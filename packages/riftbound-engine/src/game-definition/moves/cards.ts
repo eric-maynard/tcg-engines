@@ -2,6 +2,7 @@
  * Riftbound Card Play Moves
  *
  * Moves for playing cards: units, gear, spells, and hidden cards.
+ * Each move validates game rules before executing.
  */
 
 import type {
@@ -11,7 +12,131 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import { fireTriggers } from "../../abilities/trigger-runner";
+import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../chain";
+import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId, getFacedownZoneId } from "../../zones/zone-configs";
+
+/**
+ * Calculate the Deflect surcharge for targeting a card (rule 721).
+ */
+function getDeflectSurcharge(
+  _state: RiftboundGameState,
+  _playerId: string,
+  _targets?: string[],
+): number {
+  if (!_targets || _targets.length === 0) {
+    return 0;
+  }
+  const registry = getGlobalCardRegistry();
+  let surcharge = 0;
+  for (const targetId of _targets) {
+    if (registry.hasKeyword(targetId, "Deflect")) {
+      surcharge += 1;
+    }
+  }
+  return surcharge;
+}
+
+/**
+ * Create a typed getCardMeta accessor from the move context's cards API.
+ */
+function createMetaAccessor(cards: {
+  getCardMeta: (cardId: CoreCardId) => unknown;
+}): (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined {
+  return (cardId: CoreCardId) =>
+    cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
+}
+
+/**
+ * Get the cost modifier for a card from its metadata.
+ */
+function getCostModifier(
+  cardId: string,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): number {
+  if (!getCardMeta) {
+    return 0;
+  }
+  const meta = getCardMeta(cardId as CoreCardId);
+  return meta?.costModifier ?? 0;
+}
+
+/**
+ * Check if player can afford a card's cost from their rune pool.
+ */
+function canAffordCard(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  targets?: string[],
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  const pool = state.runePools[playerId];
+  if (!pool) {
+    return false;
+  }
+
+  const modifier = getCostModifier(cardId, getCardMeta);
+  const baseCost = registry.getCostToDeduct(cardId);
+  const adjustedEnergy = Math.max(0, baseCost.energy + modifier);
+
+  if (pool.energy < adjustedEnergy) {
+    return false;
+  }
+
+  // Check power (domain requirements are not affected by cost modifiers)
+  for (const [domain, amount] of Object.entries(baseCost.power)) {
+    const available = pool.power[domain as keyof typeof pool.power] ?? 0;
+    if (available < (amount ?? 0)) {
+      return false;
+    }
+  }
+
+  const deflectCost = getDeflectSurcharge(state, playerId, targets);
+  if (deflectCost > 0) {
+    const remainingEnergy = pool.energy - adjustedEnergy;
+    if (remainingEnergy < deflectCost) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Deduct a card's cost from the player's rune pool.
+ */
+function deductCost(
+  draft: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  targets?: string[],
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): void {
+  const registry = getGlobalCardRegistry();
+  const cost = registry.getCostToDeduct(cardId);
+  const pool = draft.runePools[playerId];
+  if (!pool) {
+    return;
+  }
+
+  const modifier = getCostModifier(cardId, getCardMeta);
+  const adjustedEnergy = Math.max(0, cost.energy + modifier);
+
+  pool.energy = Math.max(0, pool.energy - adjustedEnergy);
+  for (const [domain, amount] of Object.entries(cost.power)) {
+    if (amount && amount > 0) {
+      const key = domain as keyof typeof pool.power;
+      pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - amount);
+    }
+  }
+
+  const deflectCost = getDeflectSurcharge(draft, playerId, targets);
+  if (deflectCost > 0) {
+    pool.energy = Math.max(0, pool.energy - deflectCost);
+  }
+}
 
 /**
  * Card play move definitions
@@ -20,61 +145,303 @@ export const cardPlayMoves: Partial<
   GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>
 > = {
   /**
-   * Play a unit to Base or Battlefield
-   *
-   * Units can be played to:
-   * - Player's Base
-   * - A Battlefield the player controls
-   *
-   * Units enter exhausted by default (unless Accelerate is paid).
+   * Play a unit to Base (rule 554)
    */
   playUnit: {
-    reducer: (_draft, context) => {
-      const { cardId, location } = context.params;
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+      if (state.turn.activePlayer !== context.params.playerId) {
+        return false;
+      }
+      if (state.turn.phase !== "action") {
+        return false;
+      }
+
+      const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
+      if (zone !== "hand") {
+        return false;
+      }
+
+      if (
+        !canAffordCard(
+          state,
+          context.params.playerId,
+          context.params.cardId,
+          undefined,
+          createMetaAccessor(context.cards),
+        )
+      ) {
+        return false;
+      }
+
+      return true;
+    },
+    enumerator: (state, context) => {
+      if (state.status !== "playing") {
+        return [];
+      }
+      if (state.turn.activePlayer !== (context.playerId as string)) {
+        return [];
+      }
+      if (state.turn.phase !== "action") {
+        return [];
+      }
+
+      const registry = getGlobalCardRegistry();
+      const pool = state.runePools[context.playerId as string];
+      if (!pool) {
+        return [];
+      }
+
+      const handCards = context.zones.getCardsInZone(
+        "hand" as CoreZoneId,
+        context.playerId as CorePlayerId,
+      );
+
+      const results: { playerId: string; cardId: string; location: string }[] = [];
+      for (const cardId of handCards) {
+        const def = registry.get(cardId as string);
+        if (!def || def.cardType !== "unit") {
+          continue;
+        }
+        if (!registry.canAfford(cardId as string, pool)) {
+          continue;
+        }
+
+        results.push({
+          cardId: cardId as string,
+          location: "base",
+          playerId: context.playerId as string,
+        });
+      }
+      return results;
+    },
+    reducer: (draft, context) => {
+      const { cardId, playerId, location } = context.params;
       const { zones, counters } = context;
 
-      // Move unit from hand to the target location
+      deductCost(draft, playerId, cardId, undefined, createMetaAccessor(context.cards));
+
       zones.moveCard({
         cardId: cardId as CoreCardId,
         targetZoneId: location as CoreZoneId,
       });
 
-      // Units enter exhausted by default
       counters.setFlag(cardId as CoreCardId, "exhausted", true);
+
+      // Fire "play-self" and "play-card" triggers
+      fireTriggers(
+        { cardId, playerId, type: "play-self" },
+        { cards: context.cards, counters, draft, zones },
+      );
+      fireTriggers(
+        { cardId, cardType: "unit", playerId, type: "play-card" },
+        { cards: context.cards, counters, draft, zones },
+      );
     },
   },
 
   /**
-   * Play gear to Base
-   *
-   * Gear can only be played to the player's Base.
+   * Play gear to Base (rule 143.1.a.1)
    */
   playGear: {
-    reducer: (_draft, context) => {
-      const { cardId } = context.params;
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+      if (state.turn.activePlayer !== context.params.playerId) {
+        return false;
+      }
+      if (state.turn.phase !== "action") {
+        return false;
+      }
+
+      const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
+      if (zone !== "hand") {
+        return false;
+      }
+
+      if (
+        !canAffordCard(
+          state,
+          context.params.playerId,
+          context.params.cardId,
+          undefined,
+          createMetaAccessor(context.cards),
+        )
+      ) {
+        return false;
+      }
+
+      return true;
+    },
+    enumerator: (state, context) => {
+      if (state.status !== "playing") {
+        return [];
+      }
+      if (state.turn.activePlayer !== (context.playerId as string)) {
+        return [];
+      }
+      if (state.turn.phase !== "action") {
+        return [];
+      }
+
+      const registry = getGlobalCardRegistry();
+      const pool = state.runePools[context.playerId as string];
+      if (!pool) {
+        return [];
+      }
+
+      const handCards = context.zones.getCardsInZone(
+        "hand" as CoreZoneId,
+        context.playerId as CorePlayerId,
+      );
+
+      const results: { playerId: string; cardId: string }[] = [];
+      for (const cardId of handCards) {
+        const def = registry.get(cardId as string);
+        if (!def || (def.cardType !== "gear" && def.cardType !== "equipment")) {
+          continue;
+        }
+        if (!registry.canAfford(cardId as string, pool)) {
+          continue;
+        }
+
+        results.push({
+          cardId: cardId as string,
+          playerId: context.playerId as string,
+        });
+      }
+      return results;
+    },
+    reducer: (draft, context) => {
+      const { cardId, playerId } = context.params;
       const { zones } = context;
 
-      // Move gear from hand to base
+      deductCost(draft, playerId, cardId, undefined, createMetaAccessor(context.cards));
+
       zones.moveCard({
         cardId: cardId as CoreCardId,
         targetZoneId: "base" as CoreZoneId,
       });
+
+      fireTriggers(
+        { cardId, playerId, type: "play-self" },
+        { cards: context.cards, counters: context.counters, draft, zones },
+      );
+      fireTriggers(
+        { cardId, cardType: "gear", playerId, type: "play-card" },
+        { cards: context.cards, counters: context.counters, draft, zones },
+      );
     },
   },
 
   /**
-   * Play a spell
-   *
-   * Spells go to the Chain for resolution, then to Trash.
-   * In the tabletop simulator, we move directly to Trash
-   * since players handle resolution manually.
+   * Play a spell (rule 146-151)
    */
   playSpell: {
-    reducer: (_draft, context) => {
-      const { cardId } = context.params;
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+
+      const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
+      if (zone !== "hand") {
+        return false;
+      }
+
+      if (
+        !canAffordCard(
+          state,
+          context.params.playerId,
+          context.params.cardId,
+          context.params.targets,
+          createMetaAccessor(context.cards),
+        )
+      ) {
+        return false;
+      }
+
+      const interaction = state.interaction ?? createInteractionState();
+      const turnState = getTurnState(interaction);
+      const registry = getGlobalCardRegistry();
+      const timing = (registry.getSpellTiming(context.params.cardId) ?? "action") as
+        | "action"
+        | "reaction";
+
+      if (!isLegalTiming(timing, turnState)) {
+        return false;
+      }
+
+      return true;
+    },
+    enumerator: (state, context) => {
+      if (state.status !== "playing") {
+        return [];
+      }
+
+      const registry = getGlobalCardRegistry();
+      const pool = state.runePools[context.playerId as string];
+      if (!pool) {
+        return [];
+      }
+
+      const handCards = context.zones.getCardsInZone(
+        "hand" as CoreZoneId,
+        context.playerId as CorePlayerId,
+      );
+
+      const results: { playerId: string; cardId: string; targets?: string[] }[] = [];
+      for (const cardId of handCards) {
+        const def = registry.get(cardId as string);
+        if (!def || def.cardType !== "spell") {
+          continue;
+        }
+        if (!registry.canAfford(cardId as string, pool)) {
+          continue;
+        }
+
+        results.push({
+          cardId: cardId as string,
+          playerId: context.playerId as string,
+        });
+      }
+      return results;
+    },
+    reducer: (draft, context) => {
+      const { cardId, playerId, targets } = context.params;
       const { zones } = context;
 
-      // Move spell from hand to trash (after resolution)
+      deductCost(draft, playerId, cardId, targets, createMetaAccessor(context.cards));
+
+      // Look up spell effect from card definition
+      const registry = getGlobalCardRegistry();
+      const abilities = registry.getAbilities(cardId) ?? [];
+      const spellAbility = abilities.find((a) => a.type === "spell");
+      const spellEffect = spellAbility?.effect;
+
+      // Add spell to the chain (rule 537)
+      const interaction = draft.interaction ?? createInteractionState();
+      const turnOrder = Object.keys(draft.players);
+      draft.interaction = addToChain(
+        interaction,
+        { cardId, controller: playerId, effect: spellEffect, type: "spell" },
+        turnOrder,
+      );
+
+      // Fire triggers
+      fireTriggers(
+        { cardId, playerId, type: "play-spell" },
+        { cards: context.cards, counters: context.counters, draft, zones },
+      );
+      fireTriggers(
+        { cardId, cardType: "spell", playerId, type: "play-card" },
+        { cards: context.cards, counters: context.counters, draft, zones },
+      );
+
+      // Move spell to trash (it resolves from the chain later)
       zones.moveCard({
         cardId: cardId as CoreCardId,
         targetZoneId: "trash" as CoreZoneId,
@@ -83,30 +450,33 @@ export const cardPlayMoves: Partial<
   },
 
   /**
-   * Hide a card at a Battlefield
-   *
-   * Cards with the Hidden keyword can be placed facedown
-   * at a Battlefield the player controls.
-   * Cost: 1 Power matching Domain Identity
+   * Hide a card at a Battlefield (rule 723)
    */
   hideCard: {
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+
+      const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
+      if (zone !== "hand") {
+        return false;
+      }
+
+      return true;
+    },
     reducer: (_draft, context) => {
       const { cardId, battlefieldId } = context.params;
       const { zones, counters, cards } = context;
 
-      // Get the facedown zone for this battlefield
       const facedownZoneId = getFacedownZoneId(battlefieldId);
 
-      // Move card from hand to facedown zone
       zones.moveCard({
         cardId: cardId as CoreCardId,
         targetZoneId: facedownZoneId as CoreZoneId,
       });
 
-      // Mark card as hidden
       counters.setFlag(cardId as CoreCardId, "hidden", true);
-
-      // Store which battlefield it's hidden at
       cards.updateCardMeta(
         cardId as CoreCardId,
         {
@@ -114,36 +484,40 @@ export const cardPlayMoves: Partial<
           hiddenAt: battlefieldId,
         } as Partial<RiftboundCardMeta>,
       );
+
+      // Fire hide event
+      fireTriggers(
+        { cardId, playerId: context.params.playerId, type: "hide" },
+        { cards, counters, draft: _draft, zones },
+      );
     },
   },
 
   /**
    * Reveal and play a hidden card
-   *
-   * Reveals a facedown card and plays it.
-   * The card gains Reaction timing when played from hidden.
    */
   revealHidden: {
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+      return true;
+    },
     reducer: (_draft, context) => {
       const { cardId } = context.params;
       const { zones, counters, cards } = context;
 
-      // Get the card's hidden location
       const meta = cards.getCardMeta(cardId as CoreCardId) as Partial<RiftboundCardMeta>;
       const battlefieldId = meta.hiddenAt;
 
       if (battlefieldId) {
-        // Get the battlefield zone
         const battlefieldZoneId = getBattlefieldZoneId(battlefieldId);
-
-        // Move card from facedown zone to battlefield
         zones.moveCard({
           cardId: cardId as CoreCardId,
           targetZoneId: battlefieldZoneId as CoreZoneId,
         });
       }
 
-      // Clear hidden state
       counters.setFlag(cardId as CoreCardId, "hidden", false);
       cards.updateCardMeta(
         cardId as CoreCardId,
@@ -156,17 +530,46 @@ export const cardPlayMoves: Partial<
   },
 
   /**
-   * Play Chosen Champion from Champion Zone
-   *
-   * The Chosen Champion can be played from the Champion Zone
-   * to Base or a controlled Battlefield.
+   * Play Chosen Champion from Champion Zone (rule 107.2.c)
    */
   playFromChampionZone: {
-    reducer: (_draft, context) => {
+    condition: (state, context) => {
+      if (state.status !== "playing") {return false;}
+      if (state.turn.phase !== "action") {return false;}
+      if (state.turn.activePlayer !== context.params.playerId) {return false;}
+
+      const championZoneCards = context.zones.getCardsInZone(
+        "championZone" as CoreZoneId,
+        context.params.playerId as CorePlayerId,
+      );
+      if (championZoneCards.length === 0) {return false;}
+
+      return true;
+    },
+    enumerator: (state, context) => {
+      if (state.status !== "playing" || state.turn.phase !== "action") {return [];}
+      if (state.turn.activePlayer !== context.playerId) {return [];}
+
+      const championZoneCards = context.zones.getCardsInZone(
+        "championZone" as CoreZoneId,
+        context.playerId as CorePlayerId,
+      );
+      if (championZoneCards.length === 0) {return [];}
+
+      const energy = state.runePools?.[context.playerId]?.energy ?? 0;
+      const results: { playerId: PlayerId; location: string }[] = [];
+      for (const cardId of championZoneCards) {
+        const def = context.registry?.get(cardId);
+        const cost = def?.energyCost ?? 0;
+        if (cost > energy) {continue;}
+        results.push({ location: "base", playerId: context.playerId as PlayerId });
+      }
+      return results;
+    },
+    reducer: (draft, context) => {
       const { playerId, location } = context.params;
       const { zones, counters } = context;
 
-      // Get the champion from the champion zone
       const championZoneCards = zones.getCardsInZone(
         "championZone" as CoreZoneId,
         playerId as CorePlayerId,
@@ -175,13 +578,19 @@ export const cardPlayMoves: Partial<
       if (championZoneCards.length > 0) {
         const championId = championZoneCards[0];
         if (championId) {
-          // Move champion to the target location
+          deductCost(
+            draft,
+            playerId,
+            championId as string,
+            undefined,
+            createMetaAccessor(context.cards),
+          );
+
           zones.moveCard({
             cardId: championId,
             targetZoneId: location as CoreZoneId,
           });
 
-          // Champion enters exhausted by default
           counters.setFlag(championId, "exhausted", true);
         }
       }

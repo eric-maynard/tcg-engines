@@ -75,6 +75,36 @@ export interface RiftboundCardMeta {
 
   /** Domain of the card (for runes) */
   domain?: Domain;
+
+  /** Card ID of the unit this equipment is attached to (equipment only) */
+  attachedTo?: CardId;
+
+  /** Card IDs of equipment attached to this unit (unit only) */
+  equippedWith?: CardId[];
+
+  /** Keywords temporarily granted to this card (with duration tracking) */
+  grantedKeywords?: GrantedKeyword[];
+
+  /** Temporary Might modifier from effects (added to base Might; reset per duration) */
+  mightModifier?: number;
+
+  /** Might bonus from static/passive abilities (recalculated each pass) */
+  staticMightBonus?: number;
+
+  /** Cost modifier from effects (negative = reduction, positive = increase) */
+  costModifier?: number;
+}
+
+/**
+ * A keyword temporarily granted to a card by an effect.
+ */
+export interface GrantedKeyword {
+  /** The keyword name (e.g., "Assault", "Tank") */
+  keyword: string;
+  /** Optional numeric value (e.g., Assault 2) */
+  value?: number;
+  /** When this keyword expires: "static" = recalculated each pass from passive abilities */
+  duration: "turn" | "permanent" | "combat" | "static";
 }
 
 /**
@@ -151,6 +181,33 @@ export interface TurnState {
 }
 
 /**
+ * Setup step tracking for the pregame sequence.
+ */
+export type SetupStep =
+  | "rollForFirst"
+  | "chooseFirst"
+  | "placeLegends"
+  | "placeChampions"
+  | "selectBattlefields"
+  | "shuffleDecks"
+  | "drawHands"
+  | "mulligan"
+  | "ready";
+
+/**
+ * Setup state — tracks progress through the pregame sequence.
+ */
+export interface SetupState {
+  readonly step: SetupStep;
+  readonly rolls: Record<string, number>;
+  readonly rollWinner?: PlayerId;
+  readonly firstPlayer?: PlayerId;
+  readonly secondPlayer?: PlayerId;
+  readonly completedBy: PlayerId[];
+  readonly pendingMulligan: PlayerId[];
+}
+
+/**
  * Complete Riftbound game state
  *
  * This is the game-specific state that moves operate on.
@@ -186,6 +243,21 @@ export interface RiftboundGameState {
 
   /** Winner player ID (if game is finished) */
   readonly winner?: PlayerId;
+
+  /** Setup state (only present during setup phase) */
+  readonly setup?: SetupState;
+
+  /** Chain & showdown interaction state */
+  readonly interaction?: import("../chain/chain-state").TurnInteractionState;
+
+  /** Whether the second player gets an extra rune on first channel (rule 644.7) */
+  readonly secondPlayerExtraRune?: boolean;
+
+  /** Turn number of each player's first turn (for first-turn-process rules) */
+  readonly firstTurnNumber?: Record<string, number>;
+
+  /** Additional costs paid for the current card being played */
+  readonly additionalCostsPaid?: Record<string, boolean>;
 }
 
 /**
