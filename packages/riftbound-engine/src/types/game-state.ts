@@ -93,6 +93,9 @@ export interface RiftboundCardMeta {
 
   /** Cost modifier from effects (negative = reduction, positive = increase) */
   costModifier?: number;
+
+  /** Active restrictions on this card */
+  restrictions?: string[];
 }
 
 /**
@@ -164,6 +167,9 @@ export interface PlayerState {
 
   /** Victory points */
   victoryPoints: number;
+
+  /** Experience points (XP) - introduced by Unleashed (UNL) set */
+  xp: number;
 }
 
 /**
@@ -235,6 +241,9 @@ export interface RiftboundGameState {
   /** Battlefields scored this turn (max once per battlefield per turn) */
   readonly scoredThisTurn: Record<string, CardId[]>;
 
+  /** XP gained this turn per player (reset at end of turn) */
+  readonly xpGainedThisTurn: Record<string, number>;
+
   /** Turn state */
   readonly turn: TurnState;
 
@@ -258,6 +267,9 @@ export interface RiftboundGameState {
 
   /** Additional costs paid for the current card being played */
   readonly additionalCostsPaid?: Record<string, boolean>;
+
+  /** Events that occurred this turn, for condition checking */
+  readonly turnEvents?: Record<string, string[]>;
 }
 
 /**
@@ -273,6 +285,7 @@ export function createPlayerState(playerId: PlayerId): PlayerState {
   return {
     id: playerId,
     victoryPoints: 0,
+    xp: 0,
   };
 }
 

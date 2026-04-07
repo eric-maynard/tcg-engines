@@ -202,6 +202,23 @@ export function evaluateCondition(
       return ctx.draft.additionalCostsPaid?.[source.id] === true;
     }
 
+    case "while-level": {
+      const threshold = (condition.threshold as number) ?? 0;
+      const player = ctx.draft.players[source.owner];
+      return (player?.xp ?? 0) >= threshold;
+    }
+
+    case "xp-gained-this-turn": {
+      const gained = ctx.draft.xpGainedThisTurn?.[source.owner] ?? 0;
+      return gained > 0;
+    }
+
+    case "event-this-turn": {
+      const eventType = condition.event as string;
+      const events = ctx.draft.turnEvents?.[source.owner] ?? [];
+      return events.includes(eventType);
+    }
+
     default: {
       // Unknown condition — default to true (apply the effect)
       return true;

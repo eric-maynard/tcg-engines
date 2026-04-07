@@ -202,6 +202,46 @@ function checkBecomesMighty(cardId: string, mightBefore: number, ctx: EffectCont
 }
 
 /**
+ * Evaluate a condition for conditional effects.
+ */
+export function evaluateEffectCondition(
+  condition: Record<string, unknown>,
+  ctx: EffectContext,
+): boolean {
+  const condType = condition.type as string;
+  switch (condType) {
+    case "has-xp": {
+      const threshold = (condition.threshold as number) ?? 1;
+      const player = ctx.draft.players[ctx.playerId];
+      return (player?.xp ?? 0) >= threshold;
+    }
+    case "controls-unit": {
+      const baseCards = ctx.zones.getCardsInZone(
+        "base" as CoreZoneId,
+        ctx.playerId as CorePlayerId,
+      );
+      return baseCards.length > 0;
+    }
+    case "score-within": {
+      const range = (condition.range as number) ?? 0;
+      const { victoryScore } = ctx.draft;
+      for (const pid of Object.keys(ctx.draft.players)) {
+        if (pid !== ctx.playerId) {
+          const score = ctx.draft.players[pid]?.victoryPoints ?? 0;
+          if (Math.abs(victoryScore - score) <= range) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+    default: {
+      return true;
+    }
+  }
+}
+
+/**
  * Execute a single effect.
  */
 export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): void {
@@ -629,10 +669,19 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
 
     case "conditional": {
       // If condition is met, execute "then"; otherwise execute "else"
-      // For now, always execute "then" (condition evaluation requires static ability layer)
+      const {condition} = (effect as unknown as { condition?: Record<string, unknown> });
       const thenEffect = (effect as unknown as { then?: ExecutableEffect }).then;
-      if (thenEffect) {
+      const elseEffect = (effect as unknown as { else?: ExecutableEffect }).else;
+
+      let conditionMet = true; // Default to true if no condition specified
+      if (condition) {
+        conditionMet = evaluateEffectCondition(condition, ctx);
+      }
+
+      if (conditionMet && thenEffect) {
         executeEffect(thenEffect, ctx);
+      } else if (!conditionMet && elseEffect) {
+        executeEffect(elseEffect, ctx);
       }
       break;
     }
@@ -826,6 +875,82 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     case "additional-cost": {
       if (ctx.draft.additionalCostsPaid) {
         ctx.draft.additionalCostsPaid[ctx.sourceCardId] = true;
+      }
+      break;
+    }
+
+    case "gain-xp": {
+      const xpAmount = resolveAmount(effect.amount ?? 1, ctx);
+      const player = ctx.draft.players[ctx.playerId];
+      if (player) {
+        player.xp += xpAmount;
+      }
+      // Track XP gained this turn
+      if (ctx.draft.xpGainedThisTurn) {
+        ctx.draft.xpGainedThisTurn[ctx.playerId] =
+          (ctx.draft.xpGainedThisTurn[ctx.playerId] ?? 0) + xpAmount;
+      }
+      // Fire trigger
+      if (ctx.fireTriggers) {
+        ctx.fireTriggers({ amount: xpAmount, playerId: ctx.playerId, type: "gain-xp" });
+      }
+      break;
+    }
+
+    case "spend-xp": {
+      const xpAmount = resolveAmount(effect.amount ?? 1, ctx);
+      const player = ctx.draft.players[ctx.playerId];
+      if (player && player.xp >= xpAmount) {
+        player.xp -= xpAmount;
+      }
+      break;
+    }
+
+    case "predict": {
+      // Look at top N cards — for now, auto-keep all (needs UI for player choice)
+      // In full implementation: show top N to player, let them choose which to recycle
+      break;
+    }
+
+    case "add-restriction": {
+      const {restriction} = (effect as unknown as { restriction: string });
+      if (!restriction) {
+        break;
+      }
+      const targets = getTargetIds(effect, ctx);
+      const restrictTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
+      for (const targetId of restrictTargets) {
+        const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        const existing = meta?.restrictions ?? [];
+        if (!existing.includes(restriction)) {
+          ctx.cards.updateCardMeta?.(
+            targetId as CoreCardId,
+            { restrictions: [...existing, restriction] } as unknown as Record<string, unknown>,
+          );
+        }
+      }
+      break;
+    }
+
+    case "remove-restriction": {
+      const {restriction} = (effect as unknown as { restriction: string });
+      if (!restriction) {
+        break;
+      }
+      const targets = getTargetIds(effect, ctx);
+      for (const targetId of targets) {
+        const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        const existing = meta?.restrictions ?? [];
+        ctx.cards.updateCardMeta?.(
+          targetId as CoreCardId,
+          {
+            restrictions: existing.filter((r) => r !== restriction),
+          } as unknown as Record<string, unknown>,
+        );
       }
       break;
     }

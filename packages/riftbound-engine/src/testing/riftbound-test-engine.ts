@@ -40,6 +40,10 @@ function deepMergeState(
     turn: source.turn !== undefined ? { ...target.turn, ...source.turn } : target.turn,
     victoryScore: source.victoryScore ?? target.victoryScore,
     winner: source.winner !== undefined ? source.winner : target.winner,
+    xpGainedThisTurn:
+      source.xpGainedThisTurn !== undefined
+        ? { ...target.xpGainedThisTurn, ...source.xpGainedThisTurn }
+        : target.xpGainedThisTurn,
   };
 }
 

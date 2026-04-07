@@ -49,8 +49,17 @@ export type ScoringMethod = "conquer" | "hold";
  */
 export interface RiftboundMoves {
   // ============================================
-  // Setup Moves
+  // Setup Moves (Pregame Sequence)
   // ============================================
+
+  /** Roll d20 for turn order determination (rule 115) */
+  rollForFirst: { playerId: PlayerId };
+
+  /** Roll winner chooses who goes first */
+  chooseFirstPlayer: { playerId: PlayerId; firstPlayerId: PlayerId };
+
+  /** Select 1 battlefield from 3 options (rule 644.5) */
+  selectBattlefield: { playerId: PlayerId; battlefieldId: CardId; discardIds: CardId[] };
 
   /** Place Champion Legend in Legend Zone */
   placeLegend: { playerId: PlayerId; legendId: CardId };
@@ -70,11 +79,33 @@ export interface RiftboundMoves {
   /** Shuffle both decks */
   shuffleDecks: { playerId: PlayerId };
 
-  /** Draw starting hand (6 cards) */
+  /** Draw starting hand (4 cards per rule 116) */
   drawInitialHand: { playerId: PlayerId };
 
-  /** Return hand, shuffle, redraw */
+  /** Mulligan: choose up to 2 cards to set aside and redraw (rule 117) */
   mulligan: { playerId: PlayerId; keepCards?: CardId[] };
+
+  // ============================================
+  // Chain & Showdown Moves
+  // ============================================
+
+  /** Pass priority during a chain (rule 540.4) */
+  passChainPriority: { playerId: PlayerId };
+
+  /** Resolve the top item on the chain (rule 543) */
+  resolveChain: Record<string, never>;
+
+  /** Pass focus during a showdown (rule 553.4) */
+  passShowdownFocus: { playerId: PlayerId };
+
+  /** Start a showdown at a battlefield (rule 548) */
+  startShowdown: { playerId: PlayerId; battlefieldId: CardId };
+
+  /** End a showdown (all players passed, rule 553.4.a) */
+  endShowdown: Record<string, never>;
+
+  /** Transition from setup to main game */
+  transitionToPlay: Record<string, never>;
 
   // ============================================
   // Turn Structure Moves
@@ -178,11 +209,14 @@ export interface RiftboundMoves {
   /** End combat, determine outcome */
   resolveCombat: { battlefieldId: CardId };
 
+  /** Resolve full combat using the combat resolver (automated damage, kills, outcome) */
+  resolveFullCombat: { battlefieldId: CardId };
+
   /** Take control of battlefield */
   conquerBattlefield: { playerId: PlayerId; battlefieldId: CardId };
 
   /** Award victory point */
-  scorePoint: { playerId: PlayerId; method: ScoringMethod };
+  scorePoint: { playerId: PlayerId; method: ScoringMethod; battlefieldId: CardId };
 
   /** Reset combat designations */
   clearCombatState: { battlefieldId: CardId };
@@ -233,6 +267,33 @@ export interface RiftboundMoves {
 
   /** Return card to deck bottom */
   recycleCard: { cardId: CardId };
+
+  // ============================================
+  // XP Moves
+  // ============================================
+
+  /** Gain XP for a player */
+  gainXp: { playerId: PlayerId; amount: number };
+
+  /** Spend XP from a player's total */
+  spendXp: { playerId: PlayerId; amount: number };
+
+  // ============================================
+  // Ability Moves
+  // ============================================
+
+  /** Activate an ability on a card */
+  activateAbility: { playerId: PlayerId; cardId: CardId; abilityIndex: number };
+
+  // ============================================
+  // Equipment Moves
+  // ============================================
+
+  /** Attach equipment to a unit */
+  equipCard: { playerId: PlayerId; equipmentId: CardId; unitId: CardId };
+
+  /** Detach equipment from a unit (returns equipment to base) */
+  unequipCard: { playerId: PlayerId; equipmentId: CardId };
 
   // ============================================
   // Draw Moves

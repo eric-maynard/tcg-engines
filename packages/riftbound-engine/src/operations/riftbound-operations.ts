@@ -250,5 +250,8 @@ export function clearTurnTracking(state: RiftboundGameState): RiftboundGameState
     for (const playerId of Object.keys(draft.scoredThisTurn)) {
       draft.scoredThisTurn[playerId] = [];
     }
+    for (const playerId of Object.keys(draft.xpGainedThisTurn)) {
+      draft.xpGainedThisTurn[playerId] = 0;
+    }
   });
 }

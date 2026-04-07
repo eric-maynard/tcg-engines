@@ -35,15 +35,17 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
   const playerIds = players.map((p) => p.id as PlayerId);
 
   // Initialize player states
-  const playerStates: Record<PlayerId, { id: PlayerId; victoryPoints: number }> = {};
+  const playerStates: Record<PlayerId, { id: PlayerId; victoryPoints: number; xp: number }> = {};
   const runePools: Record<PlayerId, { energy: number; power: Record<string, number> }> = {};
   const conqueredThisTurn: Record<PlayerId, string[]> = {};
   const scoredThisTurn: Record<PlayerId, string[]> = {};
+  const xpGainedThisTurn: Record<PlayerId, number> = {};
 
   for (const playerId of playerIds) {
     playerStates[playerId] = {
       id: playerId,
       victoryPoints: 0,
+      xp: 0,
     };
     runePools[playerId] = {
       energy: 0,
@@ -51,6 +53,7 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
     };
     conqueredThisTurn[playerId] = [];
     scoredThisTurn[playerId] = [];
+    xpGainedThisTurn[playerId] = 0;
   }
 
   return {
@@ -61,11 +64,18 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
     runePools,
     conqueredThisTurn,
     scoredThisTurn,
+    xpGainedThisTurn,
     turn: {
       activePlayer: playerIds[0] ?? ("" as PlayerId),
       number: 1,
       phase: "setup",
     },
     status: "setup",
+    setup: {
+      completedBy: [],
+      pendingMulligan: [],
+      rolls: {},
+      step: "rollForFirst",
+    },
   };
 }
