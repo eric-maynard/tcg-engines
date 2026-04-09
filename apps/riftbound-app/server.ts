@@ -158,15 +158,15 @@ function generateLobbyCode(): string {
 function broadcastLobby(lobby: Lobby) {
   const state = {
     lobby: {
-      id: lobby.id,
       code: lobby.code,
-      status: lobby.status,
-      gameId: lobby.gameId,
-      sandbox: lobby.sandbox,
-      gameMode: lobby.gameMode,
       coinFlip: lobby.coinFlip,
-      host: { name: lobby.host.name, ready: lobby.host.ready, hasDeck: !!lobby.host.deckId },
+      gameId: lobby.gameId,
+      gameMode: lobby.gameMode,
       guest: lobby.guest ? { name: lobby.guest.name, ready: lobby.guest.ready, hasDeck: !!lobby.guest.deckId } : null,
+      host: { name: lobby.host.name, ready: lobby.host.ready, hasDeck: !!lobby.host.deckId },
+      id: lobby.id,
+      sandbox: lobby.sandbox,
+      status: lobby.status,
     },
     type: "lobby_update",
   };
@@ -698,7 +698,7 @@ function createGameFromDecks(
       }
     }
     engine.executeMove("initializeMainDeck", {
-      params: { playerId: pid, cardIds: mainDeckIds },
+      params: { cardIds: mainDeckIds, playerId: pid },
       playerId: pid as PlayerId,
     });
 
@@ -815,7 +815,7 @@ function createGameFromDecks(
 
     // Create per-battlefield zones (dynamic zones for unit placement)
     for (const bfCardId of bfIds) {
-      internal.zones[`battlefield-${bfCardId}`] = { cardIds: [], config: { id: `battlefield-${bfCardId}`, name: `Battlefield ${bfCardId}`, visibility: "public", faceDown: false, ordered: false } };
+      internal.zones[`battlefield-${bfCardId}`] = { cardIds: [], config: { faceDown: false, id: `battlefield-${bfCardId}`, name: `Battlefield ${bfCardId}`, ordered: false, visibility: "public" } };
     }
   }
 
@@ -869,7 +869,7 @@ function finalizePregame(session: GameSession): void {
 
     // Create per-battlefield zones (dynamic zones for unit placement)
     for (const bfCardId of bfIds) {
-      internal.zones[`battlefield-${bfCardId}`] = { cardIds: [], config: { id: `battlefield-${bfCardId}`, name: `Battlefield ${bfCardId}`, visibility: "public", faceDown: false, ordered: false } };
+      internal.zones[`battlefield-${bfCardId}`] = { cardIds: [], config: { faceDown: false, id: `battlefield-${bfCardId}`, name: `Battlefield ${bfCardId}`, ordered: false, visibility: "public" } };
     }
   }
 
@@ -883,13 +883,13 @@ function finalizePregame(session: GameSession): void {
 
   // Channel 2 runes for the first player (Rule 515.3: channel phase)
   engine.executeMove("channelRunes", {
-    params: { playerId: pregame.firstPlayer, count: 2 },
+    params: { count: 2, playerId: pregame.firstPlayer },
     playerId: pregame.firstPlayer as PlayerId,
   });
 
   // Draw 1 card for the first player (Rule 515.4.b: draw phase)
   engine.executeMove("drawCard", {
-    params: { playerId: pregame.firstPlayer, count: 1 },
+    params: { count: 1, playerId: pregame.firstPlayer },
     playerId: pregame.firstPlayer as PlayerId,
   });
 
@@ -1041,7 +1041,7 @@ function finalizeEndTurn(session: GameSession, nextPlayer: string): void {
   for (const [bfId, bf] of Object.entries(stateForHold.battlefields || {})) {
     if (bf.controller === nextPlayer) {
       session.engine.executeMove("scorePoint", {
-        params: { playerId: nextPlayer, method: "hold", battlefieldId: bfId },
+        params: { battlefieldId: bfId, method: "hold", playerId: nextPlayer },
         playerId: nextPlayer as PlayerId,
       });
     }
@@ -1057,17 +1057,96 @@ function finalizeEndTurn(session: GameSession, nextPlayer: string): void {
   const isFirstTurnForPlayer = runeDeckSize === 12;
   const channelCount = isFirstTurnForPlayer && stateForChannel.turn.number === 2 ? 3 : 2;
   session.engine.executeMove("channelRunes", {
-    params: { playerId: nextPlayer, count: channelCount },
+    params: { count: channelCount, playerId: nextPlayer },
     playerId: nextPlayer as PlayerId,
   });
 
   // Rule 515.4.b: Draw phase — draw 1 card for the new active player
   session.engine.executeMove("drawCard", {
-    params: { playerId: nextPlayer, count: 1 },
+    params: { count: 1, playerId: nextPlayer },
     playerId: nextPlayer as PlayerId,
   });
 
   session.log.push(`Turn passed to ${session.playerNames[nextPlayer] ?? nextPlayer}`);
+}
+
+/**
+ * Auto-play for the Goldfish in sandbox mode.
+ *
+ * Handles chain priority, showdown focus, and full turn end.
+ * Loops until the Goldfish has no more automatic actions to take.
+ */
+function sandboxAutoPlay(session: GameSession, goldfish: string): void {
+  const MAX_ITERATIONS = 20; // Safety valve to prevent infinite loops
+  let acted = true;
+  let iterations = 0;
+
+  while (acted && iterations < MAX_ITERATIONS) {
+    acted = false;
+    iterations++;
+    const state = session.engine.getState();
+    if (state.status !== "playing") {break;}
+
+    // Auto-pass chain priority if Goldfish has it
+    if (state.interaction?.chain?.active && state.interaction.chain.activePlayer === goldfish) {
+      const result = session.engine.executeMove("passChainPriority", {
+        params: { playerId: goldfish },
+        playerId: goldfish as PlayerId,
+      });
+      if (result.success) {
+        session.log.push(`${session.playerNames[goldfish] ?? goldfish}: passed priority`);
+        acted = true;
+        continue;
+      }
+    }
+
+    // Auto-pass showdown focus if Goldfish has it
+    const goldMoves = session.engine.enumerateMoves(goldfish as PlayerId, { validOnly: true });
+    const passFocus = goldMoves.find((m) => m.moveId === "passShowdownFocus");
+    if (passFocus) {
+      session.engine.executeMove("passShowdownFocus", {
+        params: passFocus.params as Record<string, unknown>,
+        playerId: goldfish as PlayerId,
+      });
+      session.log.push(`${session.playerNames[goldfish] ?? goldfish}: passed focus`);
+      acted = true;
+      continue;
+    }
+
+    // Auto end turn if it's the Goldfish's turn
+    if (state.turn.activePlayer === goldfish) {
+      const nextForGoldfish = preparePlayerRotation(session, goldfish);
+      const endResult = session.engine.executeMove("endTurn", {
+        params: { playerId: goldfish },
+        playerId: goldfish as PlayerId,
+      });
+      if (endResult.success) {
+        finalizeEndTurn(session, nextForGoldfish);
+        session.log.push(`${session.playerNames[goldfish] ?? goldfish}: ended their turn`);
+        acted = true;
+        continue;
+      }
+    }
+  }
+
+  // If the goldfish took any actions, broadcast updated state
+  if (iterations > 0) {
+    session.seq++;
+    const goldSnapshot = buildGameSnapshot(session);
+    for (const [, client] of session.clients) {
+      const clientMoves = buildAvailableMoves(session, client.playerId);
+      try {
+        client.ws.send(JSON.stringify({
+          moveId: "sandboxAutoPlay",
+          moves: clientMoves,
+          playerId: goldfish,
+          seq: session.seq,
+          state: goldSnapshot,
+          type: "state_update",
+        }));
+      } catch { /* Disconnected */ }
+    }
+  }
 }
 
 /**
@@ -1091,7 +1170,7 @@ function autoResolveCombat(session: GameSession, movingPlayerId: string): void {
     if (owners.size >= 2) {
       // Contest the battlefield
       session.engine.executeMove("contestBattlefield", {
-        params: { playerId: movingPlayerId, battlefieldId: bfId },
+        params: { battlefieldId: bfId, playerId: movingPlayerId },
         playerId: movingPlayerId as PlayerId,
       });
 
@@ -1591,9 +1670,9 @@ const server = Bun.serve({
         gameId: null,
         gameMode: (body as Record<string, unknown>).gameMode === "match" ? "match" : "duel",
         guest: isSandbox
-          ? { name: "Goldfish", connId: "", ws: null, deckId: "default", ready: true }
+          ? { connId: "", deckId: "default", name: "Goldfish", ready: true, ws: null }
           : null,
-        host: { name: body.name || "Player 1", connId: "", ws: null, deckId: null, ready: false },
+        host: { connId: "", deckId: null, name: body.name || "Player 1", ready: false, ws: null },
         id: lobbyId,
         sandbox: isSandbox,
         status: "waiting",
@@ -1627,8 +1706,8 @@ const server = Bun.serve({
       return json({
         code: lobby.code,
         gameId: lobby.gameId,
-        guest: lobby.guest ? { name: lobby.guest.name, ready: lobby.guest.ready, hasDeck: !!lobby.guest.deckId } : null,
-        host: { name: lobby.host.name, ready: lobby.host.ready, hasDeck: !!lobby.host.deckId },
+        guest: lobby.guest ? { hasDeck: !!lobby.guest.deckId, name: lobby.guest.name, ready: lobby.guest.ready } : null,
+        host: { hasDeck: !!lobby.host.deckId, name: lobby.host.name, ready: lobby.host.ready },
         id: lobby.id,
         status: lobby.status,
       });
@@ -1898,7 +1977,7 @@ const server = Bun.serve({
         return new Response(JSON.stringify({ token, user }), {
           headers: {
             "Content-Type": "application/json",
-            "Set-Cookie": `rb_token=${token}; Path=/; Max-Age=${30 * 86400}; SameSite=Lax`,
+            "Set-Cookie": `rb_token=${token}; Path=/; Max-Age=${30 * 86_400}; SameSite=Lax`,
             ...corsHeaders,
           },
           status: 201,
@@ -1917,7 +1996,7 @@ const server = Bun.serve({
       return new Response(JSON.stringify({ token, user }), {
         headers: {
           "Content-Type": "application/json",
-          "Set-Cookie": `rb_token=${token}; Path=/; Max-Age=${30 * 86400}; SameSite=Lax`,
+          "Set-Cookie": `rb_token=${token}; Path=/; Max-Age=${30 * 86_400}; SameSite=Lax`,
           ...corsHeaders,
         },
         status: 200,
@@ -2145,8 +2224,8 @@ const server = Bun.serve({
       if (ws.data.lobbyId) {
         const lobby = lobbies.get(ws.data.lobbyId);
         if (lobby) {
-          if (ws.data.lobbyRole === "host") lobby.host.ws = null;
-          if (ws.data.lobbyRole === "guest" && lobby.guest) lobby.guest.ws = null;
+          if (ws.data.lobbyRole === "host") {lobby.host.ws = null;}
+          if (ws.data.lobbyRole === "guest" && lobby.guest) {lobby.guest.ws = null;}
           console.log(`Lobby WS: ${ws.data.lobbyRole} disconnected from ${lobby.code}`);
         }
         return;
@@ -2155,16 +2234,16 @@ const server = Bun.serve({
       // ---- Game disconnect ----
       const { gameId, playerId, connId } = ws.data;
       const session = gameSessions.get(gameId);
-      if (!session) return;
+      if (!session) {return;}
 
       session.clients.delete(connId);
       console.log(`WS disconnected: ${connId} (${playerId}) code=${code} reason=${reason} (${session.clients.size} clients left)`);
       gameLogger.logPlayerDisconnected(gameId, playerId, connId, reason || `code=${code}`);
 
       broadcast(session, {
-        type: "player_disconnected",
-        playerId,
         clientCount: session.clients.size,
+        playerId,
+        type: "player_disconnected",
       });
     },
 
@@ -2173,20 +2252,20 @@ const server = Bun.serve({
       try {
         msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
       } catch {
-        ws.send(JSON.stringify({ type: "error", error: "Invalid JSON" }));
+        ws.send(JSON.stringify({ error: "Invalid JSON", type: "error" }));
         return;
       }
 
       // ---- Lobby messages ----
       if (ws.data.lobbyId) {
         const lobby = lobbies.get(ws.data.lobbyId);
-        if (!lobby) return;
+        if (!lobby) {return;}
         const role = ws.data.lobbyRole;
         const player = role === "host" ? lobby.host : lobby.guest;
 
         if (msg.type === "select_deck" && player) {
           player.deckId = msg.deckId as string;
-          player.ready = !!msg.deckId;
+          player.ready = Boolean(msg.deckId);
           broadcastLobby(lobby);
         }
 
@@ -2211,13 +2290,13 @@ const server = Bun.serve({
             } while (p1Roll === p2Roll);
           }
           const flipWinner = p1Roll > p2Roll ? "player-1" : "player-2";
-          lobby.coinFlip = { winner: flipWinner, firstPlayer: "", p1Roll, p2Roll };
+          lobby.coinFlip = { firstPlayer: "", p1Roll, p2Roll, winner: flipWinner };
           broadcastLobby(lobby);
         }
 
         // Flip winner chooses who goes first (rule 115)
         if (msg.type === "choose_first") {
-          console.log("[Lobby] choose_first received:", { role, choice: msg.choice, coinFlip: lobby.coinFlip });
+          console.log("[Lobby] choose_first received:", { choice: msg.choice, coinFlip: lobby.coinFlip, role });
           if (!lobby.coinFlip || lobby.coinFlip.firstPlayer) {
             console.log("[Lobby] choose_first rejected: no coinFlip or already chosen");
             return;
@@ -2237,23 +2316,23 @@ const server = Bun.serve({
 
           const gameId = crypto.randomUUID();
           const session = createGameFromDecks(deck1, deck2, undefined, {
-            gameMode: lobby.gameMode,
             firstPlayer: chosen,
-            sandbox: lobby.sandbox,
+            gameMode: lobby.gameMode,
             names: {
               "player-1": lobby.host.name,
               "player-2": lobby.guest?.name ?? "Player 2",
             },
+            sandbox: lobby.sandbox,
           });
           gameSessions.set(gameId, session);
           gameLogger.logGameCreated(gameId, session.players, lobby.gameMode, "random", {
-            source: "lobby",
+            firstPlayer: chosen,
+            flipWinner: lobby.coinFlip.winner,
+            guestDeckId: lobby.guest?.deckId,
+            hostDeckId: lobby.host.deckId,
             lobbyCode: lobby.code,
             sandbox: lobby.sandbox,
-            hostDeckId: lobby.host.deckId,
-            guestDeckId: lobby.guest?.deckId,
-            flipWinner: lobby.coinFlip.winner,
-            firstPlayer: chosen,
+            source: "lobby",
           });
           lobby.gameId = gameId;
           lobby.status = "started";
@@ -2269,7 +2348,7 @@ const server = Bun.serve({
       // ---- Game messages ----
       const { gameId, playerId, connId } = ws.data;
       const session = gameSessions.get(gameId);
-      if (!session) return;
+      if (!session) {return;}
 
       // ---- Pregame message handlers ----
       if (session.pregame) {
@@ -2277,7 +2356,7 @@ const server = Bun.serve({
           const bfId = msg.battlefieldId as string;
           const options = session.pregame.battlefieldOptions[playerId] ?? [];
           if (!options.includes(bfId)) {
-            ws.send(JSON.stringify({ type: "error", error: "Invalid battlefield choice" }));
+            ws.send(JSON.stringify({ error: "Invalid battlefield choice", type: "error" }));
           } else {
             session.pregame.battlefieldSelections[playerId] = bfId;
             // Check if both players have selected
@@ -2291,14 +2370,14 @@ const server = Bun.serve({
         }
 
         if (msg.type === "pregame_mulligan") {
-          if (session.pregame.phase !== "mulligan") return;
-          if (session.pregame.mulliganComplete.has(playerId)) return; // already decided
+          if (session.pregame.phase !== "mulligan") {return;}
+          if (session.pregame.mulliganComplete.has(playerId)) {return;} // Already decided
 
           const sendBack = (msg.sendBack as string[]) ?? [];
           if (sendBack.length > 0 && sendBack.length <= 2) {
             session.engine.executeMove("mulligan", {
-              playerId: playerId as PlayerId,
               params: { playerId, keepCards: sendBack },
+              playerId: playerId as PlayerId,
             });
             session.log.push(`${session.playerNames[playerId] ?? playerId} mulliganed ${sendBack.length} card${sendBack.length > 1 ? "s" : ""}`);
           } else {
@@ -2322,9 +2401,9 @@ const server = Bun.serve({
             try {
               finalizePregame(session);
               gameLogger.logStateChange(gameId, "pregame", "playing");
-            } catch (err) {
-              console.error("[finalizePregame] CRASHED:", err);
-              gameLogger.logError(gameId, err, { context: "finalizePregame" });
+            } catch (error) {
+              console.error("[finalizePregame] CRASHED:", error);
+              gameLogger.logError(gameId, error, { context: "finalizePregame" });
               // Fallback: just force playing state
               session.engine.applyPatches([
                 { op: "replace", path: ["status"], value: "playing" },
@@ -2340,13 +2419,13 @@ const server = Bun.serve({
               const clientMoves = buildAvailableMoves(session, client.playerId);
               try {
                 client.ws.send(JSON.stringify({
-                  type: "sync",
-                  seq: session.seq,
-                  state: snapshot,
                   moves: clientMoves,
                   pregame: null,
+                  seq: session.seq,
+                  state: snapshot,
+                  type: "sync",
                 }));
-              } catch { /* disconnected */ }
+              } catch { /* Disconnected */ }
             }
           } else {
             session.seq++;
@@ -2360,11 +2439,11 @@ const server = Bun.serve({
             const snapshot = buildGameSnapshot(session);
             const moves = buildAvailableMoves(session, playerId);
             ws.send(JSON.stringify({
-              type: "sync",
-              seq: session.seq,
-              state: snapshot,
               moves,
               pregame: buildPregamePayload(session, playerId),
+              seq: session.seq,
+              state: snapshot,
+              type: "sync",
             }));
           }
           return;
@@ -2374,7 +2453,7 @@ const server = Bun.serve({
       if (msg.type === "move") {
         const { moveId, params, requestId } = msg;
         if (!moveId || !params) {
-          ws.send(JSON.stringify({ type: "error", error: "Missing moveId or params", requestId }));
+          ws.send(JSON.stringify({ error: "Missing moveId or params", requestId, type: "error" }));
           return;
         }
 
@@ -2382,13 +2461,13 @@ const server = Bun.serve({
         const prevPhase = session.engine.getState().turn.phase;
 
         // For endTurn, set the next player on the flow manager BEFORE executing
-        // so the flow's phase callbacks (channel, draw, ready) target the right player.
+        // So the flow's phase callbacks (channel, draw, ready) target the right player.
         const isEndTurn = moveId === "endTurn";
         const nextPlayer = isEndTurn ? preparePlayerRotation(session, playerId) : undefined;
 
         const result = session.engine.executeMove(moveId, {
-          playerId: playerId as PlayerId,
           params,
+          playerId: playerId as PlayerId,
         });
 
         if (!result.success) {
@@ -2400,10 +2479,10 @@ const server = Bun.serve({
           const wsErrorCode = (result as { errorCode: string }).errorCode;
           gameLogger.logMoveRejected(gameId, moveId as string, playerId, params as Record<string, unknown>, wsError ?? "unknown");
           ws.send(JSON.stringify({
-            type: "move_rejected",
-            requestId,
             error: wsError,
             errorCode: wsErrorCode,
+            requestId,
+            type: "move_rejected",
           }));
           return;
         }
@@ -2449,77 +2528,39 @@ const server = Bun.serve({
         const actorMoves = buildAvailableMoves(session, playerId);
 
         ws.send(JSON.stringify({
-          type: "move_accepted",
-          requestId,
-          seq: session.seq,
           moveId,
-          playerId,
-          state: snapshot,
           moves: actorMoves,
           phaseChange,
+          playerId,
+          requestId,
+          seq: session.seq,
+          state: snapshot,
+          type: "move_accepted",
         }));
 
         // Broadcast to other clients with their own available moves
         for (const [cid, client] of session.clients) {
-          if (cid === connId) continue;
+          if (cid === connId) {continue;}
           const clientMoves = buildAvailableMoves(session, client.playerId);
           try {
             client.ws.send(JSON.stringify({
-              type: "state_update",
-              seq: session.seq,
               moveId,
-              playerId,
-              state: snapshot,
               moves: clientMoves,
               phaseChange,
+              playerId,
+              seq: session.seq,
+              state: snapshot,
+              type: "state_update",
             }));
-          } catch { /* disconnected */ }
+          } catch { /* Disconnected */ }
         }
 
-        // Sandbox auto-turn: if it's now the Goldfish's turn, auto-end it
+        // Sandbox auto-play: handle chain priority, showdown focus, and turn for Goldfish
         if (session.sandbox) {
-          const stateAfterMove = session.engine.getState();
-          const activePlayer = stateAfterMove.turn.activePlayer;
-          // The sandbox opponent is whichever player the human is NOT
           const humanPlayer = playerId;
           const goldfish = session.players.find((p) => p !== humanPlayer);
-          if (goldfish && activePlayer === goldfish && stateAfterMove.status === "playing") {
-            // Auto-pass any chain priority for the goldfish
-            const goldMoves = session.engine.enumerateMoves(goldfish as PlayerId, { validOnly: true });
-            const passChain = goldMoves.find((m) => m.moveId === "passChainPriority");
-            if (passChain) {
-              session.engine.executeMove("passChainPriority", {
-                playerId: goldfish as PlayerId,
-                params: passChain.params as Record<string, unknown>,
-              });
-              session.log.push(`${session.playerNames[goldfish] ?? goldfish}: passed priority`);
-            }
-
-            // Auto end turn for the goldfish
-            const nextForGoldfish = preparePlayerRotation(session, goldfish);
-            const endResult = session.engine.executeMove("endTurn", {
-              playerId: goldfish as PlayerId,
-              params: { playerId: goldfish },
-            });
-            if (endResult.success) {
-              finalizeEndTurn(session, nextForGoldfish);
-              session.log.push(`${session.playerNames[goldfish] ?? goldfish}: ended their turn`);
-              session.seq++;
-              const goldSnapshot = buildGameSnapshot(session);
-              for (const [, client] of session.clients) {
-                const clientMoves2 = buildAvailableMoves(session, client.playerId);
-                try {
-                  client.ws.send(JSON.stringify({
-                    type: "state_update",
-                    seq: session.seq,
-                    moveId: "endTurn",
-                    playerId: goldfish,
-                    state: goldSnapshot,
-                    moves: clientMoves2,
-                  }));
-                } catch { /* disconnected */ }
-              }
-            }
+          if (goldfish) {
+            sandboxAutoPlay(session, goldfish);
           }
         }
       }
@@ -2530,10 +2571,10 @@ const server = Bun.serve({
         const moves = buildAvailableMoves(session, playerId);
 
         ws.send(JSON.stringify({
-          type: "sync",
+          moves,
           seq: session.seq,
           state: snapshot,
-          moves,
+          type: "sync",
         }));
       }
 
@@ -2543,11 +2584,11 @@ const server = Bun.serve({
 
       if (msg.type === "game_ping") {
         const pingMsg = {
-          type: "game_ping",
+          message: (msg as Record<string, unknown>).message,
           playerId,
           target: (msg as Record<string, unknown>).target,
           targetType: (msg as Record<string, unknown>).targetType,
-          message: (msg as Record<string, unknown>).message,
+          type: "game_ping",
         };
         broadcast(session, pingMsg);
       }
@@ -2555,12 +2596,12 @@ const server = Bun.serve({
       if (msg.type === "undo") {
         const undoState = session.engine.getState();
         if (undoState.status !== "playing") {
-          ws.send(JSON.stringify({ type: "error", error: "Can only undo during active gameplay" }));
+          ws.send(JSON.stringify({ error: "Can only undo during active gameplay", type: "error" }));
           return;
         }
         const success = session.engine.undo();
         if (!success) {
-          ws.send(JSON.stringify({ type: "error", error: "Nothing to undo" }));
+          ws.send(JSON.stringify({ error: "Nothing to undo", type: "error" }));
           return;
         }
         session.log.push("Move undone");
@@ -2571,21 +2612,21 @@ const server = Bun.serve({
           const clientMoves = buildAvailableMoves(session, client.playerId);
           try {
             client.ws.send(JSON.stringify({
-              type: "state_update",
-              seq: session.seq,
               moveId: "undo",
-              playerId,
-              state: snapshot,
               moves: clientMoves,
+              playerId,
+              seq: session.seq,
+              state: snapshot,
+              type: "state_update",
             }));
-          } catch { /* disconnected */ }
+          } catch { /* Disconnected */ }
         }
       }
 
       if (msg.type === "redo") {
         const success = session.engine.redo();
         if (!success) {
-          ws.send(JSON.stringify({ type: "error", error: "Nothing to redo" }));
+          ws.send(JSON.stringify({ error: "Nothing to redo", type: "error" }));
           return;
         }
         session.log.push("Move redone");
@@ -2595,14 +2636,14 @@ const server = Bun.serve({
           const clientMoves = buildAvailableMoves(session, client.playerId);
           try {
             client.ws.send(JSON.stringify({
-              type: "state_update",
-              seq: session.seq,
               moveId: "redo",
-              playerId,
-              state: snapshot,
               moves: clientMoves,
+              playerId,
+              seq: session.seq,
+              state: snapshot,
+              type: "state_update",
             }));
-          } catch { /* disconnected */ }
+          } catch { /* Disconnected */ }
         }
       }
 
@@ -2614,7 +2655,7 @@ const server = Bun.serve({
         if (isHost) {
           // Host leaving ends the game — notify all clients and clean up
           gameLogger.logStateChange(gameId, "playing", "ended_host_left");
-          broadcast(session, { type: "game_ended", reason: "host_left" });
+          broadcast(session, { reason: "host_left", type: "game_ended" });
           // Close all client connections
           for (const [cid, client] of session.clients) {
             try { client.ws.close(1000, "Host left"); } catch { /* */ }
@@ -2624,9 +2665,9 @@ const server = Bun.serve({
         } else {
           // Guest leaving — they can rejoin later. Just notify other clients.
           broadcast(session, {
-            type: "player_disconnected",
-            playerId,
             clientCount: session.clients.size - 1,
+            playerId,
+            type: "player_disconnected",
             voluntary: true,
           }, connId);
           // Close this client's connection
@@ -2663,7 +2704,7 @@ const server = Bun.serve({
         return;
       }
 
-      session.clients.set(connId, { ws, playerId });
+      session.clients.set(connId, { playerId, ws });
       console.log(`WS connected: ${connId} as ${playerId} in game ${gameId} (${session.clients.size} clients)`);
       gameLogger.logPlayerConnected(gameId, playerId, connId);
 
@@ -2672,18 +2713,18 @@ const server = Bun.serve({
       const moves = buildAvailableMoves(session, playerId);
 
       ws.send(JSON.stringify({
-        type: "sync",
-        seq: session.seq,
-        state: snapshot,
         moves,
         pregame: buildPregamePayload(session, playerId),
+        seq: session.seq,
+        state: snapshot,
+        type: "sync",
       }));
 
       // Notify other clients
       broadcast(session, {
-        type: "player_connected",
-        playerId,
         clientCount: session.clients.size,
+        playerId,
+        type: "player_connected",
       }, connId);
     },
   },

@@ -531,6 +531,13 @@ function renderActions() {
     addResources: "Add Resources",
     spendResources: "Spend Resources",
     concede: "Concede",
+    passChainPriority: "Pass Priority",
+    passShowdownFocus: "Pass Focus",
+    resolveChain: "Resolve Chain",
+    startShowdown: "Start Showdown",
+    endShowdown: "End Showdown",
+    activateAbility: "Activate Ability",
+    resolveFullCombat: "Resolve Combat",
   };
 
   // Categorize moves into sections
