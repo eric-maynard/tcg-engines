@@ -159,16 +159,16 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           effect: {
             steps: [
               {
-                target: { selector: "chosen", controller: "opponent" },
+                target: { controller: "opponent", selector: "chosen" },
                 type: "banish",
               },
               {
                 condition: { type: "if-you-do" },
                 then: {
-                  type: "look-at-cards",
                   amount: 1,
                   from: "top-of-deck",
                   target: "OPPONENT",
+                  type: "look-at-cards",
                 },
                 type: "conditional",
               },
@@ -202,15 +202,15 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             effect: {
               steps: [
                 {
+                  counter: { controller: "you", type: "characters" },
+                  effect: { amount: 1, target: "CONTROLLER", type: "draw" },
                   type: "for-each",
-                  counter: { type: "characters", controller: "you" },
-                  effect: { type: "draw", amount: 1, target: "CONTROLLER" },
                 },
                 {
-                  type: "discard",
-                  amount: { type: "characters-in-play", controller: "you" },
-                  target: "CONTROLLER",
+                  amount: { controller: "you", type: "characters-in-play" },
                   chosen: true,
+                  target: "CONTROLLER",
+                  type: "discard",
                 },
               ],
               type: "sequence",
@@ -337,7 +337,7 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           effect: {
             steps: [
               {
-                target: { selector: "all", controller: "opponent" },
+                target: { controller: "opponent", selector: "all" },
                 type: "exert",
               },
               { size: 0, type: "draw-until-hand-size" }, // {d}
@@ -425,24 +425,24 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           effect: {
             steps: [
               {
-                type: "draw",
                 amount: {
-                  type: "strength-of",
                   target: {
-                    selector: "chosen",
-                    controller: "you",
                     classification: "Ally",
+                    controller: "you",
+                    selector: "chosen",
                   },
+                  type: "strength-of",
                 },
                 target: "CONTROLLER",
+                type: "draw",
               },
               {
-                type: "discard",
                 amount: 0,
-                target: "CONTROLLER",
                 chosen: true,
+                target: "CONTROLLER",
+                type: "discard",
               }, // {d}
-              { type: "banish", target: "chosen-for-effect" },
+              { target: "chosen-for-effect", type: "banish" },
             ],
             type: "sequence",
           },
@@ -465,11 +465,11 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             { target: "CONTROLLER", type: "reveal-top-card" },
             {
               condition: { type: "revealed-matches-named" },
-              else: { type: "put-on-top", source: "revealed" },
+              else: { source: "revealed", type: "put-on-top" },
               then: {
-                type: "put-into-inkwell",
-                source: "revealed",
                 exerted: true,
+                source: "revealed",
+                type: "put-into-inkwell",
               },
               type: "conditional",
             },
@@ -494,20 +494,20 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
               duration: "this-turn",
               modifier: 0,
               stat: "lore",
-              target: { selector: "chosen", name: "Beast" },
+              target: { name: "Beast", selector: "chosen" },
               type: "modify-stat",
             }, // {d}
             {
               condition: {
-                type: "has-named-character",
-                name: "Belle",
                 controller: "you",
+                name: "Belle",
+                type: "has-named-character",
               },
               then: {
-                type: "move-damage",
                 amount: 0,
                 from: { selector: "chosen" },
-                to: { selector: "chosen", controller: "opponent" },
+                to: { controller: "opponent", selector: "chosen" },
+                type: "move-damage",
               },
               type: "conditional", // {d}
             },
@@ -642,12 +642,12 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
               {
                 cost: { exert: true, ink: 0 },
                 effect: {
-                  type: "deal-damage",
                   amount: 0,
                   target: {
-                    selector: "chosen",
                     filters: [{ type: "damaged" }],
+                    selector: "chosen",
                   },
+                  type: "deal-damage",
                 },
                 type: "activated",
               },
@@ -748,10 +748,10 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             { target: "CONTROLLER", type: "reveal-top-card" },
             {
               condition: { type: "revealed-matches-chosen-name" },
-              else: { type: "put-in-hand", from: "revealed" },
+              else: { from: "revealed", type: "put-in-hand" },
               then: {
+                effect: { cost: "free", from: "revealed", type: "play-card" },
                 type: "optional",
-                effect: { type: "play-card", from: "revealed", cost: "free" },
               },
               type: "conditional",
             },
@@ -986,21 +986,21 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           effect: {
             effect: {
               steps: [
-                { type: "reveal-top-card", target: "CONTROLLER" },
+                { target: "CONTROLLER", type: "reveal-top-card" },
                 {
-                  type: "conditional",
                   condition: {
-                    type: "revealed-is-card-type",
                     cardType: "character",
+                    type: "revealed-is-card-type",
                   },
                   then: {
-                    type: "optional",
                     effect: {
-                      type: "play-card",
-                      from: "revealed",
                       cost: "free",
+                      from: "revealed",
+                      type: "play-card",
                     },
+                    type: "optional",
                   },
+                  type: "conditional",
                 },
               ],
               type: "sequence",
@@ -1063,7 +1063,7 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
               duration: "this-turn",
               modifier: 0,
               stat: "strength",
-              target: { selector: "chosen", controller: "you" },
+              target: { controller: "you", selector: "chosen" },
               type: "modify-stat",
             }, // {d}
             {
@@ -1211,8 +1211,8 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           effect: {
             effect: {
               steps: [
-                { type: "exert", target: "triggering-card" },
-                { type: "draw", amount: 1, target: "CONTROLLER" },
+                { target: "triggering-card", type: "exert" },
+                { amount: 1, target: "CONTROLLER", type: "draw" },
               ],
               type: "sequence",
             },
@@ -1288,8 +1288,8 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           effect: {
             effect: {
               steps: [
-                { type: "exert", target: "SELF" },
-                { type: "draw", amount: 1, target: "CONTROLLER" },
+                { target: "SELF", type: "exert" },
+                { amount: 1, target: "CONTROLLER", type: "draw" },
               ],
               type: "sequence",
             },
@@ -1313,9 +1313,9 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
               },
               {
                 effect: {
-                  type: "put-into-inkwell",
-                  source: "revealed",
                   exerted: true,
+                  source: "revealed",
+                  type: "put-into-inkwell",
                 },
                 type: "optional",
               },
@@ -1375,8 +1375,8 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
         ability: {
           effect: {
             effect: {
-              counter: { type: "songs-in-discard", controller: "you" },
-              effect: { type: "draw", amount: 1, target: "CONTROLLER" },
+              counter: { controller: "you", type: "songs-in-discard" },
+              effect: { amount: 1, target: "CONTROLLER", type: "draw" },
               type: "for-each",
             },
             type: "optional",
@@ -1432,7 +1432,7 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           steps: [
             {
               amount: 0,
-              target: { selector: "all", controller: "opponent" },
+              target: { controller: "opponent", selector: "all" },
               type: "deal-damage",
             }, // {d}
             {
@@ -1464,17 +1464,17 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             }, // {d}
             {
               ability: {
-                type: "triggered",
-                trigger: {
-                  event: "banish-in-challenge",
-                  timing: "when",
-                  on: "SELF",
-                  challengeContext: { role: "attacker" },
-                },
                 effect: {
+                  effect: { amount: 1, target: "CONTROLLER", type: "draw" },
                   type: "optional",
-                  effect: { type: "draw", amount: 1, target: "CONTROLLER" },
                 },
+                trigger: {
+                  challengeContext: { role: "attacker" },
+                  event: "banish-in-challenge",
+                  on: "SELF",
+                  timing: "when",
+                },
+                type: "triggered",
               },
               duration: "this-turn",
               target: "chosen-for-effect",
@@ -1521,12 +1521,12 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             { amount: 1, chosen: true, target: "EACH_PLAYER", type: "discard" },
             {
               effect: {
-                type: "conditional",
                 condition: {
-                  type: "discarded-was-card-type",
                   cardType: "character",
+                  type: "discarded-was-card-type",
                 },
-                then: { type: "draw", amount: 1, target: "that-player" },
+                then: { amount: 1, target: "that-player", type: "draw" },
+                type: "conditional",
               },
               type: "for-each-player",
             },
@@ -1558,21 +1558,21 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
         effect: {
           ability: {
             effect: {
-              type: "optional",
               effect: {
-                type: "sequence",
                 steps: [
-                  { type: "draw", amount: 1, target: "CONTROLLER" },
+                  { amount: 1, target: "CONTROLLER", type: "draw" },
                   {
-                    type: "discard",
                     amount: 1,
-                    target: "CONTROLLER",
                     chosen: true,
+                    target: "CONTROLLER",
+                    type: "discard",
                   },
                 ],
+                type: "sequence",
               },
+              type: "optional",
             },
-            trigger: { event: "quest", timing: "whenever", on: "SELF" },
+            trigger: { event: "quest", on: "SELF", timing: "whenever" },
             type: "triggered",
           },
           duration: "this-turn",
@@ -1606,13 +1606,13 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             { amount: 0, target: { selector: "chosen" }, type: "deal-damage" }, // {d}
             {
               condition: {
-                type: "damaged-was-classification",
                 classification: "Villain",
+                type: "damaged-was-classification",
               },
               then: {
-                type: "deal-damage",
                 amount: 0,
                 target: { selector: "another-chosen" },
+                type: "deal-damage",
               },
               type: "conditional", // {d}
             },
@@ -1683,12 +1683,12 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             { target: { selector: "all" }, type: "banish" },
             {
               effect: {
-                type: "lose-lore",
                 amount: {
-                  type: "characters-banished-this-way",
                   controller: "that-player",
+                  type: "characters-banished-this-way",
                 },
                 target: "that-player",
+                type: "lose-lore",
               },
               type: "for-each-player",
             },
@@ -1801,11 +1801,11 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
     ability: {
       effect: {
         steps: [
-          { target: { selector: "all", controller: "you" }, type: "ready" },
+          { target: { controller: "you", selector: "all" }, type: "ready" },
           {
             duration: "this-turn",
             restriction: "cant-quest",
-            target: { selector: "all", controller: "you" },
+            target: { controller: "you", selector: "all" },
             type: "restriction",
           },
         ],
@@ -1825,7 +1825,7 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             { amount: 0, target: { selector: "chosen" }, type: "deal-damage" },
             {
               condition: { type: "target-banished-this-way" },
-              then: { type: "draw", amount: 0, target: "CONTROLLER" },
+              then: { amount: 0, target: "CONTROLLER", type: "draw" },
               type: "conditional",
             },
           ],
@@ -1892,13 +1892,13 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             { amount: 0, target: { selector: "chosen" }, type: "deal-damage" },
             {
               condition: {
-                type: "target-has-classification",
                 classification: "Hero",
+                type: "target-has-classification",
               },
               then: {
-                type: "deal-damage",
                 amount: 0,
                 target: "chosen-for-effect",
+                type: "deal-damage",
               },
               type: "conditional",
             },
@@ -1917,7 +1917,7 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
         effect: {
           steps: [
             {
-              character: { selector: "chosen", controller: "you" },
+              character: { controller: "you", selector: "chosen" },
               cost: "free",
               location: "this",
               type: "move-to-location",
@@ -1977,11 +1977,11 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
       effect: {
         steps: [
           {
-            target: { selector: "chosen", controller: "you" },
+            target: { controller: "you", selector: "chosen" },
             type: "banish",
           },
           {
-            target: { selector: "chosen", controller: "opponent" },
+            target: { controller: "opponent", selector: "chosen" },
             type: "banish",
           },
         ],
@@ -2012,7 +2012,7 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
     ability: {
       effect: {
         steps: [
-          { target: { selector: "chosen", cardType: "item" }, type: "banish" },
+          { target: { cardType: "item", selector: "chosen" }, type: "banish" },
           { amount: 0, target: "CONTROLLER", type: "draw" },
         ],
         type: "sequence",
@@ -2033,7 +2033,7 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
               amount: 1,
               chooser: "CONTROLLER",
               chosen: false,
-              filter: { type: "not-card-type", cardType: "character" },
+              filter: { cardType: "character", type: "not-card-type" },
               target: "OPPONENT",
               type: "discard",
             },
@@ -2143,8 +2143,8 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           steps: [
             { target: { selector: "chosen" }, type: "return-to-hand" },
             {
-              condition: { type: "target-had-keyword", keyword: "Ward" },
-              then: { type: "draw", amount: 1, target: "CONTROLLER" },
+              condition: { keyword: "Ward", type: "target-had-keyword" },
+              then: { amount: 1, target: "CONTROLLER", type: "draw" },
               type: "conditional",
             },
           ],
@@ -2185,7 +2185,7 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
         steps: [
           { amount: 0, target: "CONTROLLER", type: "draw" },
           {
-            target: { selector: "top-of-deck", count: 0, controller: "you" },
+            target: { controller: "you", count: 0, selector: "top-of-deck" },
             type: "banish",
           },
         ],
@@ -2204,7 +2204,7 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           {
             duration: "this-turn",
             keyword: "Evasive",
-            target: { selector: "all", controller: "you" },
+            target: { controller: "you", selector: "all" },
             type: "gain-keyword",
           },
           { amount: 1, target: "CONTROLLER", type: "draw" },
@@ -2223,8 +2223,8 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
         effect: {
           effect: {
             steps: [
-              { type: "pay-ink", amount: 0 },
-              { type: "draw", amount: 1, target: "CONTROLLER" },
+              { amount: 0, type: "pay-ink" },
+              { amount: 1, target: "CONTROLLER", type: "draw" },
             ],
             type: "sequence",
           },
@@ -2310,10 +2310,10 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           },
           then: {
             effect: {
-              type: "play-card",
-              from: "discard",
               cardType: "character",
               cost: "free",
+              from: "discard",
+              type: "play-card",
             },
             type: "optional",
           },
@@ -2408,7 +2408,7 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
       effect: {
         steps: [
           {
-            target: { selector: "all", controller: "opponent" },
+            target: { controller: "opponent", selector: "all" },
             type: "exert",
           },
           {
@@ -2499,11 +2499,11 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             },
             {
               effect: {
-                type: "play-card",
-                from: "hand",
                 cardType: "item",
-                costRestriction: { comparison: "less-or-equal", value: 0 },
                 cost: "free",
+                costRestriction: { comparison: "less-or-equal", value: 0 },
+                from: "hand",
+                type: "play-card",
               },
               type: "optional",
             },
@@ -2541,12 +2541,12 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
             { amount: 0, target: { selector: "all" }, type: "deal-damage" },
             {
               effect: {
-                type: "draw",
                 amount: {
-                  type: "characters-banished-this-way",
                   controller: "that-player",
+                  type: "characters-banished-this-way",
                 },
                 target: "that-player",
+                type: "draw",
               },
               type: "for-each-player",
             },
@@ -2648,9 +2648,9 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
           },
           {
             effect: {
-              type: "play-card",
               from: "hand",
               target: "chosen-for-effect",
+              type: "play-card",
             },
             type: "optional",
           },
@@ -2669,8 +2669,8 @@ export const MANUAL_ENTRIES: Record<string, ManualEntry> = {
         effect: {
           condition: {
             comparison: "less-than",
-            left: { type: "lore", controller: "you" },
-            right: { type: "lore", controller: "opponent" },
+            left: { controller: "you", type: "lore" },
+            right: { controller: "opponent", type: "lore" },
             type: "comparison",
           },
           else: { amount: 1, target: "EACH_OPPONENT", type: "draw" },

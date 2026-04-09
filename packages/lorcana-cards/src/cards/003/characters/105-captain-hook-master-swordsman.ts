@@ -7,11 +7,11 @@ export const captainHookMasterSwordsman: CharacterCard = {
         steps: [
           {
             target: {
-              selector: "self",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "self",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "ready",
           },

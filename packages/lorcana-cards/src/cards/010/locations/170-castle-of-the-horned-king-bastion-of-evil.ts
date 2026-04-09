@@ -7,11 +7,11 @@ export const castleOfTheHornedKingBastionOfEvil: LocationCard = {
         chooser: "CONTROLLER",
         effect: {
           target: {
-            selector: "chosen",
+            cardTypes: ["item"],
             count: 1,
             owner: "any",
+            selector: "chosen",
             zones: ["play"],
-            cardTypes: ["item"],
           },
           type: "ready",
         },

@@ -8,22 +8,22 @@ export const makeThePotion: ActionCard = {
         options: [
           {
             target: {
-              selector: "chosen",
+              cardTypes: ["item"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["item"],
             },
             type: "banish",
           },
           {
             amount: 2,
             target: {
-              selector: "chosen",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "deal-damage",
           },

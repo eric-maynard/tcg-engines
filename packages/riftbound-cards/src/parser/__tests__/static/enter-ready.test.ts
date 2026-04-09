@@ -10,7 +10,7 @@ import { Abilities } from "../helpers";
 
 describe("Static: Enter Ready", () => {
   describe("self enter ready", () => {
-    it.skip("should parse 'I enter ready.'", () => {
+    it("should parse 'I enter ready.'", () => {
       const result = parseAbilities("I enter ready.");
 
       expect(result.success).toBe(true);
@@ -22,7 +22,7 @@ describe("Static: Enter Ready", () => {
       );
     });
 
-    it.skip("should parse 'I enter ready if you control another Mech.'", () => {
+    it("should parse 'I enter ready if you control another Mech.'", () => {
       const result = parseAbilities("I enter ready if you control another Mech.");
 
       expect(result.success).toBe(true);
@@ -37,7 +37,7 @@ describe("Static: Enter Ready", () => {
       );
     });
 
-    it.skip("should parse 'I enter ready if you have two or more other units in your base.'", () => {
+    it("should parse 'I enter ready if you have two or more other units in your base.'", () => {
       const result = parseAbilities(
         "I enter ready if you have two or more other units in your base.",
       );
@@ -46,7 +46,7 @@ describe("Static: Enter Ready", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'If an opponent controls a battlefield, I enter ready.'", () => {
+    it("should parse 'If an opponent controls a battlefield, I enter ready.'", () => {
       const result = parseAbilities("If an opponent controls a battlefield, I enter ready.");
 
       expect(result.success).toBe(true);
@@ -63,21 +63,21 @@ describe("Static: Enter Ready", () => {
   });
 
   describe("other units enter ready", () => {
-    it.skip("should parse 'Units you play this turn enter ready.'", () => {
+    it("should parse 'Units you play this turn enter ready.'", () => {
       const result = parseAbilities("Units you play this turn enter ready.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Friendly units enter ready this turn.'", () => {
+    it("should parse 'Friendly units enter ready this turn.'", () => {
       const result = parseAbilities("Friendly units enter ready this turn.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'The next unit you play this turn enters ready.'", () => {
+    it("should parse 'The next unit you play this turn enters ready.'", () => {
       const result = parseAbilities("The next unit you play this turn enters ready.");
 
       expect(result.success).toBe(true);

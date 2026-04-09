@@ -7,21 +7,21 @@ export const mufasaRulerOfPrideRock: CharacterCard = {
         steps: [
           {
             target: {
-              selector: "all",
+              cardTypes: ["card"],
               count: "all",
               owner: "any",
+              selector: "all",
               zones: ["play"],
-              cardTypes: ["card"],
             },
             type: "exert",
           },
           {
             target: {
-              selector: "chosen",
+              cardTypes: ["card"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["card"],
             },
             type: "return-to-hand",
           },

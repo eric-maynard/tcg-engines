@@ -26,13 +26,15 @@ const createMockAdapter = (
     textContent: "test content",
   }),
   getConfig: () => ({
-    extractionTimeoutMs: 60000,
+    extractionTimeoutMs: 60_000,
     supportedLanguages: ["en"],
     validationRules: [],
   }),
   parseUrl: (url: string) => {
     const match = url.match(urlPattern);
-    if (!match) {return null;}
+    if (!match) {
+      return null;
+    }
     return {
       contentId: match[1] ?? "test-id",
       normalizedUrl: url,

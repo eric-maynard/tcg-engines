@@ -10,7 +10,7 @@ import { Abilities } from "../helpers";
 
 describe("Static: Cost Reduction", () => {
   describe("self cost reduction", () => {
-    it.skip("should parse 'I cost :rb_energy_2: less for each of your [Mighty] units.'", () => {
+    it("should parse 'I cost :rb_energy_2: less for each of your [Mighty] units.'", () => {
       const result = parseAbilities(
         "I cost :rb_energy_2: less for each of your [Mighty] units. (A unit is Mighty while it has 5+ :rb_might:.)",
       );
@@ -24,7 +24,7 @@ describe("Static: Cost Reduction", () => {
       );
     });
 
-    it.skip("should parse 'I cost :rb_energy_2::rb_rune_calm: less for each point you scored from holding this turn.'", () => {
+    it("should parse 'I cost :rb_energy_2::rb_rune_calm: less for each point you scored from holding this turn.'", () => {
       const result = parseAbilities(
         "I cost :rb_energy_2::rb_rune_calm: less for each point you scored from holding this turn.",
       );
@@ -33,7 +33,7 @@ describe("Static: Cost Reduction", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'I cost :rb_energy_2: less to play from anywhere other than your hand.'", () => {
+    it("should parse 'I cost :rb_energy_2: less to play from anywhere other than your hand.'", () => {
       const result = parseAbilities(
         "I cost :rb_energy_2: less to play from anywhere other than your hand.",
       );
@@ -44,7 +44,7 @@ describe("Static: Cost Reduction", () => {
   });
 
   describe("spell cost reduction", () => {
-    it.skip("should parse 'This spell's Energy cost is reduced by the highest Might among units you control.'", () => {
+    it("should parse 'This spell's Energy cost is reduced by the highest Might among units you control.'", () => {
       const result = parseAbilities(
         "This spell's Energy cost is reduced by the highest Might among units you control.",
       );
@@ -55,7 +55,7 @@ describe("Static: Cost Reduction", () => {
   });
 
   describe("other cards cost reduction", () => {
-    it.skip("should parse 'While you control this battlefield, friendly [Repeat] costs cost :rb_energy_1: less.'", () => {
+    it("should parse 'While you control this battlefield, friendly [Repeat] costs cost :rb_energy_1: less.'", () => {
       const result = parseAbilities(
         "While you control this battlefield, friendly [Repeat] costs cost :rb_energy_1: less.",
       );
@@ -74,7 +74,7 @@ describe("Static: Cost Reduction", () => {
   });
 
   describe("conditional cost reduction", () => {
-    it.skip("should parse 'If an enemy unit has died this turn, this costs :rb_energy_2: less.'", () => {
+    it("should parse 'If an enemy unit has died this turn, this costs :rb_energy_2: less.'", () => {
       const result = parseAbilities(
         "If an enemy unit has died this turn, this costs :rb_energy_2: less.",
       );

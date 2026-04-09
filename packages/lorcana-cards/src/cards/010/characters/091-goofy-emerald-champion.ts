@@ -29,7 +29,7 @@ export const goofyEmeraldChampion: CharacterCard = {
         target: {
           count: "all",
           excludeSelf: true,
-          filter: [{ type: "owner", owner: "you" }],
+          filter: [{ owner: "you", type: "owner" }],
           selector: "all",
         },
         type: "gain-keyword",

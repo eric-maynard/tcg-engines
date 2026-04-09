@@ -162,8 +162,12 @@ export const chainMoves: Partial<
       return state.interaction.chain.activePlayer === context.params.playerId;
     },
     enumerator: (state, context) => {
-      if (!state.interaction?.chain?.active) {return [];}
-      if (state.interaction.chain.activePlayer !== (context.playerId as string)) {return [];}
+      if (!state.interaction?.chain?.active) {
+        return [];
+      }
+      if (state.interaction.chain.activePlayer !== (context.playerId as string)) {
+        return [];
+      }
       return [{ playerId: context.playerId as string }];
     },
     reducer: (draft, context) => {
@@ -206,8 +210,12 @@ export const chainMoves: Partial<
       return allPlayersPassed(state.interaction);
     },
     enumerator: (state) => {
-      if (!state.interaction?.chain?.active) {return [];}
-      if (!allPlayersPassed(state.interaction)) {return [];}
+      if (!state.interaction?.chain?.active) {
+        return [];
+      }
+      if (!allPlayersPassed(state.interaction)) {
+        return [];
+      }
       return [{}];
     },
     reducer: (draft, context) => {
@@ -245,9 +253,16 @@ export const chainMoves: Partial<
 
       const { playerId, cardId, abilityIndex } = context.params;
 
-      // Card must be on board
+      // Card must be on board (base, battlefield, legendZone, battlefieldRow, or championZone)
       const zone = context.zones.getCardZone(cardId as CoreCardId) as string | undefined;
-      if (!zone || (zone !== "base" && !zone.startsWith("battlefield"))) {
+      if (
+        !zone ||
+        (zone !== "base" &&
+          !zone.startsWith("battlefield") &&
+          zone !== "legendZone" &&
+          zone !== "battlefieldRow" &&
+          zone !== "championZone")
+      ) {
         return false;
       }
 
@@ -305,50 +320,77 @@ export const chainMoves: Partial<
       return true;
     },
     enumerator: (state, context) => {
-      if (state.status !== "playing") {return [];}
+      if (state.status !== "playing") {
+        return [];
+      }
       const playerId = context.playerId as string;
       const registry = getGlobalCardRegistry();
       const interaction = state.interaction ?? createInteractionState();
       const turnState = getTurnState(interaction);
       const results: { playerId: string; cardId: string; abilityIndex: number }[] = [];
 
-      // Collect cards on base and battlefields owned by this player
+      // Collect cards on base, battlefields, legendZone, battlefieldRow, and championZone
       const baseCards = context.zones.getCardsInZone(
         "base" as CoreZoneId,
         playerId as CorePlayerId,
       );
       const bfCards: CoreCardId[] = [];
       for (const bfId of Object.keys(state.battlefields ?? {})) {
-        const cards = context.zones.getCardsInZone(bfId as CoreZoneId, playerId as CorePlayerId);
+        const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
+        const cards = context.zones.getCardsInZone(bfZoneId, playerId as CorePlayerId);
         bfCards.push(...cards);
       }
+      const legendCards = context.zones.getCardsInZone(
+        "legendZone" as CoreZoneId,
+        playerId as CorePlayerId,
+      );
+      const battlefieldRowCards = context.zones.getCardsInZone(
+        "battlefieldRow" as CoreZoneId,
+        playerId as CorePlayerId,
+      );
+      const championZoneCards = context.zones.getCardsInZone(
+        "championZone" as CoreZoneId,
+        playerId as CorePlayerId,
+      );
 
-      for (const cardId of [...baseCards, ...bfCards]) {
+      for (const cardId of [...baseCards, ...bfCards, ...legendCards, ...battlefieldRowCards, ...championZoneCards]) {
         const owner = context.cards.getCardOwner(cardId);
-        if (owner !== playerId) {continue;}
+        if (owner !== playerId) {
+          continue;
+        }
 
         const abilities = registry.getAbilities(cardId as string) ?? [];
         for (let i = 0; i < abilities.length; i++) {
           const ability = abilities[i];
-          if (!ability || ability.type !== "activated") {continue;}
+          if (!ability || ability.type !== "activated") {
+            continue;
+          }
 
           // Check timing
           const timing = (ability.keyword === "Reaction" ? "reaction" : "action") as
             | "action"
             | "reaction";
-          if (!isLegalTiming(timing, turnState)) {continue;}
+          if (!isLegalTiming(timing, turnState)) {
+            continue;
+          }
 
           // Check cost affordability
           if (ability.cost) {
             const cost = ability.cost as Record<string, unknown>;
             const pool = state.runePools[playerId];
-            if (!pool) {continue;}
+            if (!pool) {
+              continue;
+            }
             const energyCost = (cost.energy as number) ?? 0;
-            if (pool.energy < energyCost) {continue;}
+            if (pool.energy < energyCost) {
+              continue;
+            }
             const powerCost = cost.power as string[] | undefined;
             if (powerCost) {
               const needed: Record<string, number> = {};
-              for (const d of powerCost) {needed[d] = (needed[d] ?? 0) + 1;}
+              for (const d of powerCost) {
+                needed[d] = (needed[d] ?? 0) + 1;
+              }
               let affordable = true;
               for (const [d, count] of Object.entries(needed)) {
                 if ((pool.power[d as keyof typeof pool.power] ?? 0) < count) {
@@ -356,7 +398,9 @@ export const chainMoves: Partial<
                   break;
                 }
               }
-              if (!affordable) {continue;}
+              if (!affordable) {
+                continue;
+              }
             }
           }
 
@@ -415,8 +459,12 @@ export const chainMoves: Partial<
     enumerator: (state, context) => {
       const interaction = state.interaction ?? createInteractionState();
       const activeShowdown = getActiveShowdown(interaction);
-      if (!activeShowdown?.active) {return [];}
-      if (activeShowdown.focusPlayer !== (context.playerId as string)) {return [];}
+      if (!activeShowdown?.active) {
+        return [];
+      }
+      if (activeShowdown.focusPlayer !== (context.playerId as string)) {
+        return [];
+      }
       return [{ playerId: context.playerId as string }];
     },
     reducer: (draft) => {
@@ -454,7 +502,9 @@ export const chainMoves: Partial<
       return true;
     },
     enumerator: (state, context) => {
-      if (state.status !== "playing") {return [];}
+      if (state.status !== "playing") {
+        return [];
+      }
       // Rule 548: Only contested battlefields can have showdowns
       const results: { playerId: string; battlefieldId: string }[] = [];
       for (const bfId of Object.keys(state.battlefields ?? {})) {
@@ -503,9 +553,13 @@ export const chainMoves: Partial<
     },
     enumerator: (state) => {
       const interaction = state.interaction ?? createInteractionState();
-      if (!interaction.showdownStack?.length) {return [];}
+      if (!interaction.showdownStack?.length) {
+        return [];
+      }
       const activeShowdown = getActiveShowdown(interaction);
-      if (activeShowdown?.active === false || isShowdownEnded(interaction)) {return [{}];}
+      if (activeShowdown?.active === false || isShowdownEnded(interaction)) {
+        return [{}];
+      }
       return [];
     },
     reducer: (draft) => {

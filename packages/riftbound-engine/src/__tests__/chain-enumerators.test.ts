@@ -16,11 +16,7 @@ import {
   clearGlobalCardRegistry,
   setGlobalCardRegistry,
 } from "../operations/card-lookup";
-import {
-  createInteractionState,
-  getActiveShowdown,
-  startShowdown,
-} from "../chain";
+import { createInteractionState, getActiveShowdown, startShowdown } from "../chain";
 import type { TurnInteractionState } from "../chain";
 import { chainMoves } from "../game-definition/moves/chain-moves";
 import type { RiftboundGameState } from "../types";
@@ -36,7 +32,10 @@ function createMockState(overrides?: Partial<RiftboundGameState>): RiftboundGame
     },
     conqueredThisTurn: { p1: [], p2: [] },
     gameId: "test",
-    players: { p1: { id: "p1", victoryPoints: 0, xp: 0 }, p2: { id: "p2", victoryPoints: 0, xp: 0 } },
+    players: {
+      p1: { id: "p1", victoryPoints: 0, xp: 0 },
+      p2: { id: "p2", victoryPoints: 0, xp: 0 },
+    },
     runePools: { p1: { energy: 5, power: { fury: 2 } }, p2: { energy: 3, power: {} } },
     scoredThisTurn: { p1: [], p2: [] },
     status: "playing",
@@ -53,7 +52,7 @@ function createMockEnumContext(playerId: string, zoneCards: Record<string, strin
       getCardOwner: (cardId: CoreCardId) => {
         // All mock cards owned by the requesting player
         for (const cards of Object.values(zoneCards)) {
-          if (cards.includes(cardId as string)) return playerId;
+          if (cards.includes(cardId as string)) {return playerId;}
         }
         return undefined;
       },
@@ -71,13 +70,11 @@ function createMockEnumContext(playerId: string, zoneCards: Record<string, strin
     zones: {
       getCardZone: (cardId: CoreCardId) => {
         for (const [zone, cards] of Object.entries(zoneCards)) {
-          if (cards.includes(cardId as string)) return zone as CoreZoneId;
+          if (cards.includes(cardId as string)) {return zone as CoreZoneId;}
         }
         return undefined;
       },
-      getCardsInZone: (zoneId: CoreZoneId, _pid?: CorePlayerId) => {
-        return (zoneCards[zoneId as string] ?? []) as CoreCardId[];
-      },
+      getCardsInZone: (zoneId: CoreZoneId, _pid?: CorePlayerId) => (zoneCards[zoneId as string] ?? []) as CoreCardId[],
     },
   };
 }
@@ -326,9 +323,7 @@ describe("activateAbility enumerator", () => {
 
   test("enumerates activated abilities on base cards", () => {
     registry.register("card-1", {
-      abilities: [
-        { effect: { amount: 1, type: "draw" }, type: "activated" },
-      ],
+      abilities: [{ effect: { amount: 1, type: "draw" }, type: "activated" }],
     });
 
     const state = createMockState();
@@ -340,13 +335,11 @@ describe("activateAbility enumerator", () => {
 
   test("enumerates activated abilities on battlefield cards", () => {
     registry.register("card-2", {
-      abilities: [
-        { effect: { amount: 2, type: "damage" }, type: "activated" },
-      ],
+      abilities: [{ effect: { amount: 2, type: "damage" }, type: "activated" }],
     });
 
     const state = createMockState();
-    const context = createMockEnumContext(P1, { "bf-1": ["card-2"] });
+    const context = createMockEnumContext(P1, { "battlefield-bf-1": ["card-2"] });
 
     const result = enumerator(state, context as never);
     expect(result).toEqual([{ abilityIndex: 0, cardId: "card-2", playerId: P1 }]);
@@ -370,9 +363,7 @@ describe("activateAbility enumerator", () => {
 
   test("skips abilities player cannot afford", () => {
     registry.register("card-expensive", {
-      abilities: [
-        { cost: { energy: 99 }, effect: { amount: 5, type: "draw" }, type: "activated" },
-      ],
+      abilities: [{ cost: { energy: 99 }, effect: { amount: 5, type: "draw" }, type: "activated" }],
     });
 
     const state = createMockState();
@@ -392,9 +383,7 @@ describe("activateAbility enumerator", () => {
 
   test("returns [] when no cards have activated abilities", () => {
     registry.register("card-passive", {
-      abilities: [
-        { effect: { amount: 1, type: "modify-might" }, type: "static" },
-      ],
+      abilities: [{ effect: { amount: 1, type: "modify-might" }, type: "static" }],
     });
 
     const state = createMockState();

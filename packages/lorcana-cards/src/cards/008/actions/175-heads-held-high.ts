@@ -8,11 +8,11 @@ export const headsHeldHigh: ActionCard = {
           {
             amount: 3,
             target: {
-              selector: "chosen",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "remove-damage",
             upTo: true,

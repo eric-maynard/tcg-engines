@@ -31,13 +31,15 @@ const createMockAdapter = (options: {
     textContent: "Test transcript content",
   }),
   getConfig: () => ({
-    extractionTimeoutMs: 60000,
+    extractionTimeoutMs: 60_000,
     maxDurationSeconds: 1800,
     supportedLanguages: ["en"],
     validationRules: [],
   }),
   parseUrl: (url: string) => {
-    if (!url.includes("youtube.com")) {return null;}
+    if (!url.includes("youtube.com")) {
+      return null;
+    }
     return {
       contentId: "test-video-id",
       normalizedUrl: url,

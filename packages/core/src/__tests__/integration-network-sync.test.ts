@@ -80,9 +80,9 @@ describe("Integration - Network Synchronization", () => {
           deck: ["card1", "card2", "card3", "card4", "card5"],
           phase: "draw",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
-            hand: [],
             score: 0,
           })),
           turnNumber: 1,
@@ -169,9 +169,9 @@ describe("Integration - Network Synchronization", () => {
           deck: ["card1"],
           phase: "play",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
-            hand: [],
             score: 0,
           })),
           turnNumber: 1, // Not "draw" phase
@@ -247,9 +247,9 @@ describe("Integration - Network Synchronization", () => {
           deck: ["card1", "card2", "card3"],
           phase: "draw",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
-            hand: [],
             score: 0,
           })),
           turnNumber: 1,
@@ -324,9 +324,9 @@ describe("Integration - Network Synchronization", () => {
           deck: ["card1", "card2", "card3", "card4"],
           phase: "draw",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
-            hand: [],
             score: 0,
           })),
           turnNumber: 1,
@@ -379,7 +379,7 @@ describe("Integration - Network Synchronization", () => {
         drawCard: {
           reducer: (draft, context) => {
             // Use RNG for deterministic shuffling
-            const {rng} = context;
+            const { rng } = context;
             if (rng && draft.deck.length > 0) {
               const index = rng.randomInt(0, draft.deck.length - 1);
               const card = draft.deck.splice(index, 1)[0];
@@ -404,9 +404,9 @@ describe("Integration - Network Synchronization", () => {
           deck: ["card1", "card2", "card3", "card4", "card5"],
           phase: "draw",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
-            hand: [],
             score: 0,
           })),
           turnNumber: 1,

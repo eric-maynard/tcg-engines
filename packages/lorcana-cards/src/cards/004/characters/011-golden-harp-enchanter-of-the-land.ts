@@ -10,11 +10,11 @@ export const goldenHarpEnchanterOfTheLand: CharacterCard = {
         },
         then: {
           target: {
-            selector: "self",
+            cardTypes: ["character"],
             count: 1,
             owner: "any",
+            selector: "self",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "banish",
         },

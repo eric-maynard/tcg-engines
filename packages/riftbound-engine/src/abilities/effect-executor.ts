@@ -669,7 +669,7 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
 
     case "conditional": {
       // If condition is met, execute "then"; otherwise execute "else"
-      const {condition} = (effect as unknown as { condition?: Record<string, unknown> });
+      const { condition } = effect as unknown as { condition?: Record<string, unknown> };
       const thenEffect = (effect as unknown as { then?: ExecutableEffect }).then;
       const elseEffect = (effect as unknown as { else?: ExecutableEffect }).else;
 
@@ -913,7 +913,7 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "add-restriction": {
-      const {restriction} = (effect as unknown as { restriction: string });
+      const { restriction } = effect as unknown as { restriction: string };
       if (!restriction) {
         break;
       }
@@ -935,7 +935,7 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "remove-restriction": {
-      const {restriction} = (effect as unknown as { restriction: string });
+      const { restriction } = effect as unknown as { restriction: string };
       if (!restriction) {
         break;
       }

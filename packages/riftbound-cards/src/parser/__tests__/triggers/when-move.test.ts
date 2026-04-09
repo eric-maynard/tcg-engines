@@ -10,7 +10,7 @@ import { Effects, Triggers } from "../helpers";
 
 describe("Trigger: When Move", () => {
   describe("draw effects", () => {
-    it.skip("should parse 'When I move, draw 1.'", () => {
+    it("should parse 'When I move, draw 1.'", () => {
       const result = parseAbilities("When I move, draw 1.");
 
       expect(result.success).toBe(true);
@@ -31,7 +31,7 @@ describe("Trigger: When Move", () => {
   });
 
   describe("might modification effects", () => {
-    it.skip("should parse 'When I move, give me +1 :rb_might: this turn.'", () => {
+    it("should parse 'When I move, give me +1 :rb_might: this turn.'", () => {
       const result = parseAbilities("When I move, give me +1 :rb_might: this turn.");
 
       expect(result.success).toBe(true);
@@ -49,7 +49,7 @@ describe("Trigger: When Move", () => {
   });
 
   describe("keyword granting effects", () => {
-    it.skip("should parse 'When I move to a battlefield, give a friendly unit my keywords and +:rb_might: equal to my Might this turn.'", () => {
+    it("should parse 'When I move to a battlefield, give a friendly unit my keywords and +:rb_might: equal to my Might this turn.'", () => {
       const result = parseAbilities(
         "When I move to a battlefield, give a friendly unit my keywords and +:rb_might: equal to my Might this turn.",
       );
@@ -60,7 +60,7 @@ describe("Trigger: When Move", () => {
   });
 
   describe("token creation effects", () => {
-    it.skip("should parse 'When I move to a battlefield, play three 1 :rb_might: Recruit unit tokens here.'", () => {
+    it("should parse 'When I move to a battlefield, play three 1 :rb_might: Recruit unit tokens here.'", () => {
       const result = parseAbilities(
         "When I move to a battlefield, play three 1 :rb_might: Recruit unit tokens here.",
       );
@@ -83,7 +83,7 @@ describe("Trigger: When Move", () => {
   });
 
   describe("ready effects", () => {
-    it.skip("should parse 'The first time I move each turn, you may ready something else that's exhausted.'", () => {
+    it("should parse 'The first time I move each turn, you may ready something else that's exhausted.'", () => {
       const result = parseAbilities(
         "The first time I move each turn, you may ready something else that's exhausted.",
       );
@@ -108,7 +108,7 @@ describe("Trigger: When Move", () => {
   });
 
   describe("score effects", () => {
-    it.skip("should parse 'The third time I move in a turn, you score 1 point.'", () => {
+    it("should parse 'The third time I move in a turn, you score 1 point.'", () => {
       const result = parseAbilities("The third time I move in a turn, you score 1 point.");
 
       expect(result.success).toBe(true);
@@ -126,7 +126,7 @@ describe("Trigger: When Move", () => {
   });
 
   describe("other unit move triggers", () => {
-    it.skip("should parse 'When an opponent moves to a battlefield other than mine, draw 1.'", () => {
+    it("should parse 'When an opponent moves to a battlefield other than mine, draw 1.'", () => {
       const result = parseAbilities(
         "When an opponent moves to a battlefield other than mine, draw 1. (Bases are not battlefield.)",
       );
@@ -135,7 +135,7 @@ describe("Trigger: When Move", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'When a friendly unit moves to a battlefield, give it +1 :rb_might: this turn.'", () => {
+    it("should parse 'When a friendly unit moves to a battlefield, give it +1 :rb_might: this turn.'", () => {
       const result = parseAbilities(
         "When a friendly unit moves to a battlefield, give it +1 :rb_might: this turn.",
       );

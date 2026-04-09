@@ -10,7 +10,7 @@ import { Targets } from "../helpers";
 
 describe("Tribal: Mech", () => {
   describe("mech keyword grants", () => {
-    it.skip("should parse 'Your Mechs have [Shield].'", () => {
+    it("should parse 'Your Mechs have [Shield].'", () => {
       const result = parseAbilities(
         "Your Mechs have [Shield]. (+1 :rb_might: while they're defenders.)",
       );
@@ -33,7 +33,7 @@ describe("Tribal: Mech", () => {
       );
     });
 
-    it.skip("should parse 'Your Mechs have [Vision].'", () => {
+    it("should parse 'Your Mechs have [Vision].'", () => {
       const result = parseAbilities(
         "Your Mechs have [Vision]. (When you play us, look at the top card of your Main Deck. You may recycle it.)",
       );
@@ -42,7 +42,7 @@ describe("Tribal: Mech", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Your Mechs have [Deflect] and [Ganking].'", () => {
+    it("should parse 'Your Mechs have [Deflect] and [Ganking].'", () => {
       const result = parseAbilities(
         "Your Mechs have [Deflect] and [Ganking]. (Opponents must pay :rb_rune_rainbow: to choose us with a spell or ability. We can move from battlefield to battlefield.)",
       );
@@ -53,14 +53,14 @@ describe("Tribal: Mech", () => {
   });
 
   describe("mech might bonus", () => {
-    it.skip("should parse 'Your Mechs have +1 :rb_might:.'", () => {
+    it("should parse 'Your Mechs have +1 :rb_might:.'", () => {
       const result = parseAbilities("Your Mechs have +1 :rb_might:.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Give your Mechs +1 :rb_might: this turn.'", () => {
+    it("should parse 'Give your Mechs +1 :rb_might: this turn.'", () => {
       const result = parseAbilities("Give your Mechs +1 :rb_might: this turn.");
 
       expect(result.success).toBe(true);
@@ -69,7 +69,7 @@ describe("Tribal: Mech", () => {
   });
 
   describe("mech conditional", () => {
-    it.skip("should parse 'I enter ready if you control another Mech.'", () => {
+    it("should parse 'I enter ready if you control another Mech.'", () => {
       const result = parseAbilities("I enter ready if you control another Mech.");
 
       expect(result.success).toBe(true);
@@ -91,7 +91,7 @@ describe("Tribal: Mech", () => {
   });
 
   describe("mech tokens", () => {
-    it.skip("should parse 'Play two 3 :rb_might: Mech unit tokens to your base.'", () => {
+    it("should parse 'Play two 3 :rb_might: Mech unit tokens to your base.'", () => {
       const result = parseAbilities("Play two 3 :rb_might: Mech unit tokens to your base.");
 
       expect(result.success).toBe(true);

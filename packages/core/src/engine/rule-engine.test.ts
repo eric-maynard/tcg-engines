@@ -62,7 +62,7 @@ describe("RuleEngine - Operations Integration", () => {
       moves: {
         draw: {
           reducer: (draft, context) => {
-            const {playerId} = context;
+            const { playerId } = context;
 
             // Operations should be available in reducer
             if (!context.zones) {

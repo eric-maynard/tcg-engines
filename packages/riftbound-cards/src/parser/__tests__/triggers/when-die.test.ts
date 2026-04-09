@@ -10,7 +10,7 @@ import { Effects, Triggers } from "../helpers";
 
 describe("Trigger: When Die", () => {
   describe("draw effects", () => {
-    it.skip("should parse 'When I die, draw 1.'", () => {
+    it("should parse 'When I die, draw 1.'", () => {
       const result = parseAbilities("When I die, draw 1.");
 
       expect(result.success).toBe(true);
@@ -29,7 +29,7 @@ describe("Trigger: When Die", () => {
       );
     });
 
-    it.skip("should parse 'When I die, draw 2.'", () => {
+    it("should parse 'When I die, draw 2.'", () => {
       const result = parseAbilities("When I die, draw 2.");
 
       expect(result.success).toBe(true);
@@ -38,7 +38,7 @@ describe("Trigger: When Die", () => {
   });
 
   describe("channel effects", () => {
-    it.skip("should parse 'When I die, channel 1 rune exhausted.'", () => {
+    it("should parse 'When I die, channel 1 rune exhausted.'", () => {
       const result = parseAbilities("When I die, channel 1 rune exhausted.");
 
       expect(result.success).toBe(true);
@@ -57,7 +57,7 @@ describe("Trigger: When Die", () => {
   });
 
   describe("token creation effects", () => {
-    it.skip("should parse 'When I die, play a 1 :rb_might: Recruit unit token to your base.'", () => {
+    it("should parse 'When I die, play a 1 :rb_might: Recruit unit token to your base.'", () => {
       const result = parseAbilities(
         "When I die, play a 1 :rb_might: Recruit unit token to your base.",
       );
@@ -76,7 +76,7 @@ describe("Trigger: When Die", () => {
   });
 
   describe("damage effects", () => {
-    it.skip("should parse 'When I die, deal 2 to all enemy units at my battlefield.'", () => {
+    it("should parse 'When I die, deal 2 to all enemy units at my battlefield.'", () => {
       const result = parseAbilities("When I die, deal 2 to all enemy units at my battlefield.");
 
       expect(result.success).toBe(true);
@@ -94,7 +94,7 @@ describe("Trigger: When Die", () => {
   });
 
   describe("recycle effects", () => {
-    it.skip("should parse 'When I die, recycle me.'", () => {
+    it("should parse 'When I die, recycle me.'", () => {
       const result = parseAbilities("When I die, recycle me.");
 
       expect(result.success).toBe(true);
@@ -111,7 +111,7 @@ describe("Trigger: When Die", () => {
   });
 
   describe("other unit die triggers", () => {
-    it.skip("should parse 'When a friendly unit dies, draw 1.'", () => {
+    it("should parse 'When a friendly unit dies, draw 1.'", () => {
       const result = parseAbilities("When a friendly unit dies, draw 1.");
 
       expect(result.success).toBe(true);
@@ -130,14 +130,14 @@ describe("Trigger: When Die", () => {
       );
     });
 
-    it.skip("should parse 'When an enemy unit dies, draw 1.'", () => {
+    it("should parse 'When an enemy unit dies, draw 1.'", () => {
       const result = parseAbilities("When an enemy unit dies, draw 1.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'When another friendly unit dies, give me +1 :rb_might:.'", () => {
+    it("should parse 'When another friendly unit dies, give me +1 :rb_might:.'", () => {
       const result = parseAbilities("When another friendly unit dies, give me +1 :rb_might:.");
 
       expect(result.success).toBe(true);

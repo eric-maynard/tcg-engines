@@ -7,7 +7,7 @@ export const beOurGuest: ActionCard = {
         amount: 4,
         destinations: [
           {
-            filter: { type: "card-type", cardType: "character" },
+            filter: { cardType: "character", type: "card-type" },
             max: 1,
             min: 0,
             reveal: true,

@@ -656,10 +656,10 @@ describe("Set 006 Card Text Parser Tests - Characters A M", () => {
                 discard: { amount: 1, chosenBy: "you" },
               },
               effect: {
-                type: "restriction",
+                duration: "until-start-of-next-turn",
                 restriction: "cant-ready",
                 target: "EXERTED_CHARACTER",
-                duration: "until-start-of-next-turn",
+                type: "restriction",
               },
               type: "cost-effect",
             },
@@ -825,8 +825,8 @@ describe("Set 006 Card Text Parser Tests - Characters A M", () => {
           cost: { ink: 2 },
           effect: {
             amount: {
-              type: "damage-on",
               target: "CHOSEN_OPPOSING_CHARACTER",
+              type: "damage-on",
             },
             target: "CONTROLLER",
             type: "gain-lore",

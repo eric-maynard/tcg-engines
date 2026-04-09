@@ -7,9 +7,9 @@ export const demonaScourgeOfTheWyvernClan: CharacterCard = {
         steps: [
           {
             target: {
-              selector: "all",
               count: "all",
-              filter: [{ type: "owner", owner: "opponent" }],
+              filter: [{ owner: "opponent", type: "owner" }],
+              selector: "all",
             },
             type: "exert",
           },

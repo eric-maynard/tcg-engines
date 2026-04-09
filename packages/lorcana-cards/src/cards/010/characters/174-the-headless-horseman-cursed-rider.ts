@@ -22,11 +22,11 @@ export const theHeadlessHorsemanCursedRider: CharacterCard = {
           {
             amount: 2,
             target: {
-              selector: "chosen",
+              cardTypes: ["card"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["card"],
             },
             type: "deal-damage",
           },

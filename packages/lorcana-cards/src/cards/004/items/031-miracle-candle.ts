@@ -12,11 +12,11 @@ export const miracleCandle: ItemCard = {
         then: {
           amount: 2,
           target: {
-            selector: "chosen",
+            cardTypes: ["location"],
             count: 1,
             owner: "any",
+            selector: "chosen",
             zones: ["play"],
-            cardTypes: ["location"],
           },
           type: "remove-damage",
           upTo: true,

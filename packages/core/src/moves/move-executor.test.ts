@@ -27,7 +27,9 @@ describe("Move Executor", () => {
   const testMoves: Record<string, GameMoveDefinition<TestGameState>> = {
     "deal-damage": {
       condition: (state: TestGameState, context: MoveContext) => {
-        if (!context.targets?.[0]) {return false;}
+        if (!context.targets?.[0]) {
+          return false;
+        }
         const targetId = context.targets[0][0] as PlayerId;
         return targetId in state.players;
       },

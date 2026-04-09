@@ -412,9 +412,9 @@ describe("Set 005 Card Text Parser Tests - Characters N Z", () => {
             else: { target: "REVEALED_CARD", type: "put-in-hand" },
             then: {
               effect: {
-                type: "play-card",
-                target: "REVEALED_CARD",
                 free: true,
+                target: "REVEALED_CARD",
+                type: "play-card",
               },
               type: "optional",
             },
@@ -1996,9 +1996,9 @@ describe("Set 005 Card Text Parser Tests - Characters N Z", () => {
             },
             then: {
               effect: {
-                type: "play-card",
-                target: "REVEALED_CARD",
                 free: true,
+                target: "REVEALED_CARD",
+                type: "play-card",
               },
               type: "optional",
             },

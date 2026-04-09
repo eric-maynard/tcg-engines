@@ -8,11 +8,11 @@ export const kingLouieJungleVip: CharacterCard = {
         effect: {
           amount: 2,
           target: {
-            selector: "self",
+            cardTypes: ["character"],
             count: 1,
             owner: "any",
+            selector: "self",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "remove-damage",
           upTo: true,

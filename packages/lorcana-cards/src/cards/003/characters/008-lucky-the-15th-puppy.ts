@@ -8,11 +8,11 @@ export const luckyThe15thPuppy: CharacterCard = {
         chooser: "CONTROLLER",
         effect: {
           target: {
-            selector: "all",
+            cardTypes: ["character"],
             count: "all",
             owner: "any",
+            selector: "all",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "put-on-bottom",
         },

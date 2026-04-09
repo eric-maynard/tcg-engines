@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Riftbound - Sign In</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔</text></svg>">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a14; color: #e0e0e0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+    .login-container { width: 100%; max-width: 400px; padding: 20px; }
+
+    .login-card { background: #14122a; border: 1px solid #2a2248; border-radius: 12px; padding: 40px 32px; }
+
+    .logo { text-align: center; margin-bottom: 32px; }
+    .logo h1 { font-size: 28px; color: #c4a0ff; letter-spacing: 2px; }
+    .logo p { font-size: 13px; color: #5a5070; margin-top: 6px; }
+
+    .tabs { display: flex; margin-bottom: 24px; border-bottom: 1px solid #2a2248; }
+    .tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; color: #5a5070; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab:hover { color: #8a7aaa; }
+    .tab.active { color: #c4a0ff; border-bottom-color: #c4a0ff; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 600; color: #8a7aaa; margin-bottom: 6px; }
+    .form-group input { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid #2a2248; background: #0e0c1e; color: #e0e0e0; font-size: 14px; outline: none; transition: border-color 0.15s; }
+    .form-group input:focus { border-color: #5a3a9a; }
+    .form-group input::placeholder { color: #3a3460; }
+
+    .submit-btn { width: 100%; padding: 12px; border: none; border-radius: 6px; background: #5a3a9a; color: white; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; margin-top: 8px; }
+    .submit-btn:hover { background: #6a4aaa; }
+    .submit-btn:disabled { background: #2a2248; color: #5a5070; cursor: not-allowed; }
+
+    .error-msg { background: #2a1a1a; border: 1px solid #4a2a2a; color: #ff6b6b; padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-bottom: 12px; display: none; }
+    .error-msg.visible { display: block; }
+
+    .success-msg { background: #1a2a1a; border: 1px solid #2a4a2a; color: #6bff6b; padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-bottom: 12px; display: none; }
+    .success-msg.visible { display: block; }
+
+    .divider { text-align: center; color: #3a3460; font-size: 11px; margin: 16px 0; }
+
+    .guest-link { display: block; text-align: center; color: #5a5070; font-size: 12px; cursor: pointer; margin-top: 16px; }
+    .guest-link:hover { color: #8a7aaa; text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<div class="login-container">
+  <div class="login-card">
+    <div class="logo">
+      <h1>RIFTBOUND</h1>
+      <p>Deck Builder & Game Engine</p>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" id="tabLogin" onclick="switchTab('login')">Sign In</div>
+      <div class="tab" id="tabRegister" onclick="switchTab('register')">Create Account</div>
+    </div>
+
+    <div id="errorMsg" class="error-msg"></div>
+    <div id="successMsg" class="success-msg"></div>
+
+    <!-- Login Form -->
+    <form id="loginForm" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="loginUser">Email</label>
+        <input type="email" id="loginUser" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="loginPass">Password</label>
+        <input type="password" id="loginPass" placeholder="Enter password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="submit-btn" id="loginBtn">Sign In</button>
+    </form>
+
+    <!-- Register Form -->
+    <form id="registerForm" onsubmit="handleRegister(event)" style="display:none;">
+      <div class="form-group">
+        <label for="regUser">Email</label>
+        <input type="email" id="regUser" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="regPass">Password</label>
+        <input type="password" id="regPass" placeholder="Choose a password (4+ characters)" required autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label for="regDisplay">Display Name (optional)</label>
+        <input type="text" id="regDisplay" placeholder="How others see you in game" maxlength="32">
+      </div>
+      <button type="submit" class="submit-btn" id="regBtn">Create Account</button>
+    </form>
+
+    <div class="divider">or</div>
+    <a class="guest-link" href="/">Continue as Guest</a>
+  </div>
+</div>
+
+<script>
+  // Check if already logged in
+  (function() {
+    const token = getCookie('rb_token');
+    if (token) {
+      fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(r => { if (r.ok) window.location.href = '/'; });
+      return;
+    }
+    // Auto-login with dev credentials if available
+    fetch('/api/auth/dev-credentials')
+      .then(r => r.ok ? r.json() : null)
+      .then(creds => {
+        if (!creds || !creds.username) return;
+        return fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: creds.username, password: creds.password })
+        });
+      })
+      .then(r => r ? r.json() : null)
+      .then(data => {
+        if (data && data.token) {
+          setCookie('rb_token', data.token, 30);
+          localStorage.setItem('rb_token', data.token);
+          window.location.href = '/';
+        }
+      })
+      .catch(() => {});
+  })();
+
+  function switchTab(tab) {
+    document.getElementById('loginForm').style.display = tab === 'login' ? '' : 'none';
+    document.getElementById('registerForm').style.display = tab === 'register' ? '' : 'none';
+    document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
+    document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
+    hideMessages();
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('errorMsg');
+    el.textContent = msg;
+    el.classList.add('visible');
+    document.getElementById('successMsg').classList.remove('visible');
+  }
+
+  function showSuccess(msg) {
+    const el = document.getElementById('successMsg');
+    el.textContent = msg;
+    el.classList.add('visible');
+    document.getElementById('errorMsg').classList.remove('visible');
+  }
+
+  function hideMessages() {
+    document.getElementById('errorMsg').classList.remove('visible');
+    document.getElementById('successMsg').classList.remove('visible');
+  }
+
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function setCookie(name, value, days) {
+    const d = new Date();
+    d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+    document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+  }
+
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : null;
+  }
+
+  function deleteCookie(name) {
+    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    hideMessages();
+    const email = document.getElementById('loginUser').value;
+    if (!isValidEmail(email)) { showError('Please enter a valid email address'); return; }
+
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true; btn.textContent = 'Signing in...';
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: email,
+          password: document.getElementById('loginPass').value,
+        })
+      });
+      const data = await res.json();
+
+      if (data.token) {
+        setCookie('rb_token', data.token, 30);
+        localStorage.setItem('rb_token', data.token);
+        showSuccess('Welcome back, ' + data.user.username + '!');
+        setTimeout(() => window.location.href = '/', 500);
+      } else {
+        showError(data.error || 'Invalid username or password');
+      }
+    } catch {
+      showError('Connection failed. Please try again.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Sign In';
+    }
+  }
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    hideMessages();
+    const btn = document.getElementById('regBtn');
+    btn.disabled = true; btn.textContent = 'Creating account...';
+
+    const username = document.getElementById('regUser').value;
+    const password = document.getElementById('regPass').value;
+    const displayName = document.getElementById('regDisplay').value || undefined;
+
+    if (!isValidEmail(username)) {
+      showError('Please enter a valid email address');
+      btn.disabled = false; btn.textContent = 'Create Account';
+      return;
+    }
+    if (password.length < 4) {
+      showError('Password must be at least 4 characters');
+      btn.disabled = false; btn.textContent = 'Create Account';
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, displayName })
+      });
+      const data = await res.json();
+
+      if (data.token) {
+        setCookie('rb_token', data.token, 30);
+        localStorage.setItem('rb_token', data.token);
+        showSuccess('Account created! Redirecting...');
+        setTimeout(() => window.location.href = '/', 500);
+      } else {
+        showError(data.error || 'Could not create account');
+      }
+    } catch {
+      showError('Connection failed. Please try again.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Create Account';
+    }
+  }
+</script>
+</body>
+</html>

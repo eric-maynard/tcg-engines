@@ -1,5 +1,7 @@
 // renderer.js — Main rendering: game board, zones, cards, actions, log, chain overlay
 
+const DOMAIN_LABELS = { fury: "F", calm: "Ca", mind: "M", body: "B", chaos: "Ch", order: "O" };
+
 function render() {
   if (!gameState) return;
 
@@ -38,6 +40,52 @@ function resolveParamValue(value) {
   return value.replace(/^player-[12]-/, "");
 }
 
+/** Fallback param formatter: show only resolved values without raw key names */
+function formatParamsFallback(params) {
+  if (!params) return "";
+  const vals = Object.entries(params)
+    .filter(([k]) => k !== "playerId" && k !== "method")
+    .map(([, v]) => resolveParamValue(v))
+    .filter(v => v != null && v !== "");
+  return vals.join(", ");
+}
+
+/** Format a move's params into a natural-language description */
+function formatMoveDescription(moveId, params) {
+  if (!params) return null;
+  const r = (v) => Array.isArray(v) ? v.map(resolveParamValue).join(", ") : resolveParamValue(v);
+  const bf = (v) => typeof v === "string" ? getBattlefieldName(v) : String(v ?? "");
+  switch (moveId) {
+    case "playUnit": return `${r(params.cardId)} to ${params.location ?? "base"}`;
+    case "playSpell": return `${r(params.cardId)}`;
+    case "playGear": return `${r(params.cardId)}`;
+    case "exhaustRune": return `${r(params.runeId)}`;
+    case "recycleRune": return `${r(params.runeId)}${params.domain ? " for " + params.domain : ""}`;
+    case "standardMove": return `${r(params.unitIds)} to ${bf(params.destination)}`;
+    case "gankingMove": return `${r(params.unitId)} to ${bf(params.toBattlefield)}`;
+    case "assignAttacker": return `${r(params.unitId)}`;
+    case "assignDefender": return `${r(params.unitId)}`;
+    case "contestBattlefield": return `${bf(params.battlefieldId)}`;
+    case "conquerBattlefield": return `${bf(params.battlefieldId)}`;
+    case "recallUnit": return `${r(params.unitId)}`;
+    case "hideCard": return `at ${bf(params.battlefieldId)}`;
+    case "scorePoint": return `${bf(params.battlefieldId)}`;
+    case "activateAbility": return `${r(params.cardId)}`;
+    case "resolveFullCombat": return `${bf(params.battlefieldId)}`;
+    case "passChainPriority": return null;
+    case "passShowdownFocus": return null;
+    case "advancePhase": return null;
+    case "endTurn": return null;
+    case "channelRunes": return null;
+    case "drawCard": return null;
+    case "readyAll": return null;
+    case "emptyRunePool": return null;
+    case "concede": return null;
+    case "pass": return null;
+    default: return null;
+  }
+}
+
 function renderSidebarHeader() {
   const { turn, status } = gameState;
   const phase = turn?.phase ?? "setup";
@@ -56,7 +104,7 @@ function renderSidebarHeader() {
     <div class="game-status">
       ${status === "playing"
         ? (isActive ? "Your turn" : `Waiting for ${pName(activeP)}`)
-        : status === "finished" ? `Game Over — ${gameState.winner === viewingPlayer ? "You Win!" : "You Lose"}`
+        : status === "finished" ? `Game Over — ${(() => { const vp = gameState.players?.[viewingPlayer]?.victoryPoints ?? 0; const opp = viewingPlayer === P1 ? P2 : P1; const opVp = gameState.players?.[opp]?.victoryPoints ?? 0; return (gameState.winner === viewingPlayer || vp > opVp) ? "You Win!" : "You Lose"; })()}`
         : `Status: ${status}`
       }
     </div>
@@ -118,7 +166,6 @@ function renderResourceBar() {
   </div>`;
 
   // Domain powers
-  const DOMAIN_LABELS = { fury: "F", calm: "C", mind: "M", body: "B", chaos: "X", order: "O" };
   for (const [domain, amount] of Object.entries(powers)) {
     if (amount > 0) {
       html += `<div class="rb-item">
@@ -302,16 +349,16 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   const defId = card.definitionId || "";
   const imgId = defId.replace(/^player-[12]-/, "");
 
-  // Legend cards are display-only — never interactive
   const isLegendZone = zone === "legendZone";
 
   // Determine if this card is playable (has available moves)
   const isOwned = card.owner === viewingPlayer;
-  const isPlayable = !isLegendZone && isOwned && hasMovesForCard(card.id, zone);
+  const isPlayable = isOwned && hasMovesForCard(card.id, zone);
   if (isPlayable) classes.push("playable");
+  if (isLegendZone && isPlayable) classes.push("legend-playable");
 
-  // Legend cards: no pointer events, just hover preview and zoom
-  const pointerAttr = isLegendZone
+  // Legend cards without moves get no pointer events; legend cards with moves are interactive
+  const pointerAttr = (isLegendZone && !isPlayable)
     ? ""
     : `onpointerdown="onPointerDown(event, '${esc(card.id)}')"`;
 
@@ -324,7 +371,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
          onmouseenter="showPreview(event, this)"
          onmouseleave="hidePreview()"
          ondblclick="openZoom('${esc(card.id)}')"
-         style="${isLegendZone ? "cursor:default;" : ""}"">
+         style="${isLegendZone && !isPlayable ? "cursor:default;" : ""}">
       ${card.energyCost != null ? `<div class="card-cost">${card.energyCost}</div>` : ""}
       ${card.might != null ? `<div class="card-might">${card.might}</div>` : ""}
       <img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(card.name)}"
@@ -399,7 +446,7 @@ function renderZones() {
         const chunk = cards.slice(s, s + STACK_MAX);
         const stackHeight = 70 + (chunk.length - 1) * 14;
         html += `<div class="rune-stack" style="height:${stackHeight + 16}px;">`;
-        html += `<div class="rune-stack-label" style="color:${color};">${domain[0].toUpperCase()}</div>`;
+        html += `<div class="rune-stack-label" style="color:${color};">${DOMAIN_LABELS[domain] ?? domain[0].toUpperCase()}</div>`;
         chunk.forEach((c, i) => {
           const el = renderCardElement(c, false, "runePool");
           html += el.replace('class="card', `style="top:${14 + i * 14}px;z-index:${i + 1};border-color:${color};" class="card`);
@@ -590,10 +637,7 @@ function renderActions() {
 
       if (moves.length === 1) {
         const m = moves[0];
-        const paramStr = Object.entries(m.params || {})
-          .filter(([k]) => k !== "playerId")
-          .map(([k, v]) => `${k}: ${resolveParamValue(v)}`)
-          .join(", ");
+        const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
 
         html += `
           <button class="action-btn ${isPrimary ? "primary" : ""} ${isHighlighted ? "highlighted" : ""}"
@@ -602,6 +646,61 @@ function renderActions() {
             ${paramStr ? `<div class="action-detail">${esc(paramStr)}</div>` : ""}
           </button>
         `;
+      } else if (moveId === "exhaustRune" || moveId === "recycleRune") {
+        // Group rune moves by domain so we don't list 11+ individual runes
+        const byDomain = {};
+        for (const m of moves) {
+          const card = findCard(m.params?.runeId);
+          const domain = card?.domain || card?.meta?.domain || "unknown";
+          const d = Array.isArray(domain) ? domain[0] : domain;
+          if (!byDomain[d]) byDomain[d] = [];
+          byDomain[d].push(m);
+        }
+        const domainEntries = Object.entries(byDomain);
+        if (domainEntries.length === 1 && domainEntries[0][1].length === 1) {
+          // Only one rune — render as single button
+          const m = domainEntries[0][1][0];
+          const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
+          html += `
+            <button class="action-btn ${isHighlighted ? "highlighted" : ""}"
+                    onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+              ${esc(label)}
+              ${paramStr ? `<div class="action-detail">${esc(paramStr)}</div>` : ""}
+            </button>
+          `;
+        } else {
+          // Multiple runes — show grouped by domain
+          const DOMAIN_DISPLAY = { fury: "Fury", calm: "Calm", mind: "Mind", body: "Body", chaos: "Chaos", order: "Order" };
+          const isExpanded = isHighlighted;
+          html += `
+            <button class="action-btn ${isHighlighted ? "highlighted" : ""}"
+                    onclick="toggleMoveGroup('${moveId}')">
+              ${esc(label)} (${moves.length} available)
+            </button>
+            <div id="move-group-${moveId}" class="${isExpanded ? "" : "hidden"}" style="padding-left:8px; display:flex; flex-direction:column; gap:2px;">
+              ${domainEntries.map(([domain, domMoves]) => {
+                const domLabel = DOMAIN_DISPLAY[domain] || domain;
+                if (domMoves.length === 1) {
+                  const m = domMoves[0];
+                  return `
+                    <button class="action-btn"
+                            onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+                      ${esc(domLabel)} Rune
+                    </button>
+                  `;
+                }
+                // Multiple runes of same domain — show count, click exhausts first available
+                const m = domMoves[0];
+                return `
+                  <button class="action-btn"
+                          onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+                    ${esc(domLabel)} Rune (${domMoves.length} available)
+                  </button>
+                `;
+              }).join("")}
+            </div>
+          `;
+        }
       } else {
         // Collapsible group
         const isExpanded = isHighlighted; // auto-expand if highlighted
@@ -612,10 +711,7 @@ function renderActions() {
           </button>
           <div id="move-group-${moveId}" class="${isExpanded ? "" : "hidden"}" style="padding-left:8px; display:flex; flex-direction:column; gap:2px;">
             ${moves.slice(0, 15).map((m, i) => {
-              const paramStr = Object.entries(m.params || {})
-                .filter(([k]) => k !== "playerId")
-                .map(([k, v]) => `${resolveParamValue(v)}`)
-                .join(", ");
+              const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
               const moveHighlighted = interaction.sourceCardId &&
                 (m.params?.cardId === interaction.sourceCardId ||
                  m.params?.unitIds?.includes(interaction.sourceCardId) ||
@@ -655,6 +751,7 @@ const LOG_MOVE_NAMES = {
   playSpell: "cast a spell",
   playGear: "played gear",
   standardMove: "moved a unit",
+  gankingMove: "ganked",
   passChainPriority: "passed priority",
   passShowdownFocus: "passed focus",
   endTurn: "ended their turn",
@@ -662,8 +759,22 @@ const LOG_MOVE_NAMES = {
   drawCard: "drew a card",
   activateAbility: "activated an ability",
   conquerBattlefield: "conquered a battlefield",
+  contestBattlefield: "contested a battlefield",
   recycleRune: "recycled a rune",
   readyAll: "readied all cards",
+  emptyRunePool: "emptied rune pool",
+  advancePhase: "advanced phase",
+  scorePoint: "scored a point",
+  recallUnit: "recalled a unit",
+  moveUnit: "moved a unit",
+  hideCard: "hid a card",
+  revealHidden: "revealed a hidden card",
+  resolveChain: "resolved the chain",
+  resolveFullCombat: "resolved combat",
+  startShowdown: "started a showdown",
+  endShowdown: "ended the showdown",
+  concede: "conceded",
+  sandboxAutoPlay: "auto-played",
 };
 
 function formatLogEntry(raw) {

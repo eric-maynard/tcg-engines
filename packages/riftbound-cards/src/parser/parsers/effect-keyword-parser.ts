@@ -79,6 +79,24 @@ const READY_PATTERN = /^Ready (me|a unit|your units|your runes|a friendly unit)\
 const DAMAGE_PATTERN = /^Deal (\d+) to (.+?)\.?$/i;
 
 /**
+ * Word-to-number mapping for token quantities
+ */
+const WORD_NUMBERS: Record<string, number> = {
+  a: 1,
+  an: 1,
+  five: 5,
+  four: 4,
+  one: 1,
+  six: 6,
+  three: 3,
+  two: 2,
+};
+
+function wordToNumber(word: string): number {
+  return WORD_NUMBERS[word.toLowerCase()] ?? (Number.parseInt(word, 10) || 1);
+}
+
+/**
  * Pattern to match "When you play me" trigger in effect text
  */
 const WHEN_PLAY_ME_PATTERN = /^When you play me,\s*/i;
@@ -192,6 +210,164 @@ function parseSimpleEffect(text: string): Effect | undefined {
     }
 
     return { amount, target, type: "damage" };
+  }
+
+  // Try compound "EFFECT and EFFECT" sequence (e.g., "Channel 2 runes exhausted and draw 1")
+  const andMatch = cleanText.match(/^(.+?) and (.+?)\.?$/i);
+  if (andMatch) {
+    const left = parseSimpleEffect(andMatch[1].trim() + ".");
+    const right = parseSimpleEffect(andMatch[2].trim() + ".");
+    if (left && right) {
+      return { effects: [left, right], type: "sequence" };
+    }
+  }
+
+  // Try "Recycle me to EFFECT." compound
+  const recycleToMatch = cleanText.match(/^Recycle me to (.+?)\.?$/i);
+  if (recycleToMatch) {
+    const thenEffect = parseSimpleEffect(recycleToMatch[1].trim() + ".");
+    if (thenEffect) {
+      return { effects: [{ target: "self", type: "recycle" }, thenEffect], type: "sequence" };
+    }
+  }
+
+  // Try "Discard N, then draw N." sequence effect
+  const discardThenDrawMatch = cleanText.match(/^Discard (\d+),\s*then draw (\d+)\.?$/i);
+  if (discardThenDrawMatch) {
+    const discardAmount = Number.parseInt(discardThenDrawMatch[1], 10);
+    const drawAmount = Number.parseInt(discardThenDrawMatch[2], 10);
+    return {
+      effects: [
+        { amount: discardAmount, type: "discard" },
+        { amount: drawAmount, type: "draw" },
+      ],
+      type: "sequence",
+    };
+  }
+
+  // Try create-token: gear tokens "Play a Gold gear token [exhausted]."
+  const gearTokenMatch = cleanText.match(
+    /^Play (a|an|one|two|three|four|five|six|\d+)\s+(\w+(?:\s+\w+)?)\s+(gear)\s+tokens?\s*(exhausted)?(?:\s+(?:here|to your base))?\.?$/i,
+  );
+  if (gearTokenMatch) {
+    const amount = wordToNumber(gearTokenMatch[1]);
+    const token = { name: gearTokenMatch[2], type: gearTokenMatch[3] as "gear" };
+    const effect: { type: "create-token"; token: typeof token; amount?: number } = {
+      token,
+      type: "create-token",
+    };
+    if (amount > 1) {
+      effect.amount = amount;
+    }
+    return effect;
+  }
+
+  // Try create-token: unit tokens "Play [N] [ready] N :rb_might: NAME unit token(s) [with [KEYWORD]] [location]."
+  const unitTokenMatch = cleanText.match(
+    /^Play (a|an|one|two|three|four|five|six|\d+)\s+(?:(ready)\s+)?(\d+)\s*:rb_might:\s+(\w+(?:\s+\w+)?)\s+(unit)\s+tokens?(?:\s+with\s+\[(\w+(?:-\w+)?)\])?\s*(?:(here|to your base|into your base|exhausted))?\.?$/i,
+  );
+  if (unitTokenMatch) {
+    const amount = wordToNumber(unitTokenMatch[1]);
+    const might = Number.parseInt(unitTokenMatch[3], 10);
+    const token: { name: string; type: "unit"; might: number; keywords?: string[] } = {
+      might,
+      name: unitTokenMatch[4],
+      type: unitTokenMatch[5] as "unit",
+    };
+    if (unitTokenMatch[6]) {
+      token.keywords = [unitTokenMatch[6]];
+    }
+    const effect: {
+      type: "create-token";
+      token: typeof token;
+      amount?: number;
+      ready?: boolean;
+      location?: string;
+    } = {
+      token,
+      type: "create-token",
+    };
+    if (amount > 1) {
+      effect.amount = amount;
+    }
+    if (unitTokenMatch[2]) {
+      effect.ready = true;
+    }
+    if (unitTokenMatch[7]) {
+      const lower = unitTokenMatch[7].toLowerCase();
+      if (lower === "here") {
+        effect.location = "here";
+      } else if (lower === "to your base" || lower === "into your base") {
+        effect.location = "base";
+      }
+    }
+    return effect;
+  }
+
+  // Try modify-might: "Give TARGET +/-N :rb_might: this turn."
+  const modifyMightMatch = cleanText.match(
+    /^Give ((?:a|an|two|three|four|five|\d+)?\s*(?:friendly |enemy )?(?:unit|units|me|it)(?:\s+(?:at a battlefield|here|there))?)\s+(?:each\s+)?([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(?:to a minimum of (\d+)\s*:rb_might:))?\.?$/i,
+  );
+  if (modifyMightMatch) {
+    const targetStr = modifyMightMatch[1].trim().toLowerCase();
+    let target: AnyTarget;
+    if (targetStr === "me") {
+      target = "self" as AnyTarget;
+    } else {
+      const t: { type: "unit"; controller?: "friendly" | "enemy" } = { type: "unit" };
+      if (targetStr.includes("friendly")) {
+        t.controller = "friendly";
+      } else if (targetStr.includes("enemy")) {
+        t.controller = "enemy";
+      }
+      target = t as AnyTarget;
+    }
+    const effect: {
+      type: "modify-might";
+      amount: number;
+      target: AnyTarget;
+      duration?: "turn";
+      minimum?: number;
+    } = {
+      amount: Number.parseInt(modifyMightMatch[2], 10),
+      target,
+      type: "modify-might",
+    };
+    if (modifyMightMatch[3]) {
+      effect.duration = "turn";
+    }
+    if (modifyMightMatch[4] !== undefined) {
+      effect.minimum = Number.parseInt(modifyMightMatch[4], 10);
+    }
+    return effect;
+  }
+
+  // Try play effect: "You may play a TYPE from your ZONE..."
+  const playMatch = cleanText.match(/^(?:You may )?play a (\w+).*?from your (trash|hand|deck)/i);
+  if (playMatch) {
+    return {
+      from: playMatch[2].toLowerCase(),
+      target: { type: playMatch[1].toLowerCase() },
+      type: "play",
+    };
+  }
+
+  // Try cost-reduction: "I cost COST less."
+  const costReductionMatch = cleanText.match(/^I cost\s+(.+?)\s+less\.?$/i);
+  if (costReductionMatch) {
+    return {
+      reduction: costReductionMatch[1],
+      target: "self",
+      type: "cost-reduction",
+    };
+  }
+
+  // Try recycle effect: "Recycle me/a unit."
+  const recycleMatch = cleanText.match(/^Recycle (me|a unit|a card|a gear)\.?$/i);
+  if (recycleMatch) {
+    const targetStr = recycleMatch[1].toLowerCase();
+    const target = targetStr === "me" ? "self" : { type: targetStr.replace(/^a /, "") };
+    return { target, type: "recycle" };
   }
 
   return undefined;

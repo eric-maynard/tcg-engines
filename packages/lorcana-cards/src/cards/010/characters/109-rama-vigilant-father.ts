@@ -8,14 +8,14 @@ export const ramaVigilantFather: CharacterCard = {
           {
             chooser: "CONTROLLER",
             effect: {
-              type: "ready",
               target: {
-                selector: "self",
+                cardTypes: ["character"],
                 count: 1,
                 owner: "any",
+                selector: "self",
                 zones: ["play"],
-                cardTypes: ["character"],
               },
+              type: "ready",
             },
             type: "optional",
           },

@@ -10,7 +10,7 @@ import { Targets } from "../helpers";
 
 describe("Tribal: Dragon", () => {
   describe("dragon keyword grants", () => {
-    it.skip("should parse 'Your Dragons have [Assault].'", () => {
+    it("should parse 'Your Dragons have [Assault].'", () => {
       const result = parseAbilities(
         "Your Dragons have [Assault]. (+1 :rb_might: while they're attackers.)",
       );
@@ -35,7 +35,7 @@ describe("Tribal: Dragon", () => {
   });
 
   describe("dragon might bonus", () => {
-    it.skip("should parse 'Your Dragons have +1 :rb_might:.'", () => {
+    it("should parse 'Your Dragons have +1 :rb_might:.'", () => {
       const result = parseAbilities("Your Dragons have +1 :rb_might:.");
 
       expect(result.success).toBe(true);
@@ -44,7 +44,7 @@ describe("Tribal: Dragon", () => {
   });
 
   describe("dragon conditional", () => {
-    it.skip("should parse 'I enter ready if you control another Dragon.'", () => {
+    it("should parse 'I enter ready if you control another Dragon.'", () => {
       const result = parseAbilities("I enter ready if you control another Dragon.");
 
       expect(result.success).toBe(true);

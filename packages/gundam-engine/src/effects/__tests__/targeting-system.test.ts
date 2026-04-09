@@ -96,8 +96,8 @@ function createMockGameState(
       cardDamage: cardDamage as any,
       cardPositions: cardPositions as any,
       effectStack: {
-        stack: [],
         nextInstanceId: 0,
+        stack: [],
       },
       hasPlayedResourceThisTurn: {},
       revealedCards: [],

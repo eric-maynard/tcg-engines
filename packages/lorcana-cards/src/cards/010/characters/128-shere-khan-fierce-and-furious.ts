@@ -18,11 +18,11 @@ export const shereKhanFierceAndFurious: CharacterCard = {
           {
             amount: 1,
             target: {
-              selector: "self",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "self",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "deal-damage",
           },

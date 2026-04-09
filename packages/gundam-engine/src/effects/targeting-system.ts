@@ -454,11 +454,15 @@ export function matchesFilter(
     const { cardType } = cardDef;
     switch (filter.type) {
       case "unit": {
-        if (cardType !== "UNIT") {return false;}
+        if (cardType !== "UNIT") {
+          return false;
+        }
         break;
       }
       case "base": {
-        if (cardType !== "BASE") {return false;}
+        if (cardType !== "BASE") {
+          return false;
+        }
         break;
       }
       case "shield": {

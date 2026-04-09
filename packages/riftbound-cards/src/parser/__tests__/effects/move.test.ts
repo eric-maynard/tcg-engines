@@ -10,7 +10,7 @@ import { Effects } from "../helpers";
 
 describe("Effect: Move", () => {
   describe("move friendly unit", () => {
-    it.skip("should parse 'Move a friendly unit.'", () => {
+    it("should parse 'Move a friendly unit.'", () => {
       const result = parseAbilities("Move a friendly unit.");
 
       expect(result.success).toBe(true);
@@ -25,7 +25,7 @@ describe("Effect: Move", () => {
       );
     });
 
-    it.skip("should parse 'Move a friendly unit and ready it.'", () => {
+    it("should parse 'Move a friendly unit and ready it.'", () => {
       const result = parseAbilities("Move a friendly unit and ready it.");
 
       expect(result.success).toBe(true);
@@ -34,7 +34,7 @@ describe("Effect: Move", () => {
   });
 
   describe("move to specific location", () => {
-    it.skip("should parse 'Move a unit from a battlefield to its base.'", () => {
+    it("should parse 'Move a unit from a battlefield to its base.'", () => {
       const result = parseAbilities("Move a unit from a battlefield to its base.");
 
       expect(result.success).toBe(true);
@@ -51,7 +51,7 @@ describe("Effect: Move", () => {
       );
     });
 
-    it.skip("should parse 'Move up to 2 friendly units to base.'", () => {
+    it("should parse 'Move up to 2 friendly units to base.'", () => {
       const result = parseAbilities("Move up to 2 friendly units to base.");
 
       expect(result.success).toBe(true);
@@ -60,14 +60,14 @@ describe("Effect: Move", () => {
   });
 
   describe("move enemy unit", () => {
-    it.skip("should parse 'Move an enemy unit to here.'", () => {
+    it("should parse 'Move an enemy unit to here.'", () => {
       const result = parseAbilities("Move an enemy unit to here.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Move an enemy unit to a location where there's a unit with the same controller.'", () => {
+    it("should parse 'Move an enemy unit to a location where there's a unit with the same controller.'", () => {
       const result = parseAbilities(
         "Move an enemy unit to a location where there's a unit with the same controller.",
       );

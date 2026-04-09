@@ -8,13 +8,13 @@ export const onYourFeetNow: ActionCard = {
           {
             steps: [
               {
-                type: "ready",
                 target: "YOUR_CHARACTERS",
+                type: "ready",
               },
               {
-                type: "deal-damage",
                 amount: 1,
                 target: "CHOSEN_CHARACTER",
+                type: "deal-damage",
               },
             ],
             type: "sequence",

@@ -8,14 +8,14 @@ export const aresGodOfWar: CharacterCard = {
           {
             chooser: "CONTROLLER",
             effect: {
-              type: "ready",
               target: {
-                selector: "chosen",
+                cardTypes: ["character"],
                 count: 1,
                 owner: "any",
+                selector: "chosen",
                 zones: ["play"],
-                cardTypes: ["character"],
               },
+              type: "ready",
             },
             type: "optional",
           },

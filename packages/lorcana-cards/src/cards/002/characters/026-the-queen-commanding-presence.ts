@@ -26,11 +26,11 @@ export const theQueenCommandingPresence: CharacterCard = {
             modifier: 4,
             stat: "strength",
             target: {
-              selector: "chosen",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "modify-stat",
           },

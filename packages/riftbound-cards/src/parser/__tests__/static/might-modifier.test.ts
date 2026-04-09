@@ -10,7 +10,7 @@ import { Abilities } from "../helpers";
 
 describe("Static: Might Modifier", () => {
   describe("self might bonus", () => {
-    it.skip("should parse 'I have +1 :rb_might: for each friendly gear.'", () => {
+    it("should parse 'I have +1 :rb_might: for each friendly gear.'", () => {
       const result = parseAbilities("I have +1 :rb_might: for each friendly gear.");
 
       expect(result.success).toBe(true);
@@ -25,7 +25,7 @@ describe("Static: Might Modifier", () => {
       );
     });
 
-    it.skip("should parse 'I get +1 :rb_might: for each buffed friendly unit at my battlefield.'", () => {
+    it("should parse 'I get +1 :rb_might: for each buffed friendly unit at my battlefield.'", () => {
       const result = parseAbilities(
         "I get +1 :rb_might: for each buffed friendly unit at my battlefield.",
       );
@@ -36,7 +36,7 @@ describe("Static: Might Modifier", () => {
   });
 
   describe("other units might bonus", () => {
-    it.skip("should parse 'Other friendly units have +1 :rb_might: here.'", () => {
+    it("should parse 'Other friendly units have +1 :rb_might: here.'", () => {
       const result = parseAbilities("Other friendly units have +1 :rb_might: here.");
 
       expect(result.success).toBe(true);
@@ -52,7 +52,7 @@ describe("Static: Might Modifier", () => {
       );
     });
 
-    it.skip("should parse 'Other buffed friendly units at my battlefield have +2 :rb_might:.'", () => {
+    it("should parse 'Other buffed friendly units at my battlefield have +2 :rb_might:.'", () => {
       const result = parseAbilities(
         "Other buffed friendly units at my battlefield have +2 :rb_might:.",
       );
@@ -61,7 +61,7 @@ describe("Static: Might Modifier", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Your Mechs have +1 :rb_might:.'", () => {
+    it("should parse 'Your Mechs have +1 :rb_might:.'", () => {
       const result = parseAbilities("Your Mechs have +1 :rb_might:.");
 
       expect(result.success).toBe(true);
@@ -70,7 +70,7 @@ describe("Static: Might Modifier", () => {
   });
 
   describe("conditional might bonus", () => {
-    it.skip("should parse 'If you've spent at least :rb_rune_rainbow::rb_rune_rainbow: this turn, I have +2 :rb_might:.'", () => {
+    it("should parse 'If you've spent at least :rb_rune_rainbow::rb_rune_rainbow: this turn, I have +2 :rb_might:.'", () => {
       const result = parseAbilities(
         "If you've spent at least :rb_rune_rainbow::rb_rune_rainbow: this turn, I have +2 :rb_might: and [Ganking]. (I can move from battlefield to battlefield.)",
       );
@@ -89,7 +89,7 @@ describe("Static: Might Modifier", () => {
   });
 
   describe("equipment might bonus", () => {
-    it.skip("should parse 'Each Equipment attached to me gives double its base Might bonus.'", () => {
+    it("should parse 'Each Equipment attached to me gives double its base Might bonus.'", () => {
       const result = parseAbilities(
         "Each Equipment attached to me gives double its base Might bonus.",
       );

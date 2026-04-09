@@ -14,24 +14,24 @@ export const fairyGodmotherMagicalBenefactor: CharacterCard = {
         effect: {
           steps: [
             {
-              type: "banish",
               target: {
-                selector: "chosen",
                 count: 1,
-                filter: [{ type: "owner", owner: "opponent" }],
+                filter: [{ owner: "opponent", type: "owner" }],
+                selector: "chosen",
               },
+              type: "banish",
             },
             {
-              type: "conditional",
               condition: {
                 type: "if-you-do",
               },
               then: {
-                type: "look-at-cards",
                 amount: 1,
                 source: "deck",
                 target: "OPPONENT",
+                type: "look-at-cards",
               },
+              type: "conditional",
             },
           ],
           type: "sequence",

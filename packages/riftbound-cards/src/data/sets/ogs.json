@@ -1,0 +1,846 @@
+{
+  "set": {
+    "id": "OGS",
+    "name": "Origins Showcase",
+    "cardCount": 24,
+    "parsedCount": 24,
+    "errataCount": 2
+  },
+  "cards": [
+    {
+      "id": "ogs-001-024",
+      "name": "Annie, Fiery",
+      "collectorNumber": 1,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["fury"],
+      "rarity": "epic",
+      "energy": 5,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": ["Annie"],
+      "isChampion": true,
+      "rulesText": "Your spells and abilities deal 1 Bonus Damage. (Each instance of damage the spell deals is increased by 1.)",
+      "abilities": [
+        {
+          "effect": {
+            "description": "Your spells and abilities deal 1 Bonus Damage",
+            "effects": [],
+            "type": "sequence"
+          },
+          "type": "static"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/532d75dc36a16eb5954253a77366fcceac7aec62-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-002-024",
+      "name": "Firestorm",
+      "collectorNumber": 2,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "spell",
+      "domains": ["fury"],
+      "rarity": "uncommon",
+      "energy": 6,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Deal 3 to all enemy units at a battlefield.",
+      "abilities": [
+        {
+          "effect": {
+            "amount": 3,
+            "target": {
+              "type": "unit"
+            },
+            "type": "damage"
+          },
+          "timing": "action",
+          "type": "spell"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a7a34129e64f0296bf2da166c2b06ed156d568db-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-003-024",
+      "name": "Incinerate",
+      "collectorNumber": 3,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "spell",
+      "domains": ["fury"],
+      "rarity": "common",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nDeal 2 to a unit at a battlefield.",
+      "abilities": [
+        {
+          "keyword": "Action",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 2,
+            "target": {
+              "type": "unit"
+            },
+            "type": "damage"
+          },
+          "timing": "action",
+          "type": "spell"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/46e4eaada1412f9b6c24751bdb3932c6a51e905f-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-004-024",
+      "name": "Yi, Meditative",
+      "collectorNumber": 4,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["calm"],
+      "rarity": "rare",
+      "energy": 5,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": ["Yi"],
+      "isChampion": true,
+      "rulesText": "While you have 8+ runes, I have +4 [Might].",
+      "abilities": [
+        {
+          "effect": {
+            "description": "While you have 8+ runes, I have +4 Might",
+            "effects": [],
+            "type": "sequence"
+          },
+          "type": "static"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/5508566c8f05f09492148faa803332a731095eb7-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-005-024",
+      "name": "Zephyr Sage",
+      "collectorNumber": 5,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["calm"],
+      "rarity": "uncommon",
+      "energy": 6,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Shield] (+1 [Might] while I'm a defender.)",
+      "abilities": [
+        {
+          "keyword": "Shield",
+          "type": "keyword",
+          "value": 1
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7664b03bb107954195153d9f2f86c5d63682fa4b-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-006-024",
+      "name": "Lux, Illuminated",
+      "collectorNumber": 6,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["mind"],
+      "rarity": "rare",
+      "energy": 6,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": ["Lux"],
+      "isChampion": true,
+      "rulesText": "When you play a spell that costs [5] or more, give me +3 [Might] this turn.",
+      "abilities": [
+        {
+          "effect": {
+            "amount": 3,
+            "duration": "turn",
+            "target": {
+              "type": "unit"
+            },
+            "type": "modify-might"
+          },
+          "optional": false,
+          "trigger": {
+            "event": "play-spell",
+            "on": "self"
+          },
+          "type": "triggered"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a0d10edf30abb6fde21f5d386e9a7db3c1b0a098-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-007-024",
+      "name": "Garen, Rugged",
+      "collectorNumber": 7,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["body"],
+      "rarity": "rare",
+      "energy": 6,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": ["Garen"],
+      "isChampion": true,
+      "rulesText": "[Assault 2], [Shield 2] (+2 [Might] while I'm an attacker or defender.)",
+      "abilities": [
+        {
+          "keyword": "Assault",
+          "type": "keyword",
+          "value": 2
+        },
+        {
+          "keyword": "Shield",
+          "type": "keyword",
+          "value": 2
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/67c22dc29a7a28dabe0f169a7848c25bef1fbda4-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-008-024",
+      "name": "Gentlemen's Duel",
+      "collectorNumber": 8,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "spell",
+      "domains": ["body"],
+      "rarity": "common",
+      "energy": 6,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nGive a friendly unit +3 [Might] this turn. Then choose an enemy unit. They deal damage equal to their Mights to each other.",
+      "abilities": [
+        {
+          "keyword": "Action",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 3,
+            "duration": "turn",
+            "target": {
+              "type": "unit"
+            },
+            "type": "modify-might"
+          },
+          "type": "static"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/4568ab827fdcd42d6bb86b1c2de6182e286c9ee9-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-009-024",
+      "name": "Yi, Honed",
+      "collectorNumber": 9,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["body"],
+      "rarity": "epic",
+      "energy": 7,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": ["Yi"],
+      "isChampion": true,
+      "rulesText": "[Ganking] (I can move from battlefield to battlefield.)\nI enter ready.",
+      "abilities": [
+        {
+          "keyword": "Ganking",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "type": "enter-ready"
+          },
+          "type": "static"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0e16976cd6d7ee5a874be9351b428671990fbd25-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-010-024",
+      "name": "Annie, Stubborn",
+      "collectorNumber": 10,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["chaos"],
+      "rarity": "rare",
+      "energy": 4,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": ["Annie"],
+      "isChampion": true,
+      "rulesText": "When you play me, return a spell from your trash to your hand.",
+      "abilities": [
+        {
+          "effect": {
+            "description": "return a spell from your trash to your hand",
+            "effects": [],
+            "type": "sequence"
+          },
+          "optional": false,
+          "trigger": {
+            "event": "play-self",
+            "on": "self"
+          },
+          "type": "triggered"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/44eb968cf0c54e75970588b69eef5c5f5ccc9b24-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-011-024",
+      "name": "Flash",
+      "collectorNumber": 11,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "spell",
+      "domains": ["chaos"],
+      "rarity": "common",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nMove up to 2 friendly units to base.",
+      "abilities": [
+        {
+          "keyword": "Reaction",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "target": {
+              "type": "unit"
+            },
+            "to": "base",
+            "type": "move"
+          },
+          "timing": "action",
+          "type": "spell"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/4d9cc1c13b75933e509e642213f13359350cd3f9-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-012-024",
+      "name": "Blast of Power",
+      "collectorNumber": 12,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "spell",
+      "domains": ["order"],
+      "rarity": "common",
+      "energy": 6,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nKill a unit at a battlefield.",
+      "abilities": [
+        {
+          "keyword": "Action",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "target": {
+              "type": "unit"
+            },
+            "type": "kill"
+          },
+          "timing": "action",
+          "type": "spell"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/026f851a703601fce4142c0791e913377c170b47-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-013-024",
+      "name": "Garen, Commander",
+      "collectorNumber": 13,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["order"],
+      "rarity": "epic",
+      "energy": 6,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": ["Garen"],
+      "isChampion": true,
+      "rulesText": "Other friendly units have +1 [Might] here.",
+      "abilities": [
+        {
+          "effect": {
+            "description": "Other friendly units have +1 Might here",
+            "effects": [],
+            "type": "sequence"
+          },
+          "type": "static"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/cbf2c12d69a86566e4cda07050b2d4495e40187e-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-014-024",
+      "name": "Lux, Crownguard",
+      "collectorNumber": 14,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["order"],
+      "rarity": "epic",
+      "energy": 4,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": ["Lux"],
+      "isChampion": true,
+      "rulesText": "[Exhaust]: [Reaction] — [Add] [2]. Use only to play spells. (Abilities that add resources can't be reacted to.)",
+      "abilities": [
+        {
+          "cost": {
+            "exhaust": true
+          },
+          "effect": {
+            "description": "[Reaction] — [Add] :rb_energy_2:. Use only to play spells",
+            "effects": [],
+            "type": "sequence"
+          },
+          "type": "activated"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/17d0793ad495727e67bb1c94ae0e11cd4705870f-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-015-024",
+      "name": "Recruit the Vanguard",
+      "collectorNumber": 15,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "spell",
+      "domains": ["order"],
+      "rarity": "uncommon",
+      "energy": 6,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nPlay four 1 [Might] Recruit unit tokens. (They can be played to your base or to battlefields you control.)",
+      "abilities": [
+        {
+          "keyword": "Action",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "description": "Play four 1 Might Recruit unit tokens",
+            "effects": [],
+            "type": "sequence"
+          },
+          "timing": "action",
+          "type": "spell"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/81d1c47459606f7b627778cce9b5f0e44d80f7fa-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-016-024",
+      "name": "Vanguard Attendant",
+      "collectorNumber": 16,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["order"],
+      "rarity": "common",
+      "energy": 6,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "I enter ready.",
+      "abilities": [
+        {
+          "effect": {
+            "type": "enter-ready"
+          },
+          "type": "static"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/4ce467c1d51a65ab4fbae918dca38ae90b510844-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-017-024",
+      "name": "Dark Child - Starter",
+      "collectorNumber": 17,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "legend",
+      "domains": ["fury", "chaos"],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "At the end of your turn, ready up to 2 runes.",
+      "abilities": [
+        {
+          "effect": {
+            "target": {
+              "type": "unit"
+            },
+            "type": "ready"
+          },
+          "optional": false,
+          "trigger": {
+            "event": "end-of-turn",
+            "on": "self"
+          },
+          "type": "triggered"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/89963e1d1cffd69c620fb5d6b037f50d5c334463-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": "Changed 'ready 2 runes' to 'ready up to 2 runes'"
+    },
+    {
+      "id": "ogs-018-024",
+      "name": "Tibbers",
+      "collectorNumber": 18,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "unit",
+      "domains": ["fury", "chaos"],
+      "rarity": "epic",
+      "energy": 8,
+      "might": 7,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play me, deal 3 to all units at battlefields.",
+      "abilities": [
+        {
+          "effect": {
+            "amount": 3,
+            "target": {
+              "type": "unit"
+            },
+            "type": "damage"
+          },
+          "optional": false,
+          "trigger": {
+            "event": "play-self",
+            "on": "self"
+          },
+          "type": "triggered"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/74f8bc78573b33d9979b0e9c121b858d770a490c-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-019-024",
+      "name": "Wuju Bladesman - Starter",
+      "collectorNumber": 19,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "legend",
+      "domains": ["calm", "body"],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "While a friendly unit defends alone, it gets +2 [Might].",
+      "abilities": [
+        {
+          "effect": {
+            "description": "While a friendly unit defends alone, it gets +2 Might",
+            "effects": [],
+            "type": "sequence"
+          },
+          "type": "static"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/8231ced23eaf22ca3bf62ec8cb86b83a3e222da6-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-020-024",
+      "name": "Highlander",
+      "collectorNumber": 20,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "spell",
+      "domains": ["calm", "body"],
+      "rarity": "epic",
+      "energy": 4,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a friendly unit. The next time it would die this turn, heal it, exhaust it, and recall it instead. (Send it to base. This isn't a move.)",
+      "abilities": [
+        {
+          "keyword": "Reaction",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "description": "Choose a friendly unit. The next time it would die this turn, heal it, exhaust it, and recall it instead",
+            "effects": [],
+            "type": "sequence"
+          },
+          "type": "static"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/18c0818cbbfdf26a1237b4f7703b1f035f47b014-744x1039.png",
+      "illustrator": null,
+      "errata": "Expanded effect to heal and exhaust before recalling"
+    },
+    {
+      "id": "ogs-021-024",
+      "name": "Lady of Luminosity - Starter",
+      "collectorNumber": 21,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "legend",
+      "domains": ["mind", "order"],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play a spell that costs [5] or more, draw 1.",
+      "abilities": [
+        {
+          "effect": {
+            "amount": 1,
+            "type": "draw"
+          },
+          "optional": false,
+          "trigger": {
+            "event": "play-spell",
+            "on": "self"
+          },
+          "type": "triggered"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/44885d811b70621b188d9813b2b10b5cff1b81e6-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-022-024",
+      "name": "Final Spark",
+      "collectorNumber": 22,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "spell",
+      "domains": ["mind", "order"],
+      "rarity": "epic",
+      "energy": 8,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nDeal 8 to a unit.",
+      "abilities": [
+        {
+          "keyword": "Action",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 8,
+            "target": {
+              "type": "unit"
+            },
+            "type": "damage"
+          },
+          "timing": "action",
+          "type": "spell"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/4558a2dc1bb1f1b8a73ec0d82244654e84b12687-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-023-024",
+      "name": "Might of Demacia - Starter",
+      "collectorNumber": 23,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "legend",
+      "domains": ["body", "order"],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you conquer, if you have 4+ units at that battlefield, draw 2.",
+      "abilities": [
+        {
+          "effect": {
+            "description": "if you have 4+ units at that battlefield, draw 2",
+            "effects": [],
+            "type": "sequence"
+          },
+          "optional": false,
+          "trigger": {
+            "event": "conquer",
+            "on": "self"
+          },
+          "type": "triggered"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/e7185deb46f17770802d06aeddfe3b929afff880-744x1039.png",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ogs-024-024",
+      "name": "Decisive Strike",
+      "collectorNumber": 24,
+      "set": "OGS",
+      "setName": "Origins Showcase",
+      "cardType": "spell",
+      "domains": ["body", "order"],
+      "rarity": "epic",
+      "energy": 5,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nGive friendly units +2 [Might] this turn.",
+      "abilities": [
+        {
+          "keyword": "Action",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": 2,
+            "duration": "turn",
+            "target": {
+              "type": "unit"
+            },
+            "type": "modify-might"
+          },
+          "timing": "action",
+          "type": "spell"
+        }
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/986782271be078c184a8d1c196e375106459c6c5-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    }
+  ]
+}

@@ -8,15 +8,15 @@ export const johnSilverFerociousFriend: CharacterCard = {
           {
             chooser: "CONTROLLER",
             effect: {
-              type: "deal-damage",
               amount: 1,
               target: {
-                selector: "all",
+                cardTypes: ["character"],
                 count: "all",
                 owner: "any",
+                selector: "all",
                 zones: ["play"],
-                cardTypes: ["character"],
               },
+              type: "deal-damage",
             },
             type: "optional",
           },

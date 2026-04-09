@@ -14,11 +14,11 @@ export const magicBroomSwiftCleaner: CharacterCard = {
         effect: {
           intoDeck: "owner",
           target: {
-            selector: "chosen",
+            cardTypes: ["card"],
             count: 1,
             owner: "any",
+            selector: "chosen",
             zones: ["play"],
-            cardTypes: ["card"],
           },
           type: "shuffle-into-deck",
         },

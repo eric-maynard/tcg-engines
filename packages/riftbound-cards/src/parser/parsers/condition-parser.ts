@@ -64,6 +64,21 @@ const IF_IM_ALONE_PATTERN = /^if I'm alone,?\s*/i;
 const IF_DISCARDED_THIS_TURN_PATTERN = /^If you've discarded a card this turn,?\s*/i;
 
 /**
+ * Pattern for "While you control this battlefield" condition
+ */
+const WHILE_CONTROL_BATTLEFIELD_PATTERN = /^While you control this battlefield,?\s*/i;
+
+/**
+ * Pattern for "If you've spent at least RUNES this turn" condition
+ */
+const IF_SPENT_POWER_PATTERN = /^If you(?:'ve|'ve) spent at least .+? this turn,?\s*/i;
+
+/**
+ * Pattern for "If an enemy unit has died this turn" condition
+ */
+const IF_ENEMY_DIED_PATTERN = /^If an enemy unit has died this turn,?\s*/i;
+
+/**
  * Pattern for "[Legion]" condition (in activated abilities)
  */
 const LEGION_CONDITION_PATTERN = /^\[Legion\]\s*—?\s*/i;
@@ -157,6 +172,36 @@ export function parseConditionFromText(text: string): ConditionParseResult | und
     };
   }
 
+  // Try "While you control this battlefield"
+  const whileControlBattlefieldMatch = WHILE_CONTROL_BATTLEFIELD_PATTERN.exec(text);
+  if (whileControlBattlefieldMatch) {
+    return {
+      condition: { type: "control-battlefield" },
+      remainingText: text.slice(whileControlBattlefieldMatch[0].length),
+      startIndex: 0,
+    };
+  }
+
+  // Try "If you've spent at least RUNES this turn"
+  const ifSpentPowerMatch = IF_SPENT_POWER_PATTERN.exec(text);
+  if (ifSpentPowerMatch) {
+    return {
+      condition: { type: "spent-power" },
+      remainingText: text.slice(ifSpentPowerMatch[0].length),
+      startIndex: 0,
+    };
+  }
+
+  // Try "If an enemy unit has died this turn"
+  const ifEnemyDiedMatch = IF_ENEMY_DIED_PATTERN.exec(text);
+  if (ifEnemyDiedMatch) {
+    return {
+      condition: { event: "enemy-died", type: "this-turn" },
+      remainingText: text.slice(ifEnemyDiedMatch[0].length),
+      startIndex: 0,
+    };
+  }
+
   // Try "[Legion]" condition
   const legionMatch = LEGION_CONDITION_PATTERN.exec(text);
   if (legionMatch) {
@@ -211,11 +256,14 @@ export function startsWithCondition(text: string): boolean {
     WHILE_MIGHTY_PATTERN.test(text) ||
     WHILE_BUFFED_PATTERN.test(text) ||
     WHILE_AT_BATTLEFIELD_PATTERN.test(text) ||
+    WHILE_CONTROL_BATTLEFIELD_PATTERN.test(text) ||
     IF_MIGHTY_PATTERN.test(text) ||
     IF_ALONE_PATTERN.test(text) ||
     IF_IM_MIGHTY_PATTERN.test(text) ||
     IF_IM_ALONE_PATTERN.test(text) ||
     IF_DISCARDED_THIS_TURN_PATTERN.test(text) ||
+    IF_SPENT_POWER_PATTERN.test(text) ||
+    IF_ENEMY_DIED_PATTERN.test(text) ||
     LEGION_CONDITION_PATTERN.test(text)
   );
 }

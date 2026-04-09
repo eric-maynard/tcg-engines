@@ -54,40 +54,40 @@ describe("Move Enumeration System", () => {
       const gameDefinition: GameDefinition<TestGameState, TestMoves> = {
         moves: {
           attack: {
-            enumerator: () => [],
             condition: () => false,
+            enumerator: () => [],
             reducer: () => {},
           },
           passTurn: {
-            enumerator: () => [{}],
             condition: () => true,
+            enumerator: () => [{}],
             reducer: () => {},
           },
           playCard: {
+            condition: (state, context) => {
+              const player = state.players.find((p) => p.id === context.playerId);
+              if (!player) {return false;}
+
+              // Check if card is in hand
+              return player.hand.includes(context.params.cardId);
+            },
             enumerator: (
               state: TestGameState,
               context: import("../moves/move-enumeration").MoveEnumerationContext,
             ) => {
               const player = state.players.find((p) => p.id === context.playerId);
-              if (!player) return [];
+              if (!player) {return [];}
 
               // Return all cards in hand as possible parameters
               return player.hand.map((cardId: string) => ({ cardId }));
             },
-            condition: (state, context) => {
-              const player = state.players.find((p) => p.id === context.playerId);
-              if (!player) return false;
-
-              // Check if card is in hand
-              return player.hand.includes(context.params.cardId);
-            },
             reducer: (draft, context) => {
               const player = draft.players.find((p) => p.id === context.playerId);
-              if (!player) return;
+              if (!player) {return;}
 
               // Move card from hand to field
               const index = player.hand.indexOf(context.params.cardId);
-              if (index >= 0) {
+              if (index !== -1) {
                 player.hand.splice(index, 1);
                 player.field.push(context.params.cardId);
               }
@@ -98,11 +98,11 @@ describe("Move Enumeration System", () => {
         setup: (players) => ({
           currentPlayerIndex: 0,
           players: players.map((p) => ({
-            id: p.id,
-            name: p.name ?? "",
-            hand: ["card1", "card2", "card3"],
             field: [],
+            hand: ["card1", "card2", "card3"],
+            id: p.id,
             mana: 5,
+            name: p.name ?? "",
           })),
         }),
       };
@@ -138,26 +138,26 @@ describe("Move Enumeration System", () => {
       const gameDefinition: GameDefinition<TestGameState, TestMoves> = {
         moves: {
           attack: {
-            enumerator: () => [],
             condition: () => false,
+            enumerator: () => [],
             reducer: () => {},
           },
           passTurn: {
             // Enumerator returns single empty object for moves without params
-            enumerator: () => [{}],
             condition: () => true,
+            enumerator: () => [{}],
             reducer: () => {},
           },
           playCard: {
-            enumerator: () => [],
             condition: () => false,
+            enumerator: () => [],
             reducer: () => {},
           },
         },
         name: "Test Game",
         setup: () => ({
           currentPlayerIndex: 0,
-          players: [{ id: "p1", name: "Player 1", hand: [], field: [], mana: 0 }],
+          players: [{ field: [], hand: [], id: "p1", mana: 0, name: "Player 1" }],
         }),
       };
 
@@ -181,13 +181,13 @@ describe("Move Enumeration System", () => {
       const gameDefinition: GameDefinition<TestGameState, TestMoves> = {
         moves: {
           attack: {
-            enumerator: () => [],
             condition: () => false,
+            enumerator: () => [],
             reducer: () => {},
           },
           passTurn: {
-            enumerator: () => [{}],
             condition: () => true,
+            enumerator: () => [{}],
             reducer: () => {},
           },
           playCard: {
@@ -209,7 +209,7 @@ describe("Move Enumeration System", () => {
         name: "Test Game",
         setup: () => ({
           currentPlayerIndex: 0,
-          players: [{ id: "p1", name: "Player 1", hand: ["card1"], field: [], mana: 0 }],
+          players: [{ field: [], hand: ["card1"], id: "p1", mana: 0, name: "Player 1" }],
         }),
       };
 
@@ -241,13 +241,13 @@ describe("Move Enumeration System", () => {
       const gameDefinition: GameDefinition<TestGameState, TestMoves> = {
         moves: {
           attack: {
-            enumerator: () => [],
             condition: () => false,
+            enumerator: () => [],
             reducer: () => {},
           },
           passTurn: {
-            enumerator: () => [{}],
             condition: () => true,
+            enumerator: () => [{}],
             reducer: () => {},
           },
           playCard: {
@@ -266,9 +266,9 @@ describe("Move Enumeration System", () => {
 
               if (available < required) {
                 return {
-                  reason: `Not enough mana. Required: ${required}, Available: ${available}`,
+                  context: { available, required },
                   errorCode: "INSUFFICIENT_MANA",
-                  context: { required, available },
+                  reason: `Not enough mana. Required: ${required}, Available: ${available}`,
                 };
               }
 
@@ -280,7 +280,7 @@ describe("Move Enumeration System", () => {
         name: "Test Game",
         setup: () => ({
           currentPlayerIndex: 0,
-          players: [{ id: "p1", name: "Player 1", hand: ["card1"], field: [], mana: 0 }],
+          players: [{ field: [], hand: ["card1"], id: "p1", mana: 0, name: "Player 1" }],
         }),
       };
 
@@ -309,16 +309,17 @@ describe("Move Enumeration System", () => {
       const gameDefinition: GameDefinition<TestGameState, TestMoves> = {
         moves: {
           attack: {
-            enumerator: () => [],
             condition: () => false,
+            enumerator: () => [],
             reducer: () => {},
           },
           passTurn: {
-            enumerator: () => [{}],
             condition: () => true,
+            enumerator: () => [{}],
             reducer: () => {},
           },
           playCard: {
+            condition: () => true,
             enumerator: (
               state: TestGameState,
               context: import("../moves/move-enumeration").MoveEnumerationContext,
@@ -326,21 +327,20 @@ describe("Move Enumeration System", () => {
               const player = state.players.find((p) => p.id === context.playerId);
               return player ? player.hand.map((cardId: string) => ({ cardId })) : [];
             },
-            condition: () => true,
-            reducer: () => {},
             metadata: {
-              displayName: "Play Card",
-              description: "Play a card from your hand",
               category: "action",
-              tags: ["card", "play"],
+              description: "Play a card from your hand",
+              displayName: "Play Card",
               priority: 1,
+              tags: ["card", "play"],
             },
+            reducer: () => {},
           },
         },
         name: "Test Game",
         setup: () => ({
           currentPlayerIndex: 0,
-          players: [{ id: "p1", name: "Player 1", hand: ["card1"], field: [], mana: 5 }],
+          players: [{ field: [], hand: ["card1"], id: "p1", mana: 5, name: "Player 1" }],
         }),
       };
 
@@ -376,13 +376,13 @@ describe("Move Enumeration System", () => {
       const gameDefinition: GameDefinition<TestGameState, TestMoves> = {
         moves: {
           attack: {
-            enumerator: () => [],
             condition: () => false,
+            enumerator: () => [],
             reducer: () => {},
           },
           passTurn: {
-            enumerator: () => [{}],
             condition: () => true,
+            enumerator: () => [{}],
             reducer: () => {},
           },
           playCard: {
@@ -394,7 +394,7 @@ describe("Move Enumeration System", () => {
         name: "Test Game",
         setup: () => ({
           currentPlayerIndex: 0,
-          players: [{ id: "p1", name: "Player 1", hand: [], field: [], mana: 0 }],
+          players: [{ field: [], hand: [], id: "p1", mana: 0, name: "Player 1" }],
         }),
       };
 
@@ -424,28 +424,28 @@ describe("Move Enumeration System", () => {
       const gameDefinition: GameDefinition<TestGameState, TestMoves> = {
         moves: {
           attack: {
-            enumerator: () => [],
             condition: () => false,
+            enumerator: () => [],
             reducer: () => {},
           },
           passTurn: {
-            enumerator: () => [{}],
             condition: () => true,
+            enumerator: () => [{}],
             reducer: () => {},
           },
           playCard: {
             // Enumerator that throws an error
+            condition: () => true,
             enumerator: () => {
               throw new Error("Test enumerator error");
             },
-            condition: () => true,
             reducer: () => {},
           },
         },
         name: "Test Game",
         setup: () => ({
           currentPlayerIndex: 0,
-          players: [{ id: "p1", name: "Player 1", hand: [], field: [], mana: 0 }],
+          players: [{ field: [], hand: [], id: "p1", mana: 0, name: "Player 1" }],
         }),
       };
 
@@ -472,16 +472,17 @@ describe("Move Enumeration System", () => {
       const gameDefinition: GameDefinition<TestGameState, TestMoves> = {
         moves: {
           attack: {
-            enumerator: () => [{ attackerId: "a1", targetId: "t1" }],
             condition: () => true,
+            enumerator: () => [{ attackerId: "a1", targetId: "t1" }],
             reducer: () => {},
           },
           passTurn: {
-            enumerator: () => [{}],
             condition: () => true,
+            enumerator: () => [{}],
             reducer: () => {},
           },
           playCard: {
+            condition: () => true,
             enumerator: (
               state: TestGameState,
               context: import("../moves/move-enumeration").MoveEnumerationContext,
@@ -489,14 +490,13 @@ describe("Move Enumeration System", () => {
               const player = state.players.find((p) => p.id === context.playerId);
               return player ? player.hand.map((cardId: string) => ({ cardId })) : [];
             },
-            condition: () => true,
             reducer: () => {},
           },
         },
         name: "Test Game",
         setup: () => ({
           currentPlayerIndex: 0,
-          players: [{ id: "p1", name: "Player 1", hand: ["card1"], field: [], mana: 5 }],
+          players: [{ field: [], hand: ["card1"], id: "p1", mana: 5, name: "Player 1" }],
         }),
       };
 
@@ -520,16 +520,17 @@ describe("Move Enumeration System", () => {
       const gameDefinition: GameDefinition<TestGameState, TestMoves> = {
         moves: {
           attack: {
-            enumerator: () => [],
             condition: () => false,
+            enumerator: () => [],
             reducer: () => {},
           },
           passTurn: {
-            enumerator: () => [{}],
             condition: () => true,
+            enumerator: () => [{}],
             reducer: () => {},
           },
           playCard: {
+            condition: () => true,
             enumerator: (
               state: TestGameState,
               context: import("../moves/move-enumeration").MoveEnumerationContext,
@@ -537,7 +538,6 @@ describe("Move Enumeration System", () => {
               const player = state.players.find((p) => p.id === context.playerId);
               return player ? player.hand.map((cardId: string) => ({ cardId })) : [];
             },
-            condition: () => true,
             reducer: () => {},
           },
         },
@@ -546,11 +546,11 @@ describe("Move Enumeration System", () => {
           currentPlayerIndex: 0,
           players: [
             {
-              id: "p1",
-              name: "Player 1",
-              hand: ["card1", "card2", "card3", "card4", "card5"],
               field: [],
+              hand: ["card1", "card2", "card3", "card4", "card5"],
+              id: "p1",
               mana: 5,
+              name: "Player 1",
             },
           ],
         }),
@@ -585,13 +585,14 @@ describe("Move Enumeration System", () => {
         moves: {
           attack: {
             // Enumerate all attacker-target combinations
+            condition: () => true,
             enumerator: (
               state: TestGameState,
               context: import("../moves/move-enumeration").MoveEnumerationContext,
             ) => {
               const results: AttackParams[] = [];
               const player = state.players.find((p) => p.id === context.playerId);
-              if (!player) return [];
+              if (!player) {return [];}
 
               // Get all opponent creatures
               const opponents = state.players.filter((p) => p.id !== context.playerId);
@@ -606,17 +607,16 @@ describe("Move Enumeration System", () => {
 
               return results;
             },
-            condition: () => true,
             reducer: () => {},
           },
           passTurn: {
-            enumerator: () => [{}],
             condition: () => true,
+            enumerator: () => [{}],
             reducer: () => {},
           },
           playCard: {
-            enumerator: () => [],
             condition: () => false,
+            enumerator: () => [],
             reducer: () => {},
           },
         },
@@ -624,11 +624,11 @@ describe("Move Enumeration System", () => {
         setup: (players) => ({
           currentPlayerIndex: 0,
           players: players.map((p) => ({
-            id: p.id,
-            name: p.name ?? "",
-            hand: [],
             field: p.id === "p1" ? ["attacker1", "attacker2"] : ["target1"],
+            hand: [],
+            id: p.id,
             mana: 5,
+            name: p.name ?? "",
           })),
         }),
       };

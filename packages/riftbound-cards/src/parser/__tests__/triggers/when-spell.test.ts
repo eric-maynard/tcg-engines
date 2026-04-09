@@ -10,7 +10,7 @@ import { Effects, Triggers } from "../helpers";
 
 describe("Trigger: When Spell", () => {
   describe("draw effects", () => {
-    it.skip("should parse 'When you play a spell, draw 1.'", () => {
+    it("should parse 'When you play a spell, draw 1.'", () => {
       const result = parseAbilities("When you play a spell, draw 1.");
 
       expect(result.success).toBe(true);
@@ -31,7 +31,7 @@ describe("Trigger: When Spell", () => {
   });
 
   describe("might modification effects", () => {
-    it.skip("should parse 'When you play a spell, give me +1 :rb_might: this turn.'", () => {
+    it("should parse 'When you play a spell, give me +1 :rb_might: this turn.'", () => {
       const result = parseAbilities("When you play a spell, give me +1 :rb_might: this turn.");
 
       expect(result.success).toBe(true);
@@ -49,7 +49,7 @@ describe("Trigger: When Spell", () => {
   });
 
   describe("buff effects", () => {
-    it.skip("should parse 'When you play a spell, buff a friendly unit.'", () => {
+    it("should parse 'When you play a spell, buff a friendly unit.'", () => {
       const result = parseAbilities(
         "When you play a spell, buff a friendly unit. (If it doesn't have a buff, it gets a +1 :rb_might: buff.)",
       );
@@ -68,7 +68,7 @@ describe("Trigger: When Spell", () => {
   });
 
   describe("first time restrictions", () => {
-    it.skip("should parse 'The first time you play a spell each turn, draw 1.'", () => {
+    it("should parse 'The first time you play a spell each turn, draw 1.'", () => {
       const result = parseAbilities("The first time you play a spell each turn, draw 1.");
 
       expect(result.success).toBe(true);
@@ -90,7 +90,7 @@ describe("Trigger: When Spell", () => {
   });
 
   describe("opponent spell triggers", () => {
-    it.skip("should parse 'When an opponent plays a spell, draw 1.'", () => {
+    it("should parse 'When an opponent plays a spell, draw 1.'", () => {
       const result = parseAbilities("When an opponent plays a spell, draw 1.");
 
       expect(result.success).toBe(true);

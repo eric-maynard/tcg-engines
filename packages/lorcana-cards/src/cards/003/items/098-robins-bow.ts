@@ -24,11 +24,11 @@ export const robinsBow: ItemCard = {
         chooser: "CONTROLLER",
         effect: {
           target: {
-            selector: "self",
+            cardTypes: ["item"],
             count: 1,
             owner: "any",
+            selector: "self",
             zones: ["play"],
-            cardTypes: ["item"],
           },
           type: "ready",
         },

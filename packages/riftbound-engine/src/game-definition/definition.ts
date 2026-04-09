@@ -7,7 +7,9 @@
 
 import type { GameDefinition } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../types";
+import { createPlayerView } from "../views/player-view";
 import { riftboundZones } from "../zones/zone-configs";
+import { riftboundFlow } from "./flow/riftbound-flow";
 import { riftboundMoves } from "./moves";
 import { createInitialState } from "./setup/game-setup";
 
@@ -27,13 +29,20 @@ export const riftboundDefinition: GameDefinition<
   unknown,
   RiftboundCardMeta
 > = {
-  name: "Riftbound Tabletop Simulator",
+  name: "Riftbound TCG",
 
   setup: createInitialState,
 
   moves: riftboundMoves,
 
   zones: riftboundZones,
+
+  flow: riftboundFlow,
+
+  trackers: {
+    perPlayer: true,
+    perTurn: ["hasChanneled", "hasDrawn"],
+  },
 
   // Win condition based on victory points
   endIf: (state) => {
@@ -51,5 +60,5 @@ export const riftboundDefinition: GameDefinition<
 
   // Player view - in tabletop simulator, most info is public
   // Only hide opponent's hand and facedown cards
-  playerView: (state, playerId) => state,
+  playerView: (state, playerId) => createPlayerView(state, playerId),
 };

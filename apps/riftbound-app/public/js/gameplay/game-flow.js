@@ -175,17 +175,27 @@ function renderGameOver() {
     return;
   }
 
-  const winner = gameState.winner;
-  const isWinner = winner === viewingPlayer;
   const opponent = viewingPlayer === P1 ? P2 : P1;
-
   const viewerVP = gameState.players?.[viewingPlayer]?.victoryPoints ?? 0;
   const opponentVP = gameState.players?.[opponent]?.victoryPoints ?? 0;
   const targetVP = gameState.victoryScore ?? "?";
 
+  // Determine winner: prefer gameState.winner, but fall back to VP comparison
+  // to guard against edge cases where the winner field is empty or mismatched
+  let winner = gameState.winner;
+  if (!winner || (winner !== viewingPlayer && winner !== opponent)) {
+    // Winner field is missing or unexpected — derive from scores
+    if (viewerVP > opponentVP) winner = viewingPlayer;
+    else if (opponentVP > viewerVP) winner = opponent;
+    else winner = gameState.winner || opponent; // tie or unknown: use original or default
+  }
+  const isWinner = winner === viewingPlayer;
+
+  const winnerName = pName(winner) || winner || "Unknown";
+
   box.innerHTML = `
     <div class="go-result ${isWinner ? "win" : "lose"}">${isWinner ? "Victory!" : "Defeat"}</div>
-    <div class="go-winner">${isWinner ? "Congratulations!" : esc(pName(winner)) + " wins the game"}</div>
+    <div class="go-winner">${isWinner ? "Congratulations!" : esc(winnerName) + " wins the game"}</div>
     <div class="go-scores">
       <div class="go-score ${isWinner ? "is-winner" : ""}">
         <div class="go-score-name">${esc(pName(viewingPlayer))}</div>

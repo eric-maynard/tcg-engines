@@ -119,7 +119,9 @@ export const createZoneOperations = <TCardDef, TCardMeta>(
       let sourceZoneId: string | undefined;
       for (const zoneId in state.zones) {
         const zone = state.zones[zoneId];
-        if (!zone) {continue;}
+        if (!zone) {
+          continue;
+        }
         const index = zone.cardIds.indexOf(cardId);
         if (index !== -1) {
           zone.cardIds.splice(index, 1);
@@ -129,7 +131,9 @@ export const createZoneOperations = <TCardDef, TCardMeta>(
           if (zone.config.ordered) {
             for (let i = index; i < zone.cardIds.length; i++) {
               const cid = zone.cardIds[i];
-              if (!cid) {continue;}
+              if (!cid) {
+                continue;
+              }
               if (state.cards[cid]) {
                 state.cards[cid].position = i;
               }
@@ -310,18 +314,11 @@ export const createGameOperations = <TCardDef, TCardMeta>(
     }
   },
 
-  getChoosingFirstPlayer: () => {
-    return state.choosingFirstPlayer;
-  },
+  getChoosingFirstPlayer: () => state.choosingFirstPlayer,
 
-  getOTP: () => {
-    return state.otp;
-  },
+  getOTP: () => state.otp,
 
-  getPendingMulligan: () => {
-    // Return copy to prevent external mutation
-    return state.pendingMulligan ? [...state.pendingMulligan] : [];
-  },
+  getPendingMulligan: () => (state.pendingMulligan ? [...state.pendingMulligan] : []),
 
   removePendingMulligan: (playerId: PlayerId) => {
     if (!state.pendingMulligan) {
@@ -381,7 +378,9 @@ export const createCounterOperations = <TCardDef, TCardMeta>(
   return {
     addCounter: (cardId, type, amount) => {
       logger?.trace("Adding counter", { amount, cardId, type });
-      if (amount <= 0) {return;}
+      if (amount <= 0) {
+        return;
+      }
       const counterState = getCounterState(cardId);
       if (!counterState.__counters) {
         counterState.__counters = {};
@@ -442,9 +441,13 @@ export const createCounterOperations = <TCardDef, TCardMeta>(
 
     removeCounter: (cardId, type, amount) => {
       logger?.trace("Removing counter", { amount, cardId, type });
-      if (amount <= 0) {return;}
+      if (amount <= 0) {
+        return;
+      }
       const counterState = getCounterState(cardId);
-      if (!counterState.__counters) {return;}
+      if (!counterState.__counters) {
+        return;
+      }
       const current = counterState.__counters[type] ?? 0;
       counterState.__counters[type] = Math.max(0, current - amount);
     },

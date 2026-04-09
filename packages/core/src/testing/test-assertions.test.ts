@@ -69,10 +69,10 @@ describe("test-assertions", () => {
         },
         phase: "main" as const,
         players: players.map((p) => ({
+          hand: [] as string[],
           id: p.id as PlayerId,
           name: p.name || "Player",
           score: 0,
-          hand: [] as string[],
         })),
         turnNumber: 1,
       }),

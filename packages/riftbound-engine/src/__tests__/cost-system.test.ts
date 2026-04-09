@@ -30,7 +30,7 @@ function createMockState(overrides?: Partial<RiftboundGameState>): RiftboundGame
     runePools: { p1: { energy: 5, power: {} }, p2: { energy: 5, power: {} } },
     scoredThisTurn: { p1: [], p2: [] },
     status: "playing",
-    turn: { activePlayer: "p1", number: 1, phase: "action" },
+    turn: { activePlayer: "p1", number: 1, phase: "main" },
     victoryScore: 8,
     ...overrides,
   };

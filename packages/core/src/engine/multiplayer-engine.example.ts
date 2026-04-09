@@ -85,10 +85,10 @@ function createCardGame(): GameDefinition<CardGameState, CardGameMoves> {
     setup: (players) => ({
       currentPlayerIndex: 0,
       players: players.map((p) => ({
+        deck: Array.from({ length: 20 }, (_, i) => `card-${i + 1}`),
+        hand: [],
         id: p.id,
         name: p.name || "Player",
-        hand: [],
-        deck: Array.from({ length: 20 }, (_, i) => `card-${i + 1}`),
         score: 0,
       })),
       turnNumber: 1,

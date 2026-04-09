@@ -8,11 +8,11 @@ export const jumboPop: ItemCard = {
           {
             amount: 2,
             target: {
-              selector: "all",
+              cardTypes: ["character"],
               count: "all",
               owner: "you",
+              selector: "all",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "remove-damage",
             upTo: true,

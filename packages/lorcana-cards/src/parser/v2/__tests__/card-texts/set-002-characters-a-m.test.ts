@@ -503,8 +503,8 @@ FORGET THE COACH, HERE'S A SWORD Whenever this character quests, your characters
           {
             ability: {
               effect: {
-                type: "return-to-hand",
                 target: "SELF",
+                type: "return-to-hand",
               },
               trigger: {
                 event: "banish-in-challenge",

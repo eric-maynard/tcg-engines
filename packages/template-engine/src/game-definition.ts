@@ -10,16 +10,18 @@ import type { TemplateGameMoves, TemplateGameState } from "./types";
 const moves: GameMoveDefinitions<TemplateGameState, TemplateGameMoves> = {
   attack: {
     condition: (state, context) => {
-      if (state.phase !== "main") {return false;}
+      if (state.phase !== "main") {
+        return false;
+      }
 
-      const {attackerId} = context.params;
+      const { attackerId } = context.params;
       const attacker = state.cards[attackerId];
 
       return attacker !== undefined && !attacker.tapped;
     },
     reducer: (draft, context) => {
-      const {attackerId} = context.params;
-      const {targetId} = context.params;
+      const { attackerId } = context.params;
+      const { targetId } = context.params;
 
       // Tap attacker
       const attacker = draft.cards[attackerId];
@@ -41,7 +43,7 @@ const moves: GameMoveDefinitions<TemplateGameState, TemplateGameMoves> = {
       return player !== undefined && state.phase === "draw";
     },
     reducer: (draft, context) => {
-      const {playerId} = context;
+      const { playerId } = context;
       const deck = draft.zones.deck[playerId];
 
       if (deck && deck.length > 0) {
@@ -85,17 +87,21 @@ const moves: GameMoveDefinitions<TemplateGameState, TemplateGameMoves> = {
 
   playCard: {
     condition: (state, context) => {
-      if (state.phase !== "main") {return false;}
-      const {cardId} = context.params;
-      if (!cardId) {return false;}
+      if (state.phase !== "main") {
+        return false;
+      }
+      const { cardId } = context.params;
+      if (!cardId) {
+        return false;
+      }
 
       const hand = state.zones.hand[context.playerId];
 
       return hand?.some((c) => c === cardId) ?? false;
     },
     reducer: (draft, context) => {
-      const {playerId} = context;
-      const {cardId} = context.params;
+      const { playerId } = context;
+      const { cardId } = context.params;
 
       // Remove from hand
       const hand = draft.zones.hand[playerId];
@@ -160,15 +166,15 @@ export const templateGameDefinition: GameDefinition<TemplateGameState, TemplateG
     phase: "draw",
     players: players.map((p) => ({
       id: p.id as PlayerId,
-      name: p.name || "Player",
       life: 20,
+      name: p.name || "Player",
     })),
     turnNumber: 1,
     zones: {
       deck: Object.fromEntries(players.map((p) => [p.id, []])),
-      hand: Object.fromEntries(players.map((p) => [p.id, []])),
       field: Object.fromEntries(players.map((p) => [p.id, []])),
       graveyard: Object.fromEntries(players.map((p) => [p.id, []])),
+      hand: Object.fromEntries(players.map((p) => [p.id, []])),
     },
   }),
 };

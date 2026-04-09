@@ -10,7 +10,7 @@ import { Effects } from "../helpers";
 
 describe("Special: Extra Turn", () => {
   describe("extra turn effect", () => {
-    it.skip("should parse 'Take an extra turn after this one.'", () => {
+    it("should parse 'Take an extra turn after this one.'", () => {
       const result = parseAbilities("Take an extra turn after this one.");
 
       expect(result.success).toBe(true);
@@ -27,7 +27,7 @@ describe("Special: Extra Turn", () => {
   });
 
   describe("conditional extra turn", () => {
-    it.skip("should parse 'If you've scored 3 or more points this turn, take an extra turn after this one.'", () => {
+    it("should parse 'If you've scored 3 or more points this turn, take an extra turn after this one.'", () => {
       const result = parseAbilities(
         "If you've scored 3 or more points this turn, take an extra turn after this one.",
       );

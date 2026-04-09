@@ -47,3 +47,6 @@ packages/core-ui/.svelte-kit/
 packages/core-ui/dist
 */.svelte-kit/
 */dist
+
+# Game logs
+apps/riftbound-app/logs/

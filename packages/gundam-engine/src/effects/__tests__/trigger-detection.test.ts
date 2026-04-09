@@ -49,8 +49,8 @@ function createMockGameState(players: PlayerId[]): GundamGameState {
       cardDamage: {},
       cardPositions: {},
       effectStack: {
-        stack: [],
         nextInstanceId: 0,
+        stack: [],
       },
       hasPlayedResourceThisTurn: {},
       revealedCards: [],

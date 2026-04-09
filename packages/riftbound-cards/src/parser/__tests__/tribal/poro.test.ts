@@ -10,7 +10,7 @@ import { Targets } from "../helpers";
 
 describe("Tribal: Poro", () => {
   describe("poro keyword grants", () => {
-    it.skip("should parse 'Your Poros have [Shield].'", () => {
+    it("should parse 'Your Poros have [Shield].'", () => {
       const result = parseAbilities(
         "Your Poros have [Shield]. (+1 :rb_might: while they're defenders.)",
       );
@@ -35,7 +35,7 @@ describe("Tribal: Poro", () => {
   });
 
   describe("poro might bonus", () => {
-    it.skip("should parse 'Your Poros have +1 :rb_might:.'", () => {
+    it("should parse 'Your Poros have +1 :rb_might:.'", () => {
       const result = parseAbilities("Your Poros have +1 :rb_might:.");
 
       expect(result.success).toBe(true);
@@ -44,7 +44,7 @@ describe("Tribal: Poro", () => {
   });
 
   describe("poro conditional", () => {
-    it.skip("should parse 'I enter ready if you control another Poro.'", () => {
+    it("should parse 'I enter ready if you control another Poro.'", () => {
       const result = parseAbilities("I enter ready if you control another Poro.");
 
       expect(result.success).toBe(true);

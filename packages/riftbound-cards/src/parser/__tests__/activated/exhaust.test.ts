@@ -10,7 +10,7 @@ import { Costs, Effects } from "../helpers";
 
 describe("Activated: Exhaust Cost", () => {
   describe("draw effects", () => {
-    it.skip("should parse ':rb_exhaust:: Draw 1.'", () => {
+    it("should parse ':rb_exhaust:: Draw 1.'", () => {
       const result = parseAbilities(":rb_exhaust:: Draw 1.");
 
       expect(result.success).toBe(true);
@@ -29,7 +29,7 @@ describe("Activated: Exhaust Cost", () => {
       );
     });
 
-    it.skip("should parse ':rb_exhaust:: Draw 2.'", () => {
+    it("should parse ':rb_exhaust:: Draw 2.'", () => {
       const result = parseAbilities(":rb_exhaust:: Draw 2.");
 
       expect(result.success).toBe(true);
@@ -38,7 +38,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("might modification effects", () => {
-    it.skip("should parse ':rb_exhaust:: Give a unit +2 :rb_might: this turn.'", () => {
+    it("should parse ':rb_exhaust:: Give a unit +2 :rb_might: this turn.'", () => {
       const result = parseAbilities(":rb_exhaust:: Give a unit +2 :rb_might: this turn.");
 
       expect(result.success).toBe(true);
@@ -57,7 +57,7 @@ describe("Activated: Exhaust Cost", () => {
       );
     });
 
-    it.skip("should parse ':rb_exhaust:: Give me +1 :rb_might: this turn.'", () => {
+    it("should parse ':rb_exhaust:: Give me +1 :rb_might: this turn.'", () => {
       const result = parseAbilities(":rb_exhaust:: Give me +1 :rb_might: this turn.");
 
       expect(result.success).toBe(true);
@@ -66,7 +66,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("keyword granting effects", () => {
-    it.skip("should parse ':rb_exhaust:: Give a unit [Ganking] this turn.'", () => {
+    it("should parse ':rb_exhaust:: Give a unit [Ganking] this turn.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: Give a unit [Ganking] this turn. (It can move from battlefield to battlefield.)",
       );
@@ -86,7 +86,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("buff effects", () => {
-    it.skip("should parse ':rb_exhaust:: Buff a friendly unit.'", () => {
+    it("should parse ':rb_exhaust:: Buff a friendly unit.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: Buff a friendly unit. (If it doesn't have a buff, it gets a +1 :rb_might: buff.)",
       );
@@ -105,7 +105,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("damage effects", () => {
-    it.skip("should parse ':rb_exhaust:: Deal 2 to a unit at a battlefield.'", () => {
+    it("should parse ':rb_exhaust:: Deal 2 to a unit at a battlefield.'", () => {
       const result = parseAbilities(":rb_exhaust:: Deal 2 to a unit at a battlefield.");
 
       expect(result.success).toBe(true);
@@ -123,7 +123,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("movement effects", () => {
-    it.skip("should parse ':rb_exhaust:: Move a friendly unit.'", () => {
+    it("should parse ':rb_exhaust:: Move a friendly unit.'", () => {
       const result = parseAbilities(":rb_exhaust:: Move a friendly unit.");
 
       expect(result.success).toBe(true);
@@ -140,7 +140,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("exhaust with energy cost", () => {
-    it.skip("should parse ':rb_energy_1:, :rb_exhaust:: Draw 1.'", () => {
+    it("should parse ':rb_energy_1:, :rb_exhaust:: Draw 1.'", () => {
       const result = parseAbilities(":rb_energy_1:, :rb_exhaust:: Draw 1.");
 
       expect(result.success).toBe(true);
@@ -156,7 +156,7 @@ describe("Activated: Exhaust Cost", () => {
       );
     });
 
-    it.skip("should parse ':rb_energy_2:, :rb_exhaust:: Draw 2.'", () => {
+    it("should parse ':rb_energy_2:, :rb_exhaust:: Draw 2.'", () => {
       const result = parseAbilities(":rb_energy_2:, :rb_exhaust:: Draw 2.");
 
       expect(result.success).toBe(true);
@@ -165,7 +165,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("exhaust with power cost", () => {
-    it.skip("should parse ':rb_rune_rainbow:, :rb_exhaust:: Draw 1.'", () => {
+    it("should parse ':rb_rune_rainbow:, :rb_exhaust:: Draw 1.'", () => {
       const result = parseAbilities(":rb_rune_rainbow:, :rb_exhaust:: Draw 1.");
 
       expect(result.success).toBe(true);
@@ -181,7 +181,7 @@ describe("Activated: Exhaust Cost", () => {
       );
     });
 
-    it.skip("should parse ':rb_rune_fury:, :rb_exhaust:: Give me +2 :rb_might: this turn.'", () => {
+    it("should parse ':rb_rune_fury:, :rb_exhaust:: Give me +2 :rb_might: this turn.'", () => {
       const result = parseAbilities(
         ":rb_rune_fury:, :rb_exhaust:: Give me +2 :rb_might: this turn.",
       );
@@ -192,7 +192,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("exhaust with energy and power cost", () => {
-    it.skip("should parse ':rb_energy_1::rb_rune_body:, :rb_exhaust:: Buff a friendly unit.'", () => {
+    it("should parse ':rb_energy_1::rb_rune_body:, :rb_exhaust:: Buff a friendly unit.'", () => {
       const result = parseAbilities(
         ":rb_energy_1::rb_rune_body:, :rb_exhaust:: Buff a friendly unit. (If it doesn't have a buff, it gets a +1 :rb_might: buff.)",
       );
@@ -213,7 +213,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("legion condition", () => {
-    it.skip("should parse ':rb_exhaust:: [Legion] — The next unit you play this turn enters ready.'", () => {
+    it("should parse ':rb_exhaust:: [Legion] — The next unit you play this turn enters ready.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Legion] — The next unit you play this turn enters ready. (Get the effect if you've played another card this turn.)",
       );
@@ -232,7 +232,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("reaction timing", () => {
-    it.skip("should parse ':rb_exhaust:: [Reaction], [Legion] — [Add] :rb_energy_1:.'", () => {
+    it("should parse ':rb_exhaust:: [Reaction], [Legion] — [Add] :rb_energy_1:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Reaction], [Legion] — [Add] :rb_energy_1:. (Abilities that add resources can't be reacted to. Get the effect if you've played a card this turn.)",
       );
@@ -249,7 +249,7 @@ describe("Activated: Exhaust Cost", () => {
   });
 
   describe("token creation", () => {
-    it.skip("should parse ':rb_energy_1:, :rb_exhaust:: Play a 2 :rb_might: Sand Soldier unit token to your base.'", () => {
+    it("should parse ':rb_energy_1:, :rb_exhaust:: Play a 2 :rb_might: Sand Soldier unit token to your base.'", () => {
       const result = parseAbilities(
         ":rb_energy_1:, :rb_exhaust:: Play a 2 :rb_might: Sand Soldier unit token to your base. Use only if you've played an Equipment this turn.",
       );

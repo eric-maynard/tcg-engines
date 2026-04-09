@@ -11,11 +11,11 @@ export const theLamp: ItemCard = {
         },
         then: {
           target: {
-            selector: "chosen",
+            cardTypes: ["character"],
             count: 1,
             owner: "any",
+            selector: "chosen",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "return-to-hand",
         },

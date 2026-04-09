@@ -10,7 +10,7 @@ import { Costs, Effects } from "../helpers";
 
 describe("Activated: Resource Add", () => {
   describe("add energy", () => {
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_energy_1:.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_energy_1:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_energy_1:. (Abilities that add resources can't be reacted to.)",
       );
@@ -31,7 +31,7 @@ describe("Activated: Resource Add", () => {
       );
     });
 
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_energy_2:.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_energy_2:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_energy_2:. (Abilities that add resources can't be reacted to.)",
       );
@@ -51,7 +51,7 @@ describe("Activated: Resource Add", () => {
   });
 
   describe("add power", () => {
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_rune_fury:.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_rune_fury:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_rune_fury:. (Abilities that add resources can't be reacted to.)",
       );
@@ -69,7 +69,7 @@ describe("Activated: Resource Add", () => {
       );
     });
 
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_rune_calm:.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_rune_calm:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_rune_calm:. (Abilities that add resources can't be reacted to.)",
       );
@@ -87,7 +87,7 @@ describe("Activated: Resource Add", () => {
       );
     });
 
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_rune_mind:.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_rune_mind:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_rune_mind:. (Abilities that add resources can't be reacted to.)",
       );
@@ -96,7 +96,7 @@ describe("Activated: Resource Add", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_rune_body:.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_rune_body:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_rune_body:. (Abilities that add resources can't be reacted to.)",
       );
@@ -105,7 +105,7 @@ describe("Activated: Resource Add", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_rune_chaos:.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_rune_chaos:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_rune_chaos:. (Abilities that add resources can't be reacted to.)",
       );
@@ -114,7 +114,7 @@ describe("Activated: Resource Add", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_rune_order:.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_rune_order:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_rune_order:. (Abilities that add resources can't be reacted to.)",
       );
@@ -123,7 +123,7 @@ describe("Activated: Resource Add", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_rune_rainbow:.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_rune_rainbow:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_rune_rainbow:. (Abilities that add resources can't be reacted to.)",
       );
@@ -134,7 +134,7 @@ describe("Activated: Resource Add", () => {
   });
 
   describe("add energy and power", () => {
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_energy_1::rb_rune_fury:.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_energy_1::rb_rune_fury:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_energy_1::rb_rune_fury:. (Abilities that add resources can't be reacted to.)",
       );
@@ -155,7 +155,7 @@ describe("Activated: Resource Add", () => {
   });
 
   describe("conditional resource add", () => {
-    it.skip("should parse ':rb_exhaust:: [Reaction], [Legion] — [Add] :rb_energy_1:.'", () => {
+    it("should parse ':rb_exhaust:: [Reaction], [Legion] — [Add] :rb_energy_1:.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Reaction], [Legion] — [Add] :rb_energy_1:. (Abilities that add resources can't be reacted to. Get the effect if you've played a card this turn.)",
       );
@@ -175,7 +175,7 @@ describe("Activated: Resource Add", () => {
   });
 
   describe("resource add with additional effects", () => {
-    it.skip("should parse ':rb_exhaust:: [Add] :rb_energy_1:. Draw 1.'", () => {
+    it("should parse ':rb_exhaust:: [Add] :rb_energy_1:. Draw 1.'", () => {
       const result = parseAbilities(
         ":rb_exhaust:: [Add] :rb_energy_1:. Draw 1. (Abilities that add resources can't be reacted to.)",
       );

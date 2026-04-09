@@ -322,9 +322,9 @@ export class GundamEngine extends RuleEngine<GundamGameState, GundamMoves, any, 
           paramSchema: {
             required: [
               {
+                description: "Player to go first",
                 name: "playerId",
                 type: "playerId",
-                description: "Player to go first",
               },
             ],
           },
@@ -340,14 +340,14 @@ export class GundamEngine extends RuleEngine<GundamGameState, GundamMoves, any, 
           paramSchema: {
             required: [
               {
+                description: "Player mulliganing",
                 name: "playerId",
                 type: "playerId",
-                description: "Player mulliganing",
               },
               {
+                description: "Cards to put on bottom of deck",
                 name: "cardsToMulligan",
                 type: "object",
-                description: "Cards to put on bottom of deck",
               },
             ],
           },

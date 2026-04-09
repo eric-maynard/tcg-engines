@@ -7,11 +7,11 @@ export const captainHookCaptainOfTheJollyRoger: CharacterCard = {
         chooser: "CONTROLLER",
         effect: {
           target: {
-            selector: "chosen",
+            cardTypes: ["card"],
             count: 1,
             owner: "any",
+            selector: "chosen",
             zones: ["play"],
-            cardTypes: ["card"],
           },
           type: "return-to-hand",
         },

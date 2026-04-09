@@ -14,9 +14,9 @@ export const everybodysGotAWeakness: ActionCard = {
               type: "damage-on-self",
             },
             effect: {
-              type: "draw",
               amount: 1,
               target: "CONTROLLER",
+              type: "draw",
             },
             type: "for-each",
           },

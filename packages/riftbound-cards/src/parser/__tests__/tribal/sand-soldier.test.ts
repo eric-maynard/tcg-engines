@@ -10,7 +10,7 @@ import { Targets, Tokens } from "../helpers";
 
 describe("Tribal: Sand Soldier", () => {
   describe("sand soldier keyword grants", () => {
-    it.skip("should parse 'Sand Soldiers you play have [Weaponmaster].'", () => {
+    it("should parse 'Sand Soldiers you play have [Weaponmaster].'", () => {
       const result = parseAbilities(
         "Sand Soldiers you play have [Weaponmaster]. (When they're played, you may [Equip] one of your Equipment to them for :rb_rune_rainbow: less.)",
       );
@@ -33,7 +33,7 @@ describe("Tribal: Sand Soldier", () => {
       );
     });
 
-    it.skip("should parse 'Your Sand Soldiers have [Weaponmaster].'", () => {
+    it("should parse 'Your Sand Soldiers have [Weaponmaster].'", () => {
       const result = parseAbilities("Your Sand Soldiers have [Weaponmaster].");
 
       expect(result.success).toBe(true);
@@ -42,7 +42,7 @@ describe("Tribal: Sand Soldier", () => {
   });
 
   describe("sand soldier tokens", () => {
-    it.skip("should parse 'Play a 2 :rb_might: Sand Soldier unit token.'", () => {
+    it("should parse 'Play a 2 :rb_might: Sand Soldier unit token.'", () => {
       const result = parseAbilities("Play a 2 :rb_might: Sand Soldier unit token.");
 
       expect(result.success).toBe(true);
@@ -62,14 +62,14 @@ describe("Tribal: Sand Soldier", () => {
       );
     });
 
-    it.skip("should parse 'Play a 2 :rb_might: Sand Soldier unit token to your base.'", () => {
+    it("should parse 'Play a 2 :rb_might: Sand Soldier unit token to your base.'", () => {
       const result = parseAbilities("Play a 2 :rb_might: Sand Soldier unit token to your base.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Play a 2 :rb_might: Sand Soldier unit token. You may pay :rb_rune_order: to ready it.'", () => {
+    it("should parse 'Play a 2 :rb_might: Sand Soldier unit token. You may pay :rb_rune_order: to ready it.'", () => {
       const result = parseAbilities(
         "Play a 2 :rb_might: Sand Soldier unit token. You may pay :rb_rune_order: to ready it.",
       );
@@ -80,7 +80,7 @@ describe("Tribal: Sand Soldier", () => {
   });
 
   describe("sand soldier activated abilities", () => {
-    it.skip("should parse ':rb_energy_1:, :rb_exhaust:: Play a 2 :rb_might: Sand Soldier unit token to your base.'", () => {
+    it("should parse ':rb_energy_1:, :rb_exhaust:: Play a 2 :rb_might: Sand Soldier unit token to your base.'", () => {
       const result = parseAbilities(
         ":rb_energy_1:, :rb_exhaust:: Play a 2 :rb_might: Sand Soldier unit token to your base. Use only if you've played an Equipment this turn.",
       );

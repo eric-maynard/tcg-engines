@@ -49,21 +49,21 @@
       min-height: 0;
       padding: 4px 12px;
       gap: 2px;
-      flex-shrink: 0;
+      flex-shrink: 1;
     }
 
     /* Center battlefields — expands to fill middle space */
     .battlefield-row {
       display: flex;
-      gap: 12px;
-      padding: 8px 24px;
+      gap: 16px;
+      padding: 12px 24px;
       justify-content: center;
       align-items: stretch;
       background: linear-gradient(180deg, rgba(30,20,50,0.4) 0%, rgba(60,20,30,0.15) 50%, rgba(30,20,50,0.4) 100%);
       border-top: 1px solid #3a1525;
       border-bottom: 1px solid #3a1525;
-      flex: 1;
-      min-height: 120px;
+      flex: 2;
+      min-height: 180px;
       position: relative;
     }
 
@@ -82,6 +82,7 @@
       flex-direction: column;
       min-height: 0;
       padding: 4px 12px;
+      padding-bottom: 10px;
       margin-top: auto;
       gap: 2px;
     }
@@ -173,7 +174,7 @@
 
     /* Player base needs a visible drop target area */
     #player-base {
-      min-height: 80px;
+      min-height: 100px;
       border: 1px dashed rgba(100, 90, 140, 0.2);
       border-radius: 8px;
       padding: 4px 8px;
@@ -187,12 +188,17 @@
     .zone-row::-webkit-scrollbar { height: 4px; }
     .zone-row::-webkit-scrollbar-thumb { background: #3a3560; border-radius: 2px; }
 
-    /* Hand zone: slight card overlap */
+    /* Hand zone: slight card overlap, scrollable when crowded */
     .zone-row.hand-zone {
       justify-content: center;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #3a3560 transparent;
     }
     .zone-row.hand-zone .card {
       margin-right: -24px;
+      flex-shrink: 0;
     }
     .zone-row.hand-zone .card:last-child { margin-right: 0; }
     .zone-row.hand-zone .card:hover {
@@ -256,15 +262,6 @@
     .card.stunned { border-color: #d04040; box-shadow: inset 0 0 8px #d0404044; }
     .card.buffed { border-color: #f0c040; box-shadow: inset 0 0 8px #f0c04044; }
 
-    /* Card type color coding */
-    .card.type-unit { border-color: #3070c0; }
-    .card.type-unit:hover { border-color: #4090e0; }
-    .card.type-spell { border-color: #8040b0; }
-    .card.type-spell:hover { border-color: #a060d0; }
-    .card.type-gear, .card.type-equipment { border-color: #408040; }
-    .card.type-gear:hover, .card.type-equipment:hover { border-color: #60a060; }
-    .card.type-rune { border-color: #a09030; }
-    .card.type-rune:hover { border-color: #c0b040; }
 
     .card-img {
       width: 100%;
@@ -343,11 +340,17 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
 
-    /* Hand cards — large, image-only */
+    /* Hand cards — large, image-only; min-width prevents unreadable compression.
+       All owned hand cards are clickable (for cost payment, card selection, etc.),
+       so they all show cursor:pointer. Playable cards also get a green pulse glow. */
     .hand-zone .card {
       width: 130px;
-      min-width: 130px;
+      min-width: 80px;
       height: 182px;
+      cursor: pointer;
+    }
+    .hand-zone .card.playable {
+      cursor: pointer;
     }
     .hand-zone .card .card-cost,
     .hand-zone .card .card-might { width: 24px; height: 24px; font-size: 13px; }
@@ -382,7 +385,7 @@
       flex-shrink: 0;
     }
     .rune-stack-label {
-      font-size: 7px;
+      font-size: 11px;
       font-weight: 700;
       text-align: center;
       text-transform: uppercase;
@@ -415,8 +418,7 @@
       display: none;
     }
     .rune-stack .card .card-name {
-      font-size: 7px;
-      padding: 1px 3px;
+      display: none;
     }
 
     /* Legend + Champion zone: side by side with labels above each card */
@@ -425,6 +427,7 @@
       gap: 6px;
       align-items: flex-end;
       flex-shrink: 0;
+      overflow: hidden;
     }
     .lc-slot {
       display: flex;
@@ -433,6 +436,16 @@
     }
     .lc-slot .legend-label {
       margin-bottom: 2px;
+    }
+    /* Legend/Champion cards — show slightly larger with full art */
+    .legend-champion-zone .card {
+      width: 100px;
+      min-width: 100px;
+      height: 120px;
+    }
+    .legend-champion-zone .card .card-img {
+      object-fit: contain;
+      background: #1a1730;
     }
 
     /* Face-down card */
@@ -740,11 +753,11 @@
        ============================================ */
     .battlefield {
       flex: 1;
-      max-width: 320px;
-      min-width: 200px;
+      max-width: 420px;
+      min-width: 240px;
       background: #151225;
       border: 2px solid #2a2448;
-      border-radius: 8px;
+      border-radius: 10px;
       display: flex;
       flex-direction: row;
       padding: 0;
@@ -754,8 +767,8 @@
     }
 
     .bf-art {
-      flex: 0 0 140px;
-      width: 140px;
+      flex: 0 0 170px;
+      width: 170px;
       background: var(--bf-img) center / cover no-repeat;
       border-right: 1px solid #2a2448;
       position: relative;
@@ -777,14 +790,14 @@
     }
     .bf-showdown-badge {
       position: absolute;
-      bottom: 6px;
-      left: 6px;
+      bottom: 8px;
+      left: 8px;
       background: #f0a020;
       color: #1a1030;
-      font-size: 8px;
+      font-size: 10px;
       font-weight: 800;
-      padding: 2px 6px;
-      border-radius: 3px;
+      padding: 3px 8px;
+      border-radius: 4px;
       letter-spacing: 1px;
       z-index: 5;
       text-transform: uppercase;
@@ -798,37 +811,39 @@
       display: flex;
       flex-direction: column;
       min-width: 0;
-      padding: 4px;
-      gap: 2px;
+      padding: 8px;
+      gap: 4px;
     }
 
     .bf-header {
       text-align: center;
-      font-size: 9px;
+      font-size: 11px;
       font-weight: 600;
       color: #8a82a6;
-      padding: 2px 0;
+      padding: 4px 0;
       border-bottom: 1px solid #2a2448;
       position: relative;
       z-index: 1;
     }
 
     .bf-name {
-      font-size: 10px;
+      font-size: 13px;
       color: #d8d4e8;
+      font-weight: 700;
     }
 
     .bf-control {
-      font-size: 8px;
+      font-size: 10px;
       color: #6a6288;
+      margin-top: 2px;
     }
 
     .bf-units {
       display: flex;
-      gap: 3px;
+      gap: 4px;
       flex-wrap: wrap;
       justify-content: center;
-      min-height: 50px;
+      min-height: 56px;
       flex: 1;
       align-items: center;
       align-content: center;
@@ -1135,10 +1150,24 @@
     }
     .card.playable {
       animation: playable-pulse 2s ease-in-out infinite;
-      cursor: grab;
+      cursor: pointer;
     }
     .card.playable:hover {
       box-shadow: 0 0 16px 4px rgba(80,200,120,0.5);
+      animation: none;
+    }
+
+    /* Legend card with activatable ability — purple glow */
+    @keyframes legend-playable-pulse {
+      0%, 100% { box-shadow: 0 0 6px 1px rgba(176,128,224,0.3); }
+      50%      { box-shadow: 0 0 12px 3px rgba(176,128,224,0.55); }
+    }
+    .card.legend-playable {
+      animation: legend-playable-pulse 2s ease-in-out infinite;
+      cursor: pointer;
+    }
+    .card.legend-playable:hover {
+      box-shadow: 0 0 16px 4px rgba(176,128,224,0.6);
       animation: none;
     }
 
@@ -2023,11 +2052,11 @@
       align-items: center;
       justify-content: center;
       gap: 4px;
-      padding: 3px 12px;
+      padding: 4px 12px;
       background: #0e0d18;
       border-bottom: 1px solid #2a2740;
       flex-shrink: 0;
-      min-height: 26px;
+      min-height: 36px;
       position: relative;
     }
 
@@ -2043,9 +2072,9 @@
     }
 
     .phase-bar .phase-item {
-      padding: 2px 8px;
+      padding: 3px 10px;
       border-radius: 10px;
-      font-size: 9px;
+      font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;

@@ -235,10 +235,7 @@ describe("RuleEngine - Flow Integration", () => {
               order: 1,
             },
             ready: {
-              endIf: (context) => {
-                // Auto-end when any player has score >= 5
-                return context.state.players.some((p) => p.score >= 5);
-              },
+              endIf: (context) => context.state.players.some((p) => p.score >= 5),
               next: "main",
               order: 0,
             },

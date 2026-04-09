@@ -10,7 +10,7 @@ import { Effects } from "../helpers";
 
 describe("Effect: Take Control", () => {
   describe("take control of unit", () => {
-    it.skip("should parse 'Take control of an enemy unit at a battlefield.'", () => {
+    it("should parse 'Take control of an enemy unit at a battlefield.'", () => {
       const result = parseAbilities("Take control of an enemy unit at a battlefield.");
 
       expect(result.success).toBe(true);
@@ -25,7 +25,7 @@ describe("Effect: Take Control", () => {
       );
     });
 
-    it.skip("should parse 'Take control of an enemy unit at a battlefield. Ready it.'", () => {
+    it("should parse 'Take control of an enemy unit at a battlefield. Ready it.'", () => {
       const result = parseAbilities(
         "Take control of an enemy unit at a battlefield. Ready it. (Start a combat if other enemies are there. Otherwise, conquer.)",
       );
@@ -36,7 +36,7 @@ describe("Effect: Take Control", () => {
   });
 
   describe("take control with duration", () => {
-    it.skip("should parse 'Take control of it and recall it.'", () => {
+    it("should parse 'Take control of it and recall it.'", () => {
       const result = parseAbilities(
         "Choose an enemy unit at a battlefield. Take control of it and recall it. (Send it to your base. This isn't a move.)",
       );
@@ -45,7 +45,7 @@ describe("Effect: Take Control", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Lose control of that unit and recall it at end of turn.'", () => {
+    it("should parse 'Lose control of that unit and recall it at end of turn.'", () => {
       const result = parseAbilities(
         "Lose control of that unit and recall it at end of turn. (Send it to base. This isn't a move.)",
       );
@@ -56,7 +56,7 @@ describe("Effect: Take Control", () => {
   });
 
   describe("take control of spell", () => {
-    it.skip("should parse 'Gain control of a spell. You may make new choices for it.'", () => {
+    it("should parse 'Gain control of a spell. You may make new choices for it.'", () => {
       const result = parseAbilities("Gain control of a spell. You may make new choices for it.");
 
       expect(result.success).toBe(true);
@@ -74,7 +74,7 @@ describe("Effect: Take Control", () => {
   });
 
   describe("take control of gear", () => {
-    it.skip("should parse 'Move an enemy gear to your base. You control it until I leave the board.'", () => {
+    it("should parse 'Move an enemy gear to your base. You control it until I leave the board.'", () => {
       const result = parseAbilities(
         "Move an enemy gear to your base. You control it until I leave the board. If it's an Equipment, attach it to me.",
       );

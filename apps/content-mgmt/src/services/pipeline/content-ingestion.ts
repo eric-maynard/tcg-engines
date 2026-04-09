@@ -315,7 +315,7 @@ export class ContentIngestionService {
       enhancedSummaries: [],
       modelId: "placeholder",
       overview: {
-        clickbaitRating: { score: 1, explanation: "" },
+        clickbaitRating: { explanation: "", score: 1 },
         contentCategory: "other",
         fullOverview: "",
         logline: "",

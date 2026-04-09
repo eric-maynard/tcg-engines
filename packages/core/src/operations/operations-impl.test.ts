@@ -72,21 +72,21 @@ describe("Operations Implementation", () => {
       },
       zones: {
         deck: {
-          config: deckZone,
           cardIds: ["card-3", "card-4", "card-5"] as unknown as CardId[],
+          config: deckZone,
         },
         hand: {
-          config: handZone,
           cardIds: ["card-1", "card-2"] as unknown as CardId[],
+          config: handZone,
         },
         play: {
+          cardIds: [],
           config: {
             id: "play" as ZoneId,
             name: "Play",
-            visibility: "public",
             ordered: false,
+            visibility: "public",
           },
-          cardIds: [],
         },
       },
     };

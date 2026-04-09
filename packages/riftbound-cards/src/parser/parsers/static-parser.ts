@@ -113,11 +113,24 @@ function parseKeywordList(text: string): string[] {
 }
 
 /**
+ * Known tribal tag names mapped from plural form in text
+ */
+const TRIBAL_TAGS: Record<string, string> = {
+  dragons: "Dragon",
+  mechs: "Mech",
+  poros: "Poro",
+  recruits: "Recruit",
+  "sand soldiers": "Sand Soldier",
+  sprites: "Sprite",
+};
+
+/**
  * Parse target from grant text
  * Examples:
  * - "Other friendly units here" -> { type: "unit", controller: "friendly", location: "here", excludeSelf: true }
- * - "Your Mechs" -> { type: "unit", controller: "friendly", tribe: "Mech" }
+ * - "Your Mechs" -> { type: "unit", controller: "friendly", filter: { tag: "Mech" } }
  * - "Friendly units" -> { type: "unit", controller: "friendly" }
+ * - "Sand Soldiers you play" -> { type: "unit", filter: { tag: "Sand Soldier" } }
  */
 function parseGrantTarget(text: string): Target {
   const normalized = text.toLowerCase().trim();
@@ -127,7 +140,7 @@ function parseGrantTarget(text: string): Target {
     controller?: "friendly" | "enemy" | "any";
     location?: string;
     excludeSelf?: boolean;
-    tribe?: string;
+    filter?: { tag: string };
     cardType?: string;
   } = { type: "unit" };
 
@@ -146,12 +159,20 @@ function parseGrantTarget(text: string): Target {
   // Check for location
   if (normalized.includes(" here")) {
     target.location = "here";
+  } else if (normalized.includes("at my battlefield") || normalized.includes("at battlefield")) {
+    target.location = "battlefield";
   }
 
   // Check for specific types/tribes
-  if (normalized.includes("mechs")) {
-    target.tribe = "Mech";
-  } else if (normalized.includes("equipment")) {
+  let foundTribe = false;
+  for (const [plural, singular] of Object.entries(TRIBAL_TAGS)) {
+    if (normalized.includes(plural)) {
+      target.filter = { tag: singular };
+      foundTribe = true;
+      break;
+    }
+  }
+  if (!foundTribe && normalized.includes("equipment")) {
     target.type = "gear";
   }
 
@@ -389,6 +410,403 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
           allowedLocation: locationText,
           type: "play-restriction",
         } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // ========================================================================
+  // Might Modifier Patterns (static)
+  // ========================================================================
+
+  // "TARGET have +N :rb_might: [here]." - static might bonus to others
+  const otherMightMatch = cleanText.match(
+    /^(.+?)\s+have\s+\+(\d+)\s*:rb_might:(?:\s+(here))?\.?$/i,
+  );
+  if (otherMightMatch) {
+    const target = parseGrantTarget(otherMightMatch[1]);
+    const amount = Number.parseInt(otherMightMatch[2], 10);
+    if (otherMightMatch[3]) {
+      (target as { location?: string }).location = "here";
+    }
+
+    return {
+      ability: {
+        effect: {
+          amount,
+          target,
+          type: "modify-might",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "I have/get +N :rb_might: for each QUALIFIER." - static self might modifier
+  const selfMightMatch = cleanText.match(
+    /^I (?:have|get) \+(\d+)\s*:rb_might:\s+for each (.+?)\.?$/i,
+  );
+  if (selfMightMatch) {
+    const amount = Number.parseInt(selfMightMatch[1], 10);
+
+    return {
+      ability: {
+        effect: {
+          amount,
+          per: selfMightMatch[2],
+          target: "self" as AnyTarget,
+          type: "modify-might",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "If CONDITION, I have +N :rb_might: [and [KEYWORD]]." - conditional self-might
+  const conditionalMightMatch = cleanText.match(
+    /^(If .+?),\s*I have \+(\d+)\s*:rb_might:(?:\s+and\s+(.+?))?\.?$/i,
+  );
+  if (conditionalMightMatch) {
+    const conditionResult = parseConditionFromText(conditionalMightMatch[1] + ",");
+    const condition = conditionResult?.condition;
+    if (condition) {
+      return {
+        ability: {
+          condition,
+          effect: {
+            amount: Number.parseInt(conditionalMightMatch[2], 10),
+            target: "self" as AnyTarget,
+            type: "modify-might",
+          } as unknown as Effect,
+          type: "static",
+        },
+        endIndex: text.length,
+        startIndex: 0,
+      };
+    }
+  }
+
+  // "Each Equipment attached to me gives double its base Might bonus." - equipment might bonus
+  const equipmentMightMatch = cleanText.match(
+    /^Each Equipment attached to me gives double its base Might bonus\.?$/i,
+  );
+  if (equipmentMightMatch) {
+    return {
+      ability: {
+        effect: {
+          multiplier: 2,
+          source: "equipment",
+          type: "modify-might",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // ========================================================================
+  // Cost Reduction Patterns (static)
+  // ========================================================================
+
+  // "I cost COST less for each QUALIFIER." or "I cost COST less to play from..."
+  const selfCostMatch = cleanText.match(/^I cost\s+(.+?)\s+less\s+(.+?)\.?$/i);
+  if (selfCostMatch) {
+    return {
+      ability: {
+        effect: {
+          reduction: selfCostMatch[1],
+          scope: selfCostMatch[2],
+          target: "self" as AnyTarget,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "This spell's Energy cost is reduced by ..." - spell cost reduction
+  const spellCostMatch = cleanText.match(/^This spell's Energy cost is reduced by\s+(.+?)\.?$/i);
+  if (spellCostMatch) {
+    return {
+      ability: {
+        effect: {
+          by: spellCostMatch[1],
+          target: "self" as AnyTarget,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "While CONDITION, TARGET costs cost COST less." - conditional cost reduction for others
+  const whileCostMatch = cleanText.match(
+    /^(While .+?),\s*(.+?)\s+costs?\s+cost\s+(.+?)\s+less\.?$/i,
+  );
+  if (whileCostMatch) {
+    const conditionResult = parseConditionFromText(whileCostMatch[1] + ",");
+    const condition = conditionResult?.condition;
+    if (condition) {
+      return {
+        ability: {
+          condition,
+          effect: {
+            reduction: whileCostMatch[3],
+            target: whileCostMatch[2],
+            type: "cost-reduction",
+          } as unknown as Effect,
+          type: "static",
+        },
+        endIndex: text.length,
+        startIndex: 0,
+      };
+    }
+  }
+
+  // "If CONDITION, this costs COST less." - conditional cost reduction
+  const ifCostMatch = cleanText.match(/^(If .+?),\s*this costs?\s+(.+?)\s+less\.?$/i);
+  if (ifCostMatch) {
+    const conditionResult = parseConditionFromText(ifCostMatch[1] + ",");
+    const condition = conditionResult?.condition;
+
+    return {
+      ability: {
+        ...(condition ? { condition } : {}),
+        effect: {
+          reduction: ifCostMatch[2],
+          target: "self" as AnyTarget,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // ========================================================================
+  // Enter Ready Patterns (static)
+  // ========================================================================
+
+  // "I enter ready [if CONDITION]." - self enter ready
+  const selfEnterReadyMatch = cleanText.match(/^I enter ready(?:\s+if\s+(.+?))?\.?$/i);
+  if (selfEnterReadyMatch) {
+    const conditionText = selfEnterReadyMatch[1];
+    let condition: Condition | undefined;
+    if (conditionText) {
+      // Parse "if you control another TAG" -> { type: "control", target: { filter: { tag: TAG } } }
+      const controlTagMatch = conditionText.match(/^you control another (\w+(?:\s+\w+)?)$/i);
+      if (controlTagMatch) {
+        const tagName = controlTagMatch[1];
+        condition = {
+          target: { filter: { tag: tagName } },
+          type: "control",
+        } as unknown as Condition;
+      }
+      // Parse "if you have N or more other units in your base"
+      const baseUnitsMatch = conditionText.match(
+        /^you have (\w+) or more other units in your base$/i,
+      );
+      if (baseUnitsMatch) {
+        condition = {
+          count: baseUnitsMatch[1],
+          location: "base",
+          type: "unit-count",
+        } as unknown as Condition;
+      }
+    }
+
+    return {
+      ability: {
+        ...(condition ? { condition } : {}),
+        effect: {
+          target: "self" as AnyTarget,
+          type: "enter-ready",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "If CONDITION, I enter ready." - conditional self enter ready
+  const ifEnterReadyMatch = cleanText.match(/^(If .+?),\s*I enter ready\.?$/i);
+  if (ifEnterReadyMatch) {
+    const conditionText = ifEnterReadyMatch[1];
+    // Parse "If an opponent controls a battlefield"
+    const opponentControlsMatch = conditionText.match(/^If an opponent controls a battlefield$/i);
+    const condition: Condition = opponentControlsMatch
+      ? ({ type: "opponent-controls" } as unknown as Condition)
+      : ({ text: conditionText, type: "custom" } as unknown as Condition);
+
+    return {
+      ability: {
+        condition,
+        effect: {
+          target: "self" as AnyTarget,
+          type: "enter-ready",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "Units you play this turn enter ready." / "Friendly units enter ready this turn." / "The next unit you play this turn enters ready."
+  const othersEnterReadyMatch = cleanText.match(
+    /^(?:Units you play this turn enter ready|Friendly units enter ready this turn|The next unit you play this turn enters ready)\.?$/i,
+  );
+  if (othersEnterReadyMatch) {
+    return {
+      ability: {
+        effect: {
+          duration: "turn",
+          target: { controller: "friendly", type: "unit" } as Target,
+          type: "enter-ready",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // ========================================================================
+  // Restriction Patterns (non-While conditional)
+  // ========================================================================
+
+  // "If CONDITION, I don't take damage." - damage restriction
+  const ifDamageRestrictionMatch = cleanText.match(/^(If .+?),\s*I don't take damage\.?$/i);
+  if (ifDamageRestrictionMatch) {
+    return {
+      ability: {
+        condition: { text: ifDamageRestrictionMatch[1], type: "custom" } as unknown as Condition,
+        effect: {
+          restriction: "no-damage",
+          type: "restriction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // ========================================================================
+  // Win Condition Patterns (static)
+  // ========================================================================
+
+  // "If you have N or more points, you win the game."
+  const winGameMatch = cleanText.match(
+    /^If you have (\d+) or more points,\s*you win the game\.?$/i,
+  );
+  if (winGameMatch) {
+    return {
+      ability: {
+        condition: {
+          points: Number.parseInt(winGameMatch[1], 10),
+          type: "score-threshold",
+        } as unknown as Condition,
+        effect: {
+          type: "win-game",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "If you're within N points of winning, EFFECT" - conditional effect on score proximity
+  const scoreWithinMatch = cleanText.match(
+    /^If you(?:'re|'re) within (\d+) points? of winning,\s*(.+?)\.?$/i,
+  );
+  if (scoreWithinMatch) {
+    const points = Number.parseInt(scoreWithinMatch[1], 10);
+    const effectText = scoreWithinMatch[2];
+    // Parse the effect (e.g. "draw 2")
+    const drawMatch = effectText.match(/^draw (\d+)$/i);
+    const effect: Effect = drawMatch
+      ? ({ amount: Number.parseInt(drawMatch[1], 10), type: "draw" } as unknown as Effect)
+      : ({ text: effectText, type: "raw" } as unknown as Effect);
+
+    return {
+      ability: {
+        condition: { points, type: "score-within" } as unknown as Condition,
+        effect,
+        type: "spell",
+      } as unknown as StaticAbility,
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "If you've scored N or more points this turn, EFFECT" - conditional on score this turn
+  const scoredThisTurnMatch = cleanText.match(
+    /^If you(?:'ve|'ve) scored (\d+) or more points this turn,\s*(.+?)\.?$/i,
+  );
+  if (scoredThisTurnMatch) {
+    const amount = Number.parseInt(scoredThisTurnMatch[1], 10);
+    const effectText = scoredThisTurnMatch[2];
+    // Parse the effect (e.g. "take an extra turn after this one")
+    const extraTurnMatch = effectText.match(/^take an extra turn after this one$/i);
+    const effect: Effect = extraTurnMatch
+      ? ({ type: "extra-turn" } as unknown as Effect)
+      : ({ text: effectText, type: "raw" } as unknown as Effect);
+
+    return {
+      ability: {
+        condition: { amount, type: "score" } as unknown as Condition,
+        effect,
+        type: "spell",
+      } as unknown as StaticAbility,
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "Your [KEYWORD] effects trigger an additional time." - keyword trigger doubling
+  const triggerDoubleMatch = cleanText.match(
+    /^Your \[(\w+(?:-\w+)?)\] effects trigger an additional time\.?$/i,
+  );
+  if (triggerDoubleMatch) {
+    return {
+      ability: {
+        effect: {
+          keyword: triggerDoubleMatch[1],
+          type: "trigger-double",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "SUBJECT you play have [KEYWORD]." - grant keyword to played cards
+  const playGrantMatch = cleanText.match(/^(.+?) you play have\s+\[(\w+(?:-\w+)?)\]\.?$/i);
+  if (playGrantMatch) {
+    const target = parseGrantTarget(playGrantMatch[1]);
+    return {
+      ability: {
+        effect: {
+          keyword: playGrantMatch[2],
+          target,
+          type: "grant-keyword",
+        },
         type: "static",
       },
       endIndex: text.length,

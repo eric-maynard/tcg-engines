@@ -17,13 +17,13 @@ export const merlinCleverClairvoyant: CharacterCard = {
               type: "revealed-matches-named",
             },
             else: {
-              type: "put-on-top",
               source: "revealed",
+              type: "put-on-top",
             },
             then: {
-              type: "put-into-inkwell",
-              source: "revealed",
               exerted: true,
+              source: "revealed",
+              type: "put-into-inkwell",
             },
             type: "conditional",
           },

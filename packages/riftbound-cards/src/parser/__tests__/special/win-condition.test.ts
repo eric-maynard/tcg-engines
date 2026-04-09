@@ -10,7 +10,7 @@ import { Effects } from "../helpers";
 
 describe("Special: Win Condition", () => {
   describe("score effects", () => {
-    it.skip("should parse 'You score 1 point.'", () => {
+    it("should parse 'You score 1 point.'", () => {
       const result = parseAbilities("You score 1 point.");
 
       expect(result.success).toBe(true);
@@ -26,7 +26,7 @@ describe("Special: Win Condition", () => {
       );
     });
 
-    it.skip("should parse 'When I conquer, you score 1 additional point.'", () => {
+    it("should parse 'When I conquer, you score 1 additional point.'", () => {
       const result = parseAbilities("When I conquer, you score 1 additional point.");
 
       expect(result.success).toBe(true);
@@ -35,7 +35,7 @@ describe("Special: Win Condition", () => {
   });
 
   describe("score conditions", () => {
-    it.skip("should parse 'If you're within 2 points of winning, draw 2.'", () => {
+    it("should parse 'If you're within 2 points of winning, draw 2.'", () => {
       const result = parseAbilities("If you're within 2 points of winning, draw 2.");
 
       expect(result.success).toBe(true);
@@ -53,7 +53,7 @@ describe("Special: Win Condition", () => {
   });
 
   describe("prevent scoring", () => {
-    it.skip("should parse 'While I'm at a battlefield, opponents can't score points.'", () => {
+    it("should parse 'While I'm at a battlefield, opponents can't score points.'", () => {
       const result = parseAbilities("While I'm at a battlefield, opponents can't score points.");
 
       expect(result.success).toBe(true);
@@ -62,7 +62,7 @@ describe("Special: Win Condition", () => {
   });
 
   describe("win game", () => {
-    it.skip("should parse 'If you have 20 or more points, you win the game.'", () => {
+    it("should parse 'If you have 20 or more points, you win the game.'", () => {
       const result = parseAbilities("If you have 20 or more points, you win the game.");
 
       expect(result.success).toBe(true);

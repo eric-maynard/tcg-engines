@@ -83,8 +83,8 @@ function createInitialGameState(): GundamGameState {
       cardDamage: {},
       cardPositions: {},
       effectStack: {
-        stack: [],
         nextInstanceId: 0,
+        stack: [],
       },
       hasPlayedResourceThisTurn: {
         [PLAYER_1]: false,
@@ -537,7 +537,7 @@ describe("handleRestAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "REST",
     };
@@ -560,7 +560,7 @@ describe("handleRestAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "card", owner: "self", zone: "resourceArea" }],
+        validTargets: [{ owner: "self", type: "card", zone: "resourceArea" }],
       },
       type: "REST",
     };
@@ -583,7 +583,7 @@ describe("handleRestAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "REST",
     };
@@ -605,7 +605,7 @@ describe("handleRestAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "card", owner: "self" }],
+        validTargets: [{ owner: "self", type: "card" }],
       },
       type: "REST",
     };
@@ -643,7 +643,7 @@ describe("handleActivateAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "ACTIVATE",
     };
@@ -666,7 +666,7 @@ describe("handleActivateAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "ACTIVATE",
     };
@@ -702,7 +702,7 @@ describe("handleMoveCardAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "card", owner: "self" }],
+        validTargets: [{ owner: "self", type: "card" }],
       },
       to: "battleArea",
       type: "MOVE_CARD",
@@ -727,7 +727,7 @@ describe("handleMoveCardAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "card", owner: "self" }],
+        validTargets: [{ owner: "self", type: "card" }],
       },
       to: "trash",
       type: "MOVE_CARD",
@@ -754,7 +754,7 @@ describe("handleMoveCardAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "card", owner: "self" }],
+        validTargets: [{ owner: "self", type: "card" }],
       },
       to: "battleArea",
       type: "MOVE_CARD",
@@ -780,7 +780,7 @@ describe("handleMoveCardAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "card", owner: "opponent" }],
+        validTargets: [{ owner: "opponent", type: "card" }],
       },
       to: "battleArea",
       type: "MOVE_CARD",
@@ -829,7 +829,7 @@ describe("handleDestroyAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "opponent" }],
+        validTargets: [{ owner: "opponent", type: "unit" }],
       },
       type: "DESTROY",
     };
@@ -849,7 +849,7 @@ describe("handleDestroyAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "opponent" }],
+        validTargets: [{ owner: "opponent", type: "unit" }],
       },
       type: "DESTROY",
     };
@@ -871,7 +871,7 @@ describe("handleDestroyAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "opponent" }],
+        validTargets: [{ owner: "opponent", type: "unit" }],
       },
       type: "DESTROY",
     };
@@ -1011,7 +1011,7 @@ describe("handleModifyStatsAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "MODIFY_STATS",
     };
@@ -1037,7 +1037,7 @@ describe("handleModifyStatsAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "MODIFY_STATS",
     };
@@ -1059,7 +1059,7 @@ describe("handleModifyStatsAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "MODIFY_STATS",
     };
@@ -1081,7 +1081,7 @@ describe("handleModifyStatsAction", () => {
         chooser: "controller",
         count: 2,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "MODIFY_STATS",
     };
@@ -1101,7 +1101,7 @@ describe("handleModifyStatsAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "MODIFY_STATS",
     };
@@ -1120,7 +1120,7 @@ describe("handleModifyStatsAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "MODIFY_STATS",
     };
@@ -1155,7 +1155,7 @@ describe("handleGrantKeywordAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "GRANT_KEYWORD",
     };
@@ -1178,7 +1178,7 @@ describe("handleGrantKeywordAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "GRANT_KEYWORD",
     };
@@ -1201,7 +1201,7 @@ describe("handleGrantKeywordAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "GRANT_KEYWORD",
     };
@@ -1245,7 +1245,7 @@ describe("handleGrantKeywordAction", () => {
           chooser: "controller",
           count: 1,
           timing: "on_resolution",
-          validTargets: [{ type: "unit", owner: "self" }],
+          validTargets: [{ owner: "self", type: "unit" }],
         },
         type: "GRANT_KEYWORD",
       };
@@ -1680,7 +1680,7 @@ describe("executeAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "REST",
     };
@@ -1701,7 +1701,7 @@ describe("executeAction", () => {
         chooser: "controller",
         count: 1,
         timing: "on_resolution",
-        validTargets: [{ type: "unit", owner: "self" }],
+        validTargets: [{ owner: "self", type: "unit" }],
       },
       type: "MODIFY_STATS",
     };
@@ -1743,7 +1743,7 @@ describe("executeActions", () => {
           chooser: "controller",
           count: 1,
           timing: "on_resolution",
-          validTargets: [{ type: "unit", owner: "self" }],
+          validTargets: [{ owner: "self", type: "unit" }],
         },
         type: "REST",
       },
@@ -1754,7 +1754,7 @@ describe("executeActions", () => {
           chooser: "controller",
           count: 1,
           timing: "on_resolution",
-          validTargets: [{ type: "unit", owner: "self" }],
+          validTargets: [{ owner: "self", type: "unit" }],
         },
         type: "MODIFY_STATS",
       },

@@ -7,11 +7,11 @@ export const kitCloudkickerToughGuy: CharacterCard = {
         chooser: "CONTROLLER",
         effect: {
           target: {
-            selector: "chosen",
+            cardTypes: ["character"],
             count: 1,
             owner: "opponent",
+            selector: "chosen",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "return-to-hand",
         },

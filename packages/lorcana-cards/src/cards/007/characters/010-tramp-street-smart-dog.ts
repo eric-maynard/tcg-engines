@@ -20,25 +20,25 @@ export const trampStreetsmartDog: CharacterCard = {
         effect: {
           steps: [
             {
-              type: "for-each",
               counter: {
-                type: "characters",
                 controller: "you",
+                type: "characters",
               },
               effect: {
-                type: "draw",
                 amount: 1,
                 target: "CONTROLLER",
+                type: "draw",
               },
+              type: "for-each",
             },
             {
-              type: "discard",
               amount: {
-                type: "characters-in-play",
                 controller: "you",
+                type: "characters-in-play",
               },
-              target: "CONTROLLER",
               chosen: true,
+              target: "CONTROLLER",
+              type: "discard",
             },
           ],
           type: "sequence",

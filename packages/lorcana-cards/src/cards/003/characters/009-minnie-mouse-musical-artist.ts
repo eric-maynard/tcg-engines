@@ -15,11 +15,11 @@ export const minnieMouseMusicalArtist: CharacterCard = {
         effect: {
           amount: 2,
           target: {
-            selector: "chosen",
+            cardTypes: ["character"],
             count: 1,
             owner: "any",
+            selector: "chosen",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "remove-damage",
           upTo: true,

@@ -11,7 +11,7 @@ import type {
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
 } from "@tcg/core";
-import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import type { PlayerId, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 /**
  * Setup move definitions
@@ -19,6 +19,145 @@ import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../.
 export const setupMoves: Partial<
   GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>
 > = {
+  /**
+   * Roll d20 for turn order determination (rule 115)
+   *
+   * Each player rolls once. After all players roll, the step advances to
+   * "chooseFirst" and the roll winner is recorded in setup state.
+   */
+  rollForFirst: {
+    condition: (state, context) => {
+      const { playerId } = context.params;
+
+      // Must be in setup phase
+      if (state.status !== "setup" || !state.setup) {
+        return false;
+      }
+
+      // Must be in the rollForFirst step
+      if (state.setup.step !== "rollForFirst") {
+        return false;
+      }
+
+      // Player cannot roll twice
+      if (state.setup.rolls[playerId] !== undefined) {
+        return false;
+      }
+
+      return true;
+    },
+
+    reducer: (draft, context) => {
+      const { playerId } = context.params;
+
+      if (!draft.setup) {
+        return;
+      }
+
+      // Roll a d20 (1-20)
+      const roll = context.rng.rollDice(20) as number;
+      draft.setup.rolls[playerId] = roll;
+
+      // Check if all players have rolled
+      const playerIds = Object.keys(draft.players);
+      const allRolled = playerIds.every((pid) => draft.setup!.rolls[pid] !== undefined);
+
+      if (allRolled) {
+        // Determine winner (highest roll wins; ties go to first player alphabetically)
+        let winner = playerIds[0] ?? "";
+        let highestRoll = draft.setup.rolls[winner] ?? 0;
+
+        for (const pid of playerIds) {
+          const pidRoll = draft.setup.rolls[pid] ?? 0;
+          if (pidRoll > highestRoll) {
+            highestRoll = pidRoll;
+            winner = pid;
+          }
+        }
+
+        draft.setup.rollWinner = winner as PlayerId;
+        draft.setup.step = "chooseFirst";
+      }
+    },
+  },
+
+  /**
+   * Roll winner chooses who goes first (rule 115.2)
+   *
+   * The player who won the roll decides which player goes first.
+   * After this choice, the step advances to "placeLegends".
+   */
+  chooseFirstPlayer: {
+    condition: (state, context) => {
+      const { playerId } = context.params;
+
+      // Must be in setup phase with chooseFirst step
+      if (state.status !== "setup" || !state.setup) {
+        return false;
+      }
+
+      if (state.setup.step !== "chooseFirst") {
+        return false;
+      }
+
+      // Only the roll winner can choose
+      if (state.setup.rollWinner !== playerId) {
+        return false;
+      }
+
+      return true;
+    },
+
+    reducer: (draft, context) => {
+      const { firstPlayerId } = context.params;
+
+      if (!draft.setup) {
+        return;
+      }
+
+      const playerIds = Object.keys(draft.players);
+      const secondPlayerId = playerIds.find((pid) => pid !== firstPlayerId) ?? "";
+
+      draft.setup.firstPlayer = firstPlayerId as PlayerId;
+      draft.setup.secondPlayer = secondPlayerId as PlayerId;
+      draft.setup.step = "placeLegends";
+    },
+  },
+
+  /**
+   * Select 1 battlefield from 3 options (rule 644.5)
+   *
+   * Each player keeps one battlefield and discards the other two.
+   * Selected battlefields are placed in play during transitionToPlay.
+   */
+  selectBattlefield: {
+    reducer: (draft, context) => {
+      const { battlefieldId, discardIds } = context.params;
+      const { zones } = context;
+
+      // Move selected battlefield to battlefield row
+      zones.moveCard({
+        cardId: battlefieldId as CoreCardId,
+        targetZoneId: "battlefieldRow" as CoreZoneId,
+      });
+
+      // Initialize battlefield state
+      draft.battlefields[battlefieldId] = {
+        contested: false,
+        controller: null,
+        id: battlefieldId,
+      };
+
+      // Discard the unchosen battlefields
+      for (const discardId of discardIds) {
+        zones.moveCard({
+          cardId: discardId as CoreCardId,
+          targetZoneId: "trash" as CoreZoneId,
+        });
+      }
+    },
+  },
+
   /**
    * Place Champion Legend in Legend Zone
    *
@@ -146,16 +285,16 @@ export const setupMoves: Partial<
   /**
    * Draw initial hand
    *
-   * Draws 6 cards from the main deck to form the starting hand.
+   * Draws 4 cards from the main deck to form the starting hand (Rule 116).
    */
   drawInitialHand: {
     reducer: (_draft, context) => {
       const { playerId } = context.params;
       const { zones } = context;
 
-      // Draw 6 cards for initial hand
+      // Draw 4 cards for initial hand (Rule 116)
       zones.drawCards({
-        count: 6,
+        count: 4,
         from: "mainDeck" as CoreZoneId,
         playerId: playerId as CorePlayerId,
         to: "hand" as CoreZoneId,
@@ -164,45 +303,86 @@ export const setupMoves: Partial<
   },
 
   /**
-   * Mulligan
+   * Mulligan (Rule 117)
    *
-   * Returns hand to deck, shuffles, and redraws.
-   * Optionally keeps some cards (partial mulligan).
+   * Player chooses up to 2 cards from their hand to set aside.
+   * They draw that many replacements, then Recycle (return to
+   * bottom of Main Deck) the set-aside cards.
+   *
+   * @param keepCards - Array of card IDs to keep (rest are mulliganed, max 2 returned)
    */
   mulligan: {
     reducer: (_draft, context) => {
       const { playerId, keepCards = [] } = context.params;
       const { zones } = context;
 
-      // Get current hand
-      const handCards = zones.getCardsInZone("hand" as CoreZoneId, playerId as CorePlayerId);
+      // Cap at 2 cards returned (Rule 117.1)
+      const toReturn = (keepCards as string[]).slice(0, 2);
+      if (toReturn.length === 0) {
+        return;
+      } // Keeping entire hand
 
-      // Return cards not being kept to deck
-      for (const cardId of handCards) {
-        if (!keepCards.includes(cardId as string)) {
-          zones.moveCard({
-            cardId: cardId,
-            position: "bottom",
-            targetZoneId: "mainDeck" as CoreZoneId,
-          });
+      // Set aside the selected cards (move to a temp holding — bottom of deck)
+      // First draw replacements, then recycle
+      const drawCount = toReturn.length;
+
+      // Draw replacement cards first (Rule 117.2)
+      zones.drawCards({
+        count: drawCount,
+        from: "mainDeck" as CoreZoneId,
+        playerId: playerId as CorePlayerId,
+        to: "hand" as CoreZoneId,
+      });
+
+      // Recycle the set-aside cards to bottom of Main Deck (Rule 117.3, 594)
+      for (const cardId of toReturn) {
+        zones.moveCard({
+          cardId: cardId as CoreCardId,
+          position: "bottom",
+          targetZoneId: "mainDeck" as CoreZoneId,
+        });
+      }
+    },
+  },
+
+  /**
+   * Transition from setup to main game
+   *
+   * Sets game status to playing, configures first player and turn state,
+   * and triggers the flow system to advance from setup to mainGame segment.
+   * Also sets up first-turn rules (rule 644.7: second player channels extra rune).
+   */
+  transitionToPlay: {
+    reducer: (draft, context) => {
+      // Determine first player from setup state or fallback to first player ID
+      const firstPlayer = (draft.setup?.firstPlayer ??
+        Object.keys(draft.players)[0] ??
+        "") as PlayerId;
+
+      // Set up turn state for the start of play
+      draft.turn = {
+        activePlayer: firstPlayer,
+        number: 1,
+        phase: "main",
+      };
+
+      // Tell the flow system who the current player is
+      context.flow?.setCurrentPlayer?.(firstPlayer as CorePlayerId);
+
+      // Rule 644.7: second player channels extra rune on first channel phase
+      if (draft.setup?.secondPlayer) {
+        draft.secondPlayerExtraRune = true;
+        draft.firstTurnNumber = {};
+        for (const pid of Object.keys(draft.players)) {
+          draft.firstTurnNumber[pid] = 1;
         }
       }
 
-      // Shuffle deck
-      zones.shuffleZone("mainDeck" as CoreZoneId, playerId as CorePlayerId);
+      draft.status = "playing";
+      draft.setup = undefined;
 
-      // Draw back to 6 cards
-      const cardsToKeep = keepCards.length;
-      const cardsToDraw = 6 - cardsToKeep;
-
-      if (cardsToDraw > 0) {
-        zones.drawCards({
-          count: cardsToDraw,
-          from: "mainDeck" as CoreZoneId,
-          playerId: playerId as CorePlayerId,
-          to: "hand" as CoreZoneId,
-        });
-      }
+      // Transition flow from setup segment to mainGame segment
+      context.flow?.endSegment();
     },
   },
 };

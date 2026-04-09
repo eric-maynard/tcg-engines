@@ -16,11 +16,11 @@ export const moanaBornLeader: CharacterCard = {
         steps: [
           {
             target: {
-              selector: "all",
+              cardTypes: ["character"],
               count: "all",
               owner: "any",
+              selector: "all",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "ready",
           },

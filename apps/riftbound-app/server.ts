@@ -162,8 +162,8 @@ function broadcastLobby(lobby: Lobby) {
       coinFlip: lobby.coinFlip,
       gameId: lobby.gameId,
       gameMode: lobby.gameMode,
-      guest: lobby.guest ? { name: lobby.guest.name, ready: lobby.guest.ready, hasDeck: !!lobby.guest.deckId } : null,
-      host: { name: lobby.host.name, ready: lobby.host.ready, hasDeck: !!lobby.host.deckId },
+      guest: lobby.guest ? { hasDeck: !!lobby.guest.deckId, name: lobby.guest.name, ready: lobby.guest.ready } : null,
+      host: { hasDeck: !!lobby.host.deckId, name: lobby.host.name, ready: lobby.host.ready },
       id: lobby.id,
       sandbox: lobby.sandbox,
       status: lobby.status,
@@ -304,6 +304,14 @@ function formatMoveLog(moveId: string, playerId: string, params: Record<string, 
     return def?.name ?? defId;
   };
 
+  // Resolve battlefield ID to display name
+  const resolveBattlefield = (id: unknown): string => {
+    if (typeof id !== "string") {return String(id ?? "");}
+    const defId = id.replace(/^player-[12]-bf-/, "");
+    const def = registry.get(defId);
+    return def?.name ?? defId;
+  };
+
   switch (moveId) {
     case "playUnit": { return `${player} played ${resolveCard(params.cardId)} to ${params.location ?? "base"}`;
     }
@@ -315,21 +323,21 @@ function formatMoveLog(moveId: string, playerId: string, params: Record<string, 
       const unitNames = Array.isArray(params.unitIds)
         ? params.unitIds.map(resolveCard).join(", ")
         : "units";
-      return `${player} moved ${unitNames} to ${params.destination ?? "?"}`;
+      return `${player} moved ${unitNames} to ${resolveBattlefield(params.destination)}`;
     }
     case "exhaustRune": { return `${player} tapped ${resolveCard(params.runeId)}`;
     }
     case "recycleRune": { return `${player} recycled ${resolveCard(params.runeId)} for ${params.domain ?? "power"}`;
     }
-    case "contestBattlefield": { return `${player} contested ${params.battlefieldId}`;
+    case "contestBattlefield": { return `${player} contested ${resolveBattlefield(params.battlefieldId)}`;
     }
-    case "conquerBattlefield": { return `${player} conquered ${params.battlefieldId}`;
+    case "conquerBattlefield": { return `${player} conquered ${resolveBattlefield(params.battlefieldId)}`;
     }
     case "assignAttacker": { return `${player} assigned ${resolveCard(params.unitId)} as attacker`;
     }
     case "assignDefender": { return `${player} assigned ${resolveCard(params.unitId)} as defender`;
     }
-    case "resolveCombat": { return `Combat resolved at ${params.battlefieldId}`;
+    case "resolveCombat": { return `Combat resolved at ${resolveBattlefield(params.battlefieldId)}`;
     }
     case "scorePoint": { return `${player} scored a point (${params.method})`;
     }
@@ -355,7 +363,7 @@ function formatMoveLog(moveId: string, playerId: string, params: Record<string, 
     }
     case "resolveChain": { return `Chain resolved`;
     }
-    case "startShowdown": { return `Showdown started at ${params.battlefieldId}`;
+    case "startShowdown": { return `Showdown started at ${resolveBattlefield(params.battlefieldId)}`;
     }
     case "endShowdown": { return `Showdown ended`;
     }
@@ -365,11 +373,19 @@ function formatMoveLog(moveId: string, playerId: string, params: Record<string, 
     }
     case "recallUnit": { return `${player} recalled ${resolveCard(params.unitId)}`;
     }
-    case "hideCard": { return `${player} hid a card at ${params.battlefieldId}`;
+    case "hideCard": { return `${player} hid a card at ${resolveBattlefield(params.battlefieldId)}`;
     }
     case "revealHidden": { return `${player} revealed ${resolveCard(params.cardId)}`;
     }
-    default: { return `${player}: ${moveId}`;
+    default: {
+      // Hide noisy system moves from the log
+      const hiddenMoves = new Set([
+        "emptyRunePool", "shuffleDecks", "placeBattlefields", "drawInitialHand",
+        "placeChampion", "placeLegend", "initializeRuneDeck", "readyAll",
+        "advancePhase", "clearDamage",
+      ]);
+      if (hiddenMoves.has(moveId)) {return "";}
+      return `${player}: ${moveId.replace(/([A-Z])/g, " $1").toLowerCase().trim()}`;
     }
   }
 }
@@ -382,7 +398,8 @@ function buildHistoryLog(session: GameSession): string[] {
     for (const entry of history) {
       const params = entry.context?.params as Record<string, unknown> ?? {};
       const playerId = entry.context?.playerId as string ?? "";
-      entries.push(formatMoveLog(entry.moveId, playerId, params));
+      const logEntry = formatMoveLog(entry.moveId, playerId, params);
+      if (logEntry) {entries.push(logEntry);}
     }
   } catch { /* History not available */ }
   return entries.slice(-80);
@@ -457,6 +474,7 @@ function buildGameSnapshot(session: GameSession, viewingPlayer?: string) {
     status: state.status,
     turn: state.turn,
     victoryScore: state.victoryScore,
+    winner: state.winner,
     zones,
   };
 }
@@ -605,22 +623,24 @@ function savedDeckToDeckConfig(deck: FullDeck): DeckConfig | null {
     return null;
   }
 
-  // Extract legend and champion from mainDeckCardIds by card type
-  // (saved decks store them in the "main" zone since the DB schema doesn't have legend/champion zones)
-  let legendId: string | undefined;
-  let championId: string | undefined;
+  // Use deck-level legend/champion IDs (DB stores them separately from deck_cards)
+  let legendId: string | undefined = deck.legendId || undefined;
+  let championId: string | undefined = deck.championId || undefined;
 
-  for (let i = mainDeckCardIds.length - 1; i >= 0; i--) {
-    const defId = mainDeckCardIds[i];
-    const def = registry.get(defId);
-    if (!def) {continue;}
+  // Fallback: scan mainDeckCardIds if deck-level IDs are missing (e.g., legacy data)
+  if (!legendId || !championId) {
+    for (let i = mainDeckCardIds.length - 1; i >= 0; i--) {
+      const defId = mainDeckCardIds[i];
+      const def = registry.get(defId);
+      if (!def) {continue;}
 
-    if (def.cardType === "legend" && !legendId) {
-      legendId = defId;
-      mainDeckCardIds.splice(i, 1);
-    } else if ("isChampion" in def && def.isChampion && !championId) {
-      championId = defId;
-      mainDeckCardIds.splice(i, 1);
+      if (def.cardType === "legend" && !legendId) {
+        legendId = defId;
+        mainDeckCardIds.splice(i, 1);
+      } else if ("isChampion" in def && def.isChampion && !championId) {
+        championId = defId;
+        mainDeckCardIds.splice(i, 1);
+      }
     }
   }
 
@@ -1706,8 +1726,8 @@ const server = Bun.serve({
       return json({
         code: lobby.code,
         gameId: lobby.gameId,
-        guest: lobby.guest ? { hasDeck: !!lobby.guest.deckId, name: lobby.guest.name, ready: lobby.guest.ready } : null,
-        host: { hasDeck: !!lobby.host.deckId, name: lobby.host.name, ready: lobby.host.ready },
+        guest: lobby.guest ? { hasDeck: Boolean(lobby.guest.deckId), name: lobby.guest.name, ready: lobby.guest.ready } : null,
+        host: { hasDeck: Boolean(lobby.host.deckId), name: lobby.host.name, ready: lobby.host.ready },
         id: lobby.id,
         status: lobby.status,
       });
@@ -2376,7 +2396,7 @@ const server = Bun.serve({
           const sendBack = (msg.sendBack as string[]) ?? [];
           if (sendBack.length > 0 && sendBack.length <= 2) {
             session.engine.executeMove("mulligan", {
-              params: { playerId, keepCards: sendBack },
+              params: { keepCards: sendBack, playerId },
               playerId: playerId as PlayerId,
             });
             session.log.push(`${session.playerNames[playerId] ?? playerId} mulliganed ${sendBack.length} card${sendBack.length > 1 ? "s" : ""}`);

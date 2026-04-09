@@ -10,7 +10,7 @@ import { Abilities, Conditions, Costs, Effects, Targets, Triggers } from "../hel
 
 describe("Keyword: Assault", () => {
   describe("simple assault", () => {
-    it.skip("should parse '[Assault] (+1 :rb_might: while I'm an attacker.)'", () => {
+    it("should parse '[Assault] (+1 :rb_might: while I'm an attacker.)'", () => {
       const result = parseAbilities("[Assault] (+1 :rb_might: while I'm an attacker.)");
 
       expect(result.success).toBe(true);
@@ -20,7 +20,7 @@ describe("Keyword: Assault", () => {
   });
 
   describe("assault with value", () => {
-    it.skip("should parse '[Assault 2] (+2 :rb_might: while I'm an attacker.)'", () => {
+    it("should parse '[Assault 2] (+2 :rb_might: while I'm an attacker.)'", () => {
       const result = parseAbilities("[Assault 2] (+2 :rb_might: while I'm an attacker.)");
 
       expect(result.success).toBe(true);
@@ -28,7 +28,7 @@ describe("Keyword: Assault", () => {
       expect(result.abilities?.[0]).toEqual(expect.objectContaining(Abilities.assault(2)));
     });
 
-    it.skip("should parse '[Assault 3]_ (+3 :rb_might: while I'm an attacker.)_If an opponent controls a battlefield, I enter ready.When I conquer, you may pay :rb_energy_1: to return me to my owner's hand.'", () => {
+    it("should parse '[Assault 3]_ (+3 :rb_might: while I'm an attacker.)_If an opponent controls a battlefield, I enter ready.When I conquer, you may pay :rb_energy_1: to return me to my owner's hand.'", () => {
       const result = parseAbilities(
         "[Assault 3]_ (+3 :rb_might: while I'm an attacker.)_If an opponent controls a battlefield, I enter ready.When I conquer, you may pay :rb_energy_1: to return me to my owner's hand.",
       );
@@ -40,7 +40,7 @@ describe("Keyword: Assault", () => {
   });
 
   describe("assault combined with other keywords", () => {
-    it.skip("should parse '[Assault 2], [Shield 2] (+2 :rb_might: while I'm an attacker or defender.)'", () => {
+    it("should parse '[Assault 2], [Shield 2] (+2 :rb_might: while I'm an attacker or defender.)'", () => {
       const result = parseAbilities(
         "[Assault 2], [Shield 2] (+2 :rb_might: while I'm an attacker or defender.)",
       );
@@ -53,7 +53,7 @@ describe("Keyword: Assault", () => {
   });
 
   describe("conditional assault", () => {
-    it.skip("should parse 'If you've discarded a card this turn, I have [Assault] and [Ganking].'", () => {
+    it("should parse 'If you've discarded a card this turn, I have [Assault] and [Ganking].'", () => {
       const result = parseAbilities(
         "If you've discarded a card this turn, I have [Assault] and [Ganking]. (+1 :rb_might: while I'm an attacker. I can move from battlefield to battlefield.)",
       );
@@ -68,7 +68,7 @@ describe("Keyword: Assault", () => {
       );
     });
 
-    it.skip("should parse 'I have [Assault] equal to the number of enemy units here.'", () => {
+    it("should parse 'I have [Assault] equal to the number of enemy units here.'", () => {
       const result = parseAbilities(
         "[Accelerate] _(Y_ou may pay :rb_energy_1::rb_rune_chaos: as an additional cost to have me enter ready.)I have [Assault] equal to the number of enemy units here. (+1 :rb_might: while I'm an attacker for each instance of Assault.)",
       );
@@ -79,7 +79,7 @@ describe("Keyword: Assault", () => {
   });
 
   describe("assault granted to others", () => {
-    it.skip("should parse 'Other friendly units here have [Assault].'", () => {
+    it("should parse 'Other friendly units here have [Assault].'", () => {
       const result = parseAbilities(
         "Other friendly units here have [Assault]. (+1 :rb_might: while they're attackers.)",
       );
@@ -97,7 +97,7 @@ describe("Keyword: Assault", () => {
       );
     });
 
-    it.skip("should parse 'Your Equipment each give [Assault].'", () => {
+    it("should parse 'Your Equipment each give [Assault].'", () => {
       const result = parseAbilities(
         "Your Equipment each give [Assault]. (+1 :rb_might: while equipped unit is an attacker.)",
       );
@@ -113,7 +113,7 @@ describe("Keyword: Assault", () => {
   });
 
   describe("assault in spell effects", () => {
-    it.skip("should parse '[Action] Give a unit [Assault 3] this turn.'", () => {
+    it("should parse '[Action] Give a unit [Assault 3] this turn.'", () => {
       const result = parseAbilities(
         "[Action] (Play on your turn or in showdowns.)Give a unit [Assault 3] this turn. (+3 :rb_might: while it's an attacker.)",
       );

@@ -7,9 +7,9 @@ export const weKnowTheWay: ActionCard = {
         steps: [
           {
             target: {
-              selector: "chosen",
               count: 1,
               filter: [{ type: "zone", zone: "discard" }],
+              selector: "chosen",
             },
             type: "shuffle-into-deck",
           },
@@ -22,17 +22,17 @@ export const weKnowTheWay: ActionCard = {
               type: "revealed-matches-chosen-name",
             },
             else: {
-              type: "put-in-hand",
-              target: "CONTROLLER",
               source: "deck",
+              target: "CONTROLLER",
+              type: "put-in-hand",
             },
             then: {
-              type: "optional",
               effect: {
-                type: "play-card",
-                from: "deck",
                 cost: "free",
+                from: "deck",
+                type: "play-card",
               },
+              type: "optional",
             },
             type: "conditional",
           },

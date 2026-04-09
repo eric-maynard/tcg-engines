@@ -9,9 +9,9 @@ export const theQueenMirrorSeeker: CharacterCard = {
           amount: 3,
           destinations: [
             {
-              zone: "deck-top",
-              remainder: true,
               ordering: "player-choice",
+              remainder: true,
+              zone: "deck-top",
             },
           ],
           target: "CONTROLLER",

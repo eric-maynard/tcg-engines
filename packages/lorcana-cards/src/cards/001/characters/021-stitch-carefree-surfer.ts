@@ -15,9 +15,9 @@ export const stitchCarefreeSurfer: CharacterCard = {
         then: {
           chooser: "CONTROLLER",
           effect: {
-            type: "draw",
             amount: 2,
             target: "CONTROLLER",
+            type: "draw",
           },
           type: "optional",
         },

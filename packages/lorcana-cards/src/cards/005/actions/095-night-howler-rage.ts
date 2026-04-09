@@ -13,11 +13,11 @@ export const nightHowlerRage: ActionCard = {
           {
             keyword: "Reckless",
             target: {
-              selector: "chosen",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "gain-keyword",
           },

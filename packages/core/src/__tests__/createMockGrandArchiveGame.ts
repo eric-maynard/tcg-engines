@@ -269,9 +269,7 @@ const grandArchiveFlow: FlowDefinition<TestGameState> = {
         order: 4,
       },
       end: {
-        endIf: (_context) => {
-          return true;
-        },
+        endIf: (_context) => true,
         next: "wakeUp",
         onBegin: (context) => {
           const currentPlayer = context.getCurrentPlayer();

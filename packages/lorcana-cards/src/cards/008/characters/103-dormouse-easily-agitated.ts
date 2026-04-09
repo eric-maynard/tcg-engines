@@ -8,11 +8,11 @@ export const dormouseEasilyAgitated: CharacterCard = {
         effect: {
           amount: 1,
           target: {
-            selector: "chosen",
+            cardTypes: ["character"],
             count: 1,
             owner: "any",
+            selector: "chosen",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "put-damage",
         },

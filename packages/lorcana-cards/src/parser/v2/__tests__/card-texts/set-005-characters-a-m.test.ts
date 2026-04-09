@@ -1259,15 +1259,15 @@ describe("Set 005 Card Text Parser Tests - Characters A M", () => {
           cost: { ink: 2 },
           effect: {
             options: [
-              { type: "discard", amount: 1, target: "EACH_OPPONENT" },
+              { amount: 1, target: "EACH_OPPONENT", type: "discard" },
               {
-                type: "modify-stat",
-                stat: "strength",
-                modifier: 2,
-                target: "CHOSEN_CHARACTER",
                 duration: "this-turn",
+                modifier: 2,
+                stat: "strength",
+                target: "CHOSEN_CHARACTER",
+                type: "modify-stat",
               },
-              { type: "banish", target: "CHOSEN_DAMAGED_CHARACTER" },
+              { target: "CHOSEN_DAMAGED_CHARACTER", type: "banish" },
             ],
             type: "modal",
           },

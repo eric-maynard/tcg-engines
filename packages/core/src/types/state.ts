@@ -25,10 +25,13 @@ export interface InternalState<TCardDefinition = any, TCardMeta = any> {
    *
    * The framework maintains this mapping and ensures consistency.
    */
-  zones: Record<string, {
+  zones: Record<
+    string,
+    {
       config: CardZoneConfig;
       cardIds: CardId[];
-    }>;
+    }
+  >;
 
   /**
    * Card instance registry - Maps card instance ID to card data
@@ -43,7 +46,9 @@ export interface InternalState<TCardDefinition = any, TCardMeta = any> {
    * Card instances are created during game setup or through game actions.
    * Note: Field names align with CardInstanceBase from cards/card-instance.ts
    */
-  cards: Record<string, {
+  cards: Record<
+    string,
+    {
       /** Reference to card definition (static properties) */
       definitionId: string;
       /** Player who owns this card (never changes) */
@@ -54,7 +59,8 @@ export interface InternalState<TCardDefinition = any, TCardMeta = any> {
       zone: ZoneId;
       /** Position in zone (for ordered zones) */
       position?: number;
-    }>;
+    }
+  >;
 
   /**
    * Card metadata registry - Maps card instance ID to dynamic metadata

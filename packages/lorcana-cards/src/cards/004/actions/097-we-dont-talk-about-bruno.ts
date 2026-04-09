@@ -7,8 +7,8 @@ export const weDontTalkAboutBruno: ActionCard = {
         steps: [
           {
             target: {
-              selector: "chosen",
               count: 1,
+              selector: "chosen",
             },
             type: "return-to-hand",
           },

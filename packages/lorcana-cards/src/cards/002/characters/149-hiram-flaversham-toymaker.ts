@@ -7,11 +7,11 @@ export const hiramFlavershamToymaker: CharacterCard = {
         chooser: "CONTROLLER",
         effect: {
           target: {
-            selector: "all",
+            cardTypes: ["item"],
             count: "all",
             owner: "you",
+            selector: "all",
             zones: ["play"],
-            cardTypes: ["item"],
           },
           type: "banish",
         },

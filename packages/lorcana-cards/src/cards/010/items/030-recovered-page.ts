@@ -30,8 +30,8 @@ export const recoveredPage: ItemCard = {
         under: {
           count: 1,
           filter: [
-            { type: "owner", owner: "you" },
-            { type: "has-keyword", keyword: "Boost" },
+            { owner: "you", type: "owner" },
+            { keyword: "Boost", type: "has-keyword" },
           ],
           selector: "chosen",
         },

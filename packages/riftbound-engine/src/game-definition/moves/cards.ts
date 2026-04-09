@@ -13,6 +13,7 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { fireTriggers } from "../../abilities/trigger-runner";
+import { resolveTarget } from "../../abilities/target-resolver";
 import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId, getFacedownZoneId } from "../../zones/zone-configs";
@@ -155,7 +156,7 @@ export const cardPlayMoves: Partial<
       if (state.turn.activePlayer !== context.params.playerId) {
         return false;
       }
-      if (state.turn.phase !== "action") {
+      if (state.turn.phase !== "main") {
         return false;
       }
 
@@ -185,7 +186,7 @@ export const cardPlayMoves: Partial<
       if (state.turn.activePlayer !== (context.playerId as string)) {
         return [];
       }
-      if (state.turn.phase !== "action") {
+      if (state.turn.phase !== "main") {
         return [];
       }
 
@@ -254,7 +255,7 @@ export const cardPlayMoves: Partial<
       if (state.turn.activePlayer !== context.params.playerId) {
         return false;
       }
-      if (state.turn.phase !== "action") {
+      if (state.turn.phase !== "main") {
         return false;
       }
 
@@ -284,7 +285,7 @@ export const cardPlayMoves: Partial<
       if (state.turn.activePlayer !== (context.playerId as string)) {
         return [];
       }
-      if (state.turn.phase !== "action") {
+      if (state.turn.phase !== "main") {
         return [];
       }
 
@@ -375,6 +376,36 @@ export const cardPlayMoves: Partial<
         return false;
       }
 
+      // Rule 537: Check that required targets exist before allowing the spell
+      const abilities = registry.getAbilities(context.params.cardId) ?? [];
+      const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
+      const effect = spellAbility?.effect as { target?: { type: string } } | undefined;
+      if (effect?.target && effect.target.type !== "self") {
+        const resolved = resolveTarget(
+          effect.target as {
+            type: string;
+            controller?: "friendly" | "enemy" | "any";
+            location?: string;
+            quantity?: number | "all";
+          },
+          {
+            cards: {
+              getCardOwner: (c) => context.cards.getCardOwner(c),
+            },
+            draft: state,
+            playerId: context.params.playerId as string,
+            sourceCardId: context.params.cardId as string,
+            zones: {
+              getCardZone: (c) => context.zones.getCardZone(c),
+              getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
+            },
+          },
+        );
+        if (resolved.length === 0) {
+          return false;
+        }
+      }
+
       return true;
     },
     enumerator: (state, context) => {
@@ -383,6 +414,8 @@ export const cardPlayMoves: Partial<
       }
 
       const registry = getGlobalCardRegistry();
+      const interaction = state.interaction ?? createInteractionState();
+      const turnState = getTurnState(interaction);
       const pool = state.runePools[context.playerId as string];
       if (!pool) {
         return [];
@@ -401,6 +434,44 @@ export const cardPlayMoves: Partial<
         }
         if (!registry.canAfford(cardId as string, pool)) {
           continue;
+        }
+
+        // Check spell timing is legal in current turn state (rule 553)
+        const timing = (registry.getSpellTiming(cardId as string) ?? "action") as
+          | "action"
+          | "reaction";
+        if (!isLegalTiming(timing, turnState)) {
+          continue;
+        }
+
+        // Check that the spell has at least one legal target (rule 537)
+        const abilities = registry.getAbilities(cardId as string) ?? [];
+        const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
+        const effect = spellAbility?.effect as { target?: { type: string } } | undefined;
+        if (effect?.target && effect.target.type !== "self") {
+          const resolved = resolveTarget(
+            effect.target as {
+              type: string;
+              controller?: "friendly" | "enemy" | "any";
+              location?: string;
+              quantity?: number | "all";
+            },
+            {
+              cards: {
+                getCardOwner: (c) => context.cards.getCardOwner(c),
+              },
+              draft: state,
+              playerId: context.playerId as string,
+              sourceCardId: cardId as string,
+              zones: {
+                getCardZone: (c) => context.zones.getCardZone(c),
+                getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
+              },
+            },
+          );
+          if (resolved.length === 0) {
+            continue;
+          }
         }
 
         results.push({
@@ -534,34 +605,50 @@ export const cardPlayMoves: Partial<
    */
   playFromChampionZone: {
     condition: (state, context) => {
-      if (state.status !== "playing") {return false;}
-      if (state.turn.phase !== "action") {return false;}
-      if (state.turn.activePlayer !== context.params.playerId) {return false;}
+      if (state.status !== "playing") {
+        return false;
+      }
+      if (state.turn.phase !== "main") {
+        return false;
+      }
+      if (state.turn.activePlayer !== context.params.playerId) {
+        return false;
+      }
 
       const championZoneCards = context.zones.getCardsInZone(
         "championZone" as CoreZoneId,
         context.params.playerId as CorePlayerId,
       );
-      if (championZoneCards.length === 0) {return false;}
+      if (championZoneCards.length === 0) {
+        return false;
+      }
 
       return true;
     },
     enumerator: (state, context) => {
-      if (state.status !== "playing" || state.turn.phase !== "action") {return [];}
-      if (state.turn.activePlayer !== context.playerId) {return [];}
+      if (state.status !== "playing" || state.turn.phase !== "main") {
+        return [];
+      }
+      if (state.turn.activePlayer !== context.playerId) {
+        return [];
+      }
 
       const championZoneCards = context.zones.getCardsInZone(
         "championZone" as CoreZoneId,
         context.playerId as CorePlayerId,
       );
-      if (championZoneCards.length === 0) {return [];}
+      if (championZoneCards.length === 0) {
+        return [];
+      }
 
       const energy = state.runePools?.[context.playerId]?.energy ?? 0;
       const results: { playerId: PlayerId; location: string }[] = [];
       for (const cardId of championZoneCards) {
         const def = context.registry?.get(cardId);
         const cost = def?.energyCost ?? 0;
-        if (cost > energy) {continue;}
+        if (cost > energy) {
+          continue;
+        }
         results.push({ location: "base", playerId: context.playerId as PlayerId });
       }
       return results;

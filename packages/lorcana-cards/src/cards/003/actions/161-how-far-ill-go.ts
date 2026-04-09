@@ -9,9 +9,9 @@ export const howFarIllGo: ActionCard = {
             amount: 2,
             destinations: [
               {
-                zone: "deck-bottom",
-                remainder: true,
                 ordering: "player-choice",
+                remainder: true,
+                zone: "deck-bottom",
               },
             ],
             target: "CONTROLLER",

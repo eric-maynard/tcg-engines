@@ -10,7 +10,7 @@ import { Abilities, Effects } from "../helpers";
 
 describe("Keyword: Vision", () => {
   describe("simple vision", () => {
-    it.skip("should parse '[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)'", () => {
+    it("should parse '[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)'", () => {
       const result = parseAbilities(
         "[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)",
       );
@@ -27,7 +27,7 @@ describe("Keyword: Vision", () => {
   });
 
   describe("vision with static abilities", () => {
-    it.skip("should parse '[Vision] Other friendly units have [Vision].'", () => {
+    it("should parse '[Vision] Other friendly units have [Vision].'", () => {
       const result = parseAbilities(
         "[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)Other friendly units have [Vision].",
       );
@@ -45,7 +45,7 @@ describe("Keyword: Vision", () => {
       );
     });
 
-    it.skip("should parse '[Vision] You may play me to an open battlefield.'", () => {
+    it("should parse '[Vision] You may play me to an open battlefield.'", () => {
       const result = parseAbilities(
         "[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)You may play me to an open battlefield.",
       );
@@ -56,7 +56,7 @@ describe("Keyword: Vision", () => {
   });
 
   describe("vision with triggered abilities", () => {
-    it.skip("should parse '[Vision] When you recycle one or more cards, buff a friendly unit.'", () => {
+    it("should parse '[Vision] When you recycle one or more cards, buff a friendly unit.'", () => {
       const result = parseAbilities(
         "[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)When you recycle one or more cards, buff a friendly unit. (If it doesn't have a buff, it gets a +1 :rb_might: buff. Runes aren't cards.)",
       );
@@ -78,7 +78,7 @@ describe("Keyword: Vision", () => {
   });
 
   describe("vision combined with shield", () => {
-    it.skip("should parse '[Vision][Shield]'", () => {
+    it("should parse '[Vision][Shield]'", () => {
       const result = parseAbilities(
         "[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)[Shield]** **(+1 :rb_might: while I'm a defender.)",
       );
@@ -96,7 +96,7 @@ describe("Keyword: Vision", () => {
   });
 
   describe("vision granted to others", () => {
-    it.skip("should parse 'Your Mechs have [Vision].'", () => {
+    it("should parse 'Your Mechs have [Vision].'", () => {
       const result = parseAbilities(
         "Your Mechs have [Vision]. (When you play us, look at the top card of your Main Deck. You may recycle it.)",
       );

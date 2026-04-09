@@ -21,7 +21,9 @@ describe("ZoneOperations Interface", () => {
             const cardId = sourceZone.cardIds.shift();
             if (cardId) {
               moved.push(cardId as CardId);
-              if (!zones[to]) {zones[to] = { cardIds: [] };}
+              if (!zones[to]) {
+                zones[to] = { cardIds: [] };
+              }
               if (position === "top") {
                 zones[to].cardIds.unshift(cardId);
               } else {
@@ -36,7 +38,9 @@ describe("ZoneOperations Interface", () => {
       createDeck: (params) => {
         const { zoneId, playerId, cardCount, shuffle } = params;
         const created: CardId[] = [];
-        if (!zones[zoneId]) {zones[zoneId] = { cardIds: [] };}
+        if (!zones[zoneId]) {
+          zones[zoneId] = { cardIds: [] };
+        }
         for (let i = 0; i < cardCount; i++) {
           const cardId = `card-${Date.now()}-${i}` as CardId;
           created.push(cardId);
@@ -57,7 +61,9 @@ describe("ZoneOperations Interface", () => {
             const cardId = sourceZone.cardIds.shift();
             if (cardId) {
               drawn.push(cardId as CardId);
-              if (!zones[to]) {zones[to] = { cardIds: [] };}
+              if (!zones[to]) {
+                zones[to] = { cardIds: [] };
+              }
               zones[to].cardIds.push(cardId);
             }
           }
@@ -74,7 +80,8 @@ describe("ZoneOperations Interface", () => {
         return undefined;
       },
 
-      getCardsInZone: (zoneId, ownerId?) => [...(zones[zoneId]?.cardIds || [])] as unknown as CardId[],
+      getCardsInZone: (zoneId, ownerId?) =>
+        [...(zones[zoneId]?.cardIds || [])] as unknown as CardId[],
 
       moveCard: (args) => {
         const { cardId, targetZoneId } = args;

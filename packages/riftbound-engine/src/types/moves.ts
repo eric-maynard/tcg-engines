@@ -117,9 +117,6 @@ export interface RiftboundMoves {
   /** End current turn */
   endTurn: { playerId: PlayerId };
 
-  /** Pass priority */
-  pass: { playerId: PlayerId };
-
   /** Forfeit the game */
   concede: { playerId: PlayerId };
 

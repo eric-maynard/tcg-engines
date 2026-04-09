@@ -9,9 +9,9 @@ export const visionOfTheFuture: ActionCard = {
             amount: 5,
             destinations: [
               {
-                zone: "deck-bottom",
-                remainder: true,
                 ordering: "player-choice",
+                remainder: true,
+                zone: "deck-bottom",
               },
             ],
             target: "CONTROLLER",

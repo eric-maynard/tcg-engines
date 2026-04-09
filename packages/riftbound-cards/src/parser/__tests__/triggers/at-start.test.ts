@@ -10,7 +10,7 @@ import { Effects, Triggers } from "../helpers";
 
 describe("Trigger: At Start of Turn", () => {
   describe("draw effects", () => {
-    it.skip("should parse 'At the start of your turn, draw 1.'", () => {
+    it("should parse 'At the start of your turn, draw 1.'", () => {
       const result = parseAbilities("At the start of your turn, draw 1.");
 
       expect(result.success).toBe(true);
@@ -32,7 +32,7 @@ describe("Trigger: At Start of Turn", () => {
   });
 
   describe("channel effects", () => {
-    it.skip("should parse 'At the start of your turn, channel 1 rune exhausted.'", () => {
+    it("should parse 'At the start of your turn, channel 1 rune exhausted.'", () => {
       const result = parseAbilities("At the start of your turn, channel 1 rune exhausted.");
 
       expect(result.success).toBe(true);
@@ -51,7 +51,7 @@ describe("Trigger: At Start of Turn", () => {
   });
 
   describe("buff effects", () => {
-    it.skip("should parse 'At the start of your turn, buff a friendly unit.'", () => {
+    it("should parse 'At the start of your turn, buff a friendly unit.'", () => {
       const result = parseAbilities(
         "At the start of your turn, buff a friendly unit. (If it doesn't have a buff, it gets a +1 :rb_might: buff.)",
       );
@@ -70,7 +70,7 @@ describe("Trigger: At Start of Turn", () => {
   });
 
   describe("token creation effects", () => {
-    it.skip("should parse 'At the start of your turn, play a 1 :rb_might: Recruit unit token to your base.'", () => {
+    it("should parse 'At the start of your turn, play a 1 :rb_might: Recruit unit token to your base.'", () => {
       const result = parseAbilities(
         "At the start of your turn, play a 1 :rb_might: Recruit unit token to your base.",
       );
@@ -89,7 +89,7 @@ describe("Trigger: At Start of Turn", () => {
   });
 
   describe("beginning phase triggers", () => {
-    it.skip("should parse 'At the start of your Beginning Phase, draw 1.'", () => {
+    it("should parse 'At the start of your Beginning Phase, draw 1.'", () => {
       const result = parseAbilities("At the start of your Beginning Phase, draw 1.");
 
       expect(result.success).toBe(true);

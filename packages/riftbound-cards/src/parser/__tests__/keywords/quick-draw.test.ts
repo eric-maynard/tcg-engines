@@ -10,7 +10,7 @@ import { Abilities, Costs } from "../helpers";
 
 describe("Keyword: Quick-Draw", () => {
   describe("quick-draw with equip calm", () => {
-    it.skip("should parse '[Quick-Draw][Equip] :rb_rune_calm:'", () => {
+    it("should parse '[Quick-Draw][Equip] :rb_rune_calm:'", () => {
       const result = parseAbilities(
         "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)[Equip] :rb_rune_calm: (:rb_rune_calm:: Attach this to a unit you control.)",
       );
@@ -25,7 +25,7 @@ describe("Keyword: Quick-Draw", () => {
   });
 
   describe("quick-draw with equip fury", () => {
-    it.skip("should parse '[Quick-Draw][Equip] :rb_rune_fury:'", () => {
+    it("should parse '[Quick-Draw][Equip] :rb_rune_fury:'", () => {
       const result = parseAbilities(
         "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)[Equip] :rb_rune_fury: (:rb_rune_fury:: Attach this to a unit you control.)",
       );
@@ -40,7 +40,7 @@ describe("Keyword: Quick-Draw", () => {
   });
 
   describe("quick-draw with equip mind", () => {
-    it.skip("should parse '[Quick-Draw][Equip] :rb_rune_mind:'", () => {
+    it("should parse '[Quick-Draw][Equip] :rb_rune_mind:'", () => {
       const result = parseAbilities(
         "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)[Equip] :rb_rune_mind: (:rb_rune_mind:: Attach this to a unit you control.)",
       );
@@ -55,7 +55,7 @@ describe("Keyword: Quick-Draw", () => {
   });
 
   describe("quick-draw with equip rainbow and temporary", () => {
-    it.skip("should parse '[Quick-Draw][Equip] :rb_rune_rainbow:[Temporary]'", () => {
+    it("should parse '[Quick-Draw][Equip] :rb_rune_rainbow:[Temporary]'", () => {
       const result = parseAbilities(
         "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)[Equip] :rb_rune_rainbow: (:rb_rune_rainbow:: Attach this to a unit you control.)[Temporary] (If this is unattached, kill it at the start of its controller's Beginning Phase, before scoring.)",
       );
@@ -71,7 +71,7 @@ describe("Keyword: Quick-Draw", () => {
   });
 
   describe("quick-draw granted to others", () => {
-    it.skip("should parse 'Each Equipment in your hand has [Quick-Draw].'", () => {
+    it("should parse 'Each Equipment in your hand has [Quick-Draw].'", () => {
       const result = parseAbilities(
         "[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)Each Equipment in your hand has [Quick-Draw]. (It gains [Reaction]. When you play it, attach it to a unit you control.)",
       );

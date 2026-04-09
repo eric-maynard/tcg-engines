@@ -145,12 +145,12 @@ describe("Integration - Complete Game Flow", () => {
           currentPlayerIndex: 0,
           phase: "draw",
           players: players.map((p) => ({
-            id: p.id as PlayerId,
-            name: p.name || "Player",
-            health: 3,
-            hand: [] as string[],
             deck: ["card1", "card2", "card3"] as string[],
             field: [] as string[],
+            hand: [] as string[],
+            health: 3,
+            id: p.id as PlayerId,
+            name: p.name || "Player",
           })),
           turnNumber: 1,
         }),
@@ -295,7 +295,7 @@ describe("Integration - Complete Game Flow", () => {
             const player = draft.players[draft.currentPlayerIndex];
             if (player && player.deck.length > 0) {
               // Use RNG to draw random card (deterministic)
-              const {rng} = context;
+              const { rng } = context;
               if (rng) {
                 const index = rng.randomInt(0, player.deck.length - 1);
                 const card = player.deck.splice(index, 1)[0];
@@ -327,12 +327,12 @@ describe("Integration - Complete Game Flow", () => {
           currentPlayerIndex: 0,
           phase: "draw",
           players: players.map((p) => ({
-            id: p.id as PlayerId,
-            name: p.name || "Player",
-            health: 5,
-            hand: [] as string[],
             deck: ["A", "B", "C", "D", "E"] as string[],
             field: [] as string[],
+            hand: [] as string[],
+            health: 5,
+            id: p.id as PlayerId,
+            name: p.name || "Player",
           })),
           turnNumber: 1,
         }),
@@ -416,7 +416,9 @@ describe("Integration - Complete Game Flow", () => {
         playCard: {
           condition: (state, context) => {
             const player = state.players[state.currentPlayerIndex];
-            if (!(player && context.params?.cardId)) {return false;}
+            if (!(player && context.params?.cardId)) {
+              return false;
+            }
             return player.hand.includes(context.params.cardId as string);
           },
           reducer: (draft, context) => {
@@ -440,12 +442,12 @@ describe("Integration - Complete Game Flow", () => {
           currentPlayerIndex: 0,
           phase: "draw",
           players: players.map((p) => ({
-            id: p.id as PlayerId,
-            name: p.name || "Player",
-            health: 10,
-            hand: [] as string[],
             deck: Array.from({ length: 20 }, (_, i) => `card${i}`) as string[],
             field: [] as string[],
+            hand: [] as string[],
+            health: 10,
+            id: p.id as PlayerId,
+            name: p.name || "Player",
           })),
           turnNumber: 1,
         }),

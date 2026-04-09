@@ -7,11 +7,11 @@ export const heiheiNotsotrickyChicken: CharacterCard = {
         steps: [
           {
             target: {
-              selector: "chosen",
+              cardTypes: ["item"],
               count: 1,
               owner: "opponent",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["item"],
             },
             type: "exert",
           },

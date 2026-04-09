@@ -8,10 +8,10 @@ export const loseTheWay: ActionCard = {
           {
             chooser: "CONTROLLER",
             effect: {
-              type: "discard",
               amount: 1,
-              target: "CONTROLLER",
               chosen: true,
+              target: "CONTROLLER",
+              type: "discard",
             },
             type: "optional",
           },

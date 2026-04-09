@@ -12,22 +12,22 @@ export const kakamoraPirateChief: CharacterCard = {
           {
             amount: 1,
             target: {
-              selector: "chosen",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "deal-damage",
           },
           {
             amount: 3,
             target: {
-              selector: "chosen",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "deal-damage",
           },

@@ -29,16 +29,16 @@ export const sherwoodForestOutlawHideaway: LocationCard = {
               ink: 1,
             },
             effect: {
-              type: "deal-damage",
               amount: 2,
               target: {
-                selector: "chosen",
                 filters: [
                   {
                     type: "damaged",
                   },
                 ],
+                selector: "chosen",
               },
+              type: "deal-damage",
             },
             type: "activated",
           },

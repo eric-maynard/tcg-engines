@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Decks - Riftbound</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔</text></svg>">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #0c0b14;
+      color: #d8d4e8;
+    }
+
+    /* Top Header (shared with builder) */
+    .top-header {
+      height: 52px;
+      min-height: 52px;
+      background: #0e0d18;
+      border-bottom: 1px solid #2a2740;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 24px;
+    }
+    .top-header .brand {
+      font-size: 15px;
+      font-weight: 700;
+      color: #c4a0ff;
+      letter-spacing: 0.5px;
+    }
+    .top-header nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .top-header .header-right {
+      margin-left: auto;
+    }
+    .top-header nav a {
+      color: #a090c0;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid #2a2740;
+      background: #1a1830;
+      transition: all 0.15s;
+    }
+    .top-header nav a:hover { color: #d4c0ff; border-color: #5a3a9a; background: #2a2248; }
+    .top-header nav a.active { color: #d4c0ff; background: #3a2a6a; border-color: #5a3a9a; }
+    .top-header .auth-btn {
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1px solid #3a3460;
+      background: #1a1830;
+      color: #c4a0ff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .top-header .auth-btn:hover { background: #2a2248; border-color: #5a3a9a; }
+    .top-header .auth-user {
+      color: #a090c0;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .top-header .auth-logout {
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #3a3460;
+      background: transparent;
+      color: #8a7aaa;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .top-header .auth-logout:hover { background: #1a1830; }
+
+    /* Page Content */
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .page-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #d4c0ff;
+    }
+
+    .btn {
+      padding: 8px 18px;
+      border-radius: 6px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary {
+      background: #3a2a6a;
+      color: #d4c0ff;
+    }
+    .btn-primary:hover { background: #4a3a8a; }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #4a4560;
+    }
+    .empty-state h2 {
+      font-size: 18px;
+      color: #6b6580;
+      margin-bottom: 8px;
+    }
+    .empty-state p {
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    /* Deck Grid */
+    .deck-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .deck-card {
+      background: #13121e;
+      border: 1px solid #2a2740;
+      border-radius: 10px;
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .deck-card:hover {
+      border-color: #5a3a9a;
+      box-shadow: 0 0 16px rgba(100, 60, 200, 0.15);
+    }
+    .deck-card .dc-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #d4c0ff;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .deck-card .dc-meta {
+      font-size: 11px;
+      color: #6b6580;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .dc-version {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .dc-version-standard { background: #1a2a1a; color: #6bcc6b; border: 1px solid #2a4a2a; }
+    .dc-version-preview { background: #2a1a3a; color: #c4a0ff; border: 1px solid #4a2a6a; }
+    .deck-card .dc-legend {
+      font-size: 12px;
+      color: #8a80a0;
+    }
+    .deck-card .dc-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid #1e1a30;
+    }
+    .deck-card .dc-date {
+      font-size: 10px;
+      color: #4a4560;
+    }
+    .deck-card .dc-delete {
+      font-size: 10px;
+      color: #5a3a3a;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+    .deck-card .dc-delete:hover { color: #ff6b6b; background: #2a1515; }
+
+    /* Domain badges */
+    .domain-badge {
+      font-size: 9px;
+      padding: 1px 7px;
+      border-radius: 8px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .domain-fury { background: #3a1515; color: #ff6b6b; }
+    .domain-calm { background: #153a15; color: #6bff6b; }
+    .domain-mind { background: #15153a; color: #6b8bff; }
+    .domain-body { background: #3a2a15; color: #ffaa6b; }
+    .domain-chaos { background: #2a153a; color: #bb6bff; }
+    .domain-order { background: #3a3a15; color: #ffff6b; }
+    .domain-colorless { background: #2a2a2a; color: #999; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 40px; color: #4a4560; font-size: 13px; }
+
+    /* Sign-in prompt */
+    .signin-prompt {
+      text-align: center;
+      padding: 40px 20px;
+      background: #13121e;
+      border: 1px solid #2a2740;
+      border-radius: 10px;
+    }
+    .signin-prompt p {
+      color: #6b6580;
+      font-size: 13px;
+      margin-bottom: 14px;
+    }
+
+    /* Toast (reused) */
+    .toast {
+      position: fixed;
+      bottom: -60px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 12px;
+      z-index: 200;
+      transition: bottom 0.3s ease;
+      text-align: center;
+    }
+    .toast.visible { bottom: 20px; }
+    .toast.success { background: #1a3a1a; color: #6bff6b; border: 1px solid #2a5a2a; }
+    .toast.error { background: #3a1a1a; color: #ff6b6b; border: 1px solid #5a2a2a; }
+
+    /* Confirm modal */
+    .confirm-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 300;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .confirm-overlay.visible { opacity: 1; pointer-events: auto; }
+    .confirm-box {
+      background: #1e1b2e;
+      border: 1px solid #3a2f5a;
+      border-radius: 12px;
+      padding: 24px 28px;
+      max-width: 340px;
+      width: 90%;
+      text-align: center;
+    }
+    .confirm-box h3 {
+      margin: 0 0 8px; font-size: 15px; color: #e8e0f0;
+    }
+    .confirm-box p {
+      margin: 0 0 20px; font-size: 12px; color: #8a7fa0;
+    }
+    .confirm-btns {
+      display: flex; gap: 10px; justify-content: center;
+    }
+    .confirm-btns button {
+      padding: 8px 20px; border-radius: 8px; border: none;
+      font-size: 12px; cursor: pointer; font-weight: 600;
+      transition: background 0.15s;
+    }
+    .confirm-cancel {
+      background: #2a2540; color: #a090c0;
+    }
+    .confirm-cancel:hover { background: #352f50; }
+    .confirm-delete {
+      background: #5a1a1a; color: #ff6b6b;
+    }
+    .confirm-delete:hover { background: #7a2a2a; }
+  </style>
+</head>
+<body>
+
+<div class="top-header">
+  <span class="brand">iykyk</span>
+  <nav>
+    <a href="/decks" class="active">Decks</a>
+    <a href="/builder">Builder</a>
+    <a href="/play">Play</a>
+  </nav>
+  <div class="header-right" id="authBar"></div>
+</div>
+
+<div class="page">
+  <div class="page-header">
+    <h1>My Decks</h1>
+    <a href="/builder" class="btn btn-primary">+ Create a Deck</a>
+  </div>
+
+  <div id="content">
+    <div class="loading">Loading...</div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div id="toastTitle" style="font-weight:700;"></div>
+  <div id="toastBody"></div>
+</div>
+
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h3>Delete Deck</h3>
+    <p id="confirmMsg">Are you sure? This can't be undone.</p>
+    <div class="confirm-btns">
+      <button class="confirm-cancel" onclick="closeConfirm()">Cancel</button>
+      <button class="confirm-delete" id="confirmDeleteBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const authToken = localStorage.getItem('rb_token') || null;
+  let currentUser = null;
+
+  // Toast
+  let toastTimer = null;
+  function showToast(title, body, type) {
+    const toast = document.getElementById('toast');
+    toast.className = 'toast ' + type;
+    document.getElementById('toastTitle').textContent = title;
+    document.getElementById('toastBody').textContent = body;
+    clearTimeout(toastTimer);
+    requestAnimationFrame(() => {
+      toast.classList.add('visible');
+      toastTimer = setTimeout(() => toast.classList.remove('visible'), 4000);
+    });
+  }
+
+  // Auth UI
+  function updateAuthUI() {
+    const bar = document.getElementById('authBar');
+    if (currentUser) {
+      bar.innerHTML = '<span class="auth-user">' + currentUser.username +
+        ' <button class="auth-logout" onclick="logout()">Logout</button></span>';
+    } else {
+      bar.innerHTML = '<button class="auth-btn" onclick="doLogin()">Login / Register</button>';
+    }
+  }
+
+  function doLogin() {
+    window.location.href = '/login';
+    return;
+    // Dead code below kept for reference
+    fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:'',password:''}) })
+      .then(r => r.json()).then(d => {
+        if (d.token) {
+          localStorage.setItem('rb_token', d.token);
+          currentUser = d.user;
+          updateAuthUI();
+          loadDecks();
+        } else {
+          if (confirm('Account not found. Register as "' + u + '"?')) {
+            fetch('/api/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:u,password:p}) })
+              .then(r => r.json()).then(d => {
+                if (d.token) {
+                  localStorage.setItem('rb_token', d.token);
+                  currentUser = d.user;
+                  updateAuthUI();
+                  loadDecks();
+                } else showToast('Failed', d.error || 'Try different username', 'error');
+              });
+          }
+        }
+      });
+  }
+
+  function logout() {
+    localStorage.removeItem('rb_token');
+    currentUser = null;
+    updateAuthUI();
+    loadDecks();
+  }
+
+  // Load decks
+  async function loadDecks() {
+    const content = document.getElementById('content');
+    const token = localStorage.getItem('rb_token');
+
+    if (!token || !currentUser) {
+      content.innerHTML = `
+        <div class="signin-prompt">
+          <p>Sign in to save and manage your decks</p>
+          <button class="btn btn-primary" onclick="doLogin()">Login / Register</button>
+        </div>
+        <div style="margin-top:24px;">
+          <h2 style="font-size:16px; color:#8a80a0; margin-bottom:14px;">Public Decks</h2>
+          <div id="publicDecks" class="deck-grid"><div class="loading">Loading...</div></div>
+        </div>`;
+      loadPublicDecks();
+      return;
+    }
+
+    content.innerHTML = '<div class="loading">Loading your decks...</div>';
+
+    try {
+      const res = await fetch('/api/saved-decks', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) throw new Error('Failed to load');
+      const decks = await res.json();
+
+      if (decks.length === 0) {
+        content.innerHTML = `
+          <div class="empty-state">
+            <h2>No decks yet</h2>
+            <p>Create your first deck to get started.</p>
+            <a href="/builder" class="btn btn-primary">+ Create a Deck</a>
+          </div>`;
+        return;
+      }
+
+      content.innerHTML = '<div class="deck-grid" id="deckGrid"></div>';
+      renderDecks(decks, 'deckGrid');
+    } catch (err) {
+      content.innerHTML = '<div class="empty-state"><p>Failed to load decks.</p></div>';
+    }
+  }
+
+  async function loadPublicDecks() {
+    try {
+      const res = await fetch('/api/saved-decks/public');
+      if (!res.ok) return;
+      const decks = await res.json();
+      const el = document.getElementById('publicDecks');
+      if (!el) return;
+      if (decks.length === 0) {
+        el.innerHTML = '<div style="color:#4a4560; font-size:12px;">No public decks yet.</div>';
+        return;
+      }
+      renderDecks(decks, 'publicDecks', true);
+    } catch {}
+  }
+
+  function renderDecks(decks, containerId, isPublic) {
+    const grid = document.getElementById(containerId);
+    grid.innerHTML = decks.map(d => {
+      const date = new Date(d.updatedAt || d.createdAt).toLocaleDateString();
+      const ver = d.gameVersion || 'standard';
+      const verClass = ver === 'preview' ? 'dc-version-preview' : 'dc-version-standard';
+      return `<div class="deck-card" onclick="openDeck('${d.id}')">
+        <div class="dc-name">${esc(d.name)}</div>
+        <div class="dc-meta">
+          <span>${d.format || 'duel'}</span>
+          <span class="dc-version ${verClass}">${ver}</span>
+        </div>
+        <div class="dc-legend">${esc(d.legendId)}</div>
+        <div class="dc-footer">
+          <span class="dc-date">${date}</span>
+          ${!isPublic ? '<span class="dc-delete" onclick="event.stopPropagation(); deleteDeck(\'' + d.id + '\')">Delete</span>' : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+  }
+
+  async function openDeck(deckId) {
+    // Store the deck ID so the builder can load it
+    localStorage.setItem('rb_loadDeckId', deckId);
+    window.location.href = '/builder';
+  }
+
+  // Confirm modal helpers
+  let pendingDeleteId = null;
+  function showConfirm(deckId) {
+    pendingDeleteId = deckId;
+    document.getElementById('confirmOverlay').classList.add('visible');
+  }
+  function closeConfirm() {
+    document.getElementById('confirmOverlay').classList.remove('visible');
+    pendingDeleteId = null;
+  }
+  document.getElementById('confirmOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeConfirm();
+  });
+  document.getElementById('confirmDeleteBtn').addEventListener('click', async function() {
+    if (!pendingDeleteId) return;
+    const deckId = pendingDeleteId;
+    closeConfirm();
+    const token = localStorage.getItem('rb_token');
+    try {
+      const res = await fetch('/api/saved-decks/' + deckId, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (res.ok) {
+        showToast('Deleted', 'Deck removed.', 'success');
+        loadDecks();
+      } else showToast('Error', 'Failed to delete.', 'error');
+    } catch { showToast('Error', 'Delete failed.', 'error'); }
+  });
+
+  function deleteDeck(deckId) {
+    showConfirm(deckId);
+  }
+
+  // Init
+  async function init() {
+    if (authToken) {
+      try {
+        const res = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + authToken } });
+        if (res.ok) currentUser = (await res.json()).user;
+      } catch {}
+    }
+    // Auto-login with dev credentials if no valid session
+    if (!currentUser) {
+      try {
+        const cr = await fetch('/api/auth/dev-credentials');
+        if (cr.ok) {
+          const creds = await cr.json();
+          if (creds && creds.username) {
+            const lr = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: creds.username, password: creds.password }) });
+            const data = await lr.json();
+            if (data && data.token) {
+              localStorage.setItem('rb_token', data.token);
+              document.cookie = 'rb_token=' + data.token + ';path=/;max-age=' + (30*86400) + ';SameSite=Lax';
+              currentUser = data.user;
+            }
+          }
+        }
+      } catch {}
+    }
+    updateAuthUI();
+    loadDecks();
+  }
+
+  init();
+</script>
+</body>
+</html>

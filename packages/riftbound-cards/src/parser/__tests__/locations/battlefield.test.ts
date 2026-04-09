@@ -10,7 +10,7 @@ import { Targets } from "../helpers";
 
 describe("Location: Battlefield", () => {
   describe("at battlefield", () => {
-    it.skip("should parse 'Deal 3 to a unit at a battlefield.'", () => {
+    it("should parse 'Deal 3 to a unit at a battlefield.'", () => {
       const result = parseAbilities("Deal 3 to a unit at a battlefield.");
 
       expect(result.success).toBe(true);
@@ -28,7 +28,7 @@ describe("Location: Battlefield", () => {
       );
     });
 
-    it.skip("should parse 'Kill a unit at a battlefield.'", () => {
+    it("should parse 'Kill a unit at a battlefield.'", () => {
       const result = parseAbilities("Kill a unit at a battlefield.");
 
       expect(result.success).toBe(true);
@@ -37,14 +37,14 @@ describe("Location: Battlefield", () => {
   });
 
   describe("at my battlefield", () => {
-    it.skip("should parse 'Deal 4 to all units at my battlefield.'", () => {
+    it("should parse 'Deal 4 to all units at my battlefield.'", () => {
       const result = parseAbilities("Deal 4 to all units at my battlefield.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'I get +1 :rb_might: for each buffed friendly unit at my battlefield.'", () => {
+    it("should parse 'I get +1 :rb_might: for each buffed friendly unit at my battlefield.'", () => {
       const result = parseAbilities(
         "I get +1 :rb_might: for each buffed friendly unit at my battlefield.",
       );
@@ -55,7 +55,7 @@ describe("Location: Battlefield", () => {
   });
 
   describe("here (current battlefield)", () => {
-    it.skip("should parse 'Other friendly units here have [Assault].'", () => {
+    it("should parse 'Other friendly units here have [Assault].'", () => {
       const result = parseAbilities(
         "Other friendly units here have [Assault]. (+1 :rb_might: while they're attackers.)",
       );
@@ -74,7 +74,7 @@ describe("Location: Battlefield", () => {
       );
     });
 
-    it.skip("should parse 'Play a 1 :rb_might: Recruit unit token here.'", () => {
+    it("should parse 'Play a 1 :rb_might: Recruit unit token here.'", () => {
       const result = parseAbilities("Play a 1 :rb_might: Recruit unit token here.");
 
       expect(result.success).toBe(true);
@@ -83,7 +83,7 @@ describe("Location: Battlefield", () => {
   });
 
   describe("open battlefield", () => {
-    it.skip("should parse 'When I conquer an open battlefield, deal damage equal to my Might to an enemy unit in a base.'", () => {
+    it("should parse 'When I conquer an open battlefield, deal damage equal to my Might to an enemy unit in a base.'", () => {
       const result = parseAbilities(
         "When I conquer an open battlefield, deal damage equal to my Might to an enemy unit in a base.",
       );
@@ -92,7 +92,7 @@ describe("Location: Battlefield", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'You may play me to an open battlefield.'", () => {
+    it("should parse 'You may play me to an open battlefield.'", () => {
       const result = parseAbilities("You may play me to an open battlefield.");
 
       expect(result.success).toBe(true);
@@ -101,7 +101,7 @@ describe("Location: Battlefield", () => {
   });
 
   describe("enemy battlefield", () => {
-    it.skip("should parse 'You may play me to an occupied enemy battlefield.'", () => {
+    it("should parse 'You may play me to an occupied enemy battlefield.'", () => {
       const result = parseAbilities("You may play me to an occupied enemy battlefield.");
 
       expect(result.success).toBe(true);
@@ -110,7 +110,7 @@ describe("Location: Battlefield", () => {
   });
 
   describe("control battlefield", () => {
-    it.skip("should parse 'While you control this battlefield, friendly [Repeat] costs cost :rb_energy_1: less.'", () => {
+    it("should parse 'While you control this battlefield, friendly [Repeat] costs cost :rb_energy_1: less.'", () => {
       const result = parseAbilities(
         "While you control this battlefield, friendly [Repeat] costs cost :rb_energy_1: less.",
       );

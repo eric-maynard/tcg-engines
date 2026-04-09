@@ -332,7 +332,7 @@ const createMockEffectContext = (
       runePools: {},
       scoredThisTurn: {},
       status: "playing",
-      turn: { activePlayer: "player-1", number: 1, phase: "action" },
+      turn: { activePlayer: "player-1", number: 1, phase: "main" },
       victoryScore: 8,
     } as unknown as RiftboundGameState,
     playerId: "player-1",
@@ -358,27 +358,27 @@ const DEFAULT_SOURCE = { id: "source-card-1", owner: "player-1", zone: "base" };
 const createMockStaticAbilityContext = (
   options: MockStaticConditionContextOptions = {},
 ): StaticAbilityContext => ({
-    draft: {
-      battlefields: {},
-      conqueredThisTurn: {},
-      gameId: "test-game",
-      players: {
-        "player-1": { id: "player-1", victoryPoints: 0, xp: 0 },
-      },
-      runePools: {},
-      scoredThisTurn: {},
-      xpGainedThisTurn: {},
-      status: "playing",
-      turn: { activePlayer: "player-1", number: 1, phase: "action" },
-      turnEvents: options.turnEvents ?? {},
-      victoryScore: 8,
-    } as unknown as RiftboundGameState,
-    zones: {
-      getCardsInZone: () => [],
+  cards: {
+    getCardMeta: () => undefined,
+    getCardOwner: () => "player-1",
+    updateCardMeta: () => {},
+  },
+  draft: {
+    battlefields: {},
+    conqueredThisTurn: {},
+    gameId: "test-game",
+    players: {
+      "player-1": { id: "player-1", victoryPoints: 0, xp: 0 },
     },
-    cards: {
-      getCardMeta: () => undefined,
-      getCardOwner: () => "player-1",
-      updateCardMeta: () => {},
-    },
-  });
+    runePools: {},
+    scoredThisTurn: {},
+    status: "playing",
+    turn: { activePlayer: "player-1", number: 1, phase: "main" },
+    turnEvents: options.turnEvents ?? {},
+    victoryScore: 8,
+    xpGainedThisTurn: {},
+  } as unknown as RiftboundGameState,
+  zones: {
+    getCardsInZone: () => [],
+  },
+});

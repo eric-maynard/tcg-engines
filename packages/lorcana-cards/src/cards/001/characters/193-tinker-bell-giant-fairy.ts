@@ -8,11 +8,11 @@ export const tinkerBellGiantFairy: CharacterCard = {
         effect: {
           amount: 1,
           target: {
-            selector: "all",
+            cardTypes: ["character"],
             count: "all",
             owner: "opponent",
+            selector: "all",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "deal-damage",
         },

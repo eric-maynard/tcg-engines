@@ -10,7 +10,7 @@ import { Effects, Triggers } from "../helpers";
 
 describe("Trigger: When Buff", () => {
   describe("draw effects", () => {
-    it.skip("should parse 'When you buff a friendly unit, draw 1.'", () => {
+    it("should parse 'When you buff a friendly unit, draw 1.'", () => {
       const result = parseAbilities("When you buff a friendly unit, draw 1.");
 
       expect(result.success).toBe(true);
@@ -31,7 +31,7 @@ describe("Trigger: When Buff", () => {
   });
 
   describe("might modification effects", () => {
-    it.skip("should parse 'When I'm buffed, give me +1 :rb_might: this turn.'", () => {
+    it("should parse 'When I'm buffed, give me +1 :rb_might: this turn.'", () => {
       const result = parseAbilities("When I'm buffed, give me +1 :rb_might: this turn.");
 
       expect(result.success).toBe(true);
@@ -53,7 +53,7 @@ describe("Trigger: When Buff", () => {
   });
 
   describe("spend buff triggers", () => {
-    it.skip("should parse 'When you spend a buff, draw 1.'", () => {
+    it("should parse 'When you spend a buff, draw 1.'", () => {
       const result = parseAbilities("When you spend a buff, draw 1.");
 
       expect(result.success).toBe(true);

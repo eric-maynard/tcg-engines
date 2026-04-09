@@ -421,8 +421,8 @@ export class ExtractionService {
         contentId,
         contentJson: {
           metadata: {
-            title: "",
             sourceMetadata: {},
+            title: "",
           },
           textContent: "",
         },

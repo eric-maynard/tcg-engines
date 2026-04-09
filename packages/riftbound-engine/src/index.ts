@@ -25,6 +25,12 @@ export type {
 // Engine exports
 export { RiftboundEngine } from "./engine/riftbound-engine";
 
+// Deck builder export
+export { DeckBuilder } from "./deckbuilder";
+
+// Card registry export
+export { getGlobalCardRegistry } from "./operations/card-lookup";
+
 // Game definition export
 export { riftboundDefinition } from "./game-definition/definition";
 

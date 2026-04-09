@@ -7,11 +7,11 @@ export const restoringTheCrown: ActionCard = {
         steps: [
           {
             target: {
-              selector: "all",
+              cardTypes: ["character"],
               count: "all",
               owner: "opponent",
+              selector: "all",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "exert",
           },

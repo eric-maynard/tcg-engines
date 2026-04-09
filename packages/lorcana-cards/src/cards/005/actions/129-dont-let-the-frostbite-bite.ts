@@ -7,9 +7,9 @@ export const dontLetTheFrostbiteBite: ActionCard = {
         steps: [
           {
             target: {
-              selector: "all",
               count: "all",
-              filter: [{ type: "owner", owner: "you" }],
+              filter: [{ owner: "you", type: "owner" }],
+              selector: "all",
             },
             type: "ready",
           },
@@ -17,9 +17,9 @@ export const dontLetTheFrostbiteBite: ActionCard = {
             duration: "this-turn",
             restriction: "cant-quest",
             target: {
-              selector: "all",
               count: "all",
-              filter: [{ type: "owner", owner: "you" }],
+              filter: [{ owner: "you", type: "owner" }],
+              selector: "all",
             },
             type: "restriction",
           },

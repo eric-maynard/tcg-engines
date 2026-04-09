@@ -7,7 +7,7 @@
  * - Beginning Phase: Start of turn effects, scoring
  * - Channel Phase: Channel 2 runes
  * - Draw Phase: Draw 1 card, rune pool empties
- * - Action Phase: Main phase for playing cards and abilities
+ * - Main Phase: Main phase for playing cards and abilities
  * - Ending Phase: End of turn effects, cleanup
  */
 
@@ -21,7 +21,7 @@ export const PHASE_ORDER: readonly GamePhase[] = [
   "beginning",
   "channel",
   "draw",
-  "action",
+  "main",
   "ending",
   "cleanup",
 ] as const;
@@ -46,8 +46,8 @@ export function getNextPhase(currentPhase: GamePhase): GamePhase | null {
  * @param phase - The phase to check
  * @returns true if the phase allows player actions
  */
-export function isActionPhase(phase: GamePhase): boolean {
-  return phase === "action";
+export function isMainPhase(phase: GamePhase): boolean {
+  return phase === "main";
 }
 
 /**

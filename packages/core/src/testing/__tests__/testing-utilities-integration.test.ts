@@ -97,10 +97,10 @@ describe("Testing Utilities Integration", () => {
       setup: (players) => ({
         phase: "draw" as const,
         players: players.map((p) => ({
+          hand: [],
+          health: 3,
           id: p.id as PlayerId,
           name: p.name || "Player",
-          health: 3,
-          hand: [],
         })),
       }),
     };

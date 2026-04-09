@@ -159,11 +159,15 @@ export function createGundamOperations<TParams>(
 
       // Validate zones exist (should never fail if condition passed)
       if (!(deck && hand)) {
-        throw new Error(`Missing zones for player ${playerId}: deck=${Boolean(deck)}, hand=${Boolean(hand)}`);
+        throw new Error(
+          `Missing zones for player ${playerId}: deck=${Boolean(deck)}, hand=${Boolean(hand)}`,
+        );
       }
 
       // Handle no-op case
-      if (drawCount === 0) {return;}
+      if (drawCount === 0) {
+        return;
+      }
 
       context.zones.drawCards({
         count: drawCount,

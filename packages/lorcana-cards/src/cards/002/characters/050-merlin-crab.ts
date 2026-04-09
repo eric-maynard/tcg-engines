@@ -7,11 +7,11 @@ export const merlinCrab: CharacterCard = {
         steps: [
           {
             target: {
-              selector: "self",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "self",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "ready",
           },
@@ -19,11 +19,11 @@ export const merlinCrab: CharacterCard = {
             duration: "this-turn",
             keyword: "Challenger",
             target: {
-              selector: "chosen",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "gain-keyword",
             value: 3,

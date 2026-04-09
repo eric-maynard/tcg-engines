@@ -9,11 +9,11 @@ export const helpingHand: ActionCard = {
             duration: "this-turn",
             keyword: "Support",
             target: {
-              selector: "chosen",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "gain-keyword",
           },

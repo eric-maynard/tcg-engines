@@ -10,7 +10,7 @@ import { Abilities, Conditions, Effects } from "../helpers";
 
 describe("Keyword: Deflect", () => {
   describe("simple deflect", () => {
-    it.skip("should parse '[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)'", () => {
+    it("should parse '[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)'", () => {
       const result = parseAbilities(
         "[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)",
       );
@@ -22,7 +22,7 @@ describe("Keyword: Deflect", () => {
   });
 
   describe("deflect with value", () => {
-    it.skip("should parse '[Deflect 2] (Opponents must pay :rb_rune_rainbow::rb_rune_rainbow: to choose me with a spell or ability.)'", () => {
+    it("should parse '[Deflect 2] (Opponents must pay :rb_rune_rainbow::rb_rune_rainbow: to choose me with a spell or ability.)'", () => {
       const result = parseAbilities(
         "[Deflect 2] (Opponents must pay :rb_rune_rainbow::rb_rune_rainbow: to choose me with a spell or ability.)When I attack, deal 5 damage split among any number of enemy units here.",
       );
@@ -34,7 +34,7 @@ describe("Keyword: Deflect", () => {
   });
 
   describe("deflect with triggered abilities", () => {
-    it.skip("should parse '[Deflect] When I conquer, draw 1 or channel 1 rune exhausted.'", () => {
+    it("should parse '[Deflect] When I conquer, draw 1 or channel 1 rune exhausted.'", () => {
       const result = parseAbilities(
         "[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)When I conquer, draw 1 or channel 1 rune exhausted.",
       );
@@ -49,7 +49,7 @@ describe("Keyword: Deflect", () => {
       );
     });
 
-    it.skip("should parse '[Deflect] When I move to a battlefield, give a friendly unit my keywords and +:rb_might: equal to my Might this turn.'", () => {
+    it("should parse '[Deflect] When I move to a battlefield, give a friendly unit my keywords and +:rb_might: equal to my Might this turn.'", () => {
       const result = parseAbilities(
         "[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)When I move to a battlefield, give a friendly unit my keywords and +:rb_might: equal to my Might this turn.",
       );
@@ -58,7 +58,7 @@ describe("Keyword: Deflect", () => {
       expect(result.abilities).toHaveLength(2);
     });
 
-    it.skip("should parse '[Deflect] When you choose or ready me, give me +1 :rb_might: this turn.'", () => {
+    it("should parse '[Deflect] When you choose or ready me, give me +1 :rb_might: this turn.'", () => {
       const result = parseAbilities(
         "[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)When you choose or ready me, give me +1 :rb_might: this turn.",
       );
@@ -69,7 +69,7 @@ describe("Keyword: Deflect", () => {
   });
 
   describe("deflect with static abilities", () => {
-    it.skip("should parse '[Deflect] While I'm at a battlefield, opponents can't score points.'", () => {
+    it("should parse '[Deflect] While I'm at a battlefield, opponents can't score points.'", () => {
       const result = parseAbilities(
         "[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)While I'm at a battlefield, opponents can't score points.",
       );
@@ -83,7 +83,7 @@ describe("Keyword: Deflect", () => {
       );
     });
 
-    it.skip("should parse '[Deflect] Each Equipment in your hand has [Quick-Draw].'", () => {
+    it("should parse '[Deflect] Each Equipment in your hand has [Quick-Draw].'", () => {
       const result = parseAbilities(
         "[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)Each Equipment in your hand has [Quick-Draw]. (It gains [Reaction]. When you play it, attach it to a unit you control.)",
       );
@@ -92,7 +92,7 @@ describe("Keyword: Deflect", () => {
       expect(result.abilities).toHaveLength(2);
     });
 
-    it.skip("should parse '[Deflect] You may play me to an occupied enemy battlefield.'", () => {
+    it("should parse '[Deflect] You may play me to an occupied enemy battlefield.'", () => {
       const result = parseAbilities(
         "[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)You may play me to an occupied enemy battlefield.",
       );
@@ -103,7 +103,7 @@ describe("Keyword: Deflect", () => {
   });
 
   describe("conditional deflect", () => {
-    it.skip("should parse 'While I'm [Mighty], I have [Deflect], [Ganking], and [Shield].'", () => {
+    it("should parse 'While I'm [Mighty], I have [Deflect], [Ganking], and [Shield].'", () => {
       const result = parseAbilities(
         "While I'm [Mighty], I have [Deflect], [Ganking], and [Shield]. (I'm Mighty while I have 5+ :rb_might:.)",
       );
@@ -122,7 +122,7 @@ describe("Keyword: Deflect", () => {
   });
 
   describe("deflect granted to others", () => {
-    it.skip("should parse 'Your Mechs have [Deflect] and [Ganking].'", () => {
+    it("should parse 'Your Mechs have [Deflect] and [Ganking].'", () => {
       const result = parseAbilities(
         "Your Mechs have [Deflect] and [Ganking]. (Opponents must pay :rb_rune_rainbow: to choose us with a spell or ability. We can move from battlefield to battlefield.)I enter ready if you control another Mech.",
       );
@@ -131,7 +131,7 @@ describe("Keyword: Deflect", () => {
       expect(result.abilities?.length).toBeGreaterThanOrEqual(2);
     });
 
-    it.skip("should parse 'Friendly buffed units have [Deflect] if they didn't already.'", () => {
+    it("should parse 'Friendly buffed units have [Deflect] if they didn't already.'", () => {
       const result = parseAbilities(
         "When you play this, buff a friendly unit. (If it doesn't have a buff, it gets a +1 :rb_might: buff.)Friendly buffed units have [Deflect] if they didn't already. (Opponents must pay :rb_rune_rainbow: to choose those units with a spell or ability.)",
       );
@@ -140,7 +140,7 @@ describe("Keyword: Deflect", () => {
       expect(result.abilities?.length).toBeGreaterThanOrEqual(2);
     });
 
-    it.skip("should parse '[Temporary] Friendly units have [Deflect].'", () => {
+    it("should parse '[Temporary] Friendly units have [Deflect].'", () => {
       const result = parseAbilities(
         "[Temporary] (Kill this at the start of its controller's Beginning Phase, before scoring.)Friendly units have [Deflect]. (Opponents must pay :rb_rune_rainbow: to choose them with a spell or ability.)",
       );
@@ -151,7 +151,7 @@ describe("Keyword: Deflect", () => {
   });
 
   describe("deflect with additional cost", () => {
-    it.skip("should parse 'As you play me, you may kill any number of friendly units as an additional cost. Reduce my cost by :rb_rune_order: for each killed this way.[Deflect][Ganking]'", () => {
+    it("should parse 'As you play me, you may kill any number of friendly units as an additional cost. Reduce my cost by :rb_rune_order: for each killed this way.[Deflect][Ganking]'", () => {
       const result = parseAbilities(
         "As you play me, you may kill any number of friendly units as an additional cost. Reduce my cost by :rb_rune_order: for each killed this way.[Deflect] (Opponents must pay :rb_rune_rainbow: to choose me with a spell or ability.)[Ganking] (I can move from battlefield to battlefield.)",
       );
@@ -162,7 +162,7 @@ describe("Keyword: Deflect", () => {
   });
 
   describe("deflect 2 with weaponmaster", () => {
-    it.skip("should parse '[Deflect 2][Weaponmaster] I have +1 :rb_might: for each friendly gear.'", () => {
+    it("should parse '[Deflect 2][Weaponmaster] I have +1 :rb_might: for each friendly gear.'", () => {
       const result = parseAbilities(
         "[Deflect 2] (Opponents must pay :rb_rune_rainbow::rb_rune_rainbow: to choose me with a spell or ability.)[Weaponmaster] (When you play me, you may [Equip] one of your Equipment to me for :rb_rune_rainbow: less, even if it's already attached.)I have +1 :rb_might: for each friendly gear.",
       );

@@ -11,11 +11,11 @@ export const mrSmeeBumblingMate: CharacterCard = {
         then: {
           amount: 1,
           target: {
-            selector: "self",
+            cardTypes: ["character"],
             count: 1,
             owner: "any",
+            selector: "self",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "deal-damage",
         },

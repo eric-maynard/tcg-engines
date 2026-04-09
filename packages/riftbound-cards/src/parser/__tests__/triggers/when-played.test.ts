@@ -10,7 +10,7 @@ import { Effects, Triggers } from "../helpers";
 
 describe("Trigger: When Played", () => {
   describe("draw effects", () => {
-    it.skip("should parse 'When you play me, draw 1.'", () => {
+    it("should parse 'When you play me, draw 1.'", () => {
       const result = parseAbilities("When you play me, draw 1.");
 
       expect(result.success).toBe(true);
@@ -29,7 +29,7 @@ describe("Trigger: When Played", () => {
       );
     });
 
-    it.skip("should parse 'When you play me, draw 2.'", () => {
+    it("should parse 'When you play me, draw 2.'", () => {
       const result = parseAbilities("When you play me, draw 2.");
 
       expect(result.success).toBe(true);
@@ -45,7 +45,7 @@ describe("Trigger: When Played", () => {
       );
     });
 
-    it.skip("should parse 'When you play me, draw 1 for each of your [Mighty] units.'", () => {
+    it("should parse 'When you play me, draw 1 for each of your [Mighty] units.'", () => {
       const result = parseAbilities(
         "When you play me, draw 1 for each of your [Mighty] units. (A unit is Mighty while it has 5+ :rb_might:.)",
       );
@@ -56,7 +56,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("discard effects", () => {
-    it.skip("should parse 'When you play me, discard 2.'", () => {
+    it("should parse 'When you play me, discard 2.'", () => {
       const result = parseAbilities("When you play me, discard 2.");
 
       expect(result.success).toBe(true);
@@ -72,7 +72,7 @@ describe("Trigger: When Played", () => {
       );
     });
 
-    it.skip("should parse 'When you play me, discard 2, then draw 2.'", () => {
+    it("should parse 'When you play me, discard 2, then draw 2.'", () => {
       const result = parseAbilities("When you play me, discard 2, then draw 2.");
 
       expect(result.success).toBe(true);
@@ -81,7 +81,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("channel effects", () => {
-    it.skip("should parse 'When you play me, channel 1 rune exhausted.'", () => {
+    it("should parse 'When you play me, channel 1 rune exhausted.'", () => {
       const result = parseAbilities("When you play me, channel 1 rune exhausted.");
 
       expect(result.success).toBe(true);
@@ -98,7 +98,7 @@ describe("Trigger: When Played", () => {
       );
     });
 
-    it.skip("should parse 'When you play me, channel 2 runes exhausted.'", () => {
+    it("should parse 'When you play me, channel 2 runes exhausted.'", () => {
       const result = parseAbilities("When you play me, channel 2 runes exhausted.");
 
       expect(result.success).toBe(true);
@@ -107,7 +107,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("buff effects", () => {
-    it.skip("should parse 'When you play me, buff a friendly unit.'", () => {
+    it("should parse 'When you play me, buff a friendly unit.'", () => {
       const result = parseAbilities(
         "When you play me, buff a friendly unit. (If it doesn't have a buff, it gets a +1 :rb_might: buff.)",
       );
@@ -124,7 +124,7 @@ describe("Trigger: When Played", () => {
       );
     });
 
-    it.skip("should parse 'When you play me, buff me.'", () => {
+    it("should parse 'When you play me, buff me.'", () => {
       const result = parseAbilities(
         "When you play me, buff me. (If I don't have a buff, I get a +1 :rb_might: buff.)",
       );
@@ -135,7 +135,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("might modification effects", () => {
-    it.skip("should parse 'When you play me, give a unit -2 :rb_might: this turn, to a minimum of 1 :rb_might:.'", () => {
+    it("should parse 'When you play me, give a unit -2 :rb_might: this turn, to a minimum of 1 :rb_might:.'", () => {
       const result = parseAbilities(
         "When you play me, give a unit -2 :rb_might: this turn, to a minimum of 1 :rb_might:.",
       );
@@ -154,14 +154,14 @@ describe("Trigger: When Played", () => {
       );
     });
 
-    it.skip("should parse 'When you play me, give me +3 :rb_might: this turn.'", () => {
+    it("should parse 'When you play me, give me +3 :rb_might: this turn.'", () => {
       const result = parseAbilities("When you play me, give me +3 :rb_might: this turn.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'When you play me, give enemy units -3 :rb_might: this turn, to a minimum of 1 :rb_might:.'", () => {
+    it("should parse 'When you play me, give enemy units -3 :rb_might: this turn, to a minimum of 1 :rb_might:.'", () => {
       const result = parseAbilities(
         "When you play me, give enemy units -3 :rb_might: this turn, to a minimum of 1 :rb_might:.",
       );
@@ -172,7 +172,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("token creation effects", () => {
-    it.skip("should parse 'When you play me, play a 1 :rb_might: Recruit unit token here.'", () => {
+    it("should parse 'When you play me, play a 1 :rb_might: Recruit unit token here.'", () => {
       const result = parseAbilities(
         "When you play me, play a 1 :rb_might: Recruit unit token here.",
       );
@@ -189,7 +189,7 @@ describe("Trigger: When Played", () => {
       );
     });
 
-    it.skip("should parse 'When you play me, play a ready 3 :rb_might: Sprite unit token with [Temporary] here.'", () => {
+    it("should parse 'When you play me, play a ready 3 :rb_might: Sprite unit token with [Temporary] here.'", () => {
       const result = parseAbilities(
         "When you play me, play a ready 3 :rb_might: Sprite unit token with [Temporary] here. (Kill it at the start of its controller's Beginning Phase, before scoring.)",
       );
@@ -198,7 +198,7 @@ describe("Trigger: When Played", () => {
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'When you play me, play two 1 :rb_might: Recruit unit tokens here.'", () => {
+    it("should parse 'When you play me, play two 1 :rb_might: Recruit unit tokens here.'", () => {
       const result = parseAbilities(
         "When you play me, play two 1 :rb_might: Recruit unit tokens here.",
       );
@@ -209,7 +209,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("movement effects", () => {
-    it.skip("should parse 'When you play me, move a unit from a battlefield to its base.'", () => {
+    it("should parse 'When you play me, move a unit from a battlefield to its base.'", () => {
       const result = parseAbilities(
         "When you play me, move a unit from a battlefield to its base.",
       );
@@ -226,7 +226,7 @@ describe("Trigger: When Played", () => {
       );
     });
 
-    it.skip("should parse 'When you play me to a battlefield, you may move an enemy unit to here.'", () => {
+    it("should parse 'When you play me to a battlefield, you may move an enemy unit to here.'", () => {
       const result = parseAbilities(
         "When you play me to a battlefield, you may move an enemy unit to here.",
       );
@@ -243,7 +243,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("damage effects", () => {
-    it.skip("should parse 'When you play me, deal 2 to a unit at a battlefield.'", () => {
+    it("should parse 'When you play me, deal 2 to a unit at a battlefield.'", () => {
       const result = parseAbilities("When you play me, deal 2 to a unit at a battlefield.");
 
       expect(result.success).toBe(true);
@@ -259,7 +259,7 @@ describe("Trigger: When Played", () => {
       );
     });
 
-    it.skip("should parse 'When you play me, deal 3 to an enemy unit at a battlefield.'", () => {
+    it("should parse 'When you play me, deal 3 to an enemy unit at a battlefield.'", () => {
       const result = parseAbilities("When you play me, deal 3 to an enemy unit at a battlefield.");
 
       expect(result.success).toBe(true);
@@ -268,7 +268,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("ready effects", () => {
-    it.skip("should parse 'When you play me, ready your units.'", () => {
+    it("should parse 'When you play me, ready your units.'", () => {
       const result = parseAbilities("When you play me, ready your units.");
 
       expect(result.success).toBe(true);
@@ -285,7 +285,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("keyword granting effects", () => {
-    it.skip("should parse 'When you play me, give a unit [Ganking] this turn.'", () => {
+    it("should parse 'When you play me, give a unit [Ganking] this turn.'", () => {
       const result = parseAbilities(
         "When you play me, give a unit [Ganking] this turn. (It can move from battlefield to battlefield.)",
       );
@@ -305,7 +305,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("optional effects", () => {
-    it.skip("should parse 'When you play me, you may draw 1.'", () => {
+    it("should parse 'When you play me, you may draw 1.'", () => {
       const result = parseAbilities("When you play me, you may draw 1.");
 
       expect(result.success).toBe(true);
@@ -318,7 +318,7 @@ describe("Trigger: When Played", () => {
       );
     });
 
-    it.skip("should parse 'When you play me, you may pay :rb_energy_1: to draw 1.'", () => {
+    it("should parse 'When you play me, you may pay :rb_energy_1: to draw 1.'", () => {
       const result = parseAbilities("When you play me, you may pay :rb_energy_1: to draw 1.");
 
       expect(result.success).toBe(true);
@@ -327,7 +327,7 @@ describe("Trigger: When Played", () => {
   });
 
   describe("conditional effects", () => {
-    it.skip("should parse 'When you play me, if you paid the additional cost, move an enemy gear to your base.'", () => {
+    it("should parse 'When you play me, if you paid the additional cost, move an enemy gear to your base.'", () => {
       const result = parseAbilities(
         "When you play me, if you paid the additional cost, move an enemy gear to your base. You control it until I leave the board. If it's an Equipment, attach it to me.",
       );

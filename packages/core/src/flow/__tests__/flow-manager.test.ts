@@ -648,9 +648,9 @@ describe("FlowManager - State Machine", () => {
                   next: "end",
                   order: 0,
                   steps: {
-                    finish: { order: 2, next: undefined },
-                    middle: { order: 1, next: "finish" },
-                    start: { order: 0, next: "middle" },
+                    finish: { next: undefined, order: 2 },
+                    middle: { next: "finish", order: 1 },
+                    start: { next: "middle", order: 0 },
                   },
                 },
               },

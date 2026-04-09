@@ -10,7 +10,7 @@ import { Abilities, Effects } from "../helpers";
 
 describe("Keyword: Temporary", () => {
   describe("simple temporary", () => {
-    it.skip("should parse '[Temporary] (Kill me at the start of your Beginning Phase, before scoring.)'", () => {
+    it("should parse '[Temporary] (Kill me at the start of your Beginning Phase, before scoring.)'", () => {
       const result = parseAbilities(
         "[Temporary] (Kill me at the start of your Beginning Phase, before scoring.)",
       );
@@ -22,7 +22,7 @@ describe("Keyword: Temporary", () => {
   });
 
   describe("temporary with static ability", () => {
-    it.skip("should parse '[Temporary] Friendly units have [Deflect].'", () => {
+    it("should parse '[Temporary] Friendly units have [Deflect].'", () => {
       const result = parseAbilities(
         "[Temporary] (Kill this at the start of its controller's Beginning Phase, before scoring.)Friendly units have [Deflect]. (Opponents must pay :rb_rune_rainbow: to choose them with a spell or ability.)",
       );
@@ -43,7 +43,7 @@ describe("Keyword: Temporary", () => {
   });
 
   describe("temporary granted to others", () => {
-    it.skip("should parse 'Give a unit at a battlefield or a gear [Temporary].'", () => {
+    it("should parse 'Give a unit at a battlefield or a gear [Temporary].'", () => {
       const result = parseAbilities(
         "Give a unit at a battlefield or a gear [Temporary]. (Kill it at the start of its controller's Beginning Phase, before scoring.)",
       );
@@ -61,7 +61,7 @@ describe("Keyword: Temporary", () => {
       );
     });
 
-    it.skip("should parse 'When you play me, play a ready 3 :rb_might: Sprite unit token with [Temporary] here.'", () => {
+    it("should parse 'When you play me, play a ready 3 :rb_might: Sprite unit token with [Temporary] here.'", () => {
       const result = parseAbilities(
         "When you play me, play a ready 3 :rb_might: Sprite unit token with [Temporary] here. (Kill it at the start of its controller's Beginning Phase, before scoring.)",
       );
@@ -83,7 +83,7 @@ describe("Keyword: Temporary", () => {
   });
 
   describe("temporary in spell effects", () => {
-    it.skip("should parse '[Action] Double a friendly unit's Might this turn. Give it [Temporary].'", () => {
+    it("should parse '[Action] Double a friendly unit's Might this turn. Give it [Temporary].'", () => {
       const result = parseAbilities(
         "[Action] (Play on your turn or in showdowns.)Double a friendly unit's Might this turn. Give it [Temporary]. (Kill it at the start of its controller's Beginning Phase, before scoring.)",
       );
@@ -98,7 +98,7 @@ describe("Keyword: Temporary", () => {
       );
     });
 
-    it.skip("should parse '[Hidden][Action] Play a ready 3 :rb_might: Sprite unit token with [Temporary].'", () => {
+    it("should parse '[Hidden][Action] Play a ready 3 :rb_might: Sprite unit token with [Temporary].'", () => {
       const result = parseAbilities(
         "[Hidden] (Hide now for :rb_rune_rainbow: to react with later for :rb_energy_0:.)[Action] (Play on your turn or in showdowns.)Play a ready 3 :rb_might: Sprite unit token with [Temporary]. (Kill it at the start of its controller's Beginning Phase, before scoring.)",
       );
@@ -109,7 +109,7 @@ describe("Keyword: Temporary", () => {
   });
 
   describe("temporary with quick-draw", () => {
-    it.skip("should parse '[Quick-Draw][Equip] :rb_rune_rainbow:[Temporary]'", () => {
+    it("should parse '[Quick-Draw][Equip] :rb_rune_rainbow:[Temporary]'", () => {
       const result = parseAbilities(
         "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)[Equip] :rb_rune_rainbow: (:rb_rune_rainbow:: Attach this to a unit you control.)[Temporary] (If this is unattached, kill it at the start of its controller's Beginning Phase, before scoring.)",
       );

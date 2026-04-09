@@ -17,14 +17,14 @@ export const wreckitRalphBigLug: CharacterCard = {
           {
             chooser: "CONTROLLER",
             effect: {
-              type: "return-to-hand",
               target: {
-                selector: "chosen",
+                cardTypes: ["character"],
                 count: 1,
                 owner: "any",
+                selector: "chosen",
                 zones: ["play"],
-                cardTypes: ["character"],
               },
+              type: "return-to-hand",
             },
             type: "optional",
           },

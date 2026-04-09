@@ -149,7 +149,6 @@ export const resourceMoves: Partial<
       // Rule 594: No restriction on exhausted runes — players can recycle tapped runes.
       const results: { playerId: string; runeId: string; domain: Domain }[] = [];
       for (const cardId of runePoolCards) {
-
         // Look up the rune's domain from card definition
         const def = registry.get(cardId as string);
         const domain = def?.domain;

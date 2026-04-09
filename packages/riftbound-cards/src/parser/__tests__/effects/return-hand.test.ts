@@ -10,7 +10,7 @@ import { Effects } from "../helpers";
 
 describe("Effect: Return to Hand", () => {
   describe("return unit", () => {
-    it.skip("should parse 'Return a unit at a battlefield to its owner's hand.'", () => {
+    it("should parse 'Return a unit at a battlefield to its owner's hand.'", () => {
       const result = parseAbilities("Return a unit at a battlefield to its owner's hand.");
 
       expect(result.success).toBe(true);
@@ -25,7 +25,7 @@ describe("Effect: Return to Hand", () => {
       );
     });
 
-    it.skip("should parse 'Return me to my owner's hand.'", () => {
+    it("should parse 'Return me to my owner's hand.'", () => {
       const result = parseAbilities("Return me to my owner's hand.");
 
       expect(result.success).toBe(true);
@@ -34,7 +34,7 @@ describe("Effect: Return to Hand", () => {
   });
 
   describe("return gear", () => {
-    it.skip("should parse 'Return a gear to its owner's hand.'", () => {
+    it("should parse 'Return a gear to its owner's hand.'", () => {
       const result = parseAbilities("Return a gear to its owner's hand.");
 
       expect(result.success).toBe(true);
@@ -43,7 +43,7 @@ describe("Effect: Return to Hand", () => {
   });
 
   describe("return from trash", () => {
-    it.skip("should parse 'Return a unit from your trash to your hand.'", () => {
+    it("should parse 'Return a unit from your trash to your hand.'", () => {
       const result = parseAbilities("Return a unit from your trash to your hand.");
 
       expect(result.success).toBe(true);
@@ -52,7 +52,7 @@ describe("Effect: Return to Hand", () => {
   });
 
   describe("return with conditions", () => {
-    it.skip("should parse 'Return a unit at a battlefield with 3 :rb_might: or less to its owner's hand.'", () => {
+    it("should parse 'Return a unit at a battlefield with 3 :rb_might: or less to its owner's hand.'", () => {
       const result = parseAbilities(
         "Return a unit at a battlefield with 3 :rb_might: or less to its owner's hand.",
       );

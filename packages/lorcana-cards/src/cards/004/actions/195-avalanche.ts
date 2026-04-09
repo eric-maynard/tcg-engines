@@ -7,11 +7,11 @@ export const avalanche: ActionCard = {
         chooser: "CONTROLLER",
         effect: {
           target: {
-            selector: "chosen",
+            cardTypes: ["location"],
             count: 1,
             owner: "any",
+            selector: "chosen",
             zones: ["play"],
-            cardTypes: ["location"],
           },
           type: "banish",
         },

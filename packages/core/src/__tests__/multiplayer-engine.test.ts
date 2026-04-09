@@ -72,9 +72,9 @@ describe("MultiplayerEngine", () => {
         currentPlayerIndex: 0,
         deck: ["card1", "card2", "card3", "card4", "card5"],
         players: players.map((p) => ({
+          hand: [],
           id: p.id,
           name: p.name || "Player",
-          hand: [],
           score: 0,
         })),
         turnNumber: 1,

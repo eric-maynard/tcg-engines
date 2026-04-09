@@ -31,7 +31,7 @@ export type GamePhase =
   | "beginning"
   | "channel"
   | "draw"
-  | "action"
+  | "main"
   | "ending"
   | "cleanup";
 

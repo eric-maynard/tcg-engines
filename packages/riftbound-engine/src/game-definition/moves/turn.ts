@@ -2,15 +2,12 @@
  * Riftbound Turn Structure Moves
  *
  * Moves for turn management: advancing phases, ending turns,
- * passing priority, conceding, and readying cards.
+ * conceding, and readying cards.
  */
 
-import type {
-  CardId as CoreCardId,
-  PlayerId as CorePlayerId,
-  GameMoveDefinitions,
-} from "@tcg/core";
-import type { PlayerId, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import type { PlayerId as CorePlayerId, GameMoveDefinitions } from "@tcg/core";
+import { createInteractionState, getTurnState } from "../../chain";
+import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 /**
  * Turn structure move definitions
@@ -25,6 +22,8 @@ export const turnMoves: Partial<
    * Uses the flow system to handle phase transitions.
    */
   advancePhase: {
+    condition: (state, context) =>
+      state.status === "playing" && state.turn.activePlayer === context.params.playerId,
     reducer: (_draft, context) => {
       // Use the flow system to advance phase
       context.flow?.endPhase();
@@ -34,31 +33,32 @@ export const turnMoves: Partial<
   /**
    * End current turn
    *
-   * Ends the current player's turn and passes to the next player.
-   * Clears turn-based tracking (conquered/scored battlefields).
+   * Ends the action phase, which triggers the ending phase (via flow),
+   * then cleanup, then the turn ends and next player starts.
+   * Turn-based tracking is cleared in the ending phase hook.
    */
   endTurn: {
-    reducer: (draft, context) => {
-      const { playerId } = context.params;
-
-      // Clear turn-based tracking for this player
-      draft.conqueredThisTurn[playerId] = [];
-      draft.scoredThisTurn[playerId] = [];
-
-      // Use the flow system to end turn
-      context.flow?.endTurn();
+    condition: (state, context) => {
+      if (state.status !== "playing") {return false;}
+      if (state.turn.activePlayer !== context.params.playerId) {return false;}
+      // Cannot end turn while chain or showdown is active (rule 510)
+      const interaction = state.interaction ?? createInteractionState();
+      const turnState = getTurnState(interaction);
+      if (turnState !== "neutral-open") {return false;}
+      return true;
     },
-  },
-
-  /**
-   * Pass priority
-   *
-   * Player passes without taking an action.
-   * This is a no-op move used for priority passing.
-   */
-  pass: {
-    reducer: (_draft, _context) => {
-      // No state change - just passing priority
+    enumerator: (state, context) => {
+      if (state.status !== "playing") {return [];}
+      if (state.turn.activePlayer !== (context.playerId as string)) {return [];}
+      // Cannot end turn while chain or showdown is active
+      const interaction = state.interaction ?? createInteractionState();
+      const turnState = getTurnState(interaction);
+      if (turnState !== "neutral-open") {return [];}
+      return [{ playerId: context.playerId as string }];
+    },
+    reducer: (_draft, context) => {
+      // Ending the action phase triggers ending -> cleanup -> next turn via flow
+      context.flow?.endPhase();
     },
   },
 
@@ -68,6 +68,13 @@ export const turnMoves: Partial<
    * Player forfeits the game. The opponent wins.
    */
   concede: {
+    condition: (state) => state.status === "playing",
+    enumerator: (state, context) => {
+      if (state.status !== "playing") {
+        return [];
+      }
+      return [{ playerId: context.playerId as string }];
+    },
     reducer: (draft, context) => {
       const { playerId } = context.params;
 
@@ -95,6 +102,8 @@ export const turnMoves: Partial<
    * This happens automatically at the start of each turn.
    */
   readyAll: {
+    condition: (state, context) =>
+      state.status === "playing" && state.turn.activePlayer === context.params.playerId,
     reducer: (_draft, context) => {
       const { playerId } = context.params;
       const { counters } = context;
@@ -119,6 +128,8 @@ export const turnMoves: Partial<
    * This happens at the end of Draw Phase and end of turn.
    */
   emptyRunePool: {
+    condition: (state, context) =>
+      state.status === "playing" && state.turn.activePlayer === context.params.playerId,
     reducer: (draft, context) => {
       const { playerId } = context.params;
 

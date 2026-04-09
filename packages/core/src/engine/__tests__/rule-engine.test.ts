@@ -59,9 +59,13 @@ describe("RuleEngine - Constructor", () => {
         },
         nextPhase: {
           reducer: (draft) => {
-            if (draft.phase === "setup") {draft.phase = "draw";}
-            else if (draft.phase === "draw") {draft.phase = "play";}
-            else if (draft.phase === "play") {draft.phase = "ended";}
+            if (draft.phase === "setup") {
+              draft.phase = "draw";
+            } else if (draft.phase === "draw") {
+              draft.phase = "play";
+            } else if (draft.phase === "play") {
+              draft.phase = "ended";
+            }
           },
         },
         playCard: {
@@ -92,10 +96,10 @@ describe("RuleEngine - Constructor", () => {
           deck: ["card1", "card2", "card3", "card4"],
           phase: "setup",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
             score: 0,
-            hand: [],
           })),
           turnNumber: 1,
         }),
@@ -128,10 +132,10 @@ describe("RuleEngine - Constructor", () => {
           deck: ["a", "b", "c"],
           phase: "setup",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
             score: 0,
-            hand: [],
           })),
           turnNumber: 1,
         }),
@@ -167,10 +171,10 @@ describe("RuleEngine - Constructor", () => {
           deck: [],
           phase: "setup",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
             score: 0,
-            hand: [],
           })),
           turnNumber: 1,
         }),
@@ -209,10 +213,10 @@ describe("RuleEngine - State Access", () => {
           deck: ["card1", "card2"],
           phase: "setup",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
             score: 0,
-            hand: [],
           })),
           turnNumber: 1,
         }),
@@ -247,10 +251,10 @@ describe("RuleEngine - State Access", () => {
           deck: [],
           phase: "setup",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
             score: 42,
-            hand: [],
           })),
           turnNumber: 1,
         }),
@@ -292,10 +296,10 @@ describe("RuleEngine - State Access", () => {
           deck: ["secret1", "secret2"],
           phase: "setup",
           players: players.map((p) => ({
+            hand: [],
             id: p.id,
             name: p.name || "Player",
             score: 0,
-            hand: [],
           })),
           turnNumber: 1,
         }),
@@ -338,10 +342,10 @@ describe("RuleEngine - State Access", () => {
           deck: ["secret1", "secret2"],
           phase: "setup",
           players: players.map((p, i) => ({
+            hand: [`hand-${i}-1`, `hand-${i}-2`],
             id: p.id,
             name: p.name || "Player",
             score: i * 10,
-            hand: [`hand-${i}-1`, `hand-${i}-2`],
           })),
           turnNumber: 1,
         }),

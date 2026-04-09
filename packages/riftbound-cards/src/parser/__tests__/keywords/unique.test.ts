@@ -10,7 +10,7 @@ import { Abilities, Costs, Effects } from "../helpers";
 
 describe("Keyword: Unique", () => {
   describe("unique with equip", () => {
-    it.skip("should parse '[Unique][Equip] :rb_rune_rainbow:'", () => {
+    it("should parse '[Unique][Equip] :rb_rune_rainbow:'", () => {
       const result = parseAbilities(
         "[Unique]** **(Your deck can have only 1 card with this name.)[Equip] :rb_rune_rainbow: (:rb_rune_rainbow:: Attach this to a unit you control.)",
       );
@@ -25,7 +25,7 @@ describe("Keyword: Unique", () => {
   });
 
   describe("unique with equip and triggered ability", () => {
-    it.skip("should parse '[Unique][Equip] :rb_rune_rainbow: When you play this, ready your units.'", () => {
+    it("should parse '[Unique][Equip] :rb_rune_rainbow: When you play this, ready your units.'", () => {
       const result = parseAbilities(
         "[Unique]** **(Your deck can have only 1 card with this name.)[Equip] :rb_rune_rainbow: (:rb_rune_rainbow:: Attach this to a unit you control.)When you play this, ready your units.",
       );

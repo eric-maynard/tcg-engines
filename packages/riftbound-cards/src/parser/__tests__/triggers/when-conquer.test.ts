@@ -10,7 +10,7 @@ import { Effects, Triggers } from "../helpers";
 
 describe("Trigger: When Conquer", () => {
   describe("draw effects", () => {
-    it.skip("should parse 'When I conquer, draw 1.'", () => {
+    it("should parse 'When I conquer, draw 1.'", () => {
       const result = parseAbilities("When I conquer, draw 1.");
 
       expect(result.success).toBe(true);
@@ -29,7 +29,7 @@ describe("Trigger: When Conquer", () => {
       );
     });
 
-    it.skip("should parse 'When I conquer, draw 1 or channel 1 rune exhausted.'", () => {
+    it("should parse 'When I conquer, draw 1 or channel 1 rune exhausted.'", () => {
       const result = parseAbilities("When I conquer, draw 1 or channel 1 rune exhausted.");
 
       expect(result.success).toBe(true);
@@ -46,7 +46,7 @@ describe("Trigger: When Conquer", () => {
   });
 
   describe("channel effects", () => {
-    it.skip("should parse 'When I conquer, channel 1 rune exhausted.'", () => {
+    it("should parse 'When I conquer, channel 1 rune exhausted.'", () => {
       const result = parseAbilities("When I conquer, channel 1 rune exhausted.");
 
       expect(result.success).toBe(true);
@@ -65,7 +65,7 @@ describe("Trigger: When Conquer", () => {
   });
 
   describe("damage effects", () => {
-    it.skip("should parse 'When I conquer an open battlefield, deal damage equal to my Might to an enemy unit in a base.'", () => {
+    it("should parse 'When I conquer an open battlefield, deal damage equal to my Might to an enemy unit in a base.'", () => {
       const result = parseAbilities(
         "When I conquer an open battlefield, deal damage equal to my Might to an enemy unit in a base.",
       );
@@ -84,7 +84,7 @@ describe("Trigger: When Conquer", () => {
   });
 
   describe("ready effects", () => {
-    it.skip("should parse 'The first time I conquer each turn, ready me.'", () => {
+    it("should parse 'The first time I conquer each turn, ready me.'", () => {
       const result = parseAbilities("The first time I conquer each turn, ready me.");
 
       expect(result.success).toBe(true);
@@ -109,7 +109,7 @@ describe("Trigger: When Conquer", () => {
   });
 
   describe("return to hand effects", () => {
-    it.skip("should parse 'When I conquer, you may pay :rb_energy_1: to return me to my owner's hand.'", () => {
+    it("should parse 'When I conquer, you may pay :rb_energy_1: to return me to my owner's hand.'", () => {
       const result = parseAbilities(
         "When I conquer, you may pay :rb_energy_1: to return me to my owner's hand.",
       );
@@ -129,7 +129,7 @@ describe("Trigger: When Conquer", () => {
   });
 
   describe("play from trash effects", () => {
-    it.skip("should parse 'When I conquer, you may play a spell from your trash with Energy cost less than your points without paying its Energy cost.'", () => {
+    it("should parse 'When I conquer, you may play a spell from your trash with Energy cost less than your points without paying its Energy cost.'", () => {
       const result = parseAbilities(
         "When I conquer, you may play a spell from your trash with Energy cost less than your points without paying its Energy cost. Then recycle it. (You must still pay its Power cost.)",
       );
@@ -149,7 +149,7 @@ describe("Trigger: When Conquer", () => {
   });
 
   describe("score effects", () => {
-    it.skip("should parse 'When I conquer, you score 1 additional point.'", () => {
+    it("should parse 'When I conquer, you score 1 additional point.'", () => {
       const result = parseAbilities("When I conquer, you score 1 additional point.");
 
       expect(result.success).toBe(true);
@@ -167,7 +167,7 @@ describe("Trigger: When Conquer", () => {
   });
 
   describe("other unit conquer triggers", () => {
-    it.skip("should parse 'When a friendly unit conquers, draw 1.'", () => {
+    it("should parse 'When a friendly unit conquers, draw 1.'", () => {
       const result = parseAbilities("When a friendly unit conquers, draw 1.");
 
       expect(result.success).toBe(true);
@@ -186,7 +186,7 @@ describe("Trigger: When Conquer", () => {
       );
     });
 
-    it.skip("should parse 'When you conquer here, draw 1.'", () => {
+    it("should parse 'When you conquer here, draw 1.'", () => {
       const result = parseAbilities("When you conquer here, draw 1.");
 
       expect(result.success).toBe(true);

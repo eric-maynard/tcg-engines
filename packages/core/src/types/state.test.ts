@@ -172,7 +172,7 @@ describe("IState", () => {
 
     const state: IState<GameState, TestCardDef, TestCardMeta> = {
       external: {
-        effects: [{ type: "global-buff", duration: 2 }],
+        effects: [{ duration: 2, type: "global-buff" }],
         players: [
           { id: "player-1", score: 100 },
           { id: "player-2", score: 85 },
@@ -186,21 +186,21 @@ describe("IState", () => {
         },
         cards: {
           "card-1": {
+            controller: "player-1" as unknown as PlayerId,
             definitionId: "monster-1",
             owner: "player-1" as unknown as PlayerId,
-            controller: "player-1" as unknown as PlayerId,
             zone: "hand" as unknown as ZoneId,
           },
         },
         zones: {
           hand: {
+            cardIds: ["card-1"] as unknown as CardId[],
             config: {
               id: "hand" as unknown as ZoneId,
               name: "Hand",
-              visibility: "private",
               ordered: false,
+              visibility: "private",
             },
-            cardIds: ["card-1"] as unknown as CardId[],
           },
         },
       },

@@ -10,7 +10,7 @@ import { Effects } from "../helpers";
 
 describe("Effect: Counter", () => {
   describe("counter spell", () => {
-    it.skip("should parse 'Counter a spell.'", () => {
+    it("should parse 'Counter a spell.'", () => {
       const result = parseAbilities("Counter a spell.");
 
       expect(result.success).toBe(true);
@@ -27,7 +27,7 @@ describe("Effect: Counter", () => {
   });
 
   describe("counter with cost restriction", () => {
-    it.skip("should parse 'Counter a spell that costs no more than :rb_energy_4: and no more than :rb_rune_rainbow:.'", () => {
+    it("should parse 'Counter a spell that costs no more than :rb_energy_4: and no more than :rb_rune_rainbow:.'", () => {
       const result = parseAbilities(
         "Counter a spell that costs no more than :rb_energy_4: and no more than :rb_rune_rainbow:.",
       );
@@ -38,7 +38,7 @@ describe("Effect: Counter", () => {
   });
 
   describe("counter unless", () => {
-    it.skip("should parse 'Counter a spell unless its controller pays :rb_energy_2:.'", () => {
+    it("should parse 'Counter a spell unless its controller pays :rb_energy_2:.'", () => {
       const result = parseAbilities("Counter a spell unless its controller pays :rb_energy_2:.");
 
       expect(result.success).toBe(true);
@@ -58,7 +58,7 @@ describe("Effect: Counter", () => {
   });
 
   describe("counter ability", () => {
-    it.skip("should parse 'Counter an enemy spell or ability that chooses a friendly unit or gear.'", () => {
+    it("should parse 'Counter an enemy spell or ability that chooses a friendly unit or gear.'", () => {
       const result = parseAbilities(
         "Counter an enemy spell or ability that chooses a friendly unit or gear.",
       );
@@ -69,7 +69,7 @@ describe("Effect: Counter", () => {
   });
 
   describe("counter with additional effects", () => {
-    it.skip("should parse 'Counter that spell and give that unit +:rb_might: equal to that spell's Energy cost this turn.'", () => {
+    it("should parse 'Counter that spell and give that unit +:rb_might: equal to that spell's Energy cost this turn.'", () => {
       const result = parseAbilities(
         "Choose a friendly unit and a spell. Counter that spell and give that unit +:rb_might: equal to that spell's Energy cost this turn.",
       );

@@ -28,11 +28,11 @@ export const gustavTheGiantTerrorOfTheKingdom: CharacterCard = {
         chooser: "CONTROLLER",
         effect: {
           target: {
-            selector: "self",
+            cardTypes: ["character"],
             count: 1,
             owner: "any",
+            selector: "self",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "ready",
         },

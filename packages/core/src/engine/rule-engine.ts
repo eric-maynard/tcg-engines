@@ -71,6 +71,10 @@ export interface ReplayHistoryEntry<TParams = any, TCardMeta = any, TCardDefinit
   patches: Patch[];
   inversePatches: Patch[];
   timestamp: number;
+  /** Snapshot of internalState before this move (for undo) */
+  internalStateBefore?: unknown;
+  /** Snapshot of internalState after this move (for redo) */
+  internalStateAfter?: unknown;
 }
 
 /**
@@ -434,19 +438,19 @@ export class RuleEngine<
         },
         messages: {
           messages: {
-            casual: {
-              key: `moves.${moveId}.failure`,
-              values: {
-                playerId: contextInput.playerId,
-                error: failure.error,
-              },
-            },
             advanced: {
               key: `moves.${moveId}.failure.detailed`,
               values: {
-                playerId: contextInput.playerId,
                 error: failure.error,
                 errorCode: failure.errorCode,
+                playerId: contextInput.playerId,
+              },
+            },
+            casual: {
+              key: `moves.${moveId}.failure`,
+              values: {
+                error: failure.error,
+                playerId: contextInput.playerId,
               },
             },
           },
@@ -557,6 +561,9 @@ export class RuleEngine<
     let patches: Patch[] = [];
     let inversePatches: Patch[] = [];
 
+    // Snapshot internalState before move for undo support
+    const internalStateBefore = structuredClone(this.internalState);
+
     try {
       this.currentState = produce(
         this.currentState,
@@ -569,9 +576,14 @@ export class RuleEngine<
         },
       );
 
+      // Snapshot internalState after move for redo support
+      const internalStateAfter = structuredClone(this.internalState);
+
       // Task 11.10: Update history (store full context for replay)
       this.addToHistory({
         context: contextWithOperations,
+        internalStateAfter,
+        internalStateBefore,
         inversePatches,
         moveId,
         patches,
@@ -585,8 +597,8 @@ export class RuleEngine<
             casual: {
               key: `moves.${moveId}.success`,
               values: {
-                playerId: contextInput.playerId,
                 params: contextInput.params,
+                playerId: contextInput.playerId,
               },
             },
           },
@@ -1220,6 +1232,11 @@ export class RuleEngine<
       entry.inversePatches,
     ) as TState;
 
+    // Restore internalState (zones, cards, metas) to pre-move snapshot
+    if (entry.internalStateBefore) {
+      this.internalState = structuredClone(entry.internalStateBefore) as typeof this.internalState;
+    }
+
     this.historyIndex--;
     return true;
   }
@@ -1246,6 +1263,11 @@ export class RuleEngine<
     // Apply forward patches to redo the move using Immer's applyPatches
     // Type assertion is safe here because Immer patches preserve the type
     this.currentState = immerApplyPatches(this.currentState as object, entry.patches) as TState;
+
+    // Restore internalState (zones, cards, metas) to post-move snapshot
+    if (entry.internalStateAfter) {
+      this.internalState = structuredClone(entry.internalStateAfter) as typeof this.internalState;
+    }
 
     this.historyIndex++;
     return true;

@@ -301,7 +301,7 @@ async function hostSandbox() {
 // Check if sandbox is enabled on load
 (async () => {
   const r = await api("/api/config").catch(() => null);
-  if (!r?.sandboxEnabled) {
+  if (r && r.sandboxEnabled === false) {
     const el = document.getElementById("sandboxOption");
     if (el) el.style.display = "none";
   }

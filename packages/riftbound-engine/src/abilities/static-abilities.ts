@@ -48,7 +48,7 @@ interface BoardCard {
 }
 
 /**
- * Collect all cards currently on the board (base + battlefields).
+ * Collect all cards currently on the board (base + battlefields + legendZone).
  */
 function getAllBoardCards(ctx: StaticAbilityContext): BoardCard[] {
   const cards: BoardCard[] = [];
@@ -58,6 +58,14 @@ function getAllBoardCards(ctx: StaticAbilityContext): BoardCard[] {
     for (const cardId of baseCards) {
       cards.push({ id: cardId as string, owner: playerId, zone: "base" });
     }
+
+    const legendCards = ctx.zones.getCardsInZone(
+      "legendZone" as CoreZoneId,
+      playerId as CorePlayerId,
+    );
+    for (const cardId of legendCards) {
+      cards.push({ id: cardId as string, owner: playerId, zone: "legendZone" });
+    }
   }
 
   for (const bfId of Object.keys(ctx.draft.battlefields)) {
@@ -66,6 +74,24 @@ function getAllBoardCards(ctx: StaticAbilityContext): BoardCard[] {
     for (const cardId of bfCards) {
       const owner = ctx.cards.getCardOwner(cardId) ?? "";
       cards.push({ id: cardId as string, owner, zone: bfZoneId as string });
+    }
+  }
+
+  // Get cards from battlefieldRow (battlefield cards themselves)
+  const battlefieldRowCards = ctx.zones.getCardsInZone("battlefieldRow" as CoreZoneId);
+  for (const cardId of battlefieldRowCards) {
+    const owner = ctx.cards.getCardOwner(cardId) ?? "";
+    cards.push({ id: cardId as string, owner, zone: "battlefieldRow" });
+  }
+
+  // Get cards from championZone (per player)
+  for (const playerId of Object.keys(ctx.draft.players)) {
+    const championCards = ctx.zones.getCardsInZone(
+      "championZone" as CoreZoneId,
+      playerId as CorePlayerId,
+    );
+    for (const cardId of championCards) {
+      cards.push({ id: cardId as string, owner: playerId, zone: "championZone" });
     }
   }
 

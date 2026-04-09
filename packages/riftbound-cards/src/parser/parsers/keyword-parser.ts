@@ -73,7 +73,22 @@ export function parseCostKeyword(
       // For Accelerate, cost is in reminder text: "(You may pay <cost> as an additional cost...)"
       const reminderMatch = followingText.match(/\([^)]*\)/);
       if (reminderMatch) {
-        const costMatch = reminderMatch[0].match(ACCELERATE_COST_PATTERN);
+        let costMatch = reminderMatch[0].match(ACCELERATE_COST_PATTERN);
+        if (!costMatch) {
+          // Handle italic markers (e.g., `_(Y_ou` -> `(You`) by protecting :rb_...: tokens,
+          // Stripping stray underscores, then restoring tokens.
+          const tokens: string[] = [];
+          const protectedReminder = reminderMatch[0].replace(/:rb_[^:]+:/g, (m) => {
+            tokens.push(m);
+            return `\x00T${tokens.length - 1}\x00`;
+          });
+          const strippedReminder = protectedReminder.replace(/_/g, "");
+          const restoredReminder = strippedReminder.replace(
+            /\x00T(\d+)\x00/g,
+            (_, idx) => tokens[Number.parseInt(idx, 10)],
+          );
+          costMatch = restoredReminder.match(ACCELERATE_COST_PATTERN);
+        }
         if (costMatch) {
           cost = parseCost(costMatch[1]);
         }

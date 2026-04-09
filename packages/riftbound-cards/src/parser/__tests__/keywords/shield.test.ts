@@ -10,7 +10,7 @@ import { Abilities, Effects, Targets } from "../helpers";
 
 describe("Keyword: Shield", () => {
   describe("simple shield", () => {
-    it.skip("should parse '[Shield] (+1 :rb_might: while I'm a defender.)'", () => {
+    it("should parse '[Shield] (+1 :rb_might: while I'm a defender.)'", () => {
       const result = parseAbilities("[Shield] (+1 :rb_might: while I'm a defender.)");
 
       expect(result.success).toBe(true);
@@ -20,7 +20,7 @@ describe("Keyword: Shield", () => {
   });
 
   describe("shield with value", () => {
-    it.skip("should parse '[Shield 2] (+2 :rb_might: while I'm a defender.)'", () => {
+    it("should parse '[Shield 2] (+2 :rb_might: while I'm a defender.)'", () => {
       const result = parseAbilities("[Shield 2] (+2 :rb_might: while I'm a defender.)");
 
       expect(result.success).toBe(true);
@@ -28,7 +28,7 @@ describe("Keyword: Shield", () => {
       expect(result.abilities?.[0]).toEqual(expect.objectContaining(Abilities.shield(2)));
     });
 
-    it.skip("should parse '[Shield 3] (+3 :rb_might: while I'm a defender.)[Tank]'", () => {
+    it("should parse '[Shield 3] (+3 :rb_might: while I'm a defender.)[Tank]'", () => {
       const result = parseAbilities(
         "[Shield 3] (+3 :rb_might: while I'm a defender.)[Tank] (I must be assigned combat damage first.)When an opponent moves to a battlefield other than mine, draw 1. (Bases are not battlefield.)",
       );
@@ -39,7 +39,7 @@ describe("Keyword: Shield", () => {
       expect(result.abilities?.[1]).toEqual(expect.objectContaining(Abilities.tank()));
     });
 
-    it.skip("should parse '[Shield 5] (+5 :rb_might: while I'm a defender.)[Tank]'", () => {
+    it("should parse '[Shield 5] (+5 :rb_might: while I'm a defender.)[Tank]'", () => {
       const result = parseAbilities(
         "[Shield 5] (+5 :rb_might: while I'm a defender.)[Tank] (I must be assigned combat damage first.)I cost :rb_energy_2::rb_rune_calm: less for each point you scored from holding this turn.",
       );
@@ -51,7 +51,7 @@ describe("Keyword: Shield", () => {
   });
 
   describe("shield combined with other keywords", () => {
-    it.skip("should parse '[Assault 2], [Shield 2]'", () => {
+    it("should parse '[Assault 2], [Shield 2]'", () => {
       const result = parseAbilities(
         "[Assault 2], [Shield 2] (+2 :rb_might: while I'm an attacker or defender.)",
       );
@@ -62,7 +62,7 @@ describe("Keyword: Shield", () => {
       expect(result.abilities?.[1]).toEqual(expect.objectContaining(Abilities.shield(2)));
     });
 
-    it.skip("should parse '[Shield] (+1 :rb_might: while I'm a defender.)[Tank]'", () => {
+    it("should parse '[Shield] (+1 :rb_might: while I'm a defender.)[Tank]'", () => {
       const result = parseAbilities(
         "[Shield] (+1 :rb_might: while I'm a defender.)[Tank] (I must be assigned combat damage first.)",
       );
@@ -75,7 +75,7 @@ describe("Keyword: Shield", () => {
   });
 
   describe("conditional shield", () => {
-    it.skip("should parse 'While I'm [Mighty], I have [Deflect], [Ganking], and [Shield].'", () => {
+    it("should parse 'While I'm [Mighty], I have [Deflect], [Ganking], and [Shield].'", () => {
       const result = parseAbilities(
         "While I'm [Mighty], I have [Deflect], [Ganking], and [Shield]. (I'm Mighty while I have 5+ :rb_might:.)",
       );
@@ -94,7 +94,7 @@ describe("Keyword: Shield", () => {
   });
 
   describe("shield granted to others", () => {
-    it.skip("should parse 'Your Mechs have [Shield].'", () => {
+    it("should parse 'Your Mechs have [Shield].'", () => {
       const result = parseAbilities(
         "Your Mechs have [Shield]. (+1 :rb_might: while they're defenders.)",
       );
@@ -112,7 +112,7 @@ describe("Keyword: Shield", () => {
       );
     });
 
-    it.skip("should parse 'Other friendly units here have [Shield].'", () => {
+    it("should parse 'Other friendly units here have [Shield].'", () => {
       const result = parseAbilities(
         "[Shield] (+1 :rb_might: while I'm a defender.)[Tank] (I must be assigned combat damage first.)Other friendly units here have [Shield].",
       );
@@ -123,7 +123,7 @@ describe("Keyword: Shield", () => {
   });
 
   describe("shield in spell effects", () => {
-    it.skip("should parse 'Give a unit [Shield 3] and [Tank] this turn.'", () => {
+    it("should parse 'Give a unit [Shield 3] and [Tank] this turn.'", () => {
       const result = parseAbilities(
         "[Hidden] (Hide now for :rb_rune_rainbow: to react with later for :rb_energy_0:.)[Action] (Play on your turn or in showdowns.)Give a unit [Shield 3] and [Tank] this turn. (+3 :rb_might: while it's a defender. It must be assigned combat damage first.)",
       );
@@ -132,7 +132,7 @@ describe("Keyword: Shield", () => {
       expect(result.abilities?.length).toBeGreaterThanOrEqual(2);
     });
 
-    it.skip("should parse 'When you defend here, choose a unit. It gains [Shield 2] this combat.'", () => {
+    it("should parse 'When you defend here, choose a unit. It gains [Shield 2] this combat.'", () => {
       const result = parseAbilities(
         "When you defend here, choose a unit. It gains [Shield 2] this combat. (+2 :rb_might: while it's a defender.)",
       );
@@ -148,7 +148,7 @@ describe("Keyword: Shield", () => {
   });
 
   describe("shield with vision", () => {
-    it.skip("should parse '[Vision][Shield]'", () => {
+    it("should parse '[Vision][Shield]'", () => {
       const result = parseAbilities(
         "[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)[Shield]** **(+1 :rb_might: while I'm a defender.)",
       );

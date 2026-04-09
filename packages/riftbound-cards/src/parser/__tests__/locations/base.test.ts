@@ -10,7 +10,7 @@ import { Targets } from "../helpers";
 
 describe("Location: Base", () => {
   describe("in base", () => {
-    it.skip("should parse 'Deal damage equal to my Might to an enemy unit in a base.'", () => {
+    it("should parse 'Deal damage equal to my Might to an enemy unit in a base.'", () => {
       const result = parseAbilities("Deal damage equal to my Might to an enemy unit in a base.");
 
       expect(result.success).toBe(true);
@@ -28,7 +28,7 @@ describe("Location: Base", () => {
       );
     });
 
-    it.skip("should parse 'Deal 4 to a unit in a base.'", () => {
+    it("should parse 'Deal 4 to a unit in a base.'", () => {
       const result = parseAbilities("Deal 4 to a unit in a base.");
 
       expect(result.success).toBe(true);
@@ -37,7 +37,7 @@ describe("Location: Base", () => {
   });
 
   describe("to base", () => {
-    it.skip("should parse 'Move a unit from a battlefield to its base.'", () => {
+    it("should parse 'Move a unit from a battlefield to its base.'", () => {
       const result = parseAbilities("Move a unit from a battlefield to its base.");
 
       expect(result.success).toBe(true);
@@ -53,7 +53,7 @@ describe("Location: Base", () => {
       );
     });
 
-    it.skip("should parse 'Move up to 2 friendly units to base.'", () => {
+    it("should parse 'Move up to 2 friendly units to base.'", () => {
       const result = parseAbilities("Move up to 2 friendly units to base.");
 
       expect(result.success).toBe(true);
@@ -62,7 +62,7 @@ describe("Location: Base", () => {
   });
 
   describe("to your base", () => {
-    it.skip("should parse 'Play a 1 :rb_might: Recruit unit token to your base.'", () => {
+    it("should parse 'Play a 1 :rb_might: Recruit unit token to your base.'", () => {
       const result = parseAbilities("Play a 1 :rb_might: Recruit unit token to your base.");
 
       expect(result.success).toBe(true);
@@ -78,7 +78,7 @@ describe("Location: Base", () => {
       );
     });
 
-    it.skip("should parse 'Play two 3 :rb_might: Mech unit tokens to your base.'", () => {
+    it("should parse 'Play two 3 :rb_might: Mech unit tokens to your base.'", () => {
       const result = parseAbilities("Play two 3 :rb_might: Mech unit tokens to your base.");
 
       expect(result.success).toBe(true);
@@ -87,7 +87,7 @@ describe("Location: Base", () => {
   });
 
   describe("from base", () => {
-    it.skip("should parse 'You may move a friendly unit from your base to here.'", () => {
+    it("should parse 'You may move a friendly unit from your base to here.'", () => {
       const result = parseAbilities("You may move a friendly unit from your base to here.");
 
       expect(result.success).toBe(true);
@@ -96,7 +96,7 @@ describe("Location: Base", () => {
   });
 
   describe("units in your base", () => {
-    it.skip("should parse 'I enter ready if you have two or more other units in your base.'", () => {
+    it("should parse 'I enter ready if you have two or more other units in your base.'", () => {
       const result = parseAbilities(
         "I enter ready if you have two or more other units in your base.",
       );

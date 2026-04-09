@@ -14,11 +14,11 @@ export const hypnoticStrength: ActionCard = {
             duration: "this-turn",
             keyword: "Challenger",
             target: {
-              selector: "chosen",
+              cardTypes: ["character"],
               count: 1,
               owner: "any",
+              selector: "chosen",
               zones: ["play"],
-              cardTypes: ["character"],
             },
             type: "gain-keyword",
             value: 2,

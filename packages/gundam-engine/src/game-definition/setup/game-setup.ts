@@ -74,8 +74,8 @@ export function createInitialGundamState(
       cardDamage: {},
       cardPositions: {},
       effectStack: {
-        stack: [],
         nextInstanceId: 0,
+        stack: [],
       },
       gameEndReason: undefined,
       hasPlayedResourceThisTurn: {

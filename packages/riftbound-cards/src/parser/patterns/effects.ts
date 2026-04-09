@@ -52,7 +52,7 @@ export const MOVE_BASIC_PATTERN =
  * @example "Move a unit from a battlefield to its base." -> ["a", "unit", "a battlefield", "its base"]
  */
 export const MOVE_FROM_TO_PATTERN =
-  /^Move (a|an) (units?) from (a battlefield|battlefield|base|here) to (its base|base|here|a battlefield|battlefield)\.?$/i;
+  /^Move (a|an) (?:friendly |enemy )?(units?) from (a battlefield|battlefield|(?:your |its )?base|here) to (its base|(?:your )?base|here|a battlefield|battlefield)\.?$/i;
 
 // ============================================================================
 // Stat Modification Effect Patterns
@@ -71,7 +71,7 @@ export const MOVE_FROM_TO_PATTERN =
  * @example "Give a unit -4 :rb_might: this turn, to a minimum of 1 :rb_might:." -> ["a unit", "-4", "this turn", "to a minimum of 1 :rb_might:"]
  */
 export const MODIFY_MIGHT_PATTERN =
-  /^Give ((?:a|an|two|three|four|five|\d+)?\s*(?:friendly |enemy )?(?:unit|units)(?:\s+(?:at a battlefield|here|there))?)\s+([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(to a minimum of (\d+)\s*:rb_might:))?\.?$/i;
+  /^Give (me|it|(?:a|an|two|three|four|five|\d+)?\s*(?:friendly |enemy |attacking enemy )?(?:unit|units)(?:\s+(?:at a battlefield|here|there))?)\s+([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(to a minimum of (\d+)\s*:rb_might:))?\.?$/i;
 
 // ============================================================================
 // Kill Effect Patterns
@@ -87,7 +87,7 @@ export const MODIFY_MIGHT_PATTERN =
  * @example "Kill all gear." -> ["all gear"]
  */
 export const KILL_PATTERN =
-  /^Kill ((?:a|an|all)\s+(?:friendly |enemy )?(?:unit|units|gear)(?:\s+(?:at a battlefield|here|there))?)\.?$/i;
+  /^Kill (me|(?:a|an|all)\s+(?:friendly |enemy )?(?:unit|units|gear)(?:\s+(?:at a battlefield|here|there))?)\.?$/i;
 
 // ============================================================================
 // Counter Effect Patterns
@@ -134,7 +134,7 @@ export const STUN_PATTERN =
  * @example "Return a unit from your trash to your hand." -> ["a unit from your trash", "your"]
  */
 export const RETURN_TO_HAND_PATTERN =
-  /^Return ((?:a|an)\s+(?:friendly |enemy )?(?:unit|gear)(?:\s+(?:at a battlefield|from your trash|here|there|with \d+ :rb_might: or less))?)\s+to\s+(its owner's|your)\s+hand\.?$/i;
+  /^Return (me|(?:a|an)\s+(?:friendly |enemy )?(?:unit|gear)(?:\s+(?:at a battlefield|from your trash|here|there|with \d+ :rb_might: or less))?)\s+to\s+(its owner's|my owner's|your)\s+hand\.?$/i;
 
 // ============================================================================
 // Token Creation Effect Patterns
@@ -308,8 +308,10 @@ export function parseLocationString(locationStr: string): "base" | "battlefield"
   if (
     normalized === "base" ||
     normalized === "its base" ||
+    normalized === "your base" ||
     normalized === "to base" ||
-    normalized === "to its base"
+    normalized === "to its base" ||
+    normalized === "to your base"
   ) {
     return "base";
   }

@@ -10,7 +10,7 @@ import { Effects, Tokens } from "../helpers";
 
 describe("Effect: Token Creation", () => {
   describe("recruit tokens", () => {
-    it.skip("should parse 'Play a 1 :rb_might: Recruit unit token.'", () => {
+    it("should parse 'Play a 1 :rb_might: Recruit unit token.'", () => {
       const result = parseAbilities("Play a 1 :rb_might: Recruit unit token.");
 
       expect(result.success).toBe(true);
@@ -30,7 +30,7 @@ describe("Effect: Token Creation", () => {
       );
     });
 
-    it.skip("should parse 'Play three 1 :rb_might: Recruit unit tokens.'", () => {
+    it("should parse 'Play three 1 :rb_might: Recruit unit tokens.'", () => {
       const result = parseAbilities("Play three 1 :rb_might: Recruit unit tokens.");
 
       expect(result.success).toBe(true);
@@ -46,7 +46,7 @@ describe("Effect: Token Creation", () => {
       );
     });
 
-    it.skip("should parse 'Play four 1 :rb_might: Recruit unit tokens.'", () => {
+    it("should parse 'Play four 1 :rb_might: Recruit unit tokens.'", () => {
       const result = parseAbilities("Play four 1 :rb_might: Recruit unit tokens.");
 
       expect(result.success).toBe(true);
@@ -55,7 +55,7 @@ describe("Effect: Token Creation", () => {
   });
 
   describe("sand soldier tokens", () => {
-    it.skip("should parse 'Play a 2 :rb_might: Sand Soldier unit token.'", () => {
+    it("should parse 'Play a 2 :rb_might: Sand Soldier unit token.'", () => {
       const result = parseAbilities("Play a 2 :rb_might: Sand Soldier unit token.");
 
       expect(result.success).toBe(true);
@@ -77,7 +77,7 @@ describe("Effect: Token Creation", () => {
   });
 
   describe("mech tokens", () => {
-    it.skip("should parse 'Play two 3 :rb_might: Mech unit tokens to your base.'", () => {
+    it("should parse 'Play two 3 :rb_might: Mech unit tokens to your base.'", () => {
       const result = parseAbilities("Play two 3 :rb_might: Mech unit tokens to your base.");
 
       expect(result.success).toBe(true);
@@ -100,7 +100,7 @@ describe("Effect: Token Creation", () => {
   });
 
   describe("sprite tokens", () => {
-    it.skip("should parse 'Play a ready 3 :rb_might: Sprite unit token with [Temporary].'", () => {
+    it("should parse 'Play a ready 3 :rb_might: Sprite unit token with [Temporary].'", () => {
       const result = parseAbilities(
         "Play a ready 3 :rb_might: Sprite unit token with [Temporary]. (Kill it at the start of its controller's Beginning Phase, before scoring.)",
       );
@@ -126,7 +126,7 @@ describe("Effect: Token Creation", () => {
   });
 
   describe("gold tokens", () => {
-    it.skip("should parse 'Play a Gold gear token exhausted.'", () => {
+    it("should parse 'Play a Gold gear token exhausted.'", () => {
       const result = parseAbilities("Play a Gold gear token exhausted.");
 
       expect(result.success).toBe(true);
@@ -147,7 +147,7 @@ describe("Effect: Token Creation", () => {
   });
 
   describe("token location", () => {
-    it.skip("should parse 'Play a 1 :rb_might: Recruit unit token here.'", () => {
+    it("should parse 'Play a 1 :rb_might: Recruit unit token here.'", () => {
       const result = parseAbilities("Play a 1 :rb_might: Recruit unit token here.");
 
       expect(result.success).toBe(true);
@@ -163,7 +163,7 @@ describe("Effect: Token Creation", () => {
       );
     });
 
-    it.skip("should parse 'Play a 1 :rb_might: Recruit unit token to your base.'", () => {
+    it("should parse 'Play a 1 :rb_might: Recruit unit token to your base.'", () => {
       const result = parseAbilities("Play a 1 :rb_might: Recruit unit token to your base.");
 
       expect(result.success).toBe(true);

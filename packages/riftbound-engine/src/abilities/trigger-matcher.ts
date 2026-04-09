@@ -124,8 +124,12 @@ export function findMatchingTriggers(
   const matches: MatchedTrigger[] = [];
 
   for (const card of boardCards) {
-    // Only cards on the board can have triggers fire
-    if (card.zone !== "base" && !card.zone.startsWith("battlefield")) {
+    // Only cards on the board (or in legendZone) can have triggers fire
+    if (
+      card.zone !== "base" &&
+      !card.zone.startsWith("battlefield") &&
+      card.zone !== "legendZone"
+    ) {
       continue;
     }
 

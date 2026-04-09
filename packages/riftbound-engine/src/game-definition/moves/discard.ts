@@ -60,8 +60,8 @@ export const discardMoves: Partial<
 
           context.endGame?.({
             metadata: {
-              method: "burn_out",
               finalScore: opponent.victoryPoints,
+              method: "burn_out",
             },
             reason: "victory_points",
             winner: opponentId as CorePlayerId,

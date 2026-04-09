@@ -10,7 +10,7 @@ import { Effects } from "../helpers";
 
 describe("Effect: Recall", () => {
   describe("recall self", () => {
-    it.skip("should parse 'Recall me.'", () => {
+    it("should parse 'Recall me.'", () => {
       const result = parseAbilities("Recall me. (Send me to base. This isn't a move.)");
 
       expect(result.success).toBe(true);
@@ -25,7 +25,7 @@ describe("Effect: Recall", () => {
       );
     });
 
-    it.skip("should parse 'Recall me exhausted.'", () => {
+    it("should parse 'Recall me exhausted.'", () => {
       const result = parseAbilities("Recall me exhausted. (Send me to base. This isn't a move.)");
 
       expect(result.success).toBe(true);
@@ -43,14 +43,14 @@ describe("Effect: Recall", () => {
   });
 
   describe("recall target", () => {
-    it.skip("should parse 'Recall a unit.'", () => {
+    it("should parse 'Recall a unit.'", () => {
       const result = parseAbilities("Recall a unit. (Send it to base. This isn't a move.)");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Recall that unit exhausted.'", () => {
+    it("should parse 'Recall that unit exhausted.'", () => {
       const result = parseAbilities(
         "Recall that unit exhausted. (Send it to base. This isn't a move.)",
       );
@@ -61,7 +61,7 @@ describe("Effect: Recall", () => {
   });
 
   describe("recall with replacement", () => {
-    it.skip("should parse 'The next time a friendly unit would die, recall it exhausted instead.'", () => {
+    it("should parse 'The next time a friendly unit would die, recall it exhausted instead.'", () => {
       const result = parseAbilities(
         "Choose a friendly unit. The next time it dies this turn, recall it exhausted instead. (Send it to base. This isn't a move.)",
       );

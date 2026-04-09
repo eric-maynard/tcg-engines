@@ -10,7 +10,7 @@ import { Targets, Tokens } from "../helpers";
 
 describe("Tribal: Recruit", () => {
   describe("recruit tokens", () => {
-    it.skip("should parse 'Play a 1 :rb_might: Recruit unit token.'", () => {
+    it("should parse 'Play a 1 :rb_might: Recruit unit token.'", () => {
       const result = parseAbilities("Play a 1 :rb_might: Recruit unit token.");
 
       expect(result.success).toBe(true);
@@ -30,21 +30,21 @@ describe("Tribal: Recruit", () => {
       );
     });
 
-    it.skip("should parse 'Play a 1 :rb_might: Recruit unit token here.'", () => {
+    it("should parse 'Play a 1 :rb_might: Recruit unit token here.'", () => {
       const result = parseAbilities("Play a 1 :rb_might: Recruit unit token here.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Play a 1 :rb_might: Recruit unit token to your base.'", () => {
+    it("should parse 'Play a 1 :rb_might: Recruit unit token to your base.'", () => {
       const result = parseAbilities("Play a 1 :rb_might: Recruit unit token to your base.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Play two 1 :rb_might: Recruit unit tokens here.'", () => {
+    it("should parse 'Play two 1 :rb_might: Recruit unit tokens here.'", () => {
       const result = parseAbilities("Play two 1 :rb_might: Recruit unit tokens here.");
 
       expect(result.success).toBe(true);
@@ -60,7 +60,7 @@ describe("Tribal: Recruit", () => {
       );
     });
 
-    it.skip("should parse 'Play three 1 :rb_might: Recruit unit tokens here.'", () => {
+    it("should parse 'Play three 1 :rb_might: Recruit unit tokens here.'", () => {
       const result = parseAbilities("Play three 1 :rb_might: Recruit unit tokens here.");
 
       expect(result.success).toBe(true);
@@ -76,14 +76,14 @@ describe("Tribal: Recruit", () => {
       );
     });
 
-    it.skip("should parse 'Play three 1 :rb_might: Recruit unit tokens into your base.'", () => {
+    it("should parse 'Play three 1 :rb_might: Recruit unit tokens into your base.'", () => {
       const result = parseAbilities("Play three 1 :rb_might: Recruit unit tokens into your base.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
     });
 
-    it.skip("should parse 'Play four 1 :rb_might: Recruit unit tokens.'", () => {
+    it("should parse 'Play four 1 :rb_might: Recruit unit tokens.'", () => {
       const result = parseAbilities(
         "Play four 1 :rb_might: Recruit unit tokens. (They can be played to your base or to battlefields you control.)",
       );

@@ -10,7 +10,7 @@ import { Effects, Triggers } from "../helpers";
 
 describe("Trigger: When Defend", () => {
   describe("draw effects", () => {
-    it.skip("should parse 'When I defend, draw 1.'", () => {
+    it("should parse 'When I defend, draw 1.'", () => {
       const result = parseAbilities("When I defend, draw 1.");
 
       expect(result.success).toBe(true);
@@ -31,7 +31,7 @@ describe("Trigger: When Defend", () => {
   });
 
   describe("might modification effects", () => {
-    it.skip("should parse 'When I defend, give me +2 :rb_might: this turn.'", () => {
+    it("should parse 'When I defend, give me +2 :rb_might: this turn.'", () => {
       const result = parseAbilities("When I defend, give me +2 :rb_might: this turn.");
 
       expect(result.success).toBe(true);
@@ -47,7 +47,7 @@ describe("Trigger: When Defend", () => {
       );
     });
 
-    it.skip("should parse 'When I defend, give attacking enemy units -2 :rb_might: this turn, to a minimum of 1 :rb_might:.'", () => {
+    it("should parse 'When I defend, give attacking enemy units -2 :rb_might: this turn, to a minimum of 1 :rb_might:.'", () => {
       const result = parseAbilities(
         "When I defend, give attacking enemy units -2 :rb_might: this turn, to a minimum of 1 :rb_might:.",
       );
@@ -58,7 +58,7 @@ describe("Trigger: When Defend", () => {
   });
 
   describe("damage effects", () => {
-    it.skip("should parse 'When I defend, deal 2 to an attacking enemy unit.'", () => {
+    it("should parse 'When I defend, deal 2 to an attacking enemy unit.'", () => {
       const result = parseAbilities("When I defend, deal 2 to an attacking enemy unit.");
 
       expect(result.success).toBe(true);
@@ -76,7 +76,7 @@ describe("Trigger: When Defend", () => {
   });
 
   describe("keyword granting effects", () => {
-    it.skip("should parse 'When you defend here, choose a unit. It gains [Shield 2] this combat.'", () => {
+    it("should parse 'When you defend here, choose a unit. It gains [Shield 2] this combat.'", () => {
       const result = parseAbilities(
         "When you defend here, choose a unit. It gains [Shield 2] this combat. (+2 :rb_might: while it's a defender.)",
       );
@@ -97,7 +97,7 @@ describe("Trigger: When Defend", () => {
   });
 
   describe("reveal effects", () => {
-    it.skip("should parse 'When I defend or I'm played from [Hidden], reveal the top 5 cards of your Main Deck.'", () => {
+    it("should parse 'When I defend or I'm played from [Hidden], reveal the top 5 cards of your Main Deck.'", () => {
       const result = parseAbilities(
         "When I defend or I'm played from [Hidden], reveal the top 5 cards of your Main Deck. Deal 1 to an enemy unit here for each card with [Hidden], then recycle them.",
       );
@@ -108,7 +108,7 @@ describe("Trigger: When Defend", () => {
   });
 
   describe("other unit defend triggers", () => {
-    it.skip("should parse 'When a friendly unit defends, give it +1 :rb_might: this turn.'", () => {
+    it("should parse 'When a friendly unit defends, give it +1 :rb_might: this turn.'", () => {
       const result = parseAbilities(
         "When a friendly unit defends, give it +1 :rb_might: this turn.",
       );

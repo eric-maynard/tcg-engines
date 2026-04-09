@@ -217,25 +217,25 @@ export class TabstackExtractionAdapter extends BaseExtractionAdapter {
     // Define schema for metadata extraction
     const metadataSchema = {
       properties: {
-        author: { type: "string", description: "Author name" },
+        author: { description: "Author name", type: "string" },
         description: {
-          type: "string",
           description: "Article description or summary",
-        },
-        imageUrl: { type: "string", description: "Featured image URL" },
-        language: { type: "string", description: "Content language code" },
-        publishedAt: {
           type: "string",
+        },
+        imageUrl: { description: "Featured image URL", type: "string" },
+        language: { description: "Content language code", type: "string" },
+        publishedAt: {
           description: "Publication date in ISO format",
+          type: "string",
         },
-        siteName: { type: "string", description: "Website name" },
+        siteName: { description: "Website name", type: "string" },
         tags: {
-          type: "array",
-          items: { type: "string" },
           description: "Article tags or categories",
+          items: { type: "string" },
+          type: "array",
         },
-        title: { type: "string", description: "Article title" },
-        wordCount: { type: "number", description: "Word count" },
+        title: { description: "Article title", type: "string" },
+        wordCount: { description: "Word count", type: "number" },
       },
       required: ["title"],
       type: "object",

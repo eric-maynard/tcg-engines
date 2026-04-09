@@ -35,8 +35,8 @@ function createMockGameState(players: PlayerId[]): GundamGameState {
       cardDamage: {},
       cardPositions: {},
       effectStack: {
-        stack: [],
         nextInstanceId: 0,
+        stack: [],
       },
       hasPlayedResourceThisTurn: {},
       revealedCards: [],
@@ -367,7 +367,7 @@ describe("Trigger Integration", () => {
           chooser: "controller",
           count: 1,
           timing: "on_resolution",
-          validTargets: [{ type: "card", owner: "any" }],
+          validTargets: [{ owner: "any", type: "card" }],
         },
         type: "DESTROY",
       };
@@ -421,7 +421,7 @@ describe("Trigger Integration", () => {
           chooser: "controller",
           count: 1,
           timing: "on_resolution",
-          validTargets: [{ type: "card", owner: "any" }],
+          validTargets: [{ owner: "any", type: "card" }],
         },
         type: "DESTROY",
       };

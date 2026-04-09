@@ -7,11 +7,11 @@ export const princePhillipDragonSlayer: CharacterCard = {
         chooser: "CONTROLLER",
         effect: {
           target: {
-            selector: "chosen",
+            cardTypes: ["character"],
             count: 1,
             owner: "any",
+            selector: "chosen",
             zones: ["play"],
-            cardTypes: ["character"],
           },
           type: "banish",
         },
