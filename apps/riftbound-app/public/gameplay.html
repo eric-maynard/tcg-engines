@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Riftbound — Play</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔</text></svg>">
+  <link rel="stylesheet" href="/css/gameplay.css">
+</head>
+<body>
+
+<div class="top-header">
+  <span class="brand">iykyk</span>
+  <nav>
+    <a href="/decks">Decks</a>
+    <a href="/builder">Builder</a>
+    <a href="/play" class="active">Play</a>
+  </nav>
+  <div class="header-right" id="authBar"></div>
+</div>
+
+<div class="app">
+  <!-- Game Board -->
+  <div class="board" id="board">
+
+    <!-- Lobby Overlay -->
+    <div class="start-screen" id="startScreen">
+      <!-- Step 1: Choose Host or Join -->
+      <div id="lobbyMenu">
+        <p style="margin-bottom:20px;">Play against another player</p>
+        <div style="display:flex; gap:12px;">
+          <button class="start-btn" onclick="hostLobby()">Host Game</button>
+          <button class="start-btn" style="background:linear-gradient(135deg,#3a2060,#5a3090);border-color:#7a50c0;" onclick="showJoinForm()">Join Game</button>
+        </div>
+        <div id="sandboxOption" style="margin-top:16px;">
+          <button class="start-btn" style="background:#1e1b30;border-color:#3a3560;font-size:13px;padding:10px 24px;color:#8a82a6;" onclick="hostSandbox()">Goldfish</button>
+          <p style="color:#4a4268;font-size:11px;margin-top:4px;">Practice against a passive opponent</p>
+        </div>
+      </div>
+
+      <!-- Step 1b: Join form -->
+      <div id="joinForm" class="hidden">
+        <h2 style="color:#e0dced;margin-bottom:12px;">Join Game</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="joinCodeInput" type="text" maxlength="4" placeholder="CODE"
+                 style="width:120px;padding:10px 16px;font-size:20px;font-weight:700;text-align:center;letter-spacing:4px;
+                        background:#1e1b30;border:2px solid #3a3560;border-radius:8px;color:#e0dced;text-transform:uppercase;"
+                 onkeyup="if(event.key==='Enter')joinLobby()">
+          <button class="start-btn" onclick="joinLobby()">Join</button>
+        </div>
+        <p id="joinError" style="color:#d04040;font-size:12px;margin-top:8px;"></p>
+        <button style="margin-top:12px;background:none;border:none;color:#6a6288;cursor:pointer;font-size:12px;" onclick="showMenu()">Back</button>
+      </div>
+
+      <!-- Step 2: Lobby waiting room -->
+      <div id="lobbyRoom" class="hidden">
+        <h2 style="color:#e0dced;margin-bottom:4px;">Game Lobby</h2>
+        <div id="lobbyCode" style="font-size:32px;font-weight:700;letter-spacing:6px;color:#c4a0ff;margin:8px 0;cursor:pointer;"
+             title="Click to copy" onclick="copyLobbyCode()"></div>
+        <p id="codeCopied" style="color:#50c878;font-size:11px;opacity:0;transition:opacity 0.3s;">Copied to clipboard!</p>
+        <p style="color:#6a6288;font-size:12px;margin-bottom:16px;">Share this code with your opponent</p>
+
+        <!-- Players -->
+        <div style="display:flex;gap:24px;margin:16px 0;">
+          <div id="lobbyHost" class="lobby-player-card"></div>
+          <div style="color:#3a3560;font-size:24px;align-self:center;">vs</div>
+          <div id="lobbyGuest" class="lobby-player-card"></div>
+        </div>
+
+        <!-- Game Mode selector (host only) -->
+        <div id="modeSelector" style="margin:12px 0;">
+          <label style="color:#8a82a6;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Game Mode</label>
+          <div class="mode-selector" style="margin-top:4px;">
+            <button class="mode-btn active" id="modeDuel" onclick="setGameMode('duel')">
+              <span class="mode-label">Duel</span>
+              <span class="mode-desc">Best of 1 — random battlefields</span>
+            </button>
+            <button class="mode-btn" id="modeMatch" onclick="setGameMode('match')">
+              <span class="mode-label">Match</span>
+              <span class="mode-desc">Best of 3 — choose battlefields</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Deck selection -->
+        <div style="margin:16px 0;">
+          <label style="color:#8a82a6;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Select Deck</label>
+          <select id="deckSelect" onchange="selectDeck(this.value)"
+                  style="display:block;width:100%;margin-top:4px;padding:8px 12px;background:#1e1b30;border:2px solid #3a3560;border-radius:6px;color:#e0dced;font-size:13px;">
+            <option value="">-- Choose a deck --</option>
+            <option value="default">Fury/Chaos Starter Deck</option>
+            <!-- Saved decks populated by loadSavedDecks() -->
+          </select>
+          <p id="deckLoadStatus" style="color:#4a4268;font-size:10px;margin-top:4px;"></p>
+        </div>
+
+        <!-- Start button (host only, both ready) -->
+        <button id="lobbyStartBtn" class="start-btn hidden" onclick="lobbyStartGame()" style="margin-top:8px;">Start Game</button>
+        <p id="lobbyStatus" style="color:#6a6288;font-size:12px;margin-top:8px;">Waiting for opponent...</p>
+        <button style="margin-top:12px;background:none;border:none;color:#6a6288;cursor:pointer;font-size:12px;text-decoration:underline;" onclick="leaveLobby()">Back</button>
+      </div>
+    </div>
+
+    <!-- Opponent Area (Top) -->
+    <div class="opponent-area" id="opponentArea">
+      <div style="display:flex; gap:8px; align-items:center; padding:2px 0;">
+        <div id="opponent-decks" style="display:flex; gap:4px; align-items:center; flex-shrink:0;"></div>
+        <div class="zone-row hand-zone" id="opponent-hand" style="justify-content:center;flex:1;"></div>
+        <div class="player-info" id="opponentInfo" style="flex-shrink:0;"></div>
+      </div>
+      <div style="display:flex; gap:6px; align-items:center; min-height:0;">
+        <div id="opponent-legendChampion" class="legend-champion-zone"></div>
+        <div class="zone-row" id="opponent-base" style="justify-content:center;"></div>
+      </div>
+      <div class="rune-pool-grid" id="opponent-runePool" style="position:absolute;top:4px;right:8px;"></div>
+    </div>
+
+    <!-- Phase Indicator Bar -->
+    <div class="phase-bar" id="phaseBar"></div>
+    <button id="endTurnBtn" onclick="onEndTurnClick()"></button>
+
+    <!-- Battlefield Row (Center) -->
+    <div class="battlefield-row" id="battlefieldRow"></div>
+
+    <!-- Player Area (Bottom) -->
+    <div class="player-area" id="playerArea">
+      <div style="display:flex; gap:6px; align-items:center; min-height:0;">
+        <div id="player-legendChampion" class="legend-champion-zone"></div>
+        <div class="zone-row" id="player-base" data-drop-zone="player-base" style="justify-content:center;"></div>
+      </div>
+      <div class="resource-bar" id="resourceBar"></div>
+      <div style="display:flex; gap:8px; align-items:stretch; padding:2px 0;">
+        <div class="rune-pool-grid" id="player-runePool"></div>
+        <div class="zone-row hand-zone" id="player-hand" style="justify-content:center;flex:1;"></div>
+        <div id="player-decks" style="display:flex; gap:4px; align-items:center; flex-shrink:0;"></div>
+      </div>
+      <div class="player-info" id="playerInfo" style="position:absolute;bottom:4px;left:8px;z-index:5;"></div>
+    </div>
+
+    <!-- Opponent Disconnect Banner -->
+    <div class="disconnect-banner" id="disconnectBanner"></div>
+
+    <!-- Action Bar (shown when card is selected) -->
+    <div class="action-bar hidden" id="actionBar">
+      <span id="actionBarLabel" style="color:#8a82a6;font-size:12px;"></span>
+      <div id="actionBarBtns" style="display:flex;gap:6px;"></div>
+      <button class="cancel-btn" onclick="cancelInteraction()">Cancel</button>
+    </div>
+
+  </div>
+
+  <!-- Sidebar (hidden until game is playing) -->
+  <div class="sidebar hidden" id="gameSidebar">
+    <div class="sidebar-header" id="sidebarHeader"></div>
+    <div class="actions-panel" id="actionsPanel">
+      <div class="actions-title">Available Actions</div>
+      <div id="actionsList"></div>
+    </div>
+    <div style="padding:4px 12px;display:flex;gap:4px;border-bottom:1px solid #2a2740;">
+      <button class="action-btn" id="undoBtn" onclick="requestUndo()" style="flex:1;text-align:center;" disabled>Undo</button>
+      <button class="action-btn" id="redoBtn" onclick="requestRedo()" style="flex:1;text-align:center;" disabled>Redo</button>
+    </div>
+    <div class="game-log" id="gameLog">
+      <div class="log-title">Game Log</div>
+      <div id="logEntries"></div>
+    </div>
+    <div class="player-switcher" id="playerSwitcher"></div>
+  </div>
+</div>
+
+<!-- Card Preview Tooltip -->
+<div class="card-preview" id="cardPreview">
+  <img id="previewImg" src="" alt="">
+  <div class="preview-name" id="previewName"></div>
+  <div class="preview-type" id="previewType"></div>
+  <div class="preview-text" id="previewText"></div>
+  <div class="preview-stats" id="previewStats"></div>
+</div>
+
+<!-- Chain / Showdown Overlay -->
+<div class="chain-overlay" id="chainOverlay">
+  <div class="chain-box" id="chainBox"></div>
+</div>
+
+<!-- Combat Outcome Overlay -->
+<div class="combat-outcome" id="combatOutcome">
+  <div class="outcome-title" id="outcomeTitle"></div>
+  <div class="outcome-detail" id="outcomeDetail"></div>
+</div>
+
+<!-- Confirm Leave Modal -->
+<div class="confirm-overlay" id="confirmLeave">
+  <div class="confirm-box">
+    <div class="confirm-title">Leave Game?</div>
+    <div class="confirm-msg" id="confirmLeaveMsg">Your opponent will be returned to the lobby.</div>
+    <div class="confirm-btns">
+      <button class="confirm-yes" onclick="confirmLeaveGame()">Leave</button>
+      <button class="confirm-no" onclick="cancelLeaveGame()">Stay</button>
+    </div>
+  </div>
+</div>
+
+<!-- Turn Order Duel Overlay -->
+<div class="coin-overlay" id="coinOverlay">
+  <div class="duel-title">Determining Turn Order</div>
+  <div class="duel-arena">
+    <div class="duel-player left">
+      <div class="duel-avatar" id="duelAvatar1"></div>
+      <div class="duel-name" id="duelName1"></div>
+      <div class="duel-roll" id="duelRoll1"></div>
+    </div>
+    <div class="duel-vs">
+      <div class="duel-dice" id="duelDice">&#x1F3B2;</div>
+    </div>
+    <div class="duel-player right">
+      <div class="duel-avatar" id="duelAvatar2"></div>
+      <div class="duel-name" id="duelName2"></div>
+      <div class="duel-roll" id="duelRoll2"></div>
+    </div>
+  </div>
+  <div class="coin-result" id="coinResult"></div>
+  <div class="coin-detail" id="coinDetail"></div>
+  <div class="coin-choose" id="coinChoose" style="display:none;">
+    <button class="coin-choose-btn" onclick="chooseTurnOrder('self')">I'll go first</button>
+    <button class="coin-choose-btn" onclick="chooseTurnOrder('opponent')" style="border-color:#8a82a6;color:#8a82a6;background:rgba(100,90,140,0.15);">Opponent goes first</button>
+  </div>
+</div>
+
+<!-- Pregame Overlay -->
+<div class="pregame-overlay" id="pregameOverlay">
+  <div class="pregame-step" id="pregameContent"></div>
+</div>
+
+<!-- Game Over Overlay -->
+<div class="game-over-overlay" id="gameOverOverlay">
+  <div class="game-over-box" id="gameOverBox"></div>
+</div>
+
+<!-- Channel Phase Banner -->
+<div class="channel-banner" id="channelBanner">
+  <div class="cb-title">Channel Phase</div>
+  <div class="cb-detail" id="channelDetail">2 runes channeled</div>
+</div>
+
+<!-- Card Zoom Modal -->
+<div class="card-zoom-overlay" id="cardZoom" onclick="closeZoom()">
+  <div class="card-zoom-content">
+    <img class="card-zoom-img" id="zoomImg" src="" alt="">
+    <div class="card-zoom-info">
+      <div class="zoom-name" id="zoomName"></div>
+      <div class="zoom-type" id="zoomType"></div>
+      <div class="zoom-stats" id="zoomStats"></div>
+      <div class="zoom-text" id="zoomText"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/gameplay/state.js"></script>
+<script src="/js/gameplay/auth.js"></script>
+<script src="/js/gameplay/websocket.js"></script>
+<script src="/js/gameplay/lobby.js"></script>
+<script src="/js/gameplay/pregame.js"></script>
+<script src="/js/gameplay/game-flow.js"></script>
+<script src="/js/gameplay/renderer.js"></script>
+<script src="/js/gameplay/combat.js"></script>
+<script src="/js/gameplay/interactions.js"></script>
+<script src="/js/gameplay/drag-drop.js"></script>
+<script src="/js/gameplay/overlays.js"></script>
+<script src="/js/gameplay/audio.js"></script>
+<script src="/js/gameplay/init.js"></script>
+<script src="/features.js"></script>
+</body>
+</html>
