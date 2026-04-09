@@ -447,14 +447,19 @@ export const chainMoves: Partial<
       if (!bf) {
         return false;
       }
-      // Allow nested showdowns — a new showdown pushes onto the stack
+      // Rule 548: Showdowns begin when a battlefield is contested
+      if (!bf.contested) {
+        return false;
+      }
       return true;
     },
     enumerator: (state, context) => {
       if (state.status !== "playing") {return [];}
+      // Rule 548: Only contested battlefields can have showdowns
       const results: { playerId: string; battlefieldId: string }[] = [];
       for (const bfId of Object.keys(state.battlefields ?? {})) {
-        if (state.battlefields[bfId]) {
+        const bf = state.battlefields[bfId];
+        if (bf?.contested) {
           results.push({ battlefieldId: bfId, playerId: context.playerId as string });
         }
       }

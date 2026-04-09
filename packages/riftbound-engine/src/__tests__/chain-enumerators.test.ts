@@ -49,6 +49,7 @@ function createMockState(overrides?: Partial<RiftboundGameState>): RiftboundGame
 function createMockEnumContext(playerId: string, zoneCards: Record<string, string[]> = {}) {
   return {
     cards: {
+      getCardMeta: () => undefined,
       getCardOwner: (cardId: CoreCardId) => {
         // All mock cards owned by the requesting player
         for (const cards of Object.values(zoneCards)) {
@@ -56,27 +57,26 @@ function createMockEnumContext(playerId: string, zoneCards: Record<string, strin
         }
         return undefined;
       },
-      getCardMeta: () => undefined,
       updateCardMeta: () => {},
     },
     counters: {
-      setFlag: () => {},
       addCounter: () => {},
-      removeCounter: () => {},
       clearCounter: () => {},
+      removeCounter: () => {},
+      setFlag: () => {},
     },
     game: { getState: () => ({}) },
     playerId: playerId as CorePlayerId,
     rng: { next: () => 0 },
     zones: {
-      getCardsInZone: (zoneId: CoreZoneId, _pid?: CorePlayerId) => {
-        return (zoneCards[zoneId as string] ?? []) as CoreCardId[];
-      },
       getCardZone: (cardId: CoreCardId) => {
         for (const [zone, cards] of Object.entries(zoneCards)) {
           if (cards.includes(cardId as string)) return zone as CoreZoneId;
         }
         return undefined;
+      },
+      getCardsInZone: (zoneId: CoreZoneId, _pid?: CorePlayerId) => {
+        return (zoneCards[zoneId as string] ?? []) as CoreCardId[];
       },
     },
   };
@@ -234,14 +234,26 @@ describe("passShowdownFocus enumerator", () => {
 describe("startShowdown enumerator", () => {
   const enumerator = chainMoves.startShowdown!.enumerator!;
 
-  test("enumerates all battlefields", () => {
+  test("enumerates only contested battlefields (Rule 548)", () => {
+    const state = createMockState({
+      battlefields: {
+        "bf-1": { contested: true, controller: "p1", id: "bf-1" },
+        "bf-2": { contested: false, controller: "p2", id: "bf-2" },
+      },
+    });
+    const context = createMockEnumContext(P1);
+
+    const result = enumerator(state, context as never);
+    expect(result).toHaveLength(1);
+    expect(result).toContainEqual({ battlefieldId: "bf-1", playerId: P1 });
+  });
+
+  test("returns [] when no battlefields are contested", () => {
     const state = createMockState();
     const context = createMockEnumContext(P1);
 
     const result = enumerator(state, context as never);
-    expect(result).toHaveLength(2);
-    expect(result).toContainEqual({ battlefieldId: "bf-1", playerId: P1 });
-    expect(result).toContainEqual({ battlefieldId: "bf-2", playerId: P1 });
+    expect(result).toEqual([]);
   });
 
   test("returns [] when game is not playing", () => {
@@ -315,7 +327,7 @@ describe("activateAbility enumerator", () => {
   test("enumerates activated abilities on base cards", () => {
     registry.register("card-1", {
       abilities: [
-        { effect: { type: "draw", amount: 1 }, type: "activated" },
+        { effect: { amount: 1, type: "draw" }, type: "activated" },
       ],
     });
 
@@ -329,7 +341,7 @@ describe("activateAbility enumerator", () => {
   test("enumerates activated abilities on battlefield cards", () => {
     registry.register("card-2", {
       abilities: [
-        { effect: { type: "damage", amount: 2 }, type: "activated" },
+        { effect: { amount: 2, type: "damage" }, type: "activated" },
       ],
     });
 
@@ -343,9 +355,9 @@ describe("activateAbility enumerator", () => {
   test("skips non-activated abilities", () => {
     registry.register("card-3", {
       abilities: [
-        { effect: { type: "draw", amount: 1 }, trigger: { type: "onPlay" }, type: "triggered" },
-        { effect: { type: "draw", amount: 1 }, type: "activated" },
-        { effect: { type: "modify-might", amount: 1 }, type: "static" },
+        { effect: { amount: 1, type: "draw" }, trigger: { type: "onPlay" }, type: "triggered" },
+        { effect: { amount: 1, type: "draw" }, type: "activated" },
+        { effect: { amount: 1, type: "modify-might" }, type: "static" },
       ],
     });
 
@@ -359,7 +371,7 @@ describe("activateAbility enumerator", () => {
   test("skips abilities player cannot afford", () => {
     registry.register("card-expensive", {
       abilities: [
-        { cost: { energy: 99 }, effect: { type: "draw", amount: 5 }, type: "activated" },
+        { cost: { energy: 99 }, effect: { amount: 5, type: "draw" }, type: "activated" },
       ],
     });
 
@@ -381,7 +393,7 @@ describe("activateAbility enumerator", () => {
   test("returns [] when no cards have activated abilities", () => {
     registry.register("card-passive", {
       abilities: [
-        { effect: { type: "modify-might", amount: 1 }, type: "static" },
+        { effect: { amount: 1, type: "modify-might" }, type: "static" },
       ],
     });
 
