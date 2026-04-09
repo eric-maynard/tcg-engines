@@ -12,6 +12,7 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { Domain, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import { getGlobalCardRegistry } from "../../operations/card-lookup";
 
 /**
  * Resource move definitions
@@ -26,6 +27,8 @@ export const resourceMoves: Partial<
    * During Channel Phase, players channel 2 runes.
    */
   channelRunes: {
+    condition: (state, context) =>
+      state.status === "playing" && state.turn.activePlayer === context.params.playerId,
     reducer: (_draft, context) => {
       const { playerId, count } = context.params;
       const { zones } = context;
@@ -47,6 +50,47 @@ export const resourceMoves: Partial<
    * Basic runes have: "[T]: Add [1]"
    */
   exhaustRune: {
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+
+      // Players can exhaust runes at any time (needed to pay for reaction spells on opponent's turn)
+      const zone = context.zones.getCardZone(context.params.runeId as CoreCardId);
+      if (zone !== "runePool") {
+        return false;
+      }
+
+      const owner = context.cards.getCardOwner(context.params.runeId as CoreCardId);
+      if ((owner as string) !== context.params.playerId) {
+        return false;
+      }
+
+      if (context.counters.getFlag(context.params.runeId as CoreCardId, "exhausted")) {
+        return false;
+      }
+
+      return true;
+    },
+    enumerator: (state, context) => {
+      if (state.status !== "playing") {
+        return [];
+      }
+
+      const runePoolCards = context.zones.getCardsInZone(
+        "runePool" as CoreZoneId,
+        context.playerId as CorePlayerId,
+      );
+
+      const results: { playerId: string; runeId: string }[] = [];
+      for (const cardId of runePoolCards) {
+        if (context.counters.getFlag(cardId, "exhausted")) {
+          continue;
+        }
+        results.push({ playerId: context.playerId as string, runeId: cardId as string });
+      }
+      return results;
+    },
     reducer: (draft, context) => {
       const { playerId, runeId } = context.params;
       const { counters } = context;
@@ -70,6 +114,56 @@ export const resourceMoves: Partial<
    * Basic runes have: "Recycle this: Add [C]" (domain-specific)
    */
   recycleRune: {
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+
+      // Players can recycle runes at any time (needed to pay for reaction spells on opponent's turn)
+      const zone = context.zones.getCardZone(context.params.runeId as CoreCardId);
+      if (zone !== "runePool") {
+        return false;
+      }
+
+      const owner = context.cards.getCardOwner(context.params.runeId as CoreCardId);
+      if ((owner as string) !== context.params.playerId) {
+        return false;
+      }
+
+      // Rule 594: Recycling has no restriction on exhausted runes.
+      // A player can recycle an exhausted rune for power.
+
+      return true;
+    },
+    enumerator: (state, context) => {
+      if (state.status !== "playing") {
+        return [];
+      }
+
+      const registry = getGlobalCardRegistry();
+      const runePoolCards = context.zones.getCardsInZone(
+        "runePool" as CoreZoneId,
+        context.playerId as CorePlayerId,
+      );
+
+      // Rule 594: No restriction on exhausted runes — players can recycle tapped runes.
+      const results: { playerId: string; runeId: string; domain: Domain }[] = [];
+      for (const cardId of runePoolCards) {
+
+        // Look up the rune's domain from card definition
+        const def = registry.get(cardId as string);
+        const domain = def?.domain;
+        const domainStr = Array.isArray(domain) ? domain[0] : domain;
+        if (domainStr) {
+          results.push({
+            domain: domainStr as Domain,
+            playerId: context.playerId as string,
+            runeId: cardId as string,
+          });
+        }
+      }
+      return results;
+    },
     reducer: (draft, context) => {
       const { playerId, runeId, domain } = context.params;
       const { zones } = context;
@@ -81,9 +175,10 @@ export const resourceMoves: Partial<
         targetZoneId: "runeDeck" as CoreZoneId,
       });
 
-      // Add 1 power of the specified domain
+      // Add 1 energy and 1 power of the specified domain
       const pool = draft.runePools[playerId];
       if (pool) {
+        pool.energy += 1;
         pool.power[domain] = (pool.power[domain] ?? 0) + 1;
       }
     },
@@ -96,6 +191,7 @@ export const resourceMoves: Partial<
    * Used for card effects that generate resources.
    */
   addResources: {
+    condition: (state) => state.status === "playing",
     reducer: (draft, context) => {
       const { playerId, energy = 0, power = {} } = context.params;
 
@@ -121,6 +217,7 @@ export const resourceMoves: Partial<
    * Used for paying costs.
    */
   spendResources: {
+    condition: (state) => state.status === "playing",
     reducer: (draft, context) => {
       const { playerId, energy = 0, power = {} } = context.params;
 
