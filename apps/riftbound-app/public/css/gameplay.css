@@ -249,14 +249,87 @@
       box-shadow: 0 0 16px #50c87844;
     }
 
-    .card.exhausted {
-      transform: rotate(90deg);
-      opacity: 0.8;
-      margin: 20px 12px;
+    /* ============================================
+       Unified state indicators (Workstream 1)
+       ============================================
+       Replaces 90deg rotation with overlay-based dimming + icon overlays so the
+       card art remains upright and recognizable even when exhausted/sick.
+       Three modifier classes:
+         .card--exhausted     → 40% black overlay + lock icon
+         .card--summoning-sick→ 25% black overlay + hourglass icon
+         .card--just-played   → brief enter animation when a card hits the board
+    */
+    .card--exhausted::before,
+    .card--summoning-sick::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 4;
+      border-radius: inherit;
+    }
+    .card--exhausted::before {
+      background: rgba(8, 6, 16, 0.40);
+    }
+    .card--summoning-sick::before {
+      background: rgba(8, 6, 16, 0.25);
+    }
+    .card--exhausted::after,
+    .card--summoning-sick::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 38%;
+      max-width: 36px;
+      aspect-ratio: 1 / 1;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 5;
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: contain;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+      opacity: 0.92;
+    }
+    /* Lock icon (inline SVG, white) for exhausted cards */
+    .card--exhausted::after {
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'><path d='M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 1 1 6 0v3H9z'/></svg>");
+    }
+    /* Hourglass icon (inline SVG, white) for summoning-sick cards */
+    .card--summoning-sick::after {
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'><path d='M6 2h12v2l-4 6 4 6v2H6v-2l4-6-4-6V2zm2.5 2 3.5 5.25L15.5 4h-7zM8.5 20h7L12 14.75 8.5 20z'/></svg>");
     }
 
-    .card.exhausted:hover {
-      transform: rotate(90deg) translateY(-4px);
+    /* Brief enter animation when a card just appears on a board zone */
+    .card--just-played {
+      animation: card-just-played-enter 600ms ease-out;
+    }
+    @keyframes card-just-played-enter {
+      0% {
+        transform: translateY(-12px) scale(0.92);
+        opacity: 0;
+        box-shadow: 0 0 18px rgba(140, 110, 220, 0.0);
+      }
+      40% {
+        opacity: 1;
+        box-shadow: 0 0 24px rgba(140, 110, 220, 0.55);
+      }
+      100% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+        box-shadow: 0 0 0 rgba(140, 110, 220, 0.0);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .card--just-played { animation: none; }
+    }
+
+    /* Legacy `.card.exhausted` (no rotation) — overlay handles the visual now.
+       Kept for backwards compatibility with `classes.push("exhausted")` callers
+       and for the rune stack hover rules below. */
+    .card.exhausted {
+      /* No rotation, no margin offset — overlay does the work */
     }
 
     .card.stunned { border-color: #d04040; box-shadow: inset 0 0 8px #d0404044; }
@@ -285,6 +358,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       pointer-events: none;
+      z-index: 6;
     }
 
     /* Card image fills the whole card — no text body */
@@ -304,6 +378,7 @@
       align-items: center;
       justify-content: center;
       box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+      z-index: 6;
     }
 
     .card-might {
@@ -321,6 +396,7 @@
       align-items: center;
       justify-content: center;
       box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+      z-index: 6;
     }
 
     .card-damage {
@@ -338,6 +414,7 @@
       align-items: center;
       justify-content: center;
       box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+      z-index: 6;
     }
 
     /* Hand cards — large, image-only; min-width prevents unreadable compression.
@@ -406,9 +483,8 @@
       z-index: 20 !important;
       transform: translateY(-24px) scale(1.2) !important;
     }
-    .rune-stack .card.exhausted {
-      opacity: 0.6;
-    }
+    /* Exhausted runes use the overlay (.card--exhausted::before) for dimming.
+       No extra opacity rule needed; just keep them hoverable. */
     .rune-stack .card.exhausted:hover {
       z-index: 20 !important;
       transform: translateY(-18px) scale(1.15) !important;
