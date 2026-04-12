@@ -162,8 +162,8 @@ function broadcastLobby(lobby: Lobby) {
       coinFlip: lobby.coinFlip,
       gameId: lobby.gameId,
       gameMode: lobby.gameMode,
-      guest: lobby.guest ? { hasDeck: !!lobby.guest.deckId, name: lobby.guest.name, ready: lobby.guest.ready } : null,
-      host: { hasDeck: !!lobby.host.deckId, name: lobby.host.name, ready: lobby.host.ready },
+      guest: lobby.guest ? { hasDeck: Boolean(lobby.guest.deckId), name: lobby.guest.name, ready: lobby.guest.ready } : null,
+      host: { hasDeck: Boolean(lobby.host.deckId), name: lobby.host.name, ready: lobby.host.ready },
       id: lobby.id,
       sandbox: lobby.sandbox,
       status: lobby.status,
@@ -420,6 +420,7 @@ function buildGameSnapshot(session: GameSession, viewingPlayer?: string) {
     name: string;
     cardType: string;
     energyCost?: number;
+    powerCost?: string[];
     might?: number;
     domain?: unknown;
     rulesText?: string;
@@ -450,6 +451,7 @@ function buildGameSnapshot(session: GameSession, viewingPlayer?: string) {
         might: def && "might" in def ? (def as Record<string, unknown>).might as number : undefined,
         name: def?.name ?? cardId,
         owner: cardInstance?.owner ?? "",
+        powerCost: def && "powerCost" in def ? (def as Record<string, unknown>).powerCost as string[] | undefined : undefined,
         rulesText: def?.rulesText,
       };
     });
@@ -490,6 +492,36 @@ function registerCard(
 ) {
   internal.cards[cardId] = { controller: owner, definitionId, owner, position: undefined, zone };
   internal.cardMetas[cardId] = { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false };
+}
+
+/**
+ * Build the CardDefinitionLookup payload for the engine's global card registry
+ * from a parsed card definition. Forwards marker flags (interactiveCostReduction,
+ * moveEscalation, inheritExhaustAbilities, copyAttachedUnitText, tracksExiledCards)
+ * and the card's abilities so the engine can read them during move execution.
+ */
+function makeLookupPayload(def: Record<string, unknown>, cardId: string, overrides?: {
+  cardType?: string;
+  energyCost?: number;
+}): Parameters<ReturnType<typeof getGlobalCardRegistry>["register"]>[1] {
+  return {
+    abilities: def.abilities as unknown as Parameters<ReturnType<typeof getGlobalCardRegistry>["register"]>[1]["abilities"],
+    cardType: (overrides?.cardType ?? def.cardType) as string,
+    copyAttachedUnitText: def.copyAttachedUnitText as boolean | undefined,
+    domain: def.domain as string | string[] | undefined,
+    energyCost: overrides?.energyCost ?? (def.energyCost as number | undefined),
+    id: cardId,
+    inheritExhaustAbilities: def.inheritExhaustAbilities as boolean | undefined,
+    interactiveCostReduction: def.interactiveCostReduction as "target-might" | undefined,
+    keywords: def.keywords as string[] | undefined,
+    might: def.might as number | undefined,
+    mightBonus: def.mightBonus as number | undefined,
+    moveEscalation: def.moveEscalation as boolean | undefined,
+    name: def.name as string,
+    powerCost: def.powerCost as string[] | undefined,
+    timing: def.timing as string | undefined,
+    tracksExiledCards: def.tracksExiledCards as boolean | undefined,
+  };
 }
 
 /** Deck configuration for creating a game */
@@ -707,14 +739,7 @@ function createGameFromDecks(
       mainDeckIds.push(cardId);
       registerCard(internal, cardId, defId, pid, "mainDeck");
       if (def) {
-        cardReg.register(cardId, {
-          cardType: def.cardType,
-          domain: def.domain as string | string[] | undefined,
-          energyCost: def.energyCost,
-          id: cardId,
-          might: "might" in def ? (def as Record<string, unknown>).might as number : undefined,
-          name: def.name,
-        });
+        cardReg.register(cardId, makeLookupPayload(def as unknown as Record<string, unknown>, cardId));
       }
     }
     engine.executeMove("initializeMainDeck", {
@@ -731,13 +756,10 @@ function createGameFromDecks(
       runeDeckIds.push(cardId);
       registerCard(internal, cardId, defId, pid, "runeDeck");
       if (def) {
-        cardReg.register(cardId, {
+        cardReg.register(cardId, makeLookupPayload(def as unknown as Record<string, unknown>, cardId, {
           cardType: "rune",
-          domain: def.domain as string | string[] | undefined,
           energyCost: 0,
-          id: cardId,
-          name: def.name,
-        });
+        }));
       }
     }
     engine.executeMove("initializeRuneDeck", {
@@ -752,13 +774,9 @@ function createGameFromDecks(
       const def = registry.get(defId);
       registerCard(internal, cardId, defId, pid, "legendZone");
       if (def) {
-        cardReg.register(cardId, {
-          cardType: def.cardType,
-          domain: def.domain as string | string[] | undefined,
-          energyCost: undefined,
-          id: cardId,
-          name: def.name,
-        });
+        cardReg.register(cardId, makeLookupPayload(def as unknown as Record<string, unknown>, cardId, {
+          energyCost: undefined as unknown as number,
+        }));
       }
       engine.executeMove("placeLegend", {
         params: { legendId: cardId },
@@ -773,14 +791,7 @@ function createGameFromDecks(
       const def = registry.get(defId);
       registerCard(internal, cardId, defId, pid, "championZone");
       if (def) {
-        cardReg.register(cardId, {
-          cardType: def.cardType,
-          domain: def.domain as string | string[] | undefined,
-          energyCost: def.energyCost,
-          id: cardId,
-          might: "might" in def ? (def as Record<string, unknown>).might as number : undefined,
-          name: def.name,
-        });
+        cardReg.register(cardId, makeLookupPayload(def as unknown as Record<string, unknown>, cardId));
       }
       engine.executeMove("placeChampion", {
         params: { championId: cardId },

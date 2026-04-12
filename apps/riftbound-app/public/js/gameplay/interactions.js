@@ -1,5 +1,17 @@
 // interactions.js — Card interaction: selection, cost payment, action bar, target highlights
 
+// Dynamically load auto-pay.js if it is not already loaded. This avoids touching
+// gameplay.html while keeping the cost solver in its own file per the workstream spec.
+(function ensureAutoPayLoaded() {
+  if (typeof autoPayAndPlay === "function") return;
+  if (document.querySelector('script[data-module="auto-pay"]')) return;
+  const s = document.createElement("script");
+  s.src = "/js/gameplay/auto-pay.js";
+  s.setAttribute("data-module", "auto-pay");
+  // eslint-disable-next-line no-undef
+  document.head.appendChild(s);
+})();
+
 function switchPlayer(pid) {
   viewingPlayer = pid;
   resetInteractionSilent();
@@ -235,14 +247,28 @@ function enterHandCardSelected(cardId) {
     m.params?.cardId === cardId
   );
 
+  // Single-click auto-play: if the card is already playable, skip the action bar and
+  // play it directly. This is the Workstream 7 click-to-play contract.
+  if (playMoves.length > 0 && typeof autoPayAndPlay === "function") {
+    autoPayAndPlay(cardId);
+    return;
+  }
+
   if (playMoves.length === 0) {
-    // Check if this card has a cost and the player doesn't have enough resources
     const card = findCard(cardId);
+
+    // Workstream 7: try Auto Pay first — if a valid cost plan exists, pay and play.
+    if (card && typeof autoPayAndPlay === "function" && typeof canAutoPay === "function" && canAutoPay(cardId)) {
+      autoPayAndPlay(cardId);
+      return;
+    }
+
+    // Fall back to the existing manual cost-payment mode (users who prefer clicking
+    // runes manually still get the old flow).
     if (card && card.energyCost > 0) {
       const pool = gameState?.runePools?.[viewingPlayer];
       const totalEnergy = pool?.energy ?? 0;
       if (totalEnergy < card.energyCost) {
-        // Check if there are any exhaustable runes to enter cost payment mode
         const runeExhaustMoves = availableMoves.filter(m =>
           m.moveId === "exhaustRune" || m.moveId === "recycleRune"
         );
@@ -259,6 +285,7 @@ function enterHandCardSelected(cardId) {
     return;
   }
 
+  // Fallback: if auto-pay is not loaded yet, use the existing action-bar flow.
   const card = findCard(cardId);
   interaction = {
     mode: "cardSelected",
