@@ -20,6 +20,8 @@
 </div>
 
 <div class="app">
+  <!-- Scale wrapper: fixed 1920x1080 logical layout, transform-scaled to fit viewport -->
+  <div id="game-scale-wrapper">
   <!-- Game Board -->
   <div class="board" id="board">
 
@@ -164,6 +166,15 @@
     </div>
     <div class="player-switcher" id="playerSwitcher"></div>
   </div>
+  </div><!-- /#game-scale-wrapper -->
+
+  <!-- Resize banner: shown when viewport is too small to scale UI -->
+  <div id="scale-resize-banner" class="hidden">
+    <div class="scale-resize-banner-inner">
+      <div class="scale-resize-title">Window too small</div>
+      <div class="scale-resize-msg">Please resize your browser window to play.</div>
+    </div>
+  </div>
 </div>
 
 <!-- Card Preview Tooltip -->
@@ -253,6 +264,7 @@
   </div>
 </div>
 
+<script src="/js/gameplay/layout.js"></script>
 <script src="/js/gameplay/state.js"></script>
 <script src="/js/gameplay/auth.js"></script>
 <script src="/js/gameplay/websocket.js"></script>
