@@ -20,6 +20,7 @@ import { authenticateUser, createUser, getUserById } from "./src/db/user-repo";
 import { createDeck, deleteDeck, getDeck, listDecks, listPublicDecks, updateDeck } from "./src/db/deck-repo";
 import type { DeckCardEntry, FullDeck, GameVersion } from "./src/db/deck-repo";
 import { GameLogger } from "./src/game-logger";
+import { type LogEntry, actorName, makeLogEntry } from "./src/narrator";
 
 /** Sets that belong to each game version. Preview is a superset of standard. */
 const STANDARD_SETS = new Set(["OGN", "OGS", "SFD"]);
@@ -162,8 +163,8 @@ function broadcastLobby(lobby: Lobby) {
       coinFlip: lobby.coinFlip,
       gameId: lobby.gameId,
       gameMode: lobby.gameMode,
-      guest: lobby.guest ? { hasDeck: !!lobby.guest.deckId, name: lobby.guest.name, ready: lobby.guest.ready } : null,
-      host: { hasDeck: !!lobby.host.deckId, name: lobby.host.name, ready: lobby.host.ready },
+      guest: lobby.guest ? { hasDeck: Boolean(lobby.guest.deckId), name: lobby.guest.name, ready: lobby.guest.ready } : null,
+      host: { hasDeck: Boolean(lobby.host.deckId), name: lobby.host.name, ready: lobby.host.ready },
       id: lobby.id,
       sandbox: lobby.sandbox,
       status: lobby.status,
@@ -227,7 +228,7 @@ interface GameSession {
   players: [string, string];
   /** Display names keyed by player ID */
   playerNames: Record<string, string>;
-  log: string[];
+  log: LogEntry[];
   /** Connected WebSocket clients for this game, keyed by a connection ID */
   clients: Map<string, { ws: ServerWebSocket<WsData>; playerId: string }>;
   /** Monotonic sequence number for ordering messages */
@@ -292,11 +293,24 @@ function buildAvailableMoves(session: GameSession, playerId: string) {
     .map((m) => ({ moveId: m.moveId, params: m.params as Record<string, unknown>, playerId: m.playerId as string }));
 }
 
-/** Format a move into a human-readable log entry */
-function formatMoveLog(moveId: string, playerId: string, params: Record<string, unknown>): string {
-  const player = playerId === "player-1" ? "P1" : "P2";
+/**
+ * Format a move into a Rift Atlas-style narrated log line.
+ *
+ * The resulting string reads like "Lillia played Swift Scout to base" — the
+ * actor label is the player's display name (resolved from `playerNames`),
+ * and the rest of the sentence describes the action in plain language.
+ *
+ * Returns an empty string for noisy system moves (zone shuffles, phase
+ * advances, initial draws, etc.) so the match log stays readable.
+ */
+function formatMoveLog(
+  moveId: string,
+  playerId: string,
+  params: Record<string, unknown>,
+  playerNames: Record<string, string>,
+): string {
+  const actor = actorName(playerId, playerNames);
 
-  // Resolve card name from params
   const resolveCard = (id: unknown): string => {
     if (typeof id !== "string") {return String(id ?? "");}
     const defId = id.replace(/^player-[12]-(?:main|rune)-\d+-/, "");
@@ -304,7 +318,6 @@ function formatMoveLog(moveId: string, playerId: string, params: Record<string, 
     return def?.name ?? defId;
   };
 
-  // Resolve battlefield ID to display name
   const resolveBattlefield = (id: unknown): string => {
     if (typeof id !== "string") {return String(id ?? "");}
     const defId = id.replace(/^player-[12]-bf-/, "");
@@ -313,69 +326,130 @@ function formatMoveLog(moveId: string, playerId: string, params: Record<string, 
   };
 
   switch (moveId) {
-    case "playUnit": { return `${player} played ${resolveCard(params.cardId)} to ${params.location ?? "base"}`;
+    case "playUnit": {
+      const location = params.location === "base" || !params.location
+        ? "base"
+        : resolveBattlefield(params.location);
+      return `${actor} played ${resolveCard(params.cardId)} to ${location}.`;
     }
-    case "playSpell": { return `${player} cast ${resolveCard(params.cardId)}`;
+    case "playSpell": {
+      return `${actor} cast ${resolveCard(params.cardId)}.`;
     }
-    case "playGear": { return `${player} equipped ${resolveCard(params.cardId)}`;
+    case "playGear": {
+      const unitName = params.targetUnitId
+        ? resolveCard(params.targetUnitId)
+        : undefined;
+      return unitName
+        ? `${actor} equipped ${resolveCard(params.cardId)} to ${unitName}.`
+        : `${actor} equipped ${resolveCard(params.cardId)}.`;
     }
     case "standardMove": {
       const unitNames = Array.isArray(params.unitIds)
         ? params.unitIds.map(resolveCard).join(", ")
         : "units";
-      return `${player} moved ${unitNames} to ${resolveBattlefield(params.destination)}`;
+      return `${actor} moved ${unitNames} to ${resolveBattlefield(params.destination)}.`;
     }
-    case "exhaustRune": { return `${player} tapped ${resolveCard(params.runeId)}`;
+    case "exhaustRune": {
+      return `${actor} exhausted ${resolveCard(params.runeId)}.`;
     }
-    case "recycleRune": { return `${player} recycled ${resolveCard(params.runeId)} for ${params.domain ?? "power"}`;
+    case "readyRune": {
+      return `${actor} readied ${resolveCard(params.runeId)}.`;
     }
-    case "contestBattlefield": { return `${player} contested ${resolveBattlefield(params.battlefieldId)}`;
+    case "recycleRune": {
+      return `${actor} recycled ${resolveCard(params.runeId)} for ${params.domain ?? "power"}.`;
     }
-    case "conquerBattlefield": { return `${player} conquered ${resolveBattlefield(params.battlefieldId)}`;
+    case "contestBattlefield": {
+      return `${actor} contested ${resolveBattlefield(params.battlefieldId)}.`;
     }
-    case "assignAttacker": { return `${player} assigned ${resolveCard(params.unitId)} as attacker`;
+    case "conquerBattlefield": {
+      return `${actor} conquered ${resolveBattlefield(params.battlefieldId)}.`;
     }
-    case "assignDefender": { return `${player} assigned ${resolveCard(params.unitId)} as defender`;
+    case "assignAttacker": {
+      return `${actor} assigned ${resolveCard(params.unitId)} as attacker.`;
     }
-    case "resolveCombat": { return `Combat resolved at ${resolveBattlefield(params.battlefieldId)}`;
+    case "assignDefender": {
+      return `${actor} assigned ${resolveCard(params.unitId)} as defender.`;
     }
-    case "scorePoint": { return `${player} scored a point (${params.method})`;
+    case "resolveCombat":
+    case "resolveFullCombat": {
+      return `Combat resolved at ${resolveBattlefield(params.battlefieldId)}.`;
     }
-    case "endTurn": { return `${player} ended their turn`;
+    case "scorePoint": {
+      return `${actor} scored a point (${params.method ?? "conquest"}).`;
     }
-    case "channelRunes": { return `${player} channeled ${params.count ?? 2} runes`;
+    case "endTurn": {
+      return `${actor} ended their turn.`;
     }
-    case "drawCard": { return `${player} drew a card`;
+    case "channelRunes": {
+      const count = Number(params.count ?? 2);
+      return `${actor} channeled ${count} rune${count === 1 ? "" : "s"} from their rune deck.`;
     }
-    case "addResources": { return `${player} gained ${params.energy ?? 0} energy`;
+    case "drawCard": {
+      const count = Number(params.count ?? 1);
+      return `${actor} drew ${count} card${count === 1 ? "" : "s"}.`;
     }
-    case "rollForFirst": { return `${player} rolled for initiative`;
+    case "scryCard":
+    case "lookAtTop": {
+      const count = Number(params.count ?? 1);
+      return `${actor} looked at top ${count} card${count === 1 ? "" : "s"} of their deck.`;
     }
-    case "chooseFirstPlayer": { return `${player} chose ${params.firstPlayerId === "player-1" ? "P1" : "P2"} to go first`;
+    case "addResources": {
+      return `${actor} gained ${params.energy ?? 0} energy.`;
     }
-    case "transitionToPlay": { return "Game started!";
+    case "rollForFirst": {
+      return `${actor} rolled a d20.`;
     }
-    case "concede": { return `${player} conceded`;
+    case "chooseFirstPlayer": {
+      const chosen = params.firstPlayerId === playerId ? "themself" : "their opponent";
+      const chosenName = typeof params.firstPlayerId === "string"
+        ? actorName(params.firstPlayerId, playerNames)
+        : chosen;
+      return `${actor} chose ${chosenName} to take the first turn.`;
     }
-    case "passChainPriority": { return `${player} passed priority`;
+    case "transitionToPlay": {
+      return "Both mulligans are complete. Starting the game.";
     }
-    case "passShowdownFocus": { return `${player} passed focus`;
+    case "concede": {
+      return `${actor} conceded.`;
     }
-    case "resolveChain": { return `Chain resolved`;
+    case "passChainPriority": {
+      return `${actor} passed priority.`;
     }
-    case "startShowdown": { return `Showdown started at ${resolveBattlefield(params.battlefieldId)}`;
+    case "passShowdownFocus": {
+      return `${actor} passed focus${
+        params.battlefieldId ? ` at ${resolveBattlefield(params.battlefieldId)}` : ""
+      }.`;
     }
-    case "endShowdown": { return `Showdown ended`;
+    case "resolveChain": {
+      return "Chain resolved.";
     }
-    case "killUnit": { return `${resolveCard(params.cardId)} was destroyed`;
+    case "startShowdown": {
+      return `Showdown started at ${resolveBattlefield(params.battlefieldId)}.`;
     }
-    case "discardCard": { return `${player} discarded ${resolveCard(params.cardId)}`;
+    case "endShowdown": {
+      return `Showdown ended${
+        params.battlefieldId ? ` at ${resolveBattlefield(params.battlefieldId)}` : ""
+      }.`;
     }
-    case "recallUnit": { return `${player} recalled ${resolveCard(params.unitId)}`;
+    case "killUnit": {
+      return `${resolveCard(params.cardId)} was destroyed.`;
     }
-    case "hideCard": { return `${player} hid a card at ${resolveBattlefield(params.battlefieldId)}`;
+    case "discardCard": {
+      return `${actor} discarded ${resolveCard(params.cardId)}.`;
     }
-    case "revealHidden": { return `${player} revealed ${resolveCard(params.cardId)}`;
+    case "recallUnit": {
+      return `${actor} recalled ${resolveCard(params.unitId)}.`;
+    }
+    case "hideCard": {
+      return `${actor} hid a card at ${resolveBattlefield(params.battlefieldId)}.`;
+    }
+    case "revealHidden": {
+      return `${actor} revealed ${resolveCard(params.cardId)}.`;
+    }
+    case "mulligan": {
+      const keep = Array.isArray(params.keepCards) ? params.keepCards.length : 0;
+      const redrawn = keep; // Number sent back = number redrawn after mulligan move
+      return `${actor} finalized mulligan (${redrawn} recycled, ${redrawn} redrawn).`;
     }
     default: {
       // Hide noisy system moves from the log
@@ -385,22 +459,57 @@ function formatMoveLog(moveId: string, playerId: string, params: Record<string, 
         "advancePhase", "clearDamage",
       ]);
       if (hiddenMoves.has(moveId)) {return "";}
-      return `${player}: ${moveId.replace(/([A-Z])/g, " $1").toLowerCase().trim()}`;
+      return `${actor}: ${moveId.replace(/([A-Z])/g, " $1").toLowerCase().trim()}.`;
     }
   }
 }
 
-/** Build the game history log from engine replay history + session log */
-function buildHistoryLog(session: GameSession): string[] {
-  const entries: string[] = [...session.log]; // Keep manual entries (setup messages)
+/**
+ * Set of move IDs that represent player-driven actions that should be
+ * rewindable. System cleanup moves are not included.
+ */
+const REWINDABLE_MOVE_IDS = new Set([
+  "playUnit", "playSpell", "playGear", "standardMove", "exhaustRune",
+  "readyRune", "recycleRune", "contestBattlefield", "conquerBattlefield",
+  "assignAttacker", "assignDefender", "scorePoint", "endTurn",
+  "channelRunes", "drawCard", "scryCard", "lookAtTop", "rollForFirst",
+  "chooseFirstPlayer", "concede", "startShowdown", "endShowdown",
+  "discardCard", "recallUnit", "hideCard", "revealHidden", "mulligan",
+]);
+
+/**
+ * Build the game history log from engine replay history + session log.
+ *
+ * Combines manually-narrated setup entries (stored on the session) with
+ * move-derived narration pulled from the engine's replay history. Each
+ * replay move is formatted via {@link formatMoveLog} and tagged with the
+ * move's real timestamp and rewindability.
+ *
+ * Returns the last 80 entries (oldest to newest) as {@link LogEntry}
+ * objects ready to be sent in the game snapshot.
+ */
+function buildHistoryLog(session: GameSession): LogEntry[] {
+  const entries: LogEntry[] = [...session.log]; // Keep manual entries (setup messages)
   try {
     const history = session.engine.getReplayHistory();
-    for (const entry of history) {
-      const params = entry.context?.params as Record<string, unknown> ?? {};
-      const playerId = entry.context?.playerId as string ?? "";
-      const logEntry = formatMoveLog(entry.moveId, playerId, params);
-      if (logEntry) {entries.push(logEntry);}
-    }
+    history.forEach((entry, index) => {
+      const params = (entry.context?.params as Record<string, unknown>) ?? {};
+      const playerId = (entry.context?.playerId as string) ?? "";
+      const text = formatMoveLog(
+        entry.moveId,
+        playerId,
+        params,
+        session.playerNames,
+      );
+      if (!text) {return;}
+      entries.push(
+        makeLogEntry(text, {
+          key: `replay-${index}`,
+          rewindable: REWINDABLE_MOVE_IDS.has(entry.moveId),
+          timestampMs: entry.timestamp,
+        }),
+      );
+    });
   } catch { /* History not available */ }
   return entries.slice(-80);
 }
@@ -678,7 +787,14 @@ function createGameFromDecks(
   deck1: DeckConfig,
   deck2: DeckConfig,
   seed?: string,
-  options?: { gameMode?: "duel" | "match"; firstPlayer?: string; sandbox?: boolean; names?: Record<string, string> },
+  options?: {
+    gameMode?: "duel" | "match";
+    firstPlayer?: string;
+    sandbox?: boolean;
+    names?: Record<string, string>;
+    /** Initiative roll results for match log narration. */
+    initiativeRoll?: { p1Roll: number; p2Roll: number; winner: string };
+  },
 ): GameSession {
   const P1 = "player-1";
   const P2 = "player-2";
@@ -694,7 +810,7 @@ function createGameFromDecks(
 
   const cardReg = getGlobalCardRegistry();
   const internal = getInternalSnapshot(engine);
-  const log: string[] = [];
+  const log: LogEntry[] = [];
 
   const decks: [string, DeckConfig][] = [[P1, deck1], [P2, deck2]];
   for (const [pid, deck] of decks) {
@@ -800,7 +916,11 @@ function createGameFromDecks(
       playerId: pid as PlayerId,
     });
 
-    log.push(`${pid === P1 ? "Player 1" : "Player 2"} deck loaded`);
+    log.push(
+      makeLogEntry(
+        `${options?.names?.[pid] ?? (pid === P1 ? "Player 1" : "Player 2")} deck loaded.`,
+      ),
+    );
   }
 
   const gameMode = options?.gameMode ?? "duel";
@@ -856,7 +976,39 @@ function createGameFromDecks(
     secondPlayer,
   };
 
-  log.push(`${firstPlayer === P1 ? "Player 1" : "Player 2"} goes first`);
+  const firstPlayerName = options?.names?.[firstPlayer]
+    ?? (firstPlayer === P1 ? "Player 1" : "Player 2");
+
+  // Narrate the d20 initiative roll if supplied by the lobby
+  const roll = options?.initiativeRoll;
+  if (roll) {
+    const winnerId = roll.winner;
+    const loserId = winnerId === P1 ? P2 : P1;
+    const winnerName = options?.names?.[winnerId]
+      ?? (winnerId === P1 ? "Player 1" : "Player 2");
+    const loserName = options?.names?.[loserId]
+      ?? (loserId === P1 ? "Player 1" : "Player 2");
+    const winnerRoll = winnerId === P1 ? roll.p1Roll : roll.p2Roll;
+    const loserRoll = winnerId === P1 ? roll.p2Roll : roll.p1Roll;
+
+    log.push(makeLogEntry(`${winnerName} rolled a d20.`));
+    log.push(
+      makeLogEntry(
+        `${winnerName} rolled ${winnerRoll}. ${loserName} rolled ${loserRoll}.`,
+      ),
+    );
+    log.push(
+      makeLogEntry(
+        `${winnerName} wins initiative (${winnerRoll} vs ${loserRoll}) and decides who plays first.`,
+      ),
+    );
+  }
+
+  log.push(
+    makeLogEntry(
+      `Chose ${firstPlayerName} to take the first turn.`,
+    ),
+  );
 
   const names = options?.names ?? { [P1]: "Player 1", [P2]: "Player 2" };
   return { clients: new Map(), engine, log, playerNames: names, players: [P1, P2], pregame, sandbox: isSandbox, seq: 0 };
@@ -913,7 +1065,9 @@ function finalizePregame(session: GameSession): void {
     playerId: pregame.firstPlayer as PlayerId,
   });
 
-  session.log.push("Game started");
+  session.log.push(
+    makeLogEntry("Both mulligans are complete. Starting the game."),
+  );
   delete session.pregame;
   session.seq++;
 }
@@ -1087,7 +1241,11 @@ function finalizeEndTurn(session: GameSession, nextPlayer: string): void {
     playerId: nextPlayer as PlayerId,
   });
 
-  session.log.push(`Turn passed to ${session.playerNames[nextPlayer] ?? nextPlayer}`);
+  session.log.push(
+    makeLogEntry(
+      `Turn passed to ${session.playerNames[nextPlayer] ?? nextPlayer}.`,
+    ),
+  );
 }
 
 /**
@@ -1114,7 +1272,12 @@ function sandboxAutoPlay(session: GameSession, goldfish: string): void {
         playerId: goldfish as PlayerId,
       });
       if (result.success) {
-        session.log.push(`${session.playerNames[goldfish] ?? goldfish}: passed priority`);
+        session.log.push(
+          makeLogEntry(
+            `${actorName(goldfish, session.playerNames)} passed priority.`,
+            { rewindable: true },
+          ),
+        );
         acted = true;
         continue;
       }
@@ -1128,7 +1291,12 @@ function sandboxAutoPlay(session: GameSession, goldfish: string): void {
         params: passFocus.params as Record<string, unknown>,
         playerId: goldfish as PlayerId,
       });
-      session.log.push(`${session.playerNames[goldfish] ?? goldfish}: passed focus`);
+      session.log.push(
+        makeLogEntry(
+          `${actorName(goldfish, session.playerNames)} passed focus.`,
+          { rewindable: true },
+        ),
+      );
       acted = true;
       continue;
     }
@@ -1142,7 +1310,12 @@ function sandboxAutoPlay(session: GameSession, goldfish: string): void {
       });
       if (endResult.success) {
         finalizeEndTurn(session, nextForGoldfish);
-        session.log.push(`${session.playerNames[goldfish] ?? goldfish}: ended their turn`);
+        session.log.push(
+          makeLogEntry(
+            `${actorName(goldfish, session.playerNames)} ended their turn.`,
+            { rewindable: true },
+          ),
+        );
         acted = true;
         continue;
       }
@@ -1803,7 +1976,7 @@ const server = Bun.serve({
       });
 
       if (result.success) {
-        session.log.push(`${body.playerId}: ${body.moveId}`);
+        // Move narration is produced from engine replay history in buildHistoryLog
         gameLogger.logMove(gameId, body.moveId, body.playerId, body.params, { success: true });
 
         // After unit movement, auto-detect and resolve contested battlefields
@@ -1888,7 +2061,7 @@ const server = Bun.serve({
       const success = session.engine.undo();
       if (!success) {return json({ error: "Nothing to undo" }, 400);}
 
-      session.log.push("Move undone");
+      session.log.push(makeLogEntry("Rewound their last action."));
       return json({ state: buildGameSnapshot(session), success: true });
     }
 
@@ -1901,7 +2074,7 @@ const server = Bun.serve({
       const success = session.engine.redo();
       if (!success) {return json({ error: "Nothing to redo" }, 400);}
 
-      session.log.push("Move redone");
+      session.log.push(makeLogEntry("Move redone."));
       return json({ state: buildGameSnapshot(session), success: true });
     }
 
@@ -2338,6 +2511,11 @@ const server = Bun.serve({
           const session = createGameFromDecks(deck1, deck2, undefined, {
             firstPlayer: chosen,
             gameMode: lobby.gameMode,
+            initiativeRoll: {
+              p1Roll: lobby.coinFlip.p1Roll,
+              p2Roll: lobby.coinFlip.p2Roll,
+              winner: lobby.coinFlip.winner,
+            },
             names: {
               "player-1": lobby.host.name,
               "player-2": lobby.guest?.name ?? "Player 2",
@@ -2379,10 +2557,23 @@ const server = Bun.serve({
             ws.send(JSON.stringify({ error: "Invalid battlefield choice", type: "error" }));
           } else {
             session.pregame.battlefieldSelections[playerId] = bfId;
+            const bfDef = registry.get(bfId);
+            const bfName = bfDef?.name ?? bfId;
+            session.log.push(
+              makeLogEntry(
+                `${actorName(playerId, session.playerNames)} locked in a battlefield (${bfName}).`,
+                { rewindable: true },
+              ),
+            );
             // Check if both players have selected
             const allSelected = session.players.every((p) => session.pregame!.battlefieldSelections[p]);
             if (allSelected) {
               session.pregame.phase = "mulligan";
+              session.log.push(
+                makeLogEntry(
+                  "Both battlefields are locked. Roll a d20 to decide first player.",
+                ),
+              );
             }
             session.seq++;
             broadcastPregameUpdate(session);
@@ -2394,14 +2585,25 @@ const server = Bun.serve({
           if (session.pregame.mulliganComplete.has(playerId)) {return;} // Already decided
 
           const sendBack = (msg.sendBack as string[]) ?? [];
+          const actor = actorName(playerId, session.playerNames);
           if (sendBack.length > 0 && sendBack.length <= 2) {
             session.engine.executeMove("mulligan", {
               params: { keepCards: sendBack, playerId },
               playerId: playerId as PlayerId,
             });
-            session.log.push(`${session.playerNames[playerId] ?? playerId} mulliganed ${sendBack.length} card${sendBack.length > 1 ? "s" : ""}`);
+            session.log.push(
+              makeLogEntry(
+                `${actor} finalized mulligan (${sendBack.length} recycled, ${sendBack.length} redrawn).`,
+                { rewindable: true },
+              ),
+            );
           } else {
-            session.log.push(`${session.playerNames[playerId] ?? playerId} kept hand`);
+            session.log.push(
+              makeLogEntry(
+                `${actor} finalized mulligan (0 recycled, 0 redrawn).`,
+                { rewindable: true },
+              ),
+            );
           }
 
           session.pregame.mulliganComplete.add(playerId);
@@ -2411,7 +2613,11 @@ const server = Bun.serve({
             const other = session.players.find((p) => p !== playerId);
             if (other && !session.pregame.mulliganComplete.has(other)) {
               session.pregame.mulliganComplete.add(other);
-              session.log.push(`${session.playerNames[other] ?? other} kept hand`);
+              session.log.push(
+                makeLogEntry(
+                  `${actorName(other, session.playerNames)} finalized mulligan (0 recycled, 0 redrawn).`,
+                ),
+              );
             }
           }
 
@@ -2507,7 +2713,7 @@ const server = Bun.serve({
           return;
         }
 
-        session.log.push(`${playerId}: ${moveId}`);
+        // Move narration is produced from engine replay history in buildHistoryLog
         gameLogger.logMove(gameId, moveId as string, playerId, params as Record<string, unknown>, { success: true });
 
         // After unit movement, auto-detect and resolve contested battlefields
@@ -2624,7 +2830,11 @@ const server = Bun.serve({
           ws.send(JSON.stringify({ error: "Nothing to undo", type: "error" }));
           return;
         }
-        session.log.push("Move undone");
+        session.log.push(
+          makeLogEntry(
+            `${actorName(playerId, session.playerNames)} rewound their last action.`,
+          ),
+        );
         session.seq++;
         const snapshot = buildGameSnapshot(session);
         // Broadcast updated state to all clients
@@ -2649,7 +2859,7 @@ const server = Bun.serve({
           ws.send(JSON.stringify({ error: "Nothing to redo", type: "error" }));
           return;
         }
-        session.log.push("Move redone");
+        session.log.push(makeLogEntry("Move redone."));
         session.seq++;
         const snapshot = buildGameSnapshot(session);
         for (const [, client] of session.clients) {
@@ -2669,7 +2879,11 @@ const server = Bun.serve({
 
       if (msg.type === "leave_game") {
         const isHost = playerId === session.players[0];
-        session.log.push(`${session.playerNames[playerId] ?? playerId} left the game`);
+        session.log.push(
+          makeLogEntry(
+            `${actorName(playerId, session.playerNames)} left the game.`,
+          ),
+        );
         gameLogger.logPlayerDisconnected(gameId, playerId, connId, "voluntary_leave");
 
         if (isHost) {
