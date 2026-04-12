@@ -431,6 +431,37 @@ function renderZones() {
   // Rune pools — grouped by domain, stacked max 3 per pile
   const DOMAIN_COLORS = { fury: "#d04040", calm: "#40a0d0", mind: "#a050d0", body: "#50b050", chaos: "#d08030", order: "#d0d040" };
   const STACK_MAX = 3;
+  // Render a single rune card with its actual face image (not a generic back).
+  // Uses `card.definitionId` so channeled runes show their real identity (Mind, Chaos, etc.).
+  function renderRuneCard(c, topOffset, zIndex, borderColor) {
+    const classes = ["card"];
+    if (c.cardType) classes.push("type-" + c.cardType);
+    if (c.meta?.exhausted) classes.push("exhausted");
+    if (selectedCard === c.id) classes.push("selected");
+    if (interaction.sourceCardId === c.id && interaction.mode !== "idle") classes.push("interaction-source");
+
+    const defId = c.definitionId || "";
+    const imgId = defId.replace(/^player-[12]-/, "");
+    const cardName = c.name || "";
+    const inlineStyle = `top:${topOffset}px;z-index:${zIndex};border-color:${borderColor};`;
+    const imgSrc = imgId ? `/card-image/${esc(imgId)}` : "";
+
+    return `
+      <div class="${classes.join(" ")}"
+           data-card-id="${esc(c.id)}"
+           data-def-id="${esc(defId)}"
+           data-zone="runePool"
+           style="${inlineStyle}"
+           onpointerdown="onPointerDown(event, '${esc(c.id)}')"
+           onmouseenter="showPreview(event, this)"
+           onmouseleave="hidePreview()"
+           ondblclick="openZoom('${esc(c.id)}')"
+           title="${esc(cardName)}">
+        <img class="card-img" src="${imgSrc}" alt="${esc(cardName)}"
+             onerror="this.style.background='linear-gradient(135deg,#201a38,#2a2248)';this.removeAttribute('src');">
+      </div>
+    `;
+  }
   function renderRuneStacks(runes) {
     // Group by domain
     const groups = {};
@@ -448,8 +479,7 @@ function renderZones() {
         html += `<div class="rune-stack" style="height:${stackHeight + 16}px;">`;
         html += `<div class="rune-stack-label" style="color:${color};">${DOMAIN_LABELS[domain] ?? domain[0].toUpperCase()}</div>`;
         chunk.forEach((c, i) => {
-          const el = renderCardElement(c, false, "runePool");
-          html += el.replace('class="card', `style="top:${14 + i * 14}px;z-index:${i + 1};border-color:${color};" class="card`);
+          html += renderRuneCard(c, 14 + i * 14, i + 1, color);
         });
         html += `</div>`;
       }
