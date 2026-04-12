@@ -972,6 +972,51 @@
       margin-top: 2px;
     }
 
+    /* Hover preview slot — shows a large readable version of the currently hovered card */
+    .hover-preview {
+      /* Fixed dimensions prevent layout shift when populating/clearing */
+      width: 240px;
+      height: 340px;
+      margin: 8px auto;
+      flex-shrink: 0;
+      background: #0b0a14;
+      border: 1px solid #2a2740;
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) inset;
+    }
+
+    .hover-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .hover-preview.has-card img {
+      display: block;
+    }
+
+    .hover-preview.has-card .hover-preview-empty {
+      display: none;
+    }
+
+    .hover-preview-empty {
+      color: #4a4566;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+      text-align: center;
+      pointer-events: none;
+    }
+
     /* Game log */
     .game-log {
       flex: 1;

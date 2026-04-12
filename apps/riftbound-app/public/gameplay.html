@@ -158,6 +158,11 @@
       <button class="action-btn" id="undoBtn" onclick="requestUndo()" style="flex:1;text-align:center;" disabled>Undo</button>
       <button class="action-btn" id="redoBtn" onclick="requestRedo()" style="flex:1;text-align:center;" disabled>Redo</button>
     </div>
+    <!-- Hover preview slot: shows large readable version of currently hovered card -->
+    <div class="hover-preview" id="hover-preview" aria-hidden="true">
+      <img id="hoverPreviewImg" src="" alt="">
+      <div class="hover-preview-empty" id="hoverPreviewEmpty">Hover a card</div>
+    </div>
     <div class="game-log" id="gameLog">
       <div class="log-title">Game Log</div>
       <div id="logEntries"></div>
