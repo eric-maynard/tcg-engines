@@ -2,11 +2,113 @@
 
 const DOMAIN_LABELS = { fury: "F", calm: "Ca", mind: "M", body: "B", chaos: "Ch", order: "O" };
 
+// ============================================
+// State indicator tracking (Workstream 1)
+// ============================================
+// Tracks which cards are "summoning sick" (entered base/battlefield this turn)
+// and which are "just played" (entered the board between the previous render and now,
+// used for a brief CSS enter animation).
+//
+// Why client-side tracking? The engine's RiftboundCardMeta does not expose a
+// `justEnteredBattlefield` / "entered this turn" flag, so we observe zone
+// transitions across renders. Cleared automatically when the active player or
+// turn number changes.
+
+/** Map<cardId, turnNumber> — turn the card first appeared on a board zone */
+const _enteredOnTurn = new Map();
+/** Set<cardId> — board zone cards observed during the previous render */
+let _prevBoardCardIds = new Set();
+/** Set<cardId> — cards that newly appeared on a board zone this render (just-played) */
+let _justPlayedCardIds = new Set();
+/** Last seen turn key (number + activePlayer) used to expire sickness */
+let _lastTurnKey = "";
+
+/** Returns true if a zone name represents an on-board zone where units sit. */
+function isBoardZone(zoneName) {
+  if (!zoneName) return false;
+  if (zoneName === "base") return true;
+  if (zoneName.startsWith("battlefield-")) return true;
+  return false;
+}
+
+/**
+ * Recompute summoning-sick / just-played tracking based on current gameState.
+ * Called once per render() before any card rendering happens.
+ */
+function updateStateIndicatorTracking() {
+  if (!gameState) return;
+
+  const turnNum = gameState.turn?.number ?? 0;
+  const activeP = gameState.turn?.activePlayer ?? "";
+  const turnKey = `${turnNum}:${activeP}`;
+  const turnChanged = turnKey !== _lastTurnKey;
+  _lastTurnKey = turnKey;
+
+  // Build the set of cards currently on any on-board zone
+  const zones = gameState.zones || {};
+  const currentBoardCardIds = new Set();
+  for (const [zoneName, cards] of Object.entries(zones)) {
+    if (!isBoardZone(zoneName)) continue;
+    for (const c of cards || []) {
+      if (c?.id) currentBoardCardIds.add(c.id);
+    }
+  }
+
+  // Detect cards that newly appeared on a board zone since the last render.
+  // These get the brief "just-played" enter animation.
+  _justPlayedCardIds = new Set();
+  for (const cardId of currentBoardCardIds) {
+    if (!_prevBoardCardIds.has(cardId)) {
+      _justPlayedCardIds.add(cardId);
+      // Record the turn the card entered the board (used for sickness)
+      if (!_enteredOnTurn.has(cardId)) {
+        _enteredOnTurn.set(cardId, turnNum);
+      }
+    }
+  }
+
+  // Garbage collect tracking entries for cards that have left the board
+  for (const cardId of _enteredOnTurn.keys()) {
+    if (!currentBoardCardIds.has(cardId)) {
+      _enteredOnTurn.delete(cardId);
+    }
+  }
+
+  // Save current snapshot for next render's diff
+  _prevBoardCardIds = currentBoardCardIds;
+
+  // Optional: when the turn key changes, leave _enteredOnTurn entries alone —
+  // a card entered on turn N is naturally no longer sick on turn N+1 because
+  // the renderer compares enteredTurn against the current turn number.
+  void turnChanged;
+}
+
+/** True if the card should display the summoning-sick overlay (entered this turn). */
+function isCardSummoningSick(card, zone) {
+  if (!card?.id) return false;
+  if (!isBoardZone(zone)) return false;
+  // Runes don't get sick — only units played to base/battlefields
+  if (card.cardType === "rune") return false;
+  const enteredTurn = _enteredOnTurn.get(card.id);
+  if (enteredTurn == null) return false;
+  return enteredTurn === (gameState?.turn?.number ?? -1);
+}
+
+/** True if the card just entered the board between the previous render and now. */
+function isCardJustPlayed(card, zone) {
+  if (!card?.id) return false;
+  if (!isBoardZone(zone)) return false;
+  return _justPlayedCardIds.has(card.id);
+}
+
 function render() {
   if (!gameState) return;
 
   // Detect phase/turn transitions before rendering
   checkPhaseTransition();
+
+  // Recompute summoning-sick / just-played card tracking before any card render
+  updateStateIndicatorTracking();
 
   renderSidebarHeader();
   renderPlayerInfo();
@@ -340,9 +442,14 @@ function renderCardElement(card, isFacedown = false, zone = "") {
 
   const classes = ["card"];
   if (card.cardType) classes.push("type-" + card.cardType);
-  if (card.meta?.exhausted) classes.push("exhausted");
+  if (card.meta?.exhausted) {
+    classes.push("exhausted");
+    classes.push("card--exhausted");
+  }
   if (card.meta?.stunned) classes.push("stunned");
   if (card.meta?.buffed) classes.push("buffed");
+  if (isCardSummoningSick(card, zone)) classes.push("card--summoning-sick");
+  if (isCardJustPlayed(card, zone)) classes.push("card--just-played");
   if (selectedCard === card.id) classes.push("selected");
   if (interaction.sourceCardId === card.id && interaction.mode !== "idle") classes.push("interaction-source");
 
