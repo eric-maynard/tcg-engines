@@ -44,7 +44,7 @@ const DRAG_THRESHOLD = 6; // px before drag starts
 /** Check if a card has any available moves from its zone */
 function hasMovesForCard(cardId, zone) {
   if (!availableMoves) return false;
-  return availableMoves.some(m => {
+  const hasDirectMove = availableMoves.some(m => {
     if (m.params?.cardId === cardId) return true;
     if (m.params?.unitId === cardId) return true;
     if (m.params?.runeId === cardId) return true;
@@ -52,6 +52,10 @@ function hasMovesForCard(cardId, zone) {
     if (m.params?.unitIds?.includes(cardId)) return true;
     return false;
   });
+  if (hasDirectMove) return true;
+  // Workstream 7: a hand card counts as playable if Auto Pay can satisfy its cost.
+  if (zone === "hand" && typeof canAutoPay === "function" && canAutoPay(cardId)) return true;
+  return false;
 }
 
 /** Get the moves and valid targets for a card being dragged from a zone */
@@ -67,6 +71,11 @@ function getDragContext(cardId, zone) {
     );
     if (matchingMoves.length > 0) {
       action = "playCard";
+      validTargets = ["player-base"];
+    } else if (typeof canAutoPay === "function" && canAutoPay(cardId)) {
+      // Workstream 7: if the card is not immediately playable but a cost plan exists,
+      // still allow dragging — we will auto-pay on drop.
+      action = "playCardAuto";
       validTargets = ["player-base"];
     }
   } else if (zone === "base") {
@@ -111,6 +120,26 @@ function findDropZoneAt(x, y) {
   // Walk up to find a [data-drop-zone] element
   const zone = el.closest("[data-drop-zone]");
   return zone ? zone.dataset.dropZone : null;
+}
+
+/**
+ * Find a unit-drop target under the pointer, if any. Returns { unitId } when the
+ * pointer is over a unit card that the viewing player controls (equipment target),
+ * otherwise null.
+ */
+function findUnitDropAt(x, y) {
+  if (dragState?.ghost) dragState.ghost.style.display = "none";
+  const el = document.elementFromPoint(x, y);
+  if (dragState?.ghost) dragState.ghost.style.display = "";
+  if (!el) return null;
+  const cardEl = el.closest("[data-card-id]");
+  if (!cardEl) return null;
+  const unitId = cardEl.dataset.cardId;
+  if (!unitId || unitId === dragState?.cardId) return null;
+  const unit = findCard(unitId);
+  if (!unit || unit.controller !== viewingPlayer) return null;
+  if (unit.cardType !== "unit" && unit.cardType !== "champion" && unit.cardType !== "legend") return null;
+  return { unitId };
 }
 
 function onPointerDown(e, cardId) {
@@ -205,20 +234,35 @@ document.addEventListener("pointermove", (e) => {
 
     // Check if we're over a valid drop zone
     const dropZone = findDropZoneAt(e.clientX, e.clientY);
-    const isValid = dropZone && (
+    const isValidZone = dropZone && (
       dragState.validTargets.includes(dropZone) ||
-      (dragState.action === "playCard" && dropZone === "player-base")
+      (dragState.action === "playCard" && dropZone === "player-base") ||
+      (dragState.action === "playCardAuto" && dropZone === "player-base")
     );
+
+    // For equipment drag-onto-unit: allow dropping on a friendly unit card too.
+    let unitDrop = null;
+    if (!dropZone && dragState.zone === "hand") {
+      const card = findCard(dragState.cardId);
+      if (card && (card.cardType === "gear" || card.cardType === "equipment")) {
+        unitDrop = findUnitDropAt(e.clientX, e.clientY);
+      }
+    }
+
+    const isValid = isValidZone || !!unitDrop;
 
     // Update ghost state
     dragState.ghost.classList.toggle("over-valid", !!isValid);
-    dragState.ghost.classList.toggle("over-invalid", dropZone && !isValid);
+    dragState.ghost.classList.toggle("over-invalid", (dropZone && !isValidZone) || (!dropZone && !unitDrop && false));
 
-    // Update drag-over highlights on zones
+    // Update drag-over highlights on zones and units
     document.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
-    if (isValid) {
+    if (isValidZone) {
       const zoneEl = document.querySelector(`[data-drop-zone="${CSS.escape(dropZone)}"]`);
       if (zoneEl) zoneEl.classList.add("drag-over");
+    } else if (unitDrop) {
+      const unitEl = document.querySelector(`[data-card-id="${CSS.escape(unitDrop.unitId)}"]`);
+      if (unitEl) unitEl.classList.add("drag-over");
     }
   }
 });
@@ -230,17 +274,20 @@ document.addEventListener("pointerup", (e) => {
   const cardId = dragState.cardId;
 
   if (wasDragging) {
-    // Check for drop on a valid zone
+    // Check for drop on a valid zone first, then fall back to unit-drop for equipment.
     const dropZone = findDropZoneAt(e.clientX, e.clientY);
+    const unitDrop = dropZone ? null : findUnitDropAt(e.clientX, e.clientY);
+
     const isValid = dropZone && (
       dragState.validTargets.includes(dropZone) ||
-      (dragState.action === "playCard" && dropZone === "player-base")
+      (dragState.action === "playCard" && dropZone === "player-base") ||
+      (dragState.action === "playCardAuto" && dropZone === "player-base")
     );
 
     if (isValid) {
       // Find the matching move and execute it
       let move = null;
-      if (dragState.action === "playCard" && dropZone === "player-base") {
+      if ((dragState.action === "playCard" || dragState.action === "playCardAuto") && dropZone === "player-base") {
         move = dragState.matchingMoves[0];
       } else {
         move = dragState.matchingMoves.find(m =>
@@ -256,6 +303,28 @@ document.addEventListener("pointerup", (e) => {
         animateCardFly(dragState.sourceEl, destEl, () => {
           executeMove(move.moveId, move.params, move.playerId);
         });
+      } else if (dragState.action === "playCardAuto" && typeof autoPayAndPlay === "function") {
+        // Auto-pay + play when no direct move exists but a cost plan does.
+        const destEl = document.querySelector(`[data-drop-zone="${CSS.escape(dropZone)}"]`);
+        animateCardFly(dragState.sourceEl, destEl, () => {
+          autoPayAndPlay(cardId);
+        });
+      }
+    } else if (unitDrop && dragState.zone === "hand" && typeof autoPayAndPlay === "function") {
+      // Equipment drag-onto-unit: single gesture that pays the cost and equips.
+      // Avoids the Rift Atlas anti-pattern of a separate "Equip" button that leaves
+      // the equipment on the base and fails to route the next click correctly.
+      const card = findCard(cardId);
+      if (card && (card.cardType === "gear" || card.cardType === "equipment")) {
+        const destEl = document.querySelector(`[data-card-id="${CSS.escape(unitDrop.unitId)}"]`);
+        animateCardFly(dragState.sourceEl, destEl, () => {
+          autoPayAndPlay(cardId, {
+            preferredMoveId: "playGear",
+            moveParamsOverrides: { chosenTargetId: unitDrop.unitId },
+          });
+        });
+      } else {
+        // Not equipment — snap back (no-op, ghost will be removed below).
       }
     }
 

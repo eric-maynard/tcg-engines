@@ -469,6 +469,21 @@ function renderCardElement(card, isFacedown = false, zone = "") {
     ? ""
     : `onpointerdown="onPointerDown(event, '${esc(card.id)}')"`;
 
+  // Workstream 7: render a compact Auto Pay button only on hand cards the viewing
+  // player owns. This gives a visible, clickable path that pays the card's cost and
+  // plays it in one action — alongside the drag-to-play and click-to-play paths.
+  // Inline styles keep the change scoped to this file (CSS is off-limits this pass).
+  let autoPayBtn = "";
+  if (zone === "hand" && isOwned && typeof canAutoPay === "function" && canAutoPay(card.id)) {
+    autoPayBtn = `<button
+      class="card-auto-pay-btn"
+      type="button"
+      title="Auto Pay and play this card"
+      onpointerdown="event.stopPropagation();"
+      onclick="event.stopPropagation(); autoPayAndPlay('${esc(card.id)}');"
+      style="position:absolute;left:4px;bottom:22px;padding:2px 6px;font-size:9px;font-weight:700;letter-spacing:0.5px;background:rgba(30,160,80,0.92);color:#eafff0;border:1px solid #7ff2a8;border-radius:3px;cursor:pointer;z-index:3;text-transform:uppercase;">Auto Pay</button>`;
+  }
+
   return `
     <div class="${classes.join(" ")}"
          data-card-id="${esc(card.id)}"
@@ -484,6 +499,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
       <img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(card.name)}"
            onerror="this.style.background='linear-gradient(135deg,#201a38,#2a2248)';this.alt='${esc(card.name)}'">
       ${card.meta?.damage > 0 ? `<div class="card-damage">${card.meta.damage}</div>` : ""}
+      ${autoPayBtn}
       <div class="card-name">${esc(card.name || "")}</div>
     </div>
   `;
