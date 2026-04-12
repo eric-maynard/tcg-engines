@@ -2265,3 +2265,308 @@
       transform: translateY(-2px);
       box-shadow: 0 4px 16px rgba(50,100,180,0.3);
     }
+
+    /* ============================================
+       Hotkeys — Armed mode banner + cursor
+       ============================================ */
+    .armed-banner {
+      position: fixed;
+      top: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9000;
+      padding: 8px 18px;
+      background: linear-gradient(135deg, #3a2060, #5a3090);
+      border: 2px solid #b080e0;
+      border-radius: 999px;
+      color: #f0e8ff;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      box-shadow: 0 4px 20px rgba(120, 80, 200, 0.4);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease-out;
+    }
+    .armed-banner.visible {
+      opacity: 1;
+    }
+    body.armed-mode .card {
+      cursor: crosshair;
+    }
+    body[data-armed-mode="counter"] .card { cursor: cell; }
+    body[data-armed-mode="buff"] .card { cursor: crosshair; }
+    body[data-armed-mode="target"] .card { cursor: crosshair; }
+    body[data-armed-mode="ping"] .card { cursor: help; }
+
+    /* ============================================
+       Hotkeys — Placeholder radial wheels (L / E)
+       ============================================ */
+    .radial-wheel {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.95);
+      z-index: 9100;
+      min-width: 240px;
+      padding: 16px 20px;
+      background: #1a1830;
+      border: 2px solid #4a3570;
+      border-radius: 14px;
+      color: #e0dced;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+    }
+    .radial-wheel.visible {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      pointer-events: auto;
+    }
+    .radial-wheel-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #8a82a6;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    .radial-wheel-opts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .radial-opt {
+      padding: 8px 12px;
+      background: #25213a;
+      border: 1px solid #3a3560;
+      border-radius: 6px;
+      color: #e0dced;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .radial-opt:hover {
+      background: #2e2946;
+      border-color: #6a50a0;
+    }
+    .radial-wheel-sub {
+      margin-top: 10px;
+      font-size: 10px;
+      color: #6a6288;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ============================================
+       Help modal — two-column shortcut reference
+       ============================================ */
+    /* Ensure the sidebar is a positioned ancestor so the help button and
+       onboarding hint (both position: absolute) anchor to it. */
+    #gameSidebar {
+      position: relative;
+    }
+    .help-info-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 10;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #2a2050, #3a2a70);
+      border: 2px solid #7a50c0;
+      color: #d0b0f0;
+      font-family: Georgia, serif;
+      font-style: italic;
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: all 0.15s;
+    }
+    .help-info-btn:hover {
+      background: linear-gradient(135deg, #3a2a70, #4a3580);
+      border-color: #a080d0;
+      color: #f0e0ff;
+      transform: scale(1.05);
+    }
+    .help-modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: rgba(8, 6, 18, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease-out;
+    }
+    .help-modal-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .help-modal-box {
+      position: relative;
+      max-width: 720px;
+      width: calc(100% - 40px);
+      max-height: calc(100vh - 80px);
+      overflow-y: auto;
+      background: #16142a;
+      border: 2px solid #3a3560;
+      border-radius: 12px;
+      padding: 28px 32px 20px;
+      color: #e0dced;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    }
+    .help-modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #f0e8ff;
+      margin-bottom: 20px;
+      letter-spacing: 0.5px;
+    }
+    .help-modal-close {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: #8a82a6;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: all 0.15s;
+    }
+    .help-modal-close:hover {
+      background: #25213a;
+      border-color: #3a3560;
+      color: #e0dced;
+    }
+    .help-modal-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+    }
+    .help-col-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #c4a0ff;
+      margin-bottom: 4px;
+    }
+    .help-col-sub {
+      font-size: 11px;
+      color: #6a6288;
+      margin-bottom: 10px;
+    }
+    .help-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .help-table td {
+      padding: 6px 4px;
+      border-bottom: 1px solid #23203a;
+      vertical-align: top;
+    }
+    .help-table tr:last-child td {
+      border-bottom: none;
+    }
+    .help-keys {
+      white-space: nowrap;
+      width: 110px;
+    }
+    .help-keys kbd,
+    .help-modal-footer kbd {
+      display: inline-block;
+      padding: 2px 7px;
+      margin-right: 3px;
+      background: #23203a;
+      border: 1px solid #3a3560;
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      color: #d0c8e8;
+      font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+    .help-action {
+      color: #c8c2dc;
+    }
+    .help-modal-footer {
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 1px solid #23203a;
+      font-size: 11px;
+      color: #6a6288;
+      text-align: center;
+    }
+
+    /* ============================================
+       Onboarding hint banner
+       ============================================ */
+    .onboarding-hint {
+      position: absolute;
+      top: 40px;
+      right: 8px;
+      z-index: 20;
+      max-width: 220px;
+      padding: 10px 28px 10px 12px;
+      background: linear-gradient(135deg, #2a2050, #3a2a70);
+      border: 1px solid #7a50c0;
+      border-radius: 8px;
+      color: #e0dced;
+      font-size: 11px;
+      line-height: 1.4;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+      animation: onboarding-pop 0.3s ease-out;
+    }
+    .onboarding-hint strong {
+      color: #c4a0ff;
+      font-style: italic;
+      font-family: Georgia, serif;
+    }
+    .onboarding-hint-close {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 20px;
+      height: 20px;
+      background: transparent;
+      border: none;
+      color: #8a82a6;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+    }
+    .onboarding-hint-close:hover {
+      color: #e0dced;
+    }
+    @keyframes onboarding-pop {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 720px) {
+      .help-modal-columns {
+        grid-template-columns: 1fr;
+        gap: 18px;
+      }
+    }

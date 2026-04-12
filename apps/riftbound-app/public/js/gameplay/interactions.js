@@ -10,6 +10,12 @@ function switchPlayer(pid) {
 }
 
 function onCardClick(cardId) {
+  // If an armed hold-to-arm mode (C/B/T/L/E/P) is active, the click goes to
+  // the armed-mode handler instead of the default selection behavior.
+  if (typeof isArmed === "function" && isArmed()) {
+    if (handleArmedCardClick(cardId)) return;
+  }
+
   // If we are in awaitTarget mode and the clicked card is a valid target, execute
   // (this would be relevant for card-targeting in the future)
 
@@ -556,3 +562,17 @@ function executeInteractionMove(moveId, abilityIndex) {
   executeMove(move.moveId, move.params, move.playerId);
   cancelInteraction();
 }
+
+// Wire global hotkeys + help modal once the DOM is ready. Both modules expose
+// their init entry points on `window` via hotkeys.js / help-modal.js.
+(function wireHotkeysAndHelp() {
+  function go() {
+    if (typeof initHotkeys === "function") initHotkeys();
+    if (typeof initHelpModal === "function") initHelpModal();
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", go, { once: true });
+  } else {
+    go();
+  }
+})();
