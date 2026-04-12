@@ -1,7 +1,34 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Atakhan — unl-170-219
+ *
+ * - Optional additional cost: kill a friendly unit → cost reduction (not
+ *   representable in Effect union; omitted).
+ * - [Ganking]
+ * - When I attack, the defender must kill one of their units here.
+ */
+const abilities: Ability[] = [
+  { keyword: "Ganking", type: "keyword" },
+  {
+    effect: {
+      player: "opponent",
+      target: {
+        controller: "enemy",
+        location: "here",
+        type: "unit",
+      },
+      type: "kill",
+    },
+    trigger: { event: "attack", on: "self" },
+    type: "triggered",
+  },
+];
+
 export const atakhan: UnitCard = {
+  abilities,
   cardNumber: 170,
   cardType: "unit",
   domain: "order",

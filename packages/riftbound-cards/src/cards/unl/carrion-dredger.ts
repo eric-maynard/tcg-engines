@@ -1,7 +1,32 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Carrion Dredger — unl-153-219
+ *
+ * [Deathknell][>] Play a 1 [Might] Bird unit token with [Deflect] to
+ * your base.
+ */
+const abilities: Ability[] = [
+  {
+    effect: {
+      location: "base",
+      token: {
+        keywords: ["Deflect"],
+        might: 1,
+        name: "Bird",
+        type: "unit",
+      },
+      type: "create-token",
+    },
+    keyword: "Deathknell",
+    type: "keyword",
+  },
+];
+
 export const carrionDredger: UnitCard = {
+  abilities,
   cardNumber: 153,
   cardType: "unit",
   domain: "order",

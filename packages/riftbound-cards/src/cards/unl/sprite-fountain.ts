@@ -1,7 +1,43 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { GearCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Sprite Fountain — unl-078-219 (Gear)
+ *
+ * [Temporary]
+ * When you play this, play a ready 3 [Might] Sprite unit token with
+ * [Temporary] to your base.
+ * [Deathknell][>] Repeat this gear's play effect.
+ */
+const spriteTokenEffect = {
+  location: "base" as const,
+  ready: true,
+  token: {
+    keywords: ["Temporary"],
+    might: 3,
+    name: "Sprite",
+    type: "unit" as const,
+  },
+  type: "create-token" as const,
+};
+
+const abilities: Ability[] = [
+  { keyword: "Temporary", type: "keyword" },
+  {
+    effect: spriteTokenEffect,
+    trigger: { event: "play-self" },
+    type: "triggered",
+  },
+  {
+    effect: spriteTokenEffect,
+    keyword: "Deathknell",
+    type: "keyword",
+  },
+];
+
 export const spriteFountain: GearCard = {
+  abilities,
   cardNumber: 78,
   cardType: "gear",
   domain: "mind",

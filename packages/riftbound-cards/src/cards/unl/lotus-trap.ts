@@ -1,7 +1,29 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { SpellCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Lotus Trap — unl-013-219 (Reaction spell)
+ *
+ * [Hidden]
+ * Choose a unit. Double all damage that would be dealt to it this turn.
+ */
+const abilities: Ability[] = [
+  { keyword: "Hidden", type: "keyword" },
+  {
+    effect: {
+      duration: "turn",
+      keyword: "DoubleIncomingDamage",
+      target: { type: "unit" },
+      type: "grant-keyword",
+    },
+    timing: "reaction",
+    type: "spell",
+  },
+];
+
 export const lotusTrap: SpellCard = {
+  abilities,
   cardNumber: 13,
   cardType: "spell",
   domain: "fury",

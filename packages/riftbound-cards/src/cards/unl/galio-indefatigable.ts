@@ -1,7 +1,29 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Galio, Indefatigable — unl-171-219
+ *
+ * [Deflect]
+ * [Tank]
+ * I don't deal combat damage.
+ */
+const abilities: Ability[] = [
+  { keyword: "Deflect", type: "keyword", value: 1 },
+  { keyword: "Tank", type: "keyword" },
+  {
+    effect: {
+      keyword: "NoCombatDamage",
+      target: "self",
+      type: "grant-keyword",
+    },
+    type: "static",
+  },
+];
+
 export const galioIndefatigable: UnitCard = {
+  abilities,
   cardNumber: 171,
   cardType: "unit",
   domain: "order",

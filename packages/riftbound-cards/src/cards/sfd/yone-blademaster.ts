@@ -1,7 +1,37 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Yone, Blademaster — sfd-116-221
+ *
+ * [Weaponmaster]
+ * When I conquer a battlefield that was uncontrolled, deal damage equal
+ * to my Might to an enemy unit in a base.
+ *
+ * The "was uncontrolled" qualifier is not expressible yet. Approximated
+ * as a conquer trigger that deals self-might damage to an enemy unit in
+ * a base.
+ */
+const abilities: Ability[] = [
+  { keyword: "Weaponmaster", type: "keyword" },
+  {
+    effect: {
+      amount: { might: "self" },
+      target: {
+        controller: "enemy",
+        location: "base",
+        type: "unit",
+      },
+      type: "damage",
+    },
+    trigger: { event: "conquer", on: "self" },
+    type: "triggered",
+  },
+];
+
 export const yoneBlademaster: UnitCard = {
+  abilities,
   cardNumber: 116,
   cardType: "unit",
   domain: "body",

@@ -1,7 +1,28 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Vi, Hotheaded — unl-030-219
+ *
+ * [Deflect]
+ * [2][fury]: Double my Might this turn.
+ */
+const abilities: Ability[] = [
+  { keyword: "Deflect", type: "keyword", value: 1 },
+  {
+    cost: { energy: 2, power: ["fury"] },
+    effect: {
+      duration: "turn",
+      target: "self",
+      type: "double-might",
+    },
+    type: "activated",
+  },
+];
+
 export const viHotheaded: UnitCard = {
+  abilities,
   cardNumber: 30,
   cardType: "unit",
   domain: "fury",
