@@ -794,23 +794,61 @@ function formatLogEntry(raw) {
   return text;
 }
 
+/**
+ * Normalize a log entry into a consistent shape.
+ *
+ * The server may emit either plain strings (legacy callers) or structured
+ * LogEntry objects with `{ text, timestamp, rewindable, key }`. This helper
+ * shields the render path from that variance.
+ */
+function normalizeLogEntry(entry) {
+  if (typeof entry === "string") {
+    return { text: entry, timestamp: "", rewindable: false };
+  }
+  return {
+    text: entry?.text ?? "",
+    timestamp: entry?.timestamp ?? "",
+    rewindable: Boolean(entry?.rewindable),
+    key: entry?.key,
+  };
+}
+
+/**
+ * Build the inner HTML for a single log entry. Returns a row with a
+ * monospaced timestamp gutter, the narration text, and an optional
+ * clickable rewind (↺) marker. Rewind wiring lands in Workstream 8.
+ */
+function renderLogEntryRow(entry) {
+  const normalized = normalizeLogEntry(entry);
+  let text = esc(formatLogEntry(normalized.text));
+  text = text.replace(/\bP1\b/g, '<span class="log-player">P1</span>');
+  text = text.replace(/\bP2\b/g, '<span class="log-player" style="color:#e09060">P2</span>');
+
+  const timestamp = normalized.timestamp
+    ? `<span class="log-timestamp" style="opacity:0.55;font-size:0.8em;margin-right:6px;font-variant-numeric:tabular-nums">${esc(normalized.timestamp)}</span>`
+    : "";
+  const rewindMark = normalized.rewindable
+    ? ` <span class="log-rewind" role="button" tabindex="0" title="Rewind to this point" style="cursor:pointer;opacity:0.55;margin-left:4px" onclick="handleRewindClick(event)">&#x21BA;</span>`
+    : "";
+
+  return `<div class="log-entry">${timestamp}<span class="log-text">${text}</span>${rewindMark}</div>`;
+}
+
 function renderLog() {
   const log = gameState.log || [];
+  const logEl = document.getElementById("gameLog");
+  // Preserve user scroll position if they've scrolled back to review older entries.
+  // The log renders newest-at-top, so "near the top" means scrollTop is small.
+  const wasAtNewest = !logEl || logEl.scrollTop < 32;
+
   document.getElementById("logEntries").innerHTML = log
     .slice()
     .reverse()
-    .map(entry => {
-      // Highlight player references
-      let html = esc(formatLogEntry(entry));
-      html = html.replace(/\bP1\b/g, '<span class="log-player">P1</span>');
-      html = html.replace(/\bP2\b/g, '<span class="log-player" style="color:#e09060">P2</span>');
-      return `<div class="log-entry">${html}</div>`;
-    })
+    .map(renderLogEntryRow)
     .join("");
 
-  // Auto-scroll log to top (newest entries)
-  const logEl = document.getElementById("gameLog");
-  if (logEl) logEl.scrollTop = 0;
+  // Auto-scroll log to top (newest entries) only when the user was already there
+  if (logEl && wasAtNewest) logEl.scrollTop = 0;
 
   // Update undo/redo button state
   const undoBtn = document.getElementById("undoBtn");
@@ -821,10 +859,26 @@ function renderLog() {
 
 function addLogEntry(text) {
   const el = document.getElementById("logEntries");
-  let html = esc(text);
-  html = html.replace(/\bP1\b/g, '<span class="log-player">P1</span>');
-  html = html.replace(/\bP2\b/g, '<span class="log-player" style="color:#e09060">P2</span>');
-  el.innerHTML = `<div class="log-entry">${html}</div>` + el.innerHTML;
+  el.innerHTML = renderLogEntryRow({ text, timestamp: formatNowForLog(), rewindable: false }) + el.innerHTML;
+}
+
+/** Format "now" as HH:MM in local time for optimistic client-side log rows. */
+function formatNowForLog() {
+  const d = new Date();
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+/**
+ * Click handler for the rewind marker on rewindable log entries.
+ *
+ * Workstream 3 only renders the marker — the wiring to the rewind engine
+ * arrives in Workstream 8. For now the handler is a no-op visual cue.
+ */
+function handleRewindClick(event) {
+  event.stopPropagation();
+  // Intentional no-op: rewind-to-point wiring lands in Workstream 8.
 }
 
 function requestUndo() {
