@@ -149,6 +149,10 @@
 
   <!-- Sidebar (hidden until game is playing) -->
   <div class="sidebar hidden" id="gameSidebar">
+    <!-- Help / keyboard shortcuts button. Lives outside sidebarHeader because
+         that element's innerHTML is overwritten on each render. -->
+    <button id="helpInfoBtn" type="button" class="help-info-btn" aria-label="Keyboard shortcuts and tips"
+            title="Keyboard shortcuts (?)" onclick="openHelpModal()">i</button>
     <div class="sidebar-header" id="sidebarHeader"></div>
     <div class="actions-panel" id="actionsPanel">
       <div class="actions-title">Available Actions</div>
@@ -266,6 +270,8 @@
 <script src="/js/gameplay/game-flow.js"></script>
 <script src="/js/gameplay/renderer.js"></script>
 <script src="/js/gameplay/combat.js"></script>
+<script src="/js/gameplay/hotkeys.js"></script>
+<script src="/js/gameplay/help-modal.js"></script>
 <script src="/js/gameplay/interactions.js"></script>
 <script src="/js/gameplay/drag-drop.js"></script>
 <script src="/js/gameplay/overlays.js"></script>
