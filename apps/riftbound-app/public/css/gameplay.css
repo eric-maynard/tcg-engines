@@ -12,11 +12,33 @@
 
     /* ============================================
        App Layout: Board + Sidebar
+
+       Uses a proportional scale-to-fit approach:
+       - .app is a viewport-sized centering container
+       - #game-scale-wrapper is a fixed 1920x1080 logical layout
+       - layout.js applies transform: scale(N) to fit the viewport
+       - Everything inside (.board + .sidebar) keeps its original
+         pixel metrics; only the wrapper is scaled.
        ============================================ */
     .app {
-      display: flex;
+      position: relative;
       height: calc(100vh - 40px);
       width: 100vw;
+      overflow: hidden;
+    }
+
+    #game-scale-wrapper {
+      /* Fixed logical size — all descendants are sized for this canvas */
+      width: 1920px;
+      height: 1080px;
+      /* Center in .app and scale from the center */
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform-origin: center center;
+      /* Initial transform: translate(-50%, -50%) — layout.js appends scale */
+      transform: translate(-50%, -50%);
+      display: flex;
     }
 
     .board {
@@ -36,6 +58,37 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+    }
+
+    /* Resize banner — shown when viewport is too small for minimum scale */
+    #scale-resize-banner {
+      position: fixed;
+      inset: 40px 0 0 0;
+      background: #0a0914;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    #scale-resize-banner.hidden { display: none; }
+    .scale-resize-banner-inner {
+      text-align: center;
+      padding: 32px 48px;
+      background: #12111d;
+      border: 1px solid #2a2740;
+      border-radius: 12px;
+      max-width: 80vw;
+    }
+    .scale-resize-title {
+      color: #c4a0ff;
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+    .scale-resize-msg {
+      color: #8a82a6;
+      font-size: 14px;
     }
 
     /* ============================================
