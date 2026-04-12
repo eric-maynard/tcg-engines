@@ -11,10 +11,15 @@ import { parseAbilities } from "../parser";
 /**
  * Enrich a single card with parsed abilities.
  * If the card already has abilities or has no rulesText, returns as-is.
+ *
+ * NOTE: Any card that declares an explicit `abilities` property (even an
+ * empty array) is considered hand-authored and will NOT be re-parsed. This
+ * lets us opt out of the parser entirely for deferred cards by setting
+ * `abilities: []` alongside a TODO comment.
  */
 function enrichCard(card: Card): Card {
-  // Skip if already has abilities or no text to parse
-  if (card.abilities && card.abilities.length > 0) {
+  // Skip if the card declares an explicit abilities array (hand-authored opt-out)
+  if (card.abilities !== undefined) {
     return card;
   }
   if (!card.rulesText || card.rulesText.trim().length === 0) {
@@ -26,8 +31,8 @@ function enrichCard(card: Card): Card {
     return card;
   }
 
-  // Extract the Ability objects from AbilityWithText wrappers
-  const abilities = result.abilities.map((a) => a.ability);
+  // ParseAbilities returns Ability[] directly
+  const {abilities} = result;
 
   // Return a new card object with abilities attached
   return { ...card, abilities } as Card;

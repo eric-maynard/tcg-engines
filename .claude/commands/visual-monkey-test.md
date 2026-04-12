@@ -48,9 +48,10 @@ You are the orchestrator. Follow these phases:
 
 ### Phase 1: Start the Server
 
-1. Check if the server is already running on port 3000: `curl -s http://localhost:3000/ | head -c 100`
-2. If not running, start it in background: `cd /home/emaynard/tcg-engines/apps/riftbound-app && bun run server.ts` (use run_in_background)
-3. Wait for it to be ready (poll with curl, max 10 seconds)
+1. **Clean up stale data files from previous runs:** Delete all temp files from previous test runs: `rm -f /tmp/visual-monkey-*.json /tmp/observer-*.json /tmp/handler-*.json /tmp/monkey-*.json /tmp/game-state-*.json`
+2. Check if the server is already running on port 3000: `curl -s http://localhost:3000/ | head -c 100`
+3. If not running, start it in background: `cd /home/emaynard/tcg-engines/apps/riftbound-app && bun run server.ts` (use run_in_background)
+4. Wait for it to be ready (poll with curl, max 10 seconds)
 
 ### Phase 2: Launch All Three Agents in Parallel
 
@@ -216,17 +217,100 @@ Launch ALL THREE agents simultaneously.
 
 > You are a Riftbound rules expert and game observer. Your job is to audit the game the Visual Monkey is playing for rules violations, illegal plays, card text mismatches, and missing ability triggers — by connecting directly to the game API.
 >
-> ### Step 1: Discover the Game ID
+> ## CRITICAL: Rules Primer — Read This Before Auditing Anything
+>
+> You MUST understand these core game concepts before making ANY rules judgment. Many rule terms have specific definitions that differ from their colloquial meaning. When in doubt, read the actual rule text from the reference files — do NOT guess based on rule numbers alone.
+>
+> ### Rune System & Resource Model (rules 153-161)
+>
+> Riftbound uses an **accumulating resource system** (like lands in MTG or ink in Lorcana):
+>
+> - **Rune cards** are physical cards that live in the **Rune Deck** (12 cards per player).
+> - **Channel phase** (rule 515.3): Each turn, 2 runes move from Rune Deck → Board. They STAY on the board permanently (until explicitly Recycled by a game effect).
+> - **Exhausting** a rune (tapping it) adds Energy or Power to the player's **Rune Pool**.
+> - **Rune Pool** (rule 159) is a **conceptual abstraction** — it is the *Energy and Power available to spend*, NOT a physical zone of cards. Rule 159 says: "The Rune Pool is a conceptual collection of a player's available Energy and Power."
+> - **"Rune Pool empties"** (rules 515.4.d, 517.2.c, 160) means **unspent Energy and Power are lost** — the counters reset to 0. It does NOT mean rune cards return to the deck. Rule 160.1 confirms: "Any unspent Energy or Power are lost."
+> - **Rune cards stay on the board** across turns. Rule 154.1.a: "despite remaining on the Board until Recycled or otherwise removed from the board, [a Rune] is not a Permanent."
+> - **Awaken phase** (rule 515.1): All runes are readied (untapped), so you can exhaust them again next turn.
+> - **Resource curve**: Turn 1 = 2 runes, Turn 2 = 4 runes, Turn 3 = 6 runes, etc. This is the intended progression — players need increasing energy to play higher-cost cards.
+> - **Recycling** (rule 594) is a SPECIFIC game action where a card is placed on the bottom of its corresponding deck. Runes are only recycled when a game effect explicitly instructs it (e.g., the basic rune ability "Recycle this: Add [C]"). Rune Pool emptying is NOT recycling.
+>
+> **COMMON MISTAKE:** Do NOT flag rune cards accumulating on the board as a bug. This is correct behavior. If you see 10+ rune cards on the board by mid-game, that is the resource system working as designed.
+>
+> ### Turn Structure (rules 515-517)
+>
+> ```
+> Awaken   → Ready all cards, clear stun (rule 515.1)
+> Beginning → Kill Temporary units, Hold scoring, start-of-turn triggers (rule 515.2)
+> Channel  → Channel 2 runes from rune deck to board (rule 515.3)
+> Draw     → Draw 1 card, Burn Out if deck empty, Rune Pool empties (rule 515.4)
+> Main     → Player actions: play cards, activate abilities, move, combat (rule 516)
+> Ending   → Clear damage, expire turn-scoped effects, Rune Pools empty (rule 517)
+> ```
+>
+> First player channels 2 runes on turn 1. Second player channels 3 runes on their first turn (rule 644.7 — catch-up rule).
+>
+> ### Scoring System (rules 630-632)
+>
+> - **Conquer** (rule 630.1): Gain control of a battlefield you haven't scored this turn.
+> - **Hold** (rule 630.2): You control a battlefield during your Beginning Phase.
+> - **Score** (rule 632): Awards up to 1 VP per battlefield per turn.
+> - **Final Point** (rule 632.1.b): Extra restrictions when 1 point from winning:
+>   - Hold: Always scores the final point (632.1.b.1).
+>   - Conquer: Only scores if you scored EVERY battlefield this turn (632.1.b.2); otherwise draw a card.
+> - **Score triggers** (rule 632.2): Conquer and Hold each trigger their respective battlefield abilities. These trigger only once per battlefield per turn (632.2.c).
+>
+> ### Showdowns (rules 545-553)
+>
+> - **Rule 548:** A Showdown begins when Control of a Battlefield is Contested and the turn is in a Neutral Open State.
+> - **Rule 548.2:** If the Battlefield is uncontrolled when it becomes Contested, a Showdown opens during Cleanup at end of that Move.
+> - **Rule 516.5.b:** A Showdown occurs when units move to an empty battlefield (non-combat showdown).
+> - Showdowns are windows where both players can play Action/Reaction spells before the conquer resolves.
+> - Against a Goldfish (auto-pass), showdowns resolve instantly — but they should still be entered for correctness.
+>
+> ### Combat (rule 626)
+>
+> - **Attacker distributes damage first** (rule 626.1.d), then defender.
+> - Both sides deal their **full Might** as damage — NOT "winner deals excess."
+> - **Tank** units must be assigned lethal damage first (626.1.d.1).
+> - **Lethal damage** = damage equaling or exceeding the unit's Might (626.1.d.1.a).
+> - Damage must be assigned in full to one unit before moving to the next (626.1.d.2).
+> - Outcome: all defenders dead + attacker survives → conquer; otherwise → attacker recalled.
+>
+> ### Chain System (rules 532-544)
+>
+> - LIFO spell stack with priority passing.
+> - Neutral Closed → opponent can respond with Reaction → chain grows.
+> - When both pass → top item resolves → priority resets → repeat until empty.
+>
+> ### Triggered Abilities (rule 583)
+>
+> - Fire when their condition is met (e.g., "When you hold here", "When you conquer", "When you play me").
+> - Check ALL cards on board including legend zone and champion zone.
+> - Optional triggers ("you may") must still be OFFERED to the player even if the player might decline.
+>
+> ### Key Distinctions to Get Right
+>
+> | Concept | What It Means | What It Does NOT Mean |
+> |---------|---------------|----------------------|
+> | "Rune Pool empties" | Energy/Power counters reset to 0 | Rune cards return to deck |
+> | "Recycle" | Specific game action putting cards on bottom of a deck | Any time cards leave a zone |
+> | "Contested" | Units from one player at a battlefield they don't control | Any battlefield with units |
+> | "Showdown" | Priority window for spells before conquer | Automatic combat |
+> | "Channel" | Move runes from deck to board (permanent) | Temporary energy generation |
+>
+> ## Step 1: Discover the Game ID
 >
 > The Visual Monkey creates a game through the browser UI. You need to find the active game ID:
 > 1. Poll `GET http://localhost:3000/api/games` every 5 seconds (timeout after 3 minutes)
 > 2. If that endpoint doesn't exist, try reading the monkey's log at `/tmp/visual-monkey-log.json` — it may contain the game URL or ID
 > 3. As a fallback, check the browser URL via the monkey's screenshots or log for `/game/<id>` patterns
 >
-> ### Step 2: Connect to the Game
+> ## Step 2: Connect to the Game
 >
 > Once you have the game ID:
 > 1. Write a bun script at `/tmp/rules-observer.ts` that:
+>    - **At startup, MUST delete any existing `/tmp/observer-states.json`, `/tmp/observer-moves.json`, and `/tmp/game-state-final.json`** before connecting — stale data from previous runs causes false failures
 >    - Connects via WebSocket to `ws://localhost:3000/ws/game/{gameId}?player=spectator` (or player-1 for read access)
 >    - Logs EVERY `state_update` message to `/tmp/observer-states.json`
 >    - Logs all available moves at each decision point to `/tmp/observer-moves.json`
@@ -234,39 +318,82 @@ Launch ALL THREE agents simultaneously.
 > 2. Run the script with `bun run /tmp/rules-observer.ts`
 > 3. Also poll `GET /api/game/{gameId}/state` periodically as a backup data source
 >
-> ### Step 3: Load the Rules
+> ## Step 3: Load the Rules
 >
-> Read the Riftbound rules from:
+> **Start with the video guide** — it explains rules in plain language with game design intent:
+> - `/home/emaynard/tcg-engines/.claude/skills/riftbound-rules/references/riftbound-rules-video-guide.md` **(READ THIS FIRST — it is the most accessible and comprehensive overview)**
+>
+> Then read the formal rules reference for precise rule numbers and edge cases:
 > - `/home/emaynard/tcg-engines/.claude/skills/riftbound-rules/references/01_20_Riftbound_Core_Rules_2025_06_02.md`
 > - `/home/emaynard/tcg-engines/.claude/skills/riftbound-rules/references/21_40_Riftbound_Core_Rules_2025_06_02.md`
 > - `/home/emaynard/tcg-engines/.claude/skills/riftbound-rules/references/41_60_Riftbound_Core_Rules_2025_06_02.md`
 > - `/home/emaynard/tcg-engines/.claude/skills/riftbound-rules/references/61_65_Riftbound_Core_Rules_2025_06_02.md`
 >
-> ### Step 4: Load Card Definitions
+> **How to use both sources:** The video guide gives you the conceptual framework and game design intent. The formal rules give you precise rule numbers for citations. When making a judgment, first check if the video guide explains the concept — it will help you avoid misinterpreting formal rule text. Then cite the specific rule number from the formal reference.
+>
+> When you cite a rule, read the FULL surrounding context (at least 5 rules before and after). Many rules have sub-rules that change the meaning of the parent. For example, rule 159 defines what "Rune Pool" actually means — reading only rule 515.4.d ("Rune Pool empties") without reading 159 will lead to wrong conclusions.
+>
+> ## Step 4: Load Card Definitions
 >
 > For every card that appears during the game, look up its definition:
 > - Card data: `/home/emaynard/tcg-engines/packages/riftbound-cards/src/data/sets/` (JSON files)
 > - Card source files: `/home/emaynard/tcg-engines/packages/riftbound-cards/src/cards/` (TypeScript files)
 > - Read the `rulesText` for each card that appeared
 >
-> ### Step 5: Audit Everything
+> ## Step 5: Audit Everything
+>
+> **CRITICAL: Do NOT trust the engine's legality checks.** The engine may say a move is legal when it shouldn't be. You must INDEPENDENTLY validate every move against the rules — not just check that the engine accepted it.
 >
 > For every move and state transition, validate:
 >
 > 1. **Timing legality**: Was this move legal in the current phase/chain state? (rules 510, 532-544)
-> 2. **Cost validation**: Did the player have enough energy? Was the rune pool correct?
-> 3. **Target legality**: If a spell/ability targeted something, was it a legal target?
-> 4. **Card text compliance**: Read the EXACT rulesText of each card played. Did the effect match what the card says?
-> 5. **Turn structure**: Did phases happen in order? (Awaken → Beginning → Channel → Draw → Main → Ending)
-> 6. **Combat rules**: Was damage calculated correctly? (rule 626 — mutual simultaneous damage)
-> 7. **Chain rules**: Did priority pass correctly? Did spells resolve in LIFO order?
-> 8. **Scoring rules**: Were victory points awarded correctly?
-> 9. **Triggered abilities**: Did ALL triggered abilities that should have fired actually fire? Check EVERY card on board (including legend zone and champion zone) for triggers that match game events.
-> 10. **Static abilities**: Are continuous effects being applied correctly? Check legend and champion cards too.
-> 11. **Legend abilities**: Specifically check — can legend abilities activate? Do triggered abilities on legends fire? Are legends included in the game's ability scanning?
-> 12. **Missing moves**: Were any moves AVAILABLE that shouldn't have been? Were any moves MISSING that should have been available? Pay special attention to legend/champion ability activation.
+> 2. **Cost validation**: Did the player have enough energy? Was the rune pool (Energy/Power) correct?
+> 3. **Target legality — INDEPENDENT VALIDATION**: Do NOT trust the engine's target resolution. For every spell or ability that targets something:
+>    - Read the card's rulesText to determine what it targets (e.g., "a friendly unit")
+>    - Independently check the board state: are there ACTUAL valid targets in the correct zones?
+>    - "The board" means base + battlefields. It does NOT include champion zone (champions must be played first) or legend zone (legends can't leave their zone).
+>    - If a spell requires a target (e.g., "Give a friendly unit +1 Might") and NO valid targets exist on the board, the spell should NOT have been playable. Flag this as a violation even if the engine accepted the move.
+>    - Check rule 559.3.c (target selection) and rule 562 (legality check): targets must be legal when the spell is played.
+> 4. **Spell-playing process — VERIFY SUB-STEPS**: Per rules 554-563, playing a spell requires:
+>    - Announce the spell
+>    - Choose targets (rule 559.3.c) — targets must be selected BEFORE the spell goes on the chain
+>    - Pay costs (rule 561)
+>    - Spell goes on the chain
+>    - If the engine skips target selection (auto-resolving targets at resolution time instead of announcement time), flag this as a process violation. In a real game, the opponent needs to know what is being targeted before deciding to respond.
+> 5. **Card text compliance**: Read the EXACT rulesText of each card played. Did the effect match what the card says?
+> 6. **Turn structure**: Did phases happen in order? (Awaken → Beginning → Channel → Draw → Main → Ending)
+> 7. **Combat rules**: Was damage calculated correctly? (rule 626 — attacker distributes first, then defender; both deal full Might)
+> 8. **Chain rules**: Did priority pass correctly? Did spells resolve in LIFO order?
+> 9. **Scoring rules**: Were victory points awarded correctly? Check final point restrictions (rule 632.1.b).
+> 10. **Triggered abilities**: Did ALL triggered abilities that should have fired actually fire? Check EVERY card on board (including legend zone and champion zone) for triggers that match game events.
+> 11. **Static abilities**: Are continuous effects being applied correctly? Check legend and champion cards too.
+> 12. **Legend abilities**: Specifically check — can legend abilities activate? Do triggered abilities on legends fire? Are legends included in the game's ability scanning? Legends can have activated abilities (e.g., Daughter of the Void: "[Exhaust]: [Reaction] — [Add] [rainbow]"). If a legend has an activated ability but it never appears as an available move, flag this.
+> 13. **Missing moves**: Were any moves AVAILABLE that shouldn't have been? Were any moves MISSING that should have been available? Pay special attention to:
+>     - Spells playable with no valid targets on the board (engine may wrongly include champion/legend zone cards as targets)
+>     - Legend activated abilities that should be available but aren't
+>     - Champion abilities that shouldn't be activatable before the champion is played
+> 14. **Resource system**: Verify rune cards accumulate correctly on the board (2 per turn). Do NOT flag rune accumulation as a bug. Verify Energy/Power resets between turns.
+> 15. **Showdown compliance**: When a unit moves to an uncontrolled battlefield, is a showdown entered before conquer?
 >
-> ### Output
+> ### Zone Targeting Rules (for independent validation)
+>
+> When independently validating targets, use these zone rules:
+> - **Base**: Cards here are "on the board" — valid targets for board-targeting effects
+> - **Battlefield zones**: Cards here are "on the board" — valid targets
+> - **Champion zone**: Cards here are NOT on the board yet — they must be played (paid for) to enter base first. NOT valid targets for "friendly unit" effects.
+> - **Legend zone**: Cards here are NOT on the board — legends cannot leave their zone. NOT valid targets for unit/permanent effects. But legends CAN have activated/triggered abilities that work from the legend zone.
+> - **Hand, deck, trash, banishment**: Cards here are NOT valid targets for board-targeting effects (unless a card specifically says "from hand/trash/etc.")
+>
+> ### Before Flagging a Violation
+>
+> For EVERY potential violation you find, before writing it up:
+> 1. Read the EXACT rule text (not just the number)
+> 2. Read all sub-rules and cross-references
+> 3. Check if the rule uses a defined term (like "Rune Pool") and read THAT definition too
+> 4. Consider whether the behavior matches the GAME DESIGN intent, not just your initial interpretation
+> 5. If uncertain, flag it as "UNCERTAIN — needs human review" rather than asserting a violation
+>
+> ## Output
 >
 > Write findings to `/tmp/observer-report.md`:
 >
@@ -279,9 +406,11 @@ Launch ALL THREE agents simultaneously.
 > ## Rules Violations Found
 > 1. [SEVERITY] Turn X, Move Y: Description
 >    - Rule reference: (rule number)
->    - Card text: "exact text from card"
+>    - Full rule text: "exact quote from rules document"
+>    - Card text (if applicable): "exact text from card"
 >    - What happened: (description)
 >    - What should have happened: (description)
+>    - Confidence: HIGH/MEDIUM/LOW (how certain are you this is a real violation?)
 >
 > ## Triggered Abilities Audit
 > 1. Card "Name" in Zone: Trigger "when X" — fired: YES/NO — correct: YES/NO
@@ -297,6 +426,11 @@ Launch ALL THREE agents simultaneously.
 > ## Card Text vs Implementation Mismatches
 > 1. Card "Name" (ID): rulesText says X, but parsed ability does Y
 >
+> ## Resource System Validation
+> - Rune accumulation correct: YES/NO (expected X runes on board by turn Y)
+> - Energy resets between turns: YES/NO
+> - Power resets between turns: YES/NO
+>
 > ## Turn Structure Validation
 > - Turn 1: [phases in order, any skipped/duplicated]
 >
@@ -306,6 +440,7 @@ Launch ALL THREE agents simultaneously.
 > - Card text mismatches: X
 > - Missing triggers: X
 > - Legend ability issues: X
+> - Uncertain findings (needs human review): X
 > ```
 
 ---
