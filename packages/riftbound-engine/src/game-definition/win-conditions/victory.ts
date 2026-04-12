@@ -8,6 +8,37 @@
 import type { PlayerId, RiftboundGameState } from "../../types";
 
 /**
+ * Get the effective victory score threshold for a player.
+ *
+ * Returns `state.victoryScore + player.victoryScoreModifier`, which is the
+ * number of victory points the player must reach to win. The modifier is
+ * bumped by battlefields like Aspirant's Climb (via the
+ * `increase-victory-score` effect).
+ */
+export function getEffectiveVictoryScore(
+  state: RiftboundGameState,
+  playerId: PlayerId,
+): number {
+  const player = state.players[playerId];
+  const modifier = player?.victoryScoreModifier ?? 0;
+  return state.victoryScore + modifier;
+}
+
+/**
+ * Check if a given player currently meets their effective victory threshold.
+ */
+export function hasPlayerWon(
+  state: RiftboundGameState,
+  playerId: PlayerId,
+): boolean {
+  const player = state.players[playerId];
+  if (!player) {
+    return false;
+  }
+  return player.victoryPoints >= getEffectiveVictoryScore(state, playerId);
+}
+
+/**
  * Check if a player has won the game
  *
  * @param state - Current game state
@@ -17,8 +48,7 @@ export function checkVictory(state: RiftboundGameState): PlayerId | null {
   const playerIds = Object.keys(state.players) as PlayerId[];
 
   for (const playerId of playerIds) {
-    const player = state.players[playerId];
-    if (player && player.victoryPoints >= state.victoryScore) {
+    if (hasPlayerWon(state, playerId)) {
       return playerId;
     }
   }
@@ -56,5 +86,5 @@ export function getPlayerScore(state: RiftboundGameState, playerId: PlayerId): n
  */
 export function isAtMatchPoint(state: RiftboundGameState, playerId: PlayerId): boolean {
   const score = getPlayerScore(state, playerId);
-  return score === state.victoryScore - 1;
+  return score === getEffectiveVictoryScore(state, playerId) - 1;
 }

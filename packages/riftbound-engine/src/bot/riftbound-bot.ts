@@ -53,7 +53,6 @@ const STRATEGY_WEIGHTS: Record<BotStrategy, Record<string, number>> = {
     playGear: 80,
     playSpell: 70,
     playUnit: 60,
-    recallUnit: 50,
     scorePoint: 100,
     standardMove: 40,
   },

@@ -11,7 +11,11 @@ export { resolveTarget } from "./target-resolver";
 export type { TargetDescriptor, TargetResolverContext } from "./target-resolver";
 export { fireTriggers } from "./trigger-runner";
 export type { TriggerRunnerContext } from "./trigger-runner";
-export { checkReplacement } from "./replacement-effects";
+export {
+  checkReplacement,
+  clearConsumedReplacements,
+  markReplacementConsumed,
+} from "./replacement-effects";
 export type {
   ReplacementEvent,
   MatchedReplacement,

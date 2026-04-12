@@ -12,6 +12,7 @@ import { riftboundZones } from "../zones/zone-configs";
 import { riftboundFlow } from "./flow/riftbound-flow";
 import { riftboundMoves } from "./moves";
 import { createInitialState } from "./setup/game-setup";
+import { hasPlayerWon } from "./win-conditions/victory";
 
 /**
  * Re-export RiftboundMoves from types for convenience
@@ -47,8 +48,7 @@ export const riftboundDefinition: GameDefinition<
   // Win condition based on victory points
   endIf: (state) => {
     for (const playerId of Object.keys(state.players)) {
-      const player = state.players[playerId];
-      if (player && player.victoryPoints >= state.victoryScore) {
+      if (hasPlayerWon(state, playerId)) {
         return {
           reason: "victory_points",
           winner: playerId,

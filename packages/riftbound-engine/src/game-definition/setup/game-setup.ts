@@ -40,6 +40,7 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
   const conqueredThisTurn: Record<PlayerId, string[]> = {};
   const scoredThisTurn: Record<PlayerId, string[]> = {};
   const xpGainedThisTurn: Record<PlayerId, number> = {};
+  const unitsMovedThisTurn: Record<PlayerId, number> = {};
 
   for (const playerId of playerIds) {
     playerStates[playerId] = {
@@ -54,6 +55,7 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
     conqueredThisTurn[playerId] = [];
     scoredThisTurn[playerId] = [];
     xpGainedThisTurn[playerId] = 0;
+    unitsMovedThisTurn[playerId] = 0;
   }
 
   return {
@@ -65,6 +67,7 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
     conqueredThisTurn,
     scoredThisTurn,
     xpGainedThisTurn,
+    unitsMovedThisTurn,
     turn: {
       activePlayer: playerIds[0] ?? ("" as PlayerId),
       number: 1,

@@ -121,4 +121,159 @@ describe("Trigger Matcher", () => {
     expect(matches).toHaveLength(1);
     expect(matches[0].ability.trigger.event).toBe("attack");
   });
+
+  describe("battlefield triggers match by battlefieldId, not owner", () => {
+    test("hold trigger fires for controller when controller differs from owner", () => {
+      // Battlefield card owned by p2 (deck provider) but held by p1 (controller)
+      const battlefieldCard = makeCard("bf-altar", [makeAbility("hold")], "battlefieldRow", "p2");
+      const event: GameEvent = { battlefieldId: "bf-altar", playerId: "p1", type: "hold" };
+
+      const matches = findMatchingTriggers(event, [battlefieldCard]);
+      expect(matches).toHaveLength(1);
+      expect(matches[0].cardId).toBe("bf-altar");
+    });
+
+    test("conquer trigger fires for controller when controller differs from owner", () => {
+      // Battlefield card owned by p2 but conquered by p1
+      const battlefieldCard = makeCard(
+        "bf-fortress",
+        [makeAbility("conquer")],
+        "battlefieldRow",
+        "p2",
+      );
+      const event: GameEvent = {
+        battlefieldId: "bf-fortress",
+        playerId: "p1",
+        type: "conquer",
+      };
+
+      const matches = findMatchingTriggers(event, [battlefieldCard]);
+      expect(matches).toHaveLength(1);
+      expect(matches[0].cardId).toBe("bf-fortress");
+    });
+
+    test("hold trigger does not fire for a different battlefield", () => {
+      const battlefieldCard = makeCard("bf-altar", [makeAbility("hold")], "battlefieldRow", "p2");
+      const event: GameEvent = { battlefieldId: "bf-other", playerId: "p1", type: "hold" };
+
+      const matches = findMatchingTriggers(event, [battlefieldCard]);
+      expect(matches).toHaveLength(0);
+    });
+
+    test("conquer trigger does not fire for a different battlefield", () => {
+      const battlefieldCard = makeCard(
+        "bf-fortress",
+        [makeAbility("conquer")],
+        "battlefieldRow",
+        "p2",
+      );
+      const event: GameEvent = { battlefieldId: "bf-other", playerId: "p1", type: "conquer" };
+
+      const matches = findMatchingTriggers(event, [battlefieldCard]);
+      expect(matches).toHaveLength(0);
+    });
+
+    test("hold trigger still fires when controller is the owner", () => {
+      const battlefieldCard = makeCard("bf-altar", [makeAbility("hold")], "battlefieldRow", "p1");
+      const event: GameEvent = { battlefieldId: "bf-altar", playerId: "p1", type: "hold" };
+
+      const matches = findMatchingTriggers(event, [battlefieldCard]);
+      expect(matches).toHaveLength(1);
+    });
+  });
+
+  describe("non-battlefield player-scoped triggers still use owner", () => {
+    test("start-of-turn trigger matches owner's turn", () => {
+      const card = makeCard("unit-1", [makeAbility("start-of-turn")], "base", "p1");
+      const event: GameEvent = { playerId: "p1", type: "start-of-turn" };
+
+      const matches = findMatchingTriggers(event, [card]);
+      expect(matches).toHaveLength(1);
+    });
+
+    test("start-of-turn trigger does not match opponent's turn", () => {
+      const card = makeCard("unit-1", [makeAbility("start-of-turn")], "base", "p1");
+      const event: GameEvent = { playerId: "p2", type: "start-of-turn" };
+
+      const matches = findMatchingTriggers(event, [card]);
+      expect(matches).toHaveLength(0);
+    });
+
+    test("draw trigger matches owner", () => {
+      const card = makeCard("unit-1", [makeAbility("draw")], "base", "p1");
+      const event: GameEvent = { playerId: "p1", type: "draw" };
+
+      const matches = findMatchingTriggers(event, [card]);
+      expect(matches).toHaveLength(1);
+    });
+
+    test("draw trigger does not match opponent", () => {
+      const card = makeCard("unit-1", [makeAbility("draw")], "base", "p1");
+      const event: GameEvent = { playerId: "p2", type: "draw" };
+
+      const matches = findMatchingTriggers(event, [card]);
+      expect(matches).toHaveLength(0);
+    });
+  });
+
+  describe("become-mighty triggers (Wave 3 Agent 4)", () => {
+    test("friendly-units become-mighty matches when owner is same", () => {
+      const observer = makeCard(
+        "observer",
+        [makeAbility("become-mighty", "friendly-units")],
+        "base",
+        "p1",
+      );
+      const event: GameEvent = { cardId: "other-unit", owner: "p1", type: "become-mighty" };
+
+      const matches = findMatchingTriggers(event, [observer]);
+      expect(matches).toHaveLength(1);
+    });
+
+    test("friendly-units become-mighty does NOT match different owner", () => {
+      const observer = makeCard(
+        "observer",
+        [makeAbility("become-mighty", "friendly-units")],
+        "base",
+        "p1",
+      );
+      const event: GameEvent = { cardId: "other-unit", owner: "p2", type: "become-mighty" };
+
+      const matches = findMatchingTriggers(event, [observer]);
+      expect(matches).toHaveLength(0);
+    });
+
+    test("friendly-other-units excludes self from become-mighty", () => {
+      const observer = makeCard(
+        "observer",
+        [makeAbility("become-mighty", "friendly-other-units")],
+        "base",
+        "p1",
+      );
+      const selfEvent: GameEvent = { cardId: "observer", owner: "p1", type: "become-mighty" };
+
+      expect(findMatchingTriggers(selfEvent, [observer])).toHaveLength(0);
+    });
+
+    test("self become-mighty still matches the card itself", () => {
+      const card = makeCard("unit-1", [makeAbility("become-mighty", "self")], "base", "p1");
+      const event: GameEvent = { cardId: "unit-1", owner: "p1", type: "become-mighty" };
+
+      const matches = findMatchingTriggers(event, [card]);
+      expect(matches).toHaveLength(1);
+    });
+
+    test("enemy-units become-mighty matches opposite owner", () => {
+      const observer = makeCard(
+        "observer",
+        [makeAbility("become-mighty", "enemy-units")],
+        "base",
+        "p1",
+      );
+      const event: GameEvent = { cardId: "foe", owner: "p2", type: "become-mighty" };
+
+      const matches = findMatchingTriggers(event, [observer]);
+      expect(matches).toHaveLength(1);
+    });
+  });
 });

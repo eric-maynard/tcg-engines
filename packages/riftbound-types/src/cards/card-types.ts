@@ -133,6 +133,22 @@ export interface UnitCard extends BaseCard {
 
   /** Whether this is a Champion unit */
   readonly isChampion?: boolean;
+
+  /**
+   * Heimerdinger-style marker: when true, this unit exposes every
+   * exhaust-cost activated ability on friendly legends, units, and gear
+   * as if it were its own. The inherited ability's cost is paid on THIS
+   * card (the "host"), but the effect resolves as the source card.
+   */
+  readonly inheritExhaustAbilities?: boolean;
+
+  /**
+   * Mageseeker-style marker: when true, this unit imposes a move-escalation
+   * surcharge on opponents. The Nth unit an opponent moves in a single turn
+   * (N > 1) costs 1 additional rainbow energy per move while this unit is
+   * on an opposing battlefield. Used by Mageseeker Investigator.
+   */
+  readonly moveEscalation?: boolean;
 }
 
 // ============================================================================
@@ -196,6 +212,13 @@ export interface GearCard extends BaseCard {
 
   /** Whether this is a token */
   readonly isToken?: boolean;
+
+  /**
+   * The Zero Drive-style marker: when true, the card's banish effect
+   * records every banished target in the source's `exiledByThis` meta,
+   * and when this card later leaves the board those cards are returned.
+   */
+  readonly tracksExiledCards?: boolean;
 }
 
 /**
@@ -222,6 +245,33 @@ export interface EquipmentCard extends BaseCard {
 
   /** Whether this has Quick-Draw */
   readonly hasQuickDraw?: boolean;
+
+  /**
+   * Svellsongur-style marker: when true, attaching this equipment to a
+   * unit records the target unit's instance ID on the equipment's
+   * `copiedFromCardId` meta, so the unit's activated abilities appear on
+   * the equipment while attached.
+   */
+  readonly copyAttachedUnitText?: boolean;
+
+  /**
+   * The Zero Drive-style marker: when true, the card's banish effect
+   * records every banished target in the source's `exiledByThis` meta,
+   * and when this card later leaves the board those cards are returned.
+   */
+  readonly tracksExiledCards?: boolean;
+
+  /**
+   * Hextech Gauntlets-style marker: when set, the card's energy cost is
+   * reduced interactively by a chosen target at play time.
+   *
+   * - `"target-might"` means the equipment's energy cost is reduced by the
+   *   Might of a unit chosen at play time (the intended attachment target).
+   *
+   * The move parameters must include `chosenTargetId` naming the unit
+   * whose Might is used. Used by Hextech Gauntlets.
+   */
+  readonly interactiveCostReduction?: "target-might";
 }
 
 // ============================================================================

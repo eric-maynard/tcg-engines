@@ -93,17 +93,47 @@ function triggerMatchesEvent(
     if ("cardId" in event && event.cardId !== card.id) {
       return false;
     }
-    if ("playerId" in event && !("cardId" in event) && event.playerId !== card.owner) {
+    if ("battlefieldId" in event && !("cardId" in event) && card.zone === "battlefieldRow") {
+      // Battlefield card self-triggers (hold, conquer): match by battlefieldId.
+      // The controller who holds/conquers may differ from the card's deck owner.
+      if (event.battlefieldId !== card.id) {
+        return false;
+      }
+    } else if ("playerId" in event && !("cardId" in event) && event.playerId !== card.owner) {
+      // Non-battlefield cards: match player-scoped events by owner
       return false;
     }
-  } else if (on === "friendly-units") {
-    // Trigger fires when any friendly unit is the subject
-    if ("cardId" in event) {
-      // The event card's owner must match this card's owner
-      // (We'd need to look up the event card's owner — simplified for now)
+  } else if (on === "friendly-units" || on === "friendly-other-units") {
+    // Trigger fires when any friendly unit is the subject.
+    // Become-mighty events carry the subject card's owner directly; we
+    // Use that to check friendliness. For other events with a cardId
+    // But no owner, we fall back to match-all.
+    if (event.type === "become-mighty") {
+      if (event.owner !== card.owner) {
+        return false;
+      }
+      if (on === "friendly-other-units" && event.cardId === card.id) {
+        return false;
+      }
+    } else if (event.type === "die") {
+      if (event.owner !== card.owner) {
+        return false;
+      }
+      if (on === "friendly-other-units" && event.cardId === card.id) {
+        return false;
+      }
+    }
+  } else if (on === "any-unit") {
+    // Match any unit subject — no additional filter required.
+  } else if (on === "enemy-units") {
+    // Trigger fires when an enemy unit is the subject.
+    if (event.type === "become-mighty" || event.type === "die") {
+      if (event.owner === card.owner) {
+        return false;
+      }
     }
   }
-  // For other "on" values (enemy-units, any-unit, etc.) — simplified: match all
+  // For other "on" values or events — simplified: match all
 
   return true;
 }

@@ -133,11 +133,30 @@ export interface RiftboundMoves {
   /** Play unit to Base or Battlefield */
   playUnit: { playerId: PlayerId; cardId: CardId; location: LocationId };
 
-  /** Play gear to Base */
-  playGear: { playerId: PlayerId; cardId: CardId };
+  /**
+   * Play gear to Base.
+   *
+   * `chosenTargetId` is required for equipment whose cost is reduced
+   * interactively by the Might of a chosen target (e.g., Hextech
+   * Gauntlets). Ignored for equipment without `interactiveCostReduction`.
+   */
+  playGear: { playerId: PlayerId; cardId: CardId; chosenTargetId?: CardId };
 
-  /** Play spell (goes to trash after) */
-  playSpell: { playerId: PlayerId; cardId: CardId; targets?: CardId[] };
+  /**
+   * Play spell (goes to trash after).
+   *
+   * `xAmount` is required for spells with a variable X-cost (e.g.,
+   * Bullet Time). It specifies the value the player chose to pay for X
+   * and determines both the additional cost deducted from the rune pool
+   * and the value exposed to the effect via `{ variable: "x" }`. Ignored
+   * for spells without an X-cost.
+   */
+  playSpell: {
+    playerId: PlayerId;
+    cardId: CardId;
+    targets?: CardId[];
+    xAmount?: number;
+  };
 
   /** Place Hidden card facedown */
   hideCard: { playerId: PlayerId; cardId: CardId; battlefieldId: CardId };
@@ -279,8 +298,22 @@ export interface RiftboundMoves {
   // Ability Moves
   // ============================================
 
-  /** Activate an ability on a card */
-  activateAbility: { playerId: PlayerId; cardId: CardId; abilityIndex: number };
+  /**
+   * Activate an ability on a card.
+   *
+   * `sourceCardId` is an optional override used for ability-inheritance
+   * cards (e.g., Heimerdinger inheriting exhaust abilities from friendly
+   * permanents, or Svellsongur copying an attached unit's abilities). When
+   * present, the ability is looked up from `sourceCardId` at `abilityIndex`,
+   * but the cost (including exhaust) is paid on `cardId` (the "host"). When
+   * absent, the ability is looked up from `cardId` directly.
+   */
+  activateAbility: {
+    playerId: PlayerId;
+    cardId: CardId;
+    abilityIndex: number;
+    sourceCardId?: CardId;
+  };
 
   // ============================================
   // Equipment Moves
@@ -301,4 +334,17 @@ export interface RiftboundMoves {
 
   /** Shuffle trash into deck, opponent scores */
   burnOut: { playerId: PlayerId; opponentId: PlayerId };
+
+  // ============================================
+  // Pending Choice Moves
+  // ============================================
+
+  /**
+   * Resolve a pending "reveal hand and pick a card" choice.
+   *
+   * Used by effects like Sabotage and Mindsplitter that pause the game
+   * to let the active player pick a card from an opponent's revealed hand.
+   * The chosen card is recycled/banished/discarded per the stored effect.
+   */
+  resolvePendingChoice: { playerId: PlayerId; pickedCardId: CardId };
 }

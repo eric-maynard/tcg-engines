@@ -23,8 +23,60 @@ import type {
   ZoneId as CoreZoneId,
   FlowDefinition,
 } from "@tcg/core";
+import { fireTriggers } from "../../abilities/trigger-runner";
+import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
+import { hasPlayerWon } from "../win-conditions/victory";
+import { canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
+
+/**
+ * Build a TriggerRunnerContext from a flow phase context.
+ *
+ * Flow hooks receive FlowContext (state, zones, cards) but NOT counters.
+ * We provide no-op counter stubs so triggers can execute their effects.
+ */
+function buildFlowTriggerContext(context: {
+  state: RiftboundGameState;
+  zones: {
+    moveCard: (params: { cardId: CoreCardId; targetZoneId: CoreZoneId }) => void;
+    drawCards: (params: {
+      count: number;
+      from: CoreZoneId;
+      to: CoreZoneId;
+      playerId: CorePlayerId;
+    }) => CoreCardId[];
+    getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
+    getCardZone?: (cardId: CoreCardId) => CoreZoneId | undefined;
+  };
+  cards: {
+    getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta>;
+    getCardOwner?: (cardId: CoreCardId) => string | undefined;
+    updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
+  };
+}): TriggerRunnerContext {
+  const noop = () => {};
+  return {
+    cards: {
+      getCardMeta: context.cards.getCardMeta as TriggerRunnerContext["cards"]["getCardMeta"],
+      getCardOwner: (context.cards.getCardOwner ??
+        (() => undefined)) as TriggerRunnerContext["cards"]["getCardOwner"],
+      updateCardMeta: context.cards
+        .updateCardMeta as TriggerRunnerContext["cards"]["updateCardMeta"],
+    },
+    counters: {
+      addCounter: noop as TriggerRunnerContext["counters"]["addCounter"],
+      setFlag: noop as TriggerRunnerContext["counters"]["setFlag"],
+    },
+    draft: context.state,
+    zones: {
+      drawCards: context.zones.drawCards as TriggerRunnerContext["zones"]["drawCards"],
+      getCardZone: context.zones.getCardZone as TriggerRunnerContext["zones"]["getCardZone"],
+      getCardsInZone: context.zones.getCardsInZone,
+      moveCard: context.zones.moveCard,
+    },
+  };
+}
 
 /**
  * Riftbound flow definition
@@ -103,6 +155,15 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           // Clear per-turn tracking
           context.state.conqueredThisTurn[currentPlayer] = [];
           context.state.scoredThisTurn[currentPlayer] = [];
+          if (context.state.unitsMovedThisTurn) {
+            context.state.unitsMovedThisTurn[currentPlayer] = 0;
+          }
+
+          // Increment per-player turn count (used by Forgotten Monument etc.)
+          const turnPlayer = context.state.players[currentPlayer];
+          if (turnPlayer) {
+            turnPlayer.turnsTaken = (turnPlayer.turnsTaken ?? 0) + 1;
+          }
         },
 
         phases: {
@@ -214,12 +275,20 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               // Scoring step (rule 515.2.b): Holding
               // Score 1 point for each battlefield the turn player controls
               const playerId = context.getCurrentPlayer();
+              const triggerCtx = buildFlowTriggerContext(context);
               for (const [bfId, bf] of Object.entries(context.state.battlefields)) {
                 if (bf.controller === playerId) {
                   const scored = context.state.scoredThisTurn[playerId] ?? [];
                   if (!scored.includes(bfId)) {
+                    // Blocked if a battlefield ability (e.g. Forgotten Monument)
+                    // Prevents this player from scoring here right now.
+                    const scoringAllowed = canPlayerScoreAtBattlefield(
+                      context.state,
+                      playerId,
+                      bfId,
+                    );
                     const player = context.state.players[playerId];
-                    if (player) {
+                    if (player && scoringAllowed) {
                       player.victoryPoints += 1;
                     }
 
@@ -227,6 +296,11 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                       context.state.scoredThisTurn[playerId] = [];
                     }
                     context.state.scoredThisTurn[playerId].push(bfId);
+
+                    // Emit "hold" event so triggered abilities fire (e.g. Altar to Unity)
+                    if (scoringAllowed) {
+                      fireTriggers({ battlefieldId: bfId, playerId, type: "hold" }, triggerCtx);
+                    }
                   }
                 }
               }
@@ -335,7 +409,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                     const opponent = context.state.players[opponentId];
                     if (opponent) {
                       opponent.victoryPoints += 1;
-                      if (opponent.victoryPoints >= context.state.victoryScore) {
+                      if (hasPlayerWon(context.state, opponentId)) {
                         context.state.status = "finished";
                         context.state.winner = opponentId;
                       }
@@ -460,6 +534,13 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               const currentPlayer = context.getCurrentPlayer();
               context.state.conqueredThisTurn[currentPlayer] = [];
               context.state.scoredThisTurn[currentPlayer] = [];
+
+              // Clear consumed-next replacement markers so turn-scoped
+              // Single-fire replacements (Tactical Retreat, Highlander, etc.)
+              // Start fresh next turn.
+              if (context.state.consumedNextReplacements) {
+                context.state.consumedNextReplacements = {};
+              }
             },
 
             order: 6,

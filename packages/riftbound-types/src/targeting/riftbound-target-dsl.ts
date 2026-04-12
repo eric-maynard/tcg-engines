@@ -297,6 +297,22 @@ export interface LastTargetRef {
 }
 
 /**
+ * Pending-value reference.
+ *
+ * Used inside a `SequenceEffect` that declares `pendingValue`. Lets a later
+ * step refer to the card produced by an earlier step (for example, "banish a
+ * card, then play it" — the `play` step's target is the card that was
+ * banished by the preceding `banish` step).
+ *
+ * See `SequenceEffect.pendingValue` in `effect-types.ts`.
+ */
+export interface PendingValueTarget {
+  readonly type: "pending-value";
+  /** Optional label matching the binding's name. */
+  readonly name?: string;
+}
+
+/**
  * All target types
  */
 export type AnyTarget =
@@ -305,6 +321,7 @@ export type AnyTarget =
   | SelfTarget
   | TriggerSourceTarget
   | LastTargetRef
+  | PendingValueTarget
   | "self"
   | "controller"
   | "opponent";
@@ -323,7 +340,8 @@ export function isCardTarget(target: AnyTarget): target is Target {
     target.type !== "player" &&
     target.type !== "self" &&
     target.type !== "trigger-source" &&
-    target.type !== "last-target"
+    target.type !== "last-target" &&
+    target.type !== "pending-value"
   );
 }
 

@@ -50,3 +50,14 @@ packages/core-ui/dist
 
 # Game logs
 apps/riftbound-app/logs/
+# Test artifacts (screenshots, snapshots, playwright traces)
+*.png
+.playwright-mcp/
+snapshot-*.yml
+riftatlas-*.md
+handler-report.md
+.claude/worktrees/
+downloads/
+.mcp.json
+apps/riftbound-app/.mcp.json
+riftbound-rules-video-transcript.txt

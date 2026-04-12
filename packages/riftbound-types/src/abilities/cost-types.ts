@@ -59,14 +59,53 @@ export interface Cost {
 
   /** Requires returning something to hand */
   readonly returnToHand?: Target;
+
+  /**
+   * Requires spending experience points (XP).
+   *
+   * Used by UNL-set activated abilities like "Spend 2 XP, [Exhaust]: ..." and
+   * by additional play costs like "You may spend 5 XP as an additional cost
+   * to play this." When combined with `optional: true` on an additional cost,
+   * the player chooses whether to pay.
+   */
+  readonly xp?: number;
+
+  /**
+   * Variable-amount "X" cost. When present, the player chooses a
+   * non-negative integer X at the moment of play, and the engine deducts
+   * that many of the specified resource from the rune pool. The bound
+   * X value is then exposed to the effect executor via
+   * `EffectContext.variables.x` so that effects can reference it via
+   * `{ variable: "x" }` amount expressions.
+   *
+   * @example "Pay any amount of rainbow to deal that much damage..."
+   * { x: { resource: "rainbow-energy" } }
+   */
+  readonly x?: XCost;
 }
 
 /**
- * Recycle cost with optional target specification
+ * Variable-X cost specification.
+ *
+ * `resource` identifies what kind of resource is being paid per point of X.
+ * Currently only `"rainbow-energy"` is supported: each X point consumes
+ * 1 energy from the paying player's rune pool (rainbow is universal).
+ */
+export interface XCost {
+  readonly resource: "rainbow-energy";
+}
+
+/**
+ * Recycle cost with optional target specification.
+ *
+ * `from` identifies where the recycled card(s) come from:
+ * - `"trash"`   — default for "Recycle N from your trash" costs
+ * - `"hand"`    — "Recycle N from your hand"
+ * - `"board"`   — "Recycle this" on self-recycling permanents (basic runes)
  */
 export interface RecycleCost {
   readonly amount: number;
-  readonly from?: "trash" | "board";
+  readonly from?: "trash" | "board" | "hand";
   readonly target?: Target;
 }
 
@@ -140,7 +179,8 @@ export function isFreeCost(cost: Cost): boolean {
     cost.discard === undefined &&
     cost.recycle === undefined &&
     cost.spend === undefined &&
-    cost.returnToHand === undefined
+    cost.returnToHand === undefined &&
+    cost.xp === undefined
   );
 }
 

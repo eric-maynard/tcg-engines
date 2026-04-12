@@ -12,7 +12,7 @@ import type {
 } from "@tcg/core";
 import type { GrantedKeyword, RiftboundCardMeta, RiftboundGameState } from "../types";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
-import { checkReplacement } from "./replacement-effects";
+import { checkReplacement, markReplacementConsumed } from "./replacement-effects";
 import type { TargetDescriptor } from "./target-resolver";
 import { resolveTarget } from "./target-resolver";
 
@@ -56,6 +56,15 @@ export interface EffectContext {
   readonly sourceCardId: string;
   readonly sourceZone?: string;
   readonly draft: RiftboundGameState;
+  /**
+   * Named variables bound at the moment this effect resolves.
+   *
+   * Used for X-cost spells (e.g., Bullet Time): when a player chooses an
+   * X value at play time, the engine stores it here as `{ x: N }` so that
+   * effects referencing `{ variable: "x" }` in their amount expression can
+   * read the chosen value during resolution.
+   */
+  readonly variables?: Record<string, number>;
   readonly zones: {
     moveCard: (params: { cardId: CoreCardId; targetZoneId: CoreZoneId }) => void;
     drawCards: (params: {
@@ -179,6 +188,12 @@ function resolveAmount(amount: number | Record<string, unknown>, ctx: EffectCont
       sourceZone: ctx.sourceZone,
       zones: ctx.zones,
     }).length;
+  }
+  if ("variable" in amount) {
+    // Named variable bound at effect entry — e.g., X-cost spells
+    // Store the chosen X value in ctx.variables.x and reference it here
+    const name = amount.variable as string;
+    return ctx.variables?.[name] ?? 0;
   }
   return 0;
 }
@@ -324,6 +339,9 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           if (replacement.replacement !== "prevent" && replacement.replacement) {
             executeEffect(replacement.replacement as ExecutableEffect, ctx);
           }
+          // Consume single-fire "next"-duration replacements so they don't
+          // Re-trigger on subsequent damage events this turn.
+          markReplacementConsumed(ctx.draft, replacement);
           continue;
         }
         ctx.counters.addCounter(targetId as CoreCardId, "damage", amount);
@@ -570,6 +588,21 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
 
     case "banish": {
       const targets = getTargetIds(effect, ctx);
+      // If the source card is flagged to track exiled cards (The Zero Drive),
+      // Record each banished card's instance ID in the source's
+      // `exiledByThis` meta. The state-based cleanup will return those cards
+      // When the source later leaves the board.
+      const banishRegistry = getGlobalCardRegistry();
+      const banishSourceDef = banishRegistry.get(ctx.sourceCardId);
+      if (banishSourceDef?.tracksExiledCards === true && targets.length > 0) {
+        const sourceMeta = ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        const existing = sourceMeta?.exiledByThis ?? [];
+        ctx.cards.updateCardMeta?.(ctx.sourceCardId as CoreCardId, {
+          exiledByThis: [...existing, ...(targets as string[])],
+        } as unknown as Record<string, unknown>);
+      }
       for (const targetId of targets) {
         ctx.zones.moveCard({
           cardId: targetId as CoreCardId,
@@ -804,6 +837,48 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
 
     case "reveal": {
       // Reveal cards — informational only for now
+      break;
+    }
+
+    case "reveal-hand": {
+      // Opponent-reveals-hand + active-player-picks flow.
+      // Sets a `pendingChoice` on the game state. All other moves become
+      // Illegal until `resolvePendingChoice` is invoked (see chain-moves.ts).
+      //
+      // Effect shape:
+      //   {
+      //     Type: "reveal-hand",
+      //     Target: { type: "player", controller: "enemy" }, // whose hand to reveal
+      //     Filter?: { excludeCardTypes?: string[] },        // non-unit, etc.
+      //     OnPicked?: "recycle" | "banish" | "discard",     // default: recycle
+      //   }
+      const revealerOverride = (effect as unknown as { revealer?: string }).revealer;
+      const revealer =
+        revealerOverride ??
+        Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId) ??
+        ctx.playerId;
+      const revealed = ctx.zones
+        .getCardsInZone("hand" as CoreZoneId, revealer as CorePlayerId)
+        .map((id) => id as string);
+
+      const {filter} = (effect as unknown as { filter?: { excludeCardTypes?: string[] } });
+      const onPicked =
+        ((effect as unknown as { onPicked?: "recycle" | "banish" | "discard" }).onPicked ??
+          "recycle") as "recycle" | "banish" | "discard";
+
+      // If the revealer has no cards in hand, there's nothing to pick — skip.
+      if (revealed.length === 0) {
+        break;
+      }
+
+      ctx.draft.pendingChoice = {
+        filter,
+        onPicked,
+        prompter: ctx.playerId,
+        revealed,
+        revealer,
+        type: "reveal-and-pick",
+      };
       break;
     }
 

@@ -10,7 +10,13 @@ import type {
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
 } from "@tcg/core";
-import type { GrantedKeyword, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import { createInteractionState, startShowdown as startShowdownState } from "../../chain";
+import type {
+  GrantedKeyword,
+  RiftboundCardMeta,
+  RiftboundGameState,
+  RiftboundMoves,
+} from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 
 /**
@@ -35,6 +41,78 @@ function hasKeyword(
     }
   }
   return false;
+}
+
+/**
+ * Compute the total move-escalation surcharge imposed on `playerId` by
+ * enemy-controlled board cards that declare `moveEscalation`.
+ *
+ * For the Nth unit moved in a single turn (N > 1), the active player pays
+ * 1 extra energy per escalator on the board. We only require one such
+ * escalator to be present (Mageseeker Investigator is unique); multiple
+ * escalators do not stack.
+ *
+ * Returns 0 if no enemy escalator exists on the board.
+ */
+function getMoveEscalationSurcharge(
+  state: RiftboundGameState,
+  playerId: string,
+  unitsToMove: number,
+  getCardZone: (cardId: CoreCardId) => string | undefined,
+  getCardOwner: (cardId: CoreCardId) => string | undefined,
+  getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[],
+): number {
+  const registry = getGlobalCardRegistry();
+
+  let hasEscalation = false;
+
+  // Check enemy base cards
+  for (const otherId of Object.keys(state.players)) {
+    if (otherId === playerId) {
+      continue;
+    }
+    const baseCards = getCardsInZone("base" as CoreZoneId, otherId as CorePlayerId);
+    for (const cid of baseCards) {
+      if (registry.hasMoveEscalation(cid as string)) {
+        hasEscalation = true;
+        break;
+      }
+    }
+    if (hasEscalation) {
+      break;
+    }
+  }
+
+  // Check enemy battlefield cards
+  if (!hasEscalation) {
+    for (const bfId of Object.keys(state.battlefields ?? {})) {
+      const bfCards = getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
+      for (const cid of bfCards) {
+        const owner = getCardOwner(cid);
+        if (owner && owner !== playerId && registry.hasMoveEscalation(cid as string)) {
+          hasEscalation = true;
+          break;
+        }
+      }
+      if (hasEscalation) {
+        break;
+      }
+    }
+  }
+
+  if (!hasEscalation) {
+    return 0;
+  }
+
+  const alreadyMoved = state.unitsMovedThisTurn?.[playerId] ?? 0;
+  let surcharge = 0;
+  for (let i = 0; i < unitsToMove; i++) {
+    const ordinal = alreadyMoved + i + 1;
+    if (ordinal > 1) {
+      surcharge += 1;
+    }
+  }
+  return surcharge;
 }
 
 /**
@@ -65,7 +143,7 @@ export const movementMoves: Partial<
         return false;
       }
 
-      const { unitIds } = context.params;
+      const { unitIds, playerId } = context.params;
       for (const unitId of unitIds) {
         const zone = context.zones.getCardZone(unitId as CoreCardId);
         if (zone !== "base") {
@@ -73,11 +151,29 @@ export const movementMoves: Partial<
         }
 
         const owner = context.cards.getCardOwner(unitId as CoreCardId);
-        if ((owner as string) !== context.params.playerId) {
+        if ((owner as string) !== playerId) {
           return false;
         }
 
         if (context.counters.getFlag(unitId as CoreCardId, "exhausted")) {
+          return false;
+        }
+      }
+
+      // Rule: enemy move-escalation cards (e.g., Mageseeker Investigator)
+      // Charge the active player 1 rainbow per unit moved beyond the first
+      // In a single turn. Refuse the move if the pool can't cover it.
+      const surcharge = getMoveEscalationSurcharge(
+        state,
+        playerId,
+        unitIds.length,
+        (c) => context.zones.getCardZone(c) as string | undefined,
+        (c) => context.cards.getCardOwner(c) as string | undefined,
+        (z, p) => context.zones.getCardsInZone(z, p),
+      );
+      if (surcharge > 0) {
+        const pool = state.runePools[playerId];
+        if (!pool || pool.energy < surcharge) {
           return false;
         }
       }
@@ -132,9 +228,25 @@ export const movementMoves: Partial<
       }
       return results;
     },
-    reducer: (_draft, context) => {
-      const { unitIds, destination } = context.params;
+    reducer: (draft, context) => {
+      const { unitIds, destination, playerId } = context.params;
       const { zones, counters } = context;
+
+      // Pay the move-escalation surcharge (rule: Mageseeker Investigator)
+      const surcharge = getMoveEscalationSurcharge(
+        draft,
+        playerId,
+        unitIds.length,
+        (c) => context.zones.getCardZone(c) as string | undefined,
+        (c) => context.cards.getCardOwner(c) as string | undefined,
+        (z, p) => context.zones.getCardsInZone(z, p),
+      );
+      if (surcharge > 0) {
+        const pool = draft.runePools[playerId];
+        if (pool) {
+          pool.energy = Math.max(0, pool.energy - surcharge);
+        }
+      }
 
       for (const unitId of unitIds) {
         // Exhaust the unit (cost of moving)
@@ -145,6 +257,44 @@ export const movementMoves: Partial<
           cardId: unitId as CoreCardId,
           targetZoneId: `battlefield-${destination}` as CoreZoneId,
         });
+      }
+
+      // Increment per-turn move counter for escalation tracking
+      if (!draft.unitsMovedThisTurn) {
+        draft.unitsMovedThisTurn = {};
+      }
+      draft.unitsMovedThisTurn[playerId] =
+        (draft.unitsMovedThisTurn[playerId] ?? 0) + unitIds.length;
+
+      // Rule 548.2: When units arrive at an uncontrolled battlefield,
+      // Start a non-combat showdown to give the opponent a window to respond
+      const bf = draft.battlefields[destination];
+      if (bf && bf.controller !== playerId) {
+        // Check if there are only friendly units (no opposing units)
+        const bfZoneId = `battlefield-${destination}` as CoreZoneId;
+        const allUnits = zones.getCardsInZone(bfZoneId);
+        const hasOpponentUnit = allUnits.some((cardId) => {
+          const owner = context.cards.getCardOwner(cardId);
+          return owner !== undefined && (owner as string) !== playerId;
+        });
+
+        if (!hasOpponentUnit && allUnits.length > 0) {
+          // Start a non-combat showdown before conquer can proceed
+          const playerIds = Object.keys(draft.players);
+          const opponent = playerIds.find((p) => p !== playerId) ?? playerId;
+          const relevantPlayers = [playerId, opponent];
+
+          const interaction = draft.interaction ?? createInteractionState();
+          draft.interaction = startShowdownState(
+            interaction,
+            destination,
+            playerId,
+            relevantPlayers,
+            false, // Not a combat showdown
+            playerId,
+            opponent,
+          );
+        }
       }
     },
   },
@@ -264,50 +414,20 @@ export const movementMoves: Partial<
    *
    * Return a unit to its owner's Base.
    * This is NOT a Move (doesn't trigger move abilities).
-   * Used for combat resolution when attackers are recalled.
+   *
+   * Per rules 616-619: Recalls are NOT discretionary player actions.
+   * They occur only as consequences of game effects:
+   *   - Combat resolution (rule 627.2: attackers recalled when both sides survive)
+   *   - Cleanup (corrective recalls for illegal positions)
+   *   - Card abilities (e.g., "recall a unit")
+   *
+   * The condition and enumerator always return false/empty to prevent
+   * this from appearing as an available player move. The reducer is
+   * retained for engine-internal use when effects trigger recalls.
    */
   recallUnit: {
-    condition: (state, context) => {
-      if (state.status !== "playing") {
-        return false;
-      }
-
-      const zone = context.zones.getCardZone(context.params.unitId as CoreCardId);
-      if (!zone || !(zone as string).startsWith("battlefield-")) {
-        return false;
-      }
-
-      const owner = context.cards.getCardOwner(context.params.unitId as CoreCardId);
-      if ((owner as string) !== context.params.playerId) {
-        return false;
-      }
-
-      return true;
-    },
-    enumerator: (state, context) => {
-      if (state.status !== "playing") {
-        return [];
-      }
-
-      const results: { playerId: string; unitId: string }[] = [];
-
-      for (const bfId of Object.keys(state.battlefields || {})) {
-        const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
-        const cardsAtBf = context.zones.getCardsInZone(bfZoneId);
-
-        for (const cardId of cardsAtBf) {
-          const owner = context.cards.getCardOwner(cardId);
-          if ((owner as string) !== (context.playerId as string)) {
-            continue;
-          }
-          results.push({
-            playerId: context.playerId as string,
-            unitId: cardId as string,
-          });
-        }
-      }
-      return results;
-    },
+    condition: () => false,
+    enumerator: () => [],
     reducer: (_draft, context) => {
       const { unitId } = context.params;
       const { zones } = context;

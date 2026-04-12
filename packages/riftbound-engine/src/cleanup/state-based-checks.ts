@@ -24,7 +24,7 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
-import { checkReplacement } from "../abilities/replacement-effects";
+import { checkReplacement, markReplacementConsumed } from "../abilities/replacement-effects";
 import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
@@ -122,13 +122,18 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
           // Non-prevent replacements store an effect to execute
           // For now, mark that a replacement occurred and skip the kill
         }
+        // Consume single-fire "next"-duration death replacements so they
+        // Don't re-trigger on subsequent deaths this turn.
+        markReplacementConsumed(ctx.draft, replacementMatch);
         stateChanged = true;
         // Clear damage so it doesn't re-trigger next cleanup pass
         ctx.cards.updateCardMeta(cardId, { damage: 0 } as Partial<RiftboundCardMeta>);
         continue;
       }
 
-      // Detach any equipment before killing (equipment returns to owner's base)
+      // Detach any equipment before killing (equipment returns to owner's base).
+      // Also clears `copiedFromCardId` so Svellsongur stops exposing the
+      // Dying unit's abilities once it's no longer attached.
       const unitMeta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
       const equippedWith = unitMeta?.equippedWith ?? [];
       for (const equipId of equippedWith) {
@@ -136,6 +141,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
           equipId as CoreCardId,
           {
             attachedTo: undefined,
+            copiedFromCardId: undefined,
           } as Partial<RiftboundCardMeta>,
         );
         ctx.zones.moveCard({
@@ -247,6 +253,43 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
           stateChanged = true;
         }
       }
+    }
+  }
+
+  // Step 5b: Return exile-tracked cards when the tracking card leaves the
+  // Board (The Zero Drive). Equipment with `tracksExiledCards` stores each
+  // Banished card's ID in `exiledByThis`. When the equipment is no longer
+  // On the board (base / battlefield), all tracked cards are played back to
+  // Their owner's base and the list is cleared.
+  const offBoardZoneIds: string[] = ["trash", "banishment", "hand", "mainDeck"];
+  const scannedTrackers = new Set<string>();
+  for (const zoneId of offBoardZoneIds) {
+    const cardsInZone = ctx.zones.getCardsInZone(zoneId as CoreZoneId);
+    for (const cardId of cardsInZone) {
+      const key = cardId as string;
+      if (scannedTrackers.has(key)) {
+        continue;
+      }
+      scannedTrackers.add(key);
+      const def = registry.get(key);
+      if (def?.tracksExiledCards !== true) {
+        continue;
+      }
+      const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
+      const tracked = meta?.exiledByThis ?? [];
+      if (tracked.length === 0) {
+        continue;
+      }
+      for (const exiledId of tracked) {
+        ctx.zones.moveCard({
+          cardId: exiledId as CoreCardId,
+          targetZoneId: "base" as CoreZoneId,
+        });
+      }
+      ctx.cards.updateCardMeta(cardId, {
+        exiledByThis: undefined,
+      } as Partial<RiftboundCardMeta>);
+      stateChanged = true;
     }
   }
 

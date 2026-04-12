@@ -66,7 +66,9 @@ describe("Move Enumeration System", () => {
           playCard: {
             condition: (state, context) => {
               const player = state.players.find((p) => p.id === context.playerId);
-              if (!player) {return false;}
+              if (!player) {
+                return false;
+              }
 
               // Check if card is in hand
               return player.hand.includes(context.params.cardId);
@@ -76,14 +78,18 @@ describe("Move Enumeration System", () => {
               context: import("../moves/move-enumeration").MoveEnumerationContext,
             ) => {
               const player = state.players.find((p) => p.id === context.playerId);
-              if (!player) {return [];}
+              if (!player) {
+                return [];
+              }
 
               // Return all cards in hand as possible parameters
               return player.hand.map((cardId: string) => ({ cardId }));
             },
             reducer: (draft, context) => {
               const player = draft.players.find((p) => p.id === context.playerId);
-              if (!player) {return;}
+              if (!player) {
+                return;
+              }
 
               // Move card from hand to field
               const index = player.hand.indexOf(context.params.cardId);
@@ -592,7 +598,9 @@ describe("Move Enumeration System", () => {
             ) => {
               const results: AttackParams[] = [];
               const player = state.players.find((p) => p.id === context.playerId);
-              if (!player) {return [];}
+              if (!player) {
+                return [];
+              }
 
               // Get all opponent creatures
               const opponents = state.players.filter((p) => p.id !== context.playerId);

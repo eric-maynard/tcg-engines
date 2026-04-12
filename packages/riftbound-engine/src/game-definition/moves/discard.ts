@@ -11,6 +11,7 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import { hasPlayerWon } from "../win-conditions/victory";
 
 /**
  * Discard/trash move definitions
@@ -54,7 +55,7 @@ export const discardMoves: Partial<
       if (opponent) {
         opponent.victoryPoints += 1;
 
-        if (opponent.victoryPoints >= draft.victoryScore) {
+        if (hasPlayerWon(draft, opponentId)) {
           draft.status = "finished";
           draft.winner = opponentId;
 

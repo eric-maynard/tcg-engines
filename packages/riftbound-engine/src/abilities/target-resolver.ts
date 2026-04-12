@@ -161,14 +161,10 @@ function getBoardCardIds(ctx: TargetResolverContext): string[] {
   const battlefieldRowCards = ctx.zones.getCardsInZone("battlefieldRow" as CoreZoneId);
   ids.push(...battlefieldRowCards.map((c) => c as string));
 
-  // Champion zone cards (per player)
-  for (const playerId of Object.keys(ctx.draft.players)) {
-    const championCards = ctx.zones.getCardsInZone(
-      "championZone" as CoreZoneId,
-      playerId as CorePlayerId,
-    );
-    ids.push(...championCards.map((c) => c as string));
-  }
+  // NOTE: Champion zone is intentionally excluded. Cards in the champion zone
+  // Have not been played to the board and are not valid targets for board-
+  // Targeting effects. Champions must be played (paid for) from the champion
+  // Zone to the base before they become targetable.
 
   return ids;
 }

@@ -272,6 +272,61 @@ export interface ControlBattlefieldCondition {
 }
 
 // ============================================================================
+// XP / Progression Conditions (Unleashed set)
+// ============================================================================
+
+/**
+ * While the controlling player has at least N XP.
+ *
+ * Used to gate `[Level N][>]` static and triggered abilities that unlock
+ * once the player's XP reaches the threshold.
+ *
+ * @example "[Level 3][>] I have +1 [Might] and enter ready."
+ * { type: "while-level", threshold: 3 }
+ */
+export interface WhileLevelCondition {
+  readonly type: "while-level";
+  readonly threshold: number;
+}
+
+/**
+ * If the controlling player has at least N XP.
+ *
+ * Used inline by conditional effects to check XP without binding a static
+ * ability (e.g., "If you have 6+ XP, ...").
+ */
+export interface HasXpCondition {
+  readonly type: "has-xp";
+  readonly threshold: number;
+}
+
+/**
+ * If the controlling player gained XP this turn.
+ *
+ * Resets at the start of each turn.
+ */
+export interface XpGainedThisTurnCondition {
+  readonly type: "xp-gained-this-turn";
+}
+
+/**
+ * True once the controlling player has taken at least `threshold` turns.
+ *
+ * Used to gate battlefield effects on a minimum turn count. A player's
+ * first turn is `turnsTaken === 1`, so `threshold: 3` unlocks on that
+ * player's third turn. Used by Forgotten Monument ("Players can't score
+ * here until their third turn.") as the condition of a `prevent-score`
+ * static ability.
+ *
+ * @example "Players can't score here until their third turn."
+ * { type: "turn-count-at-least", threshold: 3 }
+ */
+export interface TurnCountAtLeastCondition {
+  readonly type: "turn-count-at-least";
+  readonly threshold: number;
+}
+
+// ============================================================================
 // Logical Conditions
 // ============================================================================
 
@@ -359,6 +414,12 @@ export type Condition =
   // Location conditions
   | AtLocationCondition
   | ControlBattlefieldCondition
+
+  // XP / progression conditions (UNL set)
+  | WhileLevelCondition
+  | HasXpCondition
+  | XpGainedThisTurnCondition
+  | TurnCountAtLeastCondition
 
   // Logical conditions
   | AndCondition

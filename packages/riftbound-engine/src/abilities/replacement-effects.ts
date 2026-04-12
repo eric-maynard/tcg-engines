@@ -9,6 +9,8 @@
  * - "take-damage": when a unit would take damage
  * - "draw": when a player would draw
  * - "discard": when a player would discard
+ * - "enters-ready": when a unit would enter play (so it enters ready instead of exhausted)
+ * - "deals-bonus-damage": when a spell or ability would deal damage (deal bonus instead)
  *
  * Usage: call `checkReplacement()` before executing a game action.
  * If it returns a replacement, execute that instead of the original action.
@@ -27,7 +29,15 @@ import type { RiftboundCardMeta, RiftboundGameState } from "../types";
  */
 export interface ReplacementEvent {
   /** The type of action about to happen */
-  readonly type: "die" | "take-damage" | "move" | "draw" | "discard" | "score";
+  readonly type:
+    | "die"
+    | "take-damage"
+    | "move"
+    | "draw"
+    | "discard"
+    | "score"
+    | "enters-ready"
+    | "deals-bonus-damage";
   /** The card being affected (if applicable) */
   readonly cardId?: string;
   /** The player being affected (if applicable) */
@@ -69,6 +79,18 @@ export interface ReplacementContext {
 }
 
 /**
+ * Build the consumed-next key for a replacement ability.
+ *
+ * Single-fire `"next"`-duration replacements are keyed by
+ * `${sourceCardId}|${abilityIndex}` in
+ * `RiftboundGameState.consumedNextReplacements` so subsequent lookups skip
+ * already-fired replacements.
+ */
+function buildConsumedKey(sourceCardId: string, abilityIndex: number): string {
+  return `${sourceCardId}|${abilityIndex}`;
+}
+
+/**
  * Check if any replacement effects apply to a game action.
  *
  * Scans all cards on the board for replacement abilities that match
@@ -76,6 +98,11 @@ export interface ReplacementContext {
  *
  * Per rule 575: if multiple replacements apply, the owner of the
  * affected object chooses order. For simplicity, we return the first match.
+ *
+ * Respects `"next"` duration: replacements whose `${sourceCardId}|${abilityIndex}`
+ * key has already been recorded in `draft.consumedNextReplacements` are
+ * skipped. Callers should call `markReplacementConsumed()` after using a
+ * matched `"next"` replacement.
  */
 export function checkReplacement(
   event: ReplacementEvent,
@@ -98,6 +125,8 @@ export function checkReplacement(
       boardCards.push({ id: cardId as string, owner });
     }
   }
+
+  const consumed = ctx.draft.consumedNextReplacements ?? {};
 
   // Scan for replacement abilities
   for (const card of boardCards) {
@@ -126,8 +155,14 @@ export function checkReplacement(
         }
       }
 
-      const { replacement } = ability as unknown as { replacement: unknown };
       const { duration } = ability as unknown as { duration?: string };
+
+      // Skip "next"-duration replacements that have already fired.
+      if (duration === "next" && consumed[buildConsumedKey(card.id, i)]) {
+        continue;
+      }
+
+      const { replacement } = ability as unknown as { replacement: unknown };
 
       return {
         abilityIndex: i,
@@ -140,4 +175,47 @@ export function checkReplacement(
   }
 
   return null;
+}
+
+/**
+ * Record that a `"next"`-duration replacement has fired.
+ *
+ * Single-fire replacements (Tactical Retreat, Highlander, Noxian Guillotine,
+ * etc.) should be consumed after their replacement effect is executed. This
+ * function mutates `draft` so the replacement is skipped on future
+ * `checkReplacement()` calls until the markers are cleared at end of turn.
+ *
+ * Safe to call on non-"next" replacements — it no-ops unless the duration
+ * is exactly `"next"`.
+ */
+export function markReplacementConsumed(
+  draft: RiftboundGameState,
+  matched: MatchedReplacement,
+): void {
+  if (matched.duration !== "next") {
+    return;
+  }
+  if (!draft.consumedNextReplacements) {
+    (draft as unknown as {
+      consumedNextReplacements: Record<string, true>;
+    }).consumedNextReplacements = {};
+  }
+  const key = buildConsumedKey(matched.sourceCardId, matched.abilityIndex);
+  (draft.consumedNextReplacements as Record<string, true>)[key] = true;
+}
+
+/**
+ * Clear all `"next"`-duration replacement consumed markers. Invoked during
+ * end-of-turn cleanup so that new "next-time" replacements created next
+ * turn start fresh. (Turn-scoped replacements like Tactical Retreat's
+ * "this turn" are expected to be read off the board by `checkReplacement()`
+ * and naturally become inert when the source card is gone; clearing the
+ * consumed set just prevents stale keys from blocking new instances.)
+ */
+export function clearConsumedReplacements(draft: RiftboundGameState): void {
+  if (draft.consumedNextReplacements) {
+    (draft as unknown as {
+      consumedNextReplacements: Record<string, true>;
+    }).consumedNextReplacements = {};
+  }
 }

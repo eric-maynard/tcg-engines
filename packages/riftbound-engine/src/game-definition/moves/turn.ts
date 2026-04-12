@@ -23,7 +23,9 @@ export const turnMoves: Partial<
    */
   advancePhase: {
     condition: (state, context) =>
-      state.status === "playing" && state.turn.activePlayer === context.params.playerId,
+      state.status === "playing" &&
+      !state.pendingChoice &&
+      state.turn.activePlayer === context.params.playerId,
     reducer: (_draft, context) => {
       // Use the flow system to advance phase
       context.flow?.endPhase();
@@ -39,21 +41,39 @@ export const turnMoves: Partial<
    */
   endTurn: {
     condition: (state, context) => {
-      if (state.status !== "playing") {return false;}
-      if (state.turn.activePlayer !== context.params.playerId) {return false;}
+      if (state.status !== "playing") {
+        return false;
+      }
+      if (state.pendingChoice) {
+        return false;
+      }
+      if (state.turn.activePlayer !== context.params.playerId) {
+        return false;
+      }
       // Cannot end turn while chain or showdown is active (rule 510)
       const interaction = state.interaction ?? createInteractionState();
       const turnState = getTurnState(interaction);
-      if (turnState !== "neutral-open") {return false;}
+      if (turnState !== "neutral-open") {
+        return false;
+      }
       return true;
     },
     enumerator: (state, context) => {
-      if (state.status !== "playing") {return [];}
-      if (state.turn.activePlayer !== (context.playerId as string)) {return [];}
+      if (state.status !== "playing") {
+        return [];
+      }
+      if (state.pendingChoice) {
+        return [];
+      }
+      if (state.turn.activePlayer !== (context.playerId as string)) {
+        return [];
+      }
       // Cannot end turn while chain or showdown is active
       const interaction = state.interaction ?? createInteractionState();
       const turnState = getTurnState(interaction);
-      if (turnState !== "neutral-open") {return [];}
+      if (turnState !== "neutral-open") {
+        return [];
+      }
       return [{ playerId: context.playerId as string }];
     },
     reducer: (_draft, context) => {

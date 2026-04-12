@@ -245,6 +245,15 @@ export function evaluateCondition(
       return events.includes(eventType);
     }
 
+    case "turn-count-at-least": {
+      // True when the source card's controlling player has taken at least
+      // `threshold` turns. Used by Forgotten Monument to gate scoring on
+      // A player's third turn.
+      const threshold = (condition.threshold as number) ?? 0;
+      const player = ctx.draft.players[source.owner];
+      return (player?.turnsTaken ?? 0) >= threshold;
+    }
+
     default: {
       // Unknown condition — default to true (apply the effect)
       return true;

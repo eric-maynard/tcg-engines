@@ -13,6 +13,8 @@ import type {
 } from "@tcg/core";
 import type { CombatUnit } from "../../combat";
 import { resolveCombat } from "../../combat";
+import { fireTriggers } from "../../abilities/trigger-runner";
+import { getActiveShowdown } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type {
   GrantedKeyword,
@@ -20,6 +22,8 @@ import type {
   RiftboundGameState,
   RiftboundMoves,
 } from "../../types";
+import { hasPlayerWon } from "../win-conditions/victory";
+import { canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
 
 /**
  * Combat move definitions
@@ -371,12 +375,19 @@ export const combatMoves: Partial<
         draft.conqueredThisTurn[attackingPlayer].push(battlefieldId);
 
         // Award 1 VP for conquering (rule 630.1)
+        // Blocked if a battlefield ability (e.g. Forgotten Monument) prevents
+        // This player from scoring here right now.
+        const scoringAllowed = canPlayerScoreAtBattlefield(
+          draft,
+          attackingPlayer,
+          battlefieldId,
+        );
         const player = draft.players[attackingPlayer];
-        if (player) {
+        if (player && scoringAllowed) {
           player.victoryPoints += 1;
 
           // Check for victory
-          if (player.victoryPoints >= draft.victoryScore) {
+          if (hasPlayerWon(draft, attackingPlayer)) {
             draft.status = "finished";
             draft.winner = attackingPlayer;
 
@@ -387,6 +398,12 @@ export const combatMoves: Partial<
             });
           }
         }
+
+        // Emit "conquer" event so triggered abilities fire
+        fireTriggers(
+          { battlefieldId, playerId: attackingPlayer, type: "conquer" },
+          { cards, counters, draft, zones },
+        );
 
         // Recall any losing survivors (defenders that survived) to their base
         for (const survivorId of result.losingSurvivors) {
@@ -436,6 +453,17 @@ export const combatMoves: Partial<
         return false;
       }
 
+      // Rule 548.2: Cannot conquer while a showdown is active at this battlefield
+      if (state.interaction) {
+        const activeShowdown = getActiveShowdown(state.interaction);
+        if (
+          activeShowdown?.active &&
+          activeShowdown.battlefieldId === context.params.battlefieldId
+        ) {
+          return false;
+        }
+      }
+
       const bf = state.battlefields[context.params.battlefieldId];
       if (!bf) {
         return false;
@@ -474,6 +502,14 @@ export const combatMoves: Partial<
       for (const [bfId, bf] of Object.entries(state.battlefields || {})) {
         if (bf.controller === (context.playerId as string)) {
           continue;
+        }
+
+        // Rule 548.2: Cannot conquer while a showdown is active at this battlefield
+        if (state.interaction) {
+          const enumShowdown = getActiveShowdown(state.interaction);
+          if (enumShowdown?.active && enumShowdown.battlefieldId === bfId) {
+            continue;
+          }
         }
 
         const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
@@ -515,8 +551,11 @@ export const combatMoves: Partial<
       draft.conqueredThisTurn[playerId].push(battlefieldId);
 
       // Award 1 VP for conquering (rule 630.1)
+      // Blocked if a battlefield ability (e.g. Forgotten Monument) prevents
+      // This player from scoring here right now.
+      const scoringAllowed = canPlayerScoreAtBattlefield(draft, playerId, battlefieldId);
       const player = draft.players[playerId];
-      if (player) {
+      if (player && scoringAllowed) {
         player.victoryPoints += 1;
       }
 
@@ -526,8 +565,20 @@ export const combatMoves: Partial<
       }
       draft.scoredThisTurn[playerId].push(battlefieldId);
 
+      // Emit "conquer" event so triggered abilities fire
+      // (e.g. Blade Dancer's "When you conquer, pay 1 to ready me")
+      fireTriggers(
+        { battlefieldId, playerId, type: "conquer" },
+        {
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          zones: context.zones,
+        },
+      );
+
       // Check for victory
-      if (player && player.victoryPoints >= draft.victoryScore) {
+      if (player && hasPlayerWon(draft, playerId)) {
         draft.status = "finished";
         draft.winner = playerId;
 
@@ -570,6 +621,11 @@ export const combatMoves: Partial<
         return false;
       }
 
+      // Battlefield abilities (e.g. Forgotten Monument) can block scoring
+      if (!canPlayerScoreAtBattlefield(state, playerId, battlefieldId)) {
+        return false;
+      }
+
       return true;
     },
     enumerator: (state, context) => {
@@ -590,6 +646,9 @@ export const combatMoves: Partial<
         if (scoredThisTurn.includes(bfId)) {
           continue;
         }
+        if (!canPlayerScoreAtBattlefield(state, context.playerId as string, bfId)) {
+          continue;
+        }
 
         // Player controls this BF and hasn't scored it this turn
         results.push({
@@ -603,8 +662,12 @@ export const combatMoves: Partial<
     reducer: (draft, context) => {
       const { playerId, method, battlefieldId } = context.params;
 
+      // Blocked if a battlefield ability (e.g. Forgotten Monument) prevents
+      // This player from scoring here right now.
+      const scoringAllowed = canPlayerScoreAtBattlefield(draft, playerId, battlefieldId);
+
       const player = draft.players[playerId];
-      if (player) {
+      if (player && scoringAllowed) {
         player.victoryPoints += 1;
       }
 
@@ -613,7 +676,7 @@ export const combatMoves: Partial<
       draft.scoredThisTurn[playerId].push(battlefieldId);
 
       // Check for victory
-      if (player && player.victoryPoints >= draft.victoryScore) {
+      if (player && hasPlayerWon(draft, playerId)) {
         draft.status = "finished";
         draft.winner = playerId;
 

@@ -101,8 +101,10 @@ function executeResolvedItem(
     return;
   }
 
-  const effect = resolved.effect as ExecutableEffect | undefined;
-  if (!effect) {
+  const rawEffect = resolved.effect as
+    | (ExecutableEffect & { _variables?: Record<string, number> })
+    | undefined;
+  if (!rawEffect) {
     // No stored effect — try to look up from card registry (fallback for spells)
     const registry = getGlobalCardRegistry();
     const abilities = registry.getAbilities(resolved.cardId) ?? [];
@@ -114,8 +116,175 @@ function executeResolvedItem(
     return;
   }
 
-  const effectCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+  // Strip any bound variables (e.g., X-cost value) before executing — they
+  // Are threaded into the EffectContext so `{ variable: "x" }` expressions
+  // Can resolve to the chosen X amount during spell resolution.
+  const { _variables, ...effectRest } = rawEffect;
+  const effect = effectRest as ExecutableEffect;
+
+  const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+  const effectCtx: EffectContext = _variables ? { ...baseCtx, variables: _variables } : baseCtx;
   executeEffect(effect, effectCtx);
+}
+
+/**
+ * A resolved entry returned by `collectActivatedAbilities`.
+ *
+ * - `hostCardId` is the card whose cost will be paid (e.g., Heimerdinger,
+ *   Svellsongur). This is always the card the player selects.
+ * - `sourceCardId` is the card whose ability text/effect is used. It equals
+ *   `hostCardId` for a card's own abilities and differs for inherited /
+ *   copied abilities.
+ * - `abilityIndex` indexes into the source card's registry ability list.
+ */
+interface ActivatedEntry {
+  hostCardId: string;
+  sourceCardId: string;
+  abilityIndex: number;
+  ability: NonNullable<ReturnType<ReturnType<typeof getGlobalCardRegistry>["getAbilities"]>>[number];
+}
+
+/**
+ * Collect every activated ability available on `hostCardId`, including
+ * abilities inherited via `inheritExhaustAbilities` (Heimerdinger) or
+ * copied via `copiedFromCardId` meta (Svellsongur).
+ *
+ * Each returned entry is a distinct `(sourceCardId, abilityIndex)` pair that
+ * will be paid on `hostCardId`. Own abilities come first so the existing
+ * ability-index convention is preserved for cards without inheritance.
+ */
+function collectActivatedAbilities(
+  hostCardId: string,
+  playerId: string,
+  ctx: {
+    zones: {
+      getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
+    };
+    cards: {
+      getCardOwner: (cardId: CoreCardId) => string | undefined;
+      getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
+    };
+    battlefields: Record<string, unknown>;
+  },
+): ActivatedEntry[] {
+  const registry = getGlobalCardRegistry();
+  const entries: ActivatedEntry[] = [];
+
+  // 1. Own abilities (always present — abilityIndex matches getAbilities)
+  const ownAbilities = registry.getAbilities(hostCardId) ?? [];
+  for (let i = 0; i < ownAbilities.length; i++) {
+    const ability = ownAbilities[i];
+    if (!ability || ability.type !== "activated") {
+      continue;
+    }
+    entries.push({
+      ability,
+      abilityIndex: i,
+      hostCardId,
+      sourceCardId: hostCardId,
+    });
+  }
+
+  // 2. Copied abilities (Svellsongur): when `copiedFromCardId` is set,
+  // Expose the referenced card's activated abilities as if they were this
+  // Card's own.
+  const hostMeta = ctx.cards.getCardMeta(hostCardId as CoreCardId) as
+    | Partial<RiftboundCardMeta>
+    | undefined;
+  const copiedFrom = hostMeta?.copiedFromCardId;
+  if (copiedFrom && copiedFrom !== hostCardId) {
+    const copiedAbilities = registry.getAbilities(copiedFrom as string) ?? [];
+    for (let i = 0; i < copiedAbilities.length; i++) {
+      const ability = copiedAbilities[i];
+      if (!ability || ability.type !== "activated") {
+        continue;
+      }
+      entries.push({
+        ability,
+        abilityIndex: i,
+        hostCardId,
+        sourceCardId: copiedFrom as string,
+      });
+    }
+  }
+
+  // 3. Inherited exhaust abilities (Heimerdinger): scan every friendly
+  // Legend, unit, and gear for activated abilities whose cost includes
+  // `exhaust: true`, and expose each as if it were an ability of this card.
+  const hostDef = registry.get(hostCardId);
+  if (hostDef?.inheritExhaustAbilities) {
+    const friendlyCardIds = collectFriendlyBoardCards(playerId, ctx);
+    for (const otherCardId of friendlyCardIds) {
+      if (otherCardId === hostCardId) {
+        continue;
+      }
+      const otherDef = registry.get(otherCardId);
+      if (!otherDef) {
+        continue;
+      }
+      const {cardType} = otherDef;
+      if (
+        cardType !== "legend" &&
+        cardType !== "unit" &&
+        cardType !== "gear" &&
+        cardType !== "equipment"
+      ) {
+        continue;
+      }
+      const otherAbilities = registry.getAbilities(otherCardId) ?? [];
+      for (let i = 0; i < otherAbilities.length; i++) {
+        const ability = otherAbilities[i];
+        if (!ability || ability.type !== "activated") {
+          continue;
+        }
+        const cost = ability.cost as Record<string, unknown> | undefined;
+        if (!cost || cost.exhaust !== true) {
+          continue;
+        }
+        entries.push({
+          ability,
+          abilityIndex: i,
+          hostCardId,
+          sourceCardId: otherCardId,
+        });
+      }
+    }
+  }
+
+  return entries;
+}
+
+/**
+ * Collect all friendly cards on the board for a player — used when scanning
+ * for inheritable abilities (Heimerdinger).
+ */
+function collectFriendlyBoardCards(
+  playerId: string,
+  ctx: {
+    zones: {
+      getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
+    };
+    cards: { getCardOwner: (cardId: CoreCardId) => string | undefined };
+    battlefields: Record<string, unknown>;
+  },
+): string[] {
+  const collected: string[] = [];
+  const push = (cards: CoreCardId[]) => {
+    for (const cardId of cards) {
+      if (ctx.cards.getCardOwner(cardId) === playerId) {
+        collected.push(cardId as string);
+      }
+    }
+  };
+  push(ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId));
+  push(ctx.zones.getCardsInZone("legendZone" as CoreZoneId, playerId as CorePlayerId));
+  push(ctx.zones.getCardsInZone("championZone" as CoreZoneId, playerId as CorePlayerId));
+  for (const bfId of Object.keys(ctx.battlefields)) {
+    push(
+      ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId, playerId as CorePlayerId),
+    );
+  }
+  return collected;
 }
 
 /**
@@ -156,12 +325,18 @@ export const chainMoves: Partial<
    */
   passChainPriority: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (!state.interaction?.chain?.active) {
         return false;
       }
       return state.interaction.chain.activePlayer === context.params.playerId;
     },
     enumerator: (state, context) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       if (!state.interaction?.chain?.active) {
         return [];
       }
@@ -250,8 +425,11 @@ export const chainMoves: Partial<
       if (state.status !== "playing") {
         return false;
       }
+      if (state.pendingChoice) {
+        return false;
+      }
 
-      const { playerId, cardId, abilityIndex } = context.params;
+      const { playerId, cardId, abilityIndex, sourceCardId } = context.params;
 
       // Card must be on board (base, battlefield, legendZone, battlefieldRow, or championZone)
       const zone = context.zones.getCardZone(cardId as CoreCardId) as string | undefined;
@@ -272,20 +450,37 @@ export const chainMoves: Partial<
         return false;
       }
 
-      // Look up the ability
+      // Look up the ability from the source card (may equal cardId for own
+      // Abilities or differ for inherited/copied abilities).
       const registry = getGlobalCardRegistry();
-      const abilities = registry.getAbilities(cardId) ?? [];
+      const abilityLookupId = (sourceCardId as string | undefined) ?? cardId;
+      const abilities = registry.getAbilities(abilityLookupId) ?? [];
       const ability = abilities[abilityIndex];
       if (!ability || ability.type !== "activated") {
         return false;
       }
 
+      // If an inherited ability was requested, verify that the host card
+      // Legitimately exposes it (prevents arbitrary cross-card activation).
+      if (sourceCardId && sourceCardId !== cardId) {
+        const entries = collectActivatedAbilities(cardId, playerId, {
+          battlefields: state.battlefields,
+          cards: context.cards,
+          zones: context.zones,
+        });
+        const match = entries.find(
+          (e) => e.sourceCardId === sourceCardId && e.abilityIndex === abilityIndex,
+        );
+        if (!match) {
+          return false;
+        }
+      }
+
       // Check timing legality
       const interaction = state.interaction ?? createInteractionState();
       const turnState = getTurnState(interaction);
-      const timing = (ability.keyword === "Reaction" ? "reaction" : "action") as
-        | "action"
-        | "reaction";
+      const isReaction = ability.keyword === "Reaction" || ability.timing === "reaction";
+      const timing = (isReaction ? "reaction" : "action") as "action" | "reaction";
       if (!isLegalTiming(timing, turnState)) {
         return false;
       }
@@ -323,11 +518,18 @@ export const chainMoves: Partial<
       if (state.status !== "playing") {
         return [];
       }
+      if (state.pendingChoice) {
+        return [];
+      }
       const playerId = context.playerId as string;
-      const registry = getGlobalCardRegistry();
       const interaction = state.interaction ?? createInteractionState();
       const turnState = getTurnState(interaction);
-      const results: { playerId: string; cardId: string; abilityIndex: number }[] = [];
+      const results: {
+        playerId: string;
+        cardId: string;
+        abilityIndex: number;
+        sourceCardId?: string;
+      }[] = [];
 
       // Collect cards on base, battlefields, legendZone, battlefieldRow, and championZone
       const baseCards = context.zones.getCardsInZone(
@@ -353,23 +555,30 @@ export const chainMoves: Partial<
         playerId as CorePlayerId,
       );
 
-      for (const cardId of [...baseCards, ...bfCards, ...legendCards, ...battlefieldRowCards, ...championZoneCards]) {
+      for (const cardId of [
+        ...baseCards,
+        ...bfCards,
+        ...legendCards,
+        ...battlefieldRowCards,
+        ...championZoneCards,
+      ]) {
         const owner = context.cards.getCardOwner(cardId);
         if (owner !== playerId) {
           continue;
         }
 
-        const abilities = registry.getAbilities(cardId as string) ?? [];
-        for (let i = 0; i < abilities.length; i++) {
-          const ability = abilities[i];
-          if (!ability || ability.type !== "activated") {
-            continue;
-          }
+        const entries = collectActivatedAbilities(cardId as string, playerId, {
+          battlefields: state.battlefields,
+          cards: context.cards,
+          zones: context.zones,
+        });
+
+        for (const entry of entries) {
+          const { ability } = entry;
 
           // Check timing
-          const timing = (ability.keyword === "Reaction" ? "reaction" : "action") as
-            | "action"
-            | "reaction";
+          const isReaction = ability.keyword === "Reaction" || ability.timing === "reaction";
+          const timing = (isReaction ? "reaction" : "action") as "action" | "reaction";
           if (!isLegalTiming(timing, turnState)) {
             continue;
           }
@@ -404,16 +613,32 @@ export const chainMoves: Partial<
             }
           }
 
-          results.push({ abilityIndex: i, cardId: cardId as string, playerId });
+          const result: {
+            playerId: string;
+            cardId: string;
+            abilityIndex: number;
+            sourceCardId?: string;
+          } = {
+            abilityIndex: entry.abilityIndex,
+            cardId: entry.hostCardId,
+            playerId,
+          };
+          if (entry.sourceCardId !== entry.hostCardId) {
+            result.sourceCardId = entry.sourceCardId;
+          }
+          results.push(result);
         }
       }
       return results;
     },
     reducer: (draft, context) => {
-      const { playerId, cardId, abilityIndex } = context.params;
+      const { playerId, cardId, abilityIndex, sourceCardId } = context.params;
 
       const registry = getGlobalCardRegistry();
-      const abilities = registry.getAbilities(cardId) ?? [];
+      // For inherited/copied abilities, look up the ability text from the
+      // Source card, but pay the cost on the host card (`cardId`).
+      const abilityLookupId = (sourceCardId as string | undefined) ?? cardId;
+      const abilities = registry.getAbilities(abilityLookupId) ?? [];
       const ability = abilities[abilityIndex];
       if (!ability) {
         return;
@@ -424,13 +649,16 @@ export const chainMoves: Partial<
         const cost = ability.cost as Record<string, unknown>;
         deductAbilityCost(draft, playerId, cost);
 
-        // Handle exhaust cost
+        // Handle exhaust cost — always exhaust the host card, never the
+        // Source (Heimerdinger exhausts himself for an inherited ability).
         if (cost.exhaust) {
           context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
         }
       }
 
-      // Add ability to chain
+      // Add ability to chain. The chain item's `cardId` is the host so that
+      // Effect execution's `sourceCardId` (used for self-targeting and
+      // Location-relative targets) resolves to the host.
       const interaction = draft.interaction ?? createInteractionState();
       const turnOrder = Object.keys(draft.players);
       draft.interaction = addToChain(

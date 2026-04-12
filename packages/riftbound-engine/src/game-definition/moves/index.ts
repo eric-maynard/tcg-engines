@@ -15,6 +15,7 @@ import { counterMoves } from "./counters";
 import { discardMoves } from "./discard";
 import { equipmentMoves } from "./equipment";
 import { movementMoves } from "./movement";
+import { pendingChoiceMoves } from "./pending-choice";
 import { resourceMoves } from "./resources";
 import { setupMoves } from "./setup";
 import { turnMoves } from "./turn";
@@ -59,6 +60,9 @@ export const riftboundMoves: GameMoveDefinitions<
   // Discard/trash moves
   ...discardMoves,
 
+  // Pending-choice moves (reveal-hand flows)
+  ...pendingChoiceMoves,
+
   // XP moves
   ...xpMoves,
 } as GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -70,6 +74,7 @@ export { counterMoves } from "./counters";
 export { discardMoves } from "./discard";
 export { equipmentMoves } from "./equipment";
 export { movementMoves } from "./movement";
+export { pendingChoiceMoves } from "./pending-choice";
 export { resourceMoves } from "./resources";
 // Re-export individual move categories for selective imports
 export { setupMoves } from "./setup";

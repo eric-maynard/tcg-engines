@@ -33,13 +33,19 @@ export interface DiscardEffect {
 }
 
 /**
- * Recycle cards (put from trash to bottom of deck)
+ * Recycle cards (put cards on the bottom of their owner's deck).
+ *
+ * Recycle can source cards from:
+ * - `"trash"` (graveyard) — e.g., "Recycle 3 from your trash"
+ * - `"hand"` — e.g., "Recycle 2 from your hand"
+ * - `"board"` — e.g., "Recycle a rune" (recycle a permanent to deck)
+ * - `"self"` — e.g., "Recycle this" / "Recycle me"
  */
 export interface RecycleEffect {
   readonly type: "recycle";
   readonly target?: Target;
   readonly amount?: number;
-  readonly from?: "trash" | "board";
+  readonly from?: "trash" | "board" | "hand" | "self";
 }
 
 /**
@@ -101,6 +107,32 @@ export interface RevealEffect {
   readonly then?: Effect;
 }
 
+/**
+ * Reveal-hand-and-pick effect.
+ *
+ * Used by cards like Sabotage, Mindsplitter, and Ashe Focused that require
+ * an opponent to reveal their hand so the active player can pick a card
+ * from it. The engine places a `pendingChoice` on the game state; play is
+ * paused until the active player issues a `resolvePendingChoice` move.
+ *
+ * - `target` identifies the revealer (usually `{ type: "player",
+ *   controller: "enemy" }`).
+ * - `filter.excludeCardTypes` narrows valid picks (e.g., `["unit"]` for
+ *   "choose a non-unit card").
+ * - `onPicked` controls what happens to the picked card:
+ *   - `"recycle"` — bottom of owner's main deck (default).
+ *   - `"banish"` — sent to banishment.
+ *   - `"discard"` — sent to owner's trash.
+ */
+export interface RevealHandEffect {
+  readonly type: "reveal-hand";
+  readonly target: AnyTarget;
+  readonly filter?: {
+    readonly excludeCardTypes?: readonly string[];
+  };
+  readonly onPicked?: "recycle" | "banish" | "discard";
+}
+
 // ============================================================================
 // Combat Effects
 // ============================================================================
@@ -130,6 +162,7 @@ export interface HealEffect {
 export interface KillEffect {
   readonly type: "kill";
   readonly target: AnyTarget;
+  readonly player?: "self" | "opponent" | "each";
 }
 
 /**
@@ -332,11 +365,43 @@ export interface GrantKeywordsEffect {
 // ============================================================================
 
 /**
- * Sequence effect - execute effects in order
+ * Pending value reference — how a later step in a `SequenceEffect` can refer
+ * to "the thing the earlier step produced" (e.g., "banish a card, then play it"
+ * needs `play` to target the card banished one step earlier).
+ *
+ * The engine evaluates steps left-to-right and, when a step's effect produces
+ * a concrete card id (banish, reveal, choose, etc.), stores it under the
+ * optional `name` for later steps to reference via `{ type: "pending-value" }`
+ * targets.
+ */
+export interface PendingValueBinding {
+  /** Optional label for the pending value (defaults to "chosen") */
+  readonly name?: string;
+  /** Index of the step in `effects` that produces the value */
+  readonly source: number;
+}
+
+/**
+ * Sequence effect - execute effects in order.
+ *
+ * When the sequence contains `pendingValue` bindings, the engine stores the
+ * card id produced by step `source` and makes it available to subsequent
+ * steps via a `{ type: "pending-value", name?: "chosen" }` target.
+ *
+ * @example "Banish a card, then play it."
+ * {
+ *   type: "sequence",
+ *   effects: [
+ *     { type: "banish", target: { type: "card", from: "revealed" } },
+ *     { type: "play", target: { type: "pending-value" }, ignoreCost: true }
+ *   ],
+ *   pendingValue: { source: 0 }
+ * }
  */
 export interface SequenceEffect {
   readonly type: "sequence";
   readonly effects: Effect[];
+  readonly pendingValue?: PendingValueBinding;
 }
 
 /**
@@ -483,6 +548,102 @@ export interface WinGameEffect {
   readonly type: "win-game";
 }
 
+/**
+ * Increase the effective victory score threshold.
+ *
+ * Applied at game setup from battlefield static abilities. Bumps every
+ * player's `victoryScoreModifier` by `amount`, so the effective number of
+ * points needed to win is `state.victoryScore + amount`. Used by
+ * Aspirant's Climb ("Increase the points needed to win the game by 1.").
+ *
+ * @example "Increase the points needed to win the game by 1."
+ * { type: "increase-victory-score", amount: 1 }
+ */
+export interface IncreaseVictoryScoreEffect {
+  readonly type: "increase-victory-score";
+  readonly amount: number;
+}
+
+/**
+ * Increase the hidden-card capacity of the source battlefield.
+ *
+ * Applied at game setup from battlefield static abilities. Bumps the
+ * source battlefield's `hiddenCapacityBonus` by `amount`, so each player
+ * may hide `1 + bonus` cards at that battlefield. Used by Bandle Tree
+ * ("You may hide an additional card here.").
+ *
+ * @example "You may hide an additional card here."
+ * { type: "increase-hidden-capacity", amount: 1 }
+ */
+export interface IncreaseHiddenCapacityEffect {
+  readonly type: "increase-hidden-capacity";
+  readonly amount: number;
+}
+
+/**
+ * Prevent scoring at the source battlefield.
+ *
+ * Checked at scoring time against the card's `condition`. If the condition
+ * evaluates `false` for a given player (i.e. the gating is not yet
+ * cleared), that player cannot score at this battlefield. Used by
+ * Forgotten Monument ("Players can't score here until their third turn.")
+ * in combination with a `turn-count-at-least` condition.
+ *
+ * @example "Players can't score here until their third turn."
+ * { type: "prevent-score" }
+ */
+export interface PreventScoreEffect {
+  readonly type: "prevent-score";
+}
+
+// ============================================================================
+// XP / Progression Effects (Unleashed set)
+// ============================================================================
+
+/**
+ * Gain experience points (XP).
+ *
+ * Introduced in the Unleashed (UNL) set. XP is a per-player counter that
+ * persists across turns and unlocks `[Level N][>]` abilities once a threshold
+ * is reached. Often granted by `[Hunt]` triggers or "Gain N XP" effects.
+ *
+ * @example "Gain 2 XP."
+ * { type: "gain-xp", amount: 2 }
+ */
+export interface GainXpEffect {
+  readonly type: "gain-xp";
+  readonly amount: number | AmountExpression;
+}
+
+/**
+ * Spend experience points (XP) — used as an activated-ability cost or
+ * additional cost. Fails silently if the player lacks the required XP.
+ *
+ * @example "Spend 3 XP, [Exhaust]: Draw 1."
+ * { type: "spend-xp", amount: 3 }
+ */
+export interface SpendXpEffect {
+  readonly type: "spend-xp";
+  readonly amount: number;
+}
+
+/**
+ * Predict effect (UNL keyword-as-effect).
+ *
+ * Look at the top `amount` cards of the player's main deck. The player
+ * may recycle any of them (put on the bottom of the deck) and put the
+ * rest back on top in any order.
+ *
+ * `[Predict]` with no value defaults to `amount: 1`.
+ *
+ * @example "[Predict 2]."
+ * { type: "predict", amount: 2 }
+ */
+export interface PredictEffect {
+  readonly type: "predict";
+  readonly amount: number;
+}
+
 // ============================================================================
 // Amount Expressions
 // ============================================================================
@@ -491,7 +652,7 @@ export interface WinGameEffect {
  * Dynamic amount based on game state
  */
 export type AmountExpression =
-  | { readonly count: Target } // Count of matching targets
+  | { readonly count: Target; readonly multiplier?: number } // Count of matching targets, optionally times N
   | { readonly might: AnyTarget } // Might of a target
   | { readonly damage: AnyTarget } // Damage on a target
   | { readonly cost: AnyTarget } // Cost of a target
@@ -518,6 +679,7 @@ export type Effect =
   | BanishEffect
   | LookEffect
   | RevealEffect
+  | RevealHandEffect
 
   // Combat
   | DamageEffect
@@ -568,12 +730,26 @@ export type Effect =
   | DetachEffect
   | GainControlOfSpellEffect
   | ExtraTurnEffect
-  | WinGameEffect;
+  | WinGameEffect
+  | IncreaseVictoryScoreEffect
+  | IncreaseHiddenCapacityEffect
+  | PreventScoreEffect
+
+  // XP / progression (UNL set)
+  | GainXpEffect
+  | SpendXpEffect
+  | PredictEffect;
 
 /**
  * Static effects (subset for static abilities)
  */
-export type StaticEffect = ModifyMightEffect | GrantKeywordEffect | GrantKeywordsEffect;
+export type StaticEffect =
+  | ModifyMightEffect
+  | GrantKeywordEffect
+  | GrantKeywordsEffect
+  | IncreaseVictoryScoreEffect
+  | IncreaseHiddenCapacityEffect
+  | PreventScoreEffect;
 
 // ============================================================================
 // Type Guards
@@ -663,8 +839,8 @@ export function damage(amount: number | AmountExpression, target: AnyTarget): Da
 /**
  * Create a kill effect
  */
-export function kill(target: AnyTarget): KillEffect {
-  return { target, type: "kill" };
+export function kill(target: AnyTarget, player?: "self" | "opponent" | "each"): KillEffect {
+  return player ? { player, target, type: "kill" } : { target, type: "kill" };
 }
 
 /**

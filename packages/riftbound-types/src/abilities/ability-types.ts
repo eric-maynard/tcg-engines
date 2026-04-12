@@ -29,6 +29,7 @@ export type RiftboundKeyword =
   | "Assault" // +X Might while attacking
   | "Shield" // +X Might while defending
   | "Tank" // Must be assigned damage first
+  | "Backline" // Targeted last in combat damage assignment
 
   // Protection keywords
   | "Deflect" // Opponents pay +X power to target
@@ -59,12 +60,21 @@ export type RiftboundKeyword =
 
   // Special
   | "Unique" // Only 1 in deck
-  | "Repeat"; // Pay to repeat effect
+  | "Repeat" // Pay to repeat effect
+
+  // UNL champion progression keywords
+  | "Hunt" // When conquering or holding, gain N XP
+  | "Ambush" // Can be played as a Reaction to a battlefield where you have units
+  | "Predict"; // Look at top N cards, may recycle (also usable as an effect)
 
 /**
  * Keywords that have numeric values (stackable)
+ *
+ * Includes UNL-set progression keywords:
+ * - `Hunt N`: when I conquer or hold, gain N XP
+ * - `Predict N`: look at top N cards, recycle any, reorder rest (also used as an effect)
  */
-export type ValueKeyword = "Assault" | "Shield" | "Deflect";
+export type ValueKeyword = "Assault" | "Shield" | "Deflect" | "Hunt" | "Predict";
 
 /**
  * Keywords that have costs
@@ -81,6 +91,7 @@ export type EffectKeyword = "Deathknell" | "Legion" | "Vision";
  */
 export type SimpleKeyword =
   | "Tank"
+  | "Backline"
   | "Ganking"
   | "Action"
   | "Reaction"
@@ -88,7 +99,8 @@ export type SimpleKeyword =
   | "Temporary"
   | "Quick-Draw"
   | "Weaponmaster"
-  | "Unique";
+  | "Unique"
+  | "Ambush";
 
 // ============================================================================
 // Keyword Ability Variants
@@ -364,7 +376,18 @@ export interface ReplacementAbility {
   readonly name?: string;
 
   /** What event this replaces */
-  readonly replaces: "die" | "take-damage" | "move" | "draw" | "discard" | "score";
+  readonly replaces:
+    | "die"
+    | "take-damage"
+    | "move"
+    | "draw"
+    | "discard"
+    | "score"
+    | "enters-ready"
+    | "deals-bonus-damage"
+    | "reveal"
+    | "combat-tie"
+    | "play-token";
 
   /** What is being affected */
   readonly target?: AnyTarget;
@@ -375,8 +398,22 @@ export interface ReplacementAbility {
   /** What happens instead */
   readonly replacement: Effect | "prevent";
 
-  /** Duration of the replacement */
+  /**
+   * Duration of the replacement.
+   *
+   * - `"turn"`: active for the remainder of the turn
+   * - `"permanent"`: always active while the source card is on the board
+   * - `"next"`: single-fire — fires the first time the matched event occurs
+   *   and is then cleared. Used for "The next time X would Y, instead Z."
+   *   spell effects. Engines honor `duration === "next"` by removing the
+   *   pending replacement after its first successful match.
+   */
   readonly duration?: "turn" | "permanent" | "next";
+
+  /**
+   * Optional bonus damage amount for `deals-bonus-damage` replacements.
+   */
+  readonly bonusDamage?: number;
 }
 
 // ============================================================================
@@ -458,6 +495,7 @@ export function isReplacementAbility(ability: Ability): ability is ReplacementAb
 export function isSimpleKeyword(keyword: RiftboundKeyword): keyword is SimpleKeyword {
   return [
     "Tank",
+    "Backline",
     "Ganking",
     "Action",
     "Reaction",
@@ -466,6 +504,7 @@ export function isSimpleKeyword(keyword: RiftboundKeyword): keyword is SimpleKey
     "Quick-Draw",
     "Weaponmaster",
     "Unique",
+    "Ambush",
   ].includes(keyword);
 }
 
@@ -473,7 +512,13 @@ export function isSimpleKeyword(keyword: RiftboundKeyword): keyword is SimpleKey
  * Check if keyword is a value keyword
  */
 export function isValueKeyword(keyword: RiftboundKeyword): keyword is ValueKeyword {
-  return keyword === "Assault" || keyword === "Shield" || keyword === "Deflect";
+  return (
+    keyword === "Assault" ||
+    keyword === "Shield" ||
+    keyword === "Deflect" ||
+    keyword === "Hunt" ||
+    keyword === "Predict"
+  );
 }
 
 /**

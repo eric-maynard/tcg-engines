@@ -168,6 +168,48 @@ describe("Game Flow: Movement", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  test("recallUnit condition always rejects player-initiated recalls (rule 616)", () => {
+    // Rule 616-619: Recalls are NOT discretionary player actions.
+    // The recallUnit condition should always return false since players
+    // Cannot voluntarily recall units — recalls only happen via game effects
+    // (combat resolution, cleanup, card abilities).
+    const { movementMoves } = require("../game-definition/moves/movement");
+    const {condition} = movementMoves.recallUnit;
+
+    // Condition should always return false regardless of state
+    const mockState = { battlefields: { "bf-1": {} }, status: "playing" };
+    const mockContext = {
+      cards: {
+        getCardOwner: () => P1,
+      },
+      params: { playerId: P1, unitId: `${P1}-card-0` },
+      zones: {
+        getCardZone: () => "battlefield-bf-1",
+      },
+    };
+
+    expect(condition(mockState, mockContext)).toBe(false);
+  });
+
+  test("recallUnit enumerator always returns empty array (rule 616)", () => {
+    // Enumerator should never offer recallUnit as an available move
+    const { movementMoves } = require("../game-definition/moves/movement");
+    const {enumerator} = movementMoves.recallUnit;
+
+    const mockState = { battlefields: { "bf-1": {} }, status: "playing" };
+    const mockContext = {
+      cards: {
+        getCardOwner: () => P1,
+      },
+      playerId: P1,
+      zones: {
+        getCardsInZone: () => [`${P1}-card-0`],
+      },
+    };
+
+    expect(enumerator(mockState, mockContext)).toEqual([]);
+  });
 });
 
 describe("Game Flow: Combat & Scoring", () => {

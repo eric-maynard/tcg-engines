@@ -12,6 +12,7 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import { applyBattlefieldPermanentEffects } from "../../operations/battlefield-setup-effects";
 
 /**
  * Setup move definitions
@@ -380,6 +381,12 @@ export const setupMoves: Partial<
 
       draft.status = "playing";
       draft.setup = undefined;
+
+      // Apply permanent battlefield static effects (e.g. Aspirant's Climb
+      // Victory-score modifier, Bandle Tree hidden-capacity bonus). Runs
+      // Once now because the set of in-play battlefields is fixed after
+      // Setup.
+      applyBattlefieldPermanentEffects(draft);
 
       // Transition flow from setup segment to mainGame segment
       context.flow?.endSegment();

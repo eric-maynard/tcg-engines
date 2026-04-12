@@ -27,6 +27,44 @@ export interface CardDefinitionLookup {
   readonly isChampion?: boolean;
   /** Might bonus when equipment is attached to a unit */
   readonly mightBonus?: number;
+  /**
+   * Interactive cost reduction flag. When a card declares
+   * `interactiveCostReduction: "target-might"`, play-move validation
+   * reduces the card's energy cost by the Might of a chosen target
+   * (`chosenTargetId`) provided in the move parameters. Used by
+   * Hextech Gauntlets and similar equipment whose costs scale with
+   * their attachment target.
+   */
+  readonly interactiveCostReduction?: "target-might";
+  /**
+   * Move-escalation flag. When a card with this flag is on the board
+   * and enemy-controlled, each unit the opponent moves beyond the first
+   * in a single turn costs an additional 1 rainbow (energy) per move.
+   * Used by Mageseeker Investigator.
+   */
+  readonly moveEscalation?: boolean;
+  /**
+   * Heimerdinger-style marker: when set, this card exposes every
+   * exhaust-cost activated ability on friendly legends, units, and gear as
+   * if it were its own. The inherited ability's cost is paid on THIS card
+   * (the "host"), but the ability's effect comes from the source card.
+   * Used by Heimerdinger, Inventor.
+   */
+  readonly inheritExhaustAbilities?: boolean;
+  /**
+   * Svellsongur-style marker: when this equipment card is attached to a
+   * unit via `equipCard`, the unit's card instance ID is recorded on the
+   * equipment's `copiedFromCardId` meta so the unit's abilities are exposed
+   * on the equipment. Used by Svellsongur.
+   */
+  readonly copyAttachedUnitText?: boolean;
+  /**
+   * The Zero Drive marker: when set, the card's banish effect records
+   * every banished target in `exiledByThis` meta instead of only moving it
+   * to trash, and when the card leaves the board those cards return.
+   * Used by The Zero Drive.
+   */
+  readonly tracksExiledCards?: boolean;
   readonly abilities?: readonly {
     readonly type: string;
     readonly trigger?: { readonly event: string; readonly on?: string };
@@ -41,6 +79,8 @@ export interface CardDefinitionLookup {
     readonly replacement?: unknown;
     readonly duration?: string;
     readonly target?: unknown;
+    /** Timing for activated/spell abilities (action/reaction) */
+    readonly timing?: string;
   }[];
 }
 
@@ -119,6 +159,24 @@ export class CardDefinitionRegistry {
    */
   getSpellTiming(cardId: string): string | undefined {
     return this.definitions.get(cardId)?.timing;
+  }
+
+  /**
+   * Get a card's interactive cost reduction flag, if any.
+   * Used by equipment like Hextech Gauntlets whose cost depends on
+   * the Might of a player-chosen target at play time.
+   */
+  getInteractiveCostReduction(cardId: string): "target-might" | undefined {
+    return this.definitions.get(cardId)?.interactiveCostReduction;
+  }
+
+  /**
+   * Check if a card declares move escalation.
+   * Cards like Mageseeker Investigator charge opponents extra power
+   * for moving additional units past the first in a single turn.
+   */
+  hasMoveEscalation(cardId: string): boolean {
+    return this.definitions.get(cardId)?.moveEscalation === true;
   }
 
   /**

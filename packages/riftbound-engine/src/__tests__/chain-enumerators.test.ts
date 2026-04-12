@@ -52,7 +52,9 @@ function createMockEnumContext(playerId: string, zoneCards: Record<string, strin
       getCardOwner: (cardId: CoreCardId) => {
         // All mock cards owned by the requesting player
         for (const cards of Object.values(zoneCards)) {
-          if (cards.includes(cardId as string)) {return playerId;}
+          if (cards.includes(cardId as string)) {
+            return playerId;
+          }
         }
         return undefined;
       },
@@ -70,11 +72,14 @@ function createMockEnumContext(playerId: string, zoneCards: Record<string, strin
     zones: {
       getCardZone: (cardId: CoreCardId) => {
         for (const [zone, cards] of Object.entries(zoneCards)) {
-          if (cards.includes(cardId as string)) {return zone as CoreZoneId;}
+          if (cards.includes(cardId as string)) {
+            return zone as CoreZoneId;
+          }
         }
         return undefined;
       },
-      getCardsInZone: (zoneId: CoreZoneId, _pid?: CorePlayerId) => (zoneCards[zoneId as string] ?? []) as CoreCardId[],
+      getCardsInZone: (zoneId: CoreZoneId, _pid?: CorePlayerId) =>
+        (zoneCards[zoneId as string] ?? []) as CoreCardId[],
     },
   };
 }
@@ -391,5 +396,168 @@ describe("activateAbility enumerator", () => {
 
     const result = enumerator(state, context as never);
     expect(result).toEqual([]);
+  });
+
+  test("enumerates activated abilities on legend zone cards", () => {
+    registry.register("legend-1", {
+      abilities: [
+        { cost: { exhaust: true }, effect: { energy: 1, type: "add-resource" }, type: "activated" },
+      ],
+      cardType: "legend",
+      id: "legend-1",
+      name: "Test Legend",
+    });
+
+    const state = createMockState();
+    const context = createMockEnumContext(P1, { legendZone: ["legend-1"] });
+
+    const result = enumerator(state, context as never);
+    expect(result).toEqual([{ abilityIndex: 0, cardId: "legend-1", playerId: P1 }]);
+  });
+
+  test("enumerates Reaction-timed activated abilities on legend zone during neutral-open", () => {
+    // Daughter of the Void style: [Exhaust]: [Reaction] — [Add] [rainbow]
+    registry.register("legend-reaction", {
+      abilities: [
+        {
+          cost: { exhaust: true },
+          effect: { rainbow: 1, type: "add-resource" },
+          keyword: "Reaction",
+          type: "activated",
+        },
+      ],
+      cardType: "legend",
+      id: "legend-reaction",
+      name: "Daughter of the Void",
+    });
+
+    const state = createMockState(); // Neutral-open state
+    const context = createMockEnumContext(P1, { legendZone: ["legend-reaction"] });
+
+    const result = enumerator(state, context as never);
+    // Reaction abilities are always legal (any timing)
+    expect(result).toEqual([{ abilityIndex: 0, cardId: "legend-reaction", playerId: P1 }]);
+  });
+
+  test("enumerates activated abilities on champion zone cards", () => {
+    registry.register("champion-1", {
+      abilities: [{ effect: { amount: 1, type: "draw" }, type: "activated" }],
+      cardType: "unit",
+      id: "champion-1",
+      name: "Test Champion",
+    });
+
+    const state = createMockState();
+    const context = createMockEnumContext(P1, { championZone: ["champion-1"] });
+
+    const result = enumerator(state, context as never);
+    expect(result).toEqual([{ abilityIndex: 0, cardId: "champion-1", playerId: P1 }]);
+  });
+
+  test("enumerates activated ability with timing:'reaction' during neutral-closed", () => {
+    // Tests the timing field (not keyword) on activated abilities
+    registry.register("legend-timing", {
+      abilities: [
+        {
+          cost: { exhaust: true },
+          effect: { rainbow: 1, type: "add-resource" },
+          timing: "reaction",
+          type: "activated",
+        },
+      ],
+      cardType: "legend",
+      id: "legend-timing",
+      name: "Legend With Timing Field",
+    });
+
+    // Create a state with an active chain (neutral-closed)
+    let interaction = createInteractionState();
+    interaction = {
+      ...interaction,
+      chain: {
+        active: true,
+        activePlayer: P1,
+        items: [{ cardId: "spell-1", controller: P2, id: "chain-1", type: "spell" }],
+        passedPlayers: [],
+        relevantPlayers: [P1, P2],
+        turnOrder: [P1, P2],
+      },
+    };
+    const state = createMockState({ interaction });
+    const context = createMockEnumContext(P1, { legendZone: ["legend-timing"] });
+
+    const result = enumerator(state, context as never);
+    // Reaction-timed abilities should be available during closed state
+    expect(result).toEqual([{ abilityIndex: 0, cardId: "legend-timing", playerId: P1 }]);
+  });
+
+  test("skips action-timed ability during neutral-closed", () => {
+    // An action ability should NOT be available when chain is active
+    registry.register("legend-action", {
+      abilities: [
+        {
+          cost: { exhaust: true },
+          effect: { amount: 1, type: "draw" },
+          type: "activated",
+          // No timing or keyword — defaults to "action"
+        },
+      ],
+      cardType: "legend",
+      id: "legend-action",
+      name: "Legend With Action Ability",
+    });
+
+    let interaction = createInteractionState();
+    interaction = {
+      ...interaction,
+      chain: {
+        active: true,
+        activePlayer: P1,
+        items: [{ cardId: "spell-1", controller: P2, id: "chain-1", type: "spell" }],
+        passedPlayers: [],
+        relevantPlayers: [P1, P2],
+        turnOrder: [P1, P2],
+      },
+    };
+    const state = createMockState({ interaction });
+    const context = createMockEnumContext(P1, { legendZone: ["legend-action"] });
+
+    const result = enumerator(state, context as never);
+    // Action abilities are NOT available during closed state
+    expect(result).toEqual([]);
+  });
+
+  test("condition returns true for legend zone activated abilities", () => {
+    const condition = chainMoves.activateAbility!.condition!;
+    registry.register("legend-cond", {
+      abilities: [
+        { cost: { exhaust: true }, effect: { energy: 1, type: "add-resource" }, type: "activated" },
+      ],
+      cardType: "legend",
+      id: "legend-cond",
+      name: "Test Legend",
+    });
+
+    const state = createMockState();
+    const context = {
+      cards: {
+        getCardMeta: () => undefined,
+        getCardOwner: () => P1,
+        updateCardMeta: () => {},
+      },
+      counters: {
+        addCounter: () => {},
+        clearCounter: () => {},
+        removeCounter: () => {},
+        setFlag: () => {},
+      },
+      params: { abilityIndex: 0, cardId: "legend-cond", playerId: P1 },
+      zones: {
+        getCardZone: () => "legendZone" as CoreZoneId,
+        getCardsInZone: () => ["legend-cond"] as CoreCardId[],
+      },
+    };
+
+    expect(condition(state, context as never)).toBe(true);
   });
 });

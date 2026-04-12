@@ -96,6 +96,21 @@ export interface RiftboundCardMeta {
 
   /** Active restrictions on this card */
   restrictions?: string[];
+
+  /**
+   * Card instance ID whose abilities/text are copied onto this card while
+   * this card is attached/bound to it. Used by Svellsongur to copy the unit's
+   * text to the equipment for as long as it's attached.
+   */
+  copiedFromCardId?: CardId;
+
+  /**
+   * Card instance IDs that have been exiled/banished "with" this card.
+   * Used by The Zero Drive: when the equipment leaves the board, these cards
+   * return. Populated by the card's activated effect; cleared when this card
+   * leaves the board.
+   */
+  exiledByThis?: CardId[];
 }
 
 /**
@@ -156,6 +171,15 @@ export interface BattlefieldState {
 
   /** Player who contested the battlefield (if contested) */
   contestedBy?: PlayerId;
+
+  /**
+   * Bonus to the number of cards a player may hide at this battlefield.
+   *
+   * Default hidden-capacity is 1 per player. Battlefields like Bandle Tree
+   * increase this. Applied once during setup from battlefield static
+   * abilities of type `increase-hidden-capacity`.
+   */
+  hiddenCapacityBonus?: number;
 }
 
 /**
@@ -170,6 +194,24 @@ export interface PlayerState {
 
   /** Experience points (XP) - introduced by Unleashed (UNL) set */
   xp: number;
+
+  /**
+   * Number of main-phase turns this player has taken.
+   *
+   * Incremented at the start of each of the player's turns. Used by
+   * battlefields like Forgotten Monument that gate scoring on a minimum
+   * turn count. A player's first turn is `turnsTaken === 1`.
+   */
+  turnsTaken: number;
+
+  /**
+   * Modifier to the victory score needed to win for this player.
+   *
+   * Effective threshold = `state.victoryScore + victoryScoreModifier`.
+   * Used by battlefields like Aspirant's Climb that increase the points
+   * needed to win. Defaults to 0.
+   */
+  victoryScoreModifier?: number;
 }
 
 /**
@@ -211,6 +253,43 @@ export interface SetupState {
   readonly secondPlayer?: PlayerId;
   readonly completedBy: PlayerId[];
   readonly pendingMulligan: PlayerId[];
+}
+
+/**
+ * A pending player decision that blocks all other moves until resolved.
+ *
+ * Used for effects like Sabotage/Mindsplitter/Ashe Focused that require
+ * an opponent to reveal their hand so the active player can pick a card
+ * from it. While a pending choice exists, only `resolvePendingChoice` is
+ * a legal move.
+ */
+export interface PendingChoice {
+  /** The kind of choice that is pending. */
+  readonly type: "reveal-and-pick";
+
+  /** Player who triggered the choice (picks the card). */
+  readonly prompter: PlayerId;
+
+  /** Player whose hand was revealed (the target opponent). */
+  readonly revealer: PlayerId;
+
+  /** Snapshot of card IDs that were revealed (usually the revealer's full hand). */
+  readonly revealed: CardId[];
+
+  /**
+   * Optional filter on which revealed card may be picked.
+   * - `excludeCardTypes`: card types that are NOT valid picks (e.g., ["unit"]).
+   */
+  readonly filter?: {
+    readonly excludeCardTypes?: readonly string[];
+  };
+
+  /**
+   * What to do with the picked card. `"recycle"` sends it to the bottom of
+   * its owner's main deck, `"banish"` sends it to banishment, `"discard"`
+   * sends it to the owner's trash.
+   */
+  readonly onPicked: "recycle" | "banish" | "discard";
 }
 
 /**
@@ -268,8 +347,40 @@ export interface RiftboundGameState {
   /** Additional costs paid for the current card being played */
   readonly additionalCostsPaid?: Record<string, boolean>;
 
+  /**
+   * Number of units each player has moved this turn.
+   *
+   * Used by move-escalation effects (e.g., Mageseeker Investigator) that
+   * charge an opponent extra power for each unit moved beyond the first
+   * during a single turn. Reset at the start of each turn.
+   */
+  readonly unitsMovedThisTurn?: Record<string, number>;
+
   /** Events that occurred this turn, for condition checking */
   readonly turnEvents?: Record<string, string[]>;
+
+  /**
+   * Keys of `"next"`-duration replacements that have already fired this turn.
+   *
+   * Replacement abilities with `duration: "next"` (e.g., Tactical Retreat,
+   * Highlander) fire once for the next matching game action and are then
+   * consumed. The engine marks them as consumed by inserting
+   * `${sourceCardId}|${abilityIndex}` into this set; subsequent calls to
+   * `checkReplacement` skip any ability whose key is present.
+   *
+   * The set is cleared at end of turn along with other turn-scoped state.
+   */
+  readonly consumedNextReplacements?: Record<string, true>;
+
+  /**
+   * A pending player decision that blocks all other moves until resolved.
+   *
+   * When set, only the `resolvePendingChoice` move is legal. Produced by
+   * effects such as `reveal-hand` (Sabotage, Mindsplitter, Ashe Focused)
+   * that require the active player to pick a card from the revealed hand
+   * before play can continue.
+   */
+  pendingChoice?: PendingChoice;
 }
 
 /**
@@ -284,7 +395,9 @@ export type RiftboundState = RiftboundGameState;
 export function createPlayerState(playerId: PlayerId): PlayerState {
   return {
     id: playerId,
+    turnsTaken: 0,
     victoryPoints: 0,
+    victoryScoreModifier: 0,
     xp: 0,
   };
 }

@@ -96,27 +96,27 @@ function createMockContext(
         }) as unknown as (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void,
       },
       counters: {
-        getFlag: ((cardId: string, flag: string) =>
-          flagStore.get(cardId)?.[flag] ?? false) as unknown as (
-          cardId: CoreCardId,
-          flag: string,
-        ) => boolean,
-        setFlag: ((cardId: string, flag: string, value: boolean) => {
-          const existing = flagStore.get(cardId) ?? {};
-          existing[flag] = value;
-          flagStore.set(cardId, existing);
-        }) as unknown as (cardId: CoreCardId, flag: string, value: boolean) => void,
         addCounter: (() => {}) as unknown as (
           cardId: CoreCardId,
           type: string,
           amount: number,
         ) => void,
+        clearCounter: (() => {}) as unknown as (cardId: CoreCardId, type: string) => void,
+        getFlag: ((cardId: string, flag: string) =>
+          flagStore.get(cardId)?.[flag] ?? false) as unknown as (
+          cardId: CoreCardId,
+          flag: string,
+        ) => boolean,
         removeCounter: (() => {}) as unknown as (
           cardId: CoreCardId,
           type: string,
           amount: number,
         ) => void,
-        clearCounter: (() => {}) as unknown as (cardId: CoreCardId, type: string) => void,
+        setFlag: ((cardId: string, flag: string, value: boolean) => {
+          const existing = flagStore.get(cardId) ?? {};
+          existing[flag] = value;
+          flagStore.set(cardId, existing);
+        }) as unknown as (cardId: CoreCardId, flag: string, value: boolean) => void,
       },
       endGame: undefined as
         | ((opts: { winner: CorePlayerId; reason: string; metadata: unknown }) => void)
@@ -124,6 +124,15 @@ function createMockContext(
       params: {} as Record<string, unknown>,
       playerId: P1 as CorePlayerId,
       zones: {
+        drawCards: (() => []) as unknown as (params: {
+          count: number;
+          from: CoreZoneId;
+          to: CoreZoneId;
+          playerId: CorePlayerId;
+        }) => CoreCardId[],
+        getCardZone: ((cardId: string) => cardStore.get(cardId)?.zone) as unknown as (
+          cardId: CoreCardId,
+        ) => string | undefined,
         getCardsInZone: ((zoneId: string, playerId?: string) => {
           if (playerId) {
             // Filter by owner for per-player zones
@@ -132,9 +141,6 @@ function createMockContext(
           }
           return [...(zoneContents.get(zoneId) ?? [])];
         }) as unknown as (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[],
-        getCardZone: ((cardId: string) => cardStore.get(cardId)?.zone) as unknown as (
-          cardId: CoreCardId,
-        ) => string | undefined,
         moveCard: ((params: { cardId: string; targetZoneId: string }) => {
           const { cardId, targetZoneId } = params;
           for (const [_zone, zCards] of zoneContents) {
@@ -152,12 +158,6 @@ function createMockContext(
             card.zone = targetZoneId;
           }
         }) as unknown as (params: { cardId: CoreCardId; targetZoneId: CoreZoneId }) => void,
-        drawCards: (() => []) as unknown as (params: {
-          count: number;
-          from: CoreZoneId;
-          to: CoreZoneId;
-          playerId: CorePlayerId;
-        }) => CoreCardId[],
       },
     },
     flagStore,
@@ -479,7 +479,7 @@ describe("Bug 3: Spell target validation in playSpell condition", () => {
       abilities: [
         {
           effect: {
-            target: { type: "unit", controller: "enemy" },
+            target: { controller: "enemy", type: "unit" },
             type: "move",
           },
           type: "spell",
@@ -518,7 +518,7 @@ describe("Bug 3: Spell target validation in playSpell condition", () => {
       abilities: [
         {
           effect: {
-            target: { type: "unit", controller: "enemy" },
+            target: { controller: "enemy", type: "unit" },
             type: "move",
           },
           type: "spell",

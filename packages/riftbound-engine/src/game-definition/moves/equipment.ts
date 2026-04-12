@@ -72,11 +72,16 @@ export const equipmentMoves: Partial<
     reducer: (_draft, context) => {
       const { equipmentId, unitId } = context.params;
 
-      // Mark equipment as attached to the unit
-      context.cards.updateCardMeta(
-        equipmentId as CoreCardId,
-        { attachedTo: unitId } as Partial<RiftboundCardMeta>,
-      );
+      // Mark equipment as attached to the unit. Equipment flagged with
+      // `copyAttachedUnitText` (Svellsongur) also records `copiedFromCardId`
+      // So its activated abilities enumerator exposes the unit's abilities.
+      const registry = getGlobalCardRegistry();
+      const equipDef = registry.get(equipmentId);
+      const meta: Partial<RiftboundCardMeta> = { attachedTo: unitId };
+      if (equipDef?.copyAttachedUnitText) {
+        meta.copiedFromCardId = unitId;
+      }
+      context.cards.updateCardMeta(equipmentId as CoreCardId, meta);
 
       // Add equipment to unit's equippedWith list
       const unitMeta = context.cards.getCardMeta(unitId as CoreCardId) as
@@ -119,10 +124,14 @@ export const equipmentMoves: Partial<
         | undefined;
       const unitId = equipMeta?.attachedTo;
 
-      // Clear attachment on equipment
+      // Clear attachment on equipment. Also clears `copiedFromCardId` so
+      // Svellsongur stops exposing the detached unit's abilities.
       context.cards.updateCardMeta(
         equipmentId as CoreCardId,
-        { attachedTo: undefined } as Partial<RiftboundCardMeta>,
+        {
+          attachedTo: undefined,
+          copiedFromCardId: undefined,
+        } as Partial<RiftboundCardMeta>,
       );
 
       // Remove from unit's equippedWith list
