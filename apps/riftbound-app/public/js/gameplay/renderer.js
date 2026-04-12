@@ -1116,3 +1116,111 @@ function renderChainOverlay() {
 
   box.innerHTML = html;
 }
+
+// ============================================================================
+// Hover preview slot (Workstream 2)
+// Delegated hover listeners populate a fixed slot in the sidebar with a large
+// readable version of whatever card the user is currently hovering. Works for
+// any card type (hand, board, battlefield, legend, champion, rune) because it
+// listens at document level for `.card` elements bearing a `data-def-id`.
+// ============================================================================
+
+let hoverPreviewClearTimer = null;
+const HOVER_PREVIEW_CLEAR_DELAY_MS = 150;
+
+function getHoverPreviewElements() {
+  const slot = document.getElementById("hover-preview");
+  if (!slot) return null;
+  const img = document.getElementById("hoverPreviewImg");
+  if (!img) return null;
+  return { slot, img };
+}
+
+function setHoverPreviewCard(defId, name) {
+  const els = getHoverPreviewElements();
+  if (!els) return;
+  if (!defId) return;
+
+  // Cancel any pending clear from a previous mouseleave.
+  if (hoverPreviewClearTimer !== null) {
+    clearTimeout(hoverPreviewClearTimer);
+    hoverPreviewClearTimer = null;
+  }
+
+  // Strip the per-player instance prefix so we hit the shared card-image route.
+  const imgId = String(defId).replace(/^player-[12]-/, "");
+  const nextSrc = `/card-image/${encodeURIComponent(imgId)}`;
+
+  // Avoid reassigning src if unchanged (prevents flicker on re-entry).
+  if (els.img.getAttribute("data-current") !== imgId) {
+    els.img.setAttribute("data-current", imgId);
+    els.img.src = nextSrc;
+  }
+  els.img.alt = name || "";
+  els.slot.classList.add("has-card");
+  els.slot.setAttribute("aria-hidden", "false");
+}
+
+function scheduleHoverPreviewClear() {
+  const els = getHoverPreviewElements();
+  if (!els) return;
+  if (hoverPreviewClearTimer !== null) {
+    clearTimeout(hoverPreviewClearTimer);
+  }
+  hoverPreviewClearTimer = setTimeout(() => {
+    hoverPreviewClearTimer = null;
+    const latest = getHoverPreviewElements();
+    if (!latest) return;
+    latest.slot.classList.remove("has-card");
+    latest.slot.setAttribute("aria-hidden", "true");
+    latest.img.removeAttribute("data-current");
+    latest.img.removeAttribute("src");
+    latest.img.alt = "";
+  }, HOVER_PREVIEW_CLEAR_DELAY_MS);
+}
+
+function findCardElementFromEvent(event) {
+  const target = event.target;
+  if (!target || typeof target.closest !== "function") return null;
+  // Ignore hover over the preview slot itself (its img is not a `.card`).
+  if (target.closest("#hover-preview")) return null;
+  return target.closest(".card");
+}
+
+function onDocumentCardMouseOver(event) {
+  const cardEl = findCardElementFromEvent(event);
+  if (!cardEl) return;
+  const defId = cardEl.getAttribute("data-def-id");
+  if (!defId) return;
+  const nameEl = cardEl.querySelector(".card-name");
+  const name = nameEl ? nameEl.textContent : cardEl.getAttribute("alt") || "";
+  setHoverPreviewCard(defId, name);
+}
+
+function onDocumentCardMouseOut(event) {
+  const cardEl = findCardElementFromEvent(event);
+  if (!cardEl) return;
+  // Only schedule a clear when the mouse actually leaves the card element
+  // (mouseout fires when moving between descendants, so check relatedTarget).
+  const related = event.relatedTarget;
+  if (related && typeof cardEl.contains === "function" && cardEl.contains(related)) {
+    return;
+  }
+  scheduleHoverPreviewClear();
+}
+
+// Install delegated listeners once on DOM ready. Using `mouseover`/`mouseout`
+// (which bubble) instead of `mouseenter`/`mouseleave` so a single document
+// listener covers every card rendered now or in the future.
+function initHoverPreview() {
+  if (document.body.dataset.hoverPreviewInstalled === "1") return;
+  document.body.dataset.hoverPreviewInstalled = "1";
+  document.addEventListener("mouseover", onDocumentCardMouseOver);
+  document.addEventListener("mouseout", onDocumentCardMouseOut);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initHoverPreview);
+} else {
+  initHoverPreview();
+}
