@@ -5,8 +5,10 @@
  */
 
 import type {
+  AttachEffect,
   CounterEffect,
   CreateTokenEffect,
+  DetachEffect,
   FightEffect,
   GainControlOfSpellEffect,
   KillEffect,
@@ -21,8 +23,10 @@ import type {
 } from "@tcg/riftbound-types/abilities/effect-types";
 import type { AnyTarget, Location, Target } from "@tcg/riftbound-types/targeting";
 import {
+  ATTACH_PATTERN,
   COUNTER_PATTERN,
   CREATE_TOKEN_PATTERN,
+  DETACH_PATTERN,
   FIGHT_PATTERN,
   GAIN_CONTROL_OF_SPELL_PATTERN,
   KILL_PATTERN,
@@ -461,6 +465,142 @@ export function parsePreventDamageEffect(text: string): PreventDamageEffect | un
   }
 
   return effect;
+}
+
+// ============================================================================
+// Attach / Detach Effect Parsers
+// ============================================================================
+
+/**
+ * Build an equipment-target from a captured string describing the equipment.
+ * Handles "this"/"it"/"me" (self), and "a/an [detached|attached] Equipment [you control]".
+ */
+function parseEquipmentTarget(text: string): AnyTarget {
+  const lower = text.toLowerCase().trim();
+
+  // Self references: "this" / "it" / "me" — the equipment is the card with the ability
+  if (lower === "this" || lower === "it" || lower === "me") {
+    return "self";
+  }
+
+  const target: {
+    type: "equipment";
+    controller?: "friendly" | "enemy";
+    filter?: "detached" | "attached";
+  } = { type: "equipment" };
+
+  // "you control" / "friendly" implies friendly controller
+  if (lower.includes("you control") || lower.includes("friendly")) {
+    target.controller = "friendly";
+  } else if (lower.includes("enemy")) {
+    target.controller = "enemy";
+  }
+
+  if (lower.includes("detached")) {
+    target.filter = "detached";
+  } else if (lower.includes("attached")) {
+    target.filter = "attached";
+  }
+
+  return target as AnyTarget;
+}
+
+/**
+ * Build a unit-target (the attachment destination) from a captured string.
+ * Handles "a unit you control" / "a friendly/enemy unit" / "me"/"it".
+ */
+function parseAttachUnitTarget(text: string): AnyTarget {
+  const lower = text.toLowerCase().trim();
+
+  if (lower === "me" || lower === "it") {
+    return "self";
+  }
+
+  const target: {
+    type: "unit";
+    controller?: "friendly" | "enemy";
+    location?: Location;
+  } = { type: "unit" };
+
+  if (lower.includes("you control") || lower.includes("friendly")) {
+    target.controller = "friendly";
+  } else if (lower.includes("enemy")) {
+    target.controller = "enemy";
+  }
+
+  if (lower.includes("here")) {
+    target.location = "here" as Location;
+  } else if (lower.includes("at a battlefield")) {
+    target.location = "battlefield";
+  } else if (lower.includes("there")) {
+    target.location = "there" as Location;
+  }
+
+  return target as AnyTarget;
+}
+
+/**
+ * Parse an attach effect from text
+ *
+ * @param text - The text to parse (e.g., "Attach this to a unit you control.")
+ * @returns AttachEffect if matched, undefined otherwise
+ *
+ * @example
+ * parseAttachEffect("Attach this to a unit you control.")
+ * // Returns: { type: "attach", equipment: "self", to: { type: "unit", controller: "friendly" } }
+ *
+ * @example
+ * parseAttachEffect("Attach a detached Equipment you control to a unit you control.")
+ * // Returns: { type: "attach",
+ * //            equipment: { type: "equipment", controller: "friendly", filter: "detached" },
+ * //            to: { type: "unit", controller: "friendly" } }
+ */
+export function parseAttachEffect(text: string): AttachEffect | undefined {
+  const match = ATTACH_PATTERN.exec(text);
+  if (!match) {
+    return undefined;
+  }
+
+  const equipmentStr = match[1];
+  const unitStr = match[2];
+
+  const equipment = parseEquipmentTarget(equipmentStr);
+  const to = parseAttachUnitTarget(unitStr);
+
+  return {
+    equipment,
+    to,
+    type: "attach",
+  };
+}
+
+/**
+ * Parse a detach effect from text
+ *
+ * @param text - The text to parse (e.g., "detach an Equipment from it.")
+ * @returns DetachEffect if matched, undefined otherwise
+ *
+ * @example
+ * parseDetachEffect("Detach an Equipment.")
+ * // Returns: { type: "detach", equipment: { type: "equipment" } }
+ *
+ * @example
+ * parseDetachEffect("detach an Equipment from it.")
+ * // Returns: { type: "detach", equipment: { type: "equipment" } }
+ */
+export function parseDetachEffect(text: string): DetachEffect | undefined {
+  const match = DETACH_PATTERN.exec(text);
+  if (!match) {
+    return undefined;
+  }
+
+  const equipmentStr = match[1];
+  const equipment = parseEquipmentTarget(equipmentStr);
+
+  return {
+    equipment,
+    type: "detach",
+  };
 }
 
 // ============================================================================

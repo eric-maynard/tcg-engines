@@ -54,4 +54,91 @@ describe("Effect: Stun", () => {
       expect(result.abilities).toHaveLength(1);
     });
   });
+
+  describe("bracketed stun", () => {
+    it("should parse '[Stun] a unit.'", () => {
+      const result = parseAbilities("[Stun] a unit. (It doesn't deal combat damage this turn.)");
+      expect(result.success).toBe(true);
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({
+          effect: expect.objectContaining({ type: "stun" }),
+        }),
+      );
+    });
+
+    it("should parse '[Stun] an enemy unit here.'", () => {
+      const result = parseAbilities(
+        "[Stun] an enemy unit here. (It doesn't deal combat damage this turn.)",
+      );
+      expect(result.success).toBe(true);
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({
+          effect: expect.objectContaining({
+            target: expect.objectContaining({ controller: "enemy", location: "here" }),
+            type: "stun",
+          }),
+        }),
+      );
+    });
+
+    it("should parse '[Stun] an attacking enemy unit.'", () => {
+      const result = parseAbilities(
+        "[Stun] an attacking enemy unit. (It doesn't deal combat damage this turn.)",
+      );
+      expect(result.success).toBe(true);
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({
+          effect: expect.objectContaining({ type: "stun" }),
+        }),
+      );
+    });
+  });
+
+  describe("stun with quantifiers", () => {
+    it("should parse 'stun another friendly unit'", () => {
+      const result = parseAbilities("Stun another friendly unit.");
+      expect(result.success).toBe(true);
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({
+          effect: expect.objectContaining({
+            target: expect.objectContaining({
+              controller: "friendly",
+              excludeSelf: true,
+            }),
+            type: "stun",
+          }),
+        }),
+      );
+    });
+
+    it("should parse 'stun a friendly unit' (lowercase)", () => {
+      const result = parseAbilities("Stun a friendly unit.");
+      expect(result.success).toBe(true);
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({
+          effect: expect.objectContaining({
+            target: expect.objectContaining({ controller: "friendly" }),
+            type: "stun",
+          }),
+        }),
+      );
+    });
+
+    it("should parse 'Stun all enemy units here.'", () => {
+      const result = parseAbilities("Stun all enemy units here.");
+      expect(result.success).toBe(true);
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({
+          effect: expect.objectContaining({
+            target: expect.objectContaining({
+              controller: "enemy",
+              location: "here",
+              quantity: "all",
+            }),
+            type: "stun",
+          }),
+        }),
+      );
+    });
+  });
 });

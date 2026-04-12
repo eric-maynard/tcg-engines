@@ -32,27 +32,107 @@ export function parseTarget(text: string): AnyTarget {
     return "self";
   }
 
-  // Parse "a/an [controller] unit" patterns
-  const unitPattern = /^(?:a|an|that|the)?\s*(friendly\s+|enemy\s+)?(unit|units?)$/i;
-  const match = normalized.match(unitPattern);
+  // "your legend" / "your legends" / "your runes"
+  const yourMatch = normalized.match(
+    /^(?:your|my)\s+(unit|units|gear|gears|legend|legends|rune|runes|equipment|spell|card|permanent)s?$/,
+  );
+  if (yourMatch) {
+    const typeStr = yourMatch[1].replace(/s$/, "") as CardTypeStr;
+    const isPlural = yourMatch[1].endsWith("s");
+    const result: Record<string, unknown> = { controller: "friendly", type: typeStr };
+    if (isPlural) {
+      result.quantity = "all";
+    }
+    return result as Target;
+  }
+
+  // Parse "[a/an/that/the] [another] [controller] [TAG] CARD_TYPE [here/at a battlefield]"
+  const cardTypePattern =
+    /^(?:(?:a|an|that|the)\s+)?(?:(another)\s+)?(friendly\s+|enemy\s+)?((?:\w+\s+)*?)(unit|units|gear|gears|legend|legends|rune|runes|equipment|spell|card|permanent)s?(?:\s+(here|at a battlefield|there))?$/i;
+  const match = normalized.match(cardTypePattern);
 
   if (match) {
-    const controllerStr = match[1]?.trim();
+    const anotherStr = match[1]; // "another" or undefined
+    const controllerStr = match[2]?.trim();
+    const tagStr = match[3]?.trim();
+    const typeStr = match[4].replace(/s$/, "") as CardTypeStr;
+    const locationStr = match[5];
     const controller = parseController(controllerStr);
 
-    const target: Target = {
-      type: "unit",
-    };
+    const result: Record<string, unknown> = { type: typeStr };
 
     if (controller) {
-      return { ...target, controller };
+      result.controller = controller;
     }
 
-    return target;
+    if (anotherStr) {
+      result.excludeSelf = true;
+    }
+
+    if (locationStr) {
+      if (locationStr === "here") {
+        result.location = "here";
+      } else if (locationStr === "at a battlefield") {
+        result.location = "battlefield";
+      }
+    }
+
+    // Handle tag (e.g., "Mech" in "another friendly Mech")
+    if (tagStr && tagStr.length > 0) {
+      result.filter = { tag: capitalizeTag(tagStr) };
+    }
+
+    return result as Target;
+  }
+
+  // Fallback: "[a/an] [another] [controller] TAG" where TAG implies unit type
+  // E.g., "another friendly Mech", "a Dragon", "an enemy Poro"
+  const tagPattern =
+    /^(?:(?:a|an|that|the)\s+)?(?:(another)\s+)?(friendly\s+|enemy\s+)?(\w+(?:\s+\w+)?)$/i;
+  const tagMatch = normalized.match(tagPattern);
+  if (tagMatch) {
+    const anotherStr = tagMatch[1];
+    const controllerStr = tagMatch[2]?.trim();
+    const tagStr = tagMatch[3]?.trim();
+    const controller = parseController(controllerStr);
+
+    // Only treat as tag if the tag word is capitalized in the original text
+    // Or is a known tag - avoid matching random words
+    if (tagStr) {
+      const result: Record<string, unknown> = { type: "unit" };
+      if (controller) {
+        result.controller = controller;
+      }
+      if (anotherStr) {
+        result.excludeSelf = true;
+      }
+      result.filter = { tag: capitalizeTag(tagStr) };
+      return result as Target;
+    }
   }
 
   // Default to unit target
   return { type: "unit" };
+}
+
+type CardTypeStr =
+  | "unit"
+  | "gear"
+  | "legend"
+  | "rune"
+  | "equipment"
+  | "spell"
+  | "card"
+  | "permanent";
+
+/**
+ * Capitalize a tag string (e.g., "mech" -> "Mech", "sand soldier" -> "Sand Soldier")
+ */
+function capitalizeTag(tag: string): string {
+  return tag
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 /**

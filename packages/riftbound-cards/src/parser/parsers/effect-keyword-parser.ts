@@ -106,6 +106,7 @@ const WHEN_PLAY_ME_PATTERN = /^When you play me,\s*/i;
  */
 const IF_MIGHTY_PATTERN = /^If I was \[Mighty\],\s*/i;
 const IF_ALONE_PATTERN = /^If I (?:died|was|'m) alone,\s*/i;
+const IF_NOT_ALONE_PATTERN = /^If I didn't die alone,\s*/i;
 
 // ============================================================================
 // Helper Functions
@@ -370,6 +371,22 @@ function parseSimpleEffect(text: string): Effect | undefined {
     return { target, type: "recycle" };
   }
 
+  // UNL set: "Gain N XP."
+  const gainXpMatch = cleanText.match(/^Gain (\d+) XP\.?$/i);
+  if (gainXpMatch) {
+    return {
+      amount: Number.parseInt(gainXpMatch[1], 10),
+      type: "gain-xp",
+    } as unknown as Effect;
+  }
+
+  // UNL set: "[Predict]" / "[Predict N]" (used inside effect keywords like Deathknell)
+  const predictMatch = cleanText.match(/^\[Predict(?:\s+(\d+))?\]\.?$/i);
+  if (predictMatch) {
+    const amount = predictMatch[1] ? Number.parseInt(predictMatch[1], 10) : 1;
+    return { amount, type: "predict" } as unknown as Effect;
+  }
+
   return undefined;
 }
 
@@ -395,6 +412,15 @@ function parseCondition(text: string): {
     return {
       condition: { type: "while-alone" },
       remainingText: text.slice(aloneMatch[0].length),
+    };
+  }
+
+  // Check for "If I didn't die alone" condition
+  const notAloneMatch = IF_NOT_ALONE_PATTERN.exec(text);
+  if (notAloneMatch) {
+    return {
+      condition: { type: "not-died-alone" } as unknown as Condition,
+      remainingText: text.slice(notAloneMatch[0].length),
     };
   }
 
@@ -456,7 +482,7 @@ export function parseEffectKeywordsWithPositions(text: string): EffectKeywordPar
     const nextKeywordMatch = cleanText
       .slice(keywordEndIndex)
       .match(
-        /\[(?:Deathknell|Legion|Vision|Tank|Ganking|Action|Reaction|Hidden|Temporary|Quick-Draw|Weaponmaster|Unique|Assault|Shield|Deflect|Accelerate|Equip|Repeat)(?:\s+\d+)?\]/i,
+        /\[(?:Deathknell|Legion|Vision|Tank|Ganking|Action|Reaction|Hidden|Temporary|Quick-Draw|Weaponmaster|Unique|Assault|Shield|Deflect|Hunt|Accelerate|Equip|Repeat)(?:\s+\d+)?\]/i,
       );
 
     const effectEndIndex = nextKeywordMatch

@@ -53,9 +53,12 @@ const CONDITIONAL_SELF_GRANT_PATTERN = /^(While .+?),\s*I have\s+(.+?)\.?$/i;
 const IF_SELF_GRANT_PATTERN = /^(If .+?),\s*I have\s+(.+?)\.?$/i;
 
 /**
- * Pattern for "Units here have [KEYWORD]" - location-based grant
+ * Pattern for "Units here have [KEYWORD]" - location-based grant.
+ * Also matches "Enemy units here have ...", "Friendly units here have ...",
+ * "Your units here have ...", and the "other" exclusion prefix.
  */
-const LOCATION_GRANT_PATTERN = /^Units here have\s+\[(\w+(?:-\w+)?)\]\.?/i;
+const LOCATION_GRANT_PATTERN =
+  /^((?:(?:Other|Your|Friendly|Enemy)\s+)*units?)\s+here\s+have\s+\[(\w+(?:-\w+)?)\]\.?/i;
 
 /**
  * Pattern for "Your Equipment each give [KEYWORD]"
@@ -95,6 +98,14 @@ function removeReminderText(text: string): string {
 }
 
 /**
+ * Normalize token syntax in text.
+ * Converts `[Might]` to `:rb_might:` so patterns match.
+ */
+function normalizeTokens(text: string): string {
+  return text.replace(/\[Might\]/gi, ":rb_might:");
+}
+
+/**
  * Parse keywords from a keyword list string
  * Examples:
  * - "[Deflect], [Ganking], and [Shield]" -> ["Deflect", "Ganking", "Shield"]
@@ -131,6 +142,7 @@ const TRIBAL_TAGS: Record<string, string> = {
  * - "Your Mechs" -> { type: "unit", controller: "friendly", filter: { tag: "Mech" } }
  * - "Friendly units" -> { type: "unit", controller: "friendly" }
  * - "Sand Soldiers you play" -> { type: "unit", filter: { tag: "Sand Soldier" } }
+ * - "Stunned enemy units here" -> { type: "unit", controller: "enemy", location: "here", filter: "stunned" }
  */
 function parseGrantTarget(text: string): Target {
   const normalized = text.toLowerCase().trim();
@@ -140,7 +152,7 @@ function parseGrantTarget(text: string): Target {
     controller?: "friendly" | "enemy" | "any";
     location?: string;
     excludeSelf?: boolean;
-    filter?: { tag: string };
+    filter?: { tag: string } | string;
     cardType?: string;
   } = { type: "unit" };
 
@@ -149,18 +161,32 @@ function parseGrantTarget(text: string): Target {
     target.excludeSelf = true;
   }
 
-  // Check for controller
-  if (normalized.includes("friendly") || normalized.includes("your") || normalized.includes("my")) {
-    target.controller = "friendly";
-  } else if (normalized.includes("enemy")) {
+  // Check for controller. Check "enemy" first because "enemy" contains "my"
+  // As a substring and would otherwise be mis-classified as friendly.
+  if (/\benemy\b/.test(normalized)) {
     target.controller = "enemy";
+  } else if (
+    /\bfriendly\b/.test(normalized) ||
+    /\byour\b/.test(normalized) ||
+    /\bmy\b/.test(normalized)
+  ) {
+    target.controller = "friendly";
   }
 
   // Check for location
-  if (normalized.includes(" here")) {
+  if (/\bhere\b/.test(normalized)) {
     target.location = "here";
   } else if (normalized.includes("at my battlefield") || normalized.includes("at battlefield")) {
     target.location = "battlefield";
+  }
+
+  // Simple state filters (stunned, buffed, damaged, ready, exhausted)
+  const stateFilters = ["stunned", "buffed", "damaged", "ready", "exhausted"];
+  for (const f of stateFilters) {
+    if (new RegExp(`\\b${f}\\b`).test(normalized)) {
+      target.filter = f;
+      break;
+    }
   }
 
   // Check for specific types/tribes
@@ -187,7 +213,7 @@ function parseGrantTarget(text: string): Target {
  * Check if text is a static ability
  */
 export function isStaticAbility(text: string): boolean {
-  const cleanText = removeReminderText(text);
+  const cleanText = normalizeTokens(removeReminderText(text));
 
   return (
     GRANT_KEYWORD_PATTERN.test(cleanText) ||
@@ -205,7 +231,80 @@ export function isStaticAbility(text: string): boolean {
  * Parse a static ability from text
  */
 export function parseStaticAbility(text: string): StaticAbilityParseResult | undefined {
-  const cleanText = removeReminderText(text);
+  const cleanText = normalizeTokens(removeReminderText(text));
+
+  // First try the inner parser as-is. Many existing patterns already accept a
+  // "While you control this battlefield, ..." prefix natively (cost reductions,
+  // Grants, etc.).
+  const direct = parseStaticAbilityInner(cleanText, text);
+  if (direct) {
+    return direct;
+  }
+
+  // Fallback: strip a leading "While you control this battlefield," prefix and
+  // Re-parse the inner static, then wrap with a `while-control-battlefield`
+  // Condition. Used by battlefield cards (Ornn's Forge, Forge of the Fluft, etc.)
+  // Whose inner content isn't matched by the existing condition-aware patterns.
+  const whileControlBfMatch = cleanText.match(/^While you control this battlefield,\s*/i);
+  if (whileControlBfMatch) {
+    const inner = cleanText.slice(whileControlBfMatch[0].length).trim();
+    const innerResult = parseStaticAbilityInner(inner, text);
+    if (innerResult) {
+      return {
+        ...innerResult,
+        ability: {
+          ...innerResult.ability,
+          condition: {
+            type: "while-control-battlefield",
+          } as unknown as Condition,
+        } as StaticAbility,
+      };
+    }
+  }
+  return undefined;
+}
+
+function parseStaticAbilityInner(
+  cleanText: string,
+  text: string,
+): StaticAbilityParseResult | undefined {
+
+  // "X can be played to an occupied battlefield[, if Y]" — a permission
+  // Granting static used by UNL Ambush/Hunt units like Arachnoid Horror.
+  // Emits a `can-play-to-occupied` effect that the engine can reference.
+  const canPlayOccupiedMatch = cleanText.match(
+    /^(I|Friendly units|Your units|Units here)\s+can be played to an occupied battlefield(?:\s+if (.+?))?\.?$/i,
+  );
+  if (canPlayOccupiedMatch) {
+    const subject = canPlayOccupiedMatch[1].toLowerCase();
+    const conditionClause = canPlayOccupiedMatch[2];
+    const target: AnyTarget =
+      subject === "i"
+        ? ({ type: "self" } as AnyTarget)
+        : ({
+            controller: subject.includes("friendly") || subject.includes("your")
+              ? "friendly"
+              : undefined,
+            location: subject.includes("here") ? "here" : undefined,
+            type: "unit",
+          } as unknown as AnyTarget);
+    const effect = {
+      target,
+      type: "can-play-to-occupied",
+    } as unknown as Effect;
+    const ability: StaticAbility = { effect, type: "static" };
+    if (conditionClause) {
+      const condResult = parseConditionFromText(`if ${conditionClause},`);
+      if (condResult?.condition) {
+        (ability as { condition: Condition }).condition = condResult.condition;
+      }
+    }
+    return {
+      ability,
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
 
   // Try conditional self-grant: "While I'm [Mighty], I have [Deflect]..."
   const conditionalMatch = CONDITIONAL_SELF_GRANT_PATTERN.exec(cleanText);
@@ -315,15 +414,17 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
     };
   }
 
-  // Try location grant: "Units here have [KEYWORD]"
+  // Try location grant: "Units here have [KEYWORD]" (and variants)
   const locationGrantMatch = LOCATION_GRANT_PATTERN.exec(cleanText);
   if (locationGrantMatch) {
-    const keyword = locationGrantMatch[1];
-    const target: Target = { location: "here", type: "unit" } as Target;
+    const subjectText = locationGrantMatch[1];
+    const keyword = locationGrantMatch[2];
+    const target = parseGrantTarget(subjectText + " here") as { location?: string };
+    target.location = "here";
 
     return {
       ability: {
-        effect: { keyword, target, type: "grant-keyword" },
+        effect: { keyword, target: target as Target, type: "grant-keyword" },
         type: "static",
       },
       endIndex: text.length,
@@ -446,6 +547,33 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
     };
   }
 
+  // "TARGET have -N :rb_might: [here][, to a minimum of M :rb_might:]." - static might penalty to others
+  // E.g. "Stunned enemy units here have -8 :rb_might:, to a minimum of 1 :rb_might:."
+  const otherMightPenaltyMatch = cleanText.match(
+    /^(.+?)\s+have\s+-(\d+)\s*:rb_might:(?:\s*,\s*to a minimum of\s+(\d+)\s*:rb_might:)?\.?$/i,
+  );
+  if (otherMightPenaltyMatch) {
+    const target = parseGrantTarget(otherMightPenaltyMatch[1]);
+    const amount = -Number.parseInt(otherMightPenaltyMatch[2], 10);
+    const minimum = otherMightPenaltyMatch[3]
+      ? Number.parseInt(otherMightPenaltyMatch[3], 10)
+      : undefined;
+
+    return {
+      ability: {
+        effect: {
+          amount,
+          ...(minimum !== undefined ? { minimum } : {}),
+          target,
+          type: "modify-might",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // "I have/get +N :rb_might: for each QUALIFIER." - static self might modifier
   const selfMightMatch = cleanText.match(
     /^I (?:have|get) \+(\d+)\s*:rb_might:\s+for each (.+?)\.?$/i,
@@ -468,28 +596,157 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
     };
   }
 
+  // "While CONDITION, I have [an additional] +N :rb_might:." - conditional static self-might
+  const whileConditionMightMatch = cleanText.match(
+    /^(While .+?),\s*I have(?:\s+an additional)?\s+\+(\d+)\s*:rb_might:\.?$/i,
+  );
+  if (whileConditionMightMatch) {
+    const conditionResult = parseConditionFromText(whileConditionMightMatch[1] + ",");
+    const condition: Condition =
+      conditionResult?.condition ??
+      ({ text: whileConditionMightMatch[1], type: "custom" } as unknown as Condition);
+
+    return {
+      ability: {
+        condition,
+        effect: {
+          amount: Number.parseInt(whileConditionMightMatch[2], 10),
+          target: "self" as AnyTarget,
+          type: "modify-might",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "I have +N :rb_might: while CONDITION." - conditional static self-might
+  const whileMightMatch = cleanText.match(
+    /^I have \+(\d+)\s*:rb_might:\s+(while .+?)\.?$/i,
+  );
+  if (whileMightMatch) {
+    const amount = Number.parseInt(whileMightMatch[1], 10);
+    const conditionResult = parseConditionFromText(whileMightMatch[2] + ",");
+    const condition = conditionResult?.condition ?? ({
+      text: whileMightMatch[2],
+      type: "custom",
+    } as unknown as Condition);
+
+    return {
+      ability: {
+        condition,
+        effect: {
+          amount,
+          target: "self" as AnyTarget,
+          type: "modify-might",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // "If CONDITION, I have +N :rb_might: [and [KEYWORD]]." - conditional self-might
   const conditionalMightMatch = cleanText.match(
     /^(If .+?),\s*I have \+(\d+)\s*:rb_might:(?:\s+and\s+(.+?))?\.?$/i,
   );
   if (conditionalMightMatch) {
     const conditionResult = parseConditionFromText(conditionalMightMatch[1] + ",");
-    const condition = conditionResult?.condition;
-    if (condition) {
-      return {
-        ability: {
-          condition,
-          effect: {
-            amount: Number.parseInt(conditionalMightMatch[2], 10),
-            target: "self" as AnyTarget,
-            type: "modify-might",
-          } as unknown as Effect,
-          type: "static",
-        },
-        endIndex: text.length,
-        startIndex: 0,
-      };
+    const condition: Condition = conditionResult?.condition ?? ({
+      text: conditionalMightMatch[1],
+      type: "custom",
+    } as unknown as Condition);
+
+    const keywords = conditionalMightMatch[3] ? parseKeywordList(conditionalMightMatch[3]) : [];
+
+    // Build effect: modify-might + optional keyword grant
+    const mightEffect: Effect = {
+      amount: Number.parseInt(conditionalMightMatch[2], 10),
+      target: "self" as AnyTarget,
+      type: "modify-might",
+    } as unknown as Effect;
+
+    const effect: Effect = keywords.length > 0
+      ? ({
+          effects: [
+            mightEffect,
+            keywords.length === 1
+              ? { keyword: keywords[0], target: { type: "self" } as AnyTarget, type: "grant-keyword" }
+              : { keywords, target: { type: "self" } as AnyTarget, type: "grant-keywords" },
+          ],
+          type: "sequence",
+        } as unknown as Effect)
+      : mightEffect;
+
+    return {
+      ability: {
+        condition,
+        effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "I have [+/-]N :rb_might:[ and <extras>]." - unconditional static self-might
+  // Examples:
+  //   "I have +1 :rb_might:."
+  //   "I have +1 :rb_might: and enter ready."
+  //   "I have +1 :rb_might: and [Deflect]."
+  const unconditionalSelfMightMatch = cleanText.match(
+    /^I have\s+([+-]\d+)\s*:rb_might:(?:\s+and\s+(.+?))?\.?$/i,
+  );
+  if (unconditionalSelfMightMatch) {
+    const amount = Number.parseInt(unconditionalSelfMightMatch[1], 10);
+    const extras = unconditionalSelfMightMatch[2]?.trim();
+
+    const mightEffect: Effect = {
+      amount,
+      target: "self" as AnyTarget,
+      type: "modify-might",
+    } as unknown as Effect;
+
+    let effect: Effect = mightEffect;
+    if (extras) {
+      // Try to recognize "enter ready" as a simple static note (keyword "enter-ready")
+      // Or a bracketed keyword like "[Deflect]" / "[Ganking]".
+      const keywordBracket = extras.match(/^\[(\w+(?:-\w+)?)(?:\s+(\d+))?\]\.?$/);
+      const isEnterReady = /^enter(?:s)?\s+ready\.?$/i.test(extras);
+      if (keywordBracket) {
+        effect = {
+          effects: [
+            mightEffect,
+            {
+              keyword: keywordBracket[1],
+              ...(keywordBracket[2] ? { value: Number.parseInt(keywordBracket[2], 10) } : {}),
+              target: { type: "self" } as AnyTarget,
+              type: "grant-keyword",
+            },
+          ],
+          type: "sequence",
+        } as unknown as Effect;
+      } else if (isEnterReady) {
+        effect = {
+          effects: [
+            mightEffect,
+            { target: { type: "self" } as AnyTarget, type: "enter-ready" } as unknown as Effect,
+          ],
+          type: "sequence",
+        } as unknown as Effect;
+      }
     }
+
+    return {
+      ability: {
+        effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
   }
 
   // "Each Equipment attached to me gives double its base Might bonus." - equipment might bonus
@@ -515,14 +772,33 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
   // Cost Reduction Patterns (static)
   // ========================================================================
 
-  // "I cost COST less for each QUALIFIER." or "I cost COST less to play from..."
-  const selfCostMatch = cleanText.match(/^I cost\s+(.+?)\s+less\s+(.+?)\.?$/i);
-  if (selfCostMatch) {
+  // "I cost COST less [for each QUALIFIER]." or "I cost COST less to play from..."
+  // Also handles the bare "I cost COST less [instead]." form (no scope) used
+  // Inside [Level N] gated static abilities.
+  const selfCostScopeMatch = cleanText.match(/^I cost\s+(.+?)\s+less\s+(.+?)\.?$/i);
+  if (selfCostScopeMatch) {
     return {
       ability: {
         effect: {
-          reduction: selfCostMatch[1],
-          scope: selfCostMatch[2],
+          reduction: selfCostScopeMatch[1],
+          scope: selfCostScopeMatch[2],
+          target: "self" as AnyTarget,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+  const selfCostBareMatch = cleanText.match(
+    /^I cost\s+(.+?)\s+less(?:\s+instead)?\.?$/i,
+  );
+  if (selfCostBareMatch) {
+    return {
+      ability: {
+        effect: {
+          reduction: selfCostBareMatch[1],
           target: "self" as AnyTarget,
           type: "cost-reduction",
         } as unknown as Effect,
@@ -548,6 +824,33 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
       endIndex: text.length,
       startIndex: 0,
     };
+  }
+
+  // "While CONDITION, the Energy costs for spells you play [is/are] reduced by COST[, to a minimum of MIN]."
+  const whileSpellCostReduceMatch = cleanText.match(
+    /^(While .+?),\s*the Energy costs? for spells you play (?:is|are) reduced by\s+(.+?)(?:,\s*to a minimum of\s+(.+?))?\.?$/i,
+  );
+  if (whileSpellCostReduceMatch) {
+    const conditionResult = parseConditionFromText(whileSpellCostReduceMatch[1] + ",");
+    const condition = conditionResult?.condition;
+    if (condition) {
+      return {
+        ability: {
+          condition,
+          effect: {
+            by: whileSpellCostReduceMatch[2],
+            ...(whileSpellCostReduceMatch[3]
+              ? { minimum: whileSpellCostReduceMatch[3] }
+              : {}),
+            target: { controller: "friendly", type: "spell" } as Target,
+            type: "cost-reduction",
+          } as unknown as Effect,
+          type: "static",
+        },
+        endIndex: text.length,
+        startIndex: 0,
+      };
+    }
   }
 
   // "While CONDITION, TARGET costs cost COST less." - conditional cost reduction for others
@@ -645,11 +948,16 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
   const ifEnterReadyMatch = cleanText.match(/^(If .+?),\s*I enter ready\.?$/i);
   if (ifEnterReadyMatch) {
     const conditionText = ifEnterReadyMatch[1];
-    // Parse "If an opponent controls a battlefield"
-    const opponentControlsMatch = conditionText.match(/^If an opponent controls a battlefield$/i);
-    const condition: Condition = opponentControlsMatch
-      ? ({ type: "opponent-controls" } as unknown as Condition)
-      : ({ text: conditionText, type: "custom" } as unknown as Condition);
+    // Try the shared condition parser for a structured match.
+    const conditionResult = parseConditionFromText(conditionText + ",");
+    let condition: Condition;
+    if (conditionResult?.condition) {
+      ({ condition } = conditionResult);
+    } else if (/^If an opponent controls a battlefield$/i.test(conditionText)) {
+      condition = { type: "opponent-controls" } as unknown as Condition;
+    } else {
+      condition = { text: conditionText, type: "custom" } as unknown as Condition;
+    }
 
     return {
       ability: {
@@ -807,6 +1115,189 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
           target,
           type: "grant-keyword",
         },
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "Spells and abilities deal N Bonus Damage to units here." (Void Gate)
+  const bonusDamageMatch = cleanText.match(
+    /^Spells and abilities deal (\d+) Bonus Damage to units here\.?$/i,
+  );
+  if (bonusDamageMatch) {
+    return {
+      ability: {
+        effect: {
+          amount: Number.parseInt(bonusDamageMatch[1], 10),
+          source: "spells-and-abilities",
+          target: { location: "here", type: "unit" } as Target,
+          type: "bonus-damage",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "While a unit here is defending alone, it has -N [Might]." (Forbidding Waste)
+  const defendingAloneMatch = cleanText.match(
+    /^While a unit here is defending alone,\s*it has\s+([+-]\d+)\s*:rb_might:\.?$/i,
+  );
+  if (defendingAloneMatch) {
+    return {
+      ability: {
+        condition: {
+          location: "here",
+          state: "defending-alone",
+          type: "while-unit-state",
+        } as unknown as Condition,
+        effect: {
+          amount: Number.parseInt(defendingAloneMatch[1], 10),
+          target: { location: "here", type: "unit" } as Target,
+          type: "modify-might",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "Your units here with less Might than me can't be chosen by enemy spells and abilities." (Alpha Wildclaw)
+  const protectMatch = cleanText.match(
+    /^Your units here with less Might than me can't be chosen by enemy spells and abilities\.?$/i,
+  );
+  if (protectMatch) {
+    return {
+      ability: {
+        effect: {
+          restriction: "untargetable-by-enemy-spells-abilities",
+          target: {
+            controller: "friendly",
+            filter: { mightLessThanSelf: true },
+            location: "here",
+            type: "unit",
+          } as unknown as Target,
+          type: "restriction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // 'Units here have "[Exhaust]: <effect>"' (Gardens of Becoming)
+  const grantedActivatedMatch = cleanText.match(
+    /^Units here have ["“]\[Exhaust\]:\s*(.+?)["”]\.?$/i,
+  );
+  if (grantedActivatedMatch) {
+    const innerText = grantedActivatedMatch[1].trim();
+    return {
+      ability: {
+        effect: {
+          grantedAbility: {
+            cost: { exhaust: true },
+            effect: { text: innerText, type: "raw-inner" },
+            type: "activated",
+          },
+          target: { location: "here", type: "unit" } as Target,
+          type: "grant-activated-ability",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // "While CONDITION, friendly spells cost X less to a minimum of M, and enemy spells cost X more." (Vex, Cheerless)
+  // Compound variant: friendly cost-reduction + enemy cost-increase under a single condition.
+  const whileFriendlyEnemySpellCostMatch = cleanText.match(
+    /^(While .+?),\s*friendly spells cost\s+(.+?)\s+less(?:\s+to a minimum of\s+(.+?))?,\s*and enemy spells cost\s+(.+?)\s+more\.?$/i,
+  );
+  if (whileFriendlyEnemySpellCostMatch) {
+    const conditionResult = parseConditionFromText(
+      whileFriendlyEnemySpellCostMatch[1] + ",",
+    );
+    const condition = conditionResult?.condition;
+    if (condition) {
+      const reduction = whileFriendlyEnemySpellCostMatch[2];
+      const minimum = whileFriendlyEnemySpellCostMatch[3];
+      const increase = whileFriendlyEnemySpellCostMatch[4];
+      return {
+        ability: {
+          condition,
+          effect: {
+            effects: [
+              {
+                by: reduction,
+                ...(minimum ? { minimum } : {}),
+                target: { controller: "friendly", type: "spell" } as Target,
+                type: "cost-reduction",
+              },
+              {
+                by: increase,
+                target: { controller: "enemy", type: "spell" } as Target,
+                type: "cost-increase",
+              },
+            ],
+            type: "sequence",
+          } as unknown as Effect,
+          type: "static",
+        },
+        endIndex: text.length,
+        startIndex: 0,
+      };
+    }
+  }
+
+  // "the first friendly non-token gear played each turn costs [1] less." (Ornn's Forge)
+  const firstOfTurnCostMatch = cleanText.match(
+    /^the first (?:friendly )?(?:non-token )?(unit|gear|spell|card) played each turn costs\s+(.+?)\s+less\.?$/i,
+  );
+  if (firstOfTurnCostMatch) {
+    const cardType = firstOfTurnCostMatch[1].toLowerCase();
+    const reduction = firstOfTurnCostMatch[2];
+    return {
+      ability: {
+        effect: {
+          reduction,
+          restrictions: [{ type: "first-of-turn" }, { type: "non-token" }],
+          target: { controller: "friendly", type: cardType } as Target,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // 'Friendly legends have "[Exhaust]: <effect>"' (Forge of the Fluft)
+  const grantedActivatedLegendsMatch = cleanText.match(
+    /^Friendly legends have ["“]\[Exhaust\]:\s*(.+?)["”]\.?$/i,
+  );
+  if (grantedActivatedLegendsMatch) {
+    const innerText = grantedActivatedLegendsMatch[1].trim();
+    return {
+      ability: {
+        effect: {
+          grantedAbility: {
+            cost: { exhaust: true },
+            effect: { text: innerText, type: "raw-inner" },
+            type: "activated",
+          },
+          target: {
+            controller: "friendly",
+            filter: { cardType: "legend" },
+            type: "unit",
+          } as unknown as Target,
+          type: "grant-activated-ability",
+        } as unknown as Effect,
         type: "static",
       },
       endIndex: text.length,

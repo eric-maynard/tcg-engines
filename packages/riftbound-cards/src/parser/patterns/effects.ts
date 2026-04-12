@@ -74,6 +74,56 @@ export const MODIFY_MIGHT_PATTERN =
   /^Give (me|it|(?:a|an|two|three|four|five|\d+)?\s*(?:friendly |enemy |attacking enemy )?(?:unit|units)(?:\s+(?:at a battlefield|here|there))?)\s+([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(to a minimum of (\d+)\s*:rb_might:))?\.?$/i;
 
 // ============================================================================
+// Damage Effect Patterns
+// ============================================================================
+
+/**
+ * Pattern to match fixed damage effects: "Deal N to TARGET."
+ *
+ * Captures:
+ * - Group 1: Amount (numeric)
+ * - Group 2: Target ("a unit", "an enemy unit here", "all units at battlefields", etc.)
+ *
+ * @example "Deal 2 to a unit." -> ["2", "a unit"]
+ * @example "Deal 4 to an enemy unit." -> ["4", "an enemy unit"]
+ * @example "Deal 3 to all enemy units at a battlefield." -> ["3", "all enemy units at a battlefield"]
+ */
+export const DAMAGE_PATTERN = /^Deal (\d+) to (.+?)\.?$/i;
+
+/**
+ * Pattern to match "deal damage equal to" effects: "Deal damage equal to STAT to TARGET."
+ *
+ * Captures:
+ * - Group 1: Stat reference ("my Might", "its Might", "my [Assault]", etc.)
+ * - Group 2: Target ("an enemy unit", "all enemy units at a battlefield", etc.)
+ *
+ * @example "Deal damage equal to my Might to an enemy unit." -> ["my Might", "an enemy unit"]
+ * @example "Deal damage equal to its Might to all enemy units at a battlefield." -> ["its Might", "all enemy units at a battlefield"]
+ */
+export const DAMAGE_EQUAL_PATTERN =
+  /^Deal damage equal to (?:my|its|his|her)\s+(?:Might|\[\w+(?:-\w+)?\])\s+to\s+(.+?)\.?$/i;
+
+/**
+ * Pattern to match split damage effects: "Deal N damage split among TARGET."
+ *
+ * Captures:
+ * - Group 1: Amount (numeric)
+ * - Group 2: Target ("any number of enemy units here", etc.)
+ *
+ * @example "Deal 5 damage split among any number of enemy units here." -> ["5", "any number of enemy units here"]
+ */
+export const DAMAGE_SPLIT_PATTERN = /^Deal (\d+) damage split among (.+?)\.?$/i;
+
+/**
+ * Check if text matches a damage pattern
+ */
+export function isDamageEffect(text: string): boolean {
+  return (
+    DAMAGE_PATTERN.test(text) || DAMAGE_EQUAL_PATTERN.test(text) || DAMAGE_SPLIT_PATTERN.test(text)
+  );
+}
+
+// ============================================================================
 // Kill Effect Patterns
 // ============================================================================
 
@@ -81,13 +131,81 @@ export const MODIFY_MIGHT_PATTERN =
  * Pattern to match kill effects: "Kill TARGET."
  *
  * Captures:
- * - Group 1: Target ("a unit", "all gear", "a unit at a battlefield", etc.)
+ * - Group 1: Target ("me", "a unit", "all gear", "a unit at a battlefield",
+ *            "up to one gear", etc.)
  *
  * @example "Kill a unit at a battlefield." -> ["a unit at a battlefield"]
  * @example "Kill all gear." -> ["all gear"]
+ * @example "Kill up to one gear." -> ["up to one gear"]
+ * @example "Kill me." -> ["me"]
  */
 export const KILL_PATTERN =
-  /^Kill (me|(?:a|an|all)\s+(?:friendly |enemy )?(?:unit|units|gear)(?:\s+(?:at a battlefield|here|there))?)\.?$/i;
+  /^Kill (me|this|(?:a|an|all|any number of|up to (?:one|two|three|four|five|\d+))\s+(?:damaged\s+|stunned\s+|\[Mighty\]\s+)?(?:friendly\s+|enemy\s+)?(?:\[Mighty\]\s+)?(?:unit|units|gear)(?:\s+(?:at a battlefield|here|there))?)(?:\s+with\s+.+)?\.?$/i;
+
+/**
+ * Pattern to match "Each player kills" effects.
+ *
+ * Captures:
+ * - Group 1: Card type ("units", "gear")
+ *
+ * @example "Each player kills one of their units." -> ["units"]
+ * @example "Each player kills one of their gear." -> ["gear"]
+ */
+export const EACH_PLAYER_KILLS_PATTERN = /^Each player kills one of their (units?|gear)\.?$/i;
+
+// ============================================================================
+// Draw Effect Patterns
+// ============================================================================
+
+/**
+ * Pattern to match draw effects: "Draw N."
+ *
+ * Captures:
+ * - Group 1: Amount (numeric)
+ *
+ * @example "Draw 1." -> ["1"]
+ * @example "Draw 3." -> ["3"]
+ */
+export const DRAW_PATTERN = /^Draw (\d+)\.?$/i;
+
+/**
+ * Pattern to match draw-for-each effects: "Draw N for each TARGET."
+ *
+ * Captures:
+ * - Group 1: Amount per target
+ * - Group 2: Target to count
+ *
+ * @example "Draw 1 for each of your [Mighty] units." -> ["1", "your [Mighty] units"]
+ */
+export const DRAW_FOR_EACH_PATTERN =
+  /^Draw (\d+) for each (?:of )?((?:your |other |friendly )?(?:\[?\w+\]?\s*)?(?:units?|friendly units?|cards?|gear)(?:\s+(?:here|at a battlefield|there))?)\.?$/i;
+
+// ============================================================================
+// Discard Effect Patterns
+// ============================================================================
+
+/**
+ * Pattern to match discard effects: "Discard N." / "discard a card."
+ *
+ * Captures:
+ * - Group 1: Amount (numeric or "a card")
+ *
+ * @example "Discard 1." -> ["1"]
+ * @example "discard a card." -> ["a card"]
+ */
+export const DISCARD_PATTERN = /^discard (\d+|a card)\.?$/i;
+
+/**
+ * Pattern to match "discard N, then draw N" compound effects.
+ *
+ * Captures:
+ * - Group 1: Discard amount
+ * - Group 2: Draw amount
+ *
+ * @example "discard 1, then draw 1." -> ["1", "1"]
+ * @example "Discard 2, then draw 2." -> ["2", "2"]
+ */
+export const DISCARD_THEN_DRAW_PATTERN = /^discard (\d+),?\s*then draw (\d+)\.?$/i;
 
 // ============================================================================
 // Counter Effect Patterns
@@ -212,8 +330,143 @@ export const GAIN_CONTROL_OF_SPELL_PATTERN =
   /^Gain control of a spell\.?\s*(You may make new choices for it\.?)?$/i;
 
 // ============================================================================
+// Attach / Detach (Equipment) Effect Patterns
+// ============================================================================
+
+/**
+ * Pattern to match attach effects that attach SELF or a specific equipment to a unit.
+ *
+ * Captures:
+ * - Group 1: Equipment target ("this", "it", "me", "a detached Equipment you control",
+ *   "an Equipment you control", "an attached Equipment you control", etc.)
+ * - Group 2: Unit target descriptor ("a unit you control", "a friendly unit",
+ *   "me", "it", etc.)
+ * - Group 3: Optional location suffix ("here") — used for "attach it to a unit you control (here)"
+ *
+ * @example "Attach this to a unit you control." -> ["this", "a unit you control", undefined]
+ * @example "Attach it to a unit you control." -> ["it", "a unit you control", undefined]
+ * @example "attach it to a unit you control." -> ["it", "a unit you control", undefined]
+ * @example "Attach an Equipment you control to a unit you control." ->
+ *   ["an Equipment you control", "a unit you control", undefined]
+ * @example "Attach a detached Equipment you control to a unit you control." ->
+ *   ["a detached Equipment you control", "a unit you control", undefined]
+ * @example "Attach an attached Equipment you control to a unit you control." ->
+ *   ["an attached Equipment you control", "a unit you control", undefined]
+ */
+export const ATTACH_PATTERN =
+  /^attach\s+(this|it|me|(?:a|an)\s+(?:detached\s+|attached\s+)?(?:friendly\s+|enemy\s+)?[Ee]quipment(?:\s+you\s+control)?)\s+to\s+((?:a|an)\s+(?:friendly\s+|enemy\s+)?unit(?:\s+you\s+control)?(?:\s+(?:here|at\s+a\s+battlefield|there))?|me|it)(?:\s+\(here\))?\.?$/i;
+
+/**
+ * Pattern to match detach effects.
+ *
+ * Captures:
+ * - Group 1: Equipment target descriptor ("an Equipment", "a friendly Equipment", etc.)
+ * - Group 2: Optional "from X" clause target ("it", "a unit you control", etc.) — optional
+ *
+ * @example "Detach an Equipment." -> ["an Equipment", undefined]
+ * @example "detach an Equipment from it." -> ["an Equipment", "it"]
+ * @example "Detach a friendly Equipment from a unit you control." ->
+ *   ["a friendly Equipment", "a unit you control"]
+ * @example "If it's an Equipment, you may detach it." -> (handled separately via
+ *   optional "you may detach it" pattern below)
+ */
+export const DETACH_PATTERN =
+  /^detach\s+((?:a|an|that|the)\s+(?:friendly\s+|enemy\s+)?[Ee]quipment(?:\s+you\s+control)?|it|this)(?:\s+from\s+((?:a|an)\s+(?:friendly\s+|enemy\s+)?unit(?:\s+you\s+control)?|it|me))?\.?$/i;
+
+/**
+ * Check if text matches an attach pattern
+ */
+export function isAttachEffect(text: string): boolean {
+  return ATTACH_PATTERN.test(text);
+}
+
+/**
+ * Check if text matches a detach pattern
+ */
+export function isDetachEffect(text: string): boolean {
+  return DETACH_PATTERN.test(text);
+}
+
+// ============================================================================
+// Ready Effect Patterns
+// ============================================================================
+
+/**
+ * Pattern to match ready effects: "Ready TARGET."
+ *
+ * Captures:
+ * - Group 1: Target (various forms including pronouns, possessives, quantified, tag-based)
+ *
+ * Supported forms:
+ * - "Ready me." / "Ready it." / "Ready them."
+ * - "Ready a unit." / "Ready a friendly gear." / "Ready your legend."
+ * - "Ready another unit." / "Ready another friendly Mech."
+ * - "Ready up to 4 friendly runes." / "Ready up to two of them."
+ * - "Ready all friendly units here."
+ * - "Ready your units." / "Ready your runes."
+ *
+ * @example "Ready me." -> ["me"]
+ * @example "Ready another friendly Mech." -> ["another friendly Mech"]
+ * @example "Ready up to 4 friendly runes." -> ["up to 4 friendly runes"]
+ */
+export const READY_PATTERN =
+  /^Ready (me|it|them|(?:(?:all|up to (?:two|three|four|five|six|\d+)|another)\s+)?(?:a |an )?(?:friendly |enemy |your )?(?:\w+\s+)*?(?:unit|units|gear|gears|legend|legends|rune|runes|equipment|card|permanent|[A-Z]\w*)(?:s)?(?:\s+(?:here|at a battlefield|there))?|your units|your runes|your legend|something else(?:\s+that's exhausted)?|up to (?:two|three|four|five|six|\d+) of them)\.?$/i;
+
+// ============================================================================
+// Exhaust Target Effect Patterns
+// ============================================================================
+
+/**
+ * Pattern to match exhaust-target effects: "Exhaust TARGET."
+ *
+ * Captures:
+ * - Group 1: Target (various forms including pronouns, quantified, "you control" suffix)
+ *
+ * Supported forms:
+ * - "Exhaust me." / "Exhaust it."
+ * - "Exhaust a unit." / "Exhaust an enemy unit." / "Exhaust a legend."
+ * - "Exhaust all enemy units here." / "Exhaust all friendly units."
+ * - "Exhaust another unit."
+ * - "Exhaust a unit you control."
+ *
+ * @example "Exhaust a unit." -> ["a unit"]
+ * @example "Exhaust all enemy units here." -> ["all enemy units here"]
+ * @example "Exhaust a unit you control." -> ["a unit you control"]
+ */
+export const EXHAUST_TARGET_PATTERN =
+  /^Exhaust (me|it|(?:(?:all|another)\s+)?(?:a |an )?(?:friendly |enemy )?(?:\w+\s+)*?(?:unit|units|gear|gears|legend|legends|rune|runes|equipment|card|permanent|[A-Z]\w*)(?:s)?(?:\s+(?:here|at a battlefield|there))?(?:\s+you control)?)\.?$/i;
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
+
+/**
+ * Check if text matches a ready pattern
+ */
+export function isReadyEffect(text: string): boolean {
+  return READY_PATTERN.test(text);
+}
+
+/**
+ * Check if text matches an exhaust-target pattern
+ */
+export function isExhaustTargetEffect(text: string): boolean {
+  return EXHAUST_TARGET_PATTERN.test(text);
+}
+
+/**
+ * Check if text matches a draw pattern
+ */
+export function isDrawEffect(text: string): boolean {
+  return DRAW_PATTERN.test(text) || DRAW_FOR_EACH_PATTERN.test(text);
+}
+
+/**
+ * Check if text matches a discard pattern
+ */
+export function isDiscardEffect(text: string): boolean {
+  return DISCARD_PATTERN.test(text) || DISCARD_THEN_DRAW_PATTERN.test(text);
+}
 
 /**
  * Check if text matches a recall pattern
@@ -240,7 +493,7 @@ export function isModifyMightEffect(text: string): boolean {
  * Check if text matches a kill pattern
  */
 export function isKillEffect(text: string): boolean {
-  return KILL_PATTERN.test(text);
+  return KILL_PATTERN.test(text) || EACH_PLAYER_KILLS_PATTERN.test(text);
 }
 
 /**
