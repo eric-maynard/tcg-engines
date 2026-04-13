@@ -3226,3 +3226,95 @@
     .token-panel__btn--collapsed {
       display: none;
     }
+
+    /* W10b — Action panel */
+    .meta-actions-panel {
+      padding: 8px 12px;
+      border-bottom: 1px solid #2a2740;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .meta-actions-panel__title {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #6a6288;
+      margin-bottom: 2px;
+    }
+
+    .meta-actions-panel__row {
+      display: flex;
+      gap: 6px;
+      align-items: stretch;
+    }
+
+    .meta-actions-panel__btn {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #3a3560;
+      border-radius: 4px;
+      background: #1e1b30;
+      color: #d8d4e8;
+      font-size: 11px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .meta-actions-panel__btn:hover:not([disabled]) {
+      background: #2a2548;
+      border-color: #5a4f8a;
+      color: #f0ecfa;
+    }
+
+    .meta-actions-panel__btn[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .meta-actions-panel__subbtns {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .meta-actions-panel__subbtn {
+      width: 24px;
+      padding: 4px 0;
+      border: 1px solid #3a3560;
+      border-radius: 4px;
+      background: #14121f;
+      color: #8a82a6;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .meta-actions-panel__subbtn:hover {
+      background: #2a2548;
+      border-color: #5a4f8a;
+      color: #e0dced;
+    }
+
+    .meta-actions-panel__subbtn--active {
+      background: #2a4060;
+      border-color: #3a6090;
+      color: #a0c8f0;
+    }
+
+    .meta-actions-panel__subbtn--active:hover {
+      background: #305080;
+    }
+
+    .meta-actions-panel__hint {
+      font-size: 9px;
+      color: #6a6288;
+      font-style: italic;
+      margin-top: -2px;
+      padding-left: 2px;
+    }

@@ -164,6 +164,8 @@
       <div class="actions-title">Available Actions</div>
       <div id="actionsList"></div>
     </div>
+    <!-- W10b: sandbox action panel mount (Counter / Buff / Duplicate / Label / Emote) -->
+    <div id="actions-panel-mount"></div>
     <div style="padding:4px 12px;display:flex;gap:4px;border-bottom:1px solid #2a2740;">
       <button class="action-btn" id="undoBtn" onclick="requestUndo()" style="flex:1;text-align:center;" disabled title="Rewind the last action (R / Backspace)">Rewind</button>
       <button class="action-btn" id="redoBtn" onclick="requestRedo()" style="flex:1;text-align:center;" disabled>Redo</button>
@@ -291,6 +293,7 @@
 <script src="/js/gameplay/pregame.js"></script>
 <script src="/js/gameplay/game-flow.js"></script>
 <script src="/js/gameplay/board-toggles.js"></script>
+<script src="/js/gameplay/meta-actions.js"></script>
 <script src="/js/gameplay/renderer.js"></script>
 <script src="/js/gameplay/token-panel.js"></script>
 <script src="/js/gameplay/showdown.js"></script>

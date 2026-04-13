@@ -47,6 +47,8 @@ const ARMED_MODE_LABEL = {
   label: "Label wheel — click a card to label it",
   emote: "Emote wheel",
   ping: "Ping mode — click a card to ping it for your opponent",
+  // W10b: Shift+C arms duplicate mode. Sandbox-gated at dispatch time.
+  duplicate: "Duplicate mode — click a card to copy it into your hand",
 };
 
 /** @returns {string|null} the current armed mode name (for interactions.js) */
@@ -70,13 +72,39 @@ function handleArmedCardClick(cardId) {
 
   switch (mode) {
     case "counter":
+      // W10b: dispatch addCounter via meta-actions.js with the currently
+      // selected sign (+ / −). meta-actions owns the sign so the panel UI
+      // and the armed-mode click path stay in sync.
+      if (typeof dispatchCounter === "function") {
+        dispatchCounter(cardId);
+      }
+      break;
+
     case "buff":
+      // W10b: default +1/0 might buff. Prompt-driven custom deltas are
+      // out of scope for this workstream.
+      if (typeof dispatchBuff === "function") {
+        dispatchBuff(cardId);
+      }
+      break;
+
+    case "duplicate":
+      // W10b: sandbox-only. meta-actions.dispatchDuplicate gates internally
+      // and surfaces a toast outside sandbox games.
+      if (typeof dispatchDuplicate === "function") {
+        dispatchDuplicate(cardId);
+      }
+      break;
+
     case "target":
-      // Real engine moves — stubbed until the corresponding workstreams land.
+      // Target mode is gated on a "top-of-chain effect needs a target"
+      // signal that doesn't exist until chain-interaction matures. Keep
+      // the stub so future work can pick it up without reshaping this
+      // switch.
       // eslint-disable-next-line no-console
-      console.log(`[hotkeys] TODO: ${mode} mode on ${cardId} — not yet implemented (engine work)`);
+      console.log(`[hotkeys] TODO: target mode on ${cardId} — awaiting chain interaction work`);
       if (typeof showToast === "function") {
-        showToast(`${mode.charAt(0).toUpperCase() + mode.slice(1)} mode — not yet implemented`);
+        showToast("Target mode — not yet implemented");
       }
       break;
 
@@ -330,10 +358,18 @@ function onHotkeyKeydown(e) {
       e.preventDefault();
       return;
     }
-    const mode = HOLD_KEY_TO_MODE[lower];
+    // W10b: Shift+C arms sandbox Duplicate mode instead of Counter mode.
+    // We track it under a synthetic key "shift+c" so the keyup on plain
+    // "c" still cleans up the duplicate entry from the stack.
+    let mode = HOLD_KEY_TO_MODE[lower];
+    let stackKey = lower;
+    if (lower === "c" && e.shiftKey) {
+      mode = "duplicate";
+      stackKey = "shift+c";
+    }
     // Push onto stack if not already held.
-    if (!armedKeyStack.find(entry => entry.key === lower)) {
-      armedKeyStack.push({ key: lower, mode });
+    if (!armedKeyStack.find(entry => entry.key === stackKey)) {
+      armedKeyStack.push({ key: stackKey, mode });
     }
     setArmedMode(mode);
     // E opens the emote wheel immediately (doesn't require a card click).
@@ -391,8 +427,15 @@ function onHotkeyKeyup(e) {
   const lower = e.key.length === 1 ? e.key.toLowerCase() : "";
   if (!lower || !HOLD_KEY_TO_MODE[lower]) return;
 
+  // W10b: releasing plain "c" also clears a lingering "shift+c" entry so
+  // the Duplicate armed mode doesn't stick around after the user lets
+  // go of C while shift was the last modifier held.
   const idx = armedKeyStack.findIndex(entry => entry.key === lower);
   if (idx !== -1) armedKeyStack.splice(idx, 1);
+  if (lower === "c") {
+    const shiftIdx = armedKeyStack.findIndex(entry => entry.key === "shift+c");
+    if (shiftIdx !== -1) armedKeyStack.splice(shiftIdx, 1);
+  }
 
   if (armedKeyStack.length === 0) {
     disarmAll();
