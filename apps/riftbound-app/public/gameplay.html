@@ -173,6 +173,10 @@
       <img id="hoverPreviewImg" src="" alt="">
       <div class="hover-preview-empty" id="hoverPreviewEmpty">Hover a card</div>
     </div>
+    <!-- W10c: client-only board toggles panel. Populated by board-toggles.js
+         on first render. Settings persist in localStorage under
+         rba-board-toggles. -->
+    <div id="board-toggles-panel" class="board-toggles-panel"></div>
     <div class="game-log" id="gameLog">
       <div class="log-title">Game Log</div>
       <div id="logEntries"></div>
@@ -286,6 +290,7 @@
 <script src="/js/gameplay/lobby.js"></script>
 <script src="/js/gameplay/pregame.js"></script>
 <script src="/js/gameplay/game-flow.js"></script>
+<script src="/js/gameplay/board-toggles.js"></script>
 <script src="/js/gameplay/renderer.js"></script>
 <script src="/js/gameplay/combat.js"></script>
 <script src="/js/gameplay/hotkeys.js"></script>

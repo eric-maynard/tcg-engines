@@ -197,6 +197,9 @@ function render() {
   if (interaction.mode === "costPayment") {
     applyRuneTappableHighlights();
   }
+
+  // W10c: mount the board toggles panel on first render (no-op afterwards).
+  if (typeof initBoardToggles === "function") initBoardToggles();
 }
 
 /** Resolve a param value: if it's a card ID, return the card name */
