@@ -228,7 +228,7 @@ function renderMulliganUI(pregame, state, container) {
     html += `
       <div id="mulliganStatus" style="color:#8a82a6;font-size:13px;margin-top:8px;">Select 0-2 cards to send back, then confirm</div>
       <div class="mulligan-actions" id="mulliganBtns">
-        <button class="start-btn mulligan-btn-keep" onclick="confirmMulligan()">Keep All 4</button>
+        <button class="start-btn mulligan-btn-keep" onclick="confirmMulligan()">Keep Hand</button>
       </div>
       <div class="pregame-info">Selected cards are recycled to the bottom of your deck and replaced with new draws (Rule 117)</div>
     `;
@@ -265,9 +265,8 @@ function toggleMulliganCard(cardId) {
   }
   if (btns) {
     btns.innerHTML = count === 0
-      ? '<button class="start-btn mulligan-btn-keep" onclick="confirmMulligan()">Keep All 4</button>'
-      : `<button class="start-btn mulligan-btn-redo" onclick="confirmMulligan()">Send Back ${count} &amp; Draw</button>
-         <button class="start-btn mulligan-btn-keep" onclick="mulliganSelected.clear();renderMulliganUI(pregameState, gameState, document.getElementById('pregameContent'))">Reset</button>`;
+      ? '<button class="start-btn mulligan-btn-keep" onclick="confirmMulligan()">Keep Hand</button>'
+      : `<button class="start-btn mulligan-btn-redo" onclick="confirmMulligan()">Mulligan ${count}</button>`;
   }
 }
 
