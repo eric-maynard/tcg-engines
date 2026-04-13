@@ -18,6 +18,7 @@ import type {
   RiftboundMoves,
 } from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { fireTriggers } from "../../abilities/trigger-runner";
 
 /**
  * Check if a card has a specific keyword, considering both the card
@@ -249,14 +250,29 @@ export const movementMoves: Partial<
       }
 
       for (const unitId of unitIds) {
+        // Capture the source zone before the move so the fired event
+        // Reports accurate from/to locations.
+        const fromZone =
+          (context.zones.getCardZone(unitId as CoreCardId) as string | undefined) ?? "base";
+        const toZone = `battlefield-${destination}`;
+
         // Exhaust the unit (cost of moving)
         counters.setFlag(unitId as CoreCardId, "exhausted", true);
 
         // Move unit to destination battlefield
         zones.moveCard({
           cardId: unitId as CoreCardId,
-          targetZoneId: `battlefield-${destination}` as CoreZoneId,
+          targetZoneId: toZone as CoreZoneId,
         });
+
+        // Fire "move" game event so triggered abilities (e.g. Treasure
+        // Hunter "When I move...") can react. Rule 616-619 covers
+        // Discretionary moves — recalls do NOT fire this event and
+        // Correctly live in recallUnit which omits this call.
+        fireTriggers(
+          { cardId: unitId, from: fromZone, to: toZone, type: "move" },
+          { cards: context.cards, counters, draft, zones },
+        );
       }
 
       // Increment per-turn move counter for escalation tracking
@@ -394,9 +410,15 @@ export const movementMoves: Partial<
       }
       return results;
     },
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { unitId, toBattlefield } = context.params;
       const { zones, counters } = context;
+
+      // Capture source zone before moving so the fired move event
+      // Reports accurate from/to locations.
+      const fromZone =
+        (context.zones.getCardZone(unitId as CoreCardId) as string | undefined) ?? "";
+      const toZone = `battlefield-${toBattlefield}`;
 
       // Exhaust the unit
       counters.setFlag(unitId as CoreCardId, "exhausted", true);
@@ -404,8 +426,15 @@ export const movementMoves: Partial<
       // Move unit to the target battlefield
       zones.moveCard({
         cardId: unitId as CoreCardId,
-        targetZoneId: `battlefield-${toBattlefield}` as CoreZoneId,
+        targetZoneId: toZone as CoreZoneId,
       });
+
+      // Fire "move" game event for triggered abilities that react to
+      // Battlefield-to-battlefield Ganking moves.
+      fireTriggers(
+        { cardId: unitId, from: fromZone, to: toZone, type: "move" },
+        { cards: context.cards, counters, draft, zones },
+      );
     },
   },
 

@@ -370,12 +370,31 @@ export const setupMoves: Partial<
       // Tell the flow system who the current player is
       context.flow?.setCurrentPlayer?.(firstPlayer as CorePlayerId);
 
-      // Rule 644.7: second player channels extra rune on first channel phase
+      // Rule 644.7: the second player channels one extra rune on their first
+      // Channel phase. Each non-first player's "first turn number" is set to
+      // The turn they first become active (turn 2 in 1v1, turn 2/3/4 in FFA).
+      // The first player is intentionally omitted from `firstTurnNumber` so
+      // They never receive the catch-up bonus (they go first, so there is
+      // Nothing to catch up from).
+      //
+      // The flow's channel phase reads `firstTurnNumber[playerId] === turnNumber`
+      // To decide whether to grant the extra rune. For the first player this
+      // Check returns `undefined === 1`, which is false, so no bonus fires.
       if (draft.setup?.secondPlayer) {
         draft.secondPlayerExtraRune = true;
         draft.firstTurnNumber = {};
-        for (const pid of Object.keys(draft.players)) {
-          draft.firstTurnNumber[pid] = 1;
+        const playerIds = Object.keys(draft.players);
+        // Order players by turn order (first player first), then assign each
+        // Non-first player the turn on which they will first be active.
+        const ordered = [
+          firstPlayer,
+          ...playerIds.filter((p) => p !== firstPlayer),
+        ];
+        for (let i = 1; i < ordered.length; i++) {
+          const pid = ordered[i];
+          if (pid) {
+            draft.firstTurnNumber[pid] = i + 1;
+          }
         }
       }
 

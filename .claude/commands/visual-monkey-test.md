@@ -447,7 +447,7 @@ Launch ALL THREE agents simultaneously.
 
 ### Phase 3: Compile Final Report
 
-After ALL THREE agents complete, read their outputs:
+After ALL THREE agents complete, call `mcp__playwright__browser_close` to release the shared Playwright browser (the monkey and handler leave the page open when they finish). Then read their outputs:
 - `/tmp/visual-monkey-summary.json`
 - `/tmp/visual-monkey-issues.json`
 - `/tmp/handler-report.md`

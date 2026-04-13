@@ -14,18 +14,18 @@ const abilities: Ability[] = [
     condition: {
       conditions: [
         {
-          type: "has-exactly",
           count: 4,
           target: { controller: "friendly", location: "hand", type: "card" },
+          type: "has-exactly",
         },
         {
-          type: "has-exactly",
           count: 4,
           target: {
             controller: "friendly",
             location: "battlefield",
             type: "unit",
           },
+          type: "has-exactly",
         },
       ],
       type: "and",

@@ -24,9 +24,10 @@
     "check-types": "tsc --noEmit",
     "format": "bun x oxfmt --write ./src",
     "lint": "bun x oxlint --fix ./src",
-    "test": "echo \"No tests specified\"",
-    "test:watch": "bun test --watch",
-    "test:coverage": "bun test --coverage",
+    "test": "bun test ./src",
+    "test:watch": "bun test --watch ./src",
+    "test:coverage": "bun test --coverage ./src",
+    "test:rules-audit": "bun test ./src/__tests__/rules-audit",
     "check": "turbo format lint check-types test"
   },
   "dependencies": {
