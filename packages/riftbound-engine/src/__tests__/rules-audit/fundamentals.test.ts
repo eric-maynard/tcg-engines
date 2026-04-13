@@ -15,6 +15,8 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import type { BattlefieldCard, Card, LegendCard, RuneCard, UnitCard } from "@tcg/riftbound-types/cards";
+import type { Domain } from "@tcg/riftbound-types";
 import {
   P1,
   P2,
@@ -28,6 +30,7 @@ import {
   getZone,
 } from "./helpers";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { validateDeck } from "../../validators/deck-validators";
 
 // -----------------------------------------------------------------------------
 // Rules 104-107: Zones (The Board, Non-Board Zones)
@@ -466,15 +469,223 @@ describe("Victory points start at 0 and are tracked per player", () => {
 // Deferred (Wave 2+): deck construction, tokens, domain identity
 // -----------------------------------------------------------------------------
 
-describe("Deferred fundamentals (Wave 2+)", () => {
-  it.todo("Rule 103.1.b: Champion Legend dictates the Domain Identity of the Main Deck");
-  it.todo("Rule 103.2.b: Main Deck may include up to 3 copies of a named card");
-  it.todo("Rule 103.2.d: Main Deck may contain up to 3 Signature cards for its champion");
+// -----------------------------------------------------------------------------
+// Deck construction rules (validated via validators/deck-validators.ts)
+// -----------------------------------------------------------------------------
+
+const makeLegend = (overrides: Partial<LegendCard> = {}): LegendCard =>
+  ({
+    cardType: "legend",
+    championTag: "Warrior",
+    domain: ["fury"] as Domain[],
+    id: "legend-1",
+    name: "Test Legend",
+    ...overrides,
+  }) as LegendCard;
+
+const makeChampion = (overrides: Partial<UnitCard> = {}): UnitCard =>
+  ({
+    cardType: "unit",
+    domain: "fury" as Domain,
+    id: "champ-1",
+    isChampion: true,
+    might: 5,
+    name: "Test Champion",
+    tags: ["Warrior"],
+    ...overrides,
+  }) as UnitCard;
+
+const makeUnit = (name: string, domain: Domain = "fury"): UnitCard =>
+  ({
+    cardType: "unit",
+    domain,
+    id: `unit-${name}`,
+    might: 3,
+    name,
+  }) as UnitCard;
+
+const makeRune = (domain: Domain = "fury"): RuneCard =>
+  ({
+    cardType: "rune",
+    domain,
+    id: `rune-${Math.random()}`,
+    isBasic: true,
+    name: "Basic Rune",
+  }) as RuneCard;
+
+const makeBattlefield = (domain: Domain = "fury"): BattlefieldCard =>
+  ({
+    cardType: "battlefield",
+    domain,
+    id: `bf-${Math.random()}`,
+    name: "Test BF",
+  }) as BattlefieldCard;
+
+const makeMainDeck = (count: number, domain: Domain = "fury", name = "Gen"): Card[] =>
+  Array.from({ length: count }, (_x, i) => makeUnit(`${name}-${i}`, domain));
+
+const makeRuneDeck = (count: number, domain: Domain = "fury"): RuneCard[] =>
+  Array.from({ length: count }, () => makeRune(domain));
+
+describe("Rule 103.1.b: Champion Legend dictates the Domain Identity of the Main Deck", () => {
+  it("rejects a main deck card whose domain is outside the legend's identity", () => {
+    const legend = makeLegend({ domain: ["fury"] as Domain[] });
+    const mainDeck: Card[] = [
+      ...makeMainDeck(39),
+      makeUnit("OffDomain", "mind"), // 40th card: wrong domain
+    ];
+    const result = validateDeck({
+      battlefields: [makeBattlefield(), makeBattlefield()],
+      chosenChampion: makeChampion(),
+      legend,
+      mainDeck,
+      mode: "duel",
+      runeDeck: makeRuneDeck(12),
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.code === "DOMAIN_IDENTITY_VIOLATION")).toBe(true);
+  });
+
+  it("accepts a main deck where every card's domain fits the legend's identity", () => {
+    const legend = makeLegend({ domain: ["fury", "mind"] as Domain[] });
+    const result = validateDeck({
+      battlefields: [makeBattlefield(), makeBattlefield()],
+      chosenChampion: makeChampion(),
+      legend,
+      mainDeck: [...makeMainDeck(20, "fury"), ...makeMainDeck(20, "mind", "MindGen")],
+      mode: "duel",
+      runeDeck: makeRuneDeck(12),
+    });
+    expect(result.errors.filter((e) => e.code === "DOMAIN_IDENTITY_VIOLATION")).toEqual([]);
+  });
+});
+
+describe("Rule 103.2.b: Main Deck may include up to 3 copies of a named card", () => {
+  it("rejects a deck with 4 copies of the same named card", () => {
+    const dupe = (): Card => makeUnit("Duplicate");
+    const mainDeck: Card[] = [
+      ...makeMainDeck(36),
+      dupe(),
+      dupe(),
+      dupe(),
+      dupe(), // 4th copy
+    ];
+    const result = validateDeck({
+      battlefields: [makeBattlefield(), makeBattlefield()],
+      chosenChampion: makeChampion(),
+      legend: makeLegend(),
+      mainDeck,
+      mode: "duel",
+      runeDeck: makeRuneDeck(12),
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.code === "TOO_MANY_COPIES")).toBe(true);
+  });
+
+  it("accepts exactly 3 copies of a named card", () => {
+    const mainDeck: Card[] = [
+      ...makeMainDeck(37),
+      makeUnit("Triplicate"),
+      makeUnit("Triplicate"),
+      makeUnit("Triplicate"),
+    ];
+    const result = validateDeck({
+      battlefields: [makeBattlefield(), makeBattlefield()],
+      chosenChampion: makeChampion(),
+      legend: makeLegend(),
+      mainDeck,
+      mode: "duel",
+      runeDeck: makeRuneDeck(12),
+    });
+    expect(result.errors.filter((e) => e.code === "TOO_MANY_COPIES")).toEqual([]);
+  });
+});
+
+describe("Rule 103.2.d: Main Deck may contain up to 3 Signature cards for its champion", () => {
+  it("rejects more than 3 signature cards (non-champion cards with the champion tag)", () => {
+    const sigCard = (n: number): Card =>
+      ({
+        cardType: "spell",
+        domain: "fury" as Domain,
+        id: `sig-${n}`,
+        name: `Signature ${n}`,
+        tags: ["Warrior"],
+        timing: "action",
+      }) as unknown as Card;
+
+    const mainDeck: Card[] = [...makeMainDeck(36), sigCard(1), sigCard(2), sigCard(3), sigCard(4)];
+    const result = validateDeck({
+      battlefields: [makeBattlefield(), makeBattlefield()],
+      chosenChampion: makeChampion(),
+      legend: makeLegend({ championTag: "Warrior" }),
+      mainDeck,
+      mode: "duel",
+      runeDeck: makeRuneDeck(12),
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.code === "TOO_MANY_SIGNATURE_CARDS")).toBe(true);
+  });
+});
+
+describe("Rule 103.3.a: Rune Deck must contain exactly 12 cards", () => {
+  it("rejects a rune deck smaller than 12", () => {
+    const result = validateDeck({
+      battlefields: [makeBattlefield(), makeBattlefield()],
+      chosenChampion: makeChampion(),
+      legend: makeLegend(),
+      mainDeck: makeMainDeck(40),
+      mode: "duel",
+      runeDeck: makeRuneDeck(10),
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.code === "RUNE_DECK_WRONG_SIZE")).toBe(true);
+  });
+
+  it("accepts an exactly-12 rune deck", () => {
+    const result = validateDeck({
+      battlefields: [makeBattlefield(), makeBattlefield()],
+      chosenChampion: makeChampion(),
+      legend: makeLegend(),
+      mainDeck: makeMainDeck(40),
+      mode: "duel",
+      runeDeck: makeRuneDeck(12),
+    });
+    expect(result.errors.filter((e) => e.code === "RUNE_DECK_WRONG_SIZE")).toEqual([]);
+  });
+});
+
+describe("Rule 106.4.b: Each facedown zone has max occupancy of 1 card", () => {
+  it("facedown-<bf> zone config declares maxSize = 1", () => {
+    const engine = createMinimalGameState();
+    createBattlefield(engine, "bf-1", { controller: null });
+    // Read the zone config through internal state.
+    const state = getState(engine) as unknown as {
+      zones?: Record<string, { config?: { maxSize?: number } }>;
+    };
+    // State doesn't expose config; read via internal view instead.
+    const internal = (engine as unknown as {
+      internalState: { zones: Record<string, { config: { maxSize?: number } }> };
+    }).internalState;
+    const cfg = internal.zones["facedown-bf-1"]?.config;
+    expect(cfg?.maxSize).toBe(1);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Deferred fundamentals — genuine engine gaps
+// -----------------------------------------------------------------------------
+
+describe("Deferred fundamentals (engine gaps)", () => {
+  // Deferred: rune deck shuffling is a setup-time concern; not observable post-setup
   it.todo("Rule 103.3.b: Rune Deck must be shuffled and kept separate from Main Deck");
+  // Deferred: requires engine tracking of temporary-modification zones
   it.todo("Rule 109: Temporary Modifications expire when a game object changes zones");
+  // Deferred: tokens are not yet implemented as a distinct card type in the engine
   it.todo("Rule 170-178: Token semantics (owner, controller, leaving the board)");
+  // Deferred: control-swap via effects is not implemented in the engine
   it.todo("Rule 180-183: Control vs owner for Game Objects");
+  // Deferred: card-text override semantics are not encoded in the engine
   it.todo("Rule 002: Card text supersedes rules text when they conflict");
-  it.todo("Rule 106.4.b: Each facedown zone has max occupancy of 1 card");
+  // Deferred: reveal-on-controller-loss fires via battlefield-loss trigger; needs integration setup
   it.todo("Rule 106.4.d: Hidden card is revealed when its controller loses the battlefield");
 });

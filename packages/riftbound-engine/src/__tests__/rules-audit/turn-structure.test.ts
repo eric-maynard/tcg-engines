@@ -25,14 +25,18 @@ import { describe, expect, it } from "bun:test";
 import {
   P1,
   P2,
+  applyMove,
   createBattlefield,
   createCard,
   createDeck,
   createMinimalGameState,
+  getCardMeta,
+  getCardZone,
   getCardsInZone,
   getRunesOnBoard,
   getState,
   getZone,
+  runCleanup,
   runPhaseHook,
 } from "./helpers";
 
@@ -712,28 +716,121 @@ describe("Rule 504: The Turn Player is the player taking the current turn", () =
 // Deferred / rules needing infrastructure we haven't built yet
 // -----------------------------------------------------------------------------
 
-describe("Deferred turn-structure rules (Wave 3+)", () => {
+// -----------------------------------------------------------------------------
+// Rule 520: State-based check kills units whose damage >= might
+// -----------------------------------------------------------------------------
+
+describe("Rule 520: Units with damage >= Might are killed during cleanup", () => {
+  it("a 3-might unit with 3 damage is moved to trash by runCleanup", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "doomed", {
+      cardType: "unit",
+      meta: { damage: 3 },
+      might: 3,
+      owner: P1,
+      zone: "base",
+    });
+    const result = runCleanup(engine);
+    expect(result.killed).toContain("doomed");
+    expect(getCardsInZone(engine, "trash", P1)).toContain("doomed");
+  });
+
+  it("a 3-might unit with 2 damage survives cleanup", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "wounded", {
+      cardType: "unit",
+      meta: { damage: 2 },
+      might: 3,
+      owner: P1,
+      zone: "base",
+    });
+    const result = runCleanup(engine);
+    expect(result.killed).not.toContain("wounded");
+    expect(getCardsInZone(engine, "base", P1)).toContain("wounded");
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Rule 521: Attacker/Defender role cleared when unit leaves battlefield
+// -----------------------------------------------------------------------------
+
+describe("Rule 521: Combat role cleared when unit is not at a battlefield", () => {
+  it("a unit in base with a stale combatRole has that role cleared by cleanup", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "confused", {
+      cardType: "unit",
+      meta: { combatRole: "attacker" },
+      might: 3,
+      owner: P1,
+      zone: "base",
+    });
+    runCleanup(engine);
+    expect(getCardMeta(engine, "confused")?.combatRole).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Deferred turn-structure rules — mostly concept-level invariants
+// -----------------------------------------------------------------------------
+
+describe("Rule 503.1: Game actions execute one at a time, completely", () => {
+  it("applyMove produces a fully-resolved state (no partial results)", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "unit-a", {
+      cardType: "unit",
+      might: 2,
+      owner: P1,
+      zone: "base",
+    });
+    // Apply a resource move and verify the state is consistent after.
+    applyMove(engine, "addResources", { energy: 3, playerId: P1, power: {} });
+    const st = getState(engine);
+    // Action resolved atomically: both the pool update and card state are
+    // Present in the final state without intermediate zombie state.
+    expect(st.runePools[P1].energy).toBe(3);
+    expect(getCardZone(engine, "unit-a")).toBe("base");
+  });
+});
+
+describe("Deferred turn-structure rules (engine gaps or conceptual invariants)", () => {
+  // Deferred: definitional cycle rule, no direct observation
   it.todo("Rule 502: Play continues cyclically until one player wins");
-  it.todo("Rule 503.1: Game actions execute one at a time, completely");
+  // Deferred: requires trigger-ordering UX which the engine auto-orders
   it.todo("Rule 503.2.a: Simultaneous triggers resolve in Turn Order");
-  it.todo("Rule 506: Turn player changes at end-of-turn");
-  it.todo("Rule 515.2.a.1: Start-of-beginning-phase triggers fire before scoring");
+  // Deferred: Turn Player transition is part of nextTurn cascade; covered by
+  // The flow-manager integration tests outside the rules-audit suite.
+  it.todo("Rule 506: Turn player changes at end-of-turn (covered by flow-manager tests)");
+  // Deferred: covered by abilities-triggered.test.ts where start-of-turn
+  // Triggers are exercised via fireTrigger; Rule 515.2.a.1 is the flow-level
+  // Guarantee that those triggers fire before scoring.
+  it.todo(
+    "Rule 515.2.a.1: Start-of-beginning-phase triggers fire before scoring (see abilities-triggered.test.ts)",
+  );
+  // Deferred: 'perform any actions' substep not modeled separately in flow hook
   it.todo("Rule 515.3.c: Channel-phase 'perform any actions' step fires triggers");
   it.todo("Rule 515.4.c: Draw-phase 'perform any actions' fires triggers after draw");
+  // Deferred: no "combat phase" trigger — combat is event-driven post-move
   it.todo("Rule 516.4.a: Combat phase triggered by opposing units at same battlefield");
-  it.todo("Rule 516.5.b: Showdown triggered when unit moves to empty battlefield");
+  // Deferred: covered by showdowns.test.ts rule 548.2 tests
+  it.todo("Rule 516.5.b: Showdown triggered when unit moves to empty battlefield (see showdowns.test.ts)");
+  // Deferred: expiration loop is a language-level invariant; no direct observation
   it.todo("Rule 517.4: Expiration step loops if effects generate new damage/this-turn effects");
+  // Deferred: cleanup firing points covered by state-based-checks.test.ts
   it.todo("Rule 519.a: Cleanup fires after an item on the chain resolves");
   it.todo("Rule 519.b: Cleanup fires after a Move completes");
   it.todo("Rule 519.c: Cleanup fires after a Showdown completes");
   it.todo("Rule 519.d: Cleanup fires after a Combat completes");
-  it.todo("Rule 520: Units with damage >= Might are killed during cleanup");
-  it.todo("Rule 521: Attacker/Defender role cleared when unit leaves battlefield");
+  // Deferred: pending-combat set-up is part of cleanup but audit harness
+  // Lacks a trigger path to flip `combatPending` state directly
   it.todo("Rule 522.2.c: Cleanup sets Combat as Pending at contested battlefields");
+  // Deferred: Forgotten Monument + score blocking requires a registered
+  // Battlefield ability with canPlayerScoreAtBattlefield hook
   it.todo(
-    "Rule 515.2.b.1 + Forgotten Monument: score-blocking abilities prevent VP gain but still log the battlefield as 'scored'",
+    "Rule 515.2.b.1 + Forgotten Monument: score-blocking abilities prevent VP gain but still log 'scored'",
   );
-  it.todo("Rule 508: Showdown state vs Neutral state transitions");
-  it.todo("Rule 509: Open/Closed state transitions when chain is created/destroyed");
-  it.todo("Rule 510.4: Showdown Closed state tracking");
+  // Deferred: showdown/neutral/open/closed state transitions are observable via
+  // Chain.test.ts and showdowns.test.ts — these are duplicates of those.
+  it.todo("Rule 508: Showdown state vs Neutral state transitions (see showdowns.test.ts)");
+  it.todo("Rule 509: Open/Closed state transitions when chain is created/destroyed (see chain.test.ts)");
+  it.todo("Rule 510.4: Showdown Closed state tracking (see showdowns.test.ts)");
 });

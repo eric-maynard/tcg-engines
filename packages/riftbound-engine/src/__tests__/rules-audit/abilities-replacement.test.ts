@@ -261,14 +261,14 @@ describe("Rule 575: Multiple replacement effects — owner chooses order", () =>
     expect(["zhonyas-A", "zhonyas-B"]).toContain(matched?.sourceCardId);
   });
 
+  // Deferred: engine's checkReplacement returns first-found and does not
+  // Expose a player-choice UI hook. Correct behavior is observable (a match
+  // Is returned); the ordering rule requires an owner-selection callback.
   it.todo(
-    "Rule 575.1: when the affected object is a player, that player chooses order — " +
-      "engine currently returns first-found; owner-selection UI not wired through checkReplacement.",
+    "Rule 575.1: player chooses order when affected object is a player (no owner-choice hook)",
   );
-
   it.todo(
-    "Rule 575.2: when the affected object is an uncontrolled battlefield, the active " +
-      "turn player chooses order — engine currently returns first-found.",
+    "Rule 575.2: turn player chooses order at uncontrolled battlefield (no owner-choice hook)",
   );
 });
 

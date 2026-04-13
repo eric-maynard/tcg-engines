@@ -10,6 +10,8 @@ import { describe, expect, it } from "bun:test";
 import {
   P1,
   P2,
+  P3,
+  P4,
   advancePhase,
   applyMove,
   checkMoveLegal,
@@ -55,6 +57,26 @@ describe("helpers.createMinimalGameState", () => {
     expect(state.turn.phase).toBe("draw");
     expect(state.turn.number).toBe(3);
     expect(state.turn.activePlayer).toBe(P2);
+  });
+
+  it("supports 3-player mode via playerCount: 3", () => {
+    const engine = createMinimalGameState({ playerCount: 3 });
+    const state = getState(engine);
+    expect(Object.keys(state.players)).toEqual([P1, P2, P3]);
+    expect(state.runePools[P3]).toBeDefined();
+    expect(state.players[P3].victoryPoints).toBe(0);
+  });
+
+  it("supports 4-player mode via playerCount: 4", () => {
+    const engine = createMinimalGameState({ playerCount: 4 });
+    const state = getState(engine);
+    expect(Object.keys(state.players)).toEqual([P1, P2, P3, P4]);
+    expect(state.runePools[P4]).toBeDefined();
+    expect(state.players[P4].victoryPoints).toBe(0);
+    // Per-turn tracking initialized for all 4 players.
+    expect(state.conqueredThisTurn[P4]).toEqual([]);
+    expect(state.scoredThisTurn[P4]).toEqual([]);
+    expect(state.xpGainedThisTurn[P4]).toBe(0);
   });
 
   it("applies rune-pool overrides per-player", () => {

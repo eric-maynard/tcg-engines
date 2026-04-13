@@ -52,10 +52,12 @@ describe("Rule 607.1: Burn Out triggers on draw/look/mill from empty Main Deck",
     expect(getState(engine).players[P2].victoryPoints).toBe(before + 1);
   });
 
+  // Deferred: engine does not wire look/reveal effects to burn-out; no effect
+  // In the codebase currently triggers burn-out from look-from-empty-deck.
   it.todo(
-    "Rule 607.1.b: looking/revealing from an empty main deck causes Burn Out (needs a look-from-deck effect hookup)",
+    "Rule 607.1.b: looking/revealing from an empty main deck causes Burn Out (no engine hookup)",
   );
-
+  // Deferred: mill (move from deck to trash) does not currently trigger burn-out
   it.todo("Rule 607.1.c: moving cards from an empty main deck to trash (mill) causes Burn Out");
 });
 
@@ -233,13 +235,18 @@ describe("Rule 651.1: Conceding in a 1v1 game makes the opponent the winner", ()
 // Rule 651.2 / 651.3: Multi-player concede continues the game
 // ---------------------------------------------------------------------------
 
-describe("Rule 651.2 (deferred): Multi-player concede continues with remaining players", () => {
+describe("Rule 651.2: Multi-player concede behavior", () => {
+  // Deferred: engine's concede move picks the FIRST opponent as winner and
+  // Immediately finishes the game; it does not continue play with remaining
+  // Players in 3+ player modes. This is a genuine engine gap.
   it.todo(
-    "Rule 651.2: In a 3+ player game, conceding by one player continues play with the remaining players (needs FFA / multi-player mode setup which is not supported by createMinimalGameState).",
+    "Rule 651.2: concede should continue play with remaining players in 3+ player games (engine finishes immediately)",
   );
 
+  // Deferred: 'relevant player' tracking for showdowns is only implemented
+  // For 2-player; multi-player removal from the relevant set is unimplemented.
   it.todo(
-    "Rule 651.3: A removed player is no longer a Relevant Player in Showdowns and cannot make choices.",
+    "Rule 651.3: A removed player is no longer Relevant in Showdowns (engine gap: no multi-player showdown tracking)",
   );
 });
 
@@ -247,28 +254,32 @@ describe("Rule 651.2 (deferred): Multi-player concede continues with remaining p
 // Rule 652.1-652.5: Removal-of-a-player mechanics (deferred — multi-player)
 // ---------------------------------------------------------------------------
 
-describe("Rule 652: Removal of a Player (deferred — multi-player modes required)", () => {
-  it.todo("Rule 652.1: Banish all permanents and runes the removed player controls/owns.");
-  it.todo("Rule 652.2: Remove the removed player's battlefield from the game.");
-  it.todo("Rule 652.2.a: Replace removed battlefield with a token battlefield with no abilities.");
-  it.todo("Rule 652.2.b: Units/hidden cards there do not move.");
-  it.todo("Rule 652.2.c: Continuous effects from removed battlefield immediately cease.");
-  it.todo("Rule 652.3: Remove all cards the removed player owns from the game.");
+describe("Rule 652: Removal of a Player (deferred — engine has no multi-player removal pipeline)", () => {
+  // Deferred: engine's concede is a single-shot 'finish game with winner' —
+  // It does NOT run a removal pipeline that banishes permanents, replaces
+  // Battlefields, counters in-flight chain items, or redistributes priority.
+  // Every rule in this block is unimplemented.
+  it.todo("Rule 652.1: Banish all permanents and runes the removed player controls/owns");
+  it.todo("Rule 652.2: Remove the removed player's battlefield from the game");
+  it.todo("Rule 652.2.a: Replace removed battlefield with a token battlefield with no abilities");
+  it.todo("Rule 652.2.b: Units/hidden cards there do not move");
+  it.todo("Rule 652.2.c: Continuous effects from removed battlefield immediately cease");
+  it.todo("Rule 652.3: Remove all cards the removed player owns from the game");
   it.todo(
-    "Rule 652.4: Counter all spells and abilities of all types controlled by the conceded player.",
+    "Rule 652.4: Counter all spells and abilities of all types controlled by the conceded player",
   );
   it.todo(
-    "Rule 652.5.a.1: If the removed player was the Turn Player, play proceeds to the next available player in turn order.",
+    "Rule 652.5.a.1: If the removed player was the Turn Player, play proceeds to the next available player",
   );
   it.todo(
-    "Rule 652.5.b.1: If the removed player had Focus in a Showdown, the next Relevant Player receives Focus.",
+    "Rule 652.5.b.1: If the removed player had Focus in a Showdown, the next Relevant Player receives Focus",
   );
-  it.todo("Rule 652.5.b.2: If no other players remain Relevant, the Showdown ends.");
-  it.todo("Rule 652.5.b.3: Passing Focus via removal ends the Showdown if all pass.");
+  it.todo("Rule 652.5.b.2: If no other players remain Relevant, the Showdown ends");
+  it.todo("Rule 652.5.b.3: Passing Focus via removal ends the Showdown if all pass");
   it.todo(
-    "Rule 652.5.c.1: If the removed player had Priority during a Chain, the next player receives Priority.",
+    "Rule 652.5.c.1: If the removed player had Priority during a Chain, the next player receives Priority",
   );
-  it.todo("Rule 652.5.c.2: Passing Priority via removal resolves the top chain item.");
+  it.todo("Rule 652.5.c.2: Passing Priority via removal resolves the top chain item");
 });
 
 // ---------------------------------------------------------------------------

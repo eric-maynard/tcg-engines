@@ -401,13 +401,15 @@ describe("Cross-mode invariants derived from rule 642", () => {
 // ---------------------------------------------------------------------------
 
 describe("Rule 648.8: Magma Chamber team-aware behaviors (unimplemented)", () => {
-  it.todo("Rule 648.8.a: Players may play spells during their teammate's turn");
-  it.todo("Rule 648.8.b: Battlefield controls by a teammate do not score the team");
-  it.todo("Rule 648.8.c.1: Players may not hide cards at a teammate's battlefield");
-  it.todo("Rule 648.8.c.2: Players may not issue standard movement to a teammate's units");
-  it.todo("Rule 648.8.d: 'Friendly' includes game objects controlled by a teammate");
-  it.todo("Rule 648.8.f.1: Hands remain private information even from teammates");
-  it.todo("Rule 648.8.g.1: Final point via Conquer in 2v2 ignores teammate-occupied battlefields");
+  // Deferred: engine has no concept of 'team' beyond a mode flag; all of these
+  // Rules require a runtime team mapping that flows through move validators.
+  it.todo("Rule 648.8.a: Players may play spells during their teammate's turn (engine gap: no team state)");
+  it.todo("Rule 648.8.b: Battlefield controls by a teammate do not score the team (engine gap)");
+  it.todo("Rule 648.8.c.1: Players may not hide cards at a teammate's battlefield (engine gap)");
+  it.todo("Rule 648.8.c.2: Players may not issue standard movement to a teammate's units (engine gap)");
+  it.todo("Rule 648.8.d: 'Friendly' includes game objects controlled by a teammate (engine gap)");
+  it.todo("Rule 648.8.f.1: Hands remain private information even from teammates (engine gap)");
+  it.todo("Rule 648.8.g.1: Final point via Conquer in 2v2 ignores teammate-occupied battlefields (engine gap)");
 });
 
 // ---------------------------------------------------------------------------
@@ -423,7 +425,9 @@ describe("Rule 646.7 / 647.7: FFA first-turn adjustments", () => {
     expect(GAME_MODES.ffa4.firstPlayerSkipsDraw).toBe(true);
   });
 
+  // Deferred: engine only tracks `secondPlayerExtraRune` and does not model
+  // 'last player' adjustment for FFA3/FFA4 first-turn channeling.
   it.todo(
-    "Rule 646.7 / 647.7 runtime behavior: last player channels an extra rune on their first turn (not implemented — engine only tracks secondPlayerExtraRune)",
+    "Rule 646.7 / 647.7 runtime: last player channels an extra rune on their first turn (engine gap)",
   );
 });

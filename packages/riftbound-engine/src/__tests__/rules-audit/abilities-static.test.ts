@@ -574,11 +574,13 @@ describe("Rule 637.3.a/b: Might arithmetic layer stacks base + modifiers", () =>
 // ---------------------------------------------------------------------------
 
 describe("Rule 638: Dependencies between same-layer effects", () => {
-  it.todo("Rule 638.1.a: a static that removes another effect's source applies first");
-  it.todo(
-    "Rule 638.1.b: a static that changes the target set of another static creates a dependency",
-  );
-  it.todo("Rule 638.1.c: a static that alters the outcome of another static creates a dependency");
+  // Deferred: engine uses a recalc-from-scratch strategy that does not
+  // Explicitly detect dependencies. In most cases the recalc produces the
+  // Correct result because effects commute. Explicit dependency-ordering
+  // Tests require human rules review to define expected behavior.
+  it.todo("Rule 638.1.a: dependency detection not explicitly modeled (recalc-from-scratch)");
+  it.todo("Rule 638.1.b: target-set dependency not explicitly modeled");
+  it.todo("Rule 638.1.c: outcome-altering dependency not explicitly modeled");
 });
 
 // ---------------------------------------------------------------------------
@@ -586,8 +588,12 @@ describe("Rule 638: Dependencies between same-layer effects", () => {
 // ---------------------------------------------------------------------------
 
 describe("Rule 639.1: Timestamp order applies newest effect last when no dependency", () => {
+  // Deferred: timestamp ordering is not observable for commutative arithmetic
+  // Effects (covered by the commutativity test below). A test that isolates
+  // Non-commutative effects would require a dependency-detection pass that
+  // The engine does not currently implement.
   it.todo(
-    "Rule 639.1: with two independent +X Might auras, the order of application does not affect the final arithmetic total",
+    "Rule 639.1: timestamp order not observable for commutative arithmetic (see commutativity test below)",
   );
 
   it("verifies arithmetic commutativity: two +1/+2 auras on different sources produce +3 regardless of order", () => {

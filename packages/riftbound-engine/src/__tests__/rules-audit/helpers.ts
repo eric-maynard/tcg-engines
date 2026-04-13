@@ -46,6 +46,9 @@ import type {
 /** Standard player IDs used throughout the rule-audit suite. */
 export const P1: PlayerId = "player-1";
 export const P2: PlayerId = "player-2";
+/** Additional player IDs for 3/4-player rule tests (FFA3, FFA4, Magma Chamber). */
+export const P3: PlayerId = "player-3";
+export const P4: PlayerId = "player-4";
 
 /** Zone names usable in helpers (non-battlefield). */
 export type SimpleZone =
@@ -142,6 +145,11 @@ export interface MinimalStateOverrides {
    * Controllers default to null (uncontrolled).
    */
   battlefields?: string[];
+  /**
+   * Number of players in the game. Defaults to 2 (P1/P2). Set to 3 or 4 to
+   * enable FFA3/FFA4/Magma Chamber style rule tests with P3/P4 seeded.
+   */
+  playerCount?: 2 | 3 | 4;
 }
 
 /**
@@ -157,12 +165,21 @@ export function createMinimalGameState(overrides: MinimalStateOverrides = {}): A
   // Give each engine a fresh card registry so tests don't bleed into each other.
   setGlobalCardRegistry(new CardDefinitionRegistry());
 
+  const playerCount = overrides.playerCount ?? 2;
+  const playerDefs = [
+    { id: P1, name: "Player One" },
+    { id: P2, name: "Player Two" },
+  ];
+  if (playerCount >= 3) {
+    playerDefs.push({ id: P3, name: "Player Three" });
+  }
+  if (playerCount >= 4) {
+    playerDefs.push({ id: P4, name: "Player Four" });
+  }
+
   const engine = new RuleEngine<RiftboundGameState, RiftboundMoves, unknown, RiftboundCardMeta>(
     riftboundDefinition,
-    [
-      { id: P1, name: "Player One" },
-      { id: P2, name: "Player Two" },
-    ],
+    playerDefs,
     { seed: "rules-audit" },
   );
 
@@ -188,15 +205,14 @@ export function createMinimalGameState(overrides: MinimalStateOverrides = {}): A
   };
   st.setup = undefined;
 
-  // Initialize rune pools for both players.
-  (st.runePools as Record<string, { energy: number; power: Record<string, number> }>)[P1] = {
-    energy: 0,
-    power: {},
-  };
-  (st.runePools as Record<string, { energy: number; power: Record<string, number> }>)[P2] = {
-    energy: 0,
-    power: {},
-  };
+  // Initialize rune pools for every player.
+  const allPlayers: PlayerId[] = playerDefs.map((p) => p.id as PlayerId);
+  for (const pid of allPlayers) {
+    (st.runePools as Record<string, { energy: number; power: Record<string, number> }>)[pid] = {
+      energy: 0,
+      power: {},
+    };
+  }
   for (const [pid, pool] of Object.entries(overrides.runePools ?? {})) {
     if (!pool) {
       continue;
@@ -207,23 +223,23 @@ export function createMinimalGameState(overrides: MinimalStateOverrides = {}): A
     };
   }
 
-  // Ensure per-turn tracking maps are initialized.
+  // Ensure per-turn tracking maps are initialized for every player.
   const cq = st.conqueredThisTurn as Record<string, CardId[]>;
   const sq = st.scoredThisTurn as Record<string, CardId[]>;
   const xg = st.xpGainedThisTurn as Record<string, number>;
-  cq[P1] = cq[P1] ?? [];
-  cq[P2] = cq[P2] ?? [];
-  sq[P1] = sq[P1] ?? [];
-  sq[P2] = sq[P2] ?? [];
-  xg[P1] = xg[P1] ?? 0;
-  xg[P2] = xg[P2] ?? 0;
+  for (const pid of allPlayers) {
+    cq[pid] = cq[pid] ?? [];
+    sq[pid] = sq[pid] ?? [];
+    xg[pid] = xg[pid] ?? 0;
+  }
   // Rule 724 (Legion): per-player main-deck plays counter.
   if (!st.cardsPlayedThisTurn) {
     (st as RiftboundGameState & { cardsPlayedThisTurn: Record<string, number> }).cardsPlayedThisTurn = {};
   }
   const cp = st.cardsPlayedThisTurn as Record<string, number>;
-  cp[P1] = cp[P1] ?? 0;
-  cp[P2] = cp[P2] ?? 0;
+  for (const pid of allPlayers) {
+    cp[pid] = cp[pid] ?? 0;
+  }
 
   if (overrides.victoryScore !== undefined) {
     st.victoryScore = overrides.victoryScore;
@@ -447,7 +463,8 @@ export function createBattlefield(
   }
 
   // Create the paired facedown zone (Hidden zone, rule 723). Each
-  // Battlefield has exactly one associated facedown zone.
+  // Battlefield has exactly one associated facedown zone. Rule 106.4.b:
+  // Max occupancy of 1 card.
   const facedownZoneId = `facedown-${battlefieldId}` as ZoneId;
   if (!internal.internalState.zones[facedownZoneId]) {
     internal.internalState.zones[facedownZoneId] = {
@@ -455,6 +472,7 @@ export function createBattlefield(
       config: {
         faceDown: true,
         id: facedownZoneId,
+        maxSize: 1,
         name: `Facedown ${battlefieldId}`,
         ordered: false,
         visibility: "private",
@@ -1263,4 +1281,95 @@ export function buildReplacementContext(engine: AuditEngine): {
  */
 export function getConsumedNextReplacements(engine: AuditEngine): Record<string, true> {
   return (engine.getState().consumedNextReplacements ?? {}) as Record<string, true>;
+}
+
+// ---------------------------------------------------------------------------
+// Cleanup helpers (Wave 2E: state-based-check observation)
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the engine's cleanup / state-based-check pipeline once over the current
+ * state. Mirrors what `executeMove` calls after every move, but tests can
+ * call it directly to observe rule-specific cleanup behavior (rule 520 kills
+ * damaged units, rule 521 clears combat roles, rule 619.1 recalls gear).
+ *
+ * Reaches into `internalState` the same way `fireTrigger` does.
+ */
+export function runCleanup(engine: AuditEngine): {
+  killed: string[];
+  hiddenRemoved: string[];
+  combatPending: string[];
+  stateChanged: boolean;
+} {
+  // Avoid top-level import to dodge any circular dependency with cleanup.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { performCleanup } = require("../../cleanup") as {
+    performCleanup: (ctx: unknown) => {
+      killed: string[];
+      hiddenRemoved: string[];
+      combatPending: string[];
+      stateChanged: boolean;
+    };
+  };
+  const internal = asInternal(engine);
+  const ctx = {
+    cards: {
+      getCardMeta: (cardId: string) => internal.internalState.cardMetas[cardId],
+      getCardOwner: (cardId: string) => internal.internalState.cards[cardId]?.owner,
+      updateCardMeta: (cardId: string, meta: Partial<RiftboundCardMeta>) => {
+        const cur = internal.internalState.cardMetas[cardId];
+        if (cur) {
+          internal.internalState.cardMetas[cardId] = { ...cur, ...meta };
+        }
+      },
+    },
+    counters: {
+      clearCounter: (_cardId: string, _counter: string) => {
+        // No-op: tests rely on `updateCardMeta` for damage clears.
+      },
+      getCounter: (cardId: string, counter: string) => {
+        const meta = internal.internalState.cardMetas[cardId];
+        if (!meta) {
+          return 0;
+        }
+        return ((meta as unknown as Record<string, number>)[counter] ?? 0) as number;
+      },
+      setFlag: (cardId: string, flag: string, value: boolean) => {
+        const meta = internal.internalState.cardMetas[cardId];
+        if (meta) {
+          (meta as unknown as Record<string, boolean>)[flag] = value;
+        }
+      },
+    },
+    draft: internal.currentState,
+    zones: {
+      getCardsInZone: (zoneId: string, playerId?: string) => {
+        const zone = internal.internalState.zones[zoneId];
+        if (!zone) {
+          return [];
+        }
+        if (!playerId) {
+          return [...zone.cardIds];
+        }
+        return zone.cardIds.filter(
+          (cardId) => internal.internalState.cards[cardId as string]?.owner === playerId,
+        );
+      },
+      moveCard: ({ cardId, targetZoneId }: { cardId: string; targetZoneId: string }) => {
+        const card = internal.internalState.cards[cardId];
+        if (card) {
+          const oldZone = internal.internalState.zones[card.zone as string];
+          if (oldZone) {
+            oldZone.cardIds = oldZone.cardIds.filter((id) => id !== cardId);
+          }
+          card.zone = targetZoneId as ZoneId;
+          const newZone = internal.internalState.zones[targetZoneId];
+          if (newZone) {
+            newZone.cardIds.push(cardId as CoreCardId);
+          }
+        }
+      },
+    },
+  };
+  return performCleanup(ctx);
 }

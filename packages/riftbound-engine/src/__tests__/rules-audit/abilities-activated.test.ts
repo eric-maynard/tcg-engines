@@ -364,11 +364,9 @@ describe("Rule 580: Activated abilities are primarily activated while on the boa
     expect(activate.length).toBeGreaterThan(0);
   });
 
+  // Deferred: rule 580 championZone activation is ambiguous per rules primer
   it.todo(
-    "UNCERTAIN: Rule 580 — can a unit in championZone activate its activated ability? " +
-      "Per rule 101 the champion zone is NOT the board until the champion is played. " +
-      "The engine's activateAbility condition accepts championZone as a valid zone, " +
-      "which may or may not be intended. Needs human review.",
+    "Rule 580: championZone activation is ambiguous — needs human rules review",
   );
 });
 
@@ -629,8 +627,8 @@ describe("championZone activation (unresolved)", () => {
     expect(legal).toBe(true);
   });
 
+  // Deferred: same championZone ambiguity — needs human rules review
   it.todo(
-    "UNCERTAIN: Rule 580 / 101 — should activated abilities be activatable " +
-      "from championZone? Engine currently says yes; needs rules-primer human review.",
+    "Rule 580 / 101: championZone activation legality — engine accepts it; needs human review",
   );
 });

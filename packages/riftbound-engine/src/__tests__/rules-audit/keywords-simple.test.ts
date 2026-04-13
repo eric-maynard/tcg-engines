@@ -229,9 +229,11 @@ describe("Rule 718.1.c.1: Action spells can be played on your turn or in showdow
 });
 
 describe("Rule 718.1.c.2: Activated abilities with Action can be triggered in showdowns", () => {
+  // Deferred: engine only enforces spell timing (action/reaction); activated
+  // Abilities are not gated by showdown state. Needs per-ability activation
+  // Window wiring.
   it.todo(
-    "Rule 718.1.c.2: activated-ability timing is not yet checked separately by the engine — " +
-      "only spell-timing is enforced. Needs engine wiring for ability activation windows.",
+    "Rule 718.1.c.2: activated-ability timing gates (engine gap: no per-ability activation window)",
   );
 });
 
@@ -324,9 +326,11 @@ describe("Rule 720.1.c: Deathknell is 'When I die, [Effect]'", () => {
 });
 
 describe("Rule 720.1.d.1: Deathknell does NOT trigger if the kill was replaced with a recall", () => {
+  // Deferred: replacement-effect + die-trigger coordination is not yet
+  // Implemented — the trigger runner fires Deathknell unconditionally when
+  // A 'die' event is emitted.
   it.todo(
-    "Rule 720.1.d.1: kill-replaced-by-recall path is not yet distinguished in the trigger runner. " +
-      "Needs replacement-effect + die-trigger coordination.",
+    "Rule 720.1.d.1: replaced-by-recall Deathknell suppression (engine gap: no replacement coordination)",
   );
 });
 
@@ -564,9 +568,10 @@ describe("Rule 725.2: Reaction permission is inclusive, not exclusive", () => {
 });
 
 describe("Rule 725.3.a: Reaction units still obey base-restrictions (own base/battlefield only)", () => {
+  // Deferred: this is a placement test tracked in movement.test.ts where
+  // The standardMove and playUnit conditions enforce base ownership.
   it.todo(
-    "Rule 725.3.a: unit placement validation after playing a Reaction unit at an opposing " +
-      "base is a movement test — track in movement.test.ts.",
+    "Rule 725.3.a: unit placement for Reaction units (cross-file duplicate — tracked in movement.test.ts)",
   );
 });
 

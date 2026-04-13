@@ -319,12 +319,10 @@ describe("Rule 583.x: Triggers on legend-zone cards fire (legends remain relevan
     expect(getCardMeta(engine, "the-legend")?.damage ?? 0).toBe(1);
   });
 
+  // Deferred: championZone trigger inclusion is ambiguous per rules primer —
+  // Needs human review. Engine currently filters championZone out.
   it.todo(
-    "Rule 583.x: Triggers on championZone cards — engine currently filters championZone " +
-      "out of the board-cards scan (trigger-matcher.ts line 158), so start-of-turn triggers " +
-      "on cards in championZone do NOT fire. This may be intentional (champions are not 'on " +
-      "the board' until played) but conflicts with triggers that fire 'while on champion " +
-      "zone'. Needs human review.",
+    "Rule 583.x: championZone trigger inclusion — ambiguous per rules primer; engine filters out",
   );
 });
 
@@ -379,12 +377,14 @@ describe("Rule 585: Multiple triggers fire when their conditions are met simulta
     expect(getCardMeta(engine, "hero-b")?.damage ?? 0).toBe(1);
   });
 
+  // Deferred: engine auto-orders triggers; no UI exists for controller to
+  // Pick order. The rule is satisfied if two triggers both fire; ordering
+  // Is a UX concern that isn't observable from the audit harness.
   it.todo(
-    "Rule 585.1: When multiple triggers controlled by the SAME player fire simultaneously, the controller chooses order",
+    "Rule 585.1: controller-chosen order for simultaneous same-player triggers (no ordering UI)",
   );
-
   it.todo(
-    "Rule 585.2: When triggers from different controllers fire simultaneously, start with active player's triggers (in turn order)",
+    "Rule 585.2: turn-order first for simultaneous different-controller triggers (no ordering UI)",
   );
 });
 
@@ -393,8 +393,11 @@ describe("Rule 585: Multiple triggers fire when their conditions are met simulta
 // -----------------------------------------------------------------------------
 
 describe("Rule 583 (optional triggers): 'You may' triggers still queue but are skippable", () => {
+  // Deferred: engine has no 'optional trigger' flag — all triggers auto-fire.
+  // Supporting optional triggers requires a new ability shape and a choose-
+  // To-accept UI step.
   it.todo(
-    "Rule 583.x: an optional trigger is offered to the controller who may decline (engine currently auto-fires)",
+    "Rule 583.x: optional 'you may' triggers should be offered but skippable (engine gap: all triggers auto-fire)",
   );
 });
 

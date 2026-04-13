@@ -525,7 +525,9 @@ describe("Rule 633: A player at Victory Score wins the game immediately", () => 
 // ---------------------------------------------------------------------------
 
 describe("Rule 630.1.a (deferred): Teammate-held battlefields can't be Conquered", () => {
+  // Deferred: engine has no 'team' concept at runtime; this rule requires
+  // A team-aware scoring pipeline that doesn't exist.
   it.todo(
-    "Rule 630.1.a: In team modes, a battlefield controlled by a teammate during Beginning Phase is disqualified from Conquer scoring (needs team mode setup).",
+    "Rule 630.1.a: teammate-held battlefield conquer exemption (engine gap: no team state)",
   );
 });

@@ -26,8 +26,10 @@ import {
   createBattlefield,
   createCard,
   createMinimalGameState,
+  getCardMeta,
   getCardsInZone,
   getState,
+  runPhaseHook,
 } from "./helpers";
 import {
   type CombatUnit,
@@ -736,10 +738,19 @@ describe("Rule 627.4: Contested status is cleared from the battlefield after com
 // Rule 627.5: Clear all marked damage at all locations
 // ===========================================================================
 
-describe("Rule 627.5: Marked damage cleared after combat (deferred — happens in ending phase)", () => {
-  it.todo(
-    "Rule 627.5: ambiguous — combat resolver leaves damage on surviving units and end-of-turn cleanup clears it. Verify against rule 517.2.a.",
-  );
+describe("Rule 627.5 / 517.2.a: Marked damage cleared during the ending phase", () => {
+  it("a surviving unit with residual damage has its damage cleared by ending.onBegin", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "survivor", {
+      cardType: "unit",
+      meta: { damage: 2 },
+      might: 5,
+      owner: P1,
+      zone: "base",
+    });
+    runPhaseHook(engine, "ending", "onBegin");
+    expect(getCardMeta(engine, "survivor")?.damage ?? 0).toBe(0);
+  });
 });
 
 // ===========================================================================
@@ -856,12 +867,19 @@ describe("End-to-end: resolveFullCombat applies damage, kills, outcome, cleans u
 // Deferred rules (Wave 3+)
 // ===========================================================================
 
-describe("Deferred combat rules (Wave 3+)", () => {
+describe("Deferred combat rules (engine gaps)", () => {
+  // Deferred: engine uses 'pendingCombats' list but no UI/move exists for
+  // The turn player to explicitly choose ordering.
   it.todo("Rule 622.1: Turn player chooses combat resolution order when multiple are pending");
+  // Deferred: multi-player destination legality is not enforced by standardMove
   it.todo("Rule 623.1: Multi-player: battlefields with combat are invalid move destinations");
   it.todo("Rule 623.2.a: Multi-player: units played to a combat-bf instead go to base");
+  // Deferred: 'here' re-reference redirection requires play-target rewriter
   it.todo("Rule 623.2.b: 'here' references reassign to controller's base on mistargeted plays");
+  // Deferred: 3-way combat rejection requires FFA combat pipeline
   it.todo("Rule 623.3: Three-way combat choices are invalid");
+  // Deferred: attack/defend triggers that populate initial chain are wired up
+  // But the audit harness cannot directly inspect the initial-chain population.
   it.todo("Rule 625.1.c.1: 'When I attack' triggers populate the initial chain");
   it.todo("Rule 625.1.c.2: 'When I defend' triggers populate the initial chain");
   it.todo("Rule 625.1.d: State closes if an initial chain was created");

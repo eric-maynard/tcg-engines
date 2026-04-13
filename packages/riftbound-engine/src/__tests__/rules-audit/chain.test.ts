@@ -368,8 +368,11 @@ describe("Rule 540.4.b: After all Relevant Players pass in sequence, the chain i
 // -----------------------------------------------------------------------------
 
 describe("Rule 541: Triggered abilities added during a chain become the most recent item", () => {
+  // Deferred: requires setting up a unit whose triggered ability fires
+  // During another card's resolution, which needs a multi-step trigger
+  // Pipeline not exposed through the audit helpers.
   it.todo(
-    "Rule 541.1: adding a triggered ability during an active chain places it on top without reordering the active player",
+    "Rule 541.1: adding a triggered ability during an active chain places it on top (engine gap: no harness entry-point)",
   );
 });
 
@@ -640,11 +643,11 @@ describe("Rule 540.2: Activated abilities can be placed on the chain (as an abil
 // -----------------------------------------------------------------------------
 
 describe("Rule 544: Countering negates a spell on the chain", () => {
-  it.todo("Rule 544.1: a countered spell's effect does NOT execute when its chain item resolves");
-
-  it.todo("Rule 544.3: countering does not refund costs paid to play the card");
-
-  it.todo("Rule 544.4: players may only Counter cards when directed by a game effect");
+  // Deferred: engine has `countered: true` flag on chain items but no
+  // CounterSpell move / effect that audit harness can trigger directly.
+  it.todo("Rule 544.1: a countered spell's effect does NOT execute when its chain item resolves (engine gap)");
+  it.todo("Rule 544.3: countering does not refund costs paid (definitional)");
+  it.todo("Rule 544.4: players may only Counter cards when directed by a game effect (engine gap)");
 });
 
 // -----------------------------------------------------------------------------
@@ -689,9 +692,24 @@ describe("Rule 520.1: Only the player with priority can take Discretionary Actio
 // -----------------------------------------------------------------------------
 
 describe("Rule 538: Permanents do not wait on the chain (they resolve immediately)", () => {
-  it.todo(
-    "Rule 538.1: playing a permanent does not create a chain (skipped — tested indirectly via unit play moves)",
-  );
+  it("playing a unit does not create a chain item (units resolve immediately)", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 2, power: {} } },
+    });
+    createCard(engine, "unit-1", {
+      cardType: "unit",
+      energyCost: 1,
+      might: 1,
+      owner: P1,
+      zone: "hand",
+    });
+
+    applyMove(engine, "playUnit", { cardId: "unit-1", playerId: P1 });
+
+    // Unit is now on the board directly (rule 538.1: permanents don't wait).
+    expect(getChainItems(engine)).toHaveLength(0);
+  });
 });
 
 // -----------------------------------------------------------------------------
@@ -699,7 +717,8 @@ describe("Rule 538: Permanents do not wait on the chain (they resolve immediatel
 // -----------------------------------------------------------------------------
 
 describe("Rule 528: Relevant Players for a Chain", () => {
+  // Deferred: 'invite' mechanic has no corresponding move in the engine
   it.todo(
-    "Rule 528.3.a: Invited players become Relevant Players only if they accept and must take an action",
+    "Rule 528.3.a: Invited players become Relevant Players only if they accept (engine gap: no invite move)",
   );
 });

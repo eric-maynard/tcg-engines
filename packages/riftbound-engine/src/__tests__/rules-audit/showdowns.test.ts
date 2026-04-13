@@ -316,8 +316,12 @@ describe("Rule 551: Showdowns may or may not begin with an Initial Chain", () =>
     expect(state.chain).toBeNull();
   });
 
+  // Deferred: engine starts combat showdowns via combat move, which fires
+  // Initial-chain population internally. The audit harness observes chain
+  // State but can't directly inspect the combat-initiated initial chain
+  // Without running a full combat-showdown integration.
   it.todo(
-    "Rule 551.1: Combat-initiated showdown populates 'When I attack'/'When I defend' triggers to initial chain",
+    "Rule 551.1: Combat-initiated showdown populates attack/defend triggers (needs combat integration)",
   );
   it.todo("Rule 551.1.a: Focus player orders their triggered abilities first, then turn order");
 });
@@ -327,6 +331,8 @@ describe("Rule 551: Showdowns may or may not begin with an Initial Chain", () =>
 // ===========================================================================
 
 describe("Rule 552: When the last chain item resolves, Focus passes to the next Relevant Player", () => {
+  // Deferred: focus-advance-on-resolve requires a chain-inside-showdown setup
+  // That is not exposed through the audit helpers.
   it.todo(
     "Rule 552: After a chain resolves inside a showdown, focus advances to the next relevant player",
   );
@@ -337,9 +343,11 @@ describe("Rule 552: When the last chain item resolves, Focus passes to the next 
 // ===========================================================================
 
 describe("Rule 553: During a Showdown, Focus player may play spell / activate ability / pass", () => {
+  // Deferred: requires the full showdown + playSpell integration
   it.todo("Rule 553.1: Playing a legally-timed spell starts a new chain inside the showdown");
   it.todo("Rule 553.2: Focus player may activate legally-timed abilities of game objects");
-  it.todo("Rule 553.3: Focus player may 'invite' another player to act — invited gets focus");
+  // Deferred: no 'invite' move exists in the engine
+  it.todo("Rule 553.3: Focus player may 'invite' another player (engine gap: no invite move)");
 });
 
 // ===========================================================================
@@ -533,10 +541,15 @@ describe("Rule 516.5.b: A Move to an empty battlefield opens a non-combat Showdo
 // Deferred rules (Wave 3+)
 // ===========================================================================
 
-describe("Deferred showdown rules (Wave 3+)", () => {
+describe("Deferred showdown rules (engine gaps)", () => {
+  // Deferred: chain-inside-showdown alternation requires multi-player chain setup
   it.todo("Rule 546.1 detail: Chain created inside showdown alternates between Relevant Players");
+  // Deferred: engine currently doesn't restrict card abilities during Showdown State
   it.todo("Rule 547.1.b: Card abilities cannot be played during Showdown State by default");
+  // Deferred: 'become relevant' dynamic tracking is not implemented
   it.todo("Rule 550.1.a: Players may become Relevant during the course of showdown play");
+  // Deferred: multi-player triggered-ability ordering not wired
   it.todo("Rule 551.1.a.1: Triggered abilities from other players become Relevant and order");
+  // Deferred: edge case — empty initial chain, engine path not explicitly tested
   it.todo("Rule 551.1.b: No triggered abilities → no initial chain, showdown still proceeds");
 });
