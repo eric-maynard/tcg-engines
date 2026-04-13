@@ -14,4 +14,6 @@
  */
 export const DATA_VERSION = "0.1.0";
 
-export { getAllCards, getCardRegistry } from "./all-cards";
+export { getAllCards, getCardRegistry, getRawCards } from "./all-cards";
+export { enrichCards, enrichCardsWithStats } from "./enrich-cards";
+export { SETS } from "./sets";

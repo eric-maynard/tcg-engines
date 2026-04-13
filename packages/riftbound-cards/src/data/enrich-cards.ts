@@ -32,7 +32,7 @@ function enrichCard(card: Card): Card {
   }
 
   // ParseAbilities returns Ability[] directly
-  const {abilities} = result;
+  const { abilities } = result;
 
   // Return a new card object with abilities attached
   return { ...card, abilities } as Card;
