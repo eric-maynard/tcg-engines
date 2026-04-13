@@ -358,4 +358,144 @@ export interface RiftboundMoves {
    * The chosen card is recycled/banished/discarded per the stored effect.
    */
   resolvePendingChoice: { playerId: PlayerId; pickedCardId: CardId };
+
+  // ============================================
+  // Token & Sandbox Meta Moves (W10)
+  // ============================================
+
+  /**
+   * Spawn a token card into a target zone.
+   *
+   * Mints a fresh card instance with a synthetic ID, registers it in the
+   * card definition registry using the built-in token catalog, and places
+   * it in the requested zone (typically `base` or a battlefield zone).
+   *
+   * The `count` parameter batches spawns so multi-token effects can emit
+   * a single aggregate match-log entry.
+   */
+  addToken: {
+    playerId: PlayerId;
+    zoneId: ZoneId;
+    tokenName: TokenName;
+    count?: number;
+  };
+
+  /**
+   * Generic counter +/- on a single card.
+   *
+   * Delegates to the core counter API. `delta` may be negative to remove
+   * counters. Supported counter types are the four tracked by the
+   * Riftbound tabletop tools: plus, minus, poison, and experience.
+   */
+  addCounter: {
+    cardId: CardId;
+    counterType: RiftboundCounterType;
+    delta: number;
+  };
+
+  /**
+   * Numeric ±/± buff on a unit.
+   *
+   * Unlike the flag-only `addBuff` move, this applies a persistent delta
+   * to `meta.mightModifier` (and `meta.toughnessModifier` for UI display).
+   * Static recalculation is triggered after the update so derived stats
+   * stay consistent.
+   */
+  modifyBuff: {
+    cardId: CardId;
+    deltaMight: number;
+    deltaToughness?: number;
+  };
+
+  /**
+   * Duplicate an existing card into a target zone (sandbox-only).
+   *
+   * Uses the source card's definition to mint a fresh instance with a
+   * synthetic ID. This bypasses rules validation — the caller must gate
+   * the move behind a Sandbox Mode flag in the UI.
+   */
+  duplicateCard: {
+    playerId: PlayerId;
+    cardId: CardId;
+    destinationZone: ZoneId;
+  };
+
+  /**
+   * Attach a free-form label string to a card's metadata.
+   *
+   * Purely cosmetic — used by the sandbox action panel to let players
+   * mark cards with short notes. Engine logic ignores the label.
+   */
+  labelCard: { cardId: CardId; label: string };
+
+  /**
+   * Transfer control of a card to a different player (sandbox-only).
+   *
+   * Mutates the `controller` field on the internal card store without
+   * changing the owner. Rule-validated control transfers flow through
+   * normal effects; this move is a sandbox override and must be gated
+   * behind a Sandbox Mode flag in the UI.
+   */
+  transferControl: { cardId: CardId; newControllerId: PlayerId };
+
+  // ============================================
+  // Deck & Peek Moves (W12)
+  // ============================================
+
+  /**
+   * Privately reveal the top N cards of a player's main deck.
+   *
+   * Stores a `peek-top` pending choice on game state so the UI can
+   * surface the preview to the peeking player; the match log emits a
+   * public "Looked at top N" line without revealing the actual cards.
+   */
+  peekTopN: { playerId: PlayerId; count: number };
+
+  /**
+   * Place a list of card IDs on top of the main deck, preserving order.
+   *
+   * The first ID in the array becomes the very top of the deck. Used by
+   * the W12 peek dialog after the player chooses an ordering.
+   */
+  placeCardsOnTopOfDeckInOrder: {
+    playerId: PlayerId;
+    cardIds: CardId[];
+  };
+
+  /**
+   * Publicly reveal the top N cards of a player's main deck to both
+   * players (the cards remain on top of the deck in their current order).
+   */
+  revealTopToOpponent: { playerId: PlayerId; count: number };
+
+  /**
+   * Recycle multiple cards in one move.
+   *
+   * Thin batch wrapper around `recycleCard` that emits a single aggregate
+   * match-log entry for the whole batch.
+   */
+  recycleMany: { playerId: PlayerId; cardIds: CardId[] };
+
+  /**
+   * Move a card from its current zone into the controlling player's hand.
+   *
+   * Used by the W12 peek dialog's "To hand" action and by sandbox tools
+   * that pull a specific card out of any zone. Clears transient counters
+   * (damage, buffs) on the way.
+   */
+  sendToHand: { cardId: CardId };
 }
+
+/**
+ * Built-in Riftbound token names.
+ *
+ * Matches the six token types produced by existing card effects. New
+ * tokens should be added to this union AND to {@link RIFTBOUND_TOKEN_DEFS}
+ * in `moves/token.ts` so the manual `addToken` move can spawn them.
+ */
+export type TokenName = "Gold" | "Recruit" | "Mech" | "Sand Soldier" | "Sprite" | "Bird";
+
+/**
+ * Counter types tracked by the `addCounter` sandbox move.
+ */
+export type RiftboundCounterType = "plus" | "minus" | "poison" | "experience";

@@ -89,6 +89,36 @@ export interface CardOperations<TCardMeta = any> {
   getCardOwner(cardId: CardId): PlayerId | undefined;
 
   /**
+   * Get the player currently controlling a card
+   *
+   * Controllers can change over the course of a game via effects that
+   * transfer control (e.g., mind control). Unlike owners, controllers
+   * are mutable.
+   *
+   * Optional for backward-compatibility with existing test stubs; the
+   * production RuleEngine always provides an implementation.
+   *
+   * @param cardId - ID of the card
+   * @returns Player ID of the current controller, or undefined if card doesn't exist
+   */
+  getCardController?(cardId: CardId): PlayerId | undefined;
+
+  /**
+   * Set the player controlling a card
+   *
+   * Transfers control of the card without changing its owner. Used by
+   * effects and sandbox tools that re-assign which player is "in charge"
+   * of a card instance.
+   *
+   * Optional for backward-compatibility with existing test stubs; the
+   * production RuleEngine always provides an implementation.
+   *
+   * @param cardId - ID of the card
+   * @param controllerId - Player ID to become the new controller
+   */
+  setCardController?(cardId: CardId, controllerId: PlayerId): void;
+
+  /**
    * Query cards by metadata criteria
    *
    * Finds all cards matching a predicate function.

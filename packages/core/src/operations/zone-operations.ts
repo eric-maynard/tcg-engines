@@ -210,4 +210,42 @@ export interface ZoneOperations {
     cardCount: number;
     shuffle?: boolean;
   }): CardId[];
+
+  /**
+   * Create a single card instance directly in a target zone
+   *
+   * Low-level utility for minting new card instances at runtime — used by
+   * tokens, duplicated cards, and sandbox tools. The card is inserted at
+   * the bottom of the target zone and the framework registers it in the
+   * internal card store.
+   *
+   * @param params - Create parameters
+   * @param params.cardId - The new card instance ID (caller must ensure uniqueness)
+   * @param params.definitionId - Card definition ID to reference (static data lookup)
+   * @param params.zoneId - Target zone to place the card in
+   * @param params.ownerId - Owner of the new card instance
+   * @param params.controllerId - Optional controller (defaults to ownerId)
+   * @param params.position - Optional position within the target zone
+   *
+   * Optional for backward-compatibility with existing test stubs; the
+   * production RuleEngine always provides an implementation.
+   *
+   * @example
+   * ```typescript
+   * zones.createCardInZone({
+   *   cardId: "token-gold-001",
+   *   definitionId: "gold-token",
+   *   zoneId: "base",
+   *   ownerId: "player-1",
+   * });
+   * ```
+   */
+  createCardInZone?(params: {
+    cardId: CardId;
+    definitionId: string;
+    zoneId: ZoneId;
+    ownerId: PlayerId;
+    controllerId?: PlayerId;
+    position?: "top" | "bottom" | number;
+  }): void;
 }

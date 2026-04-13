@@ -37,6 +37,64 @@ export const createZoneOperations = <TCardDef, TCardMeta>(
       return movedCards;
     },
 
+    createCardInZone: ({
+      cardId,
+      definitionId,
+      zoneId,
+      ownerId,
+      controllerId,
+      position = "bottom",
+    }) => {
+      logger?.trace("Creating card in zone", { cardId, definitionId, ownerId, zoneId });
+      const targetZone = state.zones[zoneId as string];
+      if (!targetZone) {
+        throw new Error(`Target zone ${zoneId} does not exist`);
+      }
+
+      // Register the new card instance
+      state.cards[cardId as string] = {
+        controller: controllerId ?? ownerId,
+        definitionId,
+        owner: ownerId,
+        zone: zoneId,
+      };
+
+      // Insert into the zone at the requested position
+      let targetPosition: number | undefined;
+      if (position === "top") {
+        targetZone.cardIds.unshift(cardId);
+        targetPosition = 0;
+        if (targetZone.config.ordered) {
+          for (let i = 1; i < targetZone.cardIds.length; i++) {
+            const cid = targetZone.cardIds[i] as string;
+            if (state.cards[cid]) {
+              state.cards[cid].position = i;
+            }
+          }
+        }
+      } else if (position === "bottom") {
+        targetZone.cardIds.push(cardId);
+        targetPosition = targetZone.config.ordered ? targetZone.cardIds.length - 1 : undefined;
+      } else {
+        const idx = position as number;
+        targetZone.cardIds.splice(idx, 0, cardId);
+        targetPosition = targetZone.config.ordered ? idx : undefined;
+        if (targetZone.config.ordered) {
+          for (let i = idx + 1; i < targetZone.cardIds.length; i++) {
+            const cid = targetZone.cardIds[i] as string;
+            if (state.cards[cid]) {
+              state.cards[cid].position = i;
+            }
+          }
+        }
+      }
+
+      const newCard = state.cards[cardId as string];
+      if (newCard) {
+        newCard.position = targetPosition;
+      }
+    },
+
     createDeck: ({ zoneId, playerId, cardCount, shuffle = false }) => {
       const createdCards: CardId[] = [];
 
@@ -258,6 +316,11 @@ export const createCardOperations = <TCardDef, TCardMeta>(
   state: InternalState<TCardDef, TCardMeta>,
   logger?: Logger,
 ): CardOperations<TCardMeta> => ({
+  getCardController: (cardId) => {
+    const card = state.cards[cardId as string];
+    return card?.controller;
+  },
+
   getCardMeta: (cardId) => {
     logger?.trace("Getting card meta", { cardId });
     return (state.cardMetas[cardId as string] || {}) as Partial<TCardMeta>;
@@ -277,6 +340,14 @@ export const createCardOperations = <TCardDef, TCardMeta>(
       }
     }
     return results;
+  },
+
+  setCardController: (cardId, controllerId) => {
+    logger?.trace("Setting card controller", { cardId, controllerId });
+    const card = state.cards[cardId as string];
+    if (card) {
+      card.controller = controllerId;
+    }
   },
 
   setCardMeta: (cardId, meta) => {

@@ -13,7 +13,9 @@ export type {
   Domain,
   DomainPower,
   LocationId,
+  RiftboundCounterType,
   RiftboundMoves,
   ScoringMethod,
+  TokenName,
   ZoneId,
 } from "./moves";

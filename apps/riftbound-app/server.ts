@@ -451,6 +451,72 @@ function formatMoveLog(
       const redrawn = keep; // Number sent back = number redrawn after mulligan move
       return `${actor} finalized mulligan (${redrawn} recycled, ${redrawn} redrawn).`;
     }
+    case "addToken": {
+      const tokenName = String(params.tokenName ?? "token");
+      const rawCount = Number(params.count ?? 1);
+      const count = Number.isFinite(rawCount) && rawCount > 0 ? Math.floor(rawCount) : 1;
+      const zoneLabel = typeof params.zoneId === "string" && params.zoneId.startsWith("battlefield-")
+        ? resolveBattlefield(params.zoneId.replace(/^battlefield-/, ""))
+        : (params.zoneId as string) ?? "base";
+      if (count === 1) {
+        return `${actor} added a ${tokenName} token to ${zoneLabel}.`;
+      }
+      return `${actor} added ${count} ${tokenName} tokens to ${zoneLabel}.`;
+    }
+    case "addCounter": {
+      const delta = Number(params.delta ?? 0);
+      const counterType = String(params.counterType ?? "counter");
+      const cardName = resolveCard(params.cardId);
+      if (delta >= 0) {
+        return `${actor} added +${delta} ${counterType} counter${delta === 1 ? "" : "s"} to ${cardName}.`;
+      }
+      return `${actor} removed ${-delta} ${counterType} counter${-delta === 1 ? "" : "s"} from ${cardName}.`;
+    }
+    case "modifyBuff": {
+      const m = Number(params.deltaMight ?? 0);
+      const t = Number(params.deltaToughness ?? 0);
+      const cardName = resolveCard(params.cardId);
+      const fmt = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
+      return `${actor} buffed ${cardName} by ${fmt(m)}/${fmt(t)}.`;
+    }
+    case "duplicateCard": {
+      const cardName = resolveCard(params.cardId);
+      const dest = typeof params.destinationZone === "string" && params.destinationZone.startsWith("battlefield-")
+        ? resolveBattlefield(params.destinationZone.replace(/^battlefield-/, ""))
+        : (params.destinationZone as string) ?? "base";
+      return `${actor} duplicated ${cardName} into ${dest}.`;
+    }
+    case "labelCard": {
+      const cardName = resolveCard(params.cardId);
+      const label = String(params.label ?? "");
+      return `${actor} labeled ${cardName} as "${label}".`;
+    }
+    case "transferControl": {
+      const cardName = resolveCard(params.cardId);
+      const newCtrl = typeof params.newControllerId === "string"
+        ? actorName(params.newControllerId, playerNames)
+        : "another player";
+      return `${actor} transferred control of ${cardName} to ${newCtrl}.`;
+    }
+    case "peekTopN": {
+      const count = Number(params.count ?? 1);
+      return `${actor} looked at the top ${count} card${count === 1 ? "" : "s"} of their deck.`;
+    }
+    case "placeCardsOnTopOfDeckInOrder": {
+      const count = Array.isArray(params.cardIds) ? params.cardIds.length : 0;
+      return `${actor} placed ${count} card${count === 1 ? "" : "s"} on top of their deck.`;
+    }
+    case "revealTopToOpponent": {
+      const count = Number(params.count ?? 1);
+      return `${actor} revealed the top ${count} card${count === 1 ? "" : "s"} of their deck to their opponent.`;
+    }
+    case "recycleMany": {
+      const count = Array.isArray(params.cardIds) ? params.cardIds.length : 0;
+      return `${actor} recycled ${count} card${count === 1 ? "" : "s"}.`;
+    }
+    case "sendToHand": {
+      return `${actor} moved ${resolveCard(params.cardId)} to hand.`;
+    }
     default: {
       // Hide noisy system moves from the log
       const hiddenMoves = new Set([
@@ -475,6 +541,10 @@ const REWINDABLE_MOVE_IDS = new Set([
   "channelRunes", "drawCard", "scryCard", "lookAtTop", "rollForFirst",
   "chooseFirstPlayer", "concede", "startShowdown", "endShowdown",
   "discardCard", "recallUnit", "hideCard", "revealHidden", "mulligan",
+  // W10 / W12 sandbox + peek moves — all player-driven, rewindable.
+  "addToken", "addCounter", "modifyBuff", "duplicateCard", "labelCard",
+  "transferControl", "peekTopN", "placeCardsOnTopOfDeckInOrder",
+  "revealTopToOpponent", "recycleMany", "sendToHand",
 ]);
 
 /**
@@ -2882,9 +2952,9 @@ const server = Bun.serve({
           return;
         }
         // W8: emit the canonical "Rewound their last action." line (non-rewindable
-        // so rewinding a rewind is impossible) with a fresh timestamp. This matches
-        // the REST handler path above and gives the client a stable sentinel to
-        // detect and clear in-progress UI state on.
+        // So rewinding a rewind is impossible) with a fresh timestamp. This matches
+        // The REST handler path above and gives the client a stable sentinel to
+        // Detect and clear in-progress UI state on.
         session.log.push(makeLogEntry("Rewound their last action.", { rewindable: false }));
         session.seq++;
         const snapshot = buildGameSnapshot(session);

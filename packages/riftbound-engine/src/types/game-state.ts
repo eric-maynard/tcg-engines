@@ -111,6 +111,24 @@ export interface RiftboundCardMeta {
    * leaves the board.
    */
   exiledByThis?: CardId[];
+
+  /**
+   * Optional free-form label attached to the card by a sandbox/meta action.
+   *
+   * Purely cosmetic — surfaced in the UI so players can mark a card with a
+   * short note (e.g., "Turn 3", "scry target") during sandbox play. Not
+   * read by rules logic.
+   */
+  label?: string;
+
+  /**
+   * Toughness modifier from sandbox meta actions (e.g., Apply Buff +1/+1).
+   *
+   * Riftbound does not have a toughness stat in the rules — combat damage
+   * is threshold-compared against Might. We track this field so the UI can
+   * render a +N/+M style buff badge, but the engine doesn't consume it.
+   */
+  toughnessModifier?: number;
 }
 
 /**
