@@ -16,7 +16,11 @@ import type { EffectContext, ExecutableEffect } from "./effect-executor";
 import { executeEffect } from "./effect-executor";
 import type { GameEvent } from "./game-events";
 import { evaluateLegionCondition } from "./legion-conditions";
-import type { CardWithAbilities, TriggerableAbility } from "./trigger-matcher";
+import type {
+  CardWithAbilities,
+  MatchedTrigger,
+  TriggerableAbility,
+} from "./trigger-matcher";
 import { findMatchingTriggers } from "./trigger-matcher";
 
 /**
@@ -168,21 +172,12 @@ function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
     });
   }
 
-  // Get cards from championZone (per player)
-  for (const playerId of Object.keys(ctx.draft.players)) {
-    const championCards = ctx.zones.getCardsInZone(
-      "championZone" as CoreZoneId,
-      playerId as CorePlayerId,
-    );
-    for (const cardId of championCards) {
-      boardCards.push({
-        abilities: toTriggerableAbilities(cardId as string),
-        id: cardId as string,
-        owner: playerId,
-        zone: "championZone",
-      });
-    }
-  }
+  // Rule 585.1 / 585.2 (ambiguity): champions in championZone have NOT been
+  // Played yet. Per the rules primer consensus, their triggers do NOT fire
+  // While they sit in championZone — a champion's abilities only come online
+  // Once the card has been played (moved out of championZone into play).
+  // Legends in legendZone, by contrast, DO have their triggers active.
+  // So we intentionally skip scanning championZone here.
 
   return boardCards;
 }
@@ -197,6 +192,61 @@ function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
  * @param ctx - The trigger runner context from the move reducer
  * @returns Number of triggers that fired
  */
+/**
+ * Order simultaneous triggers per rule 585.
+ *
+ * Rule 585.1: Multiple triggers controlled by the **same** player fire in
+ * the order that player chooses. The engine defaults to the insertion order
+ * that `findMatchingTriggers` produced, which is deterministic (scan order
+ * of `getBoardCards`) — so auto/goldfish play does not stall on an ordering
+ * prompt.
+ *
+ * Rule 585.2: When triggers belong to **different** controllers, the turn
+ * player's triggers fire first, then each subsequent player in turn order.
+ *
+ * @param matches - Triggers in original scan order
+ * @param turnPlayer - The active player (turn player)
+ * @param turnOrder - Full turn order (players in seat order)
+ * @returns Triggers in rule-585-compliant order
+ */
+export function orderTriggers(
+  matches: MatchedTrigger[],
+  turnPlayer: string,
+  turnOrder: string[],
+): MatchedTrigger[] {
+  if (matches.length <= 1) {
+    return matches;
+  }
+
+  // Build a ranking: turn player first (rank 0), next player clockwise (rank 1), ...
+  const rank: Record<string, number> = {};
+  if (turnOrder.length > 0) {
+    const startIdx = Math.max(0, turnOrder.indexOf(turnPlayer));
+    for (let i = 0; i < turnOrder.length; i++) {
+      const pid = turnOrder[(startIdx + i) % turnOrder.length];
+      if (pid !== undefined && rank[pid] === undefined) {
+        rank[pid] = i;
+      }
+    }
+  } else {
+    rank[turnPlayer] = 0;
+  }
+
+  // Rule 585.2: stable sort by owner rank (turn player first).
+  // Rule 585.1: within a single owner, preserve insertion order (stable sort).
+  return matches
+    .map((m, i) => ({ idx: i, match: m }))
+    .toSorted((a, b) => {
+      const ra = rank[a.match.cardOwner] ?? Number.MAX_SAFE_INTEGER;
+      const rb = rank[b.match.cardOwner] ?? Number.MAX_SAFE_INTEGER;
+      if (ra !== rb) {
+        return ra - rb;
+      }
+      return a.idx - b.idx;
+    })
+    .map((entry) => entry.match);
+}
+
 export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
   const boardCards = getBoardCards(ctx);
   const allMatches = findMatchingTriggers(event, boardCards);
@@ -205,9 +255,48 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
   // Their ability.condition before executing. Conditions are evaluated
   // Against the controller of the card (owner, since abilities cannot
   // Change controller separately today).
-  const matches = allMatches.filter((match) =>
+  const filtered = allMatches.filter((match) =>
     evaluateTriggerCondition(match.ability.condition, ctx.draft, match.cardOwner),
   );
+
+  // Rule 585: Order simultaneous triggers by (1) turn player first
+  // (2) within the same owner, preserve scan order (controller-chosen
+  // Order defaults to insertion order for goldfish compatibility).
+  const turnPlayer = ctx.draft.turn?.activePlayer ?? "";
+  const turnOrder = Object.keys(ctx.draft.players ?? {});
+  const matches = orderTriggers(filtered, turnPlayer, turnOrder);
+
+  // Rule 541: When a triggered ability fires during an active chain, the
+  // Triggered ability is added to the chain as a new item (it does not
+  // Resolve immediately). When no chain is active, triggers resolve inline.
+  const chainActive = ctx.draft.interaction?.chain?.active === true;
+
+  if (chainActive) {
+    // Add each trigger onto the chain in the order computed above so that
+    // The most-recently-pushed trigger is the new top-of-stack (rule 541.1).
+    // Pushes cascade: the trigger-effect executes only when the chain
+    // Resolves via `passChainPriority` / `resolveChain`.
+    for (const match of matches) {
+      if (!ctx.draft.interaction) {
+        break;
+      }
+      const effect = match.ability.effect as unknown;
+      (ctx.draft as RiftboundGameState & {
+        interaction: NonNullable<RiftboundGameState["interaction"]>;
+      }).interaction = addToChain(
+        ctx.draft.interaction,
+        {
+          cardId: match.cardId,
+          controller: match.cardOwner,
+          effect,
+          triggered: true,
+          type: "ability",
+        },
+        turnOrder,
+      );
+    }
+    return matches.length;
+  }
 
   for (const match of matches) {
     // Build a no-op for missing optional methods

@@ -7,6 +7,11 @@
 
 import type { PlayerId as CorePlayerId, GameMoveDefinitions } from "@tcg/core";
 import { createInteractionState, getTurnState } from "../../chain";
+import {
+  getActivePlayers,
+  isPlayerRemoved,
+  removePlayer,
+} from "../../operations/player-removal";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 /**
@@ -85,12 +90,28 @@ export const turnMoves: Partial<
   /**
    * Concede the game
    *
-   * Player forfeits the game. The opponent wins.
+   * Player forfeits the game (rule 650). In a 1v1 game the opponent
+   * wins immediately. In 3+ player games (rule 651.2) the conceding
+   * player is removed via the rule-652 pipeline and the game continues
+   * with the remaining players; only when a single player is left does
+   * the game actually finish.
    */
   concede: {
-    condition: (state) => state.status === "playing",
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+      // An already-removed player cannot concede again.
+      if (isPlayerRemoved(state, context.params.playerId)) {
+        return false;
+      }
+      return true;
+    },
     enumerator: (state, context) => {
       if (state.status !== "playing") {
+        return [];
+      }
+      if (isPlayerRemoved(state, context.playerId as string)) {
         return [];
       }
       return [{ playerId: context.playerId as string }];
@@ -98,20 +119,50 @@ export const turnMoves: Partial<
     reducer: (draft, context) => {
       const { playerId } = context.params;
 
-      // Find the opponent
-      const playerIds = Object.keys(draft.players);
-      const opponentId = playerIds.find((id) => id !== playerId);
+      const totalPlayers = Object.keys(draft.players).length;
 
-      // Set game as finished with opponent as winner
-      draft.status = "finished";
-      draft.winner = opponentId;
+      // 1v1: opponent wins immediately (rule 651.1). Preserve existing
+      // Behavior for duels and 2-player rule-audit harnesses.
+      if (totalPlayers <= 2) {
+        const playerIds = Object.keys(draft.players);
+        const opponentId = playerIds.find((id) => id !== playerId);
 
-      // Also use the endGame function if available
-      context.endGame?.({
-        metadata: { concededBy: playerId },
-        reason: "concede",
-        winner: opponentId as CorePlayerId,
-      });
+        draft.status = "finished";
+        draft.winner = opponentId;
+        (draft as { removedPlayers?: string[] }).removedPlayers = [playerId];
+
+        context.endGame?.({
+          metadata: { concededBy: playerId },
+          reason: "concede",
+          winner: opponentId as CorePlayerId,
+        });
+        return;
+      }
+
+      // 3+ players: run the rule-652 removal pipeline. Game continues
+      // Unless only one player remains.
+      removePlayer(
+        {
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          zones: context.zones,
+        },
+        playerId,
+      );
+
+      const remaining = getActivePlayers(draft);
+      if (remaining.length <= 1) {
+        const winnerId = remaining[0];
+        draft.status = "finished";
+        draft.winner = winnerId;
+
+        context.endGame?.({
+          metadata: { concededBy: playerId },
+          reason: "concede",
+          winner: winnerId as CorePlayerId,
+        });
+      }
     },
   },
 

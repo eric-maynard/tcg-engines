@@ -23,13 +23,19 @@ import { describe, expect, it } from "bun:test";
 import {
   P1,
   P2,
+  P3,
+  P4,
   applyMove,
+  checkMoveLegal,
+  createBattlefield,
   createCard,
   createMinimalGameState,
+  getCardZone,
   getCardsInZone,
   getState,
   getStatus,
   getWinner,
+  placeInMainDeck,
   setVictoryPoints,
 } from "./helpers";
 import { hasPlayerWon } from "../../game-definition/win-conditions/victory";
@@ -52,13 +58,29 @@ describe("Rule 607.1: Burn Out triggers on draw/look/mill from empty Main Deck",
     expect(getState(engine).players[P2].victoryPoints).toBe(before + 1);
   });
 
-  // Deferred: engine does not wire look/reveal effects to burn-out; no effect
-  // In the codebase currently triggers burn-out from look-from-empty-deck.
-  it.todo(
-    "Rule 607.1.b: looking/revealing from an empty main deck causes Burn Out (no engine hookup)",
-  );
-  // Deferred: mill (move from deck to trash) does not currently trigger burn-out
-  it.todo("Rule 607.1.c: moving cards from an empty main deck to trash (mill) causes Burn Out");
+  it("Rule 607.1.b: burnOut with source='look' fires from an empty main deck", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+
+    const result = applyMove(engine, "burnOut", {
+      opponentId: P2,
+      playerId: P1,
+      source: "look",
+    });
+    expect(result.success).toBe(true);
+    expect(getState(engine).players[P2].victoryPoints).toBe(1);
+  });
+
+  it("Rule 607.1.c: burnOut with source='mill' fires from an empty main deck", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+
+    const result = applyMove(engine, "burnOut", {
+      opponentId: P2,
+      playerId: P1,
+      source: "mill",
+    });
+    expect(result.success).toBe(true);
+    expect(getState(engine).players[P2].victoryPoints).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -92,9 +114,25 @@ describe("Rule 607.2: Burn Out sequence (shuffle trash, give point, retry action
     expect(getState(engine).players[P1].victoryPoints).toBe(0);
   });
 
-  it.todo(
-    "Rule 607.2.c: after burnOut, the original action (e.g. draw) is retried (depends on move dispatcher that calls burnOut first).",
-  );
+  it("Rule 607.2.c: after burnOut with source='draw' the original draw action is retried", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    // P1 has 1 card in trash — after shuffle it ends up in the main deck
+    // And the retry draw moves it to hand.
+    createCard(engine, "retry-1", { cardType: "spell", owner: P1, zone: "trash" });
+
+    expect(getCardsInZone(engine, "trash", P1).length).toBe(1);
+    expect(getCardsInZone(engine, "hand", P1).length).toBe(0);
+
+    applyMove(engine, "burnOut", {
+      opponentId: P2,
+      playerId: P1,
+      source: "draw",
+    });
+
+    // Retry pulled the shuffled card back into hand.
+    expect(getCardsInZone(engine, "hand", P1).length).toBe(1);
+    expect(getCardsInZone(engine, "trash", P1).length).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

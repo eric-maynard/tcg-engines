@@ -319,11 +319,23 @@ describe("Rule 583.x: Triggers on legend-zone cards fire (legends remain relevan
     expect(getCardMeta(engine, "the-legend")?.damage ?? 0).toBe(1);
   });
 
-  // Deferred: championZone trigger inclusion is ambiguous per rules primer —
-  // Needs human review. Engine currently filters championZone out.
-  it.todo(
-    "Rule 583.x: championZone trigger inclusion — ambiguous per rules primer; engine filters out",
-  );
+  it("Rule 585.1 / 585.2: a trigger on a champion in championZone does NOT fire (not yet played)", () => {
+    // Clarification from the rules primer: a champion sitting in
+    // ChampionZone has not yet been played — its triggered abilities do
+    // NOT fire. The trigger runner intentionally skips scanning
+    // ChampionZone.
+    const engine = createMinimalGameState({ phase: "beginning" });
+    createCard(engine, "champ-waiting", {
+      abilities: [SELF_DAMAGE_TRIGGER("start-of-turn")],
+      cardType: "unit",
+      might: 3,
+      owner: P1,
+      zone: "championZone",
+    });
+    const fired = fireTrigger(engine, { playerId: P1, type: "start-of-turn" });
+    expect(fired).toBe(0);
+    expect(getCardMeta(engine, "champ-waiting")?.damage ?? 0).toBe(0);
+  });
 });
 
 // -----------------------------------------------------------------------------

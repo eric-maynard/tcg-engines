@@ -104,6 +104,31 @@ export interface RiftboundMoves {
   /** End a showdown (all players passed, rule 553.4.a) */
   endShowdown: Record<string, never>;
 
+  /**
+   * Invite a non-relevant player into the current chain or showdown
+   * (rule 528.3.a / 553.3). The inviter must be a Relevant Player; the
+   * invitee becomes Relevant for the rest of this chain/showdown and is
+   * added to the tail of the priority/focus rotation.
+   */
+  invitePlayer: {
+    playerId: PlayerId;
+    invitedPlayerId: PlayerId;
+  };
+
+  /**
+   * Counter a spell (or ability) on the chain (rules 544.x).
+   *
+   * Marks a chain item as countered so its effect is skipped when the
+   * chain resolves. A counter does not refund costs already paid (544.3).
+   * Counters may only be used when directed by a game effect (544.4) —
+   * this move is invoked by the effect executor's `counter` effect type
+   * or by a game effect that explicitly counters a chain item.
+   */
+  counterSpell: {
+    playerId: PlayerId;
+    targetChainItemId: string;
+  };
+
   /** Transition from setup to main game */
   transitionToPlay: Record<string, never>;
 
@@ -202,8 +227,11 @@ export interface RiftboundMoves {
   // Resource Moves
   // ============================================
 
-  /** Channel runes from deck */
-  channelRunes: { playerId: PlayerId; count: number };
+  /** Channel runes from deck. Rule 606.3.a: channelling is a *directed*
+   * Action — a player cannot elect to channel at will; it must be driven by
+   * A game effect (e.g., the channel-phase onBegin hook). Callers that
+   * Originate channelling from a game effect pass `directed: true`. */
+  channelRunes: { playerId: PlayerId; count: number; directed?: boolean };
 
   /** Tap rune for energy */
   exhaustRune: { playerId: PlayerId; runeId: CardId };
@@ -242,8 +270,20 @@ export interface RiftboundMoves {
   /** Take control of battlefield */
   conquerBattlefield: { playerId: PlayerId; battlefieldId: CardId };
 
-  /** Award victory point */
-  scorePoint: { playerId: PlayerId; method: ScoringMethod; battlefieldId: CardId };
+  /**
+   * Award victory point.
+   *
+   * `previousController` identifies the player (if any) who held the
+   * battlefield immediately before the scoring player gained control.
+   * Used by rule 630.1.a to disqualify conquer VP when the previous
+   * controller was a teammate.
+   */
+  scorePoint: {
+    playerId: PlayerId;
+    method: ScoringMethod;
+    battlefieldId: CardId;
+    previousController?: PlayerId | null;
+  };
 
   /** Reset combat designations */
   clearCombatState: { battlefieldId: CardId };
@@ -343,8 +383,23 @@ export interface RiftboundMoves {
   /** Draw from main deck */
   drawCard: { playerId: PlayerId; count?: number };
 
-  /** Shuffle trash into deck, opponent scores */
-  burnOut: { playerId: PlayerId; opponentId: PlayerId };
+  /**
+   * Shuffle trash into deck, opponent scores (rule 607).
+   *
+   * `source` identifies the game action that triggered burn-out:
+   *   - "draw" — player drew from an empty deck (607.1.a)
+   *   - "look" — a look/reveal effect from an empty deck (607.1.b)
+   *   - "mill" — moving from deck to trash on an empty deck (607.1.c)
+   *   - "directed" — fired by a game effect, no retry (607.4.a)
+   *
+   * Defaults to `"directed"` for backward compatibility with existing
+   * callers.
+   */
+  burnOut: {
+    playerId: PlayerId;
+    opponentId: PlayerId;
+    source?: "draw" | "look" | "mill" | "directed";
+  };
 
   // ============================================
   // Pending Choice Moves

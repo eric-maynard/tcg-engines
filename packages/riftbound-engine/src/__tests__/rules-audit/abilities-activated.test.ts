@@ -364,10 +364,35 @@ describe("Rule 580: Activated abilities are primarily activated while on the boa
     expect(activate.length).toBeGreaterThan(0);
   });
 
-  // Deferred: rule 580 championZone activation is ambiguous per rules primer
-  it.todo(
-    "Rule 580: championZone activation is ambiguous — needs human rules review",
-  );
+  it("Rule 580 / 101: a unit in championZone CANNOT have its activated ability used", () => {
+    // Clarification from rules primer: a champion sitting in championZone
+    // Has not yet been played — its abilities only come online once the
+    // Card has been played into play. The engine therefore rejects
+    // `activateAbility` while the card is in championZone.
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 0, power: {} } },
+    });
+    createCard(engine, "champ-waiting", {
+      abilities: [
+        {
+          cost: { exhaust: true },
+          effect: { amount: 1, type: "draw" },
+          type: "activated",
+        },
+      ],
+      cardType: "unit",
+      might: 3,
+      owner: P1,
+      zone: "championZone",
+    });
+    const legal = checkMoveLegal(engine, "activateAbility", {
+      abilityIndex: 0,
+      cardId: "champ-waiting",
+      playerId: P1,
+    });
+    expect(legal).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -594,13 +619,13 @@ describe("activateAbility enumerator: legal options are discoverable", () => {
 // ChampionZone: unsettled rule — mark with it.todo so reviewers can decide
 // ---------------------------------------------------------------------------
 
-describe("championZone activation (unresolved)", () => {
-  it("engine currently permits activating abilities on championZone cards — document this", () => {
+describe("championZone activation (resolved)", () => {
+  it("engine rejects activating abilities on championZone cards (champion not yet played)", () => {
     // Per rule 101 / primer, a champion in championZone is NOT on the board
-    // Until the champion is "played" into championZone proper. The engine's
-    // `activateAbility.condition` accepts championZone as a legal source zone.
-    // This test documents the current behavior. Whether it's correct depends
-    // On human rules review.
+    // Until the champion is "played" into play. The engine's
+    // `activateAbility.condition` excludes championZone as a legal source
+    // Zone — a champion's abilities come online only once the card has been
+    // Played out of championZone.
     const engine = createMinimalGameState({
       phase: "main",
       runePools: { [P1]: { energy: 0, power: {} } },
@@ -623,12 +648,34 @@ describe("championZone activation (unresolved)", () => {
       cardId: "champ",
       playerId: P1,
     });
-    // Current engine behavior: championZone is accepted.
-    expect(legal).toBe(true);
+    // Current engine behavior: championZone is rejected.
+    expect(legal).toBe(false);
   });
 
-  // Deferred: same championZone ambiguity — needs human rules review
-  it.todo(
-    "Rule 580 / 101: championZone activation legality — engine accepts it; needs human review",
-  );
+  it("Rule 580 / 101: championZone is also absent from the legal-move enumerator", () => {
+    // Parallel to the condition-level check above, the enumerator must not
+    // Offer `activateAbility` for a card sitting in championZone.
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 0, power: {} } },
+    });
+    createCard(engine, "champ-enum", {
+      abilities: [
+        {
+          cost: { exhaust: true },
+          effect: { amount: 1, type: "draw" },
+          type: "activated",
+        },
+      ],
+      cardType: "unit",
+      might: 3,
+      owner: P1,
+      zone: "championZone",
+    });
+    const legalMoves = enumerateLegalMoves(engine, P1);
+    const found = legalMoves.filter(
+      (m) => m.moveId === "activateAbility" && m.params?.cardId === "champ-enum",
+    );
+    expect(found.length).toBe(0);
+  });
 });

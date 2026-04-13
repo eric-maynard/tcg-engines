@@ -463,33 +463,61 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
     }
   }
 
-  // Step 2: Scan board cards for static abilities and apply
-  for (const card of boardCards) {
-    const abilities = registry.getAbilities(card.id) ?? [];
+  // Step 2 + 3: Apply static abilities in layered order to handle
+  // Dependencies between statics (rule 638.1.a-c, 639.1). We use a simple
+  // Two-pass approach inspired by MTG's layer system:
+  //   Pass 1 (layer "type" / "grant"): type-setting and ability-granting
+  //                                     Effects (grant-keyword, grant-keywords)
+  //   Pass 2 (layer "arithmetic"): might/stat arithmetic (modify-might)
+  //
+  // This handles the common "if X has keyword Y, then +N might" style
+  // Dependencies without needing a full dependency graph. For effects
+  // That are commutative (e.g., two +1 Might auras) the order does not
+  // Matter, so the observable result is unchanged for those cases.
 
-    for (const ability of abilities) {
-      if (ability.type !== "static") {
-        continue;
-      }
+  const PASS_1_EFFECTS = new Set(["grant-keyword", "grant-keywords"]);
+  const PASS_2_EFFECTS = new Set(["modify-might"]);
 
-      // Evaluate condition (if any)
-      const condition = ability.condition as Record<string, unknown> | undefined;
-      if (condition && !evaluateCondition(condition, card, ctx)) {
-        continue; // Condition not met — skip this ability
-      }
+  const applyPass = (allowedEffects: Set<string>): void => {
+    for (const card of boardCards) {
+      const abilities = registry.getAbilities(card.id) ?? [];
 
-      // Resolve targets
-      const { affects } = ability as unknown as { affects?: string };
-      const targetIds = resolveStaticTargets(affects, card, boardCards);
+      for (const ability of abilities) {
+        if (ability.type !== "static") {
+          continue;
+        }
 
-      // Apply effect
-      const effect = ability.effect as Record<string, unknown> | undefined;
-      if (effect) {
+        const effect = ability.effect as Record<string, unknown> | undefined;
+        if (!effect) {
+          continue;
+        }
+        const effectType = effect.type as string | undefined;
+        if (!effectType || !allowedEffects.has(effectType)) {
+          continue;
+        }
+
+        // Evaluate condition (if any). Pass 2 sees the effects of pass 1
+        // Already applied (granted keywords), which is what enables
+        // Dependency cases like "while-has-keyword-tank: +1 might".
+        const condition = ability.condition as Record<string, unknown> | undefined;
+        if (condition && !evaluateCondition(condition, card, ctx)) {
+          continue;
+        }
+
+        // Resolve targets
+        const { affects } = ability as unknown as { affects?: string };
+        const targetIds = resolveStaticTargets(affects, card, boardCards);
+
         applyStaticEffect(effect, targetIds, ctx);
         anyApplied = true;
       }
     }
-  }
+  };
+
+  // Pass 1 — type/ability-setting
+  applyPass(PASS_1_EFFECTS);
+  // Pass 2 — arithmetic
+  applyPass(PASS_2_EFFECTS);
 
   return anyApplied;
 }

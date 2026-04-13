@@ -91,13 +91,138 @@ function buildConsumedKey(sourceCardId: string, abilityIndex: number): string {
 }
 
 /**
+ * Find all replacement effects that apply to a game action.
+ *
+ * Scans all cards on the board for replacement abilities that match
+ * the given event. Returns the complete list of matches so callers that
+ * implement rule 575 ordering (owner/turn-player chooses resolution order)
+ * can inspect every eligible replacement rather than just the first one.
+ *
+ * Respects `"next"` duration: replacements whose `${sourceCardId}|${abilityIndex}`
+ * key has already been recorded in `draft.consumedNextReplacements` are
+ * skipped.
+ */
+export function findAllReplacements(
+  event: ReplacementEvent,
+  ctx: ReplacementContext,
+): MatchedReplacement[] {
+  const registry = getGlobalCardRegistry();
+
+  // Collect all board cards
+  const boardCards: { id: string; owner: string }[] = [];
+  for (const playerId of Object.keys(ctx.draft.players)) {
+    const baseCards = ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId);
+    for (const cardId of baseCards) {
+      boardCards.push({ id: cardId as string, owner: playerId });
+    }
+  }
+  for (const bfId of Object.keys(ctx.draft.battlefields)) {
+    const bfCards = ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
+    for (const cardId of bfCards) {
+      const owner = ctx.cards.getCardOwner(cardId) ?? "";
+      boardCards.push({ id: cardId as string, owner });
+    }
+  }
+
+  const consumed = ctx.draft.consumedNextReplacements ?? {};
+  const matches: MatchedReplacement[] = [];
+
+  for (const card of boardCards) {
+    const abilities = registry.getAbilities(card.id) ?? [];
+    for (let i = 0; i < abilities.length; i++) {
+      const ability = abilities[i];
+      if (!ability || ability.type !== "replacement") {
+        continue;
+      }
+
+      const { replaces } = ability as unknown as { replaces: string };
+      if (replaces !== event.type) {
+        continue;
+      }
+
+      const { target } = ability as unknown as { target?: { controller?: string } };
+      if (target?.controller === "friendly") {
+        if (event.owner && event.owner !== card.owner) {
+          continue;
+        }
+      } else if (target?.controller === "enemy") {
+        if (event.owner && event.owner === card.owner) {
+          continue;
+        }
+      }
+
+      const { duration } = ability as unknown as { duration?: string };
+      if (duration === "next" && consumed[buildConsumedKey(card.id, i)]) {
+        continue;
+      }
+
+      const { replacement } = ability as unknown as { replacement: unknown };
+      matches.push({
+        abilityIndex: i,
+        duration,
+        replacement,
+        sourceCardId: card.id,
+        sourceOwner: card.owner,
+      });
+    }
+  }
+
+  return matches;
+}
+
+/**
+ * Order a list of eligible replacements per rule 575.
+ *
+ * Rule 575.1: When multiple replacement effects apply to the same event
+ * affecting an object, the **owner** of the affected object chooses the
+ * order in which they resolve. When the affected object is a player,
+ * that player chooses.
+ *
+ * Rule 575.2: When the affected "object" is an uncontrolled battlefield
+ * (or any object without an owner), the **turn player** chooses the
+ * order.
+ *
+ * A selector may be passed in to let the caller (UI) pick an ordering.
+ * When no selector is provided, the ordering is stable: replacements on
+ * cards owned by the chooser come first (in insertion order), then the
+ * rest. This default is compatible with "auto/goldfish" play where the
+ * chooser has a single reasonable first pick.
+ */
+export function orderReplacementsByOwnerChoice(
+  matches: MatchedReplacement[],
+  affectedOwner: string | undefined,
+  turnPlayer: string,
+  selector?: (matches: MatchedReplacement[], chooser: string) => MatchedReplacement[],
+): { ordered: MatchedReplacement[]; chooser: string } {
+  const chooser = affectedOwner ?? turnPlayer;
+
+  if (matches.length <= 1) {
+    return { chooser, ordered: matches };
+  }
+
+  if (selector) {
+    return { chooser, ordered: selector(matches, chooser) };
+  }
+
+  // Default stable ordering: chooser-owned replacements first, then others.
+  const mine: MatchedReplacement[] = [];
+  const other: MatchedReplacement[] = [];
+  for (const m of matches) {
+    if (m.sourceOwner === chooser) {
+      mine.push(m);
+    } else {
+      other.push(m);
+    }
+  }
+  return { chooser, ordered: [...mine, ...other] };
+}
+
+/**
  * Check if any replacement effects apply to a game action.
  *
  * Scans all cards on the board for replacement abilities that match
- * the given event. Returns the first matching replacement, or null.
- *
- * Per rule 575: if multiple replacements apply, the owner of the
- * affected object chooses order. For simplicity, we return the first match.
+ * the given event. Returns the first matching replacement (after owner
+ * ordering per rule 575), or null.
  *
  * Respects `"next"` duration: replacements whose `${sourceCardId}|${abilityIndex}`
  * key has already been recorded in `draft.consumedNextReplacements` are

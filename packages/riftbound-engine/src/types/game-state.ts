@@ -360,6 +360,31 @@ export interface RiftboundGameState {
   /** Winner player ID (if game is finished) */
   readonly winner?: PlayerId;
 
+  /**
+   * Players that have been removed from the game (rule 651/652).
+   *
+   * A removed player has conceded, burned out repeatedly, or otherwise
+   * been removed from play. Their permanents are banished, their
+   * battlefields redistributed to uncontrolled, and any chain items
+   * they controlled are countered. In a 1v1 game the remaining player
+   * wins immediately; in 3+ player games the game continues with the
+   * removed player excluded from turn rotation and priority cycling.
+   */
+  readonly removedPlayers?: readonly PlayerId[];
+
+  /**
+   * Team membership mapping for team-based modes (rule 648).
+   *
+   * Maps each player ID to a team ID (0 or 1 for 2v2 Magma Chamber).
+   * Only populated when the game mode is team-based. Used by "friendly"
+   * target resolution (rule 648.8.d), team-mode conquer disqualification
+   * (rule 630.1.a), and gating for teammate-only moves (648.8.a-c).
+   *
+   * For solo modes (Duel, Match, FFA3, FFA4) this field is either
+   * unset or an empty record.
+   */
+  readonly teams?: Readonly<Record<PlayerId, number>>;
+
   /** Setup state (only present during setup phase) */
   readonly setup?: SetupState;
 

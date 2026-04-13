@@ -27,8 +27,23 @@ export const resourceMoves: Partial<
    * During Channel Phase, players channel 2 runes.
    */
   channelRunes: {
-    condition: (state, context) =>
-      state.status === "playing" && state.turn.activePlayer === context.params.playerId,
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+      if (state.turn.activePlayer !== context.params.playerId) {
+        return false;
+      }
+      // Rule 606.3.a: channelling is a *directed* Game Action. It can only
+      // Occur when a game effect (e.g., the channel-phase flow hook) drives
+      // It — not as a free, player-discretionary action. Callers from the
+      // Flow / game-effect layer pass `directed: true`; raw player moves
+      // Omit it and are rejected here.
+      if (context.params.directed !== true) {
+        return false;
+      }
+      return true;
+    },
     reducer: (_draft, context) => {
       const { playerId, count } = context.params;
       const { zones } = context;

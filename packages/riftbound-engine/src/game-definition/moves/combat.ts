@@ -24,6 +24,7 @@ import type {
 } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
 import { canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
+import { areAllies, isTeamGame } from "../../operations/teams";
 
 /**
  * Combat move definitions
@@ -698,7 +699,22 @@ export const combatMoves: Partial<
         }
       }
 
-      player.victoryPoints += 1;
+      // Rule 630.1.a: In team-based modes, conquering a battlefield whose
+      // Previous controller was a teammate does not grant a victory
+      // Point — the team already effectively controlled it. The battlefield
+      // Still counts as "scored this turn" so subsequent scorePoint calls
+      // Are idempotent, but no VP is awarded.
+      const prevController = context.params.previousController ?? null;
+      const teamDisqualified =
+        method === "conquer" &&
+        isTeamGame(draft) &&
+        prevController !== null &&
+        prevController !== playerId &&
+        areAllies(draft, playerId, prevController as string);
+
+      if (!teamDisqualified) {
+        player.victoryPoints += 1;
+      }
 
       // Track that this battlefield was scored this turn
       draft.scoredThisTurn[playerId] = draft.scoredThisTurn[playerId] || [];
