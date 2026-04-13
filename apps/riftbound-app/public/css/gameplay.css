@@ -3099,3 +3099,89 @@
     .board-toggles-panel__pill--on:hover {
       background: #305080;
     }
+
+    /* ============================================
+       W10a — Token panels
+       Per-zone collapsible "+ Token" button on every battlefield and
+       on the viewing player's base. Dispatches addToken via
+       token-panel.js → executeMove().
+       ============================================ */
+    .token-panel {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      z-index: 8;
+      font-family: inherit;
+      pointer-events: auto;
+    }
+
+    /* Base zone is not position:relative by default — make its token
+       panel anchor itself to the base container so it stays inside. */
+    #player-base {
+      position: relative;
+    }
+
+    .token-panel__open-btn {
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border-radius: 50%;
+      background: rgba(20, 16, 36, 0.85);
+      border: 1px solid #5a4f8a;
+      color: #c4a0ff;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .token-panel__open-btn:hover {
+      background: rgba(60, 40, 100, 0.95);
+      border-color: #8a6fd0;
+      color: #e0c8ff;
+    }
+
+    .token-panel__grid {
+      display: none;
+      position: absolute;
+      top: 26px;
+      right: 0;
+      min-width: 116px;
+      background: rgba(20, 16, 36, 0.96);
+      border: 1px solid #5a4f8a;
+      border-radius: 6px;
+      padding: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      flex-direction: column;
+      gap: 3px;
+    }
+    .token-panel--open .token-panel__grid {
+      display: flex;
+    }
+
+    .token-panel__btn {
+      width: 100%;
+      padding: 5px 8px;
+      background: #1e1b30;
+      border: 1px solid #3a3560;
+      border-radius: 4px;
+      color: #d8d4e8;
+      font-size: 11px;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .token-panel__btn:hover {
+      background: #2a2548;
+      border-color: #8a6fd0;
+      color: #e0c8ff;
+    }
+
+    .token-panel__btn--collapsed {
+      display: none;
+    }

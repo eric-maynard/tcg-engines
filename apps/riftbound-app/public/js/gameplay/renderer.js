@@ -641,6 +641,12 @@ function renderZones() {
     playerBase.map(c => renderCardElement(c, false, "base")).join("") ||
     "";
 
+  // W10a: attach the per-zone token panel to the viewing player's base.
+  // Base gets the full token set including Gold (the economy token).
+  if (typeof renderTokenPanel === "function") {
+    renderTokenPanel(baseEl, "base", "base");
+  }
+
   // Opponent base
   const opponentBase = zoneForPlayer("base", opponent);
   document.getElementById("opponent-base").innerHTML =
@@ -796,6 +802,19 @@ function renderBattlefields() {
   }
   const rowEl = document.getElementById("battlefieldRow");
   rowEl.innerHTML = html;
+
+  // W10a: after the battlefield DOM is built, inject a per-battlefield
+  // token panel so the viewing player can spawn combat tokens (Recruit,
+  // Mech, etc.) directly onto any battlefield zone. Gold is intentionally
+  // omitted here — it's an economy token and lives on the base instead.
+  if (typeof renderTokenPanel === "function") {
+    for (const bfId of Object.keys(bfs)) {
+      const bfEl = rowEl.querySelector(`.battlefield[data-bf-id="${bfId}"]`);
+      if (bfEl) {
+        renderTokenPanel(bfEl, `battlefield-${bfId}`, "battlefield");
+      }
+    }
+  }
 
   // W9: after the base battlefield DOM is built, inject a
   // per-battlefield showdown panel into every contested battlefield.
