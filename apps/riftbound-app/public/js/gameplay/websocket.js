@@ -91,6 +91,7 @@ function connectWs() {
       case "move_rejected":
         console.warn("[WS] Move rejected:", msg.error);
         addLogEntry(`Error: ${msg.error}`);
+        if (typeof showToast === "function") showToast(`Move rejected: ${msg.error}`);
         break;
 
       case "player_connected":

@@ -1,6 +1,72 @@
 // renderer.js — Main rendering: game board, zones, cards, actions, log, chain overlay
 
 const DOMAIN_LABELS = { fury: "F", calm: "Ca", mind: "M", body: "B", chaos: "Ch", order: "O" };
+const DOMAIN_ORDER = ["fury", "calm", "mind", "body", "chaos", "order"];
+
+// ============================================
+// W10d: Sandbox-gated floating resource controls
+// ============================================
+// A localStorage flag unlocks hidden dev helpers that let the viewing player
+// manually add/remove floating Energy and domain Power. Non-sandbox games
+// never see these controls. Exposed on window so it can be toggled from the
+// browser console — a proper UI toggle is a future workstream.
+
+const SANDBOX_MODE_STORAGE_KEY = "rba-sandbox-mode";
+
+/** @returns {boolean} true when the rba-sandbox-mode localStorage flag is set */
+function isSandboxMode() {
+  try {
+    return localStorage.getItem(SANDBOX_MODE_STORAGE_KEY) === "true";
+  } catch (_e) {
+    return false;
+  }
+}
+
+// Console helper: window.setSandboxMode(true) / window.setSandboxMode(false)
+window.setSandboxMode = function (enabled) {
+  try {
+    if (enabled) {
+      localStorage.setItem(SANDBOX_MODE_STORAGE_KEY, "true");
+    } else {
+      localStorage.removeItem(SANDBOX_MODE_STORAGE_KEY);
+    }
+  } catch (_e) {
+    /* ignore storage errors */
+  }
+  if (typeof render === "function") render();
+  return isSandboxMode();
+};
+
+/**
+ * Dispatch an add/spend resource move from the sandbox ± buttons.
+ * Pre-clamps at 0 so we don't fire server requests that can only be rejected.
+ * @param {"add"|"spend"} direction
+ * @param {"energy"|"fury"|"calm"|"mind"|"body"|"chaos"|"order"} key
+ */
+function sandboxAdjustResource(direction, key) {
+  if (!isSandboxMode()) return;
+  const pool = gameState?.runePools?.[viewingPlayer];
+  if (!pool) return;
+
+  const current = key === "energy" ? (pool.energy ?? 0) : (pool.power?.[key] ?? 0);
+  if (direction === "spend" && current <= 0) {
+    // Pre-clamped — nothing to do. Button should already be :disabled.
+    return;
+  }
+
+  const moveId = direction === "add" ? "addResources" : "spendResources";
+  const params = { playerId: viewingPlayer };
+  if (key === "energy") {
+    params.energy = 1;
+  } else {
+    params.power = { [key]: 1 };
+  }
+  try {
+    executeMove(moveId, params, viewingPlayer);
+  } catch (err) {
+    showToast(`Sandbox resource move failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 
 // ============================================
 // W13: Per-card Hide toggle in hand
@@ -326,6 +392,21 @@ function renderResourceBar() {
   const energy = pool.energy ?? 0;
   const powers = pool.power ?? {};
   const hasPower = Object.values(powers).some(v => v > 0);
+  const sandbox = isSandboxMode();
+
+  /** Render the +/- sandbox buttons for a resource key, or "" outside sandbox mode. */
+  const sandboxBtns = (key, current) => {
+    if (!sandbox) return "";
+    const disabledMinus = current <= 0 ? "disabled" : "";
+    return `<div class="floating-res__btns">
+      <button type="button" class="floating-res__btn floating-res__btn--minus" ${disabledMinus}
+        title="Remove 1 ${key}"
+        onclick="sandboxAdjustResource('spend', '${key}')">−</button>
+      <button type="button" class="floating-res__btn floating-res__btn--plus"
+        title="Add 1 ${key}"
+        onclick="sandboxAdjustResource('add', '${key}')">+</button>
+    </div>`;
+  };
 
   let html = '<span class="rb-label">Resources</span>';
 
@@ -333,16 +414,21 @@ function renderResourceBar() {
   html += `<div class="rb-item">
     <div class="rb-icon pip-energy" style="width:auto;border-radius:4px;padding:0 6px;font-size:9px;">Energy</div>
     <div class="rb-value ${energy > 0 ? "has-value" : ""}">${energy}</div>
+    ${sandboxBtns("energy", energy)}
   </div>`;
 
-  // Domain powers
-  for (const [domain, amount] of Object.entries(powers)) {
-    if (amount > 0) {
-      html += `<div class="rb-item">
-        <div class="rb-icon pip-${domain}">${DOMAIN_LABELS[domain] ?? domain[0].toUpperCase()}</div>
-        <div class="rb-value has-value">${amount}</div>
-      </div>`;
-    }
+  // Domain powers — in sandbox mode show every domain so the player can raise
+  // any pool from 0; otherwise only non-empty ones render.
+  const domainsToRender = sandbox
+    ? DOMAIN_ORDER
+    : Object.keys(powers).filter(d => (powers[d] ?? 0) > 0);
+  for (const domain of domainsToRender) {
+    const amount = powers[domain] ?? 0;
+    html += `<div class="rb-item">
+      <div class="rb-icon pip-${domain}">${DOMAIN_LABELS[domain] ?? domain[0].toUpperCase()}</div>
+      <div class="rb-value ${amount > 0 ? "has-value" : ""}">${amount}</div>
+      ${sandboxBtns(domain, amount)}
+    </div>`;
   }
 
   // Rune pool count (how many runes in pool)

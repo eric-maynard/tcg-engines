@@ -2362,6 +2362,47 @@
     .resource-bar .rb-value.has-value { color: #50c878; }
 
     /* ============================================
+       W10d Sandbox-gated floating ± controls
+       ============================================ */
+    .floating-res__btns {
+      display: inline-flex;
+      gap: 2px;
+      margin-left: 4px;
+    }
+    .floating-res__btn {
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      border: 1px solid #3a3560;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.12s ease, transform 0.08s ease;
+    }
+    .floating-res__btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .floating-res__btn:active:not(:disabled) { transform: translateY(0); }
+    .floating-res__btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .floating-res__btn--plus {
+      background: #2a7fff;
+      border-color: #4a9fff;
+    }
+    .floating-res__btn--plus:hover:not(:disabled) { background: #3a8fff; }
+    .floating-res__btn--minus {
+      background: #b03040;
+      border-color: #d04050;
+    }
+    .floating-res__btn--minus:hover:not(:disabled) { background: #c04050; }
+
+    /* ============================================
        Toast Notifications
        ============================================ */
     @keyframes toast-in {
