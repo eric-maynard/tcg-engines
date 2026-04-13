@@ -688,10 +688,18 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   `;
 }
 
-function renderDeckStack(zoneCards, label) {
+function renderDeckStack(zoneCards, label, options = {}) {
   const count = zoneCards?.length ?? 0;
+  // W12: right-clicking the viewing player's main deck opens the
+  // enriched peek dialog. We also add a title hint so users discover
+  // the interaction. Opponent decks and rune decks stay inert.
+  const peekable = options.peekable === true;
+  const attrs = peekable
+    ? ' oncontextmenu="event.preventDefault(); if (typeof openPeekDialog === \'function\') openPeekDialog(1); return false;" title="Right-click to peek at the top card"'
+    : "";
+  const cls = peekable ? "deck-stack deck-stack--peekable" : "deck-stack";
   return `
-    <div class="deck-stack">
+    <div class="${cls}"${attrs}>
       <div class="deck-count">${count}</div>
       <div class="deck-label">${esc(label)}</div>
     </div>
@@ -814,9 +822,10 @@ function renderZones() {
     (opponentLegend.length > 0 ? '<div class="lc-slot"><div class="legend-label">Legend</div>' + opponentLegend.map(c => renderCardElement(c, false, "legendZone")).join("") + '</div>' : "") +
     (opponentChampion.length > 0 ? '<div class="lc-slot"><div class="legend-label">Champion</div>' + opponentChampion.map(c => renderCardElement(c, false, "championZone")).join("") + '</div>' : "");
 
-  // Deck stacks
+  // Deck stacks. W12: the viewing player's main deck is peekable via
+  // right-click; opponent decks and the rune deck stay inert.
   document.getElementById("player-decks").innerHTML =
-    renderDeckStack(zoneForPlayer("mainDeck", viewingPlayer), "Main") +
+    renderDeckStack(zoneForPlayer("mainDeck", viewingPlayer), "Main", { peekable: true }) +
     renderDeckStack(zoneForPlayer("runeDeck", viewingPlayer), "Rune");
   document.getElementById("opponent-decks").innerHTML =
     renderDeckStack(zoneForPlayer("mainDeck", opponent), "Main") +
