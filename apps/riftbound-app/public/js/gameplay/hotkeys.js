@@ -49,6 +49,8 @@ const ARMED_MODE_LABEL = {
   ping: "Ping mode — click a card to ping it for your opponent",
   // W10b: Shift+C arms duplicate mode. Sandbox-gated at dispatch time.
   duplicate: "Duplicate mode — click a card to copy it into your hand",
+  // W16: bare Shift hold arms "place on top of deck" for the viewer's hand.
+  "top-of-deck": "Top of deck mode — click a hand card to place it on top of your deck",
 };
 
 /** @returns {string|null} the current armed mode name (for interactions.js) */
@@ -95,6 +97,32 @@ function handleArmedCardClick(cardId) {
         dispatchDuplicate(cardId);
       }
       break;
+
+    case "top-of-deck": {
+      // W16: hold Shift + click a hand card → place it on top of the
+      // viewer's main deck. Gate on (a) viewer actually owns this card
+      // and (b) the card currently lives in the `hand` zone. The server
+      // validates too, but this keeps the armed-click path quiet when
+      // the user clicks something nonsensical (an opponent card, a
+      // battlefield unit, etc.) instead of spamming move rejections.
+      const card = typeof findCard === "function" ? findCard(cardId) : null;
+      const zone = typeof findCardZone === "function" ? findCardZone(cardId) : null;
+      const pid = typeof viewingPlayer !== "undefined" ? viewingPlayer : null;
+      if (!card || !pid || card.owner !== pid || zone !== "hand") {
+        if (typeof showToast === "function") {
+          showToast("Can only place your own hand cards on top");
+        }
+        break;
+      }
+      if (typeof executeMove === "function") {
+        executeMove(
+          "placeCardsOnTopOfDeckInOrder",
+          { playerId: pid, cardIds: [cardId] },
+          pid
+        );
+      }
+      break;
+    }
 
     case "target":
       // Target mode is gated on a "top-of-chain effect needs a target"
@@ -350,6 +378,31 @@ function onHotkeyKeydown(e) {
     return;
   }
 
+  // W16: bare Shift hold arms "top-of-deck" mode. Ignored if an armed
+  // key already claims the mode (e.g. Shift+C → duplicate); the C
+  // keydown branch below pushes its own stack entry and wins most-recent.
+  if (e.key === "Shift") {
+    if (e.repeat) return;
+    if (!armedKeyStack.find(entry => entry.key === "shift")) {
+      armedKeyStack.push({ key: "shift", mode: "top-of-deck" });
+    }
+    // Only set the mode if nothing higher-priority is already armed. The
+    // HOLD_KEY_TO_MODE keydown branch later will override via setArmedMode
+    // if the user presses C while holding Shift.
+    if (!armedMode || armedMode === "top-of-deck") {
+      setArmedMode("top-of-deck");
+    }
+    // Scope preventDefault to the game surface so Shift-click text
+    // selection in chat / dev tools / sidebar inputs still works.
+    const target = e.target;
+    const inGame =
+      target && typeof target.closest === "function" && target.closest("#game-scale-wrapper");
+    if (inGame) {
+      e.preventDefault();
+    }
+    return;
+  }
+
   // Hold-to-arm keys.
   const lower = e.key.length === 1 ? e.key.toLowerCase() : "";
   if (lower && HOLD_KEY_TO_MODE[lower]) {
@@ -424,6 +477,25 @@ function onHotkeyKeydown(e) {
 }
 
 function onHotkeyKeyup(e) {
+  // W16: releasing Shift clears the top-of-deck arm and any lingering
+  // "shift+c" duplicate arm that the plain-C keyup branch couldn't see
+  // (e.g. user let go of Shift before C).
+  if (e.key === "Shift") {
+    const shiftIdx = armedKeyStack.findIndex(entry => entry.key === "shift");
+    if (shiftIdx !== -1) armedKeyStack.splice(shiftIdx, 1);
+    const shiftCIdx = armedKeyStack.findIndex(entry => entry.key === "shift+c");
+    if (shiftCIdx !== -1) armedKeyStack.splice(shiftCIdx, 1);
+    if (armedKeyStack.length === 0) {
+      disarmAll();
+    } else {
+      const top = armedKeyStack[armedKeyStack.length - 1];
+      setArmedMode(top.mode);
+      if (top.mode !== "emote") closeEmoteWheel();
+      if (top.mode !== "label") closeLabelWheel();
+    }
+    return;
+  }
+
   const lower = e.key.length === 1 ? e.key.toLowerCase() : "";
   if (!lower || !HOLD_KEY_TO_MODE[lower]) return;
 

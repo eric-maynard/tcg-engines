@@ -16,6 +16,7 @@ const HELP_PRESS_KEYS = [
   { keys: ["S"], action: "Resolve the top effect on the chain" },
   { keys: ["Q"], action: "End showdown / conquer the battlefield" },
   { keys: ["W"], action: "Pass focus in the current showdown" },
+  { keys: ["Shift+C"], action: "Duplicate a visible card" },
   { keys: ["?"], action: "Open this help dialog" },
   { keys: ["Esc"], action: "Cancel selection / close dialogs" },
 ];
@@ -27,6 +28,7 @@ const HELP_HOLD_KEYS = [
   { keys: ["L"], action: "Open the label wheel on the hovered card" },
   { keys: ["E"], action: "Open the emote wheel" },
   { keys: ["P"], action: "Ping the hovered card for your opponent" },
+  { keys: ["Shift"], action: "Put hovered card on top of your deck" },
 ];
 
 let _helpModalOpen = false;
