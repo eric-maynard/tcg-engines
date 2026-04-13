@@ -6,8 +6,33 @@
  */
 
 import type { CardId as CoreCardId, GameMoveDefinitions } from "@tcg/core";
-import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import type {
+  GrantedKeyword,
+  RiftboundCardMeta,
+  RiftboundGameState,
+  RiftboundMoves,
+} from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+
+/**
+ * Check whether a unit has the given keyword, considering both its printed
+ * Card definition and any runtime-granted keywords on its meta.
+ */
+function unitHasKeyword(
+  cardId: string,
+  keyword: string,
+  meta: Partial<RiftboundCardMeta> | undefined,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  if (registry.hasKeyword(cardId, keyword)) {
+    return true;
+  }
+  const granted = meta?.grantedKeywords as GrantedKeyword[] | undefined;
+  if (granted?.some((gk) => gk.keyword === keyword)) {
+    return true;
+  }
+  return false;
+}
 
 /**
  * Equipment move definitions
@@ -64,6 +89,20 @@ export const equipmentMoves: Partial<
         | Partial<RiftboundCardMeta>
         | undefined;
       if (meta?.attachedTo) {
+        return false;
+      }
+
+      // Rule 579 (Weaponmaster): a unit may only hold more than one piece
+      // Of equipment if it has the Weaponmaster keyword. Without it, any
+      // Additional attach must be rejected.
+      const unitMeta = context.cards.getCardMeta(context.params.unitId as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      const currentlyEquipped = unitMeta?.equippedWith ?? [];
+      if (
+        currentlyEquipped.length > 0 &&
+        !unitHasKeyword(context.params.unitId, "Weaponmaster", unitMeta)
+      ) {
         return false;
       }
 

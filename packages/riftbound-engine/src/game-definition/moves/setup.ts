@@ -386,10 +386,7 @@ export const setupMoves: Partial<
         const playerIds = Object.keys(draft.players);
         // Order players by turn order (first player first), then assign each
         // Non-first player the turn on which they will first be active.
-        const ordered = [
-          firstPlayer,
-          ...playerIds.filter((p) => p !== firstPlayer),
-        ];
+        const ordered = [firstPlayer, ...playerIds.filter((p) => p !== firstPlayer)];
         for (let i = 1; i < ordered.length; i++) {
           const pid = ordered[i];
           if (pid) {

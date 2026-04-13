@@ -158,6 +158,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           if (context.state.unitsMovedThisTurn) {
             context.state.unitsMovedThisTurn[currentPlayer] = 0;
           }
+          if (context.state.cardsPlayedThisTurn) {
+            // Rule 724 (Legion): reset main-deck cards-played counter at
+            // The start of the turn player's turn so Legion conditions
+            // Fire only on plays made during the current turn.
+            context.state.cardsPlayedThisTurn[currentPlayer] = 0;
+          }
 
           // Increment per-player turn count (used by Forgotten Monument etc.)
           const turnPlayer = context.state.players[currentPlayer];

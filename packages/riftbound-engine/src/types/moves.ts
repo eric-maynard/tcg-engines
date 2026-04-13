@@ -156,6 +156,17 @@ export interface RiftboundMoves {
     cardId: CardId;
     targets?: CardId[];
     xAmount?: number;
+    /**
+     * Number of EXTRA times to repeat the spell's effect for spells with
+     * the `[Repeat]` keyword. Each repeat pays the spell's `repeat` cost
+     * (energy) in addition to the base cost. A value of 0 (default) means
+     * the spell resolves exactly once. A value of N means the effect
+     * resolves (1 + N) times.
+     *
+     * For spells without a `repeat` cost defined, this parameter is
+     * ignored (and the spell always resolves once).
+     */
+    repeatCount?: number;
   };
 
   /** Place Hidden card facedown */

@@ -670,14 +670,18 @@ describe("Recalculate-from-scratch semantics (idempotence)", () => {
     // Re-fetch meta each time — updateCardMeta replaces the meta object, so
     // Stale references go out of date.
     const metaOn = getCardMeta(engine, "mystic") as { buffed?: boolean } | undefined;
-    if (metaOn) {metaOn.buffed = true;}
+    if (metaOn) {
+      metaOn.buffed = true;
+    }
     recalculateStatics(engine);
     // Base 3 + buffed +1 + static +2 = 6
     expect(getEffectiveMight(engine, "mystic")).toBe(6);
 
     // Simulate the buff expiring — fetch fresh meta reference.
     const metaOff = getCardMeta(engine, "mystic") as { buffed?: boolean } | undefined;
-    if (metaOff) {metaOff.buffed = false;}
+    if (metaOff) {
+      metaOff.buffed = false;
+    }
     recalculateStatics(engine);
     expect(getEffectiveMight(engine, "mystic")).toBe(3);
   });

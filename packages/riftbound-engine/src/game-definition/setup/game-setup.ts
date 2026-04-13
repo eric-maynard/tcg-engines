@@ -41,6 +41,7 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
   const scoredThisTurn: Record<PlayerId, string[]> = {};
   const xpGainedThisTurn: Record<PlayerId, number> = {};
   const unitsMovedThisTurn: Record<PlayerId, number> = {};
+  const cardsPlayedThisTurn: Record<PlayerId, number> = {};
 
   for (const playerId of playerIds) {
     playerStates[playerId] = {
@@ -56,6 +57,7 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
     scoredThisTurn[playerId] = [];
     xpGainedThisTurn[playerId] = 0;
     unitsMovedThisTurn[playerId] = 0;
+    cardsPlayedThisTurn[playerId] = 0;
   }
 
   return {
@@ -64,6 +66,7 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
     victoryScore: 8, // 1v1 victory score
     battlefields: {},
     runePools,
+    cardsPlayedThisTurn,
     conqueredThisTurn,
     scoredThisTurn,
     xpGainedThisTurn,

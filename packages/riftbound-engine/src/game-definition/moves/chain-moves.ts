@@ -510,6 +510,25 @@ export const chainMoves: Partial<
             }
           }
         }
+
+        // Rule 577.2: Cost must be payable at activation time. An [Exhaust]
+        // Cost cannot be paid if the host card is already exhausted.
+        // Exhaust always applies to the host card (`cardId`), even for
+        // Inherited abilities where the source differs (e.g., Heimerdinger).
+        if (cost.exhaust) {
+          const {getFlag} = (
+            context.counters as { getFlag?: (c: CoreCardId, f: string) => boolean }
+          );
+          if (getFlag && getFlag(cardId as CoreCardId, "exhausted")) {
+            return false;
+          }
+          const hostMeta = context.cards.getCardMeta(cardId as CoreCardId) as
+            | { exhausted?: boolean }
+            | undefined;
+          if (hostMeta?.exhausted === true) {
+            return false;
+          }
+        }
       }
 
       return true;
@@ -608,6 +627,25 @@ export const chainMoves: Partial<
                 }
               }
               if (!affordable) {
+                continue;
+              }
+            }
+
+            // Rule 577.2: An [Exhaust] cost cannot be paid if the host card
+            // Is already exhausted. `entry.hostCardId` is the card that
+            // Would pay the exhaust (the unit holding the ability).
+            if (cost.exhaust) {
+              const hostCardId = entry.hostCardId as CoreCardId;
+              const {getFlag} = (
+                context.counters as { getFlag?: (c: CoreCardId, f: string) => boolean }
+              );
+              if (getFlag && getFlag(hostCardId, "exhausted")) {
+                continue;
+              }
+              const hostMeta = context.cards.getCardMeta(hostCardId) as
+                | { exhausted?: boolean }
+                | undefined;
+              if (hostMeta?.exhausted === true) {
                 continue;
               }
             }

@@ -569,12 +569,10 @@ describe("Rule 561.1.a (X cost): xAmount consumes additional energy", () => {
 // ---------------------------------------------------------------------------
 
 describe("Rule 562: Play fails when the card cannot be legally announced", () => {
-  // ENGINE GAP: `playUnit` condition in cards.ts checks the global "hand"
-  // Zone but does not verify that the card belongs to `params.playerId`.
-  // As long as the card is in ANY hand zone, the active player can play it.
-  // Per rule 555/562 (and rule 103 card ownership) a player may only play
-  // Cards from their own hand. Documented and skipped; see cards.ts:224.
-  it.skip("ENGINE GAP: playing a card owned by the opponent should fail", () => {
+  // Rule 103 / 555: only a card's owner may play it. `playUnit` verifies
+  // That `context.cards.getCardOwner(cardId) === params.playerId`, so the
+  // Active player cannot play a unit out of the opponent's hand.
+  it("Rule 103: playing a unit owned by the opponent should fail", () => {
     const engine = createMinimalGameState({
       phase: "main",
       runePools: { [P1]: { energy: 2, power: {} }, [P2]: { energy: 2, power: {} } },
@@ -589,6 +587,45 @@ describe("Rule 562: Play fails when the card cannot be legally announced", () =>
     const result = applyMove(engine, "playUnit", {
       cardId: "p2-card",
       location: "base",
+      playerId: P1,
+    });
+    expect(result.success).toBe(false);
+    // Card remains in hand, untouched.
+    expect(getCardZone(engine, "p2-card")).toBe("hand");
+  });
+
+  it("Rule 103: playing a spell owned by the opponent should fail", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 2, power: {} }, [P2]: { energy: 2, power: {} } },
+    });
+    createCard(engine, "p2-spell", {
+      abilities: [{ effect: { amount: 1, type: "draw" }, type: "spell" }],
+      cardType: "spell",
+      energyCost: 1,
+      owner: P2,
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playSpell", {
+      cardId: "p2-spell",
+      playerId: P1,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("Rule 103: playing gear owned by the opponent should fail", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 2, power: {} }, [P2]: { energy: 2, power: {} } },
+    });
+    createCard(engine, "p2-gear", {
+      cardType: "gear",
+      energyCost: 1,
+      owner: P2,
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playGear", {
+      cardId: "p2-gear",
       playerId: P1,
     });
     expect(result.success).toBe(false);
@@ -753,14 +790,11 @@ describe("Rule 565: Controller of a played spell is the player who played it", (
 // During a Closed state but Actions cannot.
 // ---------------------------------------------------------------------------
 
-describe("Rule 555 / chain timing: non-active player can't play an Action spell mid-turn", () => {
-  // ENGINE GAP: `playSpell` condition (cards.ts:433) uses chain-state timing
-  // To gate Action vs. Reaction but does not verify that the caller has
-  // Priority. In Neutral Open state, `isLegalTiming("action")` returns true
-  // Regardless of which player is asking. Per rule 530 (priority), only the
-  // Active player holds priority in an Open state on their own turn.
-  // Documented and skipped; see chain/chain-state.ts#isLegalTiming.
-  it.skip("ENGINE GAP: P2 should not be able to play an Action spell during P1's main phase", () => {
+describe("Rule 530: non-active player can't play an Action spell mid-turn", () => {
+  // Rule 530 (priority): In a Neutral Open state, only the active player
+  // Holds priority, so they alone may play Action-timed spells. Reactions
+  // Are always legal for any relevant player.
+  it("Rule 530: P2 cannot play an Action spell during P1's Neutral Open main phase", () => {
     const engine = createMinimalGameState({
       currentPlayer: P1,
       phase: "main",
@@ -779,6 +813,30 @@ describe("Rule 555 / chain timing: non-active player can't play an Action spell 
       playerId: P2,
     });
     expect(result.success).toBe(false);
+    // Spell stays in hand; no chain was opened.
+    expect(getCardsInZone(engine, "hand", P2)).toContain("p2-action");
+    expect(isChainActive(engine)).toBe(false);
+  });
+
+  it("Rule 530: P1 (the active player) CAN play an Action spell in a Neutral Open state", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 1, power: {} } },
+    });
+    createCard(engine, "p1-action", {
+      abilities: [{ effect: { amount: 1, type: "draw" }, type: "spell" }],
+      cardType: "spell",
+      energyCost: 1,
+      owner: P1,
+      timing: "action",
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playSpell", {
+      cardId: "p1-action",
+      playerId: P1,
+    });
+    expect(result.success).toBe(true);
   });
 });
 

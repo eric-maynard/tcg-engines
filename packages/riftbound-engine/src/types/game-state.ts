@@ -323,6 +323,16 @@ export interface RiftboundGameState {
   /** XP gained this turn per player (reset at end of turn) */
   readonly xpGainedThisTurn: Record<string, number>;
 
+  /**
+   * Main-deck cards (unit/spell/gear/equipment) the player has played this
+   * turn. Reset to 0 at the start of each turn. Consulted by rule 724
+   * (Legion) conditions to determine whether "you have played another card
+   * this turn" is satisfied. Optional for backward-compatibility with
+   * test harnesses that construct state literally; the engine's setup
+   * path always initializes it.
+   */
+  readonly cardsPlayedThisTurn?: Record<string, number>;
+
   /** Turn state */
   readonly turn: TurnState;
 

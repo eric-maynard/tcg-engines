@@ -484,14 +484,55 @@ describe("Rule 577: Re-activation requires cost to be payable again", () => {
     expect(isExhausted(engine, "tapper")).toBe(true);
   });
 
-  it.todo(
-    "ENGINE BUG: activateAbility.condition does NOT check if the source " +
-      "card is already exhausted when the ability has an [Exhaust] cost. " +
-      "An already-exhausted card can currently be 're-activated' because " +
-      "the exhaust cost validation is only enforced by the reducer's " +
-      "setFlag call, not by the condition / enumerator. Rule 577.2 says " +
-      "the cost must be payable at time of activation — exhausting an " +
-      "already-exhausted card is not a valid cost payment.",
+  it(
+    "Rule 577.2: activateAbility.condition rejects an [Exhaust] activation " +
+      "if the source card is already exhausted — the cost must be payable " +
+      "at activation time, and exhausting an already-exhausted card is " +
+      "not a valid cost payment.",
+    () => {
+      const engine = createMinimalGameState({
+        phase: "main",
+        runePools: { [P1]: { energy: 0, power: {} } },
+      });
+      createCard(engine, "tapper", {
+        abilities: [
+          {
+            cost: { exhaust: true },
+            effect: { amount: 1, type: "draw" },
+            type: "activated",
+          },
+        ],
+        cardType: "unit",
+        meta: { exhausted: true },
+        might: 2,
+        owner: P1,
+        zone: "base",
+      });
+
+      // Condition layer must reject: the card is already exhausted, so
+      // The [Exhaust] cost cannot be paid.
+      const legal = checkMoveLegal(engine, "activateAbility", {
+        abilityIndex: 0,
+        cardId: "tapper",
+        playerId: P1,
+      });
+      expect(legal).toBe(false);
+
+      // Actually trying the move must also fail.
+      const r = applyMove(engine, "activateAbility", {
+        abilityIndex: 0,
+        cardId: "tapper",
+        playerId: P1,
+      });
+      expect(r.success).toBe(false);
+
+      // And the enumerator must not offer this activation as a legal option.
+      const legalMoves = enumerateLegalMoves(engine, P1);
+      const found = legalMoves.filter(
+        (m) => m.moveId === "activateAbility" && m.params?.cardId === "tapper",
+      );
+      expect(found.length).toBe(0);
+    },
   );
 });
 

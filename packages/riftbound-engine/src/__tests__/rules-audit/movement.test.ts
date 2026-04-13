@@ -162,7 +162,7 @@ describe("Rule 613 / 548.2: A Move to an uncontrolled battlefield opens a Showdo
       playerId: P1,
       unitIds: ["u1"],
     });
-    const {interaction} = getState(engine);
+    const { interaction } = getState(engine);
     expect(interaction).toBeDefined();
     // Active showdown sits on top of the showdownStack.
     const stack = (
@@ -189,7 +189,7 @@ describe("Rule 613 / 548.2: A Move to an uncontrolled battlefield opens a Showdo
       playerId: P1,
       unitIds: ["u1"],
     });
-    const {interaction} = getState(engine);
+    const { interaction } = getState(engine);
     // Bf-1 is already friendly, so no showdown should be created.
     if (interaction) {
       const stack = (

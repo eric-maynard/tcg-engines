@@ -691,7 +691,7 @@ describe("Rule 510.1: Neutral Open — no showdown, no chain", () => {
   it("a fresh main phase has no active interaction (neutral-open)", () => {
     const engine = createMinimalGameState({ phase: "main" });
     const state = getState(engine);
-    const {interaction} = state;
+    const { interaction } = state;
     if (interaction) {
       expect(interaction.chain?.items ?? []).toHaveLength(0);
       expect(interaction.showdownStack?.length ?? 0).toBe(0);

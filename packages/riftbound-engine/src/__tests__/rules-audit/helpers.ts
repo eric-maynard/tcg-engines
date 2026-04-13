@@ -217,6 +217,13 @@ export function createMinimalGameState(overrides: MinimalStateOverrides = {}): A
   sq[P2] = sq[P2] ?? [];
   xg[P1] = xg[P1] ?? 0;
   xg[P2] = xg[P2] ?? 0;
+  // Rule 724 (Legion): per-player main-deck plays counter.
+  if (!st.cardsPlayedThisTurn) {
+    (st as RiftboundGameState & { cardsPlayedThisTurn: Record<string, number> }).cardsPlayedThisTurn = {};
+  }
+  const cp = st.cardsPlayedThisTurn as Record<string, number>;
+  cp[P1] = cp[P1] ?? 0;
+  cp[P2] = cp[P2] ?? 0;
 
   if (overrides.victoryScore !== undefined) {
     st.victoryScore = overrides.victoryScore;
@@ -439,6 +446,22 @@ export function createBattlefield(
     };
   }
 
+  // Create the paired facedown zone (Hidden zone, rule 723). Each
+  // Battlefield has exactly one associated facedown zone.
+  const facedownZoneId = `facedown-${battlefieldId}` as ZoneId;
+  if (!internal.internalState.zones[facedownZoneId]) {
+    internal.internalState.zones[facedownZoneId] = {
+      cardIds: [],
+      config: {
+        faceDown: true,
+        id: facedownZoneId,
+        name: `Facedown ${battlefieldId}`,
+        ordered: false,
+        visibility: "private",
+      },
+    };
+  }
+
   if (params.placeInRow !== false) {
     const rowId = "battlefieldRow" as ZoneId;
     if (internal.internalState.zones[rowId]) {
@@ -581,7 +604,7 @@ export function fireTrigger(engine: AuditEngine, event: GameEvent): number {
       // Only be inferred from fireTriggers' numeric return.
       addCounter: (cardId, counter, amount) => {
         const meta = internal.internalState.cardMetas[cardId as string];
-        if (!meta) return;
+        if (!meta) {return;}
         if (counter === "damage") {
           meta.damage = (meta.damage ?? 0) + amount;
         } else {
@@ -592,7 +615,7 @@ export function fireTrigger(engine: AuditEngine, event: GameEvent): number {
       },
       clearCounter: (cardId, counter) => {
         const meta = internal.internalState.cardMetas[cardId as string];
-        if (!meta) return;
+        if (!meta) {return;}
         if (counter === "damage") {
           meta.damage = 0;
         } else {
@@ -601,7 +624,7 @@ export function fireTrigger(engine: AuditEngine, event: GameEvent): number {
       },
       removeCounter: (cardId, counter, amount) => {
         const meta = internal.internalState.cardMetas[cardId as string];
-        if (!meta) return;
+        if (!meta) {return;}
         if (counter === "damage") {
           meta.damage = Math.max(0, (meta.damage ?? 0) - amount);
         } else {
@@ -613,21 +636,21 @@ export function fireTrigger(engine: AuditEngine, event: GameEvent): number {
       },
       setFlag: (cardId, flag, value) => {
         const meta = internal.internalState.cardMetas[cardId as string];
-        if (!meta) return;
+        if (!meta) {return;}
         (meta as unknown as Record<string, boolean>)[flag] = value;
       },
     },
     draft: internal.currentState,
     zones: {
       drawCards: () => {
-        // no-op for fireTrigger helper; tests that need real draws should
-        // use applyMove instead.
+        // No-op for fireTrigger helper; tests that need real draws should
+        // Use applyMove instead.
       },
       getCardZone: (cardId) => internal.internalState.cards[cardId as string]?.zone,
       getCardsInZone: (zoneId, playerId) => {
         const zone = internal.internalState.zones[zoneId as string];
-        if (!zone) return [];
-        if (!playerId) return [...zone.cardIds];
+        if (!zone) {return [];}
+        if (!playerId) {return [...zone.cardIds];}
         return zone.cardIds.filter(
           (cardId) => internal.internalState.cards[cardId as string]?.owner === playerId,
         );
@@ -760,8 +783,12 @@ export function recalculateStatics(engine: AuditEngine): void {
     zones: {
       getCardsInZone: (zoneId, playerId) => {
         const zone = internal.internalState.zones[zoneId as string];
-        if (!zone) {return [];}
-        if (!playerId) {return [...zone.cardIds];}
+        if (!zone) {
+          return [];
+        }
+        if (!playerId) {
+          return [...zone.cardIds];
+        }
         return zone.cardIds.filter(
           (cardId) => internal.internalState.cards[cardId as string]?.owner === playerId,
         );
@@ -817,7 +844,9 @@ export function hasKeyword(engine: AuditEngine, cardId: CardId, keyword: string)
 export function removeCardFromZone(engine: AuditEngine, cardId: CardId): void {
   const internal = asInternal(engine);
   const card = internal.internalState.cards[cardId as string];
-  if (!card) {return;}
+  if (!card) {
+    return;
+  }
   const zone = internal.internalState.zones[card.zone];
   if (zone) {
     zone.cardIds = zone.cardIds.filter((id) => id !== (cardId as CoreCardId));

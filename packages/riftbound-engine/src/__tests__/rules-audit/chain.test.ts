@@ -488,7 +488,9 @@ describe("Rule 543 (LIFO): Top-of-chain resolves first", () => {
     // Pass twice through (once per spell), resolving the whole chain.
     for (let i = 0; i < 6 && isChainActive(engine); i++) {
       const active = getChainActivePlayer(engine);
-      if (!active) {break;}
+      if (!active) {
+        break;
+      }
       passChainPriority(engine, active as typeof P1);
     }
 

@@ -15,6 +15,7 @@ import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { EffectContext, ExecutableEffect } from "./effect-executor";
 import { executeEffect } from "./effect-executor";
 import type { GameEvent } from "./game-events";
+import { evaluateLegionCondition } from "./legion-conditions";
 import type { CardWithAbilities, TriggerableAbility } from "./trigger-matcher";
 import { findMatchingTriggers } from "./trigger-matcher";
 
@@ -66,6 +67,7 @@ function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
   for (const a of abilities) {
     if (a.type === "triggered" && a.trigger) {
       result.push({
+        condition: (a as { condition?: unknown }).condition,
         effect: a.effect,
         optional: a.optional,
         trigger: {
@@ -77,6 +79,33 @@ function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
     }
   }
   return result;
+}
+
+/**
+ * Evaluate whether a triggered ability's `condition` holds against the
+ * current game state. Returns `true` if there is no condition or the
+ * condition is satisfied.
+ *
+ * Currently supports:
+ *   - `{ type: "legion" }` — Rule 724, "you played another card this turn"
+ *
+ * Unknown condition shapes are permissive (return `true`) so the engine
+ * does not silently drop triggers with as-yet-unsupported condition
+ * structures.
+ */
+function evaluateTriggerCondition(
+  condition: unknown,
+  state: RiftboundGameState,
+  controllerId: string,
+): boolean {
+  if (!condition || typeof condition !== "object") {
+    return true;
+  }
+  const c = condition as { type?: string };
+  if (c.type === "legion") {
+    return evaluateLegionCondition(state, controllerId);
+  }
+  return true;
 }
 
 /**
@@ -170,7 +199,15 @@ function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
  */
 export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
   const boardCards = getBoardCards(ctx);
-  const matches = findMatchingTriggers(event, boardCards);
+  const allMatches = findMatchingTriggers(event, boardCards);
+
+  // Rule 724 (Legion) and other conditional triggers: filter matches by
+  // Their ability.condition before executing. Conditions are evaluated
+  // Against the controller of the card (owner, since abilities cannot
+  // Change controller separately today).
+  const matches = allMatches.filter((match) =>
+    evaluateTriggerCondition(match.ability.condition, ctx.draft, match.cardOwner),
+  );
 
   for (const match of matches) {
     // Build a no-op for missing optional methods

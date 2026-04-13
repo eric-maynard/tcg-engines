@@ -81,6 +81,13 @@ export interface CardDefinitionLookup {
     readonly target?: unknown;
     /** Timing for activated/spell abilities (action/reaction) */
     readonly timing?: string;
+    /**
+     * Repeat cost for spells with the `[Repeat]` keyword. When present,
+     * the player may pay this cost additional times at play time to
+     * replay the spell's effect multiple times. Rule: [Repeat] — pay
+     * :cost: to repeat the effect.
+     */
+    readonly repeat?: { energy?: number; power?: string[] };
   }[];
 }
 
@@ -159,6 +166,28 @@ export class CardDefinitionRegistry {
    */
   getSpellTiming(cardId: string): string | undefined {
     return this.definitions.get(cardId)?.timing;
+  }
+
+  /**
+   * Get a spell's Repeat cost, if any. Returns the additional cost a
+   * player pays per Repeat to resolve the spell's effect an additional
+   * time. Returns `undefined` if the card is not a spell or has no
+   * Repeat cost defined.
+   */
+  getSpellRepeatCost(cardId: string): { energy: number; power: readonly string[] } | undefined {
+    const def = this.definitions.get(cardId);
+    if (!def?.abilities) {
+      return undefined;
+    }
+    for (const ab of def.abilities) {
+      if (ab.type === "spell" && ab.repeat) {
+        return {
+          energy: ab.repeat.energy ?? 0,
+          power: ab.repeat.power ?? [],
+        };
+      }
+    }
+    return undefined;
   }
 
   /**

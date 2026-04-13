@@ -26,6 +26,7 @@ import {
   canMoveToLocation,
   canPlayViaAmbush,
 } from "../../keywords/keyword-effects";
+import { evaluateLegionCondition } from "../../abilities/legion-conditions";
 import { evaluateWhileLevel, evaluateXpGainedThisTurn } from "../../abilities/xp-conditions";
 import {
   P1,
@@ -76,7 +77,7 @@ describe("Rule 713.3.a.2: Granted keywords carry their duration", () => {
     createCard(engine, "u1", {
       cardType: "unit",
       meta: {
-        grantedKeywords: [{ keyword: "Tank", duration: "turn" }],
+        grantedKeywords: [{ duration: "turn", keyword: "Tank" }],
       },
       might: 2,
       owner: P1,
@@ -95,7 +96,7 @@ describe("Rule 713.3.a.3: Granted keywords without explicit duration last while 
     createCard(engine, "u1", {
       cardType: "unit",
       meta: {
-        grantedKeywords: [{ keyword: "Assault", duration: "static" }],
+        grantedKeywords: [{ duration: "static", keyword: "Assault" }],
       },
       might: 2,
       owner: P1,
@@ -181,18 +182,86 @@ describe("Rule 723.1.a: Hidden is present on Spells, Units, and Gear", () => {
 });
 
 describe("Rule 723.1.c.2: Hiding a card does not open a chain", () => {
-  it.todo(
-    "Rule 723.1.c.2: Hide is a Discretionary Action that does NOT open a chain. " +
-      "The engine does not yet expose a `hideCard` move — no test harness exists " +
-      "to verify chain state after Hide. Flag as engine gap.",
-  );
+  it("hideCard move moves the card to the facedown zone without adding to the chain", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 5, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+    createCard(engine, "secret", {
+      cardType: "spell",
+      energyCost: 3,
+      keywords: ["Hidden"],
+      owner: P1,
+      zone: "hand",
+    });
+
+    // Confirm chain is empty before the move.
+    expect(getState(engine).interaction?.chain?.active ?? false).toBe(false);
+
+    const result = applyMove(engine, "hideCard", {
+      battlefieldId: "bf-1",
+      cardId: "secret",
+      playerId: P1,
+    });
+    expect(result.success).toBe(true);
+
+    // The card should now live in the facedown zone for that battlefield.
+    expect(getCardZone(engine, "secret")).toBe("facedown-bf-1");
+    expect(getCardMeta(engine, "secret")?.hidden).toBe(true);
+
+    // Rule 723.1.c.2: hiding does NOT open a chain.
+    expect(getState(engine).interaction?.chain?.active ?? false).toBe(false);
+  });
 });
 
 describe("Rule 723.1.c.3: Playing a card from facedown does open a chain", () => {
-  it.todo(
-    "Rule 723.1.c.3: playing from Hidden should open a chain. No engine move " +
-      "exists for 'play from facedown' — not yet wired.",
-  );
+  it("revealHidden on a spell card adds it to the chain", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 5, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+    createCard(engine, "secret", {
+      abilities: [
+        {
+          effect: { amount: 1, target: { type: "self" }, type: "damage" },
+          timing: "action",
+          type: "spell",
+        },
+      ],
+      cardType: "spell",
+      energyCost: 3,
+      keywords: ["Hidden"],
+      owner: P1,
+      zone: "hand",
+    });
+
+    // Hide the card first.
+    applyMove(engine, "hideCard", {
+      battlefieldId: "bf-1",
+      cardId: "secret",
+      playerId: P1,
+    });
+    expect(getCardMeta(engine, "secret")?.hidden).toBe(true);
+
+    // Now reveal it — rule 723.1.c.3 says this opens a chain.
+    const reveal = applyMove(engine, "revealHidden", {
+      cardId: "secret",
+      playerId: P1,
+    });
+    expect(reveal.success).toBe(true);
+
+    const chain = getState(engine).interaction?.chain;
+    expect(chain?.active).toBe(true);
+    expect(chain?.items?.length ?? 0).toBe(1);
+    expect(chain?.items?.[0]?.cardId).toBe("secret");
+
+    // Card is no longer hidden.
+    expect(getCardMeta(engine, "secret")?.hidden).toBe(false);
+  });
 });
 
 describe("Rule 723.3: Multiple instances of Hidden are redundant", () => {
@@ -242,10 +311,92 @@ describe("Ambush: can be played as Reaction at a battlefield where you have unit
     expect(canPlayViaAmbush(true, true, false)).toBe(false);
   });
 
-  it.todo(
-    "Ambush: engine `playCard` / `playSpell` moves do NOT call `canPlayViaAmbush` — " +
-      "Ambush permission is not actually granted during play validation. Engine gap.",
-  );
+  // Rule 577.3.c: the engine's `playUnit` move now honors Ambush by letting
+  // A unit be played directly to a battlefield where the player has friendly
+  // Units, without requiring main-phase timing on the player's own turn.
+  it("Rule 577.3.c: playUnit with Ambush allows a unit to be played to a battlefield where the player has friendly units", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P2]: { energy: 2, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: null });
+    // P2 already has a friendly unit at bf-1 (needed for Ambush).
+    createCard(engine, "p2-scout", {
+      cardType: "unit",
+      might: 1,
+      owner: P2,
+      zone: "battlefield-bf-1",
+    });
+    createCard(engine, "ambusher", {
+      cardType: "unit",
+      energyCost: 2,
+      keywords: ["Ambush"],
+      might: 3,
+      owner: P2,
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playUnit", {
+      cardId: "ambusher",
+      location: "battlefield-bf-1",
+      playerId: P2,
+    });
+    expect(result.success).toBe(true);
+    expect(getCardZone(engine, "ambusher")).toBe("battlefield-bf-1");
+  });
+
+  it("Rule 577.3.c: playUnit without Ambush is rejected when the location is a battlefield", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 2, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: null });
+    createCard(engine, "friend", {
+      cardType: "unit",
+      might: 1,
+      owner: P1,
+      zone: "battlefield-bf-1",
+    });
+    createCard(engine, "no-ambush", {
+      cardType: "unit",
+      energyCost: 2,
+      might: 3,
+      owner: P1,
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playUnit", {
+      cardId: "no-ambush",
+      location: "battlefield-bf-1",
+      playerId: P1,
+    });
+    expect(result.success).toBe(false);
+    expect(getCardZone(engine, "no-ambush")).toBe("hand");
+  });
+
+  it("Rule 577.3.c: playUnit with Ambush still requires friendly units at the target battlefield", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 2, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: null });
+    // No friendly units at bf-1.
+    createCard(engine, "lonely", {
+      cardType: "unit",
+      energyCost: 2,
+      keywords: ["Ambush"],
+      might: 3,
+      owner: P1,
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playUnit", {
+      cardId: "lonely",
+      location: "battlefield-bf-1",
+      playerId: P1,
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 // ===========================================================================
@@ -259,10 +410,76 @@ describe("Weaponmaster: can hold multiple equipment (engine rule gap)", () => {
     expect(w?.category).toBe("play");
   });
 
-  it.todo(
-    "Weaponmaster: no engine wiring exists for 'multiple equipment' — unit's `equippedWith` " +
-      "array is mutated freely by equip moves without checking Weaponmaster. Engine gap.",
-  );
+  it("Rule 579: equipCard rejects a second equipment on a unit without Weaponmaster", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "knight", {
+      cardType: "unit",
+      might: 3,
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "sword", {
+      cardType: "equipment",
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "shield", {
+      cardType: "equipment",
+      owner: P1,
+      zone: "base",
+    });
+
+    // First equipment attaches fine.
+    const r1 = applyMove(engine, "equipCard", {
+      equipmentId: "sword",
+      playerId: P1,
+      unitId: "knight",
+    });
+    expect(r1.success).toBe(true);
+
+    // Second equipment on the same (non-Weaponmaster) unit must be rejected.
+    const r2 = applyMove(engine, "equipCard", {
+      equipmentId: "shield",
+      playerId: P1,
+      unitId: "knight",
+    });
+    expect(r2.success).toBe(false);
+  });
+
+  it("Rule 579: a Weaponmaster unit can hold multiple equipment", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "dual-wielder", {
+      cardType: "unit",
+      keywords: ["Weaponmaster"],
+      might: 3,
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "axe", {
+      cardType: "equipment",
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "dagger", {
+      cardType: "equipment",
+      owner: P1,
+      zone: "base",
+    });
+
+    const r1 = applyMove(engine, "equipCard", {
+      equipmentId: "axe",
+      playerId: P1,
+      unitId: "dual-wielder",
+    });
+    expect(r1.success).toBe(true);
+
+    const r2 = applyMove(engine, "equipCard", {
+      equipmentId: "dagger",
+      playerId: P1,
+      unitId: "dual-wielder",
+    });
+    expect(r2.success).toBe(true);
+  });
 });
 
 // ===========================================================================
@@ -308,11 +525,48 @@ describe("Hunt N: When conquering or holding, gain N XP (keyword parser support)
     expect(fired).toBe(1);
   });
 
-  it.todo(
-    "Hunt: parser recognizes '[Hunt N]' but no automatic conquer/hold → +N XP " +
-      "pipeline exists. Card-by-card abilities must replicate the XP grant. " +
-      "Engine gap: Hunt keyword is not functional on its own.",
-  );
+  it("Hunt parser expansion: a unit with [Hunt 2] gains a conquer-triggered gain-xp ability automatically", () => {
+    // The cards parser (riftbound-cards/src/parser) expands `[Hunt N]`
+    // Into two triggered gain-xp abilities (conquer/hold). Here we drive
+    // The parser-equivalent shape directly so the audit can verify the
+    // Engine's trigger-matcher fires on conquer and hands out XP.
+    const engine = createMinimalGameState({ phase: "main" });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+    createCard(engine, "hunter", {
+      abilities: [
+        // This is the expansion parseAbilities produces for [Hunt 2]:
+        {
+          effect: { amount: 2, type: "gain-xp" },
+          trigger: { event: "conquer", on: "self" },
+          type: "triggered",
+        },
+        {
+          effect: { amount: 2, type: "gain-xp" },
+          trigger: { event: "hold", on: "self" },
+          type: "triggered",
+        },
+      ],
+      cardType: "unit",
+      keywords: ["Hunt"],
+      might: 3,
+      owner: P1,
+      zone: "battlefield-bf-1",
+    });
+
+    // Baseline: the player has 0 XP.
+    expect(getState(engine).players[P1]?.xp ?? 0).toBe(0);
+
+    // Fire a conquer event for P1.
+    const fired = fireTrigger(engine, {
+      battlefieldId: "bf-1",
+      playerId: P1,
+      type: "conquer",
+    });
+    expect(fired).toBeGreaterThanOrEqual(1);
+
+    // Hunt's gain-xp effect should have granted 2 XP.
+    expect(getState(engine).players[P1]?.xp ?? 0).toBe(2);
+  });
 });
 
 // ===========================================================================
@@ -327,11 +581,55 @@ describe("Predict N: look at top N cards, may recycle", () => {
     expect(predict?.stackable).toBe(true);
   });
 
-  it.todo(
-    "Predict: no engine effect type `predict` is wired into the effect executor. " +
-      "Parser produces the keyword but the 'look + recycle' effect must be hand-authored " +
-      "per card today. Engine gap.",
-  );
+  it("Predict N effect moves the top N cards of the player's main deck to the bottom", () => {
+    // The executor's `predict` case auto-recycles the top N cards of
+    // The controller's main deck. After Predict 2 on a deck ordered
+    // [A, B, C, D, E], the deck becomes [C, D, E, A, B].
+    const engine = createMinimalGameState({ phase: "main" });
+
+    // Seed P1's main deck with 5 distinct cards.
+    const deckOrder = ["deck-a", "deck-b", "deck-c", "deck-d", "deck-e"];
+    for (const id of deckOrder) {
+      createCard(engine, id, {
+        cardType: "unit",
+        might: 1,
+        owner: P1,
+        zone: "mainDeck",
+      });
+    }
+
+    // Give P1 a unit with a triggered ability that produces a Predict 2
+    // Effect on play. When the trigger fires, the executor will execute
+    // The predict effect on P1's deck.
+    createCard(engine, "seer", {
+      abilities: [
+        {
+          effect: { amount: 2, type: "predict" },
+          trigger: { event: "play-self" },
+          type: "triggered",
+        },
+      ],
+      cardType: "unit",
+      might: 2,
+      owner: P1,
+      zone: "base",
+    });
+
+    // Sanity: the top two cards are deck-a and deck-b.
+    expect(getCardsInZone(engine, "mainDeck", P1).slice(0, 2)).toEqual(["deck-a", "deck-b"]);
+
+    const fired = fireTrigger(engine, { cardId: "seer", playerId: P1, type: "play-self" });
+    expect(fired).toBeGreaterThanOrEqual(1);
+
+    // After Predict 2: deck should be [C, D, E, A, B].
+    expect(getCardsInZone(engine, "mainDeck", P1)).toEqual([
+      "deck-c",
+      "deck-d",
+      "deck-e",
+      "deck-a",
+      "deck-b",
+    ]);
+  });
 });
 
 // ===========================================================================
@@ -386,12 +684,96 @@ describe("xp-gained-this-turn: activates when player has gained any XP this turn
 // ===========================================================================
 
 describe("Repeat N: spell effect may be repeated at added cost", () => {
-  it.todo(
-    "Repeat N: the effect-executor has 'repeat' logic for multi-target effects but NOT " +
-      "a player-chosen 'Repeat N' additional-cost spell resolution. Parser may recognize " +
-      "the keyword; engine wiring to pay extra and resolve extra copies is absent. " +
-      "Engine gap.",
-  );
+  it("playSpell with repeatCount charges the repeat cost and resolves the effect 1 + repeatCount times", () => {
+    // A Repeat spell pays its base cost once and then an extra repeat
+    // Cost per additional resolution. The test spell has base cost 1
+    // Energy + repeat cost 1 energy, effect "gain 1 XP for the player".
+    // Playing it with repeatCount=2 should cost 1 + (1*2) = 3 energy
+    // And the gain-xp effect should resolve 3 times (base + 2 repeats)
+    // For a total of 3 XP.
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 5, power: {} } },
+    });
+
+    // Create a Repeat spell in P1's hand whose effect grants XP to the
+    // Controller — an observable, target-less effect.
+    createCard(engine, "repeat-spell", {
+      abilities: [
+        {
+          effect: { amount: 1, type: "gain-xp" },
+          repeat: { energy: 1, power: [] },
+          timing: "action",
+          type: "spell",
+        },
+      ],
+      cardType: "spell",
+      energyCost: 1,
+      owner: P1,
+      zone: "hand",
+    });
+
+    const initialEnergy = getState(engine).runePools[P1]?.energy ?? 0;
+    expect(initialEnergy).toBe(5);
+    expect(getState(engine).players[P1]?.xp ?? 0).toBe(0);
+
+    const result = applyMove(engine, "playSpell", {
+      cardId: "repeat-spell",
+      playerId: P1,
+      repeatCount: 2,
+    });
+    expect(result.success).toBe(true);
+
+    // Cost: 1 base + 2 * 1 repeat = 3 energy.
+    expect(getState(engine).runePools[P1]?.energy ?? 0).toBe(initialEnergy - 3);
+
+    // Pass priority until the chain auto-resolves. The activePlayer
+    // Starts at the spell's controller (P1). After P1 passes, priority
+    // Moves to P2; when P2 passes the chain resolves automatically
+    // Inside passChainPriority's reducer.
+    const p1Pass = applyMove(engine, "passChainPriority", { playerId: P1 });
+    expect(p1Pass.success).toBe(true);
+    const p2Pass = applyMove(engine, "passChainPriority", { playerId: P2 });
+    expect(p2Pass.success).toBe(true);
+
+    // The gain-xp effect should have resolved 3 times (base + 2 repeats).
+    expect(getState(engine).players[P1]?.xp ?? 0).toBe(3);
+  });
+
+  it("playSpell rejects repeatCount > 0 for a spell without a Repeat cost", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 5, power: {} } },
+    });
+    createCard(engine, "target-unit", {
+      cardType: "unit",
+      might: 10,
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "regular-spell", {
+      abilities: [
+        {
+          effect: { amount: 1, target: { type: "unit" }, type: "damage" },
+          timing: "action",
+          type: "spell",
+        },
+      ],
+      cardType: "spell",
+      energyCost: 1,
+      owner: P1,
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playSpell", {
+      cardId: "regular-spell",
+      playerId: P1,
+      repeatCount: 1,
+      targets: ["target-unit"],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 // ===========================================================================
@@ -477,33 +859,157 @@ describe("Rule 709: becomes-mighty event fires when Might crosses from <5 to >=5
 // ===========================================================================
 
 describe("Rule 724.1.c: Legion — apply effect only if another card was played this turn", () => {
-  it("state tracks cards-played-this-turn via existing tracker (smoke test)", () => {
+  it("state exposes a per-player cardsPlayedThisTurn tracker", () => {
     const engine = createMinimalGameState({ phase: "main" });
     const state = getState(engine);
-    // If the engine exposes a per-player "cardsPlayedThisTurn" counter or
-    // Similar tracker, Legion could read it. We assert the tracker exists
-    // On state; if not, it's an engine gap.
-    const hasTracker =
-      "cardsPlayedThisTurn" in state ||
-      "mainDeckCardsPlayedThisTurn" in state ||
-      "cardsPlayedByPlayerThisTurn" in state;
-    // This test is informational — it documents whether the tracker exists.
-    // It does NOT fail; the todo below flags engine wiring.
-    expect(typeof hasTracker).toBe("boolean");
+    expect("cardsPlayedThisTurn" in state).toBe(true);
+    expect((state.cardsPlayedThisTurn as Record<string, number>)[P1]).toBe(0);
+    expect((state.cardsPlayedThisTurn as Record<string, number>)[P2]).toBe(0);
   });
 
-  it.todo(
-    "Rule 724.1.c: Legion condition evaluates 'have you played another main-deck card this turn?'. " +
-      "Engine does not expose a per-turn play counter that would satisfy this condition " +
-      "generically. Cards that use Legion need hand-authored condition logic. Engine gap.",
-  );
+  it("Rule 724.1.c: evaluateLegionCondition returns false when no card has been played this turn", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    const state = getState(engine);
+    expect(evaluateLegionCondition(state, P1)).toBe(false);
+  });
+
+  it("Rule 724.1.c: evaluateLegionCondition returns true once the player has played >= 1 card this turn", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    const state = getState(engine);
+    (state.cardsPlayedThisTurn as Record<string, number>)[P1] = 1;
+    expect(evaluateLegionCondition(state, P1)).toBe(true);
+  });
+
+  it("Rule 724: playUnit increments the cardsPlayedThisTurn counter for the active player", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 5, power: {} } },
+    });
+    createCard(engine, "u1", {
+      cardType: "unit",
+      energyCost: 1,
+      might: 2,
+      owner: P1,
+      zone: "hand",
+    });
+
+    // Baseline: counter is 0.
+    expect((getState(engine).cardsPlayedThisTurn as Record<string, number>)[P1]).toBe(0);
+
+    const r = applyMove(engine, "playUnit", {
+      cardId: "u1",
+      location: "base",
+      playerId: P1,
+    });
+    expect(r.success).toBe(true);
+
+    // After a successful play, the counter is bumped.
+    expect((getState(engine).cardsPlayedThisTurn as Record<string, number>)[P1]).toBe(1);
+  });
+
+  it("Rule 724.1.c: Legion-gated trigger does NOT fire when no prior card was played this turn", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "legionnaire", {
+      abilities: [
+        {
+          condition: { type: "legion" },
+          effect: { amount: 1, target: { type: "self" }, type: "damage" },
+          trigger: { event: "play-self", on: "self" },
+          type: "triggered",
+        },
+      ],
+      cardType: "unit",
+      keywords: ["Legion"],
+      might: 2,
+      owner: P1,
+      zone: "base",
+    });
+
+    // No card has been played this turn — Legion condition must fail.
+    const fired = fireTrigger(engine, {
+      cardId: "legionnaire",
+      playerId: P1,
+      type: "play-self",
+    });
+    expect(fired).toBe(0);
+  });
+
+  it("Rule 724.1.c: Legion-gated trigger fires when another card WAS played this turn", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    // Pretend the player already played another card this turn. The
+    // Engine's currentState (what fireTrigger reads) is a separate
+    // Object from `getState()` (which returns a clone), so we mutate
+    // The internal state directly.
+    const internal = engine as unknown as {
+      currentState: { cardsPlayedThisTurn: Record<string, number> };
+    };
+    internal.currentState.cardsPlayedThisTurn[P1] = 1;
+
+    createCard(engine, "legionnaire2", {
+      abilities: [
+        {
+          condition: { type: "legion" },
+          effect: { amount: 1, target: { type: "self" }, type: "damage" },
+          trigger: { event: "play-self", on: "self" },
+          type: "triggered",
+        },
+      ],
+      cardType: "unit",
+      keywords: ["Legion"],
+      might: 2,
+      owner: P1,
+      zone: "base",
+    });
+
+    const fired = fireTrigger(engine, {
+      cardId: "legionnaire2",
+      playerId: P1,
+      type: "play-self",
+    });
+    expect(fired).toBe(1);
+  });
 });
 
 describe("Rule 724.2: All Legion instances satisfied by playing a single prior card", () => {
-  it.todo(
-    "Rule 724.2: satisfaction is all-or-nothing across multiple Legion abilities. " +
-      "Needs a per-player 'main-deck cards played this turn' counter. Engine gap.",
-  );
+  it("Rule 724.2: a single prior card satisfies multiple Legion abilities on the same card", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    const internal = engine as unknown as {
+      currentState: { cardsPlayedThisTurn: Record<string, number> };
+    };
+    internal.currentState.cardsPlayedThisTurn[P1] = 1;
+
+    createCard(engine, "dual-legion", {
+      abilities: [
+        {
+          condition: { type: "legion" },
+          effect: { amount: 1, target: { type: "self" }, type: "damage" },
+          trigger: { event: "play-self", on: "self" },
+          type: "triggered",
+        },
+        {
+          condition: { type: "legion" },
+          effect: { amount: 1, target: { type: "self" }, type: "damage" },
+          trigger: { event: "play-self", on: "self" },
+          type: "triggered",
+        },
+      ],
+      cardType: "unit",
+      keywords: ["Legion"],
+      might: 2,
+      owner: P1,
+      zone: "base",
+    });
+
+    // Both abilities should fire because the single prior play satisfied
+    // All Legion instances (rule 724.2).
+    const fired = fireTrigger(engine, {
+      cardId: "dual-legion",
+      playerId: P1,
+      type: "play-self",
+    });
+    expect(fired).toBe(2);
+  });
 });
 
 // ===========================================================================

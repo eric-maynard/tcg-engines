@@ -52,6 +52,7 @@ import {
   getCardMeta,
   getCardZone,
   getCardsInZone,
+  getState,
   runPhaseHook,
 } from "./helpers";
 
@@ -382,12 +383,136 @@ describe("Rule 721.2: Multiple Deflect grants sum together", () => {
     // Summed value is passed to the helper.
     expect(getDeflectCost(5)).toBe(5);
   });
+});
 
-  it.todo(
-    "Rule 721.1.b: engine `getDeflectSurcharge` in game-definition/moves/cards.ts " +
-      "hardcodes +1 per Deflect target rather than reading the Deflect Value. " +
-      "Deflect 3 should charge +3, not +1. This is a real engine bug.",
-  );
+// ---------------------------------------------------------------------------
+// Rule 721.1.b — the engine must read the Deflect Value (not hardcode +1)
+// When computing the targeting surcharge in playSpell. We exercise this via
+// A real `playSpell` move against a Deflect-N defender and assert the rune
+// Pool math rather than calling the internal helper directly.
+// ---------------------------------------------------------------------------
+
+describe("Rule 721.1.b: engine playSpell surcharges by the target's Deflect Value", () => {
+  it("Deflect 3 target charges the attacker +3 energy on top of the spell cost", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 5, power: {} } },
+    });
+    // Target unit owned by the opponent with Deflect 3.
+    createCard(engine, "deflect-target", {
+      abilities: [{ keyword: "Deflect", type: "keyword", value: 3 }],
+      cardType: "unit",
+      keywords: ["Deflect"],
+      might: 3,
+      owner: P2,
+      zone: "base",
+    });
+    // A cost-1 enemy-damage spell. Base cost 1 + Deflect surcharge 3 = 4.
+    createCard(engine, "snipe", {
+      abilities: [
+        {
+          effect: {
+            amount: 1,
+            target: { controller: "enemy", type: "unit" },
+            type: "damage",
+          },
+          type: "spell",
+        },
+      ],
+      cardType: "spell",
+      energyCost: 1,
+      owner: P1,
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playSpell", {
+      cardId: "snipe",
+      playerId: P1,
+      targets: ["deflect-target"],
+    });
+    expect(result.success).toBe(true);
+    // 5 - (1 base + 3 deflect) = 1 remaining.
+    expect(getState(engine).runePools[P1].energy).toBe(1);
+  });
+
+  it("Deflect 3 target blocks the play when the attacker is only affording the base cost", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      // Exactly the base cost, with no budget for Deflect.
+      runePools: { [P1]: { energy: 1, power: {} } },
+    });
+    createCard(engine, "deflect-target", {
+      abilities: [{ keyword: "Deflect", type: "keyword", value: 3 }],
+      cardType: "unit",
+      keywords: ["Deflect"],
+      might: 3,
+      owner: P2,
+      zone: "base",
+    });
+    createCard(engine, "snipe", {
+      abilities: [
+        {
+          effect: {
+            amount: 1,
+            target: { controller: "enemy", type: "unit" },
+            type: "damage",
+          },
+          type: "spell",
+        },
+      ],
+      cardType: "spell",
+      energyCost: 1,
+      owner: P1,
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playSpell", {
+      cardId: "snipe",
+      playerId: P1,
+      targets: ["deflect-target"],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("Multiple Deflect abilities on the same target stack per rule 721.2", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 6, power: {} } },
+    });
+    createCard(engine, "stacked", {
+      abilities: [
+        { keyword: "Deflect", type: "keyword", value: 2 },
+        { keyword: "Deflect", type: "keyword", value: 3 },
+      ],
+      cardType: "unit",
+      keywords: ["Deflect"],
+      might: 3,
+      owner: P2,
+      zone: "base",
+    });
+    createCard(engine, "bolt", {
+      abilities: [
+        {
+          effect: {
+            amount: 1,
+            target: { controller: "enemy", type: "unit" },
+            type: "damage",
+          },
+          type: "spell",
+        },
+      ],
+      cardType: "spell",
+      energyCost: 1,
+      owner: P1,
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playSpell", {
+      cardId: "bolt",
+      playerId: P1,
+      targets: ["stacked"],
+    });
+    expect(result.success).toBe(true);
+    // 6 - (1 base + 2 + 3 stacked deflect) = 0 remaining.
+    expect(getState(engine).runePools[P1].energy).toBe(0);
+  });
 });
 
 // ===========================================================================

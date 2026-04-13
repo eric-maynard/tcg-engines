@@ -657,22 +657,65 @@ export const combatMoves: Partial<
     },
     reducer: (draft, context) => {
       const { playerId, method, battlefieldId } = context.params;
+      const { cards, counters, zones } = context;
 
       // Blocked if a battlefield ability (e.g. Forgotten Monument) prevents
       // This player from scoring here right now.
       const scoringAllowed = canPlayerScoreAtBattlefield(draft, playerId, battlefieldId);
 
       const player = draft.players[playerId];
-      if (player && scoringAllowed) {
-        player.victoryPoints += 1;
+      if (!player || !scoringAllowed) {
+        // Still record the attempt for idempotence (no VP, no event).
+        draft.scoredThisTurn[playerId] = draft.scoredThisTurn[playerId] || [];
+        draft.scoredThisTurn[playerId].push(battlefieldId);
+        return;
       }
+
+      // Rule 632.1.b.2: If trying to score the Final Point via conquer, the
+      // Player must have scored EVERY battlefield this turn. Otherwise, they
+      // Draw a card INSTEAD of scoring. No VP, no score event, no scoredThisTurn
+      // Entry for this battlefield.
+      const victoryScore = draft.victoryScore ?? 8;
+      const isFinalPoint = player.victoryPoints === victoryScore - 1;
+      if (isFinalPoint && method === "conquer") {
+        const allBattlefieldIds = Object.keys(draft.battlefields ?? {});
+        const scoredForPlayer = draft.scoredThisTurn[playerId] ?? [];
+        const allScored = allBattlefieldIds.every(
+          (bfId) => bfId === battlefieldId || scoredForPlayer.includes(bfId),
+        );
+        if (!allScored) {
+          // Draw a card instead of scoring (rule 632.1.b.2).
+          zones.drawCards({
+            count: 1,
+            from: "mainDeck" as CoreZoneId,
+            playerId: playerId as CorePlayerId,
+            to: "hand" as CoreZoneId,
+          });
+          // Intentionally do NOT push to scoredThisTurn — the battlefield was
+          // Not scored, so a subsequent scorePoint this turn is still legal
+          // (e.g. after scoring other battlefields first).
+          return;
+        }
+      }
+
+      player.victoryPoints += 1;
 
       // Track that this battlefield was scored this turn
       draft.scoredThisTurn[playerId] = draft.scoredThisTurn[playerId] || [];
       draft.scoredThisTurn[playerId].push(battlefieldId);
 
+      // Rule 632.2: emit the appropriate score event so battlefield score
+      // Abilities (on-conquer / on-hold) fire. Only the combat path used to
+      // Emit these events — non-combat scorePoint invocations (e.g. Hold
+      // During Beginning phase, manual Conquer moves) must fire them too.
+      const scoreEvent =
+        method === "conquer"
+          ? ({ battlefieldId, playerId, type: "conquer" } as const)
+          : ({ battlefieldId, playerId, type: "hold" } as const);
+      fireTriggers(scoreEvent, { cards, counters, draft, zones });
+
       // Check for victory
-      if (player && hasPlayerWon(draft, playerId)) {
+      if (hasPlayerWon(draft, playerId)) {
         draft.status = "finished";
         draft.winner = playerId;
 

@@ -21,6 +21,10 @@ function deepMergeState(
       source.battlefields !== undefined
         ? { ...target.battlefields, ...source.battlefields }
         : target.battlefields,
+    cardsPlayedThisTurn:
+      source.cardsPlayedThisTurn !== undefined
+        ? { ...target.cardsPlayedThisTurn, ...source.cardsPlayedThisTurn }
+        : target.cardsPlayedThisTurn,
     conqueredThisTurn:
       source.conqueredThisTurn !== undefined
         ? { ...target.conqueredThisTurn, ...source.conqueredThisTurn }

@@ -16,10 +16,22 @@ import { fireTriggers } from "../../abilities/trigger-runner";
 import { resolveTarget } from "../../abilities/target-resolver";
 import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import { getBattlefieldZoneId, getFacedownZoneId } from "../../zones/zone-configs";
+import { canPlayViaAmbush } from "../../keywords/keyword-effects";
+import {
+  extractBattlefieldId,
+  getBattlefieldZoneId,
+  getFacedownZoneId,
+  isBattlefieldZone,
+} from "../../zones/zone-configs";
 
 /**
- * Calculate the Deflect surcharge for targeting a card (rule 721).
+ * Calculate the Deflect surcharge for targeting a card (rule 721.1.b).
+ *
+ * Reads the Deflect value from each target's `keyword`-typed abilities
+ * (shape: `{ type: "keyword", keyword: "Deflect", value: N }`). Multiple
+ * Deflect abilities on the same target stack (rule 721.2). Falls back to
+ * +1 per target if the card declares Deflect in its flat `keywords[]`
+ * array but no ability carries an explicit numeric value (rule 721.1.b.3).
  */
 function getDeflectSurcharge(
   _state: RiftboundGameState,
@@ -32,9 +44,19 @@ function getDeflectSurcharge(
   const registry = getGlobalCardRegistry();
   let surcharge = 0;
   for (const targetId of _targets) {
-    if (registry.hasKeyword(targetId, "Deflect")) {
-      surcharge += 1;
+    const abilities = registry.getAbilities(targetId) ?? [];
+    let targetSurcharge = 0;
+    for (const ability of abilities) {
+      if (ability.type === "keyword" && ability.keyword === "Deflect") {
+        targetSurcharge += ability.value ?? 1;
+      }
     }
+    // Fallback: flat-keyword Deflect with no numeric ability entry — treat
+    // As value 1 (rule 721.1.b.3).
+    if (targetSurcharge === 0 && registry.hasKeyword(targetId, "Deflect")) {
+      targetSurcharge = 1;
+    }
+    surcharge += targetSurcharge;
   }
   return surcharge;
 }
@@ -130,6 +152,28 @@ interface CostExtras {
    * of X consumes 1 energy from the rune pool.
    */
   xAmount?: number;
+  /**
+   * Number of EXTRA Repeat activations for spells with the `[Repeat]`
+   * keyword. Each additional repeat adds the spell's `repeat` cost on
+   * top of the base cost. See RiftboundMoves.playSpell.repeatCount.
+   */
+  repeatCount?: number;
+}
+
+/**
+ * Compute the total Repeat surcharge (energy) for a spell being played
+ * with `repeatCount` additional effects.
+ */
+function getRepeatEnergySurcharge(cardId: string, repeatCount: number): number {
+  if (repeatCount <= 0) {
+    return 0;
+  }
+  const registry = getGlobalCardRegistry();
+  const cost = registry.getSpellRepeatCost(cardId);
+  if (!cost) {
+    return 0;
+  }
+  return (cost.energy ?? 0) * repeatCount;
 }
 
 /**
@@ -152,7 +196,9 @@ function canAffordCard(
   const baseCost = registry.getCostToDeduct(cardId);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
-  const adjustedEnergy = Math.max(0, baseCost.energy + modifier - interactive) + xAmount;
+  const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  const adjustedEnergy =
+    Math.max(0, baseCost.energy + modifier - interactive) + xAmount + repeatSurcharge;
 
   if (pool.energy < adjustedEnergy) {
     return false;
@@ -196,7 +242,9 @@ function deductCost(
   const modifier = getCostModifier(cardId, getCardMeta);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
-  const adjustedEnergy = Math.max(0, cost.energy + modifier - interactive) + xAmount;
+  const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  const adjustedEnergy =
+    Math.max(0, cost.energy + modifier - interactive) + xAmount + repeatSurcharge;
 
   pool.energy = Math.max(0, pool.energy - adjustedEnergy);
   for (const [domain, amount] of Object.entries(cost.power)) {
@@ -229,16 +277,58 @@ export const cardPlayMoves: Partial<
       if (state.pendingChoice) {
         return false;
       }
-      if (state.turn.activePlayer !== context.params.playerId) {
-        return false;
-      }
-      if (state.turn.phase !== "main") {
-        return false;
-      }
 
       const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
       if (zone !== "hand") {
         return false;
+      }
+
+      // Rule 103 / 555: only the card's owner may play it.
+      const owner = context.cards.getCardOwner(context.params.cardId as CoreCardId);
+      if (owner !== context.params.playerId) {
+        return false;
+      }
+
+      // Rule 577.3.c (Ambush): a unit with Ambush may be played to a
+      // Battlefield where the player has friendly units, as a Reaction.
+      // Otherwise the unit must be played on its controller's turn during
+      // The main phase to the player's base.
+      const location = context.params.location as string | undefined;
+      const targetIsBattlefield = Boolean(location) && isBattlefieldZone(location);
+      const registry = getGlobalCardRegistry();
+      const hasAmbush = registry.hasKeyword(context.params.cardId, "Ambush");
+
+      if (targetIsBattlefield) {
+        // Ambush path: relax phase / active-player gating and permit the
+        // Unit to be played directly to the target battlefield.
+        if (!hasAmbush) {
+          return false;
+        }
+        const bfId = extractBattlefieldId(location ?? "");
+        if (!bfId) {
+          return false;
+        }
+        const bfZoneId = getBattlefieldZoneId(bfId);
+        const unitsAtBattlefield = context.zones.getCardsInZone(
+          bfZoneId as CoreZoneId,
+          context.params.playerId as CorePlayerId,
+        );
+        const hasFriendlyUnits = unitsAtBattlefield.length > 0;
+        // Reaction timing is always legal per `isLegalTiming("reaction", ...)`
+        // Regardless of chain/showdown state, so we treat Ambush as
+        // Permanently reaction-legal and rely on `canPlayViaAmbush`'s
+        // Friendly-units check.
+        if (!canPlayViaAmbush(hasAmbush, hasFriendlyUnits, true)) {
+          return false;
+        }
+      } else {
+        // Standard play path: active player, main phase.
+        if (state.turn.activePlayer !== context.params.playerId) {
+          return false;
+        }
+        if (state.turn.phase !== "main") {
+          return false;
+        }
       }
 
       if (
@@ -311,7 +401,10 @@ export const cardPlayMoves: Partial<
 
       counters.setFlag(cardId as CoreCardId, "exhausted", true);
 
-      // Fire "play-self" and "play-card" triggers
+      // Fire "play-self" and "play-card" triggers BEFORE incrementing the
+      // Rule-724 counter, so a Legion trigger on this card itself cannot
+      // Satisfy its own condition — it must observe the count of cards
+      // That were played EARLIER in this turn.
       fireTriggers(
         { cardId, playerId, type: "play-self" },
         { cards: context.cards, counters, draft, zones },
@@ -320,6 +413,12 @@ export const cardPlayMoves: Partial<
         { cardId, cardType: "unit", playerId, type: "play-card" },
         { cards: context.cards, counters, draft, zones },
       );
+
+      // Rule 724 (Legion) tracker: count this play so subsequent cards
+      // Can satisfy their Legion conditions. Runes are NOT counted.
+      if (draft.cardsPlayedThisTurn) {
+        draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
+      }
     },
   },
 
@@ -343,6 +442,12 @@ export const cardPlayMoves: Partial<
 
       const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
       if (zone !== "hand") {
+        return false;
+      }
+
+      // Rule 103 / 555: only the card's owner may play it.
+      const owner = context.cards.getCardOwner(context.params.cardId as CoreCardId);
+      if (owner !== context.params.playerId) {
         return false;
       }
 
@@ -415,6 +520,8 @@ export const cardPlayMoves: Partial<
         targetZoneId: "base" as CoreZoneId,
       });
 
+      // Fire "play-self" / "play-card" triggers BEFORE incrementing the
+      // Rule-724 counter (see comment in playUnit).
       fireTriggers(
         { cardId, playerId, type: "play-self" },
         { cards: context.cards, counters: context.counters, draft, zones },
@@ -423,6 +530,11 @@ export const cardPlayMoves: Partial<
         { cardId, cardType: "gear", playerId, type: "play-card" },
         { cards: context.cards, counters: context.counters, draft, zones },
       );
+
+      // Rule 724 (Legion) tracker: count this gear/equipment play.
+      if (draft.cardsPlayedThisTurn) {
+        draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
+      }
     },
   },
 
@@ -443,12 +555,30 @@ export const cardPlayMoves: Partial<
         return false;
       }
 
+      // Rule 103 / 555: only the card's owner may play it.
+      const owner = context.cards.getCardOwner(context.params.cardId as CoreCardId);
+      if (owner !== context.params.playerId) {
+        return false;
+      }
+
+      // Rule: Repeat cost is only valid on spells that have a defined
+      // `repeat` cost on their spell ability. Reject repeatCount > 0 for
+      // Spells without Repeat.
+      const reqRepeatCount = Math.max(0, context.params.repeatCount ?? 0);
+      if (reqRepeatCount > 0) {
+        const registryCheck = getGlobalCardRegistry();
+        if (!registryCheck.getSpellRepeatCost(context.params.cardId)) {
+          return false;
+        }
+      }
+
       if (
         !canAffordCard(
           state,
           context.params.playerId,
           context.params.cardId,
           {
+            repeatCount: reqRepeatCount,
             targets: context.params.targets,
             xAmount: context.params.xAmount,
           },
@@ -467,6 +597,15 @@ export const cardPlayMoves: Partial<
 
       if (!isLegalTiming(timing, turnState)) {
         return false;
+      }
+
+      // Rule 530: in Neutral Open state, only the active player holds
+      // Priority, so only they may play an Action-timed spell. Reaction
+      // Spells can be played by any relevant player in a Closed state.
+      if (timing === "action" && turnState === "neutral-open") {
+        if (state.turn.activePlayer !== context.params.playerId) {
+          return false;
+        }
       }
 
       // Rule 537: Check that required targets exist before allowing the spell
@@ -578,10 +717,17 @@ export const cardPlayMoves: Partial<
       return results;
     },
     reducer: (draft, context) => {
-      const { cardId, playerId, targets, xAmount } = context.params;
+      const { cardId, playerId, targets, xAmount, repeatCount } = context.params;
       const { zones } = context;
 
-      deductCost(draft, playerId, cardId, { targets, xAmount }, createMetaAccessor(context.cards));
+      const repeatN = Math.max(0, repeatCount ?? 0);
+      deductCost(
+        draft,
+        playerId,
+        cardId,
+        { repeatCount: repeatN, targets, xAmount },
+        createMetaAccessor(context.cards),
+      );
 
       // Look up spell effect from card definition
       const registry = getGlobalCardRegistry();
@@ -592,14 +738,24 @@ export const cardPlayMoves: Partial<
       // For X-cost spells, wrap the effect so the chosen X value travels
       // With it through the chain. The effect executor reads `variables.x`
       // When resolving `{ variable: "x" }` amount expressions.
+      // For Repeat spells, we wrap the effect in a `sequence` that
+      // Repeats the original effect (1 + repeatCount) times. This
+      // Executes during chain resolution exactly once per repeat.
       const xValue = Math.max(0, xAmount ?? 0);
-      const effectToStore =
-        xValue > 0 && spellEffect
-          ? ({
-              ...(spellEffect as Record<string, unknown>),
-              _variables: { x: xValue },
-            } as unknown)
-          : spellEffect;
+      let effectToStore: unknown = spellEffect;
+      if (spellEffect && repeatN > 0) {
+        const repeatedEffects = Array.from({ length: 1 + repeatN }, () => spellEffect);
+        effectToStore = {
+          effects: repeatedEffects,
+          type: "sequence",
+        };
+      }
+      if (xValue > 0 && effectToStore) {
+        effectToStore = {
+          ...(effectToStore as Record<string, unknown>),
+          _variables: { x: xValue },
+        };
+      }
 
       // Add spell to the chain (rule 537)
       const interaction = draft.interaction ?? createInteractionState();
@@ -610,7 +766,9 @@ export const cardPlayMoves: Partial<
         turnOrder,
       );
 
-      // Fire triggers
+      // Fire triggers BEFORE incrementing the Rule-724 counter (see
+      // Comment in playUnit). Legion on this spell must consult plays
+      // Made EARLIER in the turn.
       fireTriggers(
         { cardId, playerId, type: "play-spell" },
         { cards: context.cards, counters: context.counters, draft, zones },
@@ -619,6 +777,12 @@ export const cardPlayMoves: Partial<
         { cardId, cardType: "spell", playerId, type: "play-card" },
         { cards: context.cards, counters: context.counters, draft, zones },
       );
+
+      // Rule 724 (Legion) tracker: count this spell play so subsequent
+      // Cards can satisfy their Legion conditions.
+      if (draft.cardsPlayedThisTurn) {
+        draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
+      }
 
       // Move spell to trash (it resolves from the chain later)
       zones.moveCard({
@@ -696,7 +860,11 @@ export const cardPlayMoves: Partial<
   },
 
   /**
-   * Reveal and play a hidden card
+   * Reveal and play a hidden card (rule 723.1.c.3).
+   *
+   * Playing a card from facedown OPENS a chain. For spell cards this
+   * means we add a chain item (same as playSpell). For unit/gear cards
+   * we move them to the appropriate zone (battlefield / base).
    */
   revealHidden: {
     condition: (state, context) => {
@@ -706,23 +874,31 @@ export const cardPlayMoves: Partial<
       if (state.pendingChoice) {
         return false;
       }
+      const meta = context.cards.getCardMeta(context.params.cardId as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      if (!meta?.hidden) {
+        return false;
+      }
+      const owner = context.cards.getCardOwner(context.params.cardId as CoreCardId);
+      if (owner !== context.params.playerId) {
+        return false;
+      }
       return true;
     },
-    reducer: (_draft, context) => {
-      const { cardId } = context.params;
+    reducer: (draft, context) => {
+      const { cardId, playerId } = context.params;
       const { zones, counters, cards } = context;
 
       const meta = cards.getCardMeta(cardId as CoreCardId) as Partial<RiftboundCardMeta>;
       const battlefieldId = meta.hiddenAt;
 
-      if (battlefieldId) {
-        const battlefieldZoneId = getBattlefieldZoneId(battlefieldId);
-        zones.moveCard({
-          cardId: cardId as CoreCardId,
-          targetZoneId: battlefieldZoneId as CoreZoneId,
-        });
-      }
+      const registry = getGlobalCardRegistry();
+      const def = registry.get(cardId);
+      const cardType = def?.cardType;
 
+      // Clear hidden state — the card is no longer facedown regardless
+      // Of its eventual destination.
       counters.setFlag(cardId as CoreCardId, "hidden", false);
       cards.updateCardMeta(
         cardId as CoreCardId,
@@ -731,6 +907,51 @@ export const cardPlayMoves: Partial<
           hiddenAt: undefined,
         } as Partial<RiftboundCardMeta>,
       );
+
+      if (cardType === "spell") {
+        // Rule 723.1.c.3: playing a card from facedown opens a chain.
+        // Push the spell onto the chain and move the physical card to
+        // Trash (where resolved spells live).
+        const abilities = registry.getAbilities(cardId) ?? [];
+        const spellAbility = abilities.find((a) => a.type === "spell");
+        const spellEffect = spellAbility?.effect;
+        const interaction = draft.interaction ?? createInteractionState();
+        const turnOrder = Object.keys(draft.players);
+        draft.interaction = addToChain(
+          interaction,
+          { cardId, controller: playerId, effect: spellEffect, type: "spell" },
+          turnOrder,
+        );
+        zones.moveCard({
+          cardId: cardId as CoreCardId,
+          targetZoneId: "trash" as CoreZoneId,
+        });
+        fireTriggers({ cardId, playerId, type: "play-spell" }, { cards, counters, draft, zones });
+        fireTriggers(
+          { cardId, cardType: "spell", playerId, type: "play-card" },
+          { cards, counters, draft, zones },
+        );
+        return;
+      }
+
+      // Unit / gear / equipment: move to the associated battlefield's
+      // Physical zone. The card becomes face-up and "in play" without
+      // Going through the chain.
+      if (battlefieldId) {
+        const battlefieldZoneId = getBattlefieldZoneId(battlefieldId);
+        zones.moveCard({
+          cardId: cardId as CoreCardId,
+          targetZoneId: battlefieldZoneId as CoreZoneId,
+        });
+      }
+
+      if (cardType === "unit") {
+        fireTriggers({ cardId, playerId, type: "play-self" }, { cards, counters, draft, zones });
+        fireTriggers(
+          { cardId, cardType: "unit", playerId, type: "play-card" },
+          { cards, counters, draft, zones },
+        );
+      }
     },
   },
 
