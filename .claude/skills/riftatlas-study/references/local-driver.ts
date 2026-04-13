@@ -159,6 +159,18 @@ async function dumpCheckpoint(page: Page, label: Checkpoint) {
       )
         ? (gs!.zones as Record<string, unknown[]>).runePool.length
         : "not-array",
+      runeDeckZoneLen: Array.isArray(
+        (gs?.zones as Record<string, unknown[]> | undefined)?.runeDeck,
+      )
+        ? (gs!.zones as Record<string, unknown[]>).runeDeck.length
+        : "not-array",
+      runeDeckOwners: Array.isArray(
+        (gs?.zones as Record<string, { owner?: string }[]> | undefined)?.runeDeck,
+      )
+        ? (gs!.zones as Record<string, { owner?: string }[]>).runeDeck
+            .slice(0, 3)
+            .map((c) => c.owner)
+        : null,
       zoneKeys: gs?.zones ? Object.keys(gs.zones as object) : null,
     };
   });
