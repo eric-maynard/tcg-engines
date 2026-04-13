@@ -298,3 +298,263 @@ function hidePregame() {
   document.getElementById("pregameOverlay")?.classList.remove("visible");
   document.getElementById("gameSidebar")?.classList.remove("hidden");
 }
+
+/* ============================================================
+   W14 — Non-modal Sideboard Overlay
+   ------------------------------------------------------------
+   Renders a centered card inside #game-scale-wrapper so the
+   live game board remains visible (dimmed) behind the overlay.
+   MUST stay inside the wrapper so scale-to-fit applies.
+   Do NOT use position: fixed.
+
+   The server does not yet emit a `sideboard` phase (see
+   server.ts pregame phases: battlefield_select | mulligan |
+   ready). This is UI scaffolding — call
+   window.showSideboardOverlayDebug() to preview it manually,
+   or once the engine emits `gameState.phase === 'sideboard'`
+   (or `pregame.phase === 'sideboard'`), maybeRenderSideboardOverlay
+   will pick it up automatically.
+   ============================================================ */
+
+/**
+ * Build a card row (thumbnail, qty, name, click-to-swap).
+ * swapHandler is invoked with (cardEntry) when row is clicked,
+ * or null to render as non-interactive.
+ */
+function buildSideboardRow(entry, swapHandler) {
+  const row = document.createElement("div");
+  row.className = "sideboard-overlay__row";
+  if (swapHandler) {
+    row.style.cursor = "pointer";
+    row.addEventListener("click", () => swapHandler(entry));
+  }
+
+  const thumb = document.createElement("div");
+  thumb.className = "sideboard-overlay__thumb";
+  const defId = (entry.definitionId || entry.id || "").replace(/^player-[12]-/, "");
+  if (defId) {
+    const img = document.createElement("img");
+    img.src = `/card-image/${defId}`;
+    img.alt = entry.name || defId;
+    img.onerror = () => {
+      img.style.display = "none";
+    };
+    thumb.appendChild(img);
+  }
+
+  const qty = document.createElement("div");
+  qty.className = "sideboard-overlay__qty";
+  qty.textContent = `x${entry.qty ?? 1}`;
+
+  const name = document.createElement("div");
+  name.className = "sideboard-overlay__name";
+  name.textContent = entry.name || defId || "Unknown";
+
+  row.appendChild(thumb);
+  row.appendChild(qty);
+  row.appendChild(name);
+  return row;
+}
+
+/**
+ * Collect main-deck and sideboard entries for the viewing player.
+ * Falls back to empty arrays if the server hasn't wired a sideboard
+ * zone yet.
+ */
+function collectSideboardData(state) {
+  const main = [];
+  const side = [];
+  if (!state || !state.zones) return { main, side };
+
+  const groupByDef = (cards) => {
+    const map = new Map();
+    for (const c of cards) {
+      if (c.owner && c.owner !== viewingPlayer) continue;
+      const key = c.definitionId || c.id;
+      const existing = map.get(key);
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        map.set(key, {
+          id: c.id,
+          definitionId: c.definitionId,
+          name: c.name || c.definitionId || "",
+          qty: 1,
+        });
+      }
+    }
+    return [...map.values()];
+  };
+
+  if (Array.isArray(state.zones.deck)) {
+    main.push(...groupByDef(state.zones.deck));
+  }
+  if (Array.isArray(state.zones.sideboard)) {
+    side.push(...groupByDef(state.zones.sideboard));
+  }
+  return { main, side };
+}
+
+/**
+ * Render the sideboard overlay into #sideboard-overlay-mount.
+ * Pass opts.debug = true to render with demo data when no zones exist.
+ */
+function renderSideboardOverlay(state, opts = {}) {
+  const mount = document.getElementById("sideboard-overlay-mount");
+  if (!mount) return;
+
+  // Tear down any previous render.
+  mount.innerHTML = "";
+
+  let { main, side } = collectSideboardData(state);
+
+  if (opts.debug && main.length === 0 && side.length === 0) {
+    main = [
+      { id: "demo-main-1", definitionId: "demo-card-1", name: "Demo Main Card A", qty: 3 },
+      { id: "demo-main-2", definitionId: "demo-card-2", name: "Demo Main Card B", qty: 2 },
+      { id: "demo-main-3", definitionId: "demo-card-3", name: "Demo Main Card C", qty: 4 },
+    ];
+    side = [
+      { id: "demo-sb-1", definitionId: "demo-card-4", name: "Demo Sideboard X", qty: 2 },
+      { id: "demo-sb-2", definitionId: "demo-card-5", name: "Demo Sideboard Y", qty: 1 },
+    ];
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "sideboard-overlay";
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "sideboard-overlay__backdrop";
+  overlay.appendChild(backdrop);
+
+  const card = document.createElement("div");
+  card.className = "sideboard-overlay__card";
+
+  const title = document.createElement("div");
+  title.className = "sideboard-overlay__title";
+  title.textContent = "Sideboard";
+  card.appendChild(title);
+
+  const subtitle = document.createElement("div");
+  subtitle.className = "sideboard-overlay__subtitle";
+  subtitle.textContent =
+    "Swap cards between your main deck and sideboard, then lock in your configuration.";
+  card.appendChild(subtitle);
+
+  const columns = document.createElement("div");
+  columns.className = "sideboard-overlay__columns";
+
+  // Swap handler: if a real engine move exists, dispatch it;
+  // otherwise log and no-op. The engine move name is speculative
+  // (`sideboard_swap`) — once the engine lands the phase, wire it here.
+  const swap = (fromZone, entry) => {
+    if (typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "sideboard_swap",
+          fromZone,
+          cardId: entry.id,
+          definitionId: entry.definitionId,
+        }),
+      );
+    } else {
+      console.log("[W14] sideboard swap (no-op — ws closed)", fromZone, entry);
+    }
+  };
+
+  const mainCol = document.createElement("div");
+  mainCol.className = "sideboard-overlay__col";
+  const mainHeader = document.createElement("div");
+  mainHeader.className = "sideboard-overlay__col-header";
+  mainHeader.textContent = `Main Deck (${main.reduce((s, e) => s + (e.qty ?? 1), 0)})`;
+  mainCol.appendChild(mainHeader);
+  const mainList = document.createElement("div");
+  mainList.className = "sideboard-overlay__list";
+  for (const entry of main) {
+    mainList.appendChild(buildSideboardRow(entry, (e) => swap("deck", e)));
+  }
+  if (main.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "sideboard-overlay__empty";
+    empty.textContent = "No cards in main deck.";
+    mainList.appendChild(empty);
+  }
+  mainCol.appendChild(mainList);
+
+  const sideCol = document.createElement("div");
+  sideCol.className = "sideboard-overlay__col";
+  const sideHeader = document.createElement("div");
+  sideHeader.className = "sideboard-overlay__col-header";
+  sideHeader.textContent = `Sideboard (${side.reduce((s, e) => s + (e.qty ?? 1), 0)})`;
+  sideCol.appendChild(sideHeader);
+  const sideList = document.createElement("div");
+  sideList.className = "sideboard-overlay__list";
+  for (const entry of side) {
+    sideList.appendChild(buildSideboardRow(entry, (e) => swap("sideboard", e)));
+  }
+  if (side.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "sideboard-overlay__empty";
+    empty.textContent = "Sideboard is empty.";
+    sideList.appendChild(empty);
+  }
+  sideCol.appendChild(sideList);
+
+  columns.appendChild(mainCol);
+  columns.appendChild(sideCol);
+  card.appendChild(columns);
+
+  const lockBtn = document.createElement("button");
+  lockBtn.className = "sideboard-overlay__lock-btn";
+  lockBtn.type = "button";
+  lockBtn.textContent = "Lock In Sideboard";
+  lockBtn.addEventListener("click", () => {
+    if (typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "sideboard_lock_in" }));
+    } else {
+      console.log("[W14] lock in sideboard (stub — no ws move available)");
+    }
+    hideSideboardOverlay();
+  });
+  card.appendChild(lockBtn);
+
+  overlay.appendChild(card);
+  mount.appendChild(overlay);
+  mount.classList.add("visible");
+}
+
+function hideSideboardOverlay() {
+  const mount = document.getElementById("sideboard-overlay-mount");
+  if (!mount) return;
+  mount.innerHTML = "";
+  mount.classList.remove("visible");
+}
+
+/**
+ * Call from the game_state message handler to sync overlay
+ * visibility to the current phase. Safe to call on every tick.
+ */
+function maybeRenderSideboardOverlay(state, pregame) {
+  const isSideboardPhase =
+    (state && state.phase === "sideboard") ||
+    (pregame && pregame.phase === "sideboard");
+  if (isSideboardPhase) {
+    renderSideboardOverlay(state);
+  } else {
+    const mount = document.getElementById("sideboard-overlay-mount");
+    if (mount && mount.classList.contains("visible")) {
+      hideSideboardOverlay();
+    }
+  }
+}
+
+// Debug entry point — lets us preview the overlay without a live
+// server-side sideboard phase. Once the engine supports the phase,
+// remove this or gate it behind a build flag.
+if (typeof window !== "undefined") {
+  window.showSideboardOverlayDebug = function () {
+    const state = typeof gameState !== "undefined" ? gameState : null;
+    renderSideboardOverlay(state, { debug: true });
+  };
+  window.hideSideboardOverlay = hideSideboardOverlay;
+}
