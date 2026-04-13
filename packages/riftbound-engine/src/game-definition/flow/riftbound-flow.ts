@@ -355,15 +355,13 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 )[0];
 
                 if (topRune) {
+                  // Channeled runes go to the runePool zone (not base, which
+                  // Is for units/gear). They enter ready and the player must
+                  // Exhaust them via the exhaustRune move to get energy.
                   context.zones.moveCard({
                     cardId: topRune,
-                    targetZoneId: "base" as CoreZoneId,
+                    targetZoneId: "runePool" as CoreZoneId,
                   });
-
-                  const pool = context.state.runePools[playerId];
-                  if (pool) {
-                    pool.energy += 1;
-                  }
                 }
               }
             },

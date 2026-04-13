@@ -1,252 +1,237 @@
 ---
 name: riftatlas-study
-description: Play a Riftbound game on play.riftatlas.com via Playwright and document every UI feature to identify gaps between their UI and our riftbound-app. Use when the goal is to study Rift Atlas's UI patterns for implementation reference — NOT to clone the game. Output is a structured observation log with prioritized gaps and an implementation plan.
+description: Side-by-side runtime comparison of play.riftatlas.com and our local riftbound-app. Drives both UIs to equivalent game checkpoints and structurally diffs each region (rune pool, hand, battlefields, log, chain) to flag MISSING features AND BROKEN rendering. Use when auditing UI parity, hunting runtime regressions in our app, or producing a prioritized gap report. NOT for rules questions or for cloning pixel-for-pixel.
 ---
 
-# Rift Atlas UI Study
+# Rift Atlas ↔ Riftbound-App Comparison
 
-Play a live game against a human operator on `play.riftatlas.com` via Playwright, observe every UI feature, and write a structured gap analysis. The goal is to inform improvements to our `apps/riftbound-app`, which has a stronger rules engine but worse UI.
+Drive **both** `play.riftatlas.com` and our `apps/riftbound-app` (goldfish mode) via Playwright, march them to equivalent checkpoints, and structurally diff the rendered UI. Produces a report split into two categories:
+
+- **Missing** — Rift Atlas renders something meaningful, our app renders nothing.
+- **Broken** — our app has the DOM container but it is empty, clipped, misaligned, or stale relative to Rift Atlas at the equivalent checkpoint.
+
+**Why this matters.** A prior single-sided study (`.ai_memory/riftatlas-ui-study.md`) documented Rift Atlas in isolation and inferred gaps from memory/code-read of our app. That methodology is **blind to runtime regressions** — e.g., an empty `#player-runePool` at turn 1 looks identical to "not implemented yet" if you never actually boot our app. Always drive both.
 
 ## When to use
 
-- User wants to study Rift Atlas's UI/UX patterns for reference
-- User wants to identify specific features we should implement
-- User wants to produce an actionable plan for UI improvement work
-- User wants screenshots + a narrative log of gameplay flow
+- Auditing UI parity after any multi-file change to the renderer, game flow, or engine
+- Producing a prioritized gap report for UI workstreams
+- Hunting a suspected regression in our app's rendering
+- Validating that shipped workstreams still hold up vs. Rift Atlas's latest
 
 ## When NOT to use
 
-- For rules questions → use `riftbound-rules` skill
-- For clone/reimplementation — we're studying, not copying pixel-for-pixel
-- For running automated QA on our own app → use `monkey-test` or `visual-monkey-test`
-
-## Mode: human operator vs. two-agent (future)
-
-**Current mode: human operator.** You play one side through Playwright; a human operator (logged in on a separate machine) plays the other side. You wait for their moves, observe the opponent state, and continue your own turns.
-
-**Future mode: two-agent** (not yet implemented). Two Claude instances, each controlling one side, playing against each other. This unlocks 24/7 observation sessions without a human in the loop. See the `future-two-agent.md` reference.
+- Rules questions → `riftbound-rules`
+- Running automated gameplay QA on our app only → `visual-monkey-test` or `monkey-test`
+- Cloning Rift Atlas pixel-for-pixel (we're not)
 
 ## Prerequisites
 
-- Playwright MCP tools available (check for `mcp__playwright__*`)
-- User has authenticated and opened a game on `play.riftatlas.com/game` (you cannot authenticate yourself — the login flow is handled by the user)
-- User has told you which side you are (typically "rifty" or "Eric" — ask if unclear)
+- Playwright available (MCP tools `mcp__playwright__*`, or direct `bun + playwright` scripting — both work)
+- **User has an authenticated tab open on `play.riftatlas.com/game`** (we can't log in for them)
+- **Our dev server running on `localhost:3000` with `SANDBOX_ENABLED=true`** (goldfish mode)
+- User has told us which side they are on Rift Atlas
 
-## Artifacts you produce
+## The deck problem (read this before writing diff code)
 
-1. **`.ai_memory/riftatlas-ui-study.md`** — the observation log, phase by phase
-2. **`riftatlas-*.png`** in repo root — screenshots at each major UI moment
-3. **`.ai_memory/riftatlas-ui-implementation-plan.md`** — the actionable gaps report, only on first run or when explicitly refreshing
-4. **Final summary in conversation** — top 5 gaps prioritized
+**The two apps will NEVER have identical decks.** Rift Atlas games use the user's deck and opponent's deck; our goldfish uses the default starter. That means comparisons must be **structural**, not card-identity-based:
+
+| ✗ Don't compare | ✓ Do compare |
+|---|---|
+| "Both apps show 'Mind Rune' in pool" | "Both apps render N ≥ 1 rune card elements in the pool at turn 1 main" |
+| "Hand has same 5 cards" | "Hand has ≥ 4 card elements with face images and onclick handlers" |
+| "Same battlefield picked" | "Battlefield row has 2 battlefield slots with controller state visible" |
+| Pixel diff | Per-region DOM presence, children count, bounding-box non-zero, interactive affordances present |
+
+Anything that requires specific card identity goes in a **manual qualitative note**, not the automated diff.
+
+## Checkpoint model
+
+Both UIs are marched to the same **named checkpoints** — states defined by phase, not by board contents:
+
+| Checkpoint | How we reach it in our app | How the user reaches it in Rift Atlas |
+|---|---|---|
+| `C0_lobby` | Click Goldfish → pick default deck → Start | (user just opened lobby) |
+| `C1_battlefield_select` | wait for pregame | (pregame) |
+| `C2_mulligan` | after battlefield pick | (pregame) |
+| `C3_turn1_main` | keep hand → land in main phase | after mulligan |
+| `C4_after_first_play` | pass focus with 1+ unit in base or on a battlefield | after their own first play |
+| `C5_showdown_open` | move unit to opponent battlefield, trigger showdown | after attacking |
+| `C6_chain_active` | play a spell with focus to opponent | (when both sides play reactive spells) |
+| `C7_conquer` | win a showdown | (after conquer) |
+| `C8_endphase` | click End Turn | (end of their turn) |
+
+At each checkpoint, we screenshot both apps and run a **region diff** (next section).
+
+## Region diff: what we compare
+
+For every checkpoint, inspect both DOMs for each region and record presence + populated state. The regions:
+
+| Region | Our selector | What to check |
+|---|---|---|
+| Opponent hand strip | `#opponent-hand` | child count > 0, card backs visible |
+| Opponent resources | `#opponent-runePool`, resource bar region | rune pool children > 0 at turn ≥ 1, energy/power counters present |
+| Battlefield row | `#battlefieldRow` | 2 battlefield cards, controller indicator, unit slots |
+| Chain panel | `#chainPanel` / sidebar chain | chain items rendered when non-empty |
+| Player base | `#player-base` | units rendered with state (exhausted, damaged, etc.) |
+| Resource bar | `#resourceBar` | energy/power counters visible |
+| **Player rune pool** | `#player-runePool` | **children > 0 at turn ≥ 1 main** — the regression-magnet region |
+| Player hand | `#player-hand` | child count > 0, hover preview works, Auto-Pay affordance |
+| Main / rune deck | `#player-decks` | both deck stacks rendered with counts |
+| Log | `#gameLog` | entries present after any action |
+| Phase bar | `#phaseBar` | current phase + active player visible |
+| Turn/timer | sidebar | turn number + name visible |
+
+For each region, produce one of five verdicts:
+
+- `✓ present` — our app has it, non-empty, roughly matching Rift Atlas's structural footprint
+- `⚠ broken` — we have the container but it is empty / clipped / zero-area / stale
+- `✗ missing` — we don't render anything for this region at all
+- `+ ours-only` — we render something they don't (rare; note it but don't "fix")
+- `○ N/A` — checkpoint doesn't exercise this region
 
 ## Workflow
 
-### Phase 0: Orient
+### Phase 0: Boot both apps
 
-1. Ask the user:
-   - Which tab has the game? (they may have multiple tabs open)
-   - Which side are you playing? ("rifty" / "Eric" / other — whoever is logged in on this browser)
-   - Is a game already in progress or do they want you to help create/join one?
-2. Navigate or switch tabs to `https://play.riftatlas.com/game`
-3. Take a screenshot + snapshot to confirm state.
+1. **Our app**: check `curl -sf http://localhost:3000/ -o /dev/null`. If down, start: `cd apps/riftbound-app && SANDBOX_ENABLED=true bun run server.ts` (run_in_background). Verify `curl -s -X POST http://localhost:3000/api/lobby/create -H 'content-type: application/json' -d '{"sandbox":true}'` returns a lobby code (not a 403).
+2. **Rift Atlas**: ask the user to confirm their authed tab is open on `play.riftatlas.com/game`. You cannot log in yourself.
+3. Confirm the two Playwright contexts: ours (headless is fine, scripted) + theirs (use the user's existing browser via Playwright MCP, DO NOT reload/clobber their session).
 
-### Phase 0.5: Read OUR current app state (CRITICAL — do not skip)
+### Phase 1: Drive our app to each checkpoint
 
-**Before you flag any gap, you must know what OUR app currently does.** The whole point of this skill is to compare Rift Atlas against the current state of `apps/riftbound-app/` — not against a cached snapshot.
+Use a `bun` playwright script (template in `references/local-driver.ts` — see reference files) to automate our app through `C0 → C8`. At each checkpoint:
 
-Before taking any Rift Atlas observations, skim our current implementation:
+1. Screenshot to `/tmp/riftatlas-compare/ours-<checkpoint>.png`
+2. Dump region DOM via `page.evaluate` into `/tmp/riftatlas-compare/ours-<checkpoint>.json`
+3. Wait for user's Rift Atlas side to reach the equivalent checkpoint (or note "user-side not yet at C_n, skip" if they're behind)
 
-1. **`apps/riftbound-app/public/js/gameplay/renderer.js`** — what zones we render, state indicators, hover behavior
-2. **`apps/riftbound-app/public/js/gameplay/interactions.js`** — click/drag handlers
-3. **`apps/riftbound-app/public/js/gameplay/hotkeys.js`** (if exists) — keybindings
-4. **`apps/riftbound-app/public/js/gameplay/help-modal.js`** (if exists) — help UI
-5. **`apps/riftbound-app/public/js/gameplay/layout.js`** (if exists) — responsive strategy
-6. **`apps/riftbound-app/public/js/gameplay/auto-pay.js`** (if exists) — cost solver
-7. **`apps/riftbound-app/public/js/gameplay/drag-drop.js`** (if exists) — drag infrastructure
-8. **`apps/riftbound-app/public/css/gameplay.css`** — scan for `.card--exhausted`, `.hover-preview`, `#game-scale-wrapper`, `.armed-mode`, etc.
-9. **`apps/riftbound-app/public/gameplay.html`** — check for `#hover-preview`, `#helpInfoBtn`, `#game-scale-wrapper`
-10. **`apps/riftbound-app/server.ts`** — scan for narration emit hooks, `/api/game/:id/move`, rewind endpoint
+Our side is deterministic (goldfish plays itself) so this is scriptable end to end. See `references/local-driver.ts` for the concrete script — it inlines `window.__gs = gameState` via `addScriptTag` because classic-script `let` bindings are not attached to `window`.
 
-Build a mental checklist: "We already have X, Y, Z. We don't yet have A, B, C." Then during Rift Atlas observation, only flag features in the "don't yet have" bucket.
+### Phase 2: Drive / observe Rift Atlas at each checkpoint
 
-**A feature that exists in our code is NOT a gap, even if it's wired differently or less polished.** Note it as "implemented — consider polish" rather than a gap.
+Via Playwright MCP against the user's tab:
 
-### Also read the implementation plan for deferred items
+1. Snapshot DOM + screenshot to `/tmp/riftatlas-compare/theirs-<checkpoint>.png`
+2. Dump the same region set into `/tmp/riftatlas-compare/theirs-<checkpoint>.json`
+3. **Do not interact on their turn** — observe only
 
-`.ai_memory/riftatlas-ui-implementation-plan.md` lists the workstreams we planned. Anything marked as merged/completed in git history (check `git log --grep 'feat(riftbound-app)' --oneline`) is done. Anything NOT yet merged is a real gap.
+Their side is human-paced. Use the downtime to run the diff on previously-captured checkpoints.
 
-As of the most recent audit (2026-04-12), W1–W7 are merged. W8 (rewind), W9 (inline showdown), W10 (token/meta panels) are still deferred. New audits should confirm W1–W7 still hold up in our codebase, and focus new gap-hunting on W8+, plus anything Rift Atlas has added since.
+### Phase 3: Diff
 
-### Phase 1: Establish observation targets
-
-Before any interaction, scan the DOM for these phase markers and document each as you encounter them:
-
-- **Sideboarding** (`Lock In Sideboard` button present)
-- **Battlefield selection** (`Choose Battlefield` modal)
-- **Mulligan** (`Choose Your Mulligan` modal, `Keep Hand` button)
-- **Main game board** (Turn indicator, hand, battlefields, score tracks)
-- **Chain / Showdown active** (Chain panel count > 0, or `Showdown in progress` banner)
-
-### Phase 2: Open the hotkey reference
-
-**CRITICAL FIRST STEP in main game:** Click the `i` icon in the sidebar (or `Show game info and hotkeys` button). This reveals the full keymap in one dialog. Copy the keymap to your observation log immediately — it answers 80% of "how do I do X" questions without needing to explore.
-
-### Phase 3: Play turn by turn with observation
-
-On each of your turns:
-1. Take a screenshot at turn start
-2. Snapshot DOM
-3. Interact (click a card, drag to zone, press hotkey)
-4. Screenshot after action
-5. Compare before/after state in the log
-
-On opponent's turns:
-1. Wait for their action (poll via `browser_wait_for time`)
-2. Snapshot DOM
-3. Note any UI changes (new cards, log entries, chain items)
-4. Do NOT interact during opponent turn — your actions are visible in their log and can cause confusion
-
-### Phase 4: Test specific features (one at a time)
-
-Each of these deserves its own experiment:
-
-| Feature | How to test | What to observe |
-|---|---|---|
-| Hotkeys | Open help modal via `i` icon | Copy the full keymap |
-| Rewind | Take any action, click Rewind button | Does it log as its own entry? Does history stay visible? |
-| Peek top | Right-click main deck | What actions are offered (Play, Recycle, On Top, To hand)? |
-| Hover preview | Hover any card in hand | Does a large preview appear in a reserved slot? |
-| Token panel | Click `+` on a zone | What tokens are offered per zone? |
-| Counter/buff | Press and hold C or B | Does the UI enter an "armed" mode? |
-| Emote wheel | Press and hold E | Does a radial menu appear? |
-| Ping | Press and hold P, click a card | Does it ping the card for the opponent? |
-| Resize | Ask the user to resize the window | Does the UI reflow or scale? Document which |
-| Drag to play | Drag a hand card to base | Does it play? To a battlefield? |
-| Drag to equip | Drag equipment to a unit | Does it equip? Is there an explicit Equip button too? |
-
-### Phase 5: Respect the shared board
-
-**Rules of engagement** (you are a visible participant, not a silent observer):
-
-- Every action you take is logged and visible to the human opponent
-- Do NOT spam actions during their turn
-- Do NOT peek at your deck repeatedly — it's visible in their log
-- If you make a mistake, Rewind and explain in chat (or let the user know so they can reset)
-- If you're stuck waiting for the opponent, document what you're seeing rather than interacting
-
-### Phase 6: Write the observation log
-
-Structure `.ai_memory/riftatlas-ui-study.md` by phase:
+For each checkpoint, for each region, run the 5-verdict classifier from the table above. Write one row per region per checkpoint into `.ai_memory/riftatlas-compare.md`:
 
 ```markdown
-# Rift Atlas UI Study
+## C3_turn1_main
 
-**Goal:** (one line)
-**Method:** (one line)
-**Context:** (one paragraph)
-
-## Phase 1: Sideboarding Screen
-### Layout (what elements exist)
-### Background (what's visible behind modal)
-### Gaps vs. our app (compare to apps/riftbound-app)
-
-## Phase 2: ...
+| Region | Verdict | Notes |
+|---|---|---|
+| Player rune pool | ⚠ broken | `#player-runePool` container present (151px tall) but 0 children. Rift Atlas shows 2 channeled rune cards. Root cause? channel phase skipped on turn 1? |
+| Player hand | ✓ present | 5 cards, hover preview works |
+| Battlefield row | ✓ present | 2 battlefields rendered |
+| Chain panel | ○ N/A | no chain at this checkpoint |
+| ... |
 ```
 
-After each major observation, add a **Gaps vs. our app** subsection that lists concrete differences you can name. Err on the side of specificity — "their log shows rune identity on board" is more useful than "they have a richer log."
+### Phase 4: Root-cause triage (optional, only if asked)
 
-**Critical: before writing any gap, verify it by inspecting OUR current code (Phase 0.5).** If we already have the feature, write "✓ already implemented in <file>:<symbol>" instead of flagging a gap. This keeps the study file honest on re-runs: new gaps surface, old solved gaps don't reappear as noise.
+Each `⚠ broken` row is a bug we own. For each, briefly note:
+- Which file renders that region (`renderer.js:<line>` or equivalent)
+- Whether the DOM is empty because game state is wrong (engine bug) or because the renderer is wrong (UI bug)
+- Suggested next step: delegate to `visual-monkey-test`, `debugger`, or a targeted rules-audit test
 
-### Phase 7: Produce the implementation plan
+Do NOT attempt the fix inside this skill — the skill's job is to find regressions, not resolve them.
 
-Only on first run or when the user asks for a refresh, write `.ai_memory/riftatlas-ui-implementation-plan.md` with:
+### Phase 5: Write the report
 
-1. **Ground rules** for implementation agents
-2. **Workstream dependency graph** (ASCII diagram)
-3. **One workstream per feature** with:
-   - Priority tier (1 = biggest impact, 3 = polish)
-   - Effort estimate (small / medium / large)
-   - Dependencies on other workstreams
-   - Files to touch
-   - Spec (numbered steps)
-   - Acceptance criteria
-   - Rift Atlas reference (screenshot filename)
-4. **Anti-patterns** — things Rift Atlas does poorly that we should NOT copy
-5. **Work ordering recommendations** for both single-agent and multi-agent execution
-6. **Delivery checklist** per workstream
+Single-file output: `.ai_memory/riftatlas-compare.md` with:
 
-### Phase 8: Top 5 summary for the user
+1. **Run metadata** — date, commit, checkpoints reached, skipped
+2. **Summary matrix** — one row per checkpoint × column per region, verdict cells
+3. **Missing features** — expanded prose on every `✗ missing` (prioritized)
+4. **Broken rendering** — expanded prose on every `⚠ broken`, with file pointers (highest priority — these are regressions)
+5. **Manual qualitative notes** — things that need human eyes (animations, timing, discoverability)
+6. **Delta from last run** — if previous `.ai_memory/riftatlas-compare.md` exists, note which verdicts changed
 
-End the session by posting a concise summary to the user in chat:
+### Phase 6: Chat summary
+
+Keep it short:
 
 ```
-Rift Atlas UI Study — top 5 gaps
+Rift Atlas ↔ Riftbound-App comparison (8 checkpoints)
 
-1. <feature name> — <why it matters> — <effort>
-2. ...
-5. ...
+BROKEN (regressions — fix first):
+  1. <region> @ <checkpoint> — <one-line reason>
+  2. ...
 
-Observation log: .ai_memory/riftatlas-ui-study.md
-Implementation plan: .ai_memory/riftatlas-ui-implementation-plan.md
-Screenshots: riftatlas-*.png in repo root
+MISSING (feature gaps):
+  1. <region> — <effort>
+  2. ...
+
+Report: .ai_memory/riftatlas-compare.md
 ```
 
-## Common issues and fixes
+## Relationship to other artifacts
 
-### "I'm stuck waiting for the opponent"
-Normal. The human operator may be doing other things. Options:
-- Use the downtime to re-read DOM snapshots and extract observations you missed
-- Write the gap analysis prose while waiting
-- Do NOT spam clicks or reload the page
-
-### "The turn indicator says Eric's turn but I'm Eric"
-Turn indicator shows whose turn it is. If it shows the name of the player you are, IT'S YOUR TURN. Confirm with the user if unclear.
-
-### "Refs keep going stale"
-Playwright refs change after every DOM mutation. Take a fresh `mcp__playwright__browser_snapshot` before every click if it's been more than one action since your last snapshot.
-
-### "I accidentally triggered a visible action (peek, rewind, emote)"
-Apologize in conversation, note the action in the log for documentation value, and move on. The human operator can see the log and will understand it's you testing.
-
-### "A button has no ref"
-Not all elements expose refs (especially dynamic nested buttons like "Equip X"). Options:
-1. Get the parent ref and use that
-2. Use `page.getByRole('button', { name: 'X' })` via a direct Playwright call
-3. Drag instead — drag usually works on any visible card
-
-### "Equip button doesn't equip when I click the target"
-**Known Rift Atlas UX bug.** The Equip button exhausts the equipment, but clicking the target unit toggles its exhausted state instead of equipping. **Workaround: drag the equipment directly onto the target unit.** Document this as a gap we can fix in our implementation.
+- `.ai_memory/riftatlas-ui-study.md` — **single-sided study from 2026-04-10.** Kept as historical reference but superseded by this skill. Do NOT treat its "MASSIVE gaps" list as current truth — re-verify every item through a real comparison run. Its first gap ("rune identity shown on board") for example conflated *missing feature* with what we now know to be a *broken render*.
+- `.ai_memory/riftatlas-ui-implementation-plan.md` — implementation workstream plan. Still valid as a roadmap, but gap status should be refreshed from new comparison runs, not assumed.
+- `visual-monkey-test` / `monkey-test` — automated QA for our app alone. Run those after this skill identifies a `⚠ broken` verdict to get deeper runtime signal.
 
 ## Reference files
 
-This skill includes reference files in `references/`:
+- `references/local-driver.ts` — the Playwright script that drives our app to each checkpoint
+- `references/hotkeys.md` — observed Rift Atlas keymap (cached; refresh on major updates)
+- `references/ui-patterns.md` — reusable patterns worth copying
+- `references/anti-patterns.md` — things Rift Atlas does poorly
+- `references/future-two-agent.md` — future two-agent design
 
-- `hotkeys.md` — full keymap observed from the in-game help modal
-- `ui-patterns.md` — reusable UI patterns (hold-to-arm, hover preview slot, inline showdown)
-- `anti-patterns.md` — things Rift Atlas does poorly — DO NOT copy
-- `future-two-agent.md` — design notes for future two-agent mode (not yet implemented)
+## Rules of engagement on the shared Rift Atlas board
 
-Read these as needed — they cache observations from prior runs so you don't have to re-discover everything.
+The user's session is a real game visible to their opponent:
 
-## Completion report format
+- Never interact on their turn
+- Never spam peek / rewind / emote — those are visible
+- Never reload or navigate their tab
+- If you cause a visible action by accident, tell the user immediately
+
+## Common pitfalls
+
+### "Our app's `gameState` isn't on `window`"
+Correct — it's a top-level `let` in a classic script, so it's in script-scope but not on `window`. Use `page.addScriptTag({ content: "setInterval(() => { window.__gs = typeof gameState !== 'undefined' ? gameState : null; }, 100)" })` to mirror it. See `references/local-driver.ts`.
+
+### "Goldfish lobby start button never appears"
+The start button is gated on `lobby.host.hasDeck && lobby.guest.hasDeck`. You must `selectOption('#deckSelect', 'default')` AFTER clicking Goldfish and BEFORE clicking Start.
+
+### "The checkpoints drift out of sync between the two apps"
+That's fine. March each app independently through its own checkpoints, tag each snapshot with `(checkpoint, app)`, and diff only equivalent pairs. If the user-side never reaches `C6_chain_active`, mark that row skipped and move on.
+
+### "Decks differ so hand contents differ"
+By design. Compare **child counts**, **region sizes**, **affordance presence** — not card identity. See "The deck problem" section above.
+
+### "I can't tell if a region is broken or just empty at this checkpoint"
+Look at the equivalent Rift Atlas screenshot. If their version of that region is also empty at the same checkpoint, it's not broken — it's `○ N/A`. The rune pool at `C3_turn1_main` is the canonical stress test: Rift Atlas shows channeled runes, so ours should too.
+
+## Completion report
 
 ```
-Rift Atlas Study complete
-=========================
+Rift Atlas Comparison complete
+==============================
 
-Duration: ~N minutes
-Turns observed: N
-Screenshots captured: N
-Observation log: .ai_memory/riftatlas-ui-study.md (updated)
-Implementation plan: .ai_memory/riftatlas-ui-implementation-plan.md (updated / created)
+Checkpoints reached: ours N/8, theirs M/8
+Regions compared: R
+Verdicts:
+  ✓ present: N
+  ⚠ broken: N  ← these are REGRESSIONS
+  ✗ missing: N
+  + ours-only: N
 
-New observations this run:
-- <bullet 1>
-- <bullet 2>
+Top broken (fix first):
+  1. <region> @ <checkpoint> — <pointer to code>
+  2. ...
 
-Top 5 prioritized gaps:
-1. <gap> — <tier> — <effort>
-2. ...
+Top missing (feature gaps):
+  1. ...
 
-Suggested next action: dispatch agent for Workstream <N> (see implementation plan)
+Report: .ai_memory/riftatlas-compare.md
 ```

@@ -360,11 +360,14 @@ export const setupMoves: Partial<
         Object.keys(draft.players)[0] ??
         "") as PlayerId;
 
-      // Set up turn state for the start of play
+      // Set up turn state for the start of play. Start at "awaken" so the
+      // Flow manager runs through awaken -> beginning -> channel -> draw
+      // Before stopping at main. Without this, turn 1 skips channeling
+      // (no runes appear) and the player has no resources to play with.
       draft.turn = {
         activePlayer: firstPlayer,
         number: 1,
-        phase: "main",
+        phase: "awaken",
       };
 
       // Tell the flow system who the current player is
@@ -403,6 +406,49 @@ export const setupMoves: Partial<
       // Once now because the set of in-play battlefields is fixed after
       // Setup.
       applyBattlefieldPermanentEffects(draft);
+
+      // Channel the first player's opening runes inline. The flow's channel
+      // Phase hook should normally do this when entering the mainGame segment,
+      // But the segment-transition cascade does not reliably reach the channel
+      // Phase before the player gets control. Inline-channeling guarantees the
+      // First player has runes visible from move 1.
+      const firstPlayerRuneDeck = context.zones.getCardsInZone(
+        "runeDeck" as CoreZoneId,
+        firstPlayer as CorePlayerId,
+      );
+      const initialChannelCount = 2;
+      const runesToChannel = Math.min(
+        initialChannelCount,
+        firstPlayerRuneDeck.length,
+      );
+      for (let i = 0; i < runesToChannel; i++) {
+        const topRune = context.zones.getCardsInZone(
+          "runeDeck" as CoreZoneId,
+          firstPlayer as CorePlayerId,
+        )[0];
+        if (topRune) {
+          context.zones.moveCard({
+            cardId: topRune,
+            targetZoneId: "runePool" as CoreZoneId,
+          });
+        }
+      }
+
+      // Also draw the opening hand's first turn draw card (rule 515.4)
+      // For the first player so they don't start with one fewer card.
+      const firstPlayerDeck = context.zones.getCardsInZone(
+        "mainDeck" as CoreZoneId,
+        firstPlayer as CorePlayerId,
+      );
+      if (firstPlayerDeck.length > 0) {
+        const top = firstPlayerDeck[0];
+        if (top) {
+          context.zones.moveCard({
+            cardId: top,
+            targetZoneId: "hand" as CoreZoneId,
+          });
+        }
+      }
 
       // Transition flow from setup segment to mainGame segment
       context.flow?.endSegment();

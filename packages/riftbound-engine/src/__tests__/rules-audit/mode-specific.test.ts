@@ -26,14 +26,43 @@ import { describe, expect, it } from "bun:test";
 import { GAME_MODES, getGameModeConfig } from "../../modes/game-modes";
 import type { GameMode } from "../../modes/game-modes";
 import {
+  areAllies,
+  createDefault2v2Teams,
+  getTeammate,
+  getTeammates,
+  isTeamGame,
+  isTeammate,
+} from "../../operations/teams";
+import {
   P1,
   P2,
+  P3,
+  P4,
+  applyMove,
+  createBattlefield,
+  createCard,
   createDeck,
   createMinimalGameState,
   getRunesOnBoard,
   getState,
   runPhaseHook,
 } from "./helpers";
+import type { AuditEngine } from "./helpers";
+import type { RiftboundGameState } from "../../types";
+
+/**
+ * Seed a team mapping directly onto the engine's current state. Mirrors
+ * what a 2v2 Magma Chamber setup would produce: P1/P3 on team 0, P2/P4 on
+ * team 1. The helper clones the immer-frozen state and swaps it back
+ * through the internal view, so subsequent reads see the new teams.
+ */
+function seedTeams(engine: AuditEngine, teams: Record<string, number>): void {
+  const internal = engine as unknown as { currentState: RiftboundGameState };
+  const st = structuredClone(internal.currentState) as RiftboundGameState;
+  (st as { teams: Record<string, number> }).teams = teams;
+  internal.currentState = st;
+  engine.getFlowManager()?.syncState(st);
+}
 
 const ALL_MODES: readonly GameMode[] = ["duel", "match", "ffa3", "ffa4", "magmaChamber"];
 
@@ -282,8 +311,9 @@ describe("Rule 644.7: Second player channels an extra rune on their first turn",
 
     runPhaseHook(engine, "channel", "onBegin");
     // Rule 644.7: second player's first channel phase = 2 + 1 = 3 runes.
+    // Channel places runes on the board (runePool zone) but does NOT
+    // Auto-exhaust for energy (that's the exhaustRune move).
     expect(getRunesOnBoard(engine, P2).length).toBe(3);
-    expect(getState(engine).runePools[P2].energy).toBe(3);
   });
 
   it("first player channels only 2 on their first turn (rule 644.7 does not apply)", () => {
@@ -400,16 +430,171 @@ describe("Cross-mode invariants derived from rule 642", () => {
 // None of the 648.8.x sub-rules as runtime behavior yet — document.
 // ---------------------------------------------------------------------------
 
-describe("Rule 648.8: Magma Chamber team-aware behaviors (unimplemented)", () => {
-  // Deferred: engine has no concept of 'team' beyond a mode flag; all of these
-  // Rules require a runtime team mapping that flows through move validators.
-  it.todo("Rule 648.8.a: Players may play spells during their teammate's turn (engine gap: no team state)");
-  it.todo("Rule 648.8.b: Battlefield controls by a teammate do not score the team (engine gap)");
-  it.todo("Rule 648.8.c.1: Players may not hide cards at a teammate's battlefield (engine gap)");
-  it.todo("Rule 648.8.c.2: Players may not issue standard movement to a teammate's units (engine gap)");
-  it.todo("Rule 648.8.d: 'Friendly' includes game objects controlled by a teammate (engine gap)");
-  it.todo("Rule 648.8.f.1: Hands remain private information even from teammates (engine gap)");
-  it.todo("Rule 648.8.g.1: Final point via Conquer in 2v2 ignores teammate-occupied battlefields (engine gap)");
+describe("Rule 648.8: Magma Chamber team-aware behaviors", () => {
+  it("createDefault2v2Teams: [P1,P2,P3,P4] -> {P1:0, P2:1, P3:0, P4:1}", () => {
+    const teams = createDefault2v2Teams([P1, P2, P3, P4]);
+    expect(teams[P1]).toBe(0);
+    expect(teams[P2]).toBe(1);
+    expect(teams[P3]).toBe(0);
+    expect(teams[P4]).toBe(1);
+  });
+
+  it("isTeamGame: returns true when teams mapping is non-empty", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
+    expect(isTeamGame(getState(engine))).toBe(false);
+    seedTeams(engine, createDefault2v2Teams([P1, P2, P3, P4]));
+    expect(isTeamGame(getState(engine))).toBe(true);
+  });
+
+  it("getTeammate/getTeammates: P1 and P3 are teammates, P2 and P4 are teammates", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
+    seedTeams(engine, createDefault2v2Teams([P1, P2, P3, P4]));
+    const state = getState(engine);
+    expect(getTeammate(state, P1)).toBe(P3);
+    expect(getTeammate(state, P3)).toBe(P1);
+    expect(getTeammate(state, P2)).toBe(P4);
+    expect(getTeammate(state, P4)).toBe(P2);
+    expect(getTeammates(state, P1)).toEqual([P3]);
+  });
+
+  it("areAllies: teammates are allies; cross-team players are not", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
+    seedTeams(engine, createDefault2v2Teams([P1, P2, P3, P4]));
+    const state = getState(engine);
+    expect(areAllies(state, P1, P3)).toBe(true);
+    expect(areAllies(state, P2, P4)).toBe(true);
+    expect(areAllies(state, P1, P2)).toBe(false);
+    expect(areAllies(state, P1, P4)).toBe(false);
+    // Self is always allied with self.
+    expect(areAllies(state, P1, P1)).toBe(true);
+  });
+
+  it("isTeammate: excludes the player themselves; includes their teammate", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
+    seedTeams(engine, createDefault2v2Teams([P1, P2, P3, P4]));
+    const state = getState(engine);
+    expect(isTeammate(state, P1, P3)).toBe(true);
+    expect(isTeammate(state, P1, P1)).toBe(false);
+    expect(isTeammate(state, P1, P2)).toBe(false);
+  });
+
+  it("Rule 648.8.b / 630.1.a: Conquering a teammate-held battlefield awards no VP", () => {
+    // Setup: 4-player team game where P1 is active. P1 conquers bf-1 which
+    // Was previously held by P3 (their teammate). Per rule 630.1.a, no VP
+    // Is awarded because the team already controlled it.
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      playerCount: 4,
+    });
+    seedTeams(engine, createDefault2v2Teams([P1, P2, P3, P4]));
+    // Battlefield is currently controlled by P1 (as if already conquered
+    // In-state) but the previousController of the scorePoint call is P3.
+    createBattlefield(engine, "bf-1", { controller: P1 });
+
+    const before = getState(engine).players[P1].victoryPoints;
+    const result = applyMove(engine, "scorePoint", {
+      battlefieldId: "bf-1",
+      method: "conquer",
+      playerId: P1,
+      previousController: P3,
+    });
+    expect(result.success).toBe(true);
+    // No VP for conquering your teammate's battlefield.
+    expect(getState(engine).players[P1].victoryPoints).toBe(before);
+    // Still marked as scored this turn to prevent exploitation.
+    expect(getState(engine).scoredThisTurn[P1]).toContain("bf-1");
+  });
+
+  it("Rule 648.8.b / 630.1.a: Conquering an opponent-held battlefield DOES award VP in team mode", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      playerCount: 4,
+    });
+    seedTeams(engine, createDefault2v2Teams([P1, P2, P3, P4]));
+    createBattlefield(engine, "bf-1", { controller: P1 });
+
+    const before = getState(engine).players[P1].victoryPoints;
+    const result = applyMove(engine, "scorePoint", {
+      battlefieldId: "bf-1",
+      method: "conquer",
+      playerId: P1,
+      previousController: P2, // Opponent on the other team
+    });
+    expect(result.success).toBe(true);
+    expect(getState(engine).players[P1].victoryPoints).toBe(before + 1);
+  });
+
+  // Deferred: playSpell/hideCard team gating lives in cards.ts which is
+  // Owned by the card-flow agent; these rules require move-time team
+  // Checks that aren't wired yet.
+  it.todo(
+    // Deferred: cards.ts playSpell validator is off-limits for this agent
+    "Rule 648.8.a: Players may play spells during their teammate's turn (cards.ts gate not wired)",
+  );
+  it.todo(
+    // Deferred: cards.ts hideCard validator is off-limits for this agent
+    "Rule 648.8.c.1: Players may not hide cards at a teammate's battlefield (cards.ts gate not wired)",
+  );
+
+  it("Rule 648.8.c.2: standardMove already rejects moving a teammate's units (owner-equality check)", () => {
+    // StandardMove's condition enforces `owner === playerId` for every
+    // Unit being moved. In a team game this means teammates' units are
+    // Automatically rejected without needing an explicit team gate.
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      playerCount: 4,
+    });
+    seedTeams(engine, createDefault2v2Teams([P1, P2, P3, P4]));
+    createBattlefield(engine, "bf-1", { controller: null });
+
+    // P3 (teammate of P1) owns a unit in their base. P1 tries to move it.
+    createCard(engine, "teammate-unit", {
+      cardType: "unit",
+      might: 2,
+      owner: P3,
+      zone: "base",
+    });
+
+    const result = applyMove(engine, "standardMove", {
+      destination: "bf-1",
+      playerId: P1,
+      unitIds: ["teammate-unit"],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  // Deferred: 'friendly' target resolution is wired by the target-resolver
+  // Which now should include teammates' units. The target-resolver tests
+  // Own that assertion; here we spot-check the helper predicate.
+  it("Rule 648.8.d: 'friendly' predicate (areAllies) includes teammates in team games", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
+    seedTeams(engine, createDefault2v2Teams([P1, P2, P3, P4]));
+    const state = getState(engine);
+    // P1 and P3 are friendly to each other; P2 and P4 are not friendly to P1.
+    expect(areAllies(state, P1, P3)).toBe(true);
+    expect(areAllies(state, P1, P2)).toBe(false);
+    expect(areAllies(state, P1, P4)).toBe(false);
+  });
+
+  // Deferred: private-hand information-hiding lives in the views layer
+  // And is not gated on team membership in the current engine.
+  it.todo(
+    // Deferred: information hiding/views layer not in scope of this agent
+    "Rule 648.8.f.1: Hands remain private information even from teammates (views layer)",
+  );
+
+  // Deferred: final-point conquer restriction interaction with teammate
+  // Exemption requires stacking rule 632.1.b.2 (all BFs scored) with
+  // 648.8.b (teammate-held exemption). The engine exempts teammate-held
+  // Conquers from scoring entirely, but does not yet treat them as
+  // "already scored" for the final-point branch.
+  it.todo(
+    // Deferred: final-point interaction with teammate-exempt scoring
+    "Rule 648.8.g.1: Final point via Conquer in 2v2 ignores teammate-occupied battlefields",
+  );
 });
 
 // ---------------------------------------------------------------------------

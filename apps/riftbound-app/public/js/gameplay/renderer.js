@@ -1,6 +1,6 @@
 // renderer.js — Main rendering: game board, zones, cards, actions, log, chain overlay
 
-const DOMAIN_LABELS = { fury: "F", calm: "Ca", mind: "M", body: "B", chaos: "Ch", order: "O" };
+const DOMAIN_LABELS = { fury: "Fury", calm: "Calm", mind: "Mind", body: "Body", chaos: "Chaos", order: "Order" };
 const DOMAIN_ORDER = ["fury", "calm", "mind", "body", "chaos", "order"];
 
 // ============================================
@@ -783,7 +783,9 @@ function renderZones() {
     `;
   }
   function renderRuneStacks(runes) {
-    // Group by domain
+    // Group by domain — one consolidated stack per domain, regardless of count.
+    // Visual stacking caps at STACK_MAX cards but the count label always reflects
+    // The true total so players can see how many runes they actually have.
     const groups = {};
     for (const c of runes) {
       const d = (Array.isArray(c.domain) ? c.domain[0] : c.domain) || "unknown";
@@ -792,17 +794,16 @@ function renderZones() {
     let html = "";
     for (const [domain, cards] of Object.entries(groups)) {
       const color = DOMAIN_COLORS[domain] || "#a09030";
-      // Split into sub-stacks of STACK_MAX
-      for (let s = 0; s < cards.length; s += STACK_MAX) {
-        const chunk = cards.slice(s, s + STACK_MAX);
-        const stackHeight = 70 + (chunk.length - 1) * 14;
-        html += `<div class="rune-stack" style="height:${stackHeight + 16}px;">`;
-        html += `<div class="rune-stack-label" style="color:${color};">${DOMAIN_LABELS[domain] ?? domain[0].toUpperCase()}</div>`;
-        chunk.forEach((c, i) => {
-          html += renderRuneCard(c, 14 + i * 14, i + 1, color);
-        });
-        html += `</div>`;
-      }
+      const visibleCards = cards.slice(0, STACK_MAX);
+      const stackHeight = 70 + (visibleCards.length - 1) * 14;
+      const label = DOMAIN_LABELS[domain] ?? domain[0].toUpperCase();
+      const labelText = cards.length > 1 ? `${label} (${cards.length})` : label;
+      html += `<div class="rune-stack" style="min-height:${stackHeight + 18}px;height:${stackHeight + 18}px;">`;
+      html += `<div class="rune-stack-label" style="color:${color};">${labelText}</div>`;
+      visibleCards.forEach((c, i) => {
+        html += renderRuneCard(c, 16 + i * 14, i + 1, color);
+      });
+      html += `</div>`;
     }
     return html;
   }

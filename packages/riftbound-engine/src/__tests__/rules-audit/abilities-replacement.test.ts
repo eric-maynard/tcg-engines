@@ -30,7 +30,9 @@ import { describe, expect, it } from "bun:test";
 import {
   checkReplacement,
   clearConsumedReplacements,
+  findAllReplacements,
   markReplacementConsumed,
+  orderReplacementsByOwnerChoice,
 } from "../../abilities/replacement-effects";
 import type { ReplacementContext } from "../../abilities/replacement-effects";
 import {
@@ -261,15 +263,83 @@ describe("Rule 575: Multiple replacement effects — owner chooses order", () =>
     expect(["zhonyas-A", "zhonyas-B"]).toContain(matched?.sourceCardId);
   });
 
-  // Deferred: engine's checkReplacement returns first-found and does not
-  // Expose a player-choice UI hook. Correct behavior is observable (a match
-  // Is returned); the ordering rule requires an owner-selection callback.
-  it.todo(
-    "Rule 575.1: player chooses order when affected object is a player (no owner-choice hook)",
-  );
-  it.todo(
-    "Rule 575.2: turn player chooses order at uncontrolled battlefield (no owner-choice hook)",
-  );
+  // Rule 575.1: Owner of affected object chooses order. We verify the
+  // Ordering primitive: when the affected owner is specified, replacements
+  // Owned by that player come first in the returned ordering.
+  it("Rule 575.1: owner-owned replacements are ordered first when owner is chooser", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    // Two replacements apply: one owned by P1 (affected owner), one by P2.
+    createCard(engine, "p1-prevent", {
+      abilities: [preventFriendlyDeath("static")],
+      cardType: "gear",
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "p2-prevent-enemy", {
+      // P2 replacement that targets "enemy" → intercepts P1's death
+      abilities: [
+        {
+          duration: "static",
+          replacement: "prevent",
+          replaces: "die",
+          target: { controller: "enemy", type: "unit" },
+          type: "replacement",
+        },
+      ],
+      cardType: "gear",
+      owner: P2,
+      zone: "base",
+    });
+
+    const ctx = buildReplacementContext(engine) as unknown as ReplacementContext;
+    const all = findAllReplacements({ cardId: "p1-unit", owner: P1, type: "die" }, ctx);
+    expect(all.length).toBe(2);
+
+    // Owner of affected object (P1) chooses; their replacement sorts first.
+    const { chooser, ordered } = orderReplacementsByOwnerChoice(all, P1, P1);
+    expect(chooser).toBe(P1);
+    expect(ordered[0]?.sourceOwner).toBe(P1);
+    expect(ordered[1]?.sourceOwner).toBe(P2);
+  });
+
+  // Rule 575.2: When the affected object has no owner (or is an uncontrolled
+  // Battlefield/"game"), the turn player chooses the order. The helper falls
+  // Back to turnPlayer when affectedOwner is undefined.
+  it("Rule 575.2: turn player chooses order when affected object has no owner", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "p1-static", {
+      abilities: [preventFriendlyDeath("static")],
+      cardType: "gear",
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "p2-static", {
+      abilities: [
+        {
+          duration: "static",
+          replacement: "prevent",
+          replaces: "die",
+          target: { controller: "enemy", type: "unit" },
+          type: "replacement",
+        },
+      ],
+      cardType: "gear",
+      owner: P2,
+      zone: "base",
+    });
+
+    const ctx = buildReplacementContext(engine) as unknown as ReplacementContext;
+    // No `owner` on the event — simulates uncontrolled-object affected event.
+    const all = findAllReplacements({ type: "die" }, ctx);
+    // Both replacements match (no controller filter applies when event.owner
+    // Is undefined — the `if (event.owner && ...)` gate is skipped).
+    expect(all.length).toBe(2);
+
+    // Turn player = P1, so their replacement sorts first per rule 575.2.
+    const { chooser, ordered } = orderReplacementsByOwnerChoice(all, undefined, P1);
+    expect(chooser).toBe(P1);
+    expect(ordered[0]?.sourceOwner).toBe(P1);
+  });
 });
 
 // -----------------------------------------------------------------------------

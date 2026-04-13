@@ -10,6 +10,7 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
+import { addToChain } from "../chain/chain-state";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { EffectContext, ExecutableEffect } from "./effect-executor";

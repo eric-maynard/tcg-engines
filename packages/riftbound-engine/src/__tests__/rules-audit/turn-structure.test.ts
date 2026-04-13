@@ -207,7 +207,7 @@ describe("Rule 515.2 / 728.1.b: Temporary units die at Beginning Phase", () => {
 // -----------------------------------------------------------------------------
 
 describe("Rule 515.3.b: Turn player channels 2 runes from their Rune Deck", () => {
-  it("moves 2 runes from runeDeck to base and increments energy by 2", () => {
+  it("moves 2 runes from runeDeck to runePool (does NOT auto-exhaust for energy)", () => {
     const engine = createMinimalGameState({ phase: "main" });
     createDeck(engine, P1, "runeDeck", [
       { cardType: "rune", domain: "fury", id: "r1" },
@@ -215,20 +215,24 @@ describe("Rule 515.3.b: Turn player channels 2 runes from their Rune Deck", () =
       { cardType: "rune", domain: "calm", id: "r3" },
     ]);
     runPhaseHook(engine, "channel", "onBegin");
+    // Rule 515.3.b: 2 runes are channeled from deck to runePool (the board).
+    // Per rule 159 / primer: channeling just places the runes on the board —
+    // They enter ready. Energy is only produced when the player exhausts
+    // Them via the exhaustRune move.
     expect(getRunesOnBoard(engine, P1).length).toBe(2);
-    expect(getState(engine).runePools[P1].energy).toBe(2);
+    expect(getState(engine).runePools[P1].energy).toBe(0);
     expect(getCardsInZone(engine, "runeDeck", P1).length).toBe(1);
   });
 
-  it("adds energy to the active player's rune pool, not the opponent's", () => {
+  it("channels runes to the active player's runePool, not the opponent's", () => {
     const engine = createMinimalGameState({ currentPlayer: P1, phase: "main" });
     createDeck(engine, P1, "runeDeck", [
       { cardType: "rune", domain: "fury", id: "r1" },
       { cardType: "rune", domain: "fury", id: "r2" },
     ]);
     runPhaseHook(engine, "channel", "onBegin");
-    expect(getState(engine).runePools[P1].energy).toBe(2);
-    expect(getState(engine).runePools[P2].energy).toBe(0);
+    expect(getRunesOnBoard(engine, P1).length).toBe(2);
+    expect(getRunesOnBoard(engine, P2).length).toBe(0);
   });
 
   it("does NOT channel runes from the opponent's rune deck", () => {
@@ -249,7 +253,8 @@ describe("Rule 515.3.b.1: Channel as many as possible if deck has < 2 runes", ()
     createDeck(engine, P1, "runeDeck", [{ cardType: "rune", domain: "fury", id: "last-rune" }]);
     runPhaseHook(engine, "channel", "onBegin");
     expect(getRunesOnBoard(engine, P1).length).toBe(1);
-    expect(getState(engine).runePools[P1].energy).toBe(1);
+    // Energy stays at 0 — channeling doesn't auto-exhaust.
+    expect(getState(engine).runePools[P1].energy).toBe(0);
   });
 
   it("if 0 runes in deck, channel 0 (no crash)", () => {
@@ -298,7 +303,7 @@ describe("Rule 515.3.b.4 / 644.7: Second player channels an extra rune on their 
 
     runPhaseHook(engine, "channel", "onBegin");
     expect(getRunesOnBoard(engine, P2).length).toBe(3);
-    expect(getState(engine).runePools[P2].energy).toBe(3);
+    // Channeling doesn't auto-exhaust — energy stays 0 until exhaustRune is used.
   });
 
   it("first player channels only 2 on turn 1 (no catch-up)", () => {
@@ -343,7 +348,7 @@ describe("Rule 515.3.b.4 / 644.7: Second player channels an extra rune on their 
       };
     };
     internal.currentState.secondPlayerExtraRune = true;
-    internal.currentState.firstTurnNumber = { [P1]: 1, [P2]: 2 };
+    internal.currentState.firstTurnNumber = { [P2]: 2 };
 
     createDeck(engine, P2, "runeDeck", [
       { cardType: "rune", domain: "fury", id: "r1" },

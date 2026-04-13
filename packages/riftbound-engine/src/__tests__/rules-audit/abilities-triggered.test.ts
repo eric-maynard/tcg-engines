@@ -22,6 +22,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import { orderTriggers } from "../../abilities/trigger-runner";
 import {
   P1,
   P2,
@@ -389,15 +390,67 @@ describe("Rule 585: Multiple triggers fire when their conditions are met simulta
     expect(getCardMeta(engine, "hero-b")?.damage ?? 0).toBe(1);
   });
 
-  // Deferred: engine auto-orders triggers; no UI exists for controller to
-  // Pick order. The rule is satisfied if two triggers both fire; ordering
-  // Is a UX concern that isn't observable from the audit harness.
-  it.todo(
-    "Rule 585.1: controller-chosen order for simultaneous same-player triggers (no ordering UI)",
-  );
-  it.todo(
-    "Rule 585.2: turn-order first for simultaneous different-controller triggers (no ordering UI)",
-  );
+  // Rule 585.1: Simultaneous triggers from the same controller fire in
+  // Controller-chosen order. The engine's `orderTriggers` helper preserves
+  // Insertion order within a single owner as the default/auto ordering.
+  it("Rule 585.1: simultaneous same-player triggers preserve insertion order (default auto choice)", () => {
+    const matches = [
+      {
+        ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
+        cardId: "a",
+        cardOwner: P1,
+      },
+      {
+        ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
+        cardId: "b",
+        cardOwner: P1,
+      },
+      {
+        ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
+        cardId: "c",
+        cardOwner: P1,
+      },
+    ];
+    const ordered = orderTriggers(matches, P1, [P1, P2]);
+    expect(ordered.map((m) => m.cardId)).toEqual(["a", "b", "c"]);
+  });
+
+  // Rule 585.2: When triggers belong to different controllers, the turn
+  // Player's triggers fire first, then subsequent players in turn order.
+  it("Rule 585.2: turn player's triggers are ordered before non-turn-player triggers", () => {
+    const matches = [
+      {
+        ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
+        cardId: "p2-card",
+        cardOwner: P2,
+      },
+      {
+        ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
+        cardId: "p1-card-first",
+        cardOwner: P1,
+      },
+      {
+        ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
+        cardId: "p1-card-second",
+        cardOwner: P1,
+      },
+    ];
+    // P1 is the turn player → P1's triggers fire first, then P2's.
+    const ordered = orderTriggers(matches, P1, [P1, P2]);
+    expect(ordered.map((m) => m.cardId)).toEqual([
+      "p1-card-first",
+      "p1-card-second",
+      "p2-card",
+    ]);
+
+    // Swap turn player → P2's trigger should now be first.
+    const orderedP2 = orderTriggers(matches, P2, [P1, P2]);
+    expect(orderedP2.map((m) => m.cardId)).toEqual([
+      "p2-card",
+      "p1-card-first",
+      "p1-card-second",
+    ]);
+  });
 });
 
 // -----------------------------------------------------------------------------

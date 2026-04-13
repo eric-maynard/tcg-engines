@@ -252,7 +252,7 @@ describe("Rule 156.2: Power is used to pay Domain-associated Power Costs", () =>
 });
 
 describe("Rule 515.3 / 606.1: Channel phase moves runes from the top of the rune deck", () => {
-  it("channel phase onBegin moves 2 runes from runeDeck to base and adds 2 energy", () => {
+  it("channel phase onBegin moves 2 runes from runeDeck to runePool", () => {
     const engine = createMinimalGameState({ phase: "awaken" });
     // Seed 4 runes in the runeDeck.
     createDeck(engine, P1, "runeDeck", [
@@ -267,17 +267,22 @@ describe("Rule 515.3 / 606.1: Channel phase moves runes from the top of the rune
     // Run the channel phase hook directly.
     runPhaseHook(engine, "channel", "onBegin");
 
-    // 2 runes moved from runeDeck to base (flow hook implementation).
+    // Rule 515.3.b: 2 runes moved from runeDeck to runePool (the board).
+    // Per rule 159 / primer: channeling places runes on the board (they
+    // Enter ready). Energy is NOT auto-produced — the player must later
+    // Exhaust them via exhaustRune to generate energy.
     expect(getCardsInZone(engine, "runeDeck", P1)).toHaveLength(2);
-    expect(getCardsInZone(engine, "base", P1)).toHaveLength(2);
-    // 2 energy added to the rune pool.
-    expect(getState(engine).runePools[P1].energy).toBe(2);
+    expect(getCardsInZone(engine, "runePool", P1)).toHaveLength(2);
+    expect(getState(engine).runePools[P1].energy).toBe(0);
   });
 });
 
 describe("Rule 594 / 154.2.b: Recycled runes go to the bottom of the rune deck (not main deck)", () => {
   it("recycleRune moves a runePool card out of runePool and adds 1 energy + 1 power", () => {
-    const engine = createMinimalGameState({ phase: "main" });
+    // Use P2 as current player so P1's empty runeDeck isn't re-channeled by
+    // The flow manager's post-move cascade (which would cycle our recycled
+    // Rune back to P1's runePool and break the zone assertion).
+    const engine = createMinimalGameState({ currentPlayer: P2, phase: "main" });
     createCard(engine, "rune-fury", {
       cardType: "rune",
       domain: "fury",
@@ -292,9 +297,7 @@ describe("Rule 594 / 154.2.b: Recycled runes go to the bottom of the rune deck (
     });
     expect(result.success).toBe(true);
 
-    // The rune left the runePool zone (it was either placed in runeDeck by the
-    // Reducer, or subsequently cascaded by the flow manager's channel hook).
-    // Rule 154.2.b: it is NOT in mainDeck.
+    // Rule 154.2.b: recycled runes go to the rune deck, not main deck.
     expect(getCardsInZone(engine, "runePool", P1)).not.toContain("rune-fury");
     expect(getCardsInZone(engine, "mainDeck", P1)).not.toContain("rune-fury");
 

@@ -471,6 +471,7 @@
     .rune-stack {
       position: relative;
       width: 52px;
+      min-height: 88px;  /* fallback so absolutely-positioned cards inside are always visible */
       flex-shrink: 0;
     }
     .rune-stack-label {
@@ -853,7 +854,11 @@
     .bf-art {
       flex: 0 0 170px;
       width: 170px;
-      background: var(--bf-img) center / cover no-repeat;
+      /* Use `contain` so the entire card art is visible (no cropping). The
+         art will letterbox vertically against the card frame background.
+         Battlefield cards are landscape and the column is portrait, so
+         `cover` was chopping off the top/bottom of the art. */
+      background: var(--bf-img) center / contain no-repeat #0e0a1c;
       border-right: 1px solid #2a2448;
       position: relative;
     }

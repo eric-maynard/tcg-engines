@@ -72,6 +72,7 @@ const PLAYER_SCOPED_ZONES: readonly string[] = [
   "runePool",
   "legendZone",
   "championZone",
+  "battlefieldRow",
 ];
 
 /**
@@ -171,7 +172,7 @@ export function removePlayer(
   // Rule 652.4: Counter all chain items whose controller is the removed
   // Player. We flag them as countered so the chain resolver will skip
   // Their effects when they pop.
-  const {interaction} = draft;
+  const { interaction } = draft;
   if (interaction?.chain) {
     for (const item of interaction.chain.items) {
       if (item.controller === playerId) {
@@ -180,23 +181,32 @@ export function removePlayer(
     }
     // Rule 652.5.c.1: If the removed player held chain priority,
     // Advance it to the next turn-order entry that is still present.
-    if (interaction.chain.activePlayer === playerId) {
-      const remaining = interaction.chain.turnOrder.filter((p) => p !== playerId);
-      interaction.chain.turnOrder = remaining;
-      interaction.chain.activePlayer = remaining[0] ?? "";
-      interaction.chain.passedPlayers = interaction.chain.passedPlayers.filter(
+    // The chain interaction types declare these fields as readonly on the
+    // Public surface; we're mutating an Immer draft so a narrow cast is
+    // Safe.
+    const chainMutable = interaction.chain as {
+      activePlayer: string;
+      turnOrder: string[];
+      passedPlayers: string[];
+      relevantPlayers: string[];
+    };
+    if (chainMutable.activePlayer === playerId) {
+      const remaining = chainMutable.turnOrder.filter((p) => p !== playerId);
+      chainMutable.turnOrder = remaining;
+      chainMutable.activePlayer = remaining[0] ?? "";
+      chainMutable.passedPlayers = chainMutable.passedPlayers.filter(
         (p) => p !== playerId,
       );
     } else {
       // Drop from the turn order regardless so subsequent rotations skip.
-      interaction.chain.turnOrder = interaction.chain.turnOrder.filter(
+      chainMutable.turnOrder = chainMutable.turnOrder.filter(
         (p) => p !== playerId,
       );
-      interaction.chain.passedPlayers = interaction.chain.passedPlayers.filter(
+      chainMutable.passedPlayers = chainMutable.passedPlayers.filter(
         (p) => p !== playerId,
       );
     }
-    interaction.chain.relevantPlayers = interaction.chain.relevantPlayers.filter(
+    chainMutable.relevantPlayers = chainMutable.relevantPlayers.filter(
       (p) => p !== playerId,
     );
   }

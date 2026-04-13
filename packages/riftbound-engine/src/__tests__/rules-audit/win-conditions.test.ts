@@ -38,6 +38,7 @@ import {
   placeInMainDeck,
   setVictoryPoints,
 } from "./helpers";
+import type { ZoneName } from "./helpers";
 import { hasPlayerWon } from "../../game-definition/win-conditions/victory";
 
 // ---------------------------------------------------------------------------
@@ -190,9 +191,39 @@ describe("Rule 607.3.a: Repeated Burn Out gives repeated points until victorySco
 // ---------------------------------------------------------------------------
 
 describe("Rule 607.4.a: Burn Out only fires when directed by a Game Effect", () => {
-  it.todo(
-    "Rule 607.4.a: a player cannot voluntarily burn out without a game-effect trigger. The burnOut move currently has no gating — any caller can fire it.",
-  );
+  it("a non-directed burnOut is rejected when the player's main deck is non-empty", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "deck-card-607", {
+      cardType: "spell",
+      owner: P1,
+      zone: "mainDeck",
+    });
+
+    // Source 'draw' means the player was trying to draw, not directed by
+    // An effect. Since the deck is non-empty the burnOut guard rejects it.
+    const result = applyMove(engine, "burnOut", {
+      opponentId: P2,
+      playerId: P1,
+      source: "draw",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("a directed burnOut always fires (source='directed' is the implicit default)", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "deck-card-607b", {
+      cardType: "spell",
+      owner: P1,
+      zone: "mainDeck",
+    });
+
+    const result = applyMove(engine, "burnOut", {
+      opponentId: P2,
+      playerId: P1,
+    });
+    expect(result.success).toBe(true);
+    expect(getState(engine).players[P2].victoryPoints).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -200,8 +231,12 @@ describe("Rule 607.4.a: Burn Out only fires when directed by a Game Effect", () 
 // ---------------------------------------------------------------------------
 
 describe("Rule 607.5: Burn Out is a Replacement Effect", () => {
+  // Deferred: the engine models burnOut as a standalone move rather than a
+  // Replacement effect. Wiring it through the replacement pipeline is owned
+  // By the replacement-effects agent.
   it.todo(
-    "Rule 607.5: Burn Out replaces the 'draw from empty deck' action with its full sequence. The engine currently models burnOut as a separate move rather than a replacement; verify via replacement-effects tests.",
+    // Deferred: replacement-effects.ts is owned by another agent
+    "Rule 607.5: Burn Out replaces 'draw from empty deck' (replacement-effects layer)",
   );
 });
 
@@ -274,17 +309,36 @@ describe("Rule 651.1: Conceding in a 1v1 game makes the opponent the winner", ()
 // ---------------------------------------------------------------------------
 
 describe("Rule 651.2: Multi-player concede behavior", () => {
-  // Deferred: engine's concede move picks the FIRST opponent as winner and
-  // Immediately finishes the game; it does not continue play with remaining
-  // Players in 3+ player modes. This is a genuine engine gap.
-  it.todo(
-    "Rule 651.2: concede should continue play with remaining players in 3+ player games (engine finishes immediately)",
-  );
+  it("Rule 651.2: concede in a 4-player game continues play with remaining players", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
+
+    const result = applyMove(engine, "concede", { playerId: P1 });
+    expect(result.success).toBe(true);
+    // Game still playing — P2, P3, P4 remain.
+    expect(getStatus(engine)).toBe("playing");
+    expect(getWinner(engine)).toBeUndefined();
+    // P1 is tracked as removed.
+    expect(getState(engine).removedPlayers).toContain(P1);
+  });
+
+  it("Rule 651.2: concede in a 3-player game continues until only one player remains", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 3 });
+
+    applyMove(engine, "concede", { playerId: P1 });
+    expect(getStatus(engine)).toBe("playing");
+    // Second concede leaves only P3 standing — game ends.
+    applyMove(engine, "concede", { playerId: P2 });
+    expect(getStatus(engine)).toBe("finished");
+    expect(getWinner(engine)).toBe(P3);
+  });
 
   // Deferred: 'relevant player' tracking for showdowns is only implemented
-  // For 2-player; multi-player removal from the relevant set is unimplemented.
+  // For 2-player; multi-player showdown removal is in the showdown stack
+  // But requires a multi-player showdown construction helper that does
+  // Not exist in the audit harness yet.
   it.todo(
-    "Rule 651.3: A removed player is no longer Relevant in Showdowns (engine gap: no multi-player showdown tracking)",
+    // Deferred: needs multi-player showdown construction helper
+    "Rule 651.3: A removed player is no longer Relevant in Showdowns (helper gap: no multi-player showdown builder)",
   );
 });
 
@@ -292,32 +346,177 @@ describe("Rule 651.2: Multi-player concede behavior", () => {
 // Rule 652.1-652.5: Removal-of-a-player mechanics (deferred — multi-player)
 // ---------------------------------------------------------------------------
 
-describe("Rule 652: Removal of a Player (deferred — engine has no multi-player removal pipeline)", () => {
-  // Deferred: engine's concede is a single-shot 'finish game with winner' —
-  // It does NOT run a removal pipeline that banishes permanents, replaces
-  // Battlefields, counters in-flight chain items, or redistributes priority.
-  // Every rule in this block is unimplemented.
-  it.todo("Rule 652.1: Banish all permanents and runes the removed player controls/owns");
-  it.todo("Rule 652.2: Remove the removed player's battlefield from the game");
-  it.todo("Rule 652.2.a: Replace removed battlefield with a token battlefield with no abilities");
-  it.todo("Rule 652.2.b: Units/hidden cards there do not move");
-  it.todo("Rule 652.2.c: Continuous effects from removed battlefield immediately cease");
-  it.todo("Rule 652.3: Remove all cards the removed player owns from the game");
+describe("Rule 652: Removal of a Player", () => {
+  it("Rule 652.1: concede banishes all permanents the removed player owns", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+
+    // Seed P1 with units in base and at the battlefield, plus cards in hand.
+    createCard(engine, "unit-base", {
+      cardType: "unit",
+      might: 2,
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "unit-bf", {
+      cardType: "unit",
+      might: 3,
+      owner: P1,
+      zone: "battlefield-bf-1",
+    });
+    createCard(engine, "spell-hand", {
+      cardType: "spell",
+      owner: P1,
+      zone: "hand",
+    });
+
+    applyMove(engine, "concede", { playerId: P1 });
+
+    // All three cards are now in the banishment zone.
+    const banished = getCardsInZone(engine, "banishment" as ZoneName, P1);
+    expect(banished).toContain("unit-base");
+    expect(banished).toContain("unit-bf");
+    expect(banished).toContain("spell-hand");
+  });
+
+  it("Rule 652.2: battlefields controlled by the removed player become uncontrolled", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
+    createBattlefield(engine, "bf-controlled", { controller: P1 });
+    createBattlefield(engine, "bf-other", { controller: P2 });
+
+    applyMove(engine, "concede", { playerId: P1 });
+
+    // P1's battlefield is now uncontrolled, P2's untouched.
+    expect(getState(engine).battlefields["bf-controlled"]?.controller).toBeNull();
+    expect(getState(engine).battlefields["bf-other"]?.controller).toBe(P2);
+  });
+
+  it("Rule 652.2.b: contested status from the removed player is cleared", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
+    createBattlefield(engine, "bf-1", {
+      contested: true,
+      contestedBy: P1,
+      controller: P2,
+    });
+
+    applyMove(engine, "concede", { playerId: P1 });
+
+    const bf = getState(engine).battlefields["bf-1"];
+    expect(bf?.contestedBy).toBeUndefined();
+    expect(bf?.contested).toBe(false);
+  });
+
+  // Deferred: token battlefield replacement requires dynamic battlefield
+  // Creation, which the engine does not yet model (652.2.a).
   it.todo(
+    // Deferred: engine cannot dynamically create token battlefields
+    "Rule 652.2.a: Replace removed battlefield with a token battlefield with no abilities (engine lacks dynamic battlefield creation)",
+  );
+
+  // Deferred: hidden-card "stays in place" semantics depend on who scans
+  // Them during removal. Rule 652.2.b also says the units/hidden cards at
+  // A removed battlefield do not move — they still get banished per 652.1
+  // When they belong to the removed player. Cross-player hidden cards at a
+  // Removed battlefield aren't yet exercisable.
+  it.todo(
+    // Deferred: requires hidden-card placement at removed-player battlefield
+    "Rule 652.2.b: Non-removed-player units/hidden cards at removed battlefield do not move",
+  );
+
+  // Deferred: continuous effects from battlefield static abilities are
+  // Stripped by the static-abilities recalc pipeline when the source
+  // Zone changes; covered by static-abilities tests.
+  it.todo(
+    // Deferred: static-abilities suite owns this assertion
+    "Rule 652.2.c: Continuous effects from removed battlefield immediately cease",
+  );
+
+  it("Rule 652.3: all cards the removed player owns are banished (main deck, trash, rune deck)", () => {
+    const engine = createMinimalGameState({ phase: "main", playerCount: 4 });
+
+    createCard(engine, "deck-1", { cardType: "spell", owner: P1, zone: "mainDeck" });
+    createCard(engine, "deck-2", { cardType: "spell", owner: P1, zone: "mainDeck" });
+    createCard(engine, "trash-1", { cardType: "unit", might: 1, owner: P1, zone: "trash" });
+    createCard(engine, "rune-deck-1", {
+      cardType: "rune",
+      domain: "fury",
+      owner: P1,
+      zone: "runeDeck",
+    });
+
+    applyMove(engine, "concede", { playerId: P1 });
+
+    expect(getCardsInZone(engine, "mainDeck", P1).length).toBe(0);
+    expect(getCardsInZone(engine, "trash", P1).length).toBe(0);
+    expect(getCardsInZone(engine, "runeDeck", P1).length).toBe(0);
+    const banished = getCardsInZone(engine, "banishment" as ZoneName, P1);
+    expect(banished).toContain("deck-1");
+    expect(banished).toContain("deck-2");
+    expect(banished).toContain("trash-1");
+    expect(banished).toContain("rune-deck-1");
+  });
+
+  it("Rule 652.3: removed player's rune pool is emptied (energy + power)", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      playerCount: 4,
+      runePools: {
+        [P1]: { energy: 5, power: { fury: 3 } },
+      },
+    });
+
+    applyMove(engine, "concede", { playerId: P1 });
+
+    const pool = getState(engine).runePools[P1];
+    expect(pool?.energy ?? 0).toBe(0);
+    expect(Object.keys(pool?.power ?? {}).length).toBe(0);
+  });
+
+  // Deferred: chain counter semantics are owned by the chain suite; the
+  // Removal pipeline marks items as countered but the resolver check
+  // Lives in chain-moves.ts which a parallel agent owns.
+  it.todo(
+    // Deferred: chain-moves.ts is owned by the chain/showdown agent
     "Rule 652.4: Counter all spells and abilities of all types controlled by the conceded player",
   );
+
+  it("Rule 652.5.a.1: if the removed player was the turn player, turn advances to the next available player", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      playerCount: 4,
+    });
+
+    applyMove(engine, "concede", { playerId: P1 });
+
+    // Turn advances past P1 to the next non-removed player.
+    const {activePlayer} = getState(engine).turn;
+    expect(activePlayer).not.toBe(P1);
+    expect([P2, P3, P4]).toContain(activePlayer);
+  });
+
+  // Deferred: multi-player showdown construction is not supported by the
+  // Current audit harness; Focus passing requires a live showdown.
   it.todo(
-    "Rule 652.5.a.1: If the removed player was the Turn Player, play proceeds to the next available player",
-  );
-  it.todo(
+    // Deferred: needs multi-player showdown construction helper
     "Rule 652.5.b.1: If the removed player had Focus in a Showdown, the next Relevant Player receives Focus",
   );
-  it.todo("Rule 652.5.b.2: If no other players remain Relevant, the Showdown ends");
-  it.todo("Rule 652.5.b.3: Passing Focus via removal ends the Showdown if all pass");
   it.todo(
+    // Deferred: needs multi-player showdown construction helper
+    "Rule 652.5.b.2: If no other players remain Relevant, the Showdown ends",
+  );
+  it.todo(
+    // Deferred: needs multi-player showdown construction helper
+    "Rule 652.5.b.3: Passing Focus via removal ends the Showdown if all pass",
+  );
+  it.todo(
+    // Deferred: chain-moves.ts is owned by the chain/showdown agent
     "Rule 652.5.c.1: If the removed player had Priority during a Chain, the next player receives Priority",
   );
-  it.todo("Rule 652.5.c.2: Passing Priority via removal resolves the top chain item");
+  it.todo(
+    // Deferred: chain-moves.ts is owned by the chain/showdown agent
+    "Rule 652.5.c.2: Passing Priority via removal resolves the top chain item",
+  );
 });
 
 // ---------------------------------------------------------------------------

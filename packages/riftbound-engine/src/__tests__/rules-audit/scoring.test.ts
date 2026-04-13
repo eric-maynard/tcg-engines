@@ -524,10 +524,38 @@ describe("Rule 633: A player at Victory Score wins the game immediately", () => 
 // (deferred — team mode setup required)
 // ---------------------------------------------------------------------------
 
-describe("Rule 630.1.a (deferred): Teammate-held battlefields can't be Conquered", () => {
-  // Deferred: engine has no 'team' concept at runtime; this rule requires
-  // A team-aware scoring pipeline that doesn't exist.
-  it.todo(
-    "Rule 630.1.a: teammate-held battlefield conquer exemption (engine gap: no team state)",
-  );
+describe("Rule 630.1.a: Teammate-held battlefields can't be Conquered for VP", () => {
+  it("conquering a teammate-held battlefield in a team game does not award VP", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: "player-1",
+      phase: "main",
+      playerCount: 4,
+    });
+    // Seed team mapping P1/P3 team 0, P2/P4 team 1.
+    const internal = engine as unknown as {
+      currentState: import("../../types").RiftboundGameState;
+    };
+    const st = structuredClone(internal.currentState);
+    (st as { teams: Record<string, number> }).teams = {
+      "player-1": 0,
+      "player-2": 1,
+      "player-3": 0,
+      "player-4": 1,
+    };
+    internal.currentState = st;
+    engine.getFlowManager()?.syncState(st);
+
+    createBattlefield(engine, "bf-teammate", { controller: P1 });
+
+    const before = getState(engine).players[P1].victoryPoints;
+    const result = applyMove(engine, "scorePoint", {
+      battlefieldId: "bf-teammate",
+      method: "conquer",
+      playerId: P1,
+      previousController: "player-3",
+    });
+    expect(result.success).toBe(true);
+    // No VP: previous controller was P1's teammate.
+    expect(getState(engine).players[P1].victoryPoints).toBe(before);
+  });
 });

@@ -1134,9 +1134,13 @@ function finalizePregame(session: GameSession): void {
     { op: "replace", path: ["turn", "number"], value: 1 },
   ]);
 
-  // Channel 2 runes for the first player (Rule 515.3: channel phase)
+  // Channel 2 runes for the first player (Rule 515.3: channel phase).
+  // `directed: true` is required by the channelRunes move's condition
+  // (rule 606.3.a — channelling is a directed action, not a discretionary
+  // Player move). Without this flag the move is silently rejected and the
+  // First player starts with zero runes.
   engine.executeMove("channelRunes", {
-    params: { count: 2, playerId: pregame.firstPlayer },
+    params: { count: 2, directed: true, playerId: pregame.firstPlayer },
     playerId: pregame.firstPlayer as PlayerId,
   });
 

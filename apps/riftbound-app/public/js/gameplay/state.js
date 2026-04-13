@@ -9,6 +9,17 @@ let gameId = null;
 let gameState = null;
 let previousGameState = null; // Track previous state for combat result detection
 let viewingPlayer = "player-1";
+
+// Expose state on window for visual-invariants test scripts. Read-only by
+// convention; production code should use the module-local `gameState`.
+Object.defineProperty(window, "__rbGameState", {
+  get() { return gameState; },
+  configurable: true,
+});
+Object.defineProperty(window, "__rbViewingPlayer", {
+  get() { return viewingPlayer; },
+  configurable: true,
+});
 let selectedCard = null; // kept for backward compat with zoom/preview
 let availableMoves = [];
 let lastSeq = -1;

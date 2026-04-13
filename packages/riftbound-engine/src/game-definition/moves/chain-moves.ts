@@ -1023,9 +1023,10 @@ export const chainMoves: Partial<
         return;
       }
       const { targetChainItemId } = context.params;
-      for (const item of chain.items) {
-        if (item.id === targetChainItemId && !item.countered) {
-          (item as { countered: boolean }).countered = true;
+      for (let i = 0; i < chain.items.length; i++) {
+        const item = chain.items[i];
+        if (item && item.id === targetChainItemId && !item.countered) {
+          (chain.items[i] as { countered: boolean }).countered = true;
           break;
         }
       }
