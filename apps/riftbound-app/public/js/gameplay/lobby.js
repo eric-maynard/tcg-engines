@@ -139,13 +139,18 @@ function connectLobbyWs() {
 function renderLobbyRoom(lobby) {
   const isSandbox = lobby.sandbox;
 
-  // Sync game mode selector from server state
-  if (lobby.gameMode) {
-    currentGameMode = lobby.gameMode;
+  // Sync game mode selector from server state.
+  // Single Player is a first-class mode: when lobby.sandbox is true we
+  // treat the effective mode as "single-player" regardless of duel/match.
+  const effectiveMode = isSandbox ? "single-player" : lobby.gameMode;
+  if (effectiveMode) {
+    currentGameMode = effectiveMode;
     const duelBtn = document.getElementById("modeDuel");
     const matchBtn = document.getElementById("modeMatch");
-    if (duelBtn) duelBtn.classList.toggle("active", lobby.gameMode === "duel");
-    if (matchBtn) matchBtn.classList.toggle("active", lobby.gameMode === "match");
+    const soloBtn = document.getElementById("modeSinglePlayer");
+    if (duelBtn) duelBtn.classList.toggle("active", effectiveMode === "duel");
+    if (matchBtn) matchBtn.classList.toggle("active", effectiveMode === "match");
+    if (soloBtn) soloBtn.classList.toggle("active", effectiveMode === "single-player");
   }
   // Only host can change mode
   const modeSelector = document.getElementById("modeSelector");
@@ -162,6 +167,11 @@ function renderLobbyRoom(lobby) {
     if (codeEl) codeEl.style.display = "none";
     if (copiedEl) copiedEl.style.display = "none";
     if (shareP) shareP.style.display = "none";
+  } else {
+    // Single Player can be toggled off — restore the code/share section
+    if (codeEl) codeEl.style.display = "";
+    if (copiedEl) copiedEl.style.display = "";
+    if (shareP) shareP.style.display = "";
   }
 
   // Host card
@@ -173,15 +183,18 @@ function renderLobbyRoom(lobby) {
 
   // Guest card
   if (lobby.guest) {
+    // In Single Player mode, label the opponent as "Solo Opponent" per Rift Atlas.
+    const descriptor = isSandbox ? "Solo Opponent" : (lobby.guest.hasDeck ? "Ready" : "Choosing deck...");
+    const readyClass = isSandbox || lobby.guest.hasDeck ? "ready" : "";
     document.getElementById("lobbyGuest").innerHTML = `
       <div class="lpc-name">${esc(lobby.guest.name)}</div>
-      <div class="lpc-status ${lobby.guest.hasDeck ? "ready" : ""}">${lobby.guest.hasDeck ? "Ready" : "Choosing deck..."}</div>
+      <div class="lpc-status ${readyClass}">${esc(descriptor)}</div>
     `;
     document.getElementById("lobbyGuest").classList.remove("empty");
   } else {
     document.getElementById("lobbyGuest").innerHTML = `
       <div class="lpc-name">Waiting...</div>
-      <div class="lpc-status">${isSandbox ? "" : "Share the code above"}</div>
+      <div class="lpc-status">Share the code above</div>
     `;
     document.getElementById("lobbyGuest").classList.add("empty");
   }
@@ -214,9 +227,27 @@ let currentGameMode = "duel";
 
 function setGameMode(mode) {
   currentGameMode = mode;
-  document.getElementById("modeDuel").classList.toggle("active", mode === "duel");
-  document.getElementById("modeMatch").classList.toggle("active", mode === "match");
-  if (lobbyWs && lobbyWs.readyState === WebSocket.OPEN) {
+  const duelBtn = document.getElementById("modeDuel");
+  const matchBtn = document.getElementById("modeMatch");
+  const soloBtn = document.getElementById("modeSinglePlayer");
+  if (duelBtn) duelBtn.classList.toggle("active", mode === "duel");
+  if (matchBtn) matchBtn.classList.toggle("active", mode === "match");
+  if (soloBtn) soloBtn.classList.toggle("active", mode === "single-player");
+  if (!lobbyWs || lobbyWs.readyState !== WebSocket.OPEN) return;
+
+  if (mode === "single-player") {
+    // Promote this lobby to Single Player: server fills the opponent
+    // slot with a Goldfish and flips sandbox mode on. Bypasses the
+    // SANDBOX_ENABLED env gate — this is a first-class lobby mode.
+    isSandboxGame = true;
+    lobbyWs.send(JSON.stringify({ type: "set_single_player", enabled: true }));
+  } else {
+    // Demote single-player if the host re-picks Duel/Match, then
+    // broadcast the underlying Bo1/Bo3 mode.
+    if (isSandboxGame) {
+      isSandboxGame = false;
+      lobbyWs.send(JSON.stringify({ type: "set_single_player", enabled: false }));
+    }
     lobbyWs.send(JSON.stringify({ type: "set_mode", mode }));
   }
 }

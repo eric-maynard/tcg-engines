@@ -2482,6 +2482,38 @@ const server = Bun.serve({
           broadcastLobby(lobby);
         }
 
+        // W11: Promote the lobby to Single Player (Goldfish) mode.
+        // This is a first-class lobby mode and is NOT gated by
+        // SANDBOX_ENABLED — that env flag still governs the legacy
+        // Goldfish button / direct sandbox lobby creation path.
+        // Only the host may toggle this, and only while the lobby is waiting.
+        if (msg.type === "set_single_player" && role === "host" && lobby.status === "waiting") {
+          const enable = msg.enabled !== false;
+          if (enable) {
+            lobby.sandbox = true;
+            // Fill the opponent slot with a labeled Goldfish if empty.
+            // If a human already joined, leave them in place — the host
+            // Can kick them out by leaving the lobby.
+            if (!lobby.guest) {
+              lobby.guest = {
+                connId: "",
+                deckId: "default",
+                name: "Goldfish",
+                ready: true,
+                ws: null,
+              };
+            }
+          } else {
+            // Demote back to a regular lobby: clear sandbox and drop
+            // The auto-filled Goldfish guest if it's still there.
+            lobby.sandbox = false;
+            if (lobby.guest && lobby.guest.ws === null && lobby.guest.name === "Goldfish") {
+              lobby.guest = null;
+            }
+          }
+          broadcastLobby(lobby);
+        }
+
         if (msg.type === "start_game" && role === "host" && lobby.guest && lobby.host.ready && lobby.guest.ready) {
           // D20 roll to determine who CHOOSES first player (rule 115)
           let p1Roll = 0;
