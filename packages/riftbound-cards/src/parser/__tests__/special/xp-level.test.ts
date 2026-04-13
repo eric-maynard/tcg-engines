@@ -106,9 +106,7 @@ describe("UNL: Level-gated abilities", () => {
     const abs = r.abilities ?? [];
     // Hunt keyword + 2 hunt triggers + level-gated static
     expect(abs.length).toBeGreaterThanOrEqual(4);
-    const huntKw = abs.find(
-      (a) => (a as { keyword?: string }).keyword === "Hunt",
-    );
+    const huntKw = abs.find((a) => (a as { keyword?: string }).keyword === "Hunt");
     expect(huntKw).toBeDefined();
     const levelAbility = abs.find(
       (a) => (a as { condition?: { type?: string } }).condition?.type === "while-level",
@@ -158,11 +156,10 @@ describe("UNL: Spend XP compound effects", () => {
     const abs = r.abilities ?? [];
     // Should contain: Hunt keyword, conquer trigger, hold trigger, attack trigger
     const attackTrigger = abs.find(
-      (a) =>
-        (a as { trigger?: { event?: string } }).trigger?.event === "attack",
+      (a) => (a as { trigger?: { event?: string } }).trigger?.event === "attack",
     );
     expect(attackTrigger).toBeDefined();
-    const {effect} = (attackTrigger as { effect: { type: string } });
+    const { effect } = attackTrigger as { effect: { type: string } };
     expect(effect.type).toBe("sequence");
   });
 });

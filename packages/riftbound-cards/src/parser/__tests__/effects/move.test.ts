@@ -79,9 +79,7 @@ describe("Effect: Move", () => {
 
   describe("additional move patterns", () => {
     it("should parse swap 'Move me to its location and it to my original location.'", () => {
-      const result = parseAbilities(
-        "Move me to its location and it to my original location.",
-      );
+      const result = parseAbilities("Move me to its location and it to my original location.");
 
       expect(result.success).toBe(true);
       expect(result.abilities?.[0]).toEqual(
@@ -113,7 +111,10 @@ describe("Effect: Move", () => {
       const result = parseAbilities("Move another friendly unit to a battlefield.");
 
       expect(result.success).toBe(true);
-      expect((result.abilities?.[0] as { effect: { target: { excludeSelf: boolean } } }).effect.target.excludeSelf).toBe(true);
+      expect(
+        (result.abilities?.[0] as { effect: { target: { excludeSelf: boolean } } }).effect.target
+          .excludeSelf,
+      ).toBe(true);
     });
 
     it("should parse 'Move a friendly unit to its base.' (possessive)", () => {

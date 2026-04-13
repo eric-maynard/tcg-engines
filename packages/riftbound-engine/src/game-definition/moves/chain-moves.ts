@@ -141,7 +141,9 @@ interface ActivatedEntry {
   hostCardId: string;
   sourceCardId: string;
   abilityIndex: number;
-  ability: NonNullable<ReturnType<ReturnType<typeof getGlobalCardRegistry>["getAbilities"]>>[number];
+  ability: NonNullable<
+    ReturnType<ReturnType<typeof getGlobalCardRegistry>["getAbilities"]>
+  >[number];
 }
 
 /**
@@ -222,7 +224,7 @@ function collectActivatedAbilities(
       if (!otherDef) {
         continue;
       }
-      const {cardType} = otherDef;
+      const { cardType } = otherDef;
       if (
         cardType !== "legend" &&
         cardType !== "unit" &&
@@ -280,9 +282,7 @@ function collectFriendlyBoardCards(
   push(ctx.zones.getCardsInZone("legendZone" as CoreZoneId, playerId as CorePlayerId));
   push(ctx.zones.getCardsInZone("championZone" as CoreZoneId, playerId as CorePlayerId));
   for (const bfId of Object.keys(ctx.battlefields)) {
-    push(
-      ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId, playerId as CorePlayerId),
-    );
+    push(ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId, playerId as CorePlayerId));
   }
   return collected;
 }

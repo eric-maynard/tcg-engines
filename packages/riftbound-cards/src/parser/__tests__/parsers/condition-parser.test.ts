@@ -135,9 +135,7 @@ describe("Condition Parser: extended", () => {
 
   describe("end-to-end card-text parses", () => {
     it("parses Poro Herder: 'When you play me, if you control a Poro, buff me and draw 1.'", () => {
-      const result = parseAbilities(
-        "When you play me, if you control a Poro, buff me and draw 1.",
-      );
+      const result = parseAbilities("When you play me, if you control a Poro, buff me and draw 1.");
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
       const ability = result.abilities?.[0];
@@ -166,9 +164,7 @@ describe("Condition Parser: extended", () => {
     });
 
     it("parses Dropboarder: 'When you play me, if you control two or more gear, ready me.'", () => {
-      const result = parseAbilities(
-        "When you play me, if you control two or more gear, ready me.",
-      );
+      const result = parseAbilities("When you play me, if you control two or more gear, ready me.");
       expect(result.success).toBe(true);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({

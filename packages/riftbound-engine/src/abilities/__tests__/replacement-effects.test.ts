@@ -14,10 +14,7 @@
 
 import { describe, expect, it } from "bun:test";
 import type { MatchedReplacement } from "../replacement-effects";
-import {
-  clearConsumedReplacements,
-  markReplacementConsumed,
-} from "../replacement-effects";
+import { clearConsumedReplacements, markReplacementConsumed } from "../replacement-effects";
 import type { RiftboundGameState } from "../../types";
 
 function makeDraft(): RiftboundGameState {
@@ -35,9 +32,7 @@ function makeDraft(): RiftboundGameState {
   } as unknown as RiftboundGameState;
 }
 
-function makeMatched(
-  overrides: Partial<MatchedReplacement> = {},
-): MatchedReplacement {
+function makeMatched(overrides: Partial<MatchedReplacement> = {}): MatchedReplacement {
   return {
     abilityIndex: 0,
     duration: "next",
@@ -72,14 +67,8 @@ describe("markReplacementConsumed", () => {
 
   it("handles multiple consumed replacements from different sources", () => {
     const draft = makeDraft();
-    markReplacementConsumed(
-      draft,
-      makeMatched({ abilityIndex: 0, sourceCardId: "a" }),
-    );
-    markReplacementConsumed(
-      draft,
-      makeMatched({ abilityIndex: 1, sourceCardId: "b" }),
-    );
+    markReplacementConsumed(draft, makeMatched({ abilityIndex: 0, sourceCardId: "a" }));
+    markReplacementConsumed(draft, makeMatched({ abilityIndex: 1, sourceCardId: "b" }));
     expect(draft.consumedNextReplacements).toEqual({
       "a|0": true,
       "b|1": true,

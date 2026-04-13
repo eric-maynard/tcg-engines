@@ -18,14 +18,19 @@ import { parseAbilities } from "../../index";
 function findRawEffects(ability: Ability): string[] {
   const out: string[] = [];
   const visit = (node: unknown): void => {
-    if (!node || typeof node !== "object") {return;}
+    if (!node || typeof node !== "object") {
+      return;
+    }
     const obj = node as Record<string, unknown>;
     if (obj.type === "raw" && typeof obj.text === "string") {
       out.push(obj.text);
     }
     for (const v of Object.values(obj)) {
-      if (Array.isArray(v)) {v.forEach(visit);}
-      else if (v && typeof v === "object") {visit(v);}
+      if (Array.isArray(v)) {
+        v.forEach(visit);
+      } else if (v && typeof v === "object") {
+        visit(v);
+      }
     }
   };
   visit(ability);
@@ -225,7 +230,7 @@ describe("Wave 4 Agent B — Bucket 2: replacement effects", () => {
       "[Reaction] Choose a friendly unit. The next time it would die this turn, heal it, exhaust it, and recall it instead.",
     );
     const spell = abs[0] as { effect: { replacement?: { effects?: { type: string }[] } } };
-    const {replacement} = spell.effect;
+    const { replacement } = spell.effect;
     expect(replacement).toBeDefined();
     expect(replacement?.effects?.map((e) => e.type)).toEqual(["heal", "exhaust", "recall"]);
   });
@@ -340,9 +345,7 @@ describe("Wave 4 Agent B — Bucket 5: XP / Level / Ambush", () => {
   });
 
   it("parses Arachnoid Horror's 'can be played to occupied battlefield' static", () => {
-    expectClean(
-      "I can be played to an occupied battlefield if an enemy unit is alone there.",
-    );
+    expectClean("I can be played to an occupied battlefield if an enemy unit is alone there.");
   });
 
   it("parses 'if an enemy unit is alone here' condition on a Hunt/Ambush trigger", () => {

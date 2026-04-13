@@ -47,10 +47,7 @@ import type {
   TokenDefinition,
 } from "@tcg/riftbound-types/abilities/effect-types";
 import type { AnyTarget, Location, Target } from "@tcg/riftbound-types/targeting";
-import {
-  parseLeadingIfCondition,
-  parseTrailingIfCondition,
-} from "./parsers/condition-parser";
+import { parseLeadingIfCondition, parseTrailingIfCondition } from "./parsers/condition-parser";
 import { parseCost } from "./parsers/cost-parser";
 import { parseCostKeyword } from "./parsers/keyword-parser";
 import { parseEffectKeywordsWithPositions } from "./parsers/effect-keyword-parser";
@@ -2190,9 +2187,7 @@ function parseScoreEffect(text: string): Effect | undefined {
   }
 
   // "they score N point(s)" / "that player scores N point(s)" — opponent scores.
-  const theyMatch = text.match(
-    /^(?:they|that player) scores? (\d+)(?: additional)? points?\.?$/i,
-  );
+  const theyMatch = text.match(/^(?:they|that player) scores? (\d+)(?: additional)? points?\.?$/i);
   if (theyMatch) {
     return {
       amount: Number.parseInt(theyMatch[1], 10),
@@ -2306,10 +2301,7 @@ function parseSpendXpToEffect(text: string): Effect | undefined {
     return undefined;
   }
   return {
-    effects: [
-      { amount, type: "spend-xp" } as unknown as Effect,
-      inner,
-    ],
+    effects: [{ amount, type: "spend-xp" } as unknown as Effect, inner],
     type: "sequence",
   } as unknown as SequenceEffect;
 }
@@ -2353,9 +2345,7 @@ function parsePredictEffect(text: string): Effect | undefined {
  * `enters-ready` replacement event.
  */
 function parseNextUnitEntersReadyEffect(text: string): Effect | undefined {
-  const match = text.match(
-    /^The next (unit|spell|card) you play this turn enters ready\.?$/i,
-  );
+  const match = text.match(/^The next (unit|spell|card) you play this turn enters ready\.?$/i);
   if (!match) {
     return undefined;
   }
@@ -2473,8 +2463,11 @@ function splitOnThen(text: string): string[] | undefined {
   let depth = 0;
   while (i < len) {
     const ch = text[i];
-    if (ch === "(") {depth++;}
-    else if (ch === ")") {depth = Math.max(0, depth - 1);}
+    if (ch === "(") {
+      depth++;
+    } else if (ch === ")") {
+      depth = Math.max(0, depth - 1);
+    }
 
     if (depth === 0) {
       // Case 1: ", then " connector
@@ -2515,7 +2508,12 @@ function splitOnThen(text: string): string[] | undefined {
   }
   // Ensure each part ends with a period for downstream parsers
   const cleaned = parts
-    .map((p) => p.replace(/^[,.\s]+/, "").replace(/\.$/, "").trim())
+    .map((p) =>
+      p
+        .replace(/^[,.\s]+/, "")
+        .replace(/\.$/, "")
+        .trim(),
+    )
     .filter((p) => p.length > 0)
     .map((p) => `${p}.`);
   if (cleaned.length < 2) {
@@ -2551,7 +2549,10 @@ function parseIfYouDoEffect(text: string): Effect | undefined {
   const otherwiseRe = /\.\s+otherwise,\s+/i;
   const om = rightText.match(otherwiseRe);
   if (om && om.index !== undefined) {
-    elseText = rightText.slice(om.index + om[0].length).trim().replace(/\.$/, "");
+    elseText = rightText
+      .slice(om.index + om[0].length)
+      .trim()
+      .replace(/\.$/, "");
     rightText = rightText.slice(0, om.index).trim();
   }
   rightText = rightText.replace(/\.$/, "").trim();
@@ -2562,10 +2563,7 @@ function parseIfYouDoEffect(text: string): Effect | undefined {
   //   "As an additional cost to play this, you may exhaust a friendly unit"
   //   "When I attack or defend, you may pay :rb_rune_fury:"
   let leftCore = leftText;
-  leftCore = leftCore.replace(
-    /^as an additional cost to play (?:this|me),?\s*/i,
-    "",
-  );
+  leftCore = leftCore.replace(/^as an additional cost to play (?:this|me),?\s*/i, "");
   leftCore = leftCore.replace(/^as you play (?:me|this),?\s*/i, "");
   // Trigger prefixes like "When I ...," are consumed by the outer trigger
   // Parser, but for defensive handling of cleaned text, strip them here too.
@@ -2578,10 +2576,7 @@ function parseIfYouDoEffect(text: string): Effect | undefined {
     leftCore = leftCore.slice(youMayMatch[0].length);
   }
   // Also strip trailing "as an additional cost"
-  leftCore = leftCore.replace(
-    /\s+as an additional cost(?: to play (?:this|me))?/i,
-    "",
-  );
+  leftCore = leftCore.replace(/\s+as an additional cost(?: to play (?:this|me))?/i, "");
 
   const leftEffect = parseEffect(`${leftCore}.`);
   if (!leftEffect) {
@@ -2688,9 +2683,7 @@ function parseEffects(text: string): Effect | undefined {
     const leftEff = parseReturnToHandEffect(
       `Return ${another ? "another " : ""}${normalize(leftRaw)} to its owner's hand.`,
     );
-    const rightEff = parseReturnToHandEffect(
-      `Return ${normalize(rightRaw)} to its owner's hand.`,
-    );
+    const rightEff = parseReturnToHandEffect(`Return ${normalize(rightRaw)} to its owner's hand.`);
     if (leftEff && rightEff) {
       return { effects: [leftEff, rightEff], type: "sequence" } as SequenceEffect;
     }
@@ -2952,10 +2945,18 @@ function effectReferencesPendingValue(effect: Effect | undefined): boolean {
   }
   // Recurse into nested effects / control-flow children.
   const nested: unknown[] = [];
-  if (Array.isArray(obj.effects)) {nested.push(...(obj.effects as unknown[]));}
-  if (obj.effect) {nested.push(obj.effect);}
-  if (obj.then) {nested.push(obj.then);}
-  if (obj.else) {nested.push(obj.else);}
+  if (Array.isArray(obj.effects)) {
+    nested.push(...(obj.effects as unknown[]));
+  }
+  if (obj.effect) {
+    nested.push(obj.effect);
+  }
+  if (obj.then) {
+    nested.push(obj.then);
+  }
+  if (obj.else) {
+    nested.push(obj.else);
+  }
   for (const n of nested) {
     if (effectReferencesPendingValue(n as Effect)) {
       return true;
@@ -2970,7 +2971,9 @@ function effectReferencesPendingValue(effect: Effect | undefined): boolean {
  * choose, play-from-deck-reveal, etc.).
  */
 function effectProducesPendingValue(effect: Effect | undefined): boolean {
-  if (!effect || typeof effect !== "object") {return false;}
+  if (!effect || typeof effect !== "object") {
+    return false;
+  }
   const t = (effect as { type?: string }).type;
   return t === "banish" || t === "look" || t === "reveal";
 }
@@ -3339,9 +3342,7 @@ function parseActivatedAbilityInner(text: string): ActivatedAbility | undefined 
   // Pre-strip "Spend this Energy only during showdowns" trailing restriction so
   // It doesn't break the [Add] match below.
   let preRestrictions: { type: string }[] | undefined;
-  const earlyShowdown = remaining.match(
-    /\s*Spend this Energy only during showdowns\.?\s*$/i,
-  );
+  const earlyShowdown = remaining.match(/\s*Spend this Energy only during showdowns\.?\s*$/i);
   if (earlyShowdown) {
     preRestrictions = [{ type: "energy-showdown-only" }];
     remaining = remaining.slice(0, remaining.length - earlyShowdown[0].length).trim();
@@ -3410,9 +3411,7 @@ function parseActivatedAbilityInner(text: string): ActivatedAbility | undefined 
   }
 
   // Extract "Spend this Energy only during showdowns" restriction (mana mod)
-  const showdownEnergyOnly = remaining.match(
-    /\s*Spend this Energy only during showdowns\.?\s*$/i,
-  );
+  const showdownEnergyOnly = remaining.match(/\s*Spend this Energy only during showdowns\.?\s*$/i);
   if (showdownEnergyOnly) {
     restrictions = [...(restrictions ?? []), { type: "energy-showdown-only" }];
     remaining = remaining.slice(0, remaining.length - showdownEnergyOnly[0].length).trim();
@@ -5127,7 +5126,11 @@ function parseLevelGatedAbilities(text: string): ParseAbilitiesResult | undefine
 
   // Prefix text: anything before the first [Level N] marker. Parse via the
   // Inner function so that Hunt expansion runs once at the outer layer.
-  const prefix = text.slice(0, matches[0].index).trim().replace(/[,.]\s*$/, "").trim();
+  const prefix = text
+    .slice(0, matches[0].index)
+    .trim()
+    .replace(/[,.]\s*$/, "")
+    .trim();
   if (prefix.length > 0) {
     const prefixResult = parseAbilitiesInner(prefix);
     if (prefixResult.success && prefixResult.abilities) {
@@ -5140,7 +5143,11 @@ function parseLevelGatedAbilities(text: string): ParseAbilitiesResult | undefine
   for (let i = 0; i < matches.length; i++) {
     const chunkStart = matches[i].end;
     const chunkEnd = i + 1 < matches.length ? matches[i + 1].index : text.length;
-    const chunkText = text.slice(chunkStart, chunkEnd).trim().replace(/^[>.\s]+/, "").trim();
+    const chunkText = text
+      .slice(chunkStart, chunkEnd)
+      .trim()
+      .replace(/^[>.\s]+/, "")
+      .trim();
     if (!chunkText) {
       continue;
     }
@@ -5242,8 +5249,7 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
       // - Multiple "Spend N XP" or "Spend <buff>" activated-cost openers (e.g., Voidreaver)
       const hasPostReminderAbility = /\)[A-Z:I]/.test(trimmed) || /\.\s*:rb_/.test(trimmed);
       const hasNewlineSeparatedAbilities = trimmed.includes("\n");
-      const hasMultipleSpendActivated =
-        (trimmed.match(/\bSpend\s+\d+\s+XP\b/g) ?? []).length >= 2;
+      const hasMultipleSpendActivated = (trimmed.match(/\bSpend\s+\d+\s+XP\b/g) ?? []).length >= 2;
       if (
         !hasRawEffect &&
         !hasPostReminderAbility &&

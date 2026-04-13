@@ -175,7 +175,7 @@ describe("Game Flow: Movement", () => {
     // Cannot voluntarily recall units — recalls only happen via game effects
     // (combat resolution, cleanup, card abilities).
     const { movementMoves } = require("../game-definition/moves/movement");
-    const {condition} = movementMoves.recallUnit;
+    const { condition } = movementMoves.recallUnit;
 
     // Condition should always return false regardless of state
     const mockState = { battlefields: { "bf-1": {} }, status: "playing" };
@@ -195,7 +195,7 @@ describe("Game Flow: Movement", () => {
   test("recallUnit enumerator always returns empty array (rule 616)", () => {
     // Enumerator should never offer recallUnit as an available move
     const { movementMoves } = require("../game-definition/moves/movement");
-    const {enumerator} = movementMoves.recallUnit;
+    const { enumerator } = movementMoves.recallUnit;
 
     const mockState = { battlefields: { "bf-1": {} }, status: "playing" };
     const mockContext = {

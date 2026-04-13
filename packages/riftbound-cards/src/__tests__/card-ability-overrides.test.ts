@@ -223,7 +223,7 @@ describe("Wave 3 Agent 4 manual overrides", () => {
     const card = registry.get("ogn-117-298")!;
     const ab = card.abilities![0] as TriggeredAbility;
     expect(ab.trigger.event).toBe("play-card");
-    const {restrictions} = (ab.trigger as { restrictions?: unknown[] });
+    const { restrictions } = ab.trigger as { restrictions?: unknown[] };
     expect(restrictions).toBeDefined();
   });
 });

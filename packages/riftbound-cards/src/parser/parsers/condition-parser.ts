@@ -179,7 +179,9 @@ function parseControlPhrase(text: string): Condition | undefined {
     const target = buildControlTarget(subject);
     if (target) {
       // Determine min count
-      const orMoreMatch = quantifier.match(/^(\d+|one|two|three|four|five|six|seven|eight|nine|ten)(?:\+| or more)$/i);
+      const orMoreMatch = quantifier.match(
+        /^(\d+|one|two|three|four|five|six|seven|eight|nine|ten)(?:\+| or more)$/i,
+      );
       if (orMoreMatch) {
         const min = parseNumberWord(orMoreMatch[1]) ?? 1;
         return {
@@ -245,9 +247,7 @@ function parseHasCountPhrase(text: string): Condition | undefined {
   }
 
   // "you have N+ units at that battlefield" — same battlefield as the trigger
-  const atThatBfMatch = text.match(
-    /^you have (\d+)\+?\s+(units?|cards?)\s+at that battlefield$/i,
-  );
+  const atThatBfMatch = text.match(/^you have (\d+)\+?\s+(units?|cards?)\s+at that battlefield$/i);
   if (atThatBfMatch) {
     const count = Number.parseInt(atThatBfMatch[1], 10);
     const subjType = atThatBfMatch[2].toLowerCase().replace(/s$/, "");
@@ -369,8 +369,7 @@ const IF_OPPONENT_SCORE_WITHIN_PATTERN =
 /**
  * Pattern for "If you're within N points of winning"
  */
-const IF_YOURE_WITHIN_PATTERN =
-  /^If you(?:'re|'re) within (\d+) points? of winning,?\s*/i;
+const IF_YOURE_WITHIN_PATTERN = /^If you(?:'re|'re) within (\d+) points? of winning,?\s*/i;
 
 /**
  * Pattern for "[Legion]" condition (in activated abilities)
@@ -722,9 +721,7 @@ export function parseLeadingIfCondition(
     };
   }
   // "if your other units have total Might N or more"
-  const totalMightMatch = clause.match(
-    /^your other units have total Might (\d+) or more$/i,
-  );
+  const totalMightMatch = clause.match(/^your other units have total Might (\d+) or more$/i);
   if (totalMightMatch) {
     return {
       condition: {

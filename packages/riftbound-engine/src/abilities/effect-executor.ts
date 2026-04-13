@@ -599,9 +599,12 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           | Partial<RiftboundCardMeta>
           | undefined;
         const existing = sourceMeta?.exiledByThis ?? [];
-        ctx.cards.updateCardMeta?.(ctx.sourceCardId as CoreCardId, {
-          exiledByThis: [...existing, ...(targets as string[])],
-        } as unknown as Record<string, unknown>);
+        ctx.cards.updateCardMeta?.(
+          ctx.sourceCardId as CoreCardId,
+          {
+            exiledByThis: [...existing, ...(targets as string[])],
+          } as unknown as Record<string, unknown>,
+        );
       }
       for (const targetId of targets) {
         ctx.zones.moveCard({
@@ -861,10 +864,9 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
         .getCardsInZone("hand" as CoreZoneId, revealer as CorePlayerId)
         .map((id) => id as string);
 
-      const {filter} = (effect as unknown as { filter?: { excludeCardTypes?: string[] } });
-      const onPicked =
-        ((effect as unknown as { onPicked?: "recycle" | "banish" | "discard" }).onPicked ??
-          "recycle") as "recycle" | "banish" | "discard";
+      const { filter } = effect as unknown as { filter?: { excludeCardTypes?: string[] } };
+      const onPicked = ((effect as unknown as { onPicked?: "recycle" | "banish" | "discard" })
+        .onPicked ?? "recycle") as "recycle" | "banish" | "discard";
 
       // If the revealer has no cards in hand, there's nothing to pick — skip.
       if (revealed.length === 0) {

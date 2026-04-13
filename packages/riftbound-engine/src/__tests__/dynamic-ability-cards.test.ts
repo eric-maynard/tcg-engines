@@ -116,12 +116,10 @@ function createHarness(cardData: Record<string, CardData>) {
   };
 
   const cards = {
-    getCardMeta: ((cardId: CoreCardId) =>
-      cardStore.get(cardId as string)?.meta) as unknown as (
+    getCardMeta: ((cardId: CoreCardId) => cardStore.get(cardId as string)?.meta) as unknown as (
       cardId: CoreCardId,
     ) => Partial<RiftboundCardMeta> | undefined,
-    getCardOwner: ((cardId: CoreCardId) =>
-      cardStore.get(cardId as string)?.owner) as unknown as (
+    getCardOwner: ((cardId: CoreCardId) => cardStore.get(cardId as string)?.owner) as unknown as (
       cardId: CoreCardId,
     ) => string | undefined,
     updateCardMeta: ((cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => {
@@ -205,9 +203,42 @@ describe("Heimerdinger, Inventor: inherits exhaust abilities", () => {
 
     const state = createMockState();
     const harness = createHarness({
-      "draw-gear": { meta: { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false }, owner: "p1", zone: "base" },
-      "energy-unit": { meta: { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false }, owner: "p1", zone: "base" },
-      "heimer-1": { meta: { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false }, owner: "p1", zone: "base" },
+      "draw-gear": {
+        meta: {
+          buffed: false,
+          combatRole: null,
+          damage: 0,
+          exhausted: false,
+          hidden: false,
+          stunned: false,
+        },
+        owner: "p1",
+        zone: "base",
+      },
+      "energy-unit": {
+        meta: {
+          buffed: false,
+          combatRole: null,
+          damage: 0,
+          exhausted: false,
+          hidden: false,
+          stunned: false,
+        },
+        owner: "p1",
+        zone: "base",
+      },
+      "heimer-1": {
+        meta: {
+          buffed: false,
+          combatRole: null,
+          damage: 0,
+          exhausted: false,
+          hidden: false,
+          stunned: false,
+        },
+        owner: "p1",
+        zone: "base",
+      },
     });
 
     const context = {
@@ -235,9 +266,7 @@ describe("Heimerdinger, Inventor: inherits exhaust abilities", () => {
     expect(heimerNonInherited.length).toBe(0);
 
     // The friendly gear's own ability also surfaces on itself.
-    const gearOwn = results.filter(
-      (r) => r.cardId === "draw-gear" && r.sourceCardId === undefined,
-    );
+    const gearOwn = results.filter((r) => r.cardId === "draw-gear" && r.sourceCardId === undefined);
     expect(gearOwn.length).toBe(1);
   });
 
@@ -265,8 +294,30 @@ describe("Heimerdinger, Inventor: inherits exhaust abilities", () => {
 
     const state = createMockState();
     const harness = createHarness({
-      "enemy-gear": { meta: { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false }, owner: "p2", zone: "base" },
-      "heimer-1": { meta: { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false }, owner: "p1", zone: "base" },
+      "enemy-gear": {
+        meta: {
+          buffed: false,
+          combatRole: null,
+          damage: 0,
+          exhausted: false,
+          hidden: false,
+          stunned: false,
+        },
+        owner: "p2",
+        zone: "base",
+      },
+      "heimer-1": {
+        meta: {
+          buffed: false,
+          combatRole: null,
+          damage: 0,
+          exhausted: false,
+          hidden: false,
+          stunned: false,
+        },
+        owner: "p1",
+        zone: "base",
+      },
     });
 
     const context = {
@@ -309,8 +360,30 @@ describe("Heimerdinger, Inventor: inherits exhaust abilities", () => {
 
     const state = createMockState();
     const harness = createHarness({
-      "draw-gear": { meta: { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false }, owner: "p1", zone: "base" },
-      "plain-unit": { meta: { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false }, owner: "p1", zone: "base" },
+      "draw-gear": {
+        meta: {
+          buffed: false,
+          combatRole: null,
+          damage: 0,
+          exhausted: false,
+          hidden: false,
+          stunned: false,
+        },
+        owner: "p1",
+        zone: "base",
+      },
+      "plain-unit": {
+        meta: {
+          buffed: false,
+          combatRole: null,
+          damage: 0,
+          exhausted: false,
+          hidden: false,
+          stunned: false,
+        },
+        owner: "p1",
+        zone: "base",
+      },
     });
 
     const context = {

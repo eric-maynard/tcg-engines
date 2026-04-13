@@ -28,9 +28,7 @@ describe("Effect: Modify Might", () => {
     });
 
     it("should parse 'Give a unit -1 [Might] this turn, to a minimum of 1 [Might].'", () => {
-      const result = parseAbilities(
-        "Give a unit -1 [Might] this turn, to a minimum of 1 [Might].",
-      );
+      const result = parseAbilities("Give a unit -1 [Might] this turn, to a minimum of 1 [Might].");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
@@ -192,9 +190,7 @@ describe("Effect: Modify Might", () => {
     });
 
     it("should parse 'When you play a unit, give a unit +1 [Might] this turn.'", () => {
-      const result = parseAbilities(
-        "When you play a unit, give a unit +1 [Might] this turn.",
-      );
+      const result = parseAbilities("When you play a unit, give a unit +1 [Might] this turn.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
@@ -356,9 +352,7 @@ describe("Effect: Modify Might", () => {
 
   describe("static might modifier patterns", () => {
     it("should parse 'I have +2 [Might] while I'm attacking with another unit.'", () => {
-      const result = parseAbilities(
-        "I have +2 [Might] while I'm attacking with another unit.",
-      );
+      const result = parseAbilities("I have +2 [Might] while I'm attacking with another unit.");
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
@@ -393,31 +387,34 @@ describe("Effect: Modify Might", () => {
   });
 
   describe("multi-line cards with modify-might", () => {
-    it(String.raw`should parse 'I enter ready.\n[Exhaust]: Give a unit +3 [Might] this turn.'`, () => {
-      const result = parseAbilities(
-        "I enter ready.\n[Exhaust]: Give a unit +3 [Might] this turn.",
-      );
+    it(
+      String.raw`should parse 'I enter ready.\n[Exhaust]: Give a unit +3 [Might] this turn.'`,
+      () => {
+        const result = parseAbilities(
+          "I enter ready.\n[Exhaust]: Give a unit +3 [Might] this turn.",
+        );
 
-      expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(2);
-      // First ability: static enter ready
-      expect(result.abilities?.[0]).toEqual(
-        expect.objectContaining({
-          type: "static",
-        }),
-      );
-      // Second ability: activated modify-might
-      expect(result.abilities?.[1]).toEqual(
-        expect.objectContaining({
-          cost: expect.objectContaining({ exhaust: true }),
-          effect: expect.objectContaining({
-            amount: 3,
-            type: "modify-might",
+        expect(result.success).toBe(true);
+        expect(result.abilities).toHaveLength(2);
+        // First ability: static enter ready
+        expect(result.abilities?.[0]).toEqual(
+          expect.objectContaining({
+            type: "static",
           }),
-          type: "activated",
-        }),
-      );
-    });
+        );
+        // Second ability: activated modify-might
+        expect(result.abilities?.[1]).toEqual(
+          expect.objectContaining({
+            cost: expect.objectContaining({ exhaust: true }),
+            effect: expect.objectContaining({
+              amount: 3,
+              type: "modify-might",
+            }),
+            type: "activated",
+          }),
+        );
+      },
+    );
   });
 
   describe("token normalization", () => {

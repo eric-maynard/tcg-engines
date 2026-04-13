@@ -408,13 +408,7 @@ export const cardPlayMoves: Partial<
       const { cardId, playerId, chosenTargetId } = context.params;
       const { zones } = context;
 
-      deductCost(
-        draft,
-        playerId,
-        cardId,
-        { chosenTargetId },
-        createMetaAccessor(context.cards),
-      );
+      deductCost(draft, playerId, cardId, { chosenTargetId }, createMetaAccessor(context.cards));
 
       zones.moveCard({
         cardId: cardId as CoreCardId,
@@ -587,13 +581,7 @@ export const cardPlayMoves: Partial<
       const { cardId, playerId, targets, xAmount } = context.params;
       const { zones } = context;
 
-      deductCost(
-        draft,
-        playerId,
-        cardId,
-        { targets, xAmount },
-        createMetaAccessor(context.cards),
-      );
+      deductCost(draft, playerId, cardId, { targets, xAmount }, createMetaAccessor(context.cards));
 
       // Look up spell effect from card definition
       const registry = getGlobalCardRegistry();
@@ -814,13 +802,7 @@ export const cardPlayMoves: Partial<
       if (championZoneCards.length > 0) {
         const championId = championZoneCards[0];
         if (championId) {
-          deductCost(
-            draft,
-            playerId,
-            championId as string,
-            {},
-            createMetaAccessor(context.cards),
-          );
+          deductCost(draft, playerId, championId as string, {}, createMetaAccessor(context.cards));
 
           zones.moveCard({
             cardId: championId,

@@ -515,9 +515,7 @@ describe("Move escalation — Mageseeker Investigator", () => {
 
     // P1 already moved 1 unit this turn; second move with Mageseeker
     // In play costs 1 rainbow, but P1 has 0 energy → rejected.
-    expect(
-      condition(state, mockContext as unknown as Parameters<typeof condition>[1]),
-    ).toBe(false);
+    expect(condition(state, mockContext as unknown as Parameters<typeof condition>[1])).toBe(false);
   });
 
   test("standardMove condition allows second move when pool can cover surcharge", () => {
@@ -573,9 +571,7 @@ describe("Move escalation — Mageseeker Investigator", () => {
       },
     };
 
-    expect(
-      condition(state, mockContext as unknown as Parameters<typeof condition>[1]),
-    ).toBe(true);
+    expect(condition(state, mockContext as unknown as Parameters<typeof condition>[1])).toBe(true);
   });
 
   test("standardMove condition does not charge surcharge without an enemy escalator", () => {
@@ -627,9 +623,7 @@ describe("Move escalation — Mageseeker Investigator", () => {
     };
 
     // No Mageseeker on the board → surcharge=0 → move allowed even with 0 energy
-    expect(
-      condition(state, mockContext as unknown as Parameters<typeof condition>[1]),
-    ).toBe(true);
+    expect(condition(state, mockContext as unknown as Parameters<typeof condition>[1])).toBe(true);
   });
 
   test("standardMove reducer deducts surcharge and increments counter", () => {
@@ -695,7 +689,10 @@ describe("Move escalation — Mageseeker Investigator", () => {
       },
     };
 
-    reducer(state as unknown as Parameters<typeof reducer>[0], mockContext as unknown as Parameters<typeof reducer>[1]);
+    reducer(
+      state as unknown as Parameters<typeof reducer>[0],
+      mockContext as unknown as Parameters<typeof reducer>[1],
+    );
 
     // 1 rainbow surcharge deducted
     expect(state.runePools.p1?.energy).toBe(2);

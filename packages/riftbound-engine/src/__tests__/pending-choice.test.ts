@@ -95,8 +95,7 @@ function buildMockCtx(opts: MockOptions = {}): {
     sourceCardId: "source-spell",
     zones: {
       drawCards: () => [] as unknown as CoreCardId[],
-      getCardZone: (cardId: CoreCardId) =>
-        zoneOf.get(cardId as string) as CoreZoneId | undefined,
+      getCardZone: (cardId: CoreCardId) => zoneOf.get(cardId as string) as CoreZoneId | undefined,
       getCardsInZone: (zoneId: CoreZoneId, pid?: CorePlayerId) => {
         if (zoneId === ("hand" as CoreZoneId) && pid === (opponentId as CorePlayerId)) {
           return opponentHand as unknown as CoreCardId[];

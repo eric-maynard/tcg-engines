@@ -13,9 +13,7 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * This requires opponent-hand reveal + pick flow (see Sabotage TODO).
  * Captured only with Hidden + a sequence stub; deferred for engine hook.
  */
-const abilities: Ability[] = [
-  { keyword: "Hidden", type: "keyword" },
-];
+const abilities: Ability[] = [{ keyword: "Hidden", type: "keyword" }];
 
 export const boneSkewer: SpellCard = {
   abilities,

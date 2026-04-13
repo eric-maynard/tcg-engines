@@ -494,8 +494,6 @@ function renderCardElement(card, isFacedown = false, zone = "") {
          onmouseleave="hidePreview()"
          ondblclick="openZoom('${esc(card.id)}')"
          style="${isLegendZone && !isPlayable ? "cursor:default;" : ""}">
-      ${card.energyCost != null ? `<div class="card-cost">${card.energyCost}</div>` : ""}
-      ${card.might != null ? `<div class="card-might">${card.might}</div>` : ""}
       <img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(card.name)}"
            onerror="this.style.background='linear-gradient(135deg,#201a38,#2a2248)';this.alt='${esc(card.name)}'">
       ${card.meta?.damage > 0 ? `<div class="card-damage">${card.meta.damage}</div>` : ""}

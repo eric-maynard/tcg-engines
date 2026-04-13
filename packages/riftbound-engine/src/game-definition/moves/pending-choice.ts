@@ -10,11 +10,7 @@
  * the stored effect (recycle / banish / discard), and clears the state.
  */
 
-import type {
-  CardId as CoreCardId,
-  ZoneId as CoreZoneId,
-  GameMoveDefinitions,
-} from "@tcg/core";
+import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type {
   PendingChoice,

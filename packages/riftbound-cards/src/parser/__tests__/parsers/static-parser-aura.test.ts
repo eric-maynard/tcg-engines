@@ -86,33 +86,36 @@ describe("Static Parser: aura extensions", () => {
     );
   });
 
-  it(String.raw`parses Leona, Zealot: 'If an opponent's score is within 3 points of the Victory Score, I enter ready.\nStunned enemy units here have -8 [Might], to a minimum of 1 [Might].'`, () => {
-    const result = parseAbilities(
-      "If an opponent's score is within 3 points of the Victory Score, I enter ready.\nStunned enemy units here have -8 [Might], to a minimum of 1 [Might].",
-    );
-    expect(result.success).toBe(true);
-    expect(result.abilities).toHaveLength(2);
-    // First ability: conditional enter-ready
-    expect(result.abilities?.[0]).toEqual(
-      expect.objectContaining({
-        condition: expect.objectContaining({
-          type: "score-within",
-          whose: "opponent",
+  it(
+    String.raw`parses Leona, Zealot: 'If an opponent's score is within 3 points of the Victory Score, I enter ready.\nStunned enemy units here have -8 [Might], to a minimum of 1 [Might].'`,
+    () => {
+      const result = parseAbilities(
+        "If an opponent's score is within 3 points of the Victory Score, I enter ready.\nStunned enemy units here have -8 [Might], to a minimum of 1 [Might].",
+      );
+      expect(result.success).toBe(true);
+      expect(result.abilities).toHaveLength(2);
+      // First ability: conditional enter-ready
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({
+          condition: expect.objectContaining({
+            type: "score-within",
+            whose: "opponent",
+          }),
+          effect: expect.objectContaining({ type: "enter-ready" }),
+          type: "static",
         }),
-        effect: expect.objectContaining({ type: "enter-ready" }),
-        type: "static",
-      }),
-    );
-    // Second ability: might penalty aura
-    expect(result.abilities?.[1]).toEqual(
-      expect.objectContaining({
-        effect: expect.objectContaining({
-          amount: -8,
-          minimum: 1,
-          type: "modify-might",
+      );
+      // Second ability: might penalty aura
+      expect(result.abilities?.[1]).toEqual(
+        expect.objectContaining({
+          effect: expect.objectContaining({
+            amount: -8,
+            minimum: 1,
+            type: "modify-might",
+          }),
+          type: "static",
         }),
-        type: "static",
-      }),
-    );
-  });
+      );
+    },
+  );
 });

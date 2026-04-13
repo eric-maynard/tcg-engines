@@ -377,11 +377,7 @@ export const combatMoves: Partial<
         // Award 1 VP for conquering (rule 630.1)
         // Blocked if a battlefield ability (e.g. Forgotten Monument) prevents
         // This player from scoring here right now.
-        const scoringAllowed = canPlayerScoreAtBattlefield(
-          draft,
-          attackingPlayer,
-          battlefieldId,
-        );
+        const scoringAllowed = canPlayerScoreAtBattlefield(draft, attackingPlayer, battlefieldId);
         const player = draft.players[attackingPlayer];
         if (player && scoringAllowed) {
           player.victoryPoints += 1;

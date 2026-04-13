@@ -23,10 +23,7 @@ import {
 import { applyBattlefieldPermanentEffects } from "../operations/battlefield-setup-effects";
 import { canPlayerScoreAtBattlefield } from "../operations/scoring-rules";
 import type { PlayerState, RiftboundGameState } from "../types";
-import {
-  getEffectiveVictoryScore,
-  hasPlayerWon,
-} from "../game-definition/win-conditions/victory";
+import { getEffectiveVictoryScore, hasPlayerWon } from "../game-definition/win-conditions/victory";
 
 function createPlayer(id: string, overrides: Partial<PlayerState> = {}): PlayerState {
   return {

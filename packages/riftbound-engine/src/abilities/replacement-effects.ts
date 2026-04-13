@@ -196,9 +196,11 @@ export function markReplacementConsumed(
     return;
   }
   if (!draft.consumedNextReplacements) {
-    (draft as unknown as {
-      consumedNextReplacements: Record<string, true>;
-    }).consumedNextReplacements = {};
+    (
+      draft as unknown as {
+        consumedNextReplacements: Record<string, true>;
+      }
+    ).consumedNextReplacements = {};
   }
   const key = buildConsumedKey(matched.sourceCardId, matched.abilityIndex);
   (draft.consumedNextReplacements as Record<string, true>)[key] = true;
@@ -214,8 +216,10 @@ export function markReplacementConsumed(
  */
 export function clearConsumedReplacements(draft: RiftboundGameState): void {
   if (draft.consumedNextReplacements) {
-    (draft as unknown as {
-      consumedNextReplacements: Record<string, true>;
-    }).consumedNextReplacements = {};
+    (
+      draft as unknown as {
+        consumedNextReplacements: Record<string, true>;
+      }
+    ).consumedNextReplacements = {};
   }
 }

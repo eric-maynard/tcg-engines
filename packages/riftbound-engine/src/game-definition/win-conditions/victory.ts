@@ -15,10 +15,7 @@ import type { PlayerId, RiftboundGameState } from "../../types";
  * bumped by battlefields like Aspirant's Climb (via the
  * `increase-victory-score` effect).
  */
-export function getEffectiveVictoryScore(
-  state: RiftboundGameState,
-  playerId: PlayerId,
-): number {
+export function getEffectiveVictoryScore(state: RiftboundGameState, playerId: PlayerId): number {
   const player = state.players[playerId];
   const modifier = player?.victoryScoreModifier ?? 0;
   return state.victoryScore + modifier;
@@ -27,10 +24,7 @@ export function getEffectiveVictoryScore(
 /**
  * Check if a given player currently meets their effective victory threshold.
  */
-export function hasPlayerWon(
-  state: RiftboundGameState,
-  playerId: PlayerId,
-): boolean {
+export function hasPlayerWon(state: RiftboundGameState, playerId: PlayerId): boolean {
   const player = state.players[playerId];
   if (!player) {
     return false;

@@ -268,7 +268,6 @@ function parseStaticAbilityInner(
   cleanText: string,
   text: string,
 ): StaticAbilityParseResult | undefined {
-
   // "X can be played to an occupied battlefield[, if Y]" — a permission
   // Granting static used by UNL Ambush/Hunt units like Arachnoid Horror.
   // Emits a `can-play-to-occupied` effect that the engine can reference.
@@ -282,9 +281,8 @@ function parseStaticAbilityInner(
       subject === "i"
         ? ({ type: "self" } as AnyTarget)
         : ({
-            controller: subject.includes("friendly") || subject.includes("your")
-              ? "friendly"
-              : undefined,
+            controller:
+              subject.includes("friendly") || subject.includes("your") ? "friendly" : undefined,
             location: subject.includes("here") ? "here" : undefined,
             type: "unit",
           } as unknown as AnyTarget);
@@ -622,16 +620,16 @@ function parseStaticAbilityInner(
   }
 
   // "I have +N :rb_might: while CONDITION." - conditional static self-might
-  const whileMightMatch = cleanText.match(
-    /^I have \+(\d+)\s*:rb_might:\s+(while .+?)\.?$/i,
-  );
+  const whileMightMatch = cleanText.match(/^I have \+(\d+)\s*:rb_might:\s+(while .+?)\.?$/i);
   if (whileMightMatch) {
     const amount = Number.parseInt(whileMightMatch[1], 10);
     const conditionResult = parseConditionFromText(whileMightMatch[2] + ",");
-    const condition = conditionResult?.condition ?? ({
-      text: whileMightMatch[2],
-      type: "custom",
-    } as unknown as Condition);
+    const condition =
+      conditionResult?.condition ??
+      ({
+        text: whileMightMatch[2],
+        type: "custom",
+      } as unknown as Condition);
 
     return {
       ability: {
@@ -654,10 +652,12 @@ function parseStaticAbilityInner(
   );
   if (conditionalMightMatch) {
     const conditionResult = parseConditionFromText(conditionalMightMatch[1] + ",");
-    const condition: Condition = conditionResult?.condition ?? ({
-      text: conditionalMightMatch[1],
-      type: "custom",
-    } as unknown as Condition);
+    const condition: Condition =
+      conditionResult?.condition ??
+      ({
+        text: conditionalMightMatch[1],
+        type: "custom",
+      } as unknown as Condition);
 
     const keywords = conditionalMightMatch[3] ? parseKeywordList(conditionalMightMatch[3]) : [];
 
@@ -668,17 +668,22 @@ function parseStaticAbilityInner(
       type: "modify-might",
     } as unknown as Effect;
 
-    const effect: Effect = keywords.length > 0
-      ? ({
-          effects: [
-            mightEffect,
-            keywords.length === 1
-              ? { keyword: keywords[0], target: { type: "self" } as AnyTarget, type: "grant-keyword" }
-              : { keywords, target: { type: "self" } as AnyTarget, type: "grant-keywords" },
-          ],
-          type: "sequence",
-        } as unknown as Effect)
-      : mightEffect;
+    const effect: Effect =
+      keywords.length > 0
+        ? ({
+            effects: [
+              mightEffect,
+              keywords.length === 1
+                ? {
+                    keyword: keywords[0],
+                    target: { type: "self" } as AnyTarget,
+                    type: "grant-keyword",
+                  }
+                : { keywords, target: { type: "self" } as AnyTarget, type: "grant-keywords" },
+            ],
+            type: "sequence",
+          } as unknown as Effect)
+        : mightEffect;
 
     return {
       ability: {
@@ -791,9 +796,7 @@ function parseStaticAbilityInner(
       startIndex: 0,
     };
   }
-  const selfCostBareMatch = cleanText.match(
-    /^I cost\s+(.+?)\s+less(?:\s+instead)?\.?$/i,
-  );
+  const selfCostBareMatch = cleanText.match(/^I cost\s+(.+?)\s+less(?:\s+instead)?\.?$/i);
   if (selfCostBareMatch) {
     return {
       ability: {
@@ -839,9 +842,7 @@ function parseStaticAbilityInner(
           condition,
           effect: {
             by: whileSpellCostReduceMatch[2],
-            ...(whileSpellCostReduceMatch[3]
-              ? { minimum: whileSpellCostReduceMatch[3] }
-              : {}),
+            ...(whileSpellCostReduceMatch[3] ? { minimum: whileSpellCostReduceMatch[3] } : {}),
             target: { controller: "friendly", type: "spell" } as Target,
             type: "cost-reduction",
           } as unknown as Effect,
@@ -1220,9 +1221,7 @@ function parseStaticAbilityInner(
     /^(While .+?),\s*friendly spells cost\s+(.+?)\s+less(?:\s+to a minimum of\s+(.+?))?,\s*and enemy spells cost\s+(.+?)\s+more\.?$/i,
   );
   if (whileFriendlyEnemySpellCostMatch) {
-    const conditionResult = parseConditionFromText(
-      whileFriendlyEnemySpellCostMatch[1] + ",",
-    );
+    const conditionResult = parseConditionFromText(whileFriendlyEnemySpellCostMatch[1] + ",");
     const condition = conditionResult?.condition;
     if (condition) {
       const reduction = whileFriendlyEnemySpellCostMatch[2];

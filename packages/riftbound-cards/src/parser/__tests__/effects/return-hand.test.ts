@@ -95,9 +95,7 @@ describe("Effect: Return to Hand", () => {
     });
 
     it("should parse 'Return a unit or gear from your trash to your hand.'", () => {
-      const result = parseAbilities(
-        "Return a unit or gear from your trash to your hand.",
-      );
+      const result = parseAbilities("Return a unit or gear from your trash to your hand.");
 
       expect(result.success).toBe(true);
       expect(result.abilities?.[0]).toEqual(
@@ -119,7 +117,7 @@ describe("Effect: Return to Hand", () => {
       );
 
       expect(result.success).toBe(true);
-      const {target} = (
+      const { target } = (
         result.abilities?.[0] as {
           effect: { target: { filter: { tag: string }[] } };
         }
@@ -175,11 +173,9 @@ describe("Effect: Return to Hand", () => {
       );
 
       expect(result.success).toBe(true);
-      const {effect} = (
-        result.abilities?.[0] as {
-          effect: { type: string; effects?: unknown[] };
-        }
-      );
+      const { effect } = result.abilities?.[0] as {
+        effect: { type: string; effects?: unknown[] };
+      };
       expect(effect.type).toBe("sequence");
       expect(effect.effects).toHaveLength(2);
     });
