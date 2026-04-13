@@ -225,11 +225,12 @@ function hotkeyDrawCard() {
 }
 
 function hotkeyRewind() {
-  // Placeholder — W8 will wire this to the real rewind move.
-  // eslint-disable-next-line no-console
-  console.log("[hotkeys] TODO: rewind not yet implemented (engine work)");
-  if (typeof showToast === "function") {
-    showToast("Rewind — not yet implemented");
+  // W8: R / Backspace fire the same WS undo request as the sidebar Rewind
+  // button. The server rejects if there is nothing to rewind; the client
+  // clears any armed hotkey mode and in-progress interaction state via
+  // clearInteractionStateOnRewind() once the new state frame arrives.
+  if (typeof requestUndo === "function") {
+    requestUndo();
   }
 }
 
@@ -416,3 +417,5 @@ window.getArmedMode = getArmedMode;
 window.isArmed = isArmed;
 window.handleArmedCardClick = handleArmedCardClick;
 window.initHotkeys = initHotkeys;
+// W8: renderer calls disarmAll() to clear armed state on rewind.
+window.disarmAll = disarmAll;

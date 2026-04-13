@@ -2066,13 +2066,17 @@ const server = Bun.serve({
 
       const state = session.engine.getState();
       if (state.status !== "playing") {
-        return json({ error: "Can only undo during active gameplay" }, 400);
+        return json({ error: "Can only rewind during active gameplay" }, 400);
+      }
+
+      if (session.engine.getReplayHistory().length === 0) {
+        return json({ error: "Nothing to rewind" }, 400);
       }
 
       const success = session.engine.undo();
-      if (!success) {return json({ error: "Nothing to undo" }, 400);}
+      if (!success) {return json({ error: "Nothing to rewind" }, 400);}
 
-      session.log.push(makeLogEntry("Rewound their last action."));
+      session.log.push(makeLogEntry("Rewound their last action.", { rewindable: false }));
       return json({ state: buildGameSnapshot(session), success: true });
     }
 
@@ -2833,19 +2837,23 @@ const server = Bun.serve({
       if (msg.type === "undo") {
         const undoState = session.engine.getState();
         if (undoState.status !== "playing") {
-          ws.send(JSON.stringify({ error: "Can only undo during active gameplay", type: "error" }));
+          ws.send(JSON.stringify({ error: "Can only rewind during active gameplay", type: "error" }));
+          return;
+        }
+        if (session.engine.getReplayHistory().length === 0) {
+          ws.send(JSON.stringify({ error: "Nothing to rewind", type: "error" }));
           return;
         }
         const success = session.engine.undo();
         if (!success) {
-          ws.send(JSON.stringify({ error: "Nothing to undo", type: "error" }));
+          ws.send(JSON.stringify({ error: "Nothing to rewind", type: "error" }));
           return;
         }
-        session.log.push(
-          makeLogEntry(
-            `${actorName(playerId, session.playerNames)} rewound their last action.`,
-          ),
-        );
+        // W8: emit the canonical "Rewound their last action." line (non-rewindable
+        // so rewinding a rewind is impossible) with a fresh timestamp. This matches
+        // the REST handler path above and gives the client a stable sentinel to
+        // detect and clear in-progress UI state on.
+        session.log.push(makeLogEntry("Rewound their last action.", { rewindable: false }));
         session.seq++;
         const snapshot = buildGameSnapshot(session);
         // Broadcast updated state to all clients

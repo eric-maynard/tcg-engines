@@ -2697,3 +2697,37 @@
         gap: 18px;
       }
     }
+
+    /* W8: brief flash overlay on the game area when a rewind lands. Purely
+       cosmetic — visual confirmation that the state frame just reverted. */
+    #game-scale-wrapper.rewind-flash {
+      animation: rewind-flash-pulse 320ms ease-out;
+    }
+    @keyframes rewind-flash-pulse {
+      0%   { filter: none; }
+      30%  { filter: brightness(1.2) hue-rotate(-12deg); }
+      100% { filter: none; }
+    }
+
+    /* W13: per-card Hide button in hand (privacy toggle). Sits in the
+       upper-right of the card so it doesn't fight the Auto Pay button. */
+    .card-hide-btn {
+      position: absolute;
+      right: 4px;
+      top: 4px;
+      padding: 2px 5px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      background: rgba(20, 20, 35, 0.82);
+      color: #c9c4e0;
+      border: 1px solid #4a4470;
+      border-radius: 3px;
+      cursor: pointer;
+      z-index: 3;
+    }
+    .card-hide-btn:hover {
+      background: rgba(40, 40, 60, 0.95);
+      color: #f0ebff;
+    }

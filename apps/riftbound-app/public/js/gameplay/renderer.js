@@ -3,6 +3,65 @@
 const DOMAIN_LABELS = { fury: "F", calm: "Ca", mind: "M", body: "B", chaos: "Ch", order: "O" };
 
 // ============================================
+// W13: Per-card Hide toggle in hand
+// ============================================
+// Client-only privacy toggle. Players sometimes want to hide a specific card
+// in their own hand (e.g. when streaming). This is purely UI — the engine
+// still treats the card normally, and the hidden state persists in
+// localStorage so it survives page reloads.
+
+const HIDDEN_HAND_STORAGE_KEY = "rba-hidden-hand-cards";
+
+/** Lazily-loaded Set<string> of card IDs the viewer has hidden. */
+let _hiddenHandCards = null;
+
+function _loadHiddenHandCards() {
+  if (_hiddenHandCards) return _hiddenHandCards;
+  _hiddenHandCards = new Set();
+  try {
+    const raw = localStorage.getItem(HIDDEN_HAND_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        for (const id of parsed) if (typeof id === "string") _hiddenHandCards.add(id);
+      }
+    }
+  } catch (err) {
+    console.warn("[renderer] failed to load hidden-hand-cards from localStorage", err);
+  }
+  return _hiddenHandCards;
+}
+
+function _saveHiddenHandCards() {
+  if (!_hiddenHandCards) return;
+  try {
+    localStorage.setItem(
+      HIDDEN_HAND_STORAGE_KEY,
+      JSON.stringify(Array.from(_hiddenHandCards)),
+    );
+  } catch (err) {
+    console.warn("[renderer] failed to persist hidden-hand-cards", err);
+  }
+}
+
+function isHandCardHidden(cardId) {
+  return _loadHiddenHandCards().has(cardId);
+}
+
+/** Toggle the hidden state of a card in hand and re-render. */
+function toggleHideHandCard(cardId) {
+  const set = _loadHiddenHandCards();
+  if (set.has(cardId)) {
+    set.delete(cardId);
+  } else {
+    set.add(cardId);
+  }
+  _saveHiddenHandCards();
+  if (typeof render === "function") render();
+}
+window.toggleHideHandCard = toggleHideHandCard;
+
+// ============================================
 // State indicator tracking (Workstream 1)
 // ============================================
 // Tracks which cards are "summoning sick" (entered base/battlefield this turn)
@@ -106,6 +165,12 @@ function render() {
 
   // Detect phase/turn transitions before rendering
   checkPhaseTransition();
+
+  // W8: if the newest log entry on the incoming frame is the rewind
+  // sentinel, clear any in-progress UI interaction (target cursor, armed
+  // hotkey mode) and flash the board. Runs before child renderers so they
+  // pick up the cleared interaction state.
+  clearInteractionStateOnRewind();
 
   // Recompute summoning-sick / just-played card tracking before any card render
   updateStateIndicatorTracking();
@@ -440,6 +505,24 @@ function renderCardElement(card, isFacedown = false, zone = "") {
     return `<div class="card facedown"><div class="card-back"></div></div>`;
   }
 
+  // W13: if the viewing player has hidden this specific hand card, render
+  // a facedown stand-in with an Unhide button so they can toggle it back.
+  // Purely client-side — the card still participates normally in gameplay.
+  const isOwnedByViewer = card.owner === viewingPlayer;
+  if (zone === "hand" && isOwnedByViewer && card.id && isHandCardHidden(card.id)) {
+    return `
+      <div class="card facedown hand-hidden" data-card-id="${esc(card.id)}" data-zone="hand"
+           onpointerdown="onPointerDown(event, '${esc(card.id)}')">
+        <div class="card-back"></div>
+        <button class="card-hide-btn"
+                type="button"
+                title="Reveal this card"
+                onpointerdown="event.stopPropagation();"
+                onclick="event.stopPropagation(); toggleHideHandCard('${esc(card.id)}');">Show</button>
+      </div>
+    `;
+  }
+
   const classes = ["card"];
   if (card.cardType) classes.push("type-" + card.cardType);
   if (card.meta?.exhausted) {
@@ -484,6 +567,18 @@ function renderCardElement(card, isFacedown = false, zone = "") {
       style="position:absolute;left:4px;bottom:22px;padding:2px 6px;font-size:9px;font-weight:700;letter-spacing:0.5px;background:rgba(30,160,80,0.92);color:#eafff0;border:1px solid #7ff2a8;border-radius:3px;cursor:pointer;z-index:3;text-transform:uppercase;">Auto Pay</button>`;
   }
 
+  // W13: per-card Hide toggle on viewer-owned hand cards. Click replaces
+  // the face with a card-back; state persists in localStorage.
+  let hideBtn = "";
+  if (zone === "hand" && isOwned && card.id) {
+    hideBtn = `<button
+      class="card-hide-btn"
+      type="button"
+      title="Hide this card (local, persists via localStorage)"
+      onpointerdown="event.stopPropagation();"
+      onclick="event.stopPropagation(); toggleHideHandCard('${esc(card.id)}');">Hide</button>`;
+  }
+
   return `
     <div class="${classes.join(" ")}"
          data-card-id="${esc(card.id)}"
@@ -498,6 +593,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
            onerror="this.style.background='linear-gradient(135deg,#201a38,#2a2248)';this.alt='${esc(card.name)}'">
       ${card.meta?.damage > 0 ? `<div class="card-damage">${card.meta.damage}</div>` : ""}
       ${autoPayBtn}
+      ${hideBtn}
       <div class="card-name">${esc(card.name || "")}</div>
     </div>
   `;
@@ -1022,14 +1118,73 @@ function formatNowForLog() {
 }
 
 /**
- * Click handler for the rewind marker on rewindable log entries.
+ * Click handler for the ↺ marker on rewindable log entries.
  *
- * Workstream 3 only renders the marker — the wiring to the rewind engine
- * arrives in Workstream 8. For now the handler is a no-op visual cue.
+ * W8 fallback: every rewindable marker performs a single-step rewind
+ * regardless of which entry was clicked. Full "jump to this point" wiring
+ * (looping N undo steps server-side) is a follow-up — see
+ * .ai_memory/riftatlas-gap-closure-sequenced-plan.md Section 6.
  */
 function handleRewindClick(event) {
   event.stopPropagation();
-  // Intentional no-op: rewind-to-point wiring lands in Workstream 8.
+  if (typeof requestUndo === "function") {
+    requestUndo();
+  }
+}
+
+/**
+ * Text of the server-emitted log line that marks a successful rewind. Must
+ * stay in sync with server.ts's undo paths — the client uses this as a
+ * sentinel to clear in-progress interaction state and flash the board.
+ */
+const REWIND_LOG_SENTINEL = "Rewound their last action.";
+
+/** Track the last-seen rewind entry so we only react to new rewinds. */
+let lastSeenRewindTimestamp = null;
+
+/**
+ * Detect whether a new state frame's newest log entry is the canonical
+ * "Rewound their last action." line and, if so, clear any in-progress UI
+ * interaction (target cursor, armed hotkey modes) and flash the board.
+ *
+ * Called from render() after gameState has been updated for the new frame.
+ */
+function clearInteractionStateOnRewind() {
+  const log = gameState?.log;
+  if (!Array.isArray(log) || log.length === 0) return;
+  const newest = log[log.length - 1];
+  if (!newest || newest.text !== REWIND_LOG_SENTINEL) return;
+
+  // Dedupe: only react if this is a different rewind than the one we
+  // already processed (timestamp is HH:MM, but combined with text it's a
+  // stable-enough sentinel for per-frame detection).
+  const stamp = newest.timestamp || "";
+  if (stamp === lastSeenRewindTimestamp && log === gameState.log) {
+    // Same entry on a re-render — nothing to do.
+  }
+  if (stamp === lastSeenRewindTimestamp) return;
+  lastSeenRewindTimestamp = stamp;
+
+  try {
+    if (typeof cancelInteraction === "function") cancelInteraction();
+  } catch (err) {
+    console.warn("[renderer] cancelInteraction threw during rewind", err);
+  }
+  try {
+    if (typeof disarmAll === "function") disarmAll();
+  } catch (err) {
+    console.warn("[renderer] disarmAll threw during rewind", err);
+  }
+
+  // Brief visual flash on the scale wrapper — purely cosmetic.
+  const wrapper = document.getElementById("game-scale-wrapper");
+  if (wrapper) {
+    wrapper.classList.remove("rewind-flash");
+    // Force reflow so the animation restarts if two rewinds happen quickly.
+    void wrapper.offsetWidth;
+    wrapper.classList.add("rewind-flash");
+    setTimeout(() => wrapper.classList.remove("rewind-flash"), 320);
+  }
 }
 
 function requestUndo() {
