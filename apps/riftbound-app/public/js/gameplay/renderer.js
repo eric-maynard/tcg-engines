@@ -794,7 +794,22 @@ function renderBattlefields() {
       </div>
     `;
   }
-  document.getElementById("battlefieldRow").innerHTML = html;
+  const rowEl = document.getElementById("battlefieldRow");
+  rowEl.innerHTML = html;
+
+  // W9: after the base battlefield DOM is built, inject a
+  // per-battlefield showdown panel into every contested battlefield.
+  // Multiple simultaneous showdowns each get their own inline panel.
+  if (typeof renderBattlefieldShowdownPanel === "function" &&
+      typeof getActiveShowdownsByBattlefield === "function") {
+    const activeShowdowns = getActiveShowdownsByBattlefield();
+    for (const [bfId, sd] of Object.entries(activeShowdowns)) {
+      const bfEl = rowEl.querySelector(`.battlefield[data-bf-id="${bfId}"]`);
+      if (bfEl) {
+        renderBattlefieldShowdownPanel(bfEl, bfId, sd);
+      }
+    }
+  }
 }
 
 function renderActions() {
@@ -1209,19 +1224,20 @@ function renderChainOverlay() {
 
   const interaction_state = gameState?.interaction;
   const chain = interaction_state?.chain;
-  const showdown = interaction_state?.showdown;
 
-  // No chain and no showdown — hide overlay
-  if ((!chain || !chain.active) && (!showdown || !showdown.active)) {
+  // W9: showdown rendering has moved to the per-battlefield inline panel
+  // (see showdown.js + renderBattlefields). The chain overlay now only
+  // reacts to the spell chain itself.
+  if (!chain || !chain.active) {
     overlay.classList.remove("visible");
     box.classList.remove("showdown-active");
     return;
   }
 
   overlay.classList.add("visible");
+  box.classList.remove("showdown-active");
 
   const isMyPriority = chain?.activePlayer === viewingPlayer;
-  const isMyFocus = showdown?.focusPlayer === viewingPlayer;
   const hasChain = chain?.active && chain.items?.length > 0;
 
   // Resolve card name helper
@@ -1241,82 +1257,12 @@ function renderChainOverlay() {
 
   let html = "";
 
-  // ---- Showdown active ----
-  if (showdown?.active) {
-    const bfName = getBattlefieldName(showdown.battlefieldId);
-
-    if (showdown.isCombatShowdown) {
-      html += `<div class="showdown-battlefield">Combat Showdown at ${esc(bfName)}</div>`;
-      html += `<div class="chain-subtitle">Play spells or pass focus</div>`;
-      box.classList.add("showdown-active");
-
-      // Get units at the battlefield
-      const bfZoneId = "battlefield-" + showdown.battlefieldId;
-      const unitsAtBf = (gameState.zones || {})[bfZoneId] || [];
-      const attackerUnits = unitsAtBf.filter(c => c.owner === showdown.attackingPlayer);
-      const defenderUnits = unitsAtBf.filter(c => c.owner !== showdown.attackingPlayer);
-
-      // Render showdown sides with unit cards
-      html += `<div class="showdown-sides">`;
-      html += `<div class="showdown-side attacker">
-        <div class="side-label">Attacker${showdown.attackingPlayer === viewingPlayer ? " (You)" : ""}</div>
-        <div class="side-units" id="showdownAttackers">${attackerUnits.map(c => renderShowdownCard(c)).join("")}</div>
-      </div>`;
-      html += `<div class="showdown-side defender">
-        <div class="side-label">Defender${showdown.defendingPlayer === viewingPlayer ? " (You)" : ""}</div>
-        <div class="side-units" id="showdownDefenders">${defenderUnits.map(c => renderShowdownCard(c)).join("")}</div>
-      </div>`;
-      html += `</div>`;
-
-      // Combat Preview — Might comparison
-      const preview = calculateCombatPreview(attackerUnits, defenderUnits);
-      const atkWinning = preview.attackerMight > preview.defenderMight;
-      const defWinning = preview.defenderMight > preview.attackerMight;
-
-      html += `<div class="combat-preview">`;
-      html += `<div class="combat-preview-col">`;
-      html += `<div class="combat-might attacker-might ${atkWinning ? "winning" : ""}">${preview.attackerMight}</div>`;
-      html += `<div style="font-size:9px;color:#6a6288;">Attacker Might</div>`;
-      html += `</div>`;
-      html += `<div class="combat-vs">vs</div>`;
-      html += `<div class="combat-preview-col">`;
-      html += `<div class="combat-might defender-might ${defWinning ? "winning" : ""}">${preview.defenderMight}</div>`;
-      html += `<div style="font-size:9px;color:#6a6288;">Defender Might</div>`;
-      html += `</div>`;
-      html += `</div>`;
-
-      // Prediction text
-      const predClass = atkWinning ? "pred-attacker" : defWinning ? "pred-defender" : "pred-tie";
-      const predText = atkWinning ? "Attackers predicted to conquer"
-        : defWinning ? "Defenders predicted to hold"
-        : "Mutual destruction likely";
-      html += `<div class="combat-prediction ${predClass}">${predText}</div>`;
-    } else {
-      html += `<div class="showdown-battlefield">Showdown at ${esc(bfName)}</div>`;
-      html += `<div class="chain-subtitle">Showdown — play action/reaction spells or pass focus</div>`;
-      box.classList.remove("showdown-active");
-    }
-
-    html += `<div class="chain-priority">`;
-    if (isMyFocus) {
-      html += `<span class="priority-player">${esc(pName(showdown.focusPlayer))} has Focus</span> — play a spell or pass`;
-    } else {
-      const focusName = pName(showdown.focusPlayer);
-      html += `<span class="priority-waiting">${esc(focusName)} has Focus</span> — waiting...`;
-    }
-    html += `</div>`;
-  } else {
-    box.classList.remove("showdown-active");
-  }
-
   // ---- Chain active ----
+  // W9: showdown-specific DOM was removed from this overlay. Per-battlefield
+  // inline panels (showdown.js) own all showdown UI now.
   if (hasChain) {
-    if (!showdown?.active) {
-      html += `<div class="chain-title">The Chain</div>`;
-      html += `<div class="chain-subtitle">Spells and abilities resolving — play reactions or pass</div>`;
-    } else {
-      html += `<div style="margin-top:12px;"><div class="chain-title" style="font-size:14px;">Chain Stack</div></div>`;
-    }
+    html += `<div class="chain-title">The Chain</div>`;
+    html += `<div class="chain-subtitle">Spells and abilities resolving — play reactions or pass</div>`;
 
     html += `<div class="chain-stack">`;
     const items = [...(chain.items || [])].reverse();
@@ -1351,11 +1297,11 @@ function renderChainOverlay() {
   }
 
   // ---- Action buttons ----
+  // W9: showdown-focus passing is handled by the per-battlefield inline
+  // panel; this block now only offers chain-priority passing / resolving.
   html += `<div class="chain-actions">`;
-  if (isMyPriority || isMyFocus) {
-    const passMove = availableMoves.find(m =>
-      m.moveId === "passChainPriority" || m.moveId === "passShowdownFocus"
-    );
+  if (isMyPriority) {
+    const passMove = availableMoves.find(m => m.moveId === "passChainPriority");
     if (passMove) {
       const passParams = JSON.stringify(passMove.params).replace(/'/g, "\\'");
       html += `<button class="chain-pass-btn" onclick='executeMove("${passMove.moveId}", ${passParams}, "${passMove.playerId}")'>Pass (Space)</button>`;

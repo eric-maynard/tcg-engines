@@ -887,6 +887,134 @@
       text-transform: uppercase;
     }
 
+    /* ============================================
+       W9: Inline per-battlefield showdown panel
+       ============================================ */
+    .battlefield__showdown-panel {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      z-index: 6;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 10px;
+      background: rgba(14, 10, 26, 0.92);
+      border: 1px solid #f0a020;
+      border-radius: 8px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+      pointer-events: auto;
+    }
+
+    .battlefield__showdown-banner {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .battlefield__showdown-type {
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #f0a020;
+    }
+
+    .battlefield__showdown-status {
+      flex: 1;
+      color: #d8d4e8;
+    }
+
+    .battlefield__showdown-banner--mine .battlefield__showdown-status {
+      color: #ffe89a;
+      font-weight: 600;
+    }
+    .battlefield__showdown-banner--theirs .battlefield__showdown-status {
+      color: #8a82a6;
+      font-style: italic;
+    }
+    .battlefield__showdown-banner--ready .battlefield__showdown-status {
+      color: #9cffb2;
+      font-weight: 700;
+    }
+
+    .battlefield__showdown-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .battlefield__showdown-btn {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border: 1px solid #3a3258;
+      border-radius: 6px;
+      background: #1e1b30;
+      color: #d8d4e8;
+      cursor: pointer;
+      transition: background 120ms ease, border-color 120ms ease,
+        color 120ms ease, transform 60ms ease;
+    }
+
+    .battlefield__showdown-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    .battlefield__showdown-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .battlefield__showdown-hint {
+      display: inline-block;
+      min-width: 14px;
+      padding: 1px 4px;
+      font-size: 9px;
+      font-weight: 800;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.12);
+      color: inherit;
+    }
+
+    .battlefield__showdown-btn--pass {
+      border-color: #4a7fff;
+      color: #b8cdff;
+    }
+    .battlefield__showdown-btn--pass:hover:not(:disabled) {
+      background: #1e2a4a;
+      color: #d8e4ff;
+    }
+
+    .battlefield__showdown-btn--conquer {
+      border-color: #f0a020;
+      color: #ffe89a;
+    }
+    .battlefield__showdown-btn--conquer:hover:not(:disabled) {
+      background: #3a2a10;
+      color: #fff3c0;
+    }
+
+    .battlefield__showdown-btn--cancel {
+      flex: 0 0 auto;
+      border-color: #6a6288;
+      color: #a09cb8;
+    }
+    .battlefield__showdown-btn--cancel:hover:not(:disabled) {
+      background: #2a2448;
+      color: #d8d4e8;
+    }
+
     .battlefield.controlled-p1 { border-color: #2a7fff55; }
     .battlefield.controlled-p2 { border-color: #d0404055; }
 

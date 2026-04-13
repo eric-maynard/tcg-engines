@@ -258,24 +258,33 @@ function hotkeyResolveChain() {
 }
 
 function hotkeyEndShowdown() {
-  // Placeholder — W9 will wire this to the real end-showdown move.
-  // eslint-disable-next-line no-console
-  console.log("[hotkeys] TODO: end showdown / conquer not yet implemented (showdown work)");
+  // W9: Q routes to the active battlefield showdown. The helper handles
+  // both "conquer" (when both sides have passed) and graceful fallback to
+  // a toast when the showdown isn't ready to close yet.
+  if (typeof showdownHotkeyConquer === "function") {
+    showdownHotkeyConquer();
+    return;
+  }
   if (typeof showToast === "function") {
-    showToast("End showdown — not yet implemented");
+    showToast("No active showdown");
   }
 }
 
 function hotkeyPassFocus() {
-  // Placeholder — W9 will wire showdown-specific focus passing.
-  // For now, fall back to the generic pass move if one is available.
+  // W9: W routes focus-passing through the per-battlefield showdown
+  // helper so it naturally picks the showdown the viewer actually has
+  // focus on (not the ambient `passShowdownFocus` move).
+  if (typeof showdownHotkeyPassFocus === "function") {
+    showdownHotkeyPassFocus();
+    return;
+  }
   const passMove = (typeof availableMoves !== "undefined" ? availableMoves : []).find(
     m => m.moveId === "passShowdownFocus"
   );
   if (passMove) {
     executeMove(passMove.moveId, passMove.params, passMove.playerId);
   } else if (typeof showToast === "function") {
-    showToast("Pass focus — not yet implemented");
+    showToast("No active showdown");
   }
 }
 
