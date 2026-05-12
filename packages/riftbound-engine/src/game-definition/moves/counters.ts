@@ -6,7 +6,7 @@
  */
 
 import type { CardId as CoreCardId, GameMoveDefinitions } from "@tcg/core";
-import { performCleanup } from "../../cleanup";
+import { cleanupAndFireDeaths } from "../../cleanup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 /**
@@ -48,21 +48,20 @@ export const counterMoves: Partial<
       }
 
       // Fire state-based checks so static recalc picks up any passive
-      // Effects gated on counter values. This is critical for risk #1
-      // In the gap-closure plan (combat math desync after counter changes).
-      performCleanup({
-        cards: context.cards as unknown as Parameters<typeof performCleanup>[0]["cards"],
-        counters: context.counters as unknown as Parameters<typeof performCleanup>[0]["counters"],
-        draft,
-        zones: context.zones as unknown as Parameters<typeof performCleanup>[0]["zones"],
-      });
+      // Effects gated on counter values, and fire die triggers if the
+      // Change killed a unit (rule 540.x / 813). Critical for risk #1 in
+      // The gap-closure plan (combat math desync after counter changes).
+      cleanupAndFireDeaths(draft, context);
     },
   },
 
   addDamage: {
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { cardId, amount } = context.params;
       context.counters.addCounter(cardId as CoreCardId, "damage", amount);
+      // Damage may reach a unit's might → state-based kill (rule 540.x).
+      // Run cleanup and fire on-death triggers (Deathknell etc.).
+      cleanupAndFireDeaths(draft, context);
     },
   },
 
@@ -103,12 +102,7 @@ export const counterMoves: Partial<
         toughnessModifier: currentToughness + deltaToughness,
       } as Partial<RiftboundCardMeta>);
 
-      performCleanup({
-        cards: context.cards as unknown as Parameters<typeof performCleanup>[0]["cards"],
-        counters: context.counters as unknown as Parameters<typeof performCleanup>[0]["counters"],
-        draft,
-        zones: context.zones as unknown as Parameters<typeof performCleanup>[0]["zones"],
-      });
+      cleanupAndFireDeaths(draft, context);
     },
   },
 

@@ -154,17 +154,29 @@ export function findMatchingTriggers(
   const matches: MatchedTrigger[] = [];
 
   for (const card of boardCards) {
-    // Only cards on the board (or in legendZone) can have triggers fire
-    if (
-      card.zone !== "base" &&
-      !card.zone.startsWith("battlefield") &&
-      card.zone !== "legendZone"
-    ) {
+    // Only cards on the board (or in legendZone) can have triggers fire.
+    // EXCEPTION (rule 813 Deathknell / "when I die" self-triggers): a unit
+    // That has just died and moved to the trash still gets its own "when I
+    // Die" triggers. Such cards are scanned from the trash zone and tagged
+    // `zone === "trash"`; they may only contribute self-scoped triggers for a
+    // `die` event so they do not spuriously fire board-presence ("any unit")
+    // Triggers from the graveyard.
+    const onBoard =
+      card.zone === "base" ||
+      card.zone.startsWith("battlefield") ||
+      card.zone === "legendZone";
+    const isJustDied = card.zone === "trash" && event.type === "die";
+    if (!onBoard && !isJustDied) {
       continue;
     }
 
     for (const ability of card.abilities) {
       if (ability.type !== "triggered") {
+        continue;
+      }
+
+      if (isJustDied && (ability.trigger.on ?? "self") !== "self") {
+        // A trashed (just-died) card only fires its own self-die triggers.
         continue;
       }
 

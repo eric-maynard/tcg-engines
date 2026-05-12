@@ -129,6 +129,22 @@ export interface RiftboundMoves {
     targetChainItemId: string;
   };
 
+  /**
+   * Decline an optional ("you may ...") triggered ability on the chain
+   * (Core Rules 2026-03-30).
+   *
+   * A "may" triggered ability is optional to place on the chain — the
+   * engine adds it by default so headless play does not stall, then the
+   * controller of that item may call this move to opt out before it
+   * resolves. Mechanically it marks the item as countered (effect skipped
+   * on resolve). Only the item's own controller may decline it, and only
+   * items flagged `optional` are eligible.
+   */
+  declineTrigger: {
+    playerId: PlayerId;
+    targetChainItemId: string;
+  };
+
   /** Transition from setup to main game */
   transitionToPlay: Record<string, never>;
 

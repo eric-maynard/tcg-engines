@@ -281,10 +281,13 @@ describe("Rule 625.1.a: Attacker is the player who applied Contested status", ()
     applyMove(engine, "resolveFullCombat", { battlefieldId: "bf-1" });
 
     // P2 is attacker; P2 dies because P1 (defender) deals 5 damage.
-    // P1 survives, so if this were "attacker wins" it'd conquer — but
-    // Attacker (P2) is dead. Defender holds, no control change.
+    // P1 (the defender) is the only player with units remaining at this
+    // Battlefield during the Resolution Step → P1 WON the combat
+    // (rule 461.3.a). With no Showdown/Combat staged here, P1 Establishes
+    // Control (rule 461.5); the battlefield was Uncontrolled & P1 hasn't
+    // Scored it this turn, so that's a Conquer (rule 461.5.d).
     const state = getState(engine);
-    expect(state.battlefields["bf-1"].controller).toBeNull();
+    expect(state.battlefields["bf-1"].controller).toBe(P1);
   });
 });
 
@@ -835,7 +838,7 @@ describe("End-to-end: resolveFullCombat applies damage, kills, outcome, cleans u
     expect(state.players[P1].victoryPoints).toBeGreaterThanOrEqual(1);
   });
 
-  it("defender wins: attacker trashed/recalled, battlefield remains uncontrolled", () => {
+  it("defender wins: attacker trashed/recalled, defender establishes control (rule 461.5.d)", () => {
     const engine = createMinimalGameState({ phase: "main" });
     createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
     createCard(engine, "weak-atk", {
@@ -856,8 +859,36 @@ describe("End-to-end: resolveFullCombat applies damage, kills, outcome, cleans u
     const state = getState(engine);
     // Attacker killed
     expect(getCardsInZone(engine, "trash", P1)).toContain("weak-atk");
-    // Defender holds (battlefield stays uncontrolled per pre-combat state)
-    expect(state.battlefields["bf-1"].controller).toBeNull();
+    // P2 (the defender) is the only player with units remaining → won
+    // (rule 461.3.a). The battlefield was Uncontrolled & P2 hasn't scored
+    // It this turn, so P2 Establishes Control = a Conquer (rule 461.5.d).
+    expect(state.battlefields["bf-1"].controller).toBe(P2);
+    expect(state.players[P2].victoryPoints).toBeGreaterThanOrEqual(1);
+    // P1 (attacker) gains nothing
+    expect(state.players[P1].victoryPoints).toBe(0);
+  });
+
+  it("no-VP-awarded sanity: attacker (loser) gets 0 VP", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createCard(engine, "weak-atk", {
+      cardType: "unit",
+      might: 1,
+      owner: P1,
+      zone: "battlefield-bf-1",
+    });
+    createCard(engine, "strong-def", {
+      cardType: "unit",
+      might: 7,
+      owner: P2,
+      zone: "battlefield-bf-1",
+    });
+
+    applyMove(engine, "resolveFullCombat", { battlefieldId: "bf-1" });
+
+    const state = getState(engine);
+    expect(getCardsInZone(engine, "trash", P1)).toContain("weak-atk");
+    expect(state.battlefields["bf-1"].controller).toBe(P2);
     // No VP awarded
     expect(state.players[P1].victoryPoints).toBe(0);
   });

@@ -23,18 +23,83 @@ import type {
   ZoneId as CoreZoneId,
   FlowDefinition,
 } from "@tcg/core";
-import { fireTriggers } from "../../abilities/trigger-runner";
+import { fireDieTriggers, fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
+import { cleanupAndFireDeaths } from "../../cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { getHuntValue } from "../../operations/hunt-keyword";
+import { dequeueExtraTurn, seatOrderSuccessor } from "../../operations/turn-queue";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
 import { canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
 
 /**
+ * Build a `counters` operation bag for use inside a flow phase hook.
+ *
+ * Flow hook contexts carry `state`/`zones`/`cards` but **not** a `counters`
+ * bag. The core counter system stores per-card counters in the reserved
+ * `__counters` field on each card's meta — so we synthesise a counters bag
+ * that reads/writes that field via `getCardMeta`/`updateCardMeta`. This is
+ * the same field `performCleanup` reads for damage counters, so a flow-fired
+ * `die`/Deathknell effect ("deal N damage") that writes through this bag is
+ * picked up by the cleanup pass exactly as a move-fired one would be.
+ */
+function buildFlowCounters(context: {
+  cards: {
+    getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
+    updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
+  };
+}) {
+  interface CountersBag { __counters?: Record<string, number> }
+  const update =
+    context.cards.updateCardMeta ?? (() => {});
+  const readCounters = (cardId: CoreCardId): Record<string, number> => {
+    const meta = context.cards.getCardMeta(cardId) as CountersBag | undefined;
+    return { ...meta?.__counters };
+  };
+  const writeCounters = (cardId: CoreCardId, bag: Record<string, number>): void => {
+    update(cardId, { __counters: bag } as unknown as Partial<RiftboundCardMeta>);
+  };
+  return {
+    addCounter: (cardId: CoreCardId, counter: string, amount: number): void => {
+      const bag = readCounters(cardId);
+      bag[counter] = (bag[counter] ?? 0) + amount;
+      writeCounters(cardId, bag);
+    },
+    clearCounter: (cardId: CoreCardId, counter: string): void => {
+      const bag = readCounters(cardId);
+      if (bag[counter] !== undefined) {
+        delete bag[counter];
+        writeCounters(cardId, bag);
+      }
+    },
+    getCounter: (cardId: CoreCardId, counter: string): number => {
+      const meta = context.cards.getCardMeta(cardId) as CountersBag | undefined;
+      return meta?.__counters?.[counter] ?? 0;
+    },
+    removeCounter: (cardId: CoreCardId, counter: string, amount: number): void => {
+      const bag = readCounters(cardId);
+      const next = (bag[counter] ?? 0) - amount;
+      if (next <= 0) {
+        delete bag[counter];
+      } else {
+        bag[counter] = next;
+      }
+      writeCounters(cardId, bag);
+    },
+    setFlag: (cardId: CoreCardId, flag: string, value: boolean): void => {
+      update(cardId, { [flag]: value } as unknown as Partial<RiftboundCardMeta>);
+    },
+  };
+}
+
+/**
  * Build a TriggerRunnerContext from a flow phase context.
  *
- * Flow hooks receive FlowContext (state, zones, cards) but NOT counters.
- * We provide no-op counter stubs so triggers can execute their effects.
+ * Flow hooks receive FlowContext (state, zones, cards) but NOT a counters
+ * bag; we synthesise one via `buildFlowCounters` so triggers' counter-writing
+ * effects (e.g. a Deathknell's "deal N damage") actually land — and are then
+ * picked up by `runFlowCleanup`'s state-based checks.
  */
 function buildFlowTriggerContext(context: {
   state: RiftboundGameState;
@@ -55,7 +120,6 @@ function buildFlowTriggerContext(context: {
     updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
   };
 }): TriggerRunnerContext {
-  const noop = () => {};
   return {
     cards: {
       getCardMeta: context.cards.getCardMeta as TriggerRunnerContext["cards"]["getCardMeta"],
@@ -64,10 +128,7 @@ function buildFlowTriggerContext(context: {
       updateCardMeta: context.cards
         .updateCardMeta as TriggerRunnerContext["cards"]["updateCardMeta"],
     },
-    counters: {
-      addCounter: noop as TriggerRunnerContext["counters"]["addCounter"],
-      setFlag: noop as TriggerRunnerContext["counters"]["setFlag"],
-    },
+    counters: buildFlowCounters(context) as unknown as TriggerRunnerContext["counters"],
     draft: context.state,
     zones: {
       drawCards: context.zones.drawCards as TriggerRunnerContext["zones"]["drawCards"],
@@ -76,6 +137,43 @@ function buildFlowTriggerContext(context: {
       moveCard: context.zones.moveCard,
     },
   };
+}
+
+/**
+ * Run state-based checks (rules 518-526) + fire `die`/Deathknell triggers
+ * (rule 540.x / 813) from inside a flow phase hook.
+ *
+ * The engine-wide post-move cleanup hook (`withPostMoveCleanup`) only fires
+ * after *moves* — it does not see deaths caused by a phase-transition hook
+ * (e.g. a "hold" triggered ability dealing lethal damage during scoring, or
+ * the Cleanup phase running end-of-turn state-based checks). This helper
+ * closes that gap; the synthesised `counters` bag is backed by each card's
+ * reserved `__counters` meta field (see `buildFlowCounters`).
+ */
+function runFlowCleanup(context: {
+  state: RiftboundGameState;
+  zones: {
+    moveCard: (params: { cardId: CoreCardId; targetZoneId: CoreZoneId }) => void;
+    getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
+  };
+  cards: {
+    getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
+    getCardOwner?: (cardId: CoreCardId) => string | undefined;
+    updateCardMeta: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
+  };
+}): void {
+  cleanupAndFireDeaths(context.state, {
+    cards: {
+      getCardMeta: context.cards.getCardMeta,
+      getCardOwner: context.cards.getCardOwner ?? (() => undefined),
+      updateCardMeta: context.cards.updateCardMeta,
+    },
+    counters: buildFlowCounters(context),
+    zones: {
+      getCardsInZone: context.zones.getCardsInZone,
+      moveCard: context.zones.moveCard,
+    },
+  });
 }
 
 /**
@@ -142,9 +240,35 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
       turn: {
         initialPhase: "awaken",
 
+        // Rule 510 / 734: the turn player rotates in seat order at the end of
+        // Each turn. The core flow manager bumps the turn *number* but does
+        // Not rotate `currentPlayer`, so we do it here in `turn.onEnd` (which
+        // Runs before the next turn's `onBegin`). If an additional turn is
+        // Queued, `turn.onBegin` below overrides this with the extra-turn
+        // Owner (rule 734: additional turns are inserted, they do not change
+        // The underlying seat-order rotation).
+        onEnd: (context) => {
+          const endingPlayer = context.getCurrentPlayer();
+          const successor = seatOrderSuccessor(context.state, endingPlayer);
+          if (successor !== endingPlayer) {
+            context.setCurrentPlayer?.(successor);
+          }
+        },
+
         onBegin: (context) => {
+          // Rule 734 (Additional Turns): if a player was told to take an
+          // Additional turn, it is inserted directly after the current turn.
+          // Dequeue it here and make that player the turn player for this
+          // Turn instead of the normal seat-order successor (which `turn.onEnd`
+          // Already set via `setCurrentPlayer`).
+          const extraTurnPlayer = dequeueExtraTurn(context.state);
+          let currentPlayer = context.getCurrentPlayer();
+          if (extraTurnPlayer) {
+            currentPlayer = extraTurnPlayer as typeof currentPlayer;
+            context.setCurrentPlayer?.(extraTurnPlayer);
+          }
+
           // Update turn tracking in game state
-          const currentPlayer = context.getCurrentPlayer();
           const turnNumber = context.getTurnNumber();
           context.state.turn = {
             activePlayer: currentPlayer,
@@ -259,6 +383,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               }
 
               const tempRegistry = getGlobalCardRegistry();
+              // Capture (cardId, owner) of each Temporary permanent trashed
+              // Here so its `die`/Deathknell triggers (rule 813) fire — a
+              // Temporary permanent leaving the Board is "dying".
+              const trashedTemps: { cardId: string; owner: string }[] = [];
               for (const cardId of tempKillCards) {
                 const owner = context.cards.getCardOwner?.(cardId);
                 if (owner !== turnPlayerId) {
@@ -275,7 +403,11 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                     cardId,
                     targetZoneId: "trash" as CoreZoneId,
                   });
+                  trashedTemps.push({ cardId: cardId as string, owner: owner ?? turnPlayerId });
                 }
+              }
+              if (trashedTemps.length > 0) {
+                fireDieTriggers(trashedTemps, buildFlowTriggerContext(context));
               }
 
               // Scoring step (rule 515.2.b): Holding
@@ -303,6 +435,39 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                     }
                     context.state.scoredThisTurn[playerId].push(bfId);
 
+                    // Hunt keyword (rule 823): [Hunt N] units the player
+                    // Controls here grant N XP "when I conquer or hold".
+                    if (scoringAllowed) {
+                      const heldUnitIds = context.zones.getCardsInZone(
+                        `battlefield-${bfId}` as CoreZoneId,
+                      );
+                      let huntXp = 0;
+                      for (const cardId of heldUnitIds) {
+                        const controller = context.cards.getCardOwner?.(cardId);
+                        if (controller !== undefined && controller !== playerId) {
+                          continue;
+                        }
+                        huntXp += getHuntValue(
+                          cardId as string,
+                          context.cards.getCardMeta(cardId) as {
+                            grantedKeywords?: { keyword: string; value?: number }[];
+                          },
+                        );
+                      }
+                      if (huntXp > 0) {
+                        const holdingPlayer = context.state.players[playerId];
+                        if (holdingPlayer) {
+                          holdingPlayer.xp += huntXp;
+                        }
+                        if (context.state.xpGainedThisTurn[playerId] !== undefined) {
+                          context.state.xpGainedThisTurn[playerId] =
+                            (context.state.xpGainedThisTurn[playerId] ?? 0) + huntXp;
+                        } else {
+                          context.state.xpGainedThisTurn[playerId] = huntXp;
+                        }
+                      }
+                    }
+
                     // Emit "hold" event so triggered abilities fire (e.g. Altar to Unity)
                     if (scoringAllowed) {
                       fireTriggers({ battlefieldId: bfId, playerId, type: "hold" }, triggerCtx);
@@ -310,6 +475,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   }
                 }
               }
+
+              // State-based checks for deaths caused inside this hook —
+              // Temporary permanents trashed above (rule 728.1.b), or units
+              // Killed by a "hold" triggered ability during scoring — plus
+              // Their `die`/Deathknell triggers (rule 540.x / 813).
+              runFlowCleanup(context);
             },
 
             order: 2,
@@ -569,9 +740,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 phase: "cleanup",
               };
 
-              // State-based checks are run by the engine after each move
-              // Via performFullCleanup. The cleanup phase signals that
-              // End-of-turn cleanup is complete and the turn can transition.
+              // Run end-of-turn state-based checks (rules 518-526) for real,
+              // Here, instead of relying solely on the post-move hook: a unit
+              // That became lethal as a side effect of an Ending-phase hook
+              // (turn-scoped Might buff expiry, etc.) must be reaped and fire
+              // Its `die`/Deathknell triggers before the turn transitions.
+              runFlowCleanup(context);
             },
           },
         },

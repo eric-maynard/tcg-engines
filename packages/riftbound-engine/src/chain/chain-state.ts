@@ -41,6 +41,18 @@ export interface ChainItem {
   readonly effect?: unknown;
   /** Whether this is a triggered ability (auto-added, not player-initiated) */
   readonly triggered?: boolean;
+  /**
+   * Whether this is an optional ("you may ...") triggered ability.
+   *
+   * Core Rules 2026-03-30: a "may" triggered ability is optional to place on
+   * the chain — when the trigger condition is fulfilled the controller chooses
+   * whether to add it. The engine adds it by default (so headless/auto play
+   * does not stall on a prompt) but flags it here so a UI / a `declineTrigger`
+   * move can let the controller opt out before it resolves. On resolve, an
+   * optional item the controller declined is treated like a countered item
+   * (its effect does not execute).
+   */
+  readonly optional?: boolean;
   /** Whether this item was countered (skip execution on resolve) */
   readonly countered?: boolean;
 }
@@ -159,6 +171,34 @@ export function isLegalTiming(timing: "action" | "reaction", turnState: TurnStat
   } // Always legal
   // Action is legal in open states
   return turnState === "neutral-open" || turnState === "showdown-open";
+}
+
+/**
+ * Who currently holds the right to act on the chain / in a showdown
+ * (rules 510 / 530 / 543.x). This is the *priority/focus holder*:
+ *
+ * - If a chain is active: the chain's `activePlayer` (the player who currently
+ *   has Priority and may add to the chain or pass). An empty string means no
+ *   one — every relevant player has passed and the chain is resolving; no new
+ *   chain item may be added until it does.
+ * - Else if a Showdown is active (no chain): the active showdown's `focusPlayer`
+ *   — only the player with Focus may take an Action/Reaction during a Showdown.
+ * - Else (Neutral Open): `null` — Priority is held by the turn's active player,
+ *   which `playSpell`/`activateAbility` already gate via rule 530 separately.
+ *
+ * Returns `undefined` only if there is no interaction state at all.
+ */
+export function getPriorityHolder(state: TurnInteractionState): string | null {
+  if (state.chain?.active) {
+    // "" => chain resolving, no one may add. Surface as a sentinel that will
+    // Never equal a real playerId, so callers reject the play.
+    return state.chain.activePlayer === "" ? "" : state.chain.activePlayer;
+  }
+  const activeShowdown = getActiveShowdown(state);
+  if (activeShowdown?.active) {
+    return activeShowdown.focusPlayer;
+  }
+  return null;
 }
 
 /**

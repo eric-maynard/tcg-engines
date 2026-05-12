@@ -7,6 +7,7 @@ export {
   calculateCombatMight,
   canMoveToLocation,
   canPlaySpellAtTiming,
+  canPlayViaAmbush,
   getDeflectCost,
   shouldEnterReady,
   sortByBacklinePriority,

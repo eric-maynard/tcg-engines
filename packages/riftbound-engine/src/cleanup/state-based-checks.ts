@@ -26,7 +26,7 @@ import type {
 } from "@tcg/core";
 import { checkReplacement, markReplacementConsumed } from "../abilities/replacement-effects";
 import { recalculateStaticEffects } from "../abilities/static-abilities";
-import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { computeEffectiveMight, getGlobalCardRegistry } from "../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 
 /**
@@ -91,22 +91,41 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
 
   for (const { cardId } of boardCards) {
     const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
-    const damage = meta?.damage ?? 0;
+    // Rule 520: a unit dies when its marked damage >= its Might. Combat code
+    // Historically writes damage to *both* `meta.damage` and the
+    // `__counters.damage` bag, but spell/ability `damage` effects only update
+    // The counter — so reading `meta.damage` alone missed spell kills. Take
+    // The larger of the two so non-combat damage kills units (and fires their
+    // `die` triggers via the caller's cleanup-and-fire-deaths pass).
+    const metaDamage = meta?.damage ?? 0;
+    const counterDamage = ctx.counters.getCounter?.(cardId, "damage") ?? 0;
+    const damage = Math.max(metaDamage, counterDamage);
 
     if (damage <= 0) {
       continue;
     }
 
-    // Look up base might from card definition
-    const def = registry.get(cardId as string);
-    const baseMight = def?.might ?? 0;
-
-    // Only units have might — skip non-units
+    // Only cards that are units (have a base Might) can die from damage —
+    // Skip everything else (gear, runes, spells in odd zones, …).
+    const baseMight = registry.getMight(cardId as string);
     if (baseMight <= 0) {
       continue;
     }
 
-    if (damage >= baseMight) {
+    // Rule 323.5 / 140.x: a unit with non-zero marked Damage dies when that
+    // Damage >= its *effective* Might — base Might plus the [+1] buff counter,
+    // Runtime `mightModifier` deltas, `staticMightBonus` from static
+    // Abilities, and any attached equipment's Might bonus. Reading `def.might`
+    // Alone (the base) wrongly killed buffed units and wrongly spared
+    // Might-reduced ones. A unit whose effective Might has been reduced to 0
+    // (rule 143.2.b — treated as 0) dies to any non-zero damage.
+    const effectiveMight = computeEffectiveMight(
+      cardId as string,
+      (id) => ctx.cards.getCardMeta(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined,
+      registry,
+    );
+
+    if (damage >= effectiveMight) {
       // Check for replacement effects ("instead of dying...") (rule 571-575)
       const owner = ctx.cards.getCardOwner(cardId) ?? "";
       const replacementMatch = checkReplacement(
@@ -126,8 +145,10 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         // Don't re-trigger on subsequent deaths this turn.
         markReplacementConsumed(ctx.draft, replacementMatch);
         stateChanged = true;
-        // Clear damage so it doesn't re-trigger next cleanup pass
+        // Clear damage so it doesn't re-trigger next cleanup pass (both the
+        // `meta.damage` field and the `__counters.damage` bag).
         ctx.cards.updateCardMeta(cardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+        ctx.counters.clearCounter(cardId, "damage");
         continue;
       }
 
@@ -167,21 +188,45 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         mightModifier: 0,
         stunned: false,
       } as Partial<RiftboundCardMeta>);
+      ctx.counters.clearCounter(cardId, "damage");
 
       killed.push(cardId as string);
       stateChanged = true;
     }
   }
 
-  // Step 2: Remove stale combat roles (rule 521)
-  // Units not at a battlefield where combat is occurring lose their combat role
+  // Step 2: Remove stale combat roles / re-assign designations (rules 521 +
+  // 323.2). Under CR 2026-03-30 the Attacker/Defender designations only exist
+  // For the duration of the combat that established them: a unit keeps its
+  // Combat role only while it sits at a battlefield that has an *ongoing*
+  // Combat or combat-showdown (the battlefield carries the Contested status,
+  // Or there's an active combat showdown there). A unit that has moved away
+  // From such a battlefield — OR a unit still at a battlefield whose combat
+  // Has resolved (no longer Contested, no active showdown) — loses its
+  // Designation.
+  const activeShowdownState = ctx.draft.interaction?.showdownStack;
+  const activeCombatShowdown =
+    activeShowdownState && activeShowdownState.length > 0
+      ? activeShowdownState[activeShowdownState.length - 1]
+      : undefined;
   for (const zoneId of allBoardZones) {
     const cardsInZone = ctx.zones.getCardsInZone(zoneId as CoreZoneId);
     const isBattlefield = (zoneId as string).startsWith("battlefield-");
+    let combatOngoingHere = false;
+    if (isBattlefield) {
+      const bfId = (zoneId as string).slice("battlefield-".length);
+      const bf = ctx.draft.battlefields[bfId];
+      const isContested = bf?.contested === true;
+      const showdownHere =
+        activeCombatShowdown?.active === true &&
+        activeCombatShowdown.isCombatShowdown === true &&
+        activeCombatShowdown.battlefieldId === bfId;
+      combatOngoingHere = isContested || showdownHere;
+    }
 
     for (const cardId of cardsInZone) {
       const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
-      if (meta?.combatRole && !isBattlefield) {
+      if (meta?.combatRole && !combatOngoingHere) {
         ctx.cards.updateCardMeta(cardId, {
           combatRole: null,
         } as Partial<RiftboundCardMeta>);
@@ -190,36 +235,44 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
   }
 
+  // NOTE: Rule 323.6 / 187.4.c — "while the turn is in an Open State, a
+  // Battlefield with no Units occupying it and no Showdown/Combat ongoing
+  // Becomes Uncontrolled" — is intentionally NOT enforced here yet. The
+  // Engine currently treats Battlefield control as sticky (Establish-Control
+  // Claims it persistently). Flipping to rules-correct lose-control-when-empty
+  // Cascades through the scoring engine and many tests that set `controller`
+  // Without placing units; it deserves its own focused tick. Tracked in the
+  // Remaining-work list.
+
   // Step 3: Recalculate static/passive ability effects (rule 522)
   // Strip and re-apply all "While X" / "As long as" continuous effects
   if (recalculateStaticEffects({ cards: ctx.cards, draft: ctx.draft, zones: ctx.zones })) {
     stateChanged = true;
   }
 
-  // Step 4: Remove orphaned hidden cards (rule 523)
-  // Hidden cards at battlefields without a friendly unit are trashed
+  // Step 4: Remove orphaned hidden cards (rule 323.7): "Remove all Hidden
+  // Cards from all Battlefields that are not controlled by the same player
+  // And place them in their owner's Trash." A hidden card stays only while
+  // Its owner controls (or holds — rule 185 control includes Contested-by)
+  // The battlefield it sits at; otherwise it is trashed.
   for (const bfId of Object.keys(ctx.draft.battlefields)) {
     const facedownZoneId = `facedown-${bfId}` as CoreZoneId;
-    const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
 
     const hiddenCards = ctx.zones.getCardsInZone(facedownZoneId);
     if (hiddenCards.length === 0) {
       continue;
     }
 
-    const bfUnits = ctx.zones.getCardsInZone(bfZoneId);
+    const bf = ctx.draft.battlefields[bfId];
+    // A player "controls" a battlefield if they're its `controller`, or — while
+    // It's Contested — if they're the contesting player (rule 185.x).
+    const controllingPlayer = bf?.contested ? (bf?.contestedBy ?? bf?.controller) : bf?.controller;
 
     for (const hiddenCardId of hiddenCards) {
       const hiddenOwner = ctx.cards.getCardOwner(hiddenCardId) ?? "";
 
-      // Check if the hidden card's controller has a unit at this battlefield
-      const hasFriendlyUnit = bfUnits.some((unitId) => {
-        const unitOwner = ctx.cards.getCardOwner(unitId) ?? "";
-        return unitOwner === hiddenOwner;
-      });
-
-      if (!hasFriendlyUnit) {
-        // Remove hidden card to trash
+      if (controllingPlayer !== hiddenOwner) {
+        // Owner does not control this battlefield → trash the hidden card.
         ctx.zones.moveCard({
           cardId: hiddenCardId,
           targetZoneId: "trash" as CoreZoneId,

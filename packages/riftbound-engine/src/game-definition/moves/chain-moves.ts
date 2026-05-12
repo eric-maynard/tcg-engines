@@ -17,6 +17,7 @@ import {
   createInteractionState,
   endShowdown as endShowdownState,
   getActiveShowdown,
+  getPriorityHolder,
   getTurnState,
   isLegalTiming,
   isShowdownEnded,
@@ -28,9 +29,15 @@ import {
 import type { ChainItem } from "../../chain";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
+import { evaluateLegionCondition } from "../../abilities/legion-conditions";
 import { fireTriggers } from "../../abilities/trigger-runner";
-import { performCleanup } from "../../cleanup";
+import { cleanupAndFireDeaths } from "../../cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import {
+  type CombatResolutionContext,
+  establishNonCombatShowdownControl,
+  runCombatResolution,
+} from "./combat";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 /**
@@ -88,6 +95,76 @@ function buildEffectContext(
 }
 
 /**
+ * Whether an activated ability's `condition` (if any) is currently satisfied
+ * for `playerId`. Used to gate `activateAbility` legality.
+ *
+ * Rule 564 / 577.2: an activated ability can only be activated if its
+ * "use-only-if" condition is met. The most common Unleashed shape is
+ * `[Exhaust]: [Legion] — [Text]`, which the parser emits as an activated
+ * ability carrying `condition:{type:"legion"}` (rule 724/812). Such an
+ * ability may only be activated if its controller has already played another
+ * card this turn. We only enforce conditions the engine can evaluate; unknown
+ * condition types are treated as satisfied (so we never wrongly forbid an
+ * activation we don't understand).
+ */
+function isActivationConditionMet(
+  state: RiftboundGameState,
+  playerId: string,
+  condition: { readonly type?: string } | undefined,
+): boolean {
+  if (!condition) {
+    return true;
+  }
+  if (condition.type === "legion") {
+    return evaluateLegionCondition(state, playerId as Parameters<typeof evaluateLegionCondition>[1]);
+  }
+  return true;
+}
+
+/**
+ * If the resolving card has a Legion dependent-keyword ability that *replaces*
+ * its printed effect ("[Legion] — <text> instead.", rule 812 — e.g. Noxian
+ * Guillotine's "Kill it now instead.") AND the controller has played another
+ * card this turn (the Legion condition, rule 724), return that replacement
+ * effect. Otherwise return `undefined` so the printed effect is used.
+ */
+function getLegionReplacementEffect(
+  cardId: string,
+  controllerId: string,
+  state: RiftboundGameState,
+): ExecutableEffect | undefined {
+  const registry = getGlobalCardRegistry();
+  const abilities = registry.getAbilities(cardId) ?? [];
+  const legionReplace = abilities.find(
+    (a) =>
+      a.type === "keyword" &&
+      a.keyword === "Legion" &&
+      (a as { replacesSpellEffect?: boolean }).replacesSpellEffect === true &&
+      (a as { effect?: unknown }).effect != null,
+  ) as { effect?: unknown; condition?: { type?: string } } | undefined;
+  if (!legionReplace?.effect) {
+    return undefined;
+  }
+  // The keyword *is* the Legion condition (rule 724); honour an explicit
+  // Condition if the parser supplied one, else the implicit `{type:"legion"}`.
+  const cond = legionReplace.condition;
+  if (cond && cond.type !== "legion") {
+    // Unknown condition shape: be conservative and don't substitute.
+    return undefined;
+  }
+  // Rule 724.1.c: the Legion ability applies only if the controller played
+  // *Another* card this turn. By the time this spell resolves, its own play
+  // Has already incremented `cardsPlayedThisTurn`, so we need at least 2
+  // Plays this turn (this spell + one other). `evaluateLegionCondition`
+  // Alone would wrongly count the spell itself.
+  const playedThisTurn = state.cardsPlayedThisTurn?.[controllerId] ?? 0;
+  if (playedThisTurn < 2) {
+    return undefined;
+  }
+  return legionReplace.effect as ExecutableEffect;
+}
+
+/**
  * Execute a resolved chain item's effect.
  * Skips execution if the item was countered (rule 543).
  */
@@ -101,6 +178,14 @@ function executeResolvedItem(
     return;
   }
 
+  // Rule 812: a Legion "...instead." dependent ability replaces the printed
+  // Spell effect when the Legion condition holds.
+  const legionReplacement = getLegionReplacementEffect(
+    resolved.cardId,
+    resolved.controller,
+    draft,
+  );
+
   const rawEffect = resolved.effect as
     | (ExecutableEffect & { _variables?: Record<string, number> })
     | undefined;
@@ -109,9 +194,10 @@ function executeResolvedItem(
     const registry = getGlobalCardRegistry();
     const abilities = registry.getAbilities(resolved.cardId) ?? [];
     const spellAbility = abilities.find((a) => a.type === "spell");
-    if (spellAbility?.effect) {
+    const effectToRun = legionReplacement ?? (spellAbility?.effect as ExecutableEffect | undefined);
+    if (effectToRun) {
       const effectCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
-      executeEffect(spellAbility.effect as ExecutableEffect, effectCtx);
+      executeEffect(effectToRun, effectCtx);
     }
     return;
   }
@@ -120,12 +206,17 @@ function executeResolvedItem(
   // Are threaded into the EffectContext so `{ variable: "x" }` expressions
   // Can resolve to the chosen X amount during spell resolution.
   const { _variables, ...effectRest } = rawEffect;
-  const effect = effectRest as ExecutableEffect;
+  const effect = (legionReplacement ?? (effectRest as ExecutableEffect)) as ExecutableEffect;
 
   const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
   const effectCtx: EffectContext = _variables ? { ...baseCtx, variables: _variables } : baseCtx;
   executeEffect(effect, effectCtx);
 }
+
+// `cleanupAndFireDeaths` (state-based checks → fire `die`/Deathknell triggers →
+// One cascade pass) is the shared implementation in `cleanup/post-move-cleanup.ts`.
+// Imported above; every move reducer's `context` is a structural superset of the
+// `PostMoveCleanupContext` shape it needs, so it passes straight through.
 
 /**
  * A resolved entry returned by `collectActivatedAbilities`.
@@ -360,13 +451,9 @@ export const chainMoves: Partial<
         if (resolved) {
           executeResolvedItem(resolved, draft, context);
 
-          // Run state-based checks after resolution (rule 543.3/518)
-          performCleanup({
-            cards: context.cards,
-            counters: context.counters,
-            draft,
-            zones: context.zones,
-          });
+          // Run state-based checks after resolution (rule 543.3/518) and
+          // Fire any on-death triggers for units killed by the resolution.
+          cleanupAndFireDeaths(draft, context);
         }
       }
     },
@@ -404,12 +491,7 @@ export const chainMoves: Partial<
       if (resolved) {
         executeResolvedItem(resolved, draft, context);
 
-        performCleanup({
-          cards: context.cards,
-          counters: context.counters,
-          draft,
-          zones: context.zones,
-        });
+        cleanupAndFireDeaths(draft, context);
       }
     },
   },
@@ -464,6 +546,19 @@ export const chainMoves: Partial<
         return false;
       }
 
+      // Rule 564 / 724 / 812: an activated ability with a "use-only-if"
+      // Condition (e.g. `[Exhaust]: [Legion] — [Text]` → condition
+      // `{type:"legion"}`) can only be activated when that condition holds.
+      if (
+        !isActivationConditionMet(
+          state,
+          playerId,
+          (ability as { condition?: { type?: string } }).condition,
+        )
+      ) {
+        return false;
+      }
+
       // If an inherited ability was requested, verify that the host card
       // Legitimately exposes it (prevents arbitrary cross-card activation).
       if (sourceCardId && sourceCardId !== cardId) {
@@ -486,6 +581,24 @@ export const chainMoves: Partial<
       const isReaction = ability.keyword === "Reaction" || ability.timing === "reaction";
       const timing = (isReaction ? "reaction" : "action") as "action" | "reaction";
       if (!isLegalTiming(timing, turnState)) {
+        return false;
+      }
+
+      // Rule 530: in Neutral Open state only the active player holds priority,
+      // So only they may activate an Action-timed ability. (Mirrors `playSpell`.)
+      if (timing === "action" && turnState === "neutral-open") {
+        if (state.turn.activePlayer !== playerId) {
+          return false;
+        }
+      }
+
+      // Rules 510 / 530 / 543.x — once a chain or showdown is ongoing, only the
+      // Player who currently holds Priority (chain) / Focus (showdown) may add
+      // To the chain. A Reaction ability waits for that player's window; it is
+      // Not free to activate mid-chain by whoever wants to. (Neutral Open is
+      // Covered by the rule-530 check above — `getPriorityHolder` is null there.)
+      const priorityHolder = getPriorityHolder(interaction);
+      if (priorityHolder !== null && priorityHolder !== playerId) {
         return false;
       }
 
@@ -599,10 +712,34 @@ export const chainMoves: Partial<
         for (const entry of entries) {
           const { ability } = entry;
 
+          // Rule 564 / 724 / 812: skip activated abilities whose "use-only-if"
+          // Condition (e.g. `[Exhaust]: [Legion] — [Text]`) is not currently
+          // Satisfied. See the matching guard in the condition above.
+          if (
+            !isActivationConditionMet(
+              state,
+              playerId,
+              (ability as { condition?: { type?: string } }).condition,
+            )
+          ) {
+            continue;
+          }
+
           // Check timing
           const isReaction = ability.keyword === "Reaction" || ability.timing === "reaction";
           const timing = (isReaction ? "reaction" : "action") as "action" | "reaction";
           if (!isLegalTiming(timing, turnState)) {
+            continue;
+          }
+
+          // Rule 530: only the active player may activate an Action-timed
+          // Ability in Neutral Open (no chain / no showdown). See the matching
+          // Guard in the condition above.
+          if (
+            timing === "action" &&
+            turnState === "neutral-open" &&
+            state.turn.activePlayer !== playerId
+          ) {
             continue;
           }
 
@@ -737,16 +874,50 @@ export const chainMoves: Partial<
       }
       return [{ playerId: context.playerId as string }];
     },
-    reducer: (draft) => {
+    reducer: (draft, context) => {
       if (!draft.interaction) {
         return;
       }
 
+      // Snapshot the active showdown *before* passing — we need its
+      // BattlefieldId / isCombatShowdown to decide what closing it does.
+      const before = getActiveShowdown(draft.interaction);
+
       draft.interaction = passFocusState(draft.interaction);
 
-      // If showdown ended (all passed), clean up
+      // If the showdown just ended (all relevant players passed Focus in
+      // Sequence with no spell/ability — rule 347.3.a / 348), proceed with
+      // What closing that Window entails (rule 348):
       if (isShowdownEnded(draft.interaction)) {
+        // Pop the (closed) showdown *first*: per rule 348.1, the Combat
+        // Showdown Step is over before the Combat Damage / Resolution Steps
+        // Begin, so combat resolution must run with no Showdown ongoing here
+        // (otherwise the in-progress Showdown wrongly gates downstream
+        // State-based checks on the resolution-step kills).
         draft.interaction = endShowdownState(draft.interaction);
+        if (before) {
+          const {battlefieldId} = before;
+          if (before.isCombatShowdown) {
+            // Rule 348.1 → 458: a Combat Showdown closing means we proceed
+            // With the remaining Steps of Combat (Step 2 Combat Damage +
+            // Step 3 Resolution). The Combat Showdown Step *was* this Focus
+            // Window.
+            runCombatResolution(
+              draft,
+              context as unknown as CombatResolutionContext,
+              battlefieldId,
+            );
+          } else {
+            // Rule 348.2: a Non-Combat Showdown closing — the sole surviving
+            // Player Establishes Control (a Conquer if not yet scored this
+            // Turn, rule 348.2.a.1).
+            establishNonCombatShowdownControl(
+              draft,
+              context as unknown as CombatResolutionContext,
+              battlefieldId,
+            );
+          }
+        }
       }
     },
   },
@@ -1026,6 +1197,75 @@ export const chainMoves: Partial<
       for (let i = 0; i < chain.items.length; i++) {
         const item = chain.items[i];
         if (item && item.id === targetChainItemId && !item.countered) {
+          (chain.items[i] as { countered: boolean }).countered = true;
+          break;
+        }
+      }
+    },
+  },
+
+  /**
+   * Decline an optional ("you may ...") triggered ability on the chain.
+   *
+   * Core Rules 2026-03-30: a "may" triggered ability is optional to place on
+   * the chain. The engine adds it by default and flags it `optional`; the
+   * item's controller may invoke this move to opt out before it resolves.
+   * Mechanically this marks the item as countered so its effect is skipped
+   * on resolve (the item is still removed from the chain normally).
+   */
+  declineTrigger: {
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+      const chain = state.interaction?.chain;
+      if (!chain?.active) {
+        return false;
+      }
+      const { targetChainItemId, playerId } = context.params;
+      const target = chain.items.find((item) => item.id === targetChainItemId);
+      if (!target) {
+        return false;
+      }
+      // Only an item flagged optional, owned by the requesting player, and not
+      // Already countered/declined may be declined.
+      if (!target.optional || target.controller !== playerId || target.countered) {
+        return false;
+      }
+      return true;
+    },
+    enumerator: (state, context) => {
+      if (state.status !== "playing") {
+        return [];
+      }
+      const chain = state.interaction?.chain;
+      if (!chain?.active) {
+        return [];
+      }
+      const requester = context.playerId as string;
+      const results: { playerId: string; targetChainItemId: string }[] = [];
+      for (const item of chain.items) {
+        if (item.optional && item.controller === requester && !item.countered) {
+          results.push({ playerId: requester, targetChainItemId: item.id });
+        }
+      }
+      return results;
+    },
+    reducer: (draft, context) => {
+      const chain = draft.interaction?.chain;
+      if (!chain) {
+        return;
+      }
+      const { targetChainItemId, playerId } = context.params;
+      for (let i = 0; i < chain.items.length; i++) {
+        const item = chain.items[i];
+        if (
+          item &&
+          item.id === targetChainItemId &&
+          item.optional &&
+          item.controller === playerId &&
+          !item.countered
+        ) {
           (chain.items[i] as { countered: boolean }).countered = true;
           break;
         }

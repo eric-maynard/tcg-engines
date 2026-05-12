@@ -108,7 +108,9 @@ describe("Rule 532.1: At most one chain exists at a time", () => {
     });
 
     applyMove(engine, "playSpell", { cardId: "spell-a", playerId: P1 });
-    // P2 responds with a Reaction spell (legal during closed state).
+    // Rule 338.1.c: after adding to the chain P1 holds Priority; P1 passes,
+    // Then P2 holds Priority and may respond with a Reaction spell.
+    passChainPriority(engine, P1);
     const r2 = applyMove(engine, "playSpell", { cardId: "spell-b", playerId: P2 });
     expect(r2.success).toBe(true);
 
@@ -199,6 +201,8 @@ describe("Rule 535.2: Reaction-timed spells CAN be played during a Closed State"
     });
 
     applyMove(engine, "playSpell", { cardId: "spell-a", playerId: P1 });
+    // Rule 338.1.c: P1 holds Priority after adding; P1 passes → P2 may react.
+    passChainPriority(engine, P1);
     const r = applyMove(engine, "playSpell", { cardId: "reaction-b", playerId: P2 });
     expect(r.success).toBe(true);
   });
@@ -520,6 +524,8 @@ describe("Rule 543 (LIFO): Top-of-chain resolves first", () => {
     });
 
     applyMove(engine, "playSpell", { cardId: "p1-draw", playerId: P1 });
+    // Rule 338.1.c: P1 holds Priority after adding; P1 passes → P2 may react.
+    passChainPriority(engine, P1);
     applyMove(engine, "playSpell", { cardId: "p2-reaction-draw", playerId: P2 });
 
     // Pass twice through (once per spell), resolving the whole chain.
@@ -560,6 +566,8 @@ describe("Rule 543 (LIFO): Top-of-chain resolves first", () => {
       zone: "hand",
     });
     applyMove(engine, "playSpell", { cardId: "p1-a", playerId: P1 });
+    // Rule 338.1.c: P1 holds Priority after adding; P1 passes → P2 may react.
+    passChainPriority(engine, P1);
     applyMove(engine, "playSpell", { cardId: "p2-b", playerId: P2 });
 
     // After P2's spell is added, P2 is the active player.
@@ -599,6 +607,8 @@ describe("Rule 543.4: After a resolution, passes reset and everyone must pass ag
       zone: "hand",
     });
     applyMove(engine, "playSpell", { cardId: "p1-a", playerId: P1 });
+    // Rule 338.1.c: P1 holds Priority after adding; P1 passes → P2 may react.
+    passChainPriority(engine, P1);
     applyMove(engine, "playSpell", { cardId: "p2-b", playerId: P2 });
 
     passChainPriority(engine, P2);

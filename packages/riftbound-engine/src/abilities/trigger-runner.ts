@@ -81,6 +81,53 @@ function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
         },
         type: "triggered",
       });
+      continue;
+    }
+
+    // Rule 813 (Deathknell): "[Deathknell] — [text]" is an *intrinsic
+    // Triggered ability* meaning "When I die, get the effect." The parser
+    // Emits it as `{ type: "keyword", keyword: "Deathknell", effect, condition? }`.
+    // Synthesize the real triggered ability so it fires through the normal
+    // Trigger machinery when this card dies.
+    if (a.type === "keyword" && a.keyword === "Deathknell" && a.effect) {
+      result.push({
+        condition: (a as { condition?: unknown }).condition,
+        effect: a.effect,
+        // Deathknell triggers are mandatory (not "may") unless the carried
+        // Text says otherwise; default to non-optional.
+        optional: a.optional,
+        trigger: { event: "die", on: "self" },
+        type: "triggered",
+      });
+      continue;
+    }
+
+    // Rule 812 (Legion): "[Legion][>] [Text]" / "[Legion] — [Text]" is a
+    // Dependent Keyword — short for "If you've played another card this turn,
+    // This card gains [Text]." When the carried text is itself a *triggered*
+    // Ability (e.g. "When you play me, buff me"), the parser emits
+    // `{ type: "keyword", keyword: "Legion", effect, trigger:{event,on} }`.
+    // Synthesize the real triggered ability gated on the Legion condition so
+    // It fires through the normal trigger machinery. Legion abilities whose
+    // Carried text is a static/passive modifier (e.g. "I cost [2] less")
+    // Carry no `trigger` — those are handled elsewhere (cost calc) and are
+    // Not synthesized here.
+    if (a.type === "keyword" && a.keyword === "Legion" && a.effect) {
+      const trig = (a as { trigger?: { event: string; on?: string } }).trigger;
+      if (trig?.event) {
+        const existingCond = (a as { condition?: unknown }).condition;
+        result.push({
+          // A Legion ability is always gated on the Legion condition (the
+          // Keyword *is* the condition). Use the parser-supplied condition
+          // If present, else the implicit `{ type: "legion" }`.
+          condition: existingCond ?? { type: "legion" },
+          effect: a.effect,
+          optional: a.optional,
+          trigger: { event: trig.event, on: trig.on },
+          type: "triggered",
+        });
+      }
+      continue;
     }
   }
   return result;
@@ -179,6 +226,22 @@ function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
   // Once the card has been played (moved out of championZone into play).
   // Legends in legendZone, by contrast, DO have their triggers active.
   // So we intentionally skip scanning championZone here.
+
+  // Rule 813 (Deathknell) / "when I die" self-triggers: a unit that just died
+  // Is already in the trash by the time the `die` event fires. Include trash
+  // Cards so their self-die triggers can still resolve. `findMatchingTriggers`
+  // Limits trash cards to self-scoped `die` triggers only — they never fire
+  // Board-presence triggers from the graveyard.
+  const trashCards = ctx.zones.getCardsInZone("trash" as CoreZoneId);
+  for (const cardId of trashCards) {
+    const owner = ctx.cards.getCardOwner(cardId) ?? "";
+    boardCards.push({
+      abilities: toTriggerableAbilities(cardId as string),
+      id: cardId as string,
+      owner,
+      zone: "trash",
+    });
+  }
 
   return boardCards;
 }
@@ -290,6 +353,10 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
           cardId: match.cardId,
           controller: match.cardOwner,
           effect,
+          // Core Rules 2026-03-30: a "may" triggered ability is optional to
+          // Place on the chain. We add it by default and flag it so a UI /
+          // `declineTrigger` move can opt out before resolution.
+          ...(match.ability.optional ? { optional: true } : {}),
           triggered: true,
           type: "ability",
         },
@@ -335,4 +402,39 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
   }
 
   return matches.length;
+}
+
+/**
+ * Fire `die` triggers for a batch of units that have just been killed.
+ *
+ * Rules:
+ *  - 540.x / 813 (Deathknell): "when I die" / Deathknell triggered abilities
+ *    fire when their unit dies, even though the card has already moved to the
+ *    trash. `getBoardCards` includes trash cards and `findMatchingTriggers`
+ *    restricts trashed cards to self-scoped `die` triggers, so the dying
+ *    unit's own Deathknell resolves.
+ *  - "when ANOTHER unit dies" / enemy-/friendly-units `die` triggers fire from
+ *    board cards as normal.
+ *  - Rule 585: multiple deaths in a single batch fire in turn order (handled
+ *    inside `fireTriggers` per-event).
+ *
+ * Owner is resolved via `ctx.cards.getCardOwner`; if a caller already knows
+ * the owner it may pass an explicit `{ cardId, owner }` pair.
+ *
+ * @param killed - Cards that died: card ids, or `{ cardId, owner }` pairs.
+ * @param ctx - Trigger runner context.
+ * @returns Total number of triggers that fired across all deaths.
+ */
+export function fireDieTriggers(
+  killed: readonly (string | { cardId: string; owner?: string })[],
+  ctx: TriggerRunnerContext,
+): number {
+  let total = 0;
+  for (const entry of killed) {
+    const cardId = typeof entry === "string" ? entry : entry.cardId;
+    const explicitOwner = typeof entry === "string" ? undefined : entry.owner;
+    const owner = explicitOwner ?? ctx.cards.getCardOwner(cardId as CoreCardId) ?? "";
+    total += fireTriggers({ cardId, owner, type: "die" }, ctx);
+  }
+  return total;
 }

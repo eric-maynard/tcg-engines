@@ -88,6 +88,14 @@ export interface RiftboundCardMeta {
   /** Temporary Might modifier from effects (added to base Might; reset per duration) */
   mightModifier?: number;
 
+  /**
+   * "This combat"-duration Might modifier (rule 461.7.b). Accumulated by
+   * `modify-might` effects with `duration: "combat"` and zeroed when the
+   * combat ends (in `resolveFullCombat`). Folded into effective Might
+   * alongside `mightModifier`/`staticMightBonus`.
+   */
+  combatMightModifier?: number;
+
   /** Might bonus from static/passive abilities (recalculated each pass) */
   staticMightBonus?: number;
 
@@ -350,6 +358,22 @@ export interface RiftboundGameState {
    * path always initializes it.
    */
   readonly cardsPlayedThisTurn?: Record<string, number>;
+
+  /**
+   * Queue of additional turns (rule 734). When an effect grants a player an
+   * additional turn, that player's id is appended here; the queue is FIFO.
+   * As each turn ends, the flow layer dequeues the front entry (if any) and
+   * makes that player the turn player for the next turn instead of advancing
+   * normally in seat order. Turn *order* is otherwise unaffected — once the
+   * additional turn finishes its entry is removed and normal rotation
+   * resumes. Optional for backward-compatibility with literal test states.
+   *
+   * Rule 734: "An additional turn is owned by the player who was told to take
+   * it and is inserted directly after the current turn in the repeating turn
+   * queue." Multiple additional turns granted in sequence are taken in the
+   * order they were granted.
+   */
+  pendingExtraTurns?: PlayerId[];
 
   /** Turn state */
   readonly turn: TurnState;

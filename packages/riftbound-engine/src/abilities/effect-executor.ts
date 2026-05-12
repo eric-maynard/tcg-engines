@@ -137,6 +137,7 @@ function getEffectiveMight(cardId: string, ctx: EffectContext): number {
     | undefined;
   const buffBonus = meta?.buffed ? 1 : 0;
   const mightMod = meta?.mightModifier ?? 0;
+  const combatMightMod = meta?.combatMightModifier ?? 0;
   const staticBonus = meta?.staticMightBonus ?? 0;
 
   let equipBonus = 0;
@@ -144,7 +145,7 @@ function getEffectiveMight(cardId: string, ctx: EffectContext): number {
     equipBonus += registry.getMightBonus(equipId);
   }
 
-  return Math.max(0, baseMight + buffBonus + mightMod + staticBonus + equipBonus);
+  return Math.max(0, baseMight + buffBonus + mightMod + combatMightMod + staticBonus + equipBonus);
 }
 
 /**
@@ -497,18 +498,31 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     case "modify-might": {
       const targets = getTargetIds(effect, ctx);
       const amount = resolveAmount(effect.amount ?? 0, ctx);
+      // Rule 461.7.b: a "this combat" Might modifier is tracked separately so
+      // It can be cleared when the combat ends (not at the Ending phase).
+      const isCombatDuration = effect.duration === "combat";
       for (const targetId of targets) {
         const mightBefore = getEffectiveMight(targetId, ctx);
         const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
           | Partial<RiftboundCardMeta>
           | undefined;
-        const currentMod = meta?.mightModifier ?? 0;
-        ctx.cards.updateCardMeta?.(
-          targetId as CoreCardId,
-          {
-            mightModifier: currentMod + amount,
-          } as unknown as Record<string, unknown>,
-        );
+        if (isCombatDuration) {
+          const currentCombatMod = meta?.combatMightModifier ?? 0;
+          ctx.cards.updateCardMeta?.(
+            targetId as CoreCardId,
+            {
+              combatMightModifier: currentCombatMod + amount,
+            } as unknown as Record<string, unknown>,
+          );
+        } else {
+          const currentMod = meta?.mightModifier ?? 0;
+          ctx.cards.updateCardMeta?.(
+            targetId as CoreCardId,
+            {
+              mightModifier: currentMod + amount,
+            } as unknown as Record<string, unknown>,
+          );
+        }
         checkBecomesMighty(targetId, mightBefore, ctx);
       }
       break;
@@ -1012,6 +1026,22 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           targetZoneId: "mainDeck" as CoreZoneId,
         });
       }
+      break;
+    }
+
+    case "extra-turn": {
+      // Rule 734 (Additional Turns): the controller of this effect (or, if
+      // The effect names a player, that player) is told to take an
+      // Additional turn. We enqueue them onto `pendingExtraTurns`; the flow
+      // Layer dequeues at the next turn transition. Multiple grants stack in
+      // FIFO order.
+      const targets = getTargetIds(effect, ctx);
+      const owner = targets[0] ?? ctx.playerId;
+      const draft = ctx.draft as RiftboundGameState & { pendingExtraTurns?: string[] };
+      if (!draft.pendingExtraTurns) {
+        draft.pendingExtraTurns = [];
+      }
+      draft.pendingExtraTurns.push(owner);
       break;
     }
 

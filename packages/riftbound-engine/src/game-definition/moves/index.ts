@@ -5,6 +5,7 @@
  */
 
 import type { GameMoveDefinitions } from "@tcg/core";
+import { withPostMoveCleanup } from "../../cleanup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 // Import all move categories
@@ -25,14 +26,20 @@ import { turnMoves } from "./turn";
 import { xpMoves } from "./xp";
 
 /**
- * All Riftbound move definitions combined
+ * All Riftbound move definitions combined.
+ *
+ * Wrapped by `withPostMoveCleanup` so every move reducer runs the state-based
+ * checks (rules 518-526) + `die` triggers (rule 540.x / 813 Deathknell) after
+ * it returns — the engine-wide post-move cleanup hook. Moves that already run
+ * cleanup themselves are unaffected (the extra pass is a no-op when there's
+ * nothing left to reap).
  */
 export const riftboundMoves: GameMoveDefinitions<
   RiftboundGameState,
   RiftboundMoves,
   RiftboundCardMeta,
   unknown
-> = {
+> = withPostMoveCleanup({
   // Setup moves
   ...setupMoves,
 
@@ -75,7 +82,7 @@ export const riftboundMoves: GameMoveDefinitions<
 
   // W12 deck-peek moves
   ...deckActionMoves,
-} as GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
+}) as GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
 export { cardActionMoves } from "./card-actions";
 export { cardPlayMoves } from "./cards";

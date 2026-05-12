@@ -14,9 +14,16 @@ import type {
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { resolveTarget } from "../../abilities/target-resolver";
-import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../chain";
+import {
+  addToChain,
+  createInteractionState,
+  getPriorityHolder,
+  getTurnState,
+  isLegalTiming,
+} from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { canPlayViaAmbush } from "../../keywords/keyword-effects";
+import { evaluateLegionCondition } from "../../abilities/legion-conditions";
 import {
   extractBattlefieldId,
   getBattlefieldZoneId,
@@ -59,6 +66,34 @@ function getDeflectSurcharge(
     surcharge += targetSurcharge;
   }
   return surcharge;
+}
+
+/**
+ * Detect a "Legion play-from-trash" alternate-play permission (rule 724 +
+ * rule 555).
+ *
+ * Cards like Undying Legion carry
+ * `{ type: "keyword", keyword: "Legion", effect: { type: "play",
+ *    from: "trash", target: { type: "unit", ... } } }` — a [Legion][>]
+ * ability that lets the owner play the card from their trash for the
+ * printed alternate cost (which, for the known Unleashed card, equals the
+ * card's normal `energyCost`/`domain`, so the standard cost path applies).
+ *
+ * Returns `true` when the card has such an ability AND it would play a
+ * unit (i.e. the [>] play-permission applies to playing it as a unit).
+ */
+function hasLegionPlayFromTrash(cardId: string): boolean {
+  const registry = getGlobalCardRegistry();
+  for (const ability of registry.getAbilities(cardId) ?? []) {
+    if (ability.type !== "keyword" || ability.keyword !== "Legion") {
+      continue;
+    }
+    const {effect} = (ability as { effect?: { type?: string; from?: string } });
+    if (effect && effect.type === "play" && effect.from === "trash") {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -279,7 +314,9 @@ export const cardPlayMoves: Partial<
       }
 
       const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
-      if (zone !== "hand") {
+      const isLegionTrashPlay =
+        zone === "trash" && hasLegionPlayFromTrash(context.params.cardId);
+      if (zone !== "hand" && !isLegionTrashPlay) {
         return false;
       }
 
@@ -287,6 +324,43 @@ export const cardPlayMoves: Partial<
       const owner = context.cards.getCardOwner(context.params.cardId as CoreCardId);
       if (owner !== context.params.playerId) {
         return false;
+      }
+
+      // Rule 724 (Legion) [>] play-from-trash permission (e.g. Undying
+      // Legion): only legal when the owner has played another card this
+      // Turn, on their own turn during the main phase, to their base.
+      if (isLegionTrashPlay) {
+        if (
+          !evaluateLegionCondition(
+            state,
+            context.params.playerId as Parameters<typeof evaluateLegionCondition>[1],
+          )
+        ) {
+          return false;
+        }
+        if (state.turn.activePlayer !== context.params.playerId) {
+          return false;
+        }
+        if (state.turn.phase !== "main") {
+          return false;
+        }
+        const trashLocation = context.params.location as string | undefined;
+        if (trashLocation && isBattlefieldZone(trashLocation)) {
+          // Undying Legion's [>] permission plays it to base, not a bf.
+          return false;
+        }
+        if (
+          !canAffordCard(
+            state,
+            context.params.playerId,
+            context.params.cardId,
+            {},
+            createMetaAccessor(context.cards),
+          )
+        ) {
+          return false;
+        }
+        return true;
       }
 
       // Rule 577.3.c (Ambush): a unit with Ambush may be played to a
@@ -352,12 +426,6 @@ export const cardPlayMoves: Partial<
       if (state.pendingChoice) {
         return [];
       }
-      if (state.turn.activePlayer !== (context.playerId as string)) {
-        return [];
-      }
-      if (state.turn.phase !== "main") {
-        return [];
-      }
 
       const registry = getGlobalCardRegistry();
       const pool = state.runePools[context.playerId as string];
@@ -370,6 +438,19 @@ export const cardPlayMoves: Partial<
         context.playerId as CorePlayerId,
       );
 
+      // Standard play path: enumerated only on the player's own turn during
+      // The main phase (rule 554), playing to base.
+      const isOwnMainPhase =
+        state.turn.activePlayer === (context.playerId as string) && state.turn.phase === "main";
+
+      // Rule 822 (Ambush): an Ambush unit "may be played to a battlefield
+      // Where you control Units" and "has [Reaction] as long as I'm being
+      // Played to a battlefield where you control Units." So an Ambush unit
+      // Is also playable to any such battlefield during a Reaction window —
+      // Off-turn, outside the main phase, etc. — provided the player
+      // Controls at least one unit there.
+      const battlefieldIds = Object.keys(state.battlefields ?? {});
+
       const results: { playerId: string; cardId: string; location: string }[] = [];
       for (const cardId of handCards) {
         const def = registry.get(cardId as string);
@@ -380,11 +461,68 @@ export const cardPlayMoves: Partial<
           continue;
         }
 
-        results.push({
-          cardId: cardId as string,
-          location: "base",
-          playerId: context.playerId as string,
-        });
+        if (isOwnMainPhase) {
+          results.push({
+            cardId: cardId as string,
+            location: "base",
+            playerId: context.playerId as string,
+          });
+        }
+
+        // Ambush battlefield plays — always available (rule 822: Reaction
+        // Timing is always legal) at battlefields where the player controls
+        // A unit.
+        if (registry.hasKeyword(cardId as string, "Ambush")) {
+          for (const bfId of battlefieldIds) {
+            const bfZoneId = getBattlefieldZoneId(bfId);
+            const unitsAtBf = context.zones.getCardsInZone(
+              bfZoneId as CoreZoneId,
+              context.playerId as CorePlayerId,
+            );
+            if (unitsAtBf.length > 0) {
+              results.push({
+                cardId: cardId as string,
+                location: bfZoneId,
+                playerId: context.playerId as string,
+              });
+            }
+          }
+        }
+      }
+
+      // Rule 724 (Legion) [>] play-from-trash permission (e.g. Undying
+      // Legion): on the player's own main phase, with another card already
+      // Played this turn, a unit in the trash that carries a
+      // `{keyword:"Legion", effect:{type:"play", from:"trash"}}` ability may
+      // Be played to base for its printed alternate cost.
+      if (
+        isOwnMainPhase &&
+        evaluateLegionCondition(
+          state,
+          context.playerId as Parameters<typeof evaluateLegionCondition>[1],
+        )
+      ) {
+        const trashCards = context.zones.getCardsInZone(
+          "trash" as CoreZoneId,
+          context.playerId as CorePlayerId,
+        );
+        for (const cardId of trashCards) {
+          const def = registry.get(cardId as string);
+          if (!def || def.cardType !== "unit") {
+            continue;
+          }
+          if (!hasLegionPlayFromTrash(cardId as string)) {
+            continue;
+          }
+          if (!registry.canAfford(cardId as string, pool)) {
+            continue;
+          }
+          results.push({
+            cardId: cardId as string,
+            location: "base",
+            playerId: context.playerId as string,
+          });
+        }
       }
       return results;
     },
@@ -600,12 +738,21 @@ export const cardPlayMoves: Partial<
       }
 
       // Rule 530: in Neutral Open state, only the active player holds
-      // Priority, so only they may play an Action-timed spell. Reaction
-      // Spells can be played by any relevant player in a Closed state.
+      // Priority, so only they may play an Action-timed spell.
       if (timing === "action" && turnState === "neutral-open") {
         if (state.turn.activePlayer !== context.params.playerId) {
           return false;
         }
+      }
+
+      // Rules 510 / 530 / 543.x — once a chain or showdown is ongoing, only
+      // The player who currently holds Priority (chain) / Focus (showdown) may
+      // Add to the chain. A Reaction spell is *not* free for anyone to play
+      // Mid-chain; it waits for that player's window. (Neutral Open is gated
+      // By the rule-530 check above; `getPriorityHolder` returns null there.)
+      const priorityHolder = getPriorityHolder(interaction);
+      if (priorityHolder !== null && priorityHolder !== context.params.playerId) {
+        return false;
       }
 
       // Rule 537: Check that required targets exist before allowing the spell

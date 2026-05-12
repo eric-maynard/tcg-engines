@@ -833,8 +833,9 @@ export function getEffectiveMight(engine: AuditEngine, cardId: CardId): number {
   const meta = getCardMeta(engine, cardId);
   const staticBonus = (meta?.staticMightBonus as number | undefined) ?? 0;
   const mightMod = (meta?.mightModifier as number | undefined) ?? 0;
+  const combatMightMod = (meta?.combatMightModifier as number | undefined) ?? 0;
   const buffBonus = meta?.buffed ? 1 : 0;
-  return baseMight + staticBonus + mightMod + buffBonus;
+  return baseMight + staticBonus + mightMod + combatMightMod + buffBonus;
 }
 
 /**
@@ -1069,6 +1070,7 @@ export function getChainItems(engine: AuditEngine): readonly {
   effect?: unknown;
   countered?: boolean;
   triggered?: boolean;
+  optional?: boolean;
 }[] {
   const { interaction } = engine.getState();
   if (!interaction?.chain) {
@@ -1082,7 +1084,26 @@ export function getChainItems(engine: AuditEngine): readonly {
     effect?: unknown;
     countered?: boolean;
     triggered?: boolean;
+    optional?: boolean;
   }[];
+}
+
+/**
+ * Install a hand-built interaction state directly onto the engine, bypassing
+ * the chain-priority machinery. Used by rule-audit tests that need an active
+ * chain (e.g. to exercise optional-trigger / decline behaviour) without
+ * playing real spells. The mutation goes through the same internal view as
+ * `fireTrigger`, so subsequent `engine.getState()` reads and `applyMove`
+ * calls observe it.
+ */
+export function setInteractionStateForTest(
+  engine: AuditEngine,
+  interaction: TurnInteractionState,
+): void {
+  const internal = asInternal(engine);
+  (internal.currentState as { interaction?: TurnInteractionState }).interaction = interaction;
+  const flowManager = engine.getFlowManager?.();
+  flowManager?.syncState?.(internal.currentState);
 }
 
 /**
@@ -1110,6 +1131,39 @@ export function passChainPriority(
   player: PlayerId,
 ): { success: boolean; error?: string } {
   return applyMove(engine, "passChainPriority", { playerId: player });
+}
+
+/**
+ * Read the flow manager's notion of the current (active) player.
+ *
+ * `state.turn.activePlayer` is also kept in sync by `turn.onBegin`, but the
+ * flow manager's `getCurrentPlayer()` is the source of truth that phase hooks
+ * read — so rotation tests assert against it directly.
+ */
+export function getFlowCurrentPlayer(engine: AuditEngine): string | undefined {
+  return engine.getFlowManager()?.getCurrentPlayer();
+}
+
+/**
+ * Drive a full turn transition via the flow manager (`nextTurn()` →
+ * `transitionToNextTurn`), running `turn.onEnd` (seat-order rotation, rule
+ * 510/734) and then the next turn's `turn.onBegin` (extra-turn dequeue). The
+ * engine's `currentState` is re-synced afterwards so subsequent reads see the
+ * mutations the hooks made.
+ */
+export function endTurnViaFlow(engine: AuditEngine): void {
+  const fm = engine.getFlowManager();
+  if (!fm) {
+    return;
+  }
+  fm.nextTurn();
+  const internal = asInternal(engine);
+  // The hooks mutate the flow manager's draft; pull it back so getState()
+  // Reflects rotation / per-turn resets.
+  const flowState = (fm as unknown as { getGameState?: () => RiftboundGameState }).getGameState?.();
+  if (flowState) {
+    (internal as { currentState: RiftboundGameState }).currentState = flowState;
+  }
 }
 
 /**
@@ -1169,6 +1223,46 @@ export function setVictoryPoints(engine: AuditEngine, playerId: PlayerId, points
     player.victoryPoints = points;
   }
   (internal as { currentState: RiftboundGameState }).currentState = newState;
+  engine.getFlowManager()?.syncState(newState);
+}
+
+/**
+ * Set the per-player "main-deck cards played this turn" counter (rule 724 /
+ * 812 — Legion). Used by Legion tests that need the "you've played another
+ * card this turn" precondition satisfied without going through real plays.
+ */
+export function setCardsPlayedThisTurn(
+  engine: AuditEngine,
+  playerId: PlayerId,
+  count: number,
+): void {
+  const internal = asInternal(engine);
+  const newState = structuredClone(internal.currentState) as RiftboundGameState & {
+    cardsPlayedThisTurn?: Record<string, number>;
+  };
+  if (!newState.cardsPlayedThisTurn) {
+    newState.cardsPlayedThisTurn = {};
+  }
+  newState.cardsPlayedThisTurn[playerId] = count;
+  (internal as { currentState: RiftboundGameState }).currentState = newState as RiftboundGameState;
+  engine.getFlowManager()?.syncState(newState);
+}
+
+/**
+ * Append a player to the `pendingExtraTurns` queue (rule 734 — Additional
+ * Turns) via the engine's internal state, so subsequent `engine.getState()`
+ * reads and flow hooks observe it.
+ */
+export function enqueuePendingExtraTurn(engine: AuditEngine, playerId: PlayerId): void {
+  const internal = asInternal(engine);
+  const newState = structuredClone(internal.currentState) as RiftboundGameState & {
+    pendingExtraTurns?: PlayerId[];
+  };
+  if (!newState.pendingExtraTurns) {
+    newState.pendingExtraTurns = [];
+  }
+  newState.pendingExtraTurns.push(playerId);
+  (internal as { currentState: RiftboundGameState }).currentState = newState as RiftboundGameState;
   engine.getFlowManager()?.syncState(newState);
 }
 

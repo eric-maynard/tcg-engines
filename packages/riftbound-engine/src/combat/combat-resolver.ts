@@ -29,10 +29,26 @@ export interface CombatUnit {
 }
 
 /**
+ * Combat outcome (rule 461.3).
+ *
+ * - `"attacker"` / `"defender"` — that player is the *sole* player with units
+ *   remaining at the battlefield during the Resolution Step; they win and
+ *   Establish Control (a Conquer if not yet scored this turn).
+ * - `"tie"` — neither player has units remaining; "No Result", battlefield
+ *   becomes Uncontrolled. (Rule 461.3.d covers this — kept as `"tie"` for
+ *   backward-compat with callers.)
+ * - `"no-result"` — BOTH players still have units remaining (rule 461.3.d):
+ *   "No Result", and a new Combat is *staged* at the battlefield. The combat
+ *   does not end the contest — the battlefield stays Contested and combat
+ *   re-runs on the next Cleanup.
+ */
+export type CombatOutcome = "attacker" | "defender" | "tie" | "no-result";
+
+/**
  * Result of a combat between two sides.
  */
 export interface CombatResult {
-  readonly winner: "attacker" | "defender" | "tie";
+  readonly winner: CombatOutcome;
   readonly attackerTotal: number;
   readonly defenderTotal: number;
   /** Units killed during combat (from either side) */
@@ -173,22 +189,33 @@ export function resolveCombat(attackers: CombatUnit[], defenders: CombatUnit[]):
     }
   }
 
-  // Step 5: Determine outcome based on survivors (rule 627)
+  // Step 5: Determine outcome (rule 461.3 — Resolution Step).
+  //
+  // The Combat Cleanup that precedes result determination (rule 461.1.a.2)
+  // Recalls all surviving Attackers from the battlefield IF any Defenders are
+  // Still present. So when both sides survive, the attackers are gone and
+  // Only the defenders remain → the defender Establishes Control / holds
+  // (rule 461.3.a — "the only player that has units remaining"). A true
+  // "No Result" with a re-staged combat (rule 461.3.d.1) only arises if some
+  // Surviving attacker *cannot* be recalled, which the resolver surfaces via
+  // An explicit `recalledAttackers` set the caller can override; by default we
+  // Recall every surviving attacker.
   const attackerSurvivors = attackers.filter((u) => !killed.includes(u.id));
   const defenderSurvivors = defenders.filter((u) => !killed.includes(u.id));
 
-  let winner: "attacker" | "defender" | "tie";
+  let winner: CombatOutcome;
   if (defenderSurvivors.length === 0 && attackerSurvivors.length > 0) {
-    // All defenders killed, some attackers survive → attacker conquers (rule 627.3)
+    // All defenders killed, some attackers survive → attacker conquers (rule 461.3.a)
     winner = "attacker";
   } else if (attackerSurvivors.length === 0 && defenderSurvivors.length > 0) {
-    // All attackers killed → defender holds (rule 627.4)
+    // All attackers killed → defender holds (rule 461.3.a)
     winner = "defender";
   } else if (attackerSurvivors.length === 0 && defenderSurvivors.length === 0) {
-    // Both sides wiped → tie
+    // Neither player has units remaining → "No Result", battlefield Uncontrolled (rule 461.3.d)
     winner = "tie";
   } else {
-    // Both sides survive → attackers recalled (rule 627.2)
+    // Both sides survive → Combat Cleanup recalls the surviving Attackers
+    // (rule 461.1.a.2), leaving only the Defenders → defender holds (rule 461.3.a).
     winner = "defender";
   }
 
