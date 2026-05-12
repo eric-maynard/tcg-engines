@@ -1,0 +1,96 @@
+Riftbound: League of Legends TCG — Parity Test Decklists
+Source: official Riftbound site, "Vi & Vex Champion Decks" (Unleashed), 2026-04-08
+https://riftbound.leagueoflegends.com/en-us/news/announcements/vi--vex-champion-decks/
+
+NOTE: RiftAtlas (play.riftatlas.com) "Import Deck / Paste a deck" expects raw text.
+The exact line format RiftAtlas wants may differ — these are written in a common
+"<count> <name>" format. If import fails, fall back to RiftAtlas's "Choose Deck" presets.
+
+================================================================================
+DECK 1 — Vex, Gloomist (Calm / Chaos)
+================================================================================
+Legend: Vex, Gloomist
+Champion Unit Options:
+1 Vex, Apathetic
+1 Vex, Cheerless
+2 Vex, Mocking
+
+Main deck cards:
+2 Mutated Mouser
+1 Monch
+2 Existential Dread
+2 Allay, Eager Admirer
+3 Back Off
+1 Enthusiastic Promoter
+2 Trevor Snoozebottom
+2 Blast Cone
+1 Megatusk
+1 Evelyn, Entrancing
+1 Nami, Headstrong
+1 Iascylla
+1 Shadow
+1 Scryer's Bloom
+2 Soul Sword
+2 Mister Root
+2 Skyward Strike
+2 Combat Experience
+2 Herald of Spring
+3 Wuju Apprentice
+2 Mosstomper
+
+Battlefields:
+Amateur Recital
+Gardens of Becoming
+Ripper's Bay
+
+Runes:
+6 Calm
+6 Chaos
+
+Tokens:
+1 XP/Buff Double-Faced Tokens
+3 Sprite/Buff Double-Faced Tokens
+
+================================================================================
+DECK 2 — Vi, Piltover Enforcer (Order / Fury)
+================================================================================
+Legend: Vi, Piltover Enforcer
+Champion Unit Options:
+1 Vi, Destructive
+1 Vi, Hotheaded
+2 Vi, Peacekeeper
+
+Main deck cards:
+2 Vault Breaker
+3 Inferna
+2 Loyal Poro
+2 Crimson Pigeons
+2 Sharkling
+2 Square Up
+1 Hextech Gauntlets
+2 Right of Conquest
+1 Arena Kingpin
+2 Lord Broadmane
+2 Towering Pairofant
+2 Yeti Brawler
+2 Carion Dredger
+1 Rengar, Unseen
+2 Serrated Dirk
+1 Tactical Retreat
+2 Divining Shells
+2 Mageseeker, Investigator
+1 Xerath, Freed
+1 Upstage Comedy
+1 Soul Harvest
+
+Battlefields:
+Trapping Grounds
+Star Spring
+Valley of Idols
+
+Runes:
+6 Order
+6 Fury
+
+Tokens:
+4 Bird/Gold Double-Faced Tokens
