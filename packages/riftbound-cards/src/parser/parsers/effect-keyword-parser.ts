@@ -371,6 +371,34 @@ function parseSimpleEffect(text: string): Effect | undefined {
     return { target, type: "recycle" };
   }
 
+  // Try kill effect: "Kill it[ now][ instead]." / "Kill a unit." / "Kill me."
+  // Used by Legion replacement-style alternate effects (e.g. Noxian Guillotine
+  // Line 3: "[Legion] — Kill it now instead.") and as a plain effect.
+  // The trailing "now"/"instead" qualifiers are stripped — "instead" is
+  // Surfaced as the `replacesSpellEffect` flag by the caller.
+  const killMatch = cleanText.match(
+    /^Kill\s+(it|me|a friendly unit|an? enemy unit|a unit|that unit)(?:\s+now)?(?:\s+instead)?\.?$/i,
+  );
+  if (killMatch) {
+    const targetStr = killMatch[1].toLowerCase();
+    let target: AnyTarget;
+    if (targetStr === "me") {
+      target = "self" as AnyTarget;
+    } else {
+      // "it"/"that unit"/"a unit" all resolve to a unit target — this mirrors
+      // How the spell parser renders "Choose a unit. Kill it" as
+      // `{ type: "kill", target: { type: "unit" } }`.
+      const t: { type: "unit"; controller?: "friendly" | "enemy" } = { type: "unit" };
+      if (targetStr.includes("friendly")) {
+        t.controller = "friendly";
+      } else if (targetStr.includes("enemy")) {
+        t.controller = "enemy";
+      }
+      target = t as AnyTarget;
+    }
+    return { target, type: "kill" };
+  }
+
   // UNL set: "Gain N XP."
   const gainXpMatch = cleanText.match(/^Gain (\d+) XP\.?$/i);
   if (gainXpMatch) {
@@ -428,10 +456,16 @@ function parseCondition(text: string): {
 }
 
 /**
- * Parse effect text that may contain "When you play me" trigger
- * For Legion keyword, this creates a triggered effect
+ * Parse effect text that may contain "When you play me" trigger.
+ *
+ * Returns the parsed effect plus, when the text was a "When you play me, …"
+ * triggered ability, the trigger that fires it. For Legion this lets the
+ * engine synthesize a real triggered ability gated on the Legion condition
+ * (rule 812) rather than dropping the trigger.
  */
-function parseEffectWithTrigger(text: string): Effect | undefined {
+function parseEffectAndTrigger(
+  text: string,
+): { effect: Effect; trigger?: { event: string; on?: string } } | undefined {
   const cleanText = removeReminderText(text).trim();
 
   // Check for "When you play me" pattern
@@ -440,14 +474,18 @@ function parseEffectWithTrigger(text: string): Effect | undefined {
     const effectText = cleanText.slice(whenPlayMatch[0].length);
     const effect = parseSimpleEffect(effectText);
     if (effect) {
-      // Return the effect directly - the trigger is implicit in Legion
-      return effect;
+      return { effect, trigger: { event: "play-self", on: "self" } };
     }
   }
 
   // Try parsing as simple effect
-  return parseSimpleEffect(cleanText);
+  const effect = parseSimpleEffect(cleanText);
+  if (effect) {
+    return { effect };
+  }
+  return undefined;
 }
+
 
 // ============================================================================
 // Main Parser Functions
@@ -496,12 +534,20 @@ export function parseEffectKeywordsWithPositions(text: string): EffectKeywordPar
       effectText = effectText.slice(0, -1).trim();
     }
 
+    // Detect a replacement-style alternate effect — the carried text ends in
+    // "instead", meaning it replaces the spell/ability's printed effect rather
+    // Than adding on top of it (rule 812; e.g. Noxian Guillotine line 3
+    // "[Legion] — Kill it now instead."). The flag is surfaced on the ability
+    // So the engine can substitute this effect for the printed one.
+    const replacesSpellEffect = /\binstead\.?$/i.test(effectText);
+
     // Parse condition from effect text
     const { condition, remainingText } = parseCondition(effectText);
     effectText = remainingText;
 
     // Parse the effect
     let effect: Effect | undefined;
+    let trigger: { event: string; on?: string } | undefined;
 
     if (keyword === "Vision") {
       // Vision has an implicit "look" effect
@@ -512,15 +558,22 @@ export function parseEffectKeywordsWithPositions(text: string): EffectKeywordPar
         type: "look",
       };
     } else {
-      // Parse the effect text
-      effect = parseEffectWithTrigger(effectText);
+      // Parse the effect text (capturing an implicit "When you play me" trigger)
+      const parsed = parseEffectAndTrigger(effectText);
+      effect = parsed?.effect;
+      trigger = parsed?.trigger;
     }
 
     // Only add if we have an effect (or it's Vision which has implicit effect)
     if (effect) {
-      const ability: EffectKeywordAbility = condition
-        ? { condition, effect, keyword, type: "keyword" }
-        : { effect, keyword, type: "keyword" };
+      const ability: EffectKeywordAbility = {
+        effect,
+        keyword,
+        type: "keyword",
+        ...(condition ? { condition } : {}),
+        ...(trigger ? { trigger } : {}),
+        ...(replacesSpellEffect ? { replacesSpellEffect: true } : {}),
+      };
 
       results.push({
         ability,

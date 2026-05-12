@@ -811,6 +811,45 @@ function parseStaticAbilityInner(
       startIndex: 0,
     };
   }
+  // Spell-card phrasing of the self cost reduction: "This costs COST less" /
+  // "This spell costs COST less" / "This costs COST less instead." — used by
+  // [Level N][>] gated cost reductions on spells (e.g. Concentrate, UNL).
+  // Treated identically to the "I cost COST less" unit phrasing.
+  const thisCostScopeMatch = cleanText.match(
+    /^This(?:\s+spell)?\s+costs?\s+(.+?)\s+less\s+(?!instead\b)(.+?)\.?$/i,
+  );
+  if (thisCostScopeMatch) {
+    return {
+      ability: {
+        effect: {
+          reduction: thisCostScopeMatch[1],
+          scope: thisCostScopeMatch[2],
+          target: "self" as AnyTarget,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+  const thisCostBareMatch = cleanText.match(
+    /^This(?:\s+spell)?\s+costs?\s+(.+?)\s+less(?:\s+instead)?\.?$/i,
+  );
+  if (thisCostBareMatch) {
+    return {
+      ability: {
+        effect: {
+          reduction: thisCostBareMatch[1],
+          target: "self" as AnyTarget,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
 
   // "This spell's Energy cost is reduced by ..." - spell cost reduction
   const spellCostMatch = cleanText.match(/^This spell's Energy cost is reduced by\s+(.+?)\.?$/i);

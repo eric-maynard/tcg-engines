@@ -5235,7 +5235,16 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
     if (startsWithKeyword) {
       // For [Action]/[Reaction], accept if no raw effects AND no [Repeat] keyword
       // ([Repeat] needs special spell+repeat parsing that the single path misses)
-      if (/^\[(Action|Reaction)\]/.test(trimmed) && !hasRawEffect && !/\[Repeat\]/.test(trimmed)) {
+      // AND no standalone effect keyword ([Legion]/[Deathknell]/[Vision]) on a
+      // Later line — those (e.g. Noxian Guillotine's "[Legion] — Kill it now
+      // Instead.") are dropped by the single-spell parse and need multi-split.
+      const hasTrailingEffectKeyword = /\n\s*\[(?:Legion|Deathknell|Vision)\]/i.test(trimmed);
+      if (
+        /^\[(Action|Reaction)\]/.test(trimmed) &&
+        !hasRawEffect &&
+        !/\[Repeat\]/.test(trimmed) &&
+        !hasTrailingEffectKeyword
+      ) {
         return singleResult;
       }
       // For other keywords, always try multi-ability to preserve keywords
