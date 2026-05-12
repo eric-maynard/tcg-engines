@@ -266,7 +266,41 @@ function render() {
 
   // W10c: mount the board toggles panel on first render (no-op afterwards).
   if (typeof initBoardToggles === "function") initBoardToggles();
+
+  // M8 — keep the chat panel's enabled/disabled state in sync with game mode.
+  if (typeof refreshChatPanel === "function") refreshChatPanel();
+
+  // M3 — populate the room-code badge (top-right of board). Prefer lobbyCode
+  // (human-friendly room code from a hosted lobby) but fall back to short
+  // gameId when only a goldfish/single-player session is active.
+  renderRoomBadge();
 }
+
+function renderRoomBadge() {
+  const badge = document.getElementById("roomBadge");
+  if (!badge) return;
+  const code = (typeof lobbyCode !== "undefined" && lobbyCode)
+    || (typeof gameId !== "undefined" && gameId ? String(gameId).slice(0, 6).toUpperCase() : null);
+  if (!code) {
+    badge.classList.add("hidden");
+    return;
+  }
+  badge.classList.remove("hidden");
+  const valEl = document.getElementById("roomCodeValue");
+  if (valEl && valEl.textContent !== code) valEl.textContent = code;
+  if (!badge.dataset.bound) {
+    badge.dataset.bound = "1";
+    badge.addEventListener("click", () => {
+      try {
+        navigator.clipboard.writeText(code).then(() => {
+          badge.classList.add("copied");
+          setTimeout(() => badge.classList.remove("copied"), 1500);
+        });
+      } catch (e) { /* ignore */ }
+    });
+  }
+}
+
 
 /** Resolve a param value: if it's a card ID, return the card name */
 function resolveParamValue(value) {
@@ -322,18 +356,30 @@ function formatMoveDescription(moveId, params) {
   }
 }
 
+/** Wall-clock string for the on-board turn timer (mirrors RiftAtlas's M:SS). */
+function _turnClockStr() {
+  if (typeof window.__turnClockStart !== "number") window.__turnClockStart = Date.now();
+  const secs = Math.max(0, Math.floor((Date.now() - window.__turnClockStart) / 1000));
+  const m = Math.floor(secs / 60), s = secs % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function renderSidebarHeader() {
   const { turn, status } = gameState;
   const phase = turn?.phase ?? "setup";
   const turnNum = turn?.number ?? 0;
   const activeP = turn?.activePlayer ?? "";
   const isActive = activeP === viewingPlayer;
+  // Reset the turn clock whenever the active player changes.
+  if (window.__turnClockOwner !== activeP) { window.__turnClockOwner = activeP; window.__turnClockStart = Date.now(); }
+  const phaseLabel = (typeof PHASE_LABELS !== "undefined" && PHASE_LABELS && PHASE_LABELS[phase]) || phase;
 
   document.getElementById("sidebarHeader").innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;">
       <div class="turn-badge" style="flex:1;">
         <span class="turn-number">Turn ${turnNum}</span>
-        <span class="phase-badge phase-${phase}">${phase}</span>
+        <span class="phase-badge phase-${phase}">${esc(phaseLabel)}</span>
+        ${status === "playing" ? `<span class="turn-timer" title="Time on this turn">${_turnClockStr()}</span>` : ""}
       </div>
       <button class="leave-btn" onclick="showLeaveConfirm()">Leave</button>
     </div>
@@ -346,6 +392,15 @@ function renderSidebarHeader() {
     </div>
     <div id="connStatus" style="font-size:10px;margin-top:2px;">${wsConnected ? "Connected" : "Disconnected"}</div>
   `;
+}
+
+// Tick the on-board turn timer once a second so it visibly counts up like RiftAtlas.
+if (!window.__turnTimerInterval) {
+  window.__turnTimerInterval = setInterval(() => {
+    if (typeof gameState === "undefined" || !gameState || gameState.status !== "playing") return;
+    const el = document.querySelector("#sidebarHeader .turn-timer");
+    if (el) el.textContent = _turnClockStr();
+  }, 1000);
 }
 
 function renderPlayerInfo() {
@@ -647,13 +702,15 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   // Inline styles keep the change scoped to this file (CSS is off-limits this pass).
   let autoPayBtn = "";
   if (zone === "hand" && isOwned && typeof canAutoPay === "function" && canAutoPay(card.id)) {
+    // B16 (tick1): shrunk pill — was a chunky bright green block dominating ~25% of
+    // the card height; now a subtle compact chip in the bottom-left corner.
     autoPayBtn = `<button
       class="card-auto-pay-btn"
       type="button"
       title="Auto Pay and play this card"
       onpointerdown="event.stopPropagation();"
       onclick="event.stopPropagation(); autoPayAndPlay('${esc(card.id)}');"
-      style="position:absolute;left:4px;bottom:22px;padding:2px 6px;font-size:9px;font-weight:700;letter-spacing:0.5px;background:rgba(30,160,80,0.92);color:#eafff0;border:1px solid #7ff2a8;border-radius:3px;cursor:pointer;z-index:3;text-transform:uppercase;">Auto Pay</button>`;
+      style="position:absolute;left:3px;bottom:3px;padding:1px 5px;font-size:8px;font-weight:700;letter-spacing:0.5px;background:rgba(30,140,72,0.78);color:#eafff0;border:1px solid rgba(127,242,168,0.7);border-radius:8px;cursor:pointer;z-index:3;text-transform:uppercase;line-height:1.2;box-shadow:0 1px 2px rgba(0,0,0,0.5);">Pay</button>`;
   }
 
   // W13: per-card Hide toggle on viewer-owned hand cards. Click replaces
@@ -797,18 +854,37 @@ function renderZones() {
       const visibleCards = cards.slice(0, STACK_MAX);
       const stackHeight = 70 + (visibleCards.length - 1) * 14;
       const label = DOMAIN_LABELS[domain] ?? domain[0].toUpperCase();
-      const labelText = cards.length > 1 ? `${label} (${cards.length})` : label;
-      html += `<div class="rune-stack" style="min-height:${stackHeight + 18}px;height:${stackHeight + 18}px;">`;
-      html += `<div class="rune-stack-label" style="color:${color};">${labelText}</div>`;
+      // B15: rune-domain badge — colored dot + domain name + ready/total count,
+      // mirroring RA's labelled rune-pool domain chips.
+      const ready = cards.filter(c => !c.meta?.exhausted).length;
+      html += `<div class="rune-stack" style="min-height:${stackHeight + 22}px;height:${stackHeight + 22}px;">`;
+      html += `<div class="rune-stack-label" style="border-color:${color}55;color:${color};" title="${label} runes — ${ready} ready / ${cards.length} total">`;
+      html += `<span class="rune-domain-dot" style="background:${color};"></span><span class="rune-domain-name">${label}</span><span class="rune-domain-count">${ready}/${cards.length}</span>`;
+      html += `</div>`;
       visibleCards.forEach((c, i) => {
-        html += renderRuneCard(c, 16 + i * 14, i + 1, color);
+        html += renderRuneCard(c, 22 + i * 14, i + 1, color);
       });
       html += `</div>`;
     }
     return html;
   }
-  document.getElementById("player-runePool").innerHTML = renderRuneStacks(zoneForPlayer("runePool", viewingPlayer));
-  document.getElementById("opponent-runePool").innerHTML = renderRuneStacks(zoneForPlayer("runePool", opponent));
+  // B1 fix: render a compact count badge for opponent rune pool so the zone is
+  // never visually collapsed. When the opponent has 0 runes, we still render a
+  // dimmed placeholder so the UI conveys "opponent has 0 runes" rather than
+  // appearing broken/missing. The opponent's full stacks are rendered when
+  // they actually have runes.
+  const playerRunes = zoneForPlayer("runePool", viewingPlayer);
+  const oppRunes = zoneForPlayer("runePool", opponent);
+  document.getElementById("player-runePool").innerHTML = renderRuneStacks(playerRunes);
+  let oppRuneHtml = renderRuneStacks(oppRunes);
+  if (!oppRuneHtml) {
+    const oppReady = oppRunes.filter(c => !c.meta?.exhausted).length;
+    oppRuneHtml = `<div class="rune-stack rune-stack-empty" title="Opponent rune pool (${oppRunes.length} runes)" style="min-height:48px;height:48px;padding:4px 8px;border:1px dashed #2a2740;border-radius:6px;background:rgba(20,18,40,0.6);">
+      <div class="rune-stack-label" style="color:#6a6288;font-size:10px;">Runes</div>
+      <div style="color:#8a82a6;font-size:11px;">${oppReady}/${oppRunes.length}</div>
+    </div>`;
+  }
+  document.getElementById("opponent-runePool").innerHTML = oppRuneHtml;
 
   // Legend and Champion zones
   const playerLegend = zoneForPlayer("legendZone", viewingPlayer);
@@ -832,6 +908,15 @@ function renderZones() {
     renderDeckStack(zoneForPlayer("mainDeck", opponent), "Main") +
     renderDeckStack(zoneForPlayer("runeDeck", opponent), "Rune");
 }
+
+// B14 — faint dashed "unit slot" placeholders rendered behind each
+// battlefield side. Riftbound has no fixed unit cap per battlefield, so this
+// is a purely visual landing-zone hint (3 ghost slots, mirroring RiftAtlas);
+// it carries no engine state.
+const BF_SLOT_GHOSTS =
+  '<div class="bf-slot-ghosts" aria-hidden="true">' +
+  '<div class="bf-slot-ghost"></div><div class="bf-slot-ghost"></div><div class="bf-slot-ghost"></div>' +
+  "</div>";
 
 function renderBattlefields() {
   const bfs = gameState.battlefields || {};
@@ -885,11 +970,13 @@ function renderBattlefields() {
             <div class="bf-name">${esc(bfName)}</div>
             <div class="bf-control">${controlLabel}${isContested ? " (Contested)" : ""}${hasShowdown ? " — " + (activeShowdown.isCombatShowdown ? "Combat" : "Showdown") : ""}</div>
           </div>
-          <div class="bf-units opponent-side">
+          <div class="bf-units opponent-side ${opponentUnits.length ? "has-units" : ""}">
+            ${BF_SLOT_GHOSTS}
             ${opponentUnits.map(c => renderCardElement(c, false, bfZoneId)).join("") || ""}
           </div>
           <div class="bf-divider"></div>
-          <div class="bf-units player-side">
+          <div class="bf-units player-side ${playerUnits.length ? "has-units" : ""}">
+            ${BF_SLOT_GHOSTS}
             ${playerUnits.map(c => renderCardElement(c, false, bfZoneId)).join("") || ""}
           </div>
         </div>

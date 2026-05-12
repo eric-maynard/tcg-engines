@@ -10,7 +10,7 @@
 
 import { getAllCards, getCardRegistry } from "@tcg/riftbound-cards";
 import type { Card } from "@tcg/riftbound-types/cards";
-import { DeckBuilder, getGlobalCardRegistry, riftboundDefinition } from "@tcg/riftbound";
+import { DeckBuilder, PHASE_LABELS, TURN_PHASE_STRIP, getGlobalCardRegistry, riftboundDefinition } from "@tcg/riftbound";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "@tcg/riftbound";
 import { RuleEngine } from "@tcg/core";
 import type { PlayerId } from "@tcg/core";
@@ -1516,6 +1516,12 @@ const server = Bun.serve({
     // ========================================
     // API Routes
     // ========================================
+
+    // GET /api/flow — turn-phase structure (engine-defined, constant). Clients
+    // Consume this instead of hard-coding the phase order/labels.
+    if (pathname === "/api/flow") {
+      return json({ phaseLabels: PHASE_LABELS, phases: TURN_PHASE_STRIP });
+    }
 
     // GET /api/cards — all cards (with optional filters)
     if (pathname === "/api/cards") {

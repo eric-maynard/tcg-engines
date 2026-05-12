@@ -3,11 +3,34 @@
        ============================================ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; overflow: hidden; }
+    :root {
+      /* Display font — matches play.riftatlas.com (Bricolage Grotesque). Used for
+         board chrome, headings, turn/phase labels, log/section titles, deck names. */
+      --font-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+      --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-family: var(--font-body);
       background: #0a0914;
       color: #d8d4e8;
       user-select: none;
+    }
+    /* Board chrome / headings use the display font (Bricolage Grotesque) — mirrors RA. */
+    .sidebar-header, .sidebar-header *,
+    .turn-number, .turn-timer, .phase-badge, .game-status,
+    .lobby-shell-title, .lobby-shell-sub, .lsd-empty-title, .lsd-deck-name, .lsr-card-title,
+    .start-screen h1, .start-screen h2,
+    .top-header .brand,
+    .phase-bar, .phase-bar *,
+    .log-title, .chat-title,
+    .actions-title, .actions-panel .actions-title,
+    .player-name, .player-stat .stat-label, .player-stat .stat-value,
+    .room-badge, .room-badge-label, .room-badge-value,
+    .resource-bar .rb-label, .resource-bar .rb-icon, .rb-label, .rb-icon,
+    .rune-stack-label,
+    .legend-label, .legend-champion-zone .legend-label,
+    .battlefield .bf-name, .bf-name {
+      font-family: var(--font-display);
     }
 
     /* ============================================
@@ -143,46 +166,73 @@
     /* ============================================
        Player Info Bar
        ============================================ */
+    /* B9/B10: player / opponent nameplate — avatar + name + VP + resources, sized to
+       read clearly at board scale (mirrors RA's nameplate prominence). */
     .player-info {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 6px 0;
-      font-size: 12px;
+      gap: 10px;
+      padding: 5px 10px;
+      font-size: 13px;
+      background: linear-gradient(180deg, rgba(30,26,52,0.7), rgba(18,16,32,0.55));
+      border: 1px solid #2e2a48;
+      border-radius: 10px;
+      width: fit-content;
+    }
+    /* Opponent's nameplate gets a distinct (reddish) accent so the two strips
+       are immediately tellable apart, like RA's top vs bottom plates. */
+    #opponentInfo.player-info {
+      border-color: #4a2a32;
+      background: linear-gradient(180deg, rgba(46,28,34,0.55), rgba(22,16,20,0.5));
     }
 
     .player-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: #2a2448;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #322a58, #221d40);
       border: 2px solid #4a3f6a;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 700;
-      font-size: 14px;
+      font-weight: 800;
+      font-size: 16px;
+      font-family: var(--font-display);
+      color: #e8e0ff;
+      flex-shrink: 0;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
     }
 
     .player-avatar.active {
-      border-color: #50c878;
-      box-shadow: 0 0 8px #50c87844;
+      border-color: #6cdcff;
+      box-shadow: 0 0 10px rgba(108,220,255,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    #opponentInfo .player-avatar.active {
+      border-color: #ff8b6c;
+      box-shadow: 0 0 10px rgba(255,139,108,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
     }
 
-    .player-name { font-weight: 600; color: #e0dced; }
+    .player-name {
+      font-weight: 700;
+      color: #f0ecf8;
+      font-size: 14px;
+      font-family: var(--font-display);
+      letter-spacing: 0.2px;
+    }
 
     .player-stat {
       display: flex;
       align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
-      background: #1e1b30;
-      border-radius: 4px;
-      font-size: 11px;
+      gap: 5px;
+      padding: 3px 9px;
+      background: rgba(14, 12, 26, 0.7);
+      border: 1px solid #2a2740;
+      border-radius: 6px;
+      font-size: 12px;
     }
 
-    .stat-label { color: #8a82a6; }
-    .stat-value { color: #e0dced; font-weight: 700; }
+    .stat-label { color: #8a82a6; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-value { color: #e8e2f4; font-weight: 800; font-family: var(--font-display); }
     .stat-value.vp { color: #f0c040; }
 
     .resource-pips {
@@ -235,6 +285,19 @@
     #player-base:empty::after {
       content: "Base";
       color: rgba(100, 90, 140, 0.3);
+      font-size: 11px;
+    }
+    /* Opponent base — mirror player-base so the row stays visible even
+       when empty. (Parity fix: was collapsing to 6px tall.) */
+    #opponent-base {
+      min-height: 100px;
+      border: 1px dashed rgba(100, 90, 140, 0.15);
+      border-radius: 8px;
+      padding: 4px 8px;
+    }
+    #opponent-base:empty::after {
+      content: "Opponent Base";
+      color: rgba(100, 90, 140, 0.25);
       font-size: 11px;
     }
 
@@ -297,9 +360,15 @@
       z-index: 10;
     }
 
+    /* Selected card — bright cyan ring + glow, matches RA's vivid select highlight. */
     .card.selected {
-      border-color: #50c878;
-      box-shadow: 0 0 16px #50c87844;
+      border-color: #6cdcff;
+      box-shadow: 0 0 0 2px #6cdcff, 0 0 18px 4px rgba(108,220,255,0.55), 0 0 36px 8px rgba(108,220,255,0.22);
+      animation: card-selected-glow 1.6s ease-in-out infinite;
+    }
+    @keyframes card-selected-glow {
+      0%, 100% { box-shadow: 0 0 0 2px #6cdcff, 0 0 16px 3px rgba(108,220,255,0.45), 0 0 30px 6px rgba(108,220,255,0.18); }
+      50%      { box-shadow: 0 0 0 2px #9be8ff, 0 0 22px 5px rgba(108,220,255,0.65), 0 0 44px 10px rgba(108,220,255,0.30); }
     }
 
     /* ============================================
@@ -470,19 +539,38 @@
     }
     .rune-stack {
       position: relative;
-      width: 52px;
-      min-height: 88px;  /* fallback so absolutely-positioned cards inside are always visible */
+      width: 56px;
+      min-height: 92px;  /* fallback so absolutely-positioned cards inside are always visible */
       flex-shrink: 0;
     }
+    /* B15: rune-domain chip — colored dot + domain name + ready/total, mirrors RA's
+       labelled rune-pool domain badges. */
     .rune-stack-label {
-      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      justify-content: center;
+      font-size: 9px;
       font-weight: 700;
-      text-align: center;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
+      padding: 1px 4px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: rgba(12, 10, 24, 0.78);
       margin-bottom: 2px;
       pointer-events: none;
+      white-space: nowrap;
+      position: relative;
+      z-index: 3;
     }
+    .rune-domain-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 0 4px currentColor;
+    }
+    .rune-domain-name { opacity: 0.95; }
+    .rune-domain-count { opacity: 0.78; font-weight: 600; }
     .rune-stack .card {
       position: absolute;
       width: 50px;
@@ -1120,6 +1208,21 @@
       letter-spacing: 0.5px;
     }
 
+    .turn-timer {
+      margin-left: auto;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: #9a92b8;
+      background: #15121f;
+      border: 1px solid #2a2740;
+      border-radius: 6px;
+      padding: 2px 7px;
+      letter-spacing: 0.5px;
+      min-width: 38px;
+      text-align: center;
+    }
+
     .phase-setup { background: #3a3060; color: #b0a0d0; }
     .phase-awaken { background: #2a4060; color: #80b0d0; }
     .phase-beginning { background: #2a5040; color: #80d0a0; }
@@ -1191,10 +1294,11 @@
 
     /* Hover preview slot — shows a large readable version of the currently hovered card */
     .hover-preview {
-      /* Fixed dimensions prevent layout shift when populating/clearing */
-      width: 240px;
-      height: 340px;
-      margin: 8px auto;
+      /* Reduced from 340px so the game-log below has room to render
+         (parity fix: log was being squeezed to 13px). */
+      width: 220px;
+      height: 260px;
+      margin: 6px auto;
       flex-shrink: 0;
       background: #0b0a14;
       border: 1px solid #2a2740;
@@ -1236,12 +1340,15 @@
 
     /* Game log */
     .game-log {
-      flex: 1;
+      flex: 1 1 180px;
+      min-height: 160px;
       overflow-y: auto;
       padding: 8px 12px;
       display: flex;
       flex-direction: column;
       gap: 2px;
+      border-top: 1px solid #2a2740;
+      background: #0e0d18;
     }
 
     .game-log::-webkit-scrollbar { width: 4px; }
@@ -1359,7 +1466,10 @@
     .start-screen {
       position: absolute;
       inset: 0;
-      background: #0a0914ee;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(80,50,150,0.18), transparent 50%),
+        radial-gradient(circle at 80% 100%, rgba(150,40,80,0.10), transparent 50%),
+        #0a0914ee;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -1407,16 +1517,23 @@
 
     /* Playable card indicator — subtle animated glow on cards with available moves */
     @keyframes playable-pulse {
-      0%, 100% { box-shadow: 0 0 6px 1px rgba(80,200,120,0.25); }
-      50%      { box-shadow: 0 0 12px 3px rgba(80,200,120,0.45); }
+      0%, 100% { box-shadow: 0 0 8px 1px rgba(80,200,120,0.30); }
+      50%      { box-shadow: 0 0 16px 4px rgba(80,200,120,0.55); }
     }
     .card.playable {
       animation: playable-pulse 2s ease-in-out infinite;
       cursor: pointer;
     }
     .card.playable:hover {
-      box-shadow: 0 0 16px 4px rgba(80,200,120,0.5);
+      box-shadow: 0 0 22px 6px rgba(80,200,120,0.62);
+      transform: translateY(-4px) scale(1.04);
       animation: none;
+      z-index: 5;
+    }
+    /* In-hand playable cards get a slightly stronger glow + lifted resting state,
+       echoing RA's "this card is castable" affordance. */
+    .hand-zone .card.playable {
+      box-shadow: 0 0 10px 2px rgba(80,200,120,0.35);
     }
 
     /* Legend card with activatable ability — purple glow */
@@ -2322,14 +2439,18 @@
        ============================================ */
     .resource-bar {
       display: flex;
-      gap: 8px;
+      gap: 10px;
       align-items: center;
       justify-content: center;
-      background: #12111d;
+      background: linear-gradient(180deg, #15131f 0%, #0e0d18 100%);
       border: 1px solid #2a2740;
+      border-top: 1px solid #3a2a6a;
+      border-bottom: 1px solid #3a2a6a;
       border-radius: 10px;
-      padding: 4px 12px;
+      padding: 8px 14px;
+      min-height: 44px;
       flex-shrink: 0;
+      box-shadow: 0 1px 0 #00000044 inset;
     }
     .resource-bar .rb-label {
       font-size: 10px;
@@ -3509,3 +3630,683 @@
       font-style: italic;
       padding: 30px 10px;
     }
+
+    /* ============================================
+       Editorial Lobby Shell (parity with play.riftatlas.com)
+       ============================================ */
+    .lobby-shell {
+      width: min(1080px, 92vw);
+      max-width: 1080px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      padding: 22px 28px 24px;
+      background: linear-gradient(180deg, #14111e 0%, #0c0a17 100%);
+      border: 1px solid #2a2740;
+      border-radius: 14px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.55), 0 1px 0 #2a274055 inset;
+      color: #d8d4e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    .lobby-shell-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid #2a2740;
+    }
+    .lobby-shell-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3a2a6a, #6a3a90);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f0e0ff;
+      font-size: 20px;
+      font-weight: 700;
+      border: 2px solid #7a50c0;
+      box-shadow: 0 0 12px rgba(122,80,192,0.35);
+    }
+    .lobby-shell-title {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #f0e6ff;
+      margin: 0;
+    }
+    .lobby-shell-sub {
+      font-size: 12px;
+      color: #8a82a6;
+      margin: 2px 0 0;
+    }
+    .lobby-shell-body {
+      display: grid;
+      grid-template-columns: minmax(190px, 0.8fr) minmax(340px, 1.3fr) minmax(270px, 1fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    /* ----- M5: left info rail (replaces RiftAtlas's TCGPlayer ad column) ----- */
+    .lobby-shell-rail {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 0;
+    }
+    .lsr-card {
+      background: #0f0d1a;
+      border: 1px solid #262340;
+      border-radius: 10px;
+      padding: 13px 14px;
+    }
+    .lsr-card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: #7a72a0;
+      margin-bottom: 8px;
+    }
+    .lsr-list {
+      margin: 0;
+      padding-left: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .lsr-list li {
+      font-size: 11.5px;
+      line-height: 1.4;
+      color: #9a92b8;
+    }
+    .lsr-list li b { color: #c8c0e8; font-weight: 600; }
+    .lsr-changelog { list-style: none; padding-left: 0; }
+    .lsr-changelog li { display: flex; gap: 7px; align-items: flex-start; }
+    .lsr-tag {
+      flex: 0 0 auto;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #b9aeff;
+      background: #2a2548;
+      border: 1px solid #3a3460;
+      border-radius: 3px;
+      padding: 1px 4px;
+      margin-top: 1px;
+    }
+
+    /* ----- Deck panel (middle column) ----- */
+    .lobby-shell-deck-panel {
+      background: #100e1c;
+      border: 1px solid #2a2740;
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 320px;
+    }
+    .lsd-tabs {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid #2a2740;
+      padding-bottom: 8px;
+    }
+    .lsd-tab {
+      background: transparent;
+      border: 1px solid #2a2740;
+      color: #8a82a6;
+      padding: 5px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-radius: 14px;
+      cursor: pointer;
+    }
+    .lsd-tab.active {
+      background: #2a2060;
+      color: #c4a0ff;
+      border-color: #5a3a9a;
+    }
+    .lsd-tab:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .lsd-deck {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      border: 1px dashed #2a2740;
+      border-radius: 8px;
+      background: #0a0814;
+      min-height: 200px;
+    }
+    .lsd-empty {
+      text-align: center;
+      max-width: 340px;
+    }
+    .lsd-empty-title {
+      font-family: var(--font-display);
+      font-size: 16px;
+      color: #b8a8d8;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .lsd-empty-hint {
+      font-size: 12px;
+      color: #6a6288;
+      line-height: 1.5;
+    }
+    .lsd-deck-card {
+      display: flex;
+      gap: 12px;
+      width: 100%;
+    }
+    .lsd-deck-card .lsdc-art {
+      width: 110px;
+      height: 150px;
+      flex-shrink: 0;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #2a2060, #5a3090);
+      border: 1px solid #5a3a9a;
+    }
+    .lsd-deck-card .lsdc-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 14px;
+      font-size: 11px;
+    }
+    .lsd-deck-card .lsdc-section .ls-h {
+      color: #6a6288;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-size: 9px;
+      margin-bottom: 2px;
+    }
+    .lsd-deck-card .lsdc-section .ls-v {
+      color: #d0c8e8;
+      font-weight: 600;
+    }
+    .lsd-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .lsd-btn {
+      flex: 1 1 auto;
+      min-width: 110px;
+      padding: 9px 14px;
+      border: 1px solid #2a2740;
+      background: #161324;
+      color: #c0b8d8;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .lsd-btn:hover:not(:disabled) {
+      border-color: #5a3a9a;
+      color: #e0d8ff;
+      background: #1f1a35;
+    }
+    .lsd-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .lsd-btn-primary {
+      background: linear-gradient(135deg, #3a2a6a, #5a3a9a);
+      border-color: #7a50c0;
+      color: #f0e0ff;
+    }
+    .lsd-btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #4a3a8a, #6a4ab0);
+    }
+    .lsd-deck-select-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-top: 4px;
+    }
+    .lsd-deck-label {
+      font-size: 10px;
+      color: #6a6288;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .lsd-deck-select {
+      flex: 1;
+      padding: 7px 10px;
+      background: #161324;
+      border: 1px solid #2a2740;
+      border-radius: 6px;
+      color: #d8d4e8;
+      font-size: 12px;
+    }
+    .lsd-deck-select:focus {
+      outline: none;
+      border-color: #5a3a9a;
+    }
+
+    /* ----- Side panel (right column) ----- */
+    .lobby-shell-side {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      background: #100e1c;
+      border: 1px solid #2a2740;
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .lss-block {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .lss-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #6a6288;
+    }
+    .lss-input {
+      padding: 8px 12px;
+      border: 1px solid #2a2740;
+      background: #0c0a17;
+      color: #e0dced;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .lss-input:focus {
+      outline: none;
+      border-color: #5a3a9a;
+    }
+    .lss-pillrow {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .lss-pill {
+      flex: 1 1 auto;
+      padding: 7px 12px;
+      border: 1px solid #2a2740;
+      background: #0c0a17;
+      color: #8a82a6;
+      border-radius: 18px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .lss-pill:hover:not(:disabled) {
+      border-color: #5a3a9a;
+      color: #d0c8e8;
+    }
+    .lss-pill.active {
+      background: #2a2060;
+      border-color: #5a3a9a;
+      color: #c4a0ff;
+    }
+    .lss-pill:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .lss-cta-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .lss-cta {
+      flex: 1;
+      padding: 11px 16px;
+      border-radius: 8px;
+      border: 2px solid #3a3560;
+      background: #1e1b30;
+      color: #d8d4e8;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .lss-cta:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+    .lss-cta-primary {
+      background: linear-gradient(135deg, #2a4060, #3a6090);
+      border-color: #4a80c0;
+      color: #e0eeff;
+    }
+    .lss-cta-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #305080, #4a80c0);
+      box-shadow: 0 4px 14px rgba(50,100,180,0.35);
+    }
+    .lss-cta-secondary {
+      background: linear-gradient(135deg, #3a2060, #5a3090);
+      border-color: #7a50c0;
+      color: #f0e0ff;
+    }
+    .lss-cta-secondary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #4a307a, #6a40a8);
+      box-shadow: 0 4px 14px rgba(120,80,192,0.35);
+    }
+    .lss-cta-ghost {
+      background: #161324;
+      border-color: #2a2740;
+      color: #b0a8c8;
+    }
+    .lss-cta-ghost:hover:not(:disabled) {
+      background: #1f1a35;
+      border-color: #5a3a9a;
+      color: #e0d8ff;
+    }
+    .lss-cta:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .lss-hint {
+      font-size: 10px;
+      color: #4a4268;
+      margin: 4px 0 0;
+    }
+    .lss-quickmatch,
+    .lss-sandbox {
+      padding-top: 10px;
+      border-top: 1px solid #2a2740;
+    }
+    .lobby-shell-foot {
+      font-size: 10px;
+      color: #4a4268;
+      text-align: center;
+      padding-top: 8px;
+      border-top: 1px solid #2a2740;
+    }
+
+    /* Make the lobby shell responsive — stack columns on narrow viewports */
+    @media (max-width: 1100px) {
+      .lobby-shell-body {
+        grid-template-columns: minmax(320px, 1.3fr) minmax(260px, 1fr);
+      }
+      .lobby-shell-rail { display: none; }
+    }
+    @media (max-width: 900px) {
+      .lobby-shell-body {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ============================================================
+       TICK1 — M3 Room badge + B12/M4 first-game hint + B1 rune-stack-empty + B16 auto-pay pill
+       ============================================================ */
+
+    /* Room code badge — top-right of board, mirrors RiftAtlas "ROOM: XXXXX". */
+    .room-badge {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      z-index: 40;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px 4px 8px;
+      background: linear-gradient(180deg, rgba(46, 36, 88, 0.85), rgba(28, 22, 56, 0.85));
+      border: 1px solid #4a3a8a;
+      border-radius: 4px;
+      font-size: 11px;
+      letter-spacing: 1.2px;
+      color: #e0dced;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      user-select: none;
+    }
+    .room-badge .room-badge-label {
+      color: #8a82a6;
+      font-weight: 600;
+    }
+    .room-badge .room-badge-value {
+      color: #c4a0ff;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-weight: 700;
+    }
+    .room-badge:hover {
+      background: linear-gradient(180deg, rgba(58, 46, 110, 0.95), rgba(36, 28, 68, 0.95));
+      border-color: #6a5aaa;
+    }
+    .room-badge.copied .room-badge-value::after {
+      content: " ✓";
+      color: #80e8a0;
+    }
+    /* Push the room badge slightly left when the help button is also showing on the right column */
+    .sidebar:not(.hidden) ~ * .room-badge,
+    .board .room-badge {
+      /* board's overflow can clip — keep within board */
+    }
+
+    /* First-game hint — floating dismissible chip, top-right area but below room badge.
+       Mirrors RiftAtlas's "FIRST GAME? Tap the i for controls and board tips." */
+    .first-game-hint {
+      position: absolute;
+      top: 42px;
+      right: 8px;
+      z-index: 39;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 280px;
+      padding: 8px 10px;
+      background: linear-gradient(180deg, rgba(36, 28, 60, 0.92), rgba(22, 18, 44, 0.92));
+      border: 1px solid #3a2f6a;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #c0b8d8;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    .first-game-hint .fgh-icon {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #c4a0ff;
+      color: #1a1330;
+      font-weight: 700;
+      font-style: italic;
+      font-family: var(--font-display);
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .first-game-hint .fgh-text {
+      flex: 1;
+      line-height: 1.3;
+    }
+    .first-game-hint .fgh-close {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: #8a82a6;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .first-game-hint .fgh-close:hover {
+      color: #e0dced;
+    }
+    .first-game-hint.hidden { display: none !important; }
+
+    /* B1 — placeholder rune stack for empty opponent pool */
+    .rune-stack-empty {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 2px;
+      opacity: 0.7;
+    }
+    .rune-stack-empty .rune-stack-label {
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    /* B16 — Auto-Pay pill — was big purple block dominating ~25% of card height. Compact chip now. */
+    .card .auto-pay-pill,
+    .auto-pay-pill {
+      background: linear-gradient(180deg, #2c3a60, #1f2a48);
+      color: #b0c0e8;
+      font-size: 9px;
+      letter-spacing: 0.6px;
+      padding: 1px 5px;
+      border-radius: 8px;
+      border: 1px solid #3a4f80;
+      font-weight: 600;
+      line-height: 1.3;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    .card .auto-pay-pill:hover {
+      background: linear-gradient(180deg, #3a4c7c, #2a3658);
+      color: #d8e4ff;
+    }
+
+    /* ---------------------------------------------------------------------
+       M8 — Multiplayer chat panel (sidebar, below the game log).
+       Mirrors play.riftatlas.com's "CHAT" box: header, scrolling message
+       list, single-line input + Send button. In sandbox/goldfish the panel
+       gets `.chat-disabled` (dimmed; still typeable so the stub hint fires).
+       --------------------------------------------------------------------- */
+    .chat-panel {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid #2a2740;
+      background: #0c0b16;
+      max-height: 170px;
+    }
+    .chat-title {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #6a6288;
+      padding: 5px 12px 3px;
+      background: #110f1c;
+      border-bottom: 1px solid #1c1930;
+    }
+    .chat-messages {
+      flex: 1 1 60px;
+      min-height: 48px;
+      max-height: 110px;
+      overflow-y: auto;
+      padding: 5px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: #3a3560; border-radius: 2px; }
+    .chat-msg {
+      font-size: 10px;
+      line-height: 1.35;
+      color: #9a92b6;
+      word-break: break-word;
+    }
+    .chat-msg-time { color: #4a4468; margin-right: 5px; font-variant-numeric: tabular-nums; }
+    .chat-msg-who { color: #b9aeff; font-weight: 600; margin-right: 5px; }
+    .chat-msg-self .chat-msg-who { color: #8ad6a0; }
+    .chat-msg-system { color: #5f5980; font-style: italic; }
+    .chat-input-row {
+      display: flex;
+      gap: 4px;
+      padding: 6px 8px;
+      border-top: 1px solid #1c1930;
+      background: #0e0d18;
+    }
+    .chat-input {
+      flex: 1 1 auto;
+      min-width: 0;
+      background: #16142400;
+      background-color: #1a1830;
+      border: 1px solid #2e2a48;
+      border-radius: 4px;
+      padding: 4px 7px;
+      font-size: 11px;
+      color: #d6cffb;
+      outline: none;
+    }
+    .chat-input::placeholder { color: #5a5478; }
+    .chat-input:focus { border-color: #6b5fb0; }
+    .chat-send-btn {
+      flex: 0 0 auto;
+      background: linear-gradient(180deg, #4a3f86, #352c66);
+      border: 1px solid #5a4fa0;
+      border-radius: 4px;
+      color: #e4ddff;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 4px 9px;
+      cursor: pointer;
+    }
+    .chat-send-btn:hover { background: linear-gradient(180deg, #5a4f96, #453c76); }
+    .chat-panel.chat-disabled { opacity: 0.55; }
+    .chat-panel.chat-disabled .chat-title::after {
+      content: " · multiplayer only";
+      color: #4a4468;
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    /* Make room for the chat panel: let the game log shrink a bit. */
+    .game-log { flex: 1 1 130px; min-height: 120px; }
+
+    /* ---------------------------------------------------------------------
+       B14 — Battlefield empty-slot ghosts.
+       play.riftatlas.com draws faint dashed unit-slot outlines on each side
+       of a battlefield even when empty, so players see where units land.
+       We render 3 ghost slots per side (`.bf-slot-ghost`) behind any real
+       units; they fade out when the side has units.
+       --------------------------------------------------------------------- */
+    .bf-units {
+      position: relative;
+      min-height: 46px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      align-content: flex-start;
+      align-items: flex-start;
+    }
+    .bf-slot-ghosts {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      gap: 4px;
+      padding: 2px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .bf-slot-ghost {
+      flex: 1 1 0;
+      min-width: 0;
+      max-width: 56px;
+      border: 1px dashed #ffffff1c;
+      border-radius: 5px;
+      background: #ffffff05;
+    }
+    .bf-units.opponent-side .bf-slot-ghost { border-color: #ff6b8b1c; }
+    .bf-units.player-side .bf-slot-ghost { border-color: #8ad6ff1c; }
+    /* Hide the ghosts once a side actually has units (they'd just be clutter). */
+    .bf-units.has-units .bf-slot-ghosts { opacity: 0; }
+    .bf-units > .card { position: relative; z-index: 1; }

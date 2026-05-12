@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Riftbound — Play</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔</text></svg>">
+  <!-- Display font — matches play.riftatlas.com (Bricolage Grotesque) for headings & board chrome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&display=swap">
   <link rel="stylesheet" href="/css/gameplay.css">
 </head>
 <body>
@@ -27,17 +31,105 @@
 
     <!-- Lobby Overlay -->
     <div class="start-screen" id="startScreen">
-      <!-- Step 1: Choose Host or Join -->
-      <div id="lobbyMenu">
-        <p style="margin-bottom:20px;">Play against another player</p>
-        <div style="display:flex; gap:12px;">
-          <button class="start-btn" onclick="hostLobby()">Host Game</button>
-          <button class="start-btn" style="background:linear-gradient(135deg,#3a2060,#5a3090);border-color:#7a50c0;" onclick="showJoinForm()">Join Game</button>
+      <!-- Step 1: Editorial lobby — deck-preview panel + player/match sidebar -->
+      <div id="lobbyMenu" class="lobby-shell">
+        <div class="lobby-shell-header">
+          <div class="lobby-shell-avatar">⚔</div>
+          <div>
+            <h1 class="lobby-shell-title">Lobby</h1>
+            <p class="lobby-shell-sub">Pick a deck, then host, join, or practice against a passive opponent.</p>
+          </div>
         </div>
-        <div id="sandboxOption" style="margin-top:16px;">
-          <button class="start-btn" style="background:#1e1b30;border-color:#3a3560;font-size:13px;padding:10px 24px;color:#8a82a6;" onclick="hostSandbox()">Goldfish</button>
-          <p style="color:#4a4268;font-size:11px;margin-top:4px;">Practice against a passive opponent</p>
+
+        <div class="lobby-shell-body">
+          <!-- M5: left info rail — fills the column gap RiftAtlas uses for its
+               TCGPlayer ad with our own tips / changelog instead. -->
+          <aside class="lobby-shell-rail">
+            <div class="lsr-card lsr-card-tips">
+              <div class="lsr-card-title">Getting started</div>
+              <ul class="lsr-list">
+                <li>Pick a deck on the right, then <b>Host</b> or <b>Join</b> with a room code.</li>
+                <li>No deck handy? Hit <b>Goldfish</b> to practise solo against a passive opponent.</li>
+                <li>In-game, tap the <b>i</b> button (top-right of the board) for controls and board tips.</li>
+                <li>Use <b>Rewind / Redo</b> in the sidebar to explore lines — every move is reversible.</li>
+              </ul>
+            </div>
+            <div class="lsr-card lsr-card-changelog">
+              <div class="lsr-card-title">What's new</div>
+              <ul class="lsr-list lsr-changelog">
+                <li><span class="lsr-tag">UI</span> Chat panel + battlefield landing-slot hints.</li>
+                <li><span class="lsr-tag">UI</span> On-board turn timer &amp; engine-driven phase strip.</li>
+                <li><span class="lsr-tag">UI</span> Editorial lobby shell, room-code badge, deck preview.</li>
+              </ul>
+            </div>
+          </aside>
+
+          <!-- Left: Deck preview / Paste-a-deck panel -->
+          <section class="lobby-shell-deck-panel">
+            <div class="lsd-tabs">
+              <button class="lsd-tab active" type="button">List</button>
+              <button class="lsd-tab" type="button" disabled>Stats</button>
+            </div>
+            <div class="lsd-deck" id="lsdDeckPreview">
+              <div class="lsd-empty">
+                <div class="lsd-empty-title">No deck loaded</div>
+                <div class="lsd-empty-hint">Paste a deck export or choose one of your saved decks to preview champions, sideboard, battlefields, and runes here.</div>
+              </div>
+            </div>
+            <div class="lsd-actions">
+              <button class="lsd-btn lsd-btn-import" type="button" disabled title="Coming soon">Import Deck</button>
+              <button class="lsd-btn" type="button" onclick="window.location='/builder'">New Deck</button>
+              <button class="lsd-btn lsd-btn-primary" type="button" onclick="document.getElementById('deckSelect-lobby')?.focus()">Choose Deck</button>
+            </div>
+            <div class="lsd-deck-select-wrap">
+              <label for="deckSelect-lobby" class="lsd-deck-label">Deck</label>
+              <select id="deckSelect-lobby" class="lsd-deck-select" onchange="window.__lsdSyncDeckPreview && window.__lsdSyncDeckPreview(this.value);">
+                <option value="">— Choose a deck —</option>
+                <option value="default">Fury/Chaos Starter Deck</option>
+              </select>
+            </div>
+          </section>
+
+          <!-- Right: Player / Play mode / Match format / CTAs -->
+          <aside class="lobby-shell-side">
+            <div class="lss-block">
+              <div class="lss-label">Player</div>
+              <input class="lss-input" id="lobbyPlayerName" type="text" placeholder="Your name" maxlength="24" />
+            </div>
+            <div class="lss-block">
+              <div class="lss-label">Play Mode</div>
+              <div class="lss-pillrow">
+                <button class="lss-pill active" type="button">Constructed</button>
+                <button class="lss-pill" type="button" disabled>Unleashed Pre.</button>
+              </div>
+            </div>
+            <div class="lss-block">
+              <div class="lss-label">Match Format</div>
+              <div class="lss-pillrow">
+                <button class="lss-pill active" type="button">Best of 1</button>
+                <button class="lss-pill" type="button" disabled>Best of 3</button>
+              </div>
+            </div>
+
+            <div class="lss-cta-row">
+              <button class="lss-cta lss-cta-primary" onclick="hostLobby()">Host Game</button>
+              <button class="lss-cta lss-cta-secondary" onclick="showJoinForm()">Join Game</button>
+            </div>
+
+            <div class="lss-block lss-quickmatch">
+              <div class="lss-label">Quick Match</div>
+              <button class="lss-cta lss-cta-ghost" type="button" disabled title="Matchmaking coming soon">Find Random Match</button>
+            </div>
+
+            <div class="lss-block lss-sandbox">
+              <div class="lss-label">Practice</div>
+              <button class="lss-cta lss-cta-ghost" id="sandboxOption" onclick="hostSandbox()">Goldfish</button>
+              <p class="lss-hint">Solo vs a passive opponent — no deck-pick needed.</p>
+            </div>
+          </aside>
         </div>
+
+        <p class="lobby-shell-foot">iykyk is an unofficial fan project for Riftbound: League of Legends TCG. Not affiliated with Riot Games.</p>
       </div>
 
       <!-- Step 1b: Join form -->
@@ -105,6 +197,13 @@
         <p id="lobbyStatus" style="color:#6a6288;font-size:12px;margin-top:8px;">Waiting for opponent...</p>
         <button style="margin-top:12px;background:none;border:none;color:#6a6288;cursor:pointer;font-size:12px;text-decoration:underline;" onclick="leaveLobby()">Back</button>
       </div>
+    </div>
+
+    <!-- M3: Room code badge — top-right of board, mirrors RiftAtlas "ROOM: XXXXX" affordance.
+         Hidden until a game session is active (renderer sets text via #roomCodeValue). -->
+    <div id="roomBadge" class="room-badge hidden" title="Click to copy room code">
+      <span class="room-badge-label">ROOM</span>
+      <span class="room-badge-value" id="roomCodeValue">—</span>
     </div>
 
     <!-- Opponent Area (Top) -->
@@ -182,6 +281,16 @@
     <div class="game-log" id="gameLog">
       <div class="log-title">Game Log</div>
       <div id="logEntries"></div>
+    </div>
+    <!-- M8: multiplayer chat panel. In sandbox/goldfish it renders a disabled
+         placeholder; chat.js wires send/receive for real rooms. -->
+    <div class="chat-panel" id="chatPanel">
+      <div class="chat-title">Chat</div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <form class="chat-input-row" id="chatForm" onsubmit="return sendChatMessage(event)">
+        <input type="text" id="chatInput" class="chat-input" placeholder="Type message..." autocomplete="off" maxlength="280">
+        <button type="submit" class="chat-send-btn" id="chatSendBtn">Send</button>
+      </form>
     </div>
     <div class="player-switcher" id="playerSwitcher"></div>
   </div>
@@ -293,6 +402,7 @@
 <script src="/js/gameplay/pregame.js"></script>
 <script src="/js/gameplay/game-flow.js"></script>
 <script src="/js/gameplay/board-toggles.js"></script>
+<script src="/js/gameplay/chat.js"></script>
 <script src="/js/gameplay/meta-actions.js"></script>
 <script src="/js/gameplay/peek-dialog.js"></script>
 <script src="/js/gameplay/renderer.js"></script>
