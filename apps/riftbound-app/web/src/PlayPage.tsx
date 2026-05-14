@@ -1029,11 +1029,16 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
     ? `Undo (${undoState.lastMove.label})`
     : "Undo";
 
+  // QA Reviewer v2 iter-5 — Defect 5 (D-awaken-no-ready-visual): tag the
+  // Play-page with the current phase id so CSS can apply the awaken-pulse
+  // Animation to units only during Awaken. Defensive lowercase normalize.
+  const currentPhaseId = String(view.turn.phase ?? "").toLowerCase();
   return (
     <div
-      className={`play-page ${rewindPulse ? "rewind-pulse" : ""}`}
+      className={`play-page phase-${currentPhaseId} ${rewindPulse ? "rewind-pulse" : ""}`}
       data-testid="play-page"
       data-rewinding={rewindPulse ? "true" : "false"}
+      data-phase={currentPhaseId}
     >
       <header className="turn-header">
         {/* Defect 4 (D-no-turn-indicator): top-of-page badge announcing whose
@@ -1064,7 +1069,13 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
            * pulse animation — we layer the new active-yours look on top via
            * a sibling class so existing tests / styles keep working. */}
           {view.phaseStrip.map((p, idx) => {
-            const isActive = p.id === view.turn.phase;
+            // QA Reviewer v2 iter-5 — Defect 3 (D-phase-strip-stuck-channel):
+            // Defensive lowercase comparison so engine phase ids and strip ids
+            // Match regardless of case. Both should already be lowercase but
+            // A normalisation is cheap and prevents silent strip mismatch.
+            const isActive =
+              String(p.id).toLowerCase() ===
+              String(view.turn.phase ?? "").toLowerCase();
             const isYourTurn = view.turn.activePlayer === localPlayerId;
             // Iter-8 stretch (Path B): each phase carries a small icon glyph
             // Looked up from a tiny data-driven map. Falls back to the phase
@@ -1072,9 +1083,17 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
             // With synthetic ids like "main" working without a phase icon).
             const icon = PHASE_ICON[p.id.toLowerCase()] ?? null;
             const tip = PHASE_TOOLTIP[p.id.toLowerCase()] ?? p.label;
+            // QA Reviewer v2 iter-5 — Defect 3: when the active pill carries
+            // The live phase id as the React key it re-mounts every phase
+            // Change so the .phase-active-flash animation runs again, leaving
+            // A fresh visible trail per transition. Non-active pills keep
+            // Their stable id-based key.
+            const pillKey = isActive
+              ? `${p.id}-active-${view.turn.phase}-${view.turn.number}`
+              : p.id;
             return (
               <span
-                key={p.id}
+                key={pillKey}
                 className={[
                   "phase",
                   isActive ? "phase-active" : "",

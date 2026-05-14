@@ -6431,3 +6431,175 @@ button {
   40%  { transform: scale(1.08); filter: brightness(1.3); }
   100% { transform: scale(1.0); filter: brightness(1.0); }
 }
+
+/* ============================================================
+ * QA Reviewer v2 iter-5 — Defect 1 (B-size-drift on .turn-banner)
+ *
+ * The TurnBanner height drifted 32px across turns because the
+ * VP-row (`.turn-banner-vp-row`) and winner row appear/disappear
+ * conditionally. Lock a min-height so the container always reserves
+ * the maximum possible footprint, eliminating reflow as conditional
+ * children mount/unmount.
+ *
+ * Observed max in QA run: 122.5px (turn 1, Main, with VP row).
+ * Add 32px buffer so future winner row + VP row both fit without
+ * regression — that's the same 32px the reviewer measured as the
+ * drift delta, so this also matches the worst-case grow envelope.
+ * ============================================================ */
+.turn-banner {
+  min-height: 155px !important;
+}
+
+/* ============================================================
+ * QA Reviewer v2 iter-5 — Defect 2 (B-size-drift + B-position-drift
+ * on .move-log-fill).
+ *
+ * The outer .move-log container was already locked, but the inner
+ * .move-log-fill still moved within it because the move log header
+ * and rows grew turn-to-turn (more trail entries). Lock the
+ * .move-log-fill rectangle by making it absolute-positioned inside
+ * a relatively-positioned .move-log so the inner content scrolls
+ * inside a fixed box regardless of trail length.
+ * ============================================================ */
+.move-log {
+  position: relative !important;
+}
+
+.move-log-fill {
+  position: absolute !important;
+  inset: 0 !important;
+  overflow-y: auto !important;
+  flex: none !important;
+  min-height: 0 !important;
+}
+
+/* The .move-log-fill is sometimes used as a board-side flex child
+ * (it wraps the move log directly when there is no surrounding
+ * .move-log). When .move-log-fill is itself a top-level rail child
+ * (not nested in .move-log), keep the prior flex behaviour. The
+ * `> .move-log` selector below ensures the absolute-positioning
+ * applies only when nested inside .move-log. */
+.move-log > .move-log-fill,
+.move-log-fill > .move-log,
+.move-log-fill .move-log {
+  position: relative !important;
+}
+
+/* ============================================================
+ * QA Reviewer v2 iter-5 — Defect 4 (D-showdown-no-comparison)
+ *
+ * CombatPanel needs a prominent "X might vs Y might" comparison
+ * block visible during any showdown so the human can see the
+ * matchup at a glance instead of mentally summing attacker and
+ * defender lists.
+ * ============================================================ */
+.showdown-comparison {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 12px;
+  margin: 8px 0;
+  background: rgba(220, 80, 80, 0.08);
+  border: 1px solid rgba(220, 80, 80, 0.3);
+  border-radius: 6px;
+}
+
+.showdown-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.showdown-side h4 {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #c08070;
+}
+
+.showdown-side .might-total {
+  font-size: 24px;
+  font-weight: 700;
+  color: #f0883e;
+  line-height: 1;
+}
+
+.showdown-side .might-count {
+  font-size: 10px;
+  color: rgba(220, 200, 180, 0.55);
+}
+
+.showdown-vs {
+  font-size: 14px;
+  opacity: 0.6;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #c0c0c8;
+}
+
+.showdown-comparison[data-lead="attackers"] .showdown-attackers .might-total {
+  color: #ff9a48;
+  text-shadow: 0 0 8px rgba(255, 154, 72, 0.35);
+}
+.showdown-comparison[data-lead="defenders"] .showdown-defenders .might-total {
+  color: #ff9a48;
+  text-shadow: 0 0 8px rgba(255, 154, 72, 0.35);
+}
+
+/* ============================================================
+ * QA Reviewer v2 iter-5 — Defect 5 (D-awaken-no-ready-visual)
+ *
+ * Units don't visibly un-rotate when they un-exhaust at start of
+ * turn. Add a transition on transform so the rotation change
+ * animates, and a brief awaken-pulse glow during the Awaken phase.
+ * ============================================================ */
+.bf-mini-chip,
+.base-zone-unit,
+.hand-chip {
+  transition: transform 0.4s ease-out, filter 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+@keyframes awaken-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 230, 100, 0); }
+  50%      { box-shadow: 0 0 12px 4px rgba(255, 230, 100, 0.6); }
+}
+
+.phase-awaken .bf-mini-chip,
+.phase-awaken .base-zone-unit {
+  animation: awaken-pulse 0.8s ease-out;
+}
+
+/* ============================================================
+ * QA Reviewer v2 iter-5 — Defect 3 (D-phase-strip-stuck-channel)
+ *
+ * The phase strip data-source is correct (matches view.turn.phase),
+ * but the visual flash animation didn't re-trigger when the same
+ * phase id remained active across snapshots. The React `key` prop
+ * (added in PlayPage) now keys the active pill on phase id so the
+ * animation re-runs on transition. Defensive CSS: ensure the active
+ * pill has a strong, unmistakable highlight (thicker border + glow)
+ * so even a single-frame highlight is visible.
+ * ============================================================ */
+.phase-strip .phase[data-active="true"] {
+  outline: 2px solid rgba(255, 213, 116, 0.9);
+  outline-offset: 1px;
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.45),
+    0 0 14px 3px rgba(255, 213, 116, 0.45);
+  position: relative;
+  z-index: 2;
+}
+
+.phase-strip .phase[data-active="true"]::before {
+  content: "▶";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  color: rgba(255, 213, 116, 0.9);
+}

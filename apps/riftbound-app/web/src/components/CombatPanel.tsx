@@ -376,6 +376,45 @@ export function CombatPanel({
         onPassFocus={onPassFocus}
         disabled={disabled}
       />
+      {/* QA Reviewer v2 iter-5 — Defect 4 (D-showdown-no-comparison):
+          prominent attacker-vs-defender Might comparison block. Renders
+          whenever there's at least one combatant on either side so the
+          human sees "X Might vs Y Might" at a glance instead of mentally
+          summing the unit lists below. Lead side gets the orange accent
+          via the data-lead attribute. */}
+      {(combat.attackers.length > 0 || combat.defenders.length > 0) && (() => {
+        const aTotal = combat.attackers.reduce((s, u) => s + (u.might ?? 0), 0);
+        const dTotal = combat.defenders.reduce((s, u) => s + (u.might ?? 0), 0);
+        const lead: "attackers" | "defenders" | "tied" =
+          aTotal > dTotal ? "attackers" : (dTotal > aTotal ? "defenders" : "tied");
+        return (
+          <div
+            className="showdown-comparison"
+            data-testid="showdown-comparison"
+            data-lead={lead}
+          >
+            <div className="showdown-side showdown-attackers" data-testid="showdown-attackers-side">
+              <h4>Attackers</h4>
+              <span className="might-total" data-testid="showdown-attackers-might">
+                {aTotal}
+              </span>
+              <span className="might-count">
+                {combat.attackers.length} unit{combat.attackers.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="showdown-vs" aria-hidden="true">vs</div>
+            <div className="showdown-side showdown-defenders" data-testid="showdown-defenders-side">
+              <h4>Defenders</h4>
+              <span className="might-total" data-testid="showdown-defenders-might">
+                {dTotal}
+              </span>
+              <span className="might-count">
+                {combat.defenders.length} unit{combat.defenders.length === 1 ? "" : "s"}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
       <div className="combat-panel-body">
         <div
           className="combat-panel-side combat-panel-attackers"
