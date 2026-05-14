@@ -5438,3 +5438,114 @@ button {
   opacity: 0.55;
   font-style: italic;
 }
+
+/* Slice 5 (UX affordances) — ping pulse.
+ *
+ * Applied to any element carrying `data-card-id` / `data-zone-id` when its
+ * id matches a `ping` SSE event. The keyframe is a quick yellow/gold ring
+ * burst + glow that draws the eye without obscuring underlying card art.
+ * Lasts 1.2s; PlayPage's `applyPingPulse` strips the class after the
+ * animation so subsequent pings re-trigger cleanly.
+ */
+@keyframes rb-ping-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(232, 192, 96, 0.85);
+    outline: 2px solid rgba(232, 192, 96, 0.9);
+    outline-offset: 0;
+  }
+  50% {
+    box-shadow: 0 0 30px 14px rgba(232, 192, 96, 0.35);
+    outline: 2px solid rgba(232, 192, 96, 0.6);
+    outline-offset: 6px;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(232, 192, 96, 0);
+    outline: 2px solid rgba(232, 192, 96, 0);
+    outline-offset: 10px;
+  }
+}
+.ping-pulse {
+  animation: rb-ping-pulse 1.2s ease-out;
+  /* Keep ring above neighboring chips so it never gets clipped behind a
+   * stacked unit. */
+  z-index: 50;
+  position: relative;
+}
+
+/* Slice 5 (UX affordances) — might counter badge.
+ *
+ * Rendered as a small pill in the corner of a BF unit chip when the unit's
+ * effective might differs from its base might. Positive deltas are green
+ * (buffed), negative deltas are red (debuffed). Pure CSS — no JS animation;
+ * the badge just appears whenever the data attribute flips.
+ */
+.bf-might-counter {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  border: 1.5px solid rgba(20, 30, 40, 0.85);
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.bf-might-counter-pos {
+  background: linear-gradient(180deg, #6ed27a 0%, #3aa64f 100%);
+  color: #0a1a10;
+}
+.bf-might-counter-neg {
+  background: linear-gradient(180deg, #e0696e 0%, #b32d36 100%);
+  color: #1a0808;
+}
+
+/* Slice 5 (UX affordances) — smart showdown assist block in CombatPanel.
+ *
+ * Predicted-damage summary surfaced under the attacker/defender lists.
+ * Compact dl with lethal hints rendered in a warning color so the player
+ * Notices "your X dies" at a glance.
+ */
+.combat-panel-assist {
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  background: rgba(216, 168, 107, 0.08);
+  border: 1px solid rgba(216, 168, 107, 0.35);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.combat-panel-assist-title {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  color: #d8a86b;
+  margin-bottom: 4px;
+}
+.combat-panel-assist-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 1px 0;
+}
+.combat-panel-assist-row dt {
+  opacity: 0.78;
+}
+.combat-panel-assist-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.combat-panel-assist-lethal {
+  color: #ff8a6b;
+  font-weight: 600;
+}
+.combat-panel-assist-safe {
+  color: #6ed27a;
+}

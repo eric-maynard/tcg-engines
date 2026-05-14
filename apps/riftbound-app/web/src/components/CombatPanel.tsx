@@ -24,6 +24,87 @@ import type { CSSProperties } from "react";
 import type { ActionsLegal, BattlefieldUnit, CombatUnit, CombatView } from "../lib/api";
 import { phaseLabel } from "../lib/phase-names";
 
+/**
+ * Slice 5 (UX affordances) — smart showdown assist.
+ *
+ * Compute predicted combat outcomes from the current attacker/defender
+ * Lists. Pure function over `CombatUnit.might` — no engine round-trip
+ * Needed. Returns:
+ *   - `attackerTotal` / `defenderTotal`: sum of might on each side
+ *   - `lethal`: which side wipes if the showdown resolves now
+ *     ("attackers" / "defenders" / "trade" / "stalemate")
+ *   - `playerDamage`: incidental damage that leaks through to the
+ *     defending player when the attacker side has uncontested
+ *     attackers (no defenders left)
+ *
+ * Rule note: Riftbound combat is approximate here — the engine resolves
+ * Per-pair strike order with `strikesFirst` / equipment / static effects
+ * That this preview can't replicate. The assist is therefore a HINT, not
+ * A binding prediction; the real `resolveCombat` move still runs through
+ * The engine. Labelled "Predicted outcome" in the UI to make this clear.
+ */
+function summarizeShowdown(
+  attackers: readonly CombatUnit[],
+  defenders: readonly CombatUnit[],
+): {
+  attackerTotal: number;
+  defenderTotal: number;
+  lethal: "attackers" | "defenders" | "trade" | "stalemate" | "none";
+  playerDamageFromAttackers: number;
+} {
+  const attackerTotal = attackers.reduce(
+    (sum, u) => sum + (u.might ?? 0),
+    0,
+  );
+  const defenderTotal = defenders.reduce(
+    (sum, u) => sum + (u.might ?? 0),
+    0,
+  );
+  // Lethal heuristic: a side "wipes" if its total might absorbed equals
+  // Or exceeds the OTHER side's total. When both wipe, it's a trade;
+  // When neither does, stalemate; when neither side has units, "none".
+  let lethal: "attackers" | "defenders" | "trade" | "stalemate" | "none";
+  if (attackers.length === 0 && defenders.length === 0) {
+    lethal = "none";
+  } else if (attackers.length === 0) {
+    lethal = "defenders";
+  } else if (defenders.length === 0) {
+    // Uncontested attackers → player damage instead of a unit wipe.
+    lethal = "none";
+  } else {
+    const attackersDie = defenderTotal >= attackerTotal && attackerTotal > 0;
+    const defendersDie = attackerTotal >= defenderTotal && defenderTotal > 0;
+    if (attackersDie && defendersDie) {
+      lethal = "trade";
+    } else if (attackersDie) {
+      lethal = "attackers";
+    } else if (defendersDie) {
+      lethal = "defenders";
+    } else {
+      lethal = "stalemate";
+    }
+  }
+  const playerDamageFromAttackers =
+    defenders.length === 0 ? attackerTotal : 0;
+  return {
+    attackerTotal,
+    defenderTotal,
+    lethal,
+    playerDamageFromAttackers,
+  };
+}
+
+const LETHAL_LABEL: Record<
+  ReturnType<typeof summarizeShowdown>["lethal"],
+  string
+> = {
+  attackers: "Attackers wipe",
+  defenders: "Defenders wipe",
+  none: "—",
+  stalemate: "No deaths",
+  trade: "Mutual destruction",
+};
+
 interface CombatPanelProps {
   readonly combat: CombatView | undefined;
   /**
@@ -75,6 +156,7 @@ function renderUnit(u: CombatUnit, localPlayerId?: string) {
       key={u.id}
       className="combat-panel-unit"
       data-testid={`combat-unit-${u.id}`}
+      data-card-id={u.id}
       data-has-image={u.imageUrl ? "true" : "false"}
       /* Iter-M: --card-img drives the CSS-only hover-zoom preview
        * (::after on .combat-panel-unit:hover). */
@@ -136,6 +218,41 @@ export function CombatPanel({
   const localUnits = (assignableUnits ?? []).filter(
     (u) => !localPlayerId || u.controller === localPlayerId,
   );
+  // Slice 5 (UX affordances): predicted combat outcome. Pure derivation
+  // From the attacker/defender lists already in `combat`. Shown only when
+  // At least one side has units so an empty showdown doesn't get an
+  // Awkward "0 vs 0, stalemate" block.
+  const showAssist =
+    combat.attackers.length > 0 || combat.defenders.length > 0;
+  const assist = showAssist
+    ? summarizeShowdown(combat.attackers, combat.defenders)
+    : null;
+  const assistAttackerSide =
+    combat.attackingPlayer === localPlayerId ? "you" : "opponent";
+  const assistDefenderSide =
+    combat.defendingPlayer === localPlayerId ? "you" : "opponent";
+  // Slice 5: which side's wipe is "bad news" for the local player.
+  const assistTone:
+    | "good"
+    | "bad"
+    | "neutral"
+    | undefined = assist
+    ? assist.lethal === "trade" || assist.lethal === "stalemate"
+      ? "neutral"
+      : assist.lethal === "attackers"
+        ? assistAttackerSide === "you"
+          ? "bad"
+          : "good"
+        : assist.lethal === "defenders"
+          ? assistDefenderSide === "you"
+            ? "bad"
+            : "good"
+          : assist.playerDamageFromAttackers > 0
+            ? assistAttackerSide === "you"
+              ? "good"
+              : "bad"
+            : "neutral"
+    : undefined;
   return (
     <section
       className="combat-panel"
@@ -215,6 +332,56 @@ export function CombatPanel({
           )}
         </div>
       </div>
+      {assist ? (
+        <section
+          className={`combat-panel-assist combat-panel-assist-${assistTone ?? "neutral"}`}
+          data-testid="combat-panel-assist"
+          data-tone={assistTone ?? "neutral"}
+          data-lethal={assist.lethal}
+        >
+          <div className="combat-panel-assist-title">Predicted outcome</div>
+          <dl>
+            <div className="combat-panel-assist-row">
+              <dt>Attackers ({assistAttackerSide})</dt>
+              <dd data-testid="combat-assist-attacker-total">
+                {assist.attackerTotal} might
+              </dd>
+            </div>
+            <div className="combat-panel-assist-row">
+              <dt>Defenders ({assistDefenderSide})</dt>
+              <dd data-testid="combat-assist-defender-total">
+                {assist.defenderTotal} might
+              </dd>
+            </div>
+            <div className="combat-panel-assist-row">
+              <dt>Result</dt>
+              <dd
+                className={
+                  assist.lethal === "stalemate"
+                    ? "combat-panel-assist-safe"
+                    : (assist.lethal === "none"
+                      ? undefined
+                      : "combat-panel-assist-lethal")
+                }
+                data-testid="combat-assist-lethal"
+              >
+                {LETHAL_LABEL[assist.lethal]}
+              </dd>
+            </div>
+            {assist.playerDamageFromAttackers > 0 ? (
+              <div className="combat-panel-assist-row">
+                <dt>Player damage</dt>
+                <dd
+                  className="combat-panel-assist-lethal"
+                  data-testid="combat-assist-player-damage"
+                >
+                  +{assist.playerDamageFromAttackers} to {assistDefenderSide}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        </section>
+      ) : null}
       <footer
         className="combat-panel-actions"
         data-testid="combat-panel-actions"

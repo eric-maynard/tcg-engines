@@ -59,6 +59,14 @@ export interface BattlefieldUnit extends CardDefinitionFields {
   readonly id: string;
   readonly definitionId: string;
   readonly controller: string;
+  /**
+   * Slice 5 (UX affordances): the unit's printed (base) might. `might`
+   * (inherited from CardDefinitionFields) is the EFFECTIVE might after
+   * Buffs/equipment/static abilities. The SPA renders a small +N/-N badge
+   * Whenever `might !== baseMight`. Optional — synthetic decks have no
+   * Registered definition so neither field is set.
+   */
+  readonly baseMight?: number;
 }
 
 export interface GameViewBattlefield {
@@ -411,6 +419,48 @@ export async function postStep(sessionId: string): Promise<MoveResponse> {
  * Action since, no chain item resolved); on success it broadcasts the
  * Rewound state via SSE so the opponent's UI catches up too.
  */
+/**
+ * Slice 5 (UX affordances): ping payload. Sent by `postPing` and received
+ * Via the `ping` SSE event. Coords are optional (right-click position) for
+ * Future cursor-anchored animations; today the receiver just adds a CSS
+ * Pulse class to the element matching `targetId`.
+ */
+export interface PingPayload {
+  readonly playerId: string;
+  readonly targetType: "card" | "zone";
+  readonly targetId: string;
+  readonly ts: number;
+  readonly x?: number;
+  readonly y?: number;
+}
+
+/**
+ * Slice 5 (UX affordances): broadcast a ping for the named card/zone. The
+ * Server fans the event out over the existing SSE stream as a named `ping`
+ * Event (distinct from the `state` event channel). Pings are NOT persisted
+ * Into game state.
+ */
+export async function postPing(
+  sessionId: string,
+  ping: {
+    readonly playerId: string;
+    readonly targetType: "card" | "zone";
+    readonly targetId: string;
+    readonly x?: number;
+    readonly y?: number;
+  },
+): Promise<{ ok: boolean; error?: string; ping?: PingPayload }> {
+  const res = await fetch(`${BASE}/ping/${encodeURIComponent(sessionId)}`, {
+    body: JSON.stringify(ping),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  if (!res.ok) {
+    return { error: `postPing failed: ${res.status} ${res.statusText}`, ok: false };
+  }
+  return (await res.json()) as { ok: boolean; error?: string; ping?: PingPayload };
+}
+
 export async function postUndo(
   sessionId: string,
   playerId: string,

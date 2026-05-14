@@ -31,6 +31,13 @@ interface DeckPileProps {
   readonly label?: string;
   readonly testId?: string;
   readonly variant?: "deck" | "rune" | "trash";
+  /**
+   * Slice 5 (UX affordances): zone id for pinging. When set, the rendered
+   * Element carries `data-zone-id="<zoneId>"` so the delegated right-click
+   * Handler on the play board can target this pile. Optional — older
+   * Callers / tests work unchanged.
+   */
+  readonly zoneId?: string;
 }
 
 // Variant glyph table — pure data, no per-card ifs in the JSX.
@@ -48,6 +55,7 @@ export function DeckPile({
   label,
   testId,
   variant = "deck",
+  zoneId,
 }: DeckPileProps) {
   const isEmpty = size === 0;
   const glyph = VARIANT_GLYPH[variant];
@@ -58,6 +66,7 @@ export function DeckPile({
       data-size={size}
       data-variant={variant}
       data-empty={isEmpty ? "true" : "false"}
+      data-zone-id={zoneId}
       role="img"
       aria-label={`${label ?? variant} (${size} cards)`}
       title={label ? `${label}: ${size}` : `${size} cards`}

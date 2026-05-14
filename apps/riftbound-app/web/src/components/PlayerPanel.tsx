@@ -203,18 +203,21 @@ export function PlayerPanel({
             label="deck"
             variant="deck"
             testId={`deck-pile-${player.id}`}
+            zoneId={`${player.id}-deck`}
           />
           <DeckPile
             size={player.runeDeckSize}
             label="runes"
             variant="rune"
             testId={`rune-pile-${player.id}`}
+            zoneId={`${player.id}-runes`}
           />
           <DeckPile
             size={player.trashSize}
             label="trash"
             variant="trash"
             testId={`trash-pile-${player.id}`}
+            zoneId={`${player.id}-trash`}
           />
         </div>
       </div>
@@ -240,15 +243,15 @@ export function PlayerPanel({
             const locs = c.legalLocations ?? [];
             const hasChoice = locs.length > 1
               || (locs.length === 1 && locs[0] !== "base");
-            // iter-8 gap 3: a card is "playable right now" when the seat
-            // can play (canPlay) AND the engine reports at least one legal
-            // location. We surface this as a data attribute + class so CSS
-            // can pulse the chip — pure visual hint, no logic change.
+            // Iter-8 gap 3: a card is "playable right now" when the seat
+            // Can play (canPlay) AND the engine reports at least one legal
+            // Location. We surface this as a data attribute + class so CSS
+            // Can pulse the chip — pure visual hint, no logic change.
             const isPlayable = canPlay && locs.length > 0;
-            // iter-9 gap 3: an "unaffordable" chip is one where the player
-            // doesn't currently have enough energy/power to pay the cost.
+            // Iter-9 gap 3: an "unaffordable" chip is one where the player
+            // Doesn't currently have enough energy/power to pay the cost.
             // We compute this even when canPlay=false so the dimming reads
-            // as a stable "you can't afford this" signal vs the transient
+            // As a stable "you can't afford this" signal vs the transient
             // "not your turn" disable. Pure data-driven (canAfford helper).
             const affordable = canAfford(c, {
               energy: player.energy,
@@ -256,18 +259,18 @@ export function PlayerPanel({
             });
             const showUnaffordable = !affordable;
             const isSelected = selectedCardId === c.id;
-            // iter-N: in revealer-pick mode, the chip's affordance is
+            // Iter-N: in revealer-pick mode, the chip's affordance is
             // "click to pick" not "click to play". Pickability is driven
-            // by `pendingChoice.filter` (e.g. exclude units for Sabotage).
+            // By `pendingChoice.filter` (e.g. exclude units for Sabotage).
             const pickable = isPickable(c);
             const isRevealerChip = isRevealerPanel;
             const chipDisabled = isRevealerChip
               ? !pickable
               : !canPlay || isSelected;
             const chipOnClick = isRevealerChip
-              ? pickable
+              ? (pickable
                 ? () => onPickRevealedCard?.(c.id)
-                : undefined
+                : undefined)
               : () => onPlayCard(c);
             return (
               <CardOverlay
@@ -279,6 +282,7 @@ export function PlayerPanel({
                 <button
                   className={`hand-chip${c.imageUrl ? " hand-chip-art" : ""}${isPlayable ? " hand-chip-playable" : ""}${showUnaffordable ? " hand-chip-unaffordable" : ""}${isSelected ? " hand-chip-selected" : ""}${isRevealerChip && pickable ? " hand-chip-pickable" : ""}${isRevealerChip && !pickable ? " hand-chip-unpickable" : ""}`}
                   data-testid={`hand-chip-${c.id}`}
+                  data-card-id={c.id}
                   data-has-choice={hasChoice ? "true" : "false"}
                   data-has-image={c.imageUrl ? "true" : "false"}
                   data-playable={isPlayable ? "true" : "false"}
@@ -287,7 +291,7 @@ export function PlayerPanel({
                   data-pickable={
                     isRevealerChip ? (pickable ? "true" : "false") : undefined
                   }
-                  /* iter-M: --card-img drives the CSS-only hover-zoom
+                  /* Iter-M: --card-img drives the CSS-only hover-zoom
                    * preview (::after on .hand-chip:hover). When the card
                    * has no image, leave it unset so the preview hides. */
                   style={
@@ -299,12 +303,12 @@ export function PlayerPanel({
                   onClick={chipOnClick}
                   title={
                     isRevealerChip
-                      ? pickable
+                      ? (pickable
                         ? `Pick ${c.name ?? c.definitionId} — ${pendingChoice?.onPicked ?? "resolve"}`
-                        : `${c.name ?? c.definitionId} — not a legal pick (${c.cardType ?? "card"})`
-                      : locs.length > 0
+                        : `${c.name ?? c.definitionId} — not a legal pick (${c.cardType ?? "card"})`)
+                      : (locs.length > 0
                         ? `${c.name ?? c.definitionId} — legal: ${locs.join(", ")}${showUnaffordable ? " (unaffordable)" : ""}`
-                        : `${c.name ?? c.definitionId}${showUnaffordable ? " (unaffordable)" : ""}`
+                        : `${c.name ?? c.definitionId}${showUnaffordable ? " (unaffordable)" : ""}`)
                   }
                 >
                   {c.imageUrl ? (
@@ -317,14 +321,14 @@ export function PlayerPanel({
                     />
                   ) : (
                     // Image-less fallback: keep the name visible so the
-                    // player can still tell the cards apart. The card art
-                    // itself already shows cost + might, so the badges
-                    // are redundant when imageUrl is present.
+                    // Player can still tell the cards apart. The card art
+                    // Itself already shows cost + might, so the badges
+                    // Are redundant when imageUrl is present.
                     <span className="hand-chip-name hand-chip-name-fallback">
                       {c.name ?? c.definitionId}
                     </span>
                   )}
-                  {/* iter-10 gap 4: subtle hover name banner at the bottom
+                  {/* Iter-10 gap 4: subtle hover name banner at the bottom
                       of art chips. Hidden when not hovering (keeps the
                       clean art-only look); slides up + fades in on hover
                       so the player can skim names quickly. */}
@@ -353,28 +357,28 @@ export function PlayerPanel({
           })
         ) : (
           // Face-down hand: opponent hand chips are rendered as generic
-          // card-backs (CSS-only — no per-card art / name / cost leaks).
+          // Card-backs (CSS-only — no per-card art / name / cost leaks).
           // The button stays disabled because the local player can never
-          // play out of the opponent's hand.
+          // Play out of the opponent's hand.
           //
-          // iter-19 Gap 1: opponent face-down chips share the same fan
-          // overlap as the local hand (centered + overlap via parent .hand
+          // Iter-19 Gap 1: opponent face-down chips share the same fan
+          // Overlap as the local hand (centered + overlap via parent .hand
           // CSS) but render in compact 60×84 form via the
           // `.hand-chip-back-compact` modifier — keeping geometry symmetric
-          // with the local hand while preserving the face-down disguise.
+          // With the local hand while preserving the face-down disguise.
           // Pure CSS modifier — no per-card branching here.
           //
-          // iter-K: drive chip count from player.handSize (server-reported)
-          // when the hand array is empty. In production, the server never
-          // sends actual opponent hand cards, so hand[opponent.id] === [].
-          // player.handSize carries the real count. We fall back to index-
-          // keyed placeholder buttons for those extra chips. When the hand
-          // array HAS entries (unit tests pass real cards for identity
-          // assertions), we use the array directly for backward compat.
+          // Iter-K: drive chip count from player.handSize (server-reported)
+          // When the hand array is empty. In production, the server never
+          // Sends actual opponent hand cards, so hand[opponent.id] === [].
+          // Player.handSize carries the real count. We fall back to index-
+          // Keyed placeholder buttons for those extra chips. When the hand
+          // Array HAS entries (unit tests pass real cards for identity
+          // Assertions), we use the array directly for backward compat.
           //
-          // chipCount = max(hand.length, player.handSize) so whichever is
-          // larger wins. In tests hand.length === chipCount === player.handSize;
-          // in production hand.length === 0 so player.handSize drives it.
+          // ChipCount = max(hand.length, player.handSize) so whichever is
+          // Larger wins. In tests hand.length === chipCount === player.handSize;
+          // In production hand.length === 0 so player.handSize drives it.
           <>
             {(() => {
               const chipCount = Math.max(hand.length, player.handSize);

@@ -357,6 +357,17 @@ export interface BattlefieldUnitView extends CardDefinitionView {
   readonly id: string;
   readonly definitionId: string;
   readonly controller: string;
+  /**
+   * Slice 5 (UX affordances): the card's *base* (printed) might from its
+   * Definition. `might` (inherited from CardDefinitionView) is the EFFECTIVE
+   * Might after buffs, equipment, static abilities, and runtime modifiers.
+   * The SPA renders a small `+N` / `-N` badge whenever `might !== baseMight`
+   * So the human can see at a glance that a unit is buffed/debuffed.
+   *
+   * `undefined` when the card has no registered definition (synthetic test
+   * Decks), in which case the badge is suppressed.
+   */
+  readonly baseMight?: number;
 }
 
 /**
@@ -604,6 +615,64 @@ export function getCardDefinition(
   };
   // Drop undefined keys so JSON round-trips stay clean.
   return stripUndefined(view);
+}
+
+/**
+ * Slice 5 (UX affordances): compute a unit's *effective* might by mirroring
+ * The engine's `computeEffectiveMight` formula at the app layer (the engine
+ * Package is closed scope so we can't import the internal helper directly).
+ *
+ * Sums: base might (from registered card) + 1-if-buffed + mightModifier +
+ * combatMightModifier + staticMightBonus + sum of equipped gear mightBonus.
+ * Floored at 0 (Rule 141 — Might can't go negative).
+ *
+ * Returns `undefined` when the card isn't registered (synthetic decks) —
+ * The SPA falls back to base might and suppresses the +N badge.
+ */
+function computeEffectiveMightAppLayer(
+  cardInstanceId: string,
+  meta:
+    | {
+        buffed?: boolean;
+        mightModifier?: number;
+        combatMightModifier?: number;
+        staticMightBonus?: number;
+        equippedWith?: readonly string[];
+      }
+    | undefined,
+): { baseMight?: number; effectiveMight?: number } {
+  let lookup: EngineCardLookup | undefined;
+  try {
+    lookup = getGlobalCardRegistry().get(cardInstanceId);
+  } catch {
+    lookup = undefined;
+  }
+  if (!lookup || typeof lookup.might !== "number") {
+    return {};
+  }
+  const baseMight = lookup.might;
+  if (baseMight === 0) {
+    // Non-units (or 0-might cards): no badge, no effective math.
+    return { baseMight, effectiveMight: 0 };
+  }
+  const buffBonus = meta?.buffed ? 1 : 0;
+  const mightMod = meta?.mightModifier ?? 0;
+  const combatMightMod = meta?.combatMightModifier ?? 0;
+  const staticBonus = meta?.staticMightBonus ?? 0;
+  let equipBonus = 0;
+  for (const equipId of meta?.equippedWith ?? []) {
+    try {
+      const equipLookup = getGlobalCardRegistry().get(equipId);
+      equipBonus += equipLookup?.mightBonus ?? 0;
+    } catch {
+      // Ignore — equipment not registered, skip its contribution.
+    }
+  }
+  const effectiveMight = Math.max(
+    0,
+    baseMight + buffBonus + mightMod + combatMightMod + staticBonus + equipBonus,
+  );
+  return { baseMight, effectiveMight };
 }
 
 /**
@@ -2052,11 +2121,34 @@ function buildView(engine: RiftboundEngine): GameView {
       const card = internal.cards?.[cid];
       const definitionId = card?.definitionId ?? cid;
       const def = getCardDefinition(cid, definitionId);
+      // Slice 5 (UX affordances): compute effective vs base might so the
+      // SPA can surface a +N/-N counter badge when buffs/equipment apply.
+      const meta = internal.cardMetas?.[cid] as
+        | {
+            buffed?: boolean;
+            mightModifier?: number;
+            combatMightModifier?: number;
+            staticMightBonus?: number;
+            equippedWith?: readonly string[];
+          }
+        | undefined;
+      const mightInfo = computeEffectiveMightAppLayer(cid, meta);
+      // When effective differs from base, override `might` with the
+      // Effective value so combat-panel + BF chip displays match the live
+      // Value; `baseMight` carries the printed value for the +N badge math.
+      const mightFields =
+        mightInfo.baseMight !== undefined
+          ? {
+              baseMight: mightInfo.baseMight,
+              might: mightInfo.effectiveMight ?? mightInfo.baseMight,
+            }
+          : {};
       return {
         controller: card?.controller ?? "",
         definitionId,
         id: cid,
         ...def,
+        ...mightFields,
       };
     });
     // The battlefield IS itself a card — bfId is the CardId (see

@@ -421,6 +421,30 @@ function broadcastV2State(sessionId: string, statePayload: unknown): void {
 }
 
 /**
+ * Slice 5 (UX affordances): broadcast an arbitrary named SSE event to every
+ * subscriber of `sessionId`. Used for ephemeral signals like pings that
+ * are not persisted into game state but still need to reach the opponent's
+ * Browser. Today only "ping" rides this path; structured so other future
+ * Ephemeral channels (typing-indicator, emote) can drop in cleanly.
+ */
+function broadcastV2Event(
+  sessionId: string,
+  eventName: string,
+  payload: unknown,
+): void {
+  const subs = v2Subscribers.get(sessionId);
+  if (!subs || subs.size === 0) {return;}
+  const chunk = sseFormat(eventName, payload);
+  for (const controller of subs) {
+    try {
+      controller.enqueue(chunk);
+    } catch {
+      subs.delete(controller);
+    }
+  }
+}
+
+/**
  * Build a per-player hand summary from an EngineSession.
  *
  * Delegates to `EngineSession.buildHandView()` so each card carries the full
@@ -2123,6 +2147,54 @@ const server = Bun.serve({
         undone: result.undone,
         ...spaState,
       });
+    }
+
+    // POST /api/v2/ping/:id — Slice 5 (UX affordances): ephemeral ping.
+    //
+    // Body: { playerId: string, targetType: "card" | "zone",
+    //         TargetId: string, x?: number, y?: number }
+    //
+    // Broadcasts a `ping` SSE event to every subscriber of the session so
+    // Both browsers can render a pulse animation on the named DOM element
+    // (data-card-id="..." or data-zone-id="..."). Pings are NOT persisted
+    // Into game state — they're a transient communication channel,
+    // Equivalent to a player tapping a card to draw their opponent's eye.
+    //
+    // The server validates that the session exists but does NOT validate
+    // The targetId itself; the client is responsible for sending a valid
+    // Id (and silently no-ops if the corresponding DOM element is missing
+    // On render).
+    if (pathname.startsWith("/api/v2/ping/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      if (!demoSessions.get(sessionId)) {
+        return json({ error: "session not found" }, 404);
+      }
+      const body = (await req.json().catch(() => ({}))) as {
+        playerId?: string;
+        targetType?: "card" | "zone";
+        targetId?: string;
+        x?: number;
+        y?: number;
+      };
+      const {playerId} = body;
+      const {targetType} = body;
+      const {targetId} = body;
+      if (!playerId || !targetType || !targetId) {
+        return json({ error: "missing playerId/targetType/targetId" }, 400);
+      }
+      if (targetType !== "card" && targetType !== "zone") {
+        return json({ error: "targetType must be 'card' or 'zone'" }, 400);
+      }
+      const pingPayload = {
+        playerId,
+        targetId,
+        targetType,
+        ts: Date.now(),
+        ...(typeof body.x === "number" ? { x: body.x } : {}),
+        ...(typeof body.y === "number" ? { y: body.y } : {}),
+      };
+      broadcastV2Event(sessionId, "ping", pingPayload);
+      return json({ ok: true, ping: pingPayload });
     }
 
     // GET /api/v2/stream/:id — Server-Sent Events stream for live state

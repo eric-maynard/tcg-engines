@@ -142,6 +142,7 @@ function UnitSlot({
               className={`bf-unit bf-mini-chip${u.imageUrl ? " bf-mini-chip-art bf-unit-art" : ""}${role !== "none" ? ` bf-mini-chip-role-${role}` : ""}${isFlashing ? " bf-unit-role-flash" : ""}${isActionable ? ` bf-mini-chip-actionable bf-mini-chip-actionable-${actionableRolePhase}` : ""}`}
               data-testid={`bf-unit-${u.id}`}
               data-mini-chip-id={u.id}
+              data-card-id={u.id}
               data-controller={u.controller}
               data-stack-index={idx}
               data-has-image={u.imageUrl ? "true" : "false"}
@@ -187,6 +188,32 @@ function UnitSlot({
               ) : null}
               {u.might !== undefined ? (
                 <span className="bf-mini-chip-might bf-unit-might">{u.might}</span>
+              ) : null}
+              {/* Slice 5 (UX affordances): might-counter badge. Surfaced
+                  whenever effective might differs from the printed
+                  (base) might — e.g. a buffed unit, an equipped unit,
+                  or one under a static aura. Pure data-driven from
+                  `u.baseMight` vs `u.might`. */}
+              {u.baseMight !== undefined
+                && u.might !== undefined
+                && u.might !== u.baseMight ? (
+                <span
+                  className={`bf-might-counter ${
+                    u.might > u.baseMight
+                      ? "bf-might-counter-pos"
+                      : "bf-might-counter-neg"
+                  }`}
+                  data-testid={`bf-might-counter-${u.id}`}
+                  data-base-might={u.baseMight}
+                  data-effective-might={u.might}
+                  aria-label={`Might modifier: ${
+                    u.might > u.baseMight ? "+" : ""
+                  }${u.might - u.baseMight}`}
+                  title={`Effective ${u.might}, base ${u.baseMight}`}
+                >
+                  {u.might > u.baseMight ? "+" : ""}
+                  {u.might - u.baseMight}
+                </span>
               ) : null}
               {/* Hidden accessible name + owner for tests + screen readers. */}
               <span className="bf-unit-name sr-only">
@@ -632,6 +659,7 @@ function BattlefieldTile({
       data-contested={bf.contested ? "true" : "false"}
       data-has-image={bf.imageUrl ? "true" : "false"}
       data-active={isActive ? "true" : "false"}
+      data-zone-id={`battlefield-${bf.id}`}
     >
       {/* Iter-43a: full-tile bg art rendered as a direct child of the .bf
           grid so position:absolute;inset:0 covers the entire tile (including

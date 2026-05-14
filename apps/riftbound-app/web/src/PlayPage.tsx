@@ -5,11 +5,13 @@ import {
   type GameView,
   type HandCard,
   type MoveResponse,
+  type PingPayload,
   type StateResponse,
   type TrailStep,
   type UndoState,
   fetchState,
   postMove,
+  postPing,
   postStep,
   postUndo,
 } from "./lib/api";
@@ -71,6 +73,43 @@ const DEFAULT_ACTIONS_LEGAL: ActionsLegal = {
 };
 
 const TOAST_MS = 3000;
+
+/**
+ * Slice 5 (UX affordances): ping pulse duration (ms). Should match the
+ * `rb-ping-pulse` keyframe in styles.css (1.2s). The class is removed after
+ * Each pulse so re-pinging the same element re-triggers the animation
+ * Cleanly (browsers don't restart a CSS animation when the class stays on).
+ */
+const PING_PULSE_MS = 1200;
+
+/**
+ * Slice 5 (UX affordances): apply a brief CSS pulse to the DOM element
+ * Matching the ping target. Cards carry `data-card-id="..."`; zones (e.g.
+ * Deck/trash piles, base, BF tiles) carry `data-zone-id="..."`. If no
+ * Matching element exists in this client's DOM (e.g. opponent pinged a
+ * Card that's in their hand, not visible to us), the ping is a no-op.
+ */
+function applyPingPulse(ping: PingPayload): void {
+  if (typeof document === "undefined") {return;}
+  const attr = ping.targetType === "card" ? "data-card-id" : "data-zone-id";
+  // CSS.escape isn't available in jsdom; do manual quoting via attribute selector.
+  const sel = `[${attr}="${ping.targetId.replaceAll("\\", String.raw`\\`).replaceAll("\"", String.raw`\"`)}"]`;
+  let nodes: NodeListOf<Element>;
+  try {
+    nodes = document.querySelectorAll(sel);
+  } catch {
+    return;
+  }
+  for (const el of nodes) {
+    el.classList.remove("ping-pulse");
+    // Force reflow so the class re-application re-runs the keyframe.
+    void (el as HTMLElement).offsetWidth;
+    el.classList.add("ping-pulse");
+    setTimeout(() => {
+      el.classList.remove("ping-pulse");
+    }, PING_PULSE_MS);
+  }
+}
 
 /**
  * Iter-8 stretch (phase strip Path B): data-driven phase-id → icon map.
@@ -317,6 +356,19 @@ export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProp
         applyState(next);
       } catch {
         // Bad payload — ignore. Next move will refresh state.
+      }
+    });
+    // Slice 5 (UX affordances): ephemeral ping channel. The server fans
+    // Pings out as a named `ping` event distinct from `state`. We find the
+    // Matching DOM element (data-card-id or data-zone-id) and add a
+    // `.ping-pulse` class for the keyframe duration, then strip it.
+    es.addEventListener("ping", (ev: MessageEvent) => {
+      if (cancelled) {return;}
+      try {
+        const ping = JSON.parse(ev.data) as PingPayload;
+        applyPingPulse(ping);
+      } catch {
+        // Bad payload — ignore.
       }
     });
     es.onerror = () => {
@@ -813,6 +865,66 @@ export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProp
   }, [sessionId, applyState, showToast]);
 
   /**
+   * Slice 5 (UX affordances): ping a card or zone. Posts to /api/v2/ping;
+   * The server broadcasts a `ping` SSE event to every subscriber (including
+   * Us, so both browsers animate the same pulse). Failures are silent —
+   * Pings are an ephemeral UX affordance, not a critical move.
+   */
+  const triggerPing = useCallback(
+    (
+      targetType: "card" | "zone",
+      targetId: string,
+      coords?: { x: number; y: number },
+    ) => {
+      if (!targetId) {return;}
+      void postPing(sessionId, {
+        playerId: localPlayerId,
+        targetId,
+        targetType,
+        ...coords,
+      }).catch(() => {
+        // Silent — ping is best-effort.
+      });
+    },
+    [sessionId, localPlayerId],
+  );
+
+  /**
+   * Slice 5 (UX affordances): delegated right-click + shift-click handler
+   * For the play board. Walks up from the target looking for the nearest
+   * Element carrying `data-card-id` or `data-zone-id` and pings it.
+   * Right-click suppresses the native context menu so it doesn't fight
+   * The animation. Shift-click is the keyboard-friendly alternative for
+   * Trackpad users (Mac context-menu gesture varies).
+   */
+  const handleBoardPing = useCallback(
+    (ev: React.MouseEvent<HTMLDivElement>) => {
+      let el: HTMLElement | null = ev.target as HTMLElement | null;
+      let targetType: "card" | "zone" | null = null;
+      let targetId: string | null = null;
+      while (el && el !== ev.currentTarget) {
+        const cardId = el.getAttribute("data-card-id");
+        if (cardId) {
+          targetType = "card";
+          targetId = cardId;
+          break;
+        }
+        const zoneId = el.getAttribute("data-zone-id");
+        if (zoneId) {
+          targetType = "zone";
+          targetId = zoneId;
+          break;
+        }
+        el = el.parentElement;
+      }
+      if (!targetType || !targetId) {return;}
+      ev.preventDefault();
+      triggerPing(targetType, targetId, { x: ev.clientX, y: ev.clientY });
+    },
+    [triggerPing],
+  );
+
+  /**
    * Slice 4 (undo/rewind): rewind the local player's last move. Server
    * Enforces the same gates `undoState.canUndoBy[localPlayerId]`
    * Reflects, so this is best-effort — we still surface a toast on
@@ -1054,7 +1166,20 @@ export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProp
         </div>
       ) : null}
 
-      <div className="board" data-testid="board">
+      <div
+        className="board"
+        data-testid="board"
+        onContextMenu={handleBoardPing}
+        onAuxClick={(ev) => {
+          // Some browsers/devices route middle/right-clicks via auxclick too;
+          // Reuse the same delegated handler so the affordance is symmetric.
+          if (ev.button === 2) {handleBoardPing(ev);}
+        }}
+        onClick={(ev) => {
+          // Shift-click alt-ping for trackpad / no-right-click devices.
+          if (ev.shiftKey) {handleBoardPing(ev);}
+        }}
+      >
         <div className="board-main">
           {/* OPPONENT (top) */}
           {opponent ? (

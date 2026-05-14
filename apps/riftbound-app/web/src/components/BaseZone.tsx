@@ -34,6 +34,7 @@ export function BaseZone({ playerId, units, label }: BaseZoneProps) {
       className="base-zone"
       data-testid={`base-zone-${playerId}`}
       data-base-empty={units.length === 0 ? "true" : "false"}
+      data-zone-id={`${playerId}-base`}
     >
       <header className="base-zone-header">
         <span className="base-zone-label">{headerLabel}</span>
@@ -55,6 +56,7 @@ export function BaseZone({ playerId, units, label }: BaseZoneProps) {
                 key={u.id}
                 className={`base-zone-unit${u.imageUrl ? " base-zone-unit-art" : ""}`}
                 data-testid={`base-zone-unit-${u.id}`}
+                data-card-id={u.id}
                 data-has-image={u.imageUrl ? "true" : "false"}
               >
                 {u.imageUrl ? (
