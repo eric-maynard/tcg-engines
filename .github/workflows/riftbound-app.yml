@@ -1,0 +1,108 @@
+name: Riftbound App
+
+on:
+  push:
+    branches: [main, production]
+    paths:
+      - "apps/riftbound-app/**"
+      - "packages/riftbound-engine/**"
+      - "packages/riftbound-cards/**"
+      - "packages/riftbound-types/**"
+      - "packages/core/**"
+      - "packages/core-types/**"
+      - "packages/core-ui/**"
+      - ".github/workflows/riftbound-app.yml"
+      - "package.json"
+      - "bun.lock"
+  pull_request:
+    branches: [main, production]
+    paths:
+      - "apps/riftbound-app/**"
+      - "packages/riftbound-engine/**"
+      - "packages/riftbound-cards/**"
+      - "packages/riftbound-types/**"
+      - "packages/core/**"
+      - "packages/core-types/**"
+      - "packages/core-ui/**"
+      - ".github/workflows/riftbound-app.yml"
+      - "package.json"
+      - "bun.lock"
+
+jobs:
+  test-and-build:
+    name: Riftbound App — typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: ".bun-version"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck (workspace)
+        # Falls back to `tsc -p` per-package if the root script is missing.
+        run: |
+          if bun run --silent check-types --filter riftbound-app >/dev/null 2>&1; then
+            bun run check-types --filter riftbound-app
+          elif bun run --silent typecheck --filter riftbound-app >/dev/null 2>&1; then
+            bun run typecheck --filter riftbound-app
+          else
+            echo "no workspace typecheck script for riftbound-app — falling back to tsc"
+            cd apps/riftbound-app && bunx tsc --noEmit
+          fi
+
+      - name: Vitest (web)
+        run: |
+          cd apps/riftbound-app/web
+          bun run vitest run
+
+      - name: Bun test (server)
+        run: |
+          cd apps/riftbound-app
+          bun test
+
+      - name: Build SPA (vite)
+        run: |
+          cd apps/riftbound-app/web
+          bun run build
+
+      - name: Verify dist is non-empty
+        run: |
+          set -e
+          DIST=apps/riftbound-app/web/dist
+          if [ ! -d "$DIST" ]; then
+            echo "::error::$DIST does not exist"; exit 1
+          fi
+          FILES=$(find "$DIST" -type f | wc -l)
+          if [ "$FILES" -lt 2 ]; then
+            echo "::error::$DIST has only $FILES files; expected index.html + assets"
+            ls -la "$DIST"
+            exit 1
+          fi
+          SIZE=$(du -sb "$DIST" | cut -f1)
+          if [ "$SIZE" -lt 1000 ]; then
+            echo "::error::$DIST is only $SIZE bytes; build looks broken"
+            exit 1
+          fi
+          echo "dist OK — $FILES files, $SIZE bytes"
+
+      - name: Upload SPA dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: riftbound-spa-dist
+          path: apps/riftbound-app/web/dist
+          retention-days: 7

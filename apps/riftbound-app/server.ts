@@ -47,12 +47,17 @@ import {
   tryPlayFromHand,
 } from "./lib/server-helpers";
 import { renderInteractiveBoard, renderInteractivePage } from "./components/InteractiveGameBoard";
+import { withProdMiddleware } from "./lib/prod-middleware";
 
 /** Sets that belong to each game version. Preview is a superset of standard. */
 const STANDARD_SETS = new Set(["OGN", "OGS", "SFD"]);
 const PREVIEW_SETS = new Set(["OGN", "OGS", "SFD", "UNL"]);
 
-const PORT = Number(process.env.RIFTBOUND_PORT ?? 3000);
+// PORT precedence: PORT (PaaS convention) > RIFTBOUND_PORT (legacy) > 3000.
+// Slice 8 production deploys read from PORT.
+const PORT = Number(process.env.PORT ?? process.env.RIFTBOUND_PORT ?? 3000);
+const NODE_ENV = process.env.NODE_ENV ?? "development";
+const SERVER_STARTED_AT = Date.now();
 const STATIC_DIR = path.join(import.meta.dir, "public");
 const IMAGES_DIR = path.join(import.meta.dir, "../../downloads/card-images");
 const SANDBOX_ENABLED = process.env.SANDBOX_ENABLED === "true";
@@ -1873,7 +1878,11 @@ const server = Bun.serve({
   // Spam `ERR_INCOMPLETE_CHUNKED_ENCODING` + reconnect storms. We pick a
   // Generous window that still lets actual hung sockets die eventually.
   idleTimeout: 255,
-  async fetch(req) {
+  // Slice 8 (production hosting): the fetch handler is wrapped with
+  // `withProdMiddleware` to add /health, per-IP rate limiting, and
+  // Structured request logging. See `lib/prod-middleware.ts`.
+  fetch: withProdMiddleware(
+    async (req, _server) => {
     const url = new URL(req.url);
     const {pathname} = url;
 
@@ -4359,7 +4368,17 @@ const server = Bun.serve({
     }
 
     return new Response("Not Found", { status: 404 });
-  },
+    },
+    {
+      isAuthenticated: (req: Request) => getUserIdFromRequest(req) !== null,
+      startedAt: SERVER_STARTED_AT,
+      version: process.env.RIFTBOUND_VERSION ?? "0.1.0",
+      // Quiet logging in tests; verbose JSON lines in prod.
+      logger: NODE_ENV === "test"
+        ? () => {}
+        : undefined,
+    },
+  ),
 
   // ========================================
   // WebSocket Handlers
