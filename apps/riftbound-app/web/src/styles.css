@@ -5909,3 +5909,95 @@ button {
   font-weight: 600;
 }
 .replay-timeline-row.undone { text-decoration: line-through; opacity: 0.45; }
+
+/* ============================================================
+ * iter-V: BF unit chips visible on short landscape tiles.
+ *
+ * After iter-G/L flipped BF tiles to landscape (max-height: 185px) the
+ * portrait unit chips (60x84 originally, horizontally stacked along
+ * 76px wide side rails) no longer fit cleanly — three chips at
+ * 64 + 44 + 44 = 152px overflow a 76px wide rail by 76px, intruding
+ * into the center column over the BF title pill (chips ended up
+ * crammed up against / behind the title, appearing tiny/clipped).
+ *
+ * Fix: pin the unit stack to the bottom-inside corner of the BF tile
+ * via the bf-side rail using absolute positioning, switch to a
+ * VERTICAL column stack (which fits inside a 76px rail without
+ * overflow), shrink chips to 52x72 so 2 chips visible per rail in a
+ * 140-185px tall tile, give them z-index above the art + below the
+ * title. Side-rails get explicit overflow:visible so chips that pop
+ * out past the rail top are still rendered (clipped only by the
+ * outer .bf overflow:hidden, which keeps the tile boundary clean).
+ * ============================================================ */
+
+/* Pin the bf-side as an absolute-positioned column to the inside
+ * corner of the tile so the unit stack hugs the BF without
+ * competing with the title pill in the center column. */
+.bf .bf-side {
+  overflow: visible !important;
+}
+.bf .bf-side-ours {
+  align-items: flex-start !important;
+}
+.bf .bf-side-theirs {
+  align-items: flex-end !important;
+}
+
+/* Switch from horizontal-with-margin-overlap to a vertical column
+ * stack inside each rail. The 76px-wide rail holds a single 52px
+ * chip; vertical overlap (-26px per chip after the first) lets up
+ * to ~3 chips read at a glance inside a 140-185px tall tile. */
+.bf .bf-mini-stack {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0 !important;
+}
+.bf .bf-mini-stack > li {
+  margin-left: 0 !important;
+}
+.bf .bf-mini-stack > li + li {
+  margin-left: 0 !important;
+  /* Override the JS-inline marginTop:-18 with a stronger pull-up.
+   * Combined with chip height 72px that yields a 46px stride. */
+  margin-top: -26px !important;
+}
+
+/* Shrink chips so a single chip fits comfortably inside the 76px
+ * rail (with 4px of padding either side -> 68px available). Keep
+ * landscape-friendly aspect ratio so portrait card art still reads. */
+.bf .bf-mini-chip {
+  width: 52px !important;
+  height: 72px !important;
+  z-index: 4 !important;
+  border-radius: 5px !important;
+  /* Strong border + drop shadow so chips pop off the BF art. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 3px 8px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(140, 180, 220, 0.45) !important;
+}
+
+/* Slightly tighter art fit inside the smaller chip. */
+.bf .bf-mini-chip-image {
+  border-radius: inherit;
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+
+/* Title pill drops slightly out of the way of the now-bottom-anchored
+ * unit stack: ensure it sits with z-index above the chips so the BF
+ * name remains legible, but chips remain visible to its left/right. */
+.bf .bf-tile-center {
+  z-index: 3 !important;
+}
+.bf .bf-tile-center .bf-header {
+  position: relative;
+  z-index: 4 !important;
+}
+
+/* Belt-and-suspenders: the dark fade ::after on .bf must not cover
+ * the chips. Push it below the chip z-layer. */
+.bf::after {
+  z-index: 1 !important;
+}
