@@ -1,0 +1,12 @@
+{
+  "kind": "out-of-engine-scope",
+  "questionText": "do I have to pay 2 for zhonyas or do I just have to recycle a rune to play it as hidden",
+  "question": "to play Zhonya's Hourglass hidden, do you pay its 2-energy printed cost, or just the Hidden cost (recycle 1 rune)?",
+  "whatsUnsupported": "cost-payment timing / the [Hidden] keyword's alternative cost — the engine has a cost system (energy/power, repeat-cost) but the bridge doesn't model playing a card face-down via [Hidden] and the rune-recycle Power payment that replaces the printed energy cost",
+  "rulesAnswer": {
+    "verdict": "Just recycle 1 rune — you do NOT pay the 2 energy. To hide Zhonya's Hourglass you pay only the [Hidden] cost (1 [A] Power of any domain, paid by recycling a rune into your Rune Deck). The printed 2-energy cost is never paid when you hide it, and when you later reveal and play it from the hidden state you play it for [0]. You pay the 2 energy only if you instead play it face-up into your base normally.",
+    "reasoning": "The [Hidden] keyword (rule 811 / Patch Notes 2025-10-24) lets you play a card face-down at a battlefield by paying the Hidden cost — 1 [A] (Power of any domain) — INSTEAD of its normal cost; that Power is paid by recycling a rune into your Rune Deck (FAQ #5672, rule 811.1.b). A hidden card has its normal costs only when it would be played from its hidden state, and the [Hidden] grant lets you play it from there for [0] (rule 811.6). So: hide it → recycle 1 rune (the 1-[A] Hidden cost), never pay the printed 2 energy; reveal+play later → pay [0]. Playing it the ordinary way (face-up to base) is the only mode where the printed 2-energy cost applies. Costs (the Hidden cost included) are paid as the card is played, before it goes on the chain (rule 357).",
+    "cites": ["811", "811.1.b", "811.6", "357", "FAQ-5672"],
+    "confidence": "high"
+  }
+}

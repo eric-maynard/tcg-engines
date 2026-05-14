@@ -25,9 +25,9 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
-import { type TriggerRunnerContext, fireDieTriggers } from "../abilities/trigger-runner";
+import type { DispatchContext } from "../events/dispatcher";
+import { runStateMaintenance } from "../events/dispatcher";
 import type { RiftboundCardMeta } from "../types";
-import { performCleanup } from "./state-based-checks";
 
 /**
  * The slice of a move reducer's `context` that the cleanup pass needs. Every
@@ -52,37 +52,35 @@ export interface PostMoveCleanupContext {
 }
 
 /**
- * Run state-based cleanup, then fire `die` triggers for anything it killed,
- * plus one cascade pass for deaths caused by those triggers. Safe to call
- * after any state mutation; safe to call more than once.
+ * Run static-effect recalc + state-based checks, then emit `die` events for
+ * everything reaped (which re-enter the dispatcher → Deathknell etc. →
+ * possible further deaths), looping until the state is stable.
+ *
+ * This is now a **thin delegate to {@link runStateMaintenance}** — the
+ * dispatcher owns the "static recalc + SBA + death-emission" pipeline; this
+ * wrapper just adapts a {@link PostMoveCleanupContext} (the slice a move
+ * reducer's `context` exposes) to a {@link DispatchContext} and hands off.
+ * Kept as a belt-and-suspenders post-move / post-effect / flow-hook hook for
+ * the (few) state-changing paths that don't themselves emit a recalc-relevant
+ * event through `dispatchEvent`; it's idempotent, so calling it after a path
+ * that *did* run maintenance via the dispatcher finds nothing left to do.
  */
 export function cleanupAndFireDeaths<TState>(
   draft: TState,
   context: PostMoveCleanupContext,
 ): void {
-  // The cleanup + trigger-runner contexts both accept this shape; the casts
-  // Bridge the structural types without dragging the full generics in.
-  const cleanupCtx = {
+  // Adapt the move/flow context slice to a `DispatchContext`. The structural
+  // Shapes overlap (cards / counters / zones operation bags); cast bridges
+  // Without dragging the full generics in. `runStateMaintenance` reads
+  // `counters.getCounter`/`clearCounter`/`setFlag` and `zones.{moveCard,
+  // GetCardsInZone}` — all present on a real move/flow context.
+  const dispatchCtx = {
     cards: context.cards,
     counters: context.counters,
     draft,
     zones: context.zones,
-  } as unknown as Parameters<typeof performCleanup>[0];
-  const triggerCtx = {
-    cards: context.cards,
-    counters: context.counters,
-    draft,
-    zones: context.zones,
-  } as unknown as TriggerRunnerContext;
-
-  const result = performCleanup(cleanupCtx);
-  if (result.killed.length > 0) {
-    fireDieTriggers(result.killed, triggerCtx);
-    const cascade = performCleanup(cleanupCtx);
-    if (cascade.killed.length > 0) {
-      fireDieTriggers(cascade.killed, triggerCtx);
-    }
-  }
+  } as unknown as DispatchContext;
+  runStateMaintenance(dispatchCtx);
 }
 
 /**

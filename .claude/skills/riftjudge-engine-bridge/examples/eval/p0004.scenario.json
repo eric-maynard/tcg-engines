@@ -1,0 +1,16 @@
+{
+  "kind": "rules-question",
+  "questionText": "if vex, apathetic is on a battlefield, and someone plays tideturner to base, can they use the move trigger, or is it stunned first?",
+  "question": "does Tideturner's 'when you play me' move trigger resolve before Vex's stun?",
+  "rulesAnswer": {
+    "verdict": "It depends on who is the Active Player: if Vex's controller is the Active Player, Vex's Stun resolves first and Tideturner can't use its move trigger; if the Tideturner player is the Non-Active Player, Tideturner's move trigger resolves first (it moves before the Stun lands).",
+    "reasoning": "Playing Tideturner produces two simultaneous triggered abilities: Tideturner's 'when you play me, move' trigger and Vex, Apathetic's 'when an opponent plays a unit while I'm at a battlefield, Stun it' trigger. Simultaneous triggers are added to the chain in turn order, Active Player's first, then the Non-Active Player's on top (rule 383.3.d.1 / APNAP). The chain then resolves last-in, first-out (rule 340.1). So whichever player added their trigger LAST resolves it FIRST: if the Active Player owns Vex and the Non-Active Player played Tideturner, then Vex's trigger (Active) goes on first and Tideturner's (Non-Active) goes on top — Tideturner's move resolves first, before the Stun. If instead the Active Player played Tideturner, Vex's controller (Non-Active) puts the Stun trigger on top — the Stun resolves first, and a stunned unit can't move (stun removes its ability to move/attack), so the move trigger does nothing when it resolves.",
+    "cites": ["383.3.d.1", "340.1", "Stun (800-keywords)"],
+    "confidence": "medium",
+    "conditionalCases": [
+      { "condition": "Vex's controller is the Active Player (the Tideturner player is Non-Active)", "outcome": "Tideturner's move trigger resolves first — it moves before being stunned." },
+      { "condition": "The Tideturner player is the Active Player (Vex's controller is Non-Active)", "outcome": "Vex's Stun trigger resolves first — Tideturner is stunned and its move trigger does nothing." }
+    ],
+    "assumptions": ["Tideturner's and Vex, Apathetic's exact text were not pulled from @tcg/riftbound-cards; the answer uses the wording in the question, which matches the bot's reconstruction."]
+  }
+}

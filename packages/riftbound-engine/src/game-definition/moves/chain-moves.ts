@@ -30,7 +30,8 @@ import type { ChainItem } from "../../chain";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
 import { evaluateLegionCondition } from "../../abilities/legion-conditions";
-import { fireTriggers } from "../../abilities/trigger-runner";
+import { evaluateAbilityCondition } from "../../abilities/trigger-runner";
+import { dispatchEvent } from "../../events/dispatcher";
 import { cleanupAndFireDeaths } from "../../cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import {
@@ -61,6 +62,8 @@ function buildEffectContext(
     };
     cards: {
       getCardOwner: (cardId: CoreCardId) => string | undefined;
+      getCardController?: (cardId: CoreCardId) => string | undefined;
+      setCardController?: (cardId: CoreCardId, controllerId: CorePlayerId) => void;
       getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
       updateCardMeta: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
     };
@@ -80,13 +83,18 @@ function buildEffectContext(
   };
   return {
     cards: {
+      getCardController: context.cards.getCardController,
       getCardMeta: context.cards.getCardMeta as EffectContext["cards"]["getCardMeta"],
       getCardOwner: context.cards.getCardOwner,
+      setCardController: context.cards.setCardController as
+        | EffectContext["cards"]["setCardController"],
       updateCardMeta: context.cards.updateCardMeta as EffectContext["cards"]["updateCardMeta"],
     },
     counters: context.counters,
     draft,
-    fireTriggers: (event) => fireTriggers(event, triggerCtx),
+    // Inner triggers raised during effect resolution (become-mighty, …)
+    // Are emitted through the unified event-bus chokepoint.
+    fireTriggers: (event) => dispatchEvent(triggerCtx, event),
     playerId,
     sourceCardId,
     sourceZone: context.zones.getCardZone(sourceCardId as CoreCardId) as string | undefined,
@@ -178,6 +186,19 @@ function executeResolvedItem(
     return;
   }
 
+  // "Intervening if" rule: a queued triggered ability re-checks its
+  // `condition` against the CURRENT state when it would resolve. If the
+  // Condition lapsed between trigger and resolution, the ability does
+  // Nothing (its effect is skipped — the chain item is still removed
+  // Normally by the caller).
+  if (
+    resolved.triggered &&
+    resolved.condition != null &&
+    !evaluateAbilityCondition(resolved.condition, draft, resolved.controller)
+  ) {
+    return;
+  }
+
   // Rule 812: a Legion "...instead." dependent ability replaces the printed
   // Spell effect when the Legion condition holds.
   const legionReplacement = getLegionReplacementEffect(
@@ -217,6 +238,32 @@ function executeResolvedItem(
 // One cascade pass) is the shared implementation in `cleanup/post-move-cleanup.ts`.
 // Imported above; every move reducer's `context` is a structural superset of the
 // `PostMoveCleanupContext` shape it needs, so it passes straight through.
+
+/**
+ * Resolve a chain item: execute its effect (honouring `countered` and the
+ * "intervening if" re-check) and then emit a `chainItemResolved` engine-bus
+ * event through the dispatcher so the event log / future listeners see it.
+ */
+function resolveChainItem(
+  resolved: ChainItem,
+  draft: RiftboundGameState,
+  context: Parameters<typeof buildEffectContext>[3],
+): void {
+  executeResolvedItem(resolved, draft, context);
+  const triggerCtx = {
+    cards: context.cards,
+    counters: context.counters,
+    draft,
+    zones: context.zones,
+  } as unknown as Parameters<typeof dispatchEvent>[0];
+  dispatchEvent(triggerCtx, {
+    cardId: resolved.cardId,
+    chainItemId: resolved.id,
+    controller: resolved.controller,
+    countered: resolved.countered === true,
+    type: "chainItemResolved",
+  });
+}
 
 /**
  * A resolved entry returned by `collectActivatedAbilities`.
@@ -449,7 +496,7 @@ export const chainMoves: Partial<
         draft.interaction = newState;
 
         if (resolved) {
-          executeResolvedItem(resolved, draft, context);
+          resolveChainItem(resolved, draft, context);
 
           // Run state-based checks after resolution (rule 543.3/518) and
           // Fire any on-death triggers for units killed by the resolution.
@@ -489,7 +536,7 @@ export const chainMoves: Partial<
       draft.interaction = newState;
 
       if (resolved) {
-        executeResolvedItem(resolved, draft, context);
+        resolveChainItem(resolved, draft, context);
 
         cleanupAndFireDeaths(draft, context);
       }
@@ -530,9 +577,19 @@ export const chainMoves: Partial<
         return false;
       }
 
-      // Must be controlled by the player
-      const owner = context.cards.getCardOwner(cardId as CoreCardId);
-      if (owner !== playerId) {
+      // Rule 381 / 378 — "All Activated Abilities can only be activated on
+      // The Controlling Player's Turn." After a `take-control` (rule 187 /
+      // 323.6) the unit's CONTROLLER is what gates ability use, not its
+      // OWNER. Fall back to owner when the controller getter isn't wired
+      // (older test stubs).
+      const cardsBag = context.cards as {
+        getCardController?: (id: CoreCardId) => string | undefined;
+        getCardOwner: (id: CoreCardId) => string | undefined;
+      };
+      const controller =
+        cardsBag.getCardController?.(cardId as CoreCardId) ??
+        cardsBag.getCardOwner(cardId as CoreCardId);
+      if (controller !== playerId) {
         return false;
       }
 
@@ -584,12 +641,14 @@ export const chainMoves: Partial<
         return false;
       }
 
-      // Rule 530: in Neutral Open state only the active player holds priority,
-      // So only they may activate an Action-timed ability. (Mirrors `playSpell`.)
-      if (timing === "action" && turnState === "neutral-open") {
-        if (state.turn.activePlayer !== playerId) {
-          return false;
-        }
+      // Rule 555 / 530: activated abilities default to Action timing — "sorcery
+      // Speed, only on your turn during a main phase". Only `[Reaction]`-tagged
+      // Activated abilities can fire on the chain in opponent windows. So an
+      // Action-timed ability requires `activePlayer === playerId` REGARDLESS of
+      // Turn state (neutral-open, showdown-open). Reaction-timed abilities are
+      // Gated separately by `isLegalTiming` + the priority/focus holder below.
+      if (timing === "action" && state.turn.activePlayer !== playerId) {
+        return false;
       }
 
       // Rules 510 / 530 / 543.x — once a chain or showdown is ongoing, only the
@@ -667,39 +726,31 @@ export const chainMoves: Partial<
         sourceCardId?: string;
       }[] = [];
 
-      // Collect cards on base, battlefields, legendZone, battlefieldRow, and championZone
-      const baseCards = context.zones.getCardsInZone(
-        "base" as CoreZoneId,
-        playerId as CorePlayerId,
-      );
-      const bfCards: CoreCardId[] = [];
+      // Rule 381 / 378 — "All Activated Abilities can only be activated on
+      // The Controlling Player's Turn." After `take-control` (rule 187 /
+      // 323.6) the unit's CONTROLLER, not its OWNER, is what gates
+      // Activation. So we sweep every board zone (unfiltered) and pick
+      // Controller-matching cards. `getCardsInZone(zoneId)` (no ownerId)
+      // Returns every card in the zone — we filter in JS below.
+      const enumCardsBag = context.cards as {
+        getCardController?: (id: CoreCardId) => string | undefined;
+        getCardOwner: (id: CoreCardId) => string | undefined;
+      };
+      const allBoardCards: CoreCardId[] = [];
+      allBoardCards.push(...context.zones.getCardsInZone("base" as CoreZoneId));
       for (const bfId of Object.keys(state.battlefields ?? {})) {
-        const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
-        const cards = context.zones.getCardsInZone(bfZoneId, playerId as CorePlayerId);
-        bfCards.push(...cards);
+        allBoardCards.push(
+          ...context.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId),
+        );
       }
-      const legendCards = context.zones.getCardsInZone(
-        "legendZone" as CoreZoneId,
-        playerId as CorePlayerId,
-      );
-      const battlefieldRowCards = context.zones.getCardsInZone(
-        "battlefieldRow" as CoreZoneId,
-        playerId as CorePlayerId,
-      );
-      const championZoneCards = context.zones.getCardsInZone(
-        "championZone" as CoreZoneId,
-        playerId as CorePlayerId,
-      );
+      allBoardCards.push(...context.zones.getCardsInZone("legendZone" as CoreZoneId));
+      allBoardCards.push(...context.zones.getCardsInZone("battlefieldRow" as CoreZoneId));
+      allBoardCards.push(...context.zones.getCardsInZone("championZone" as CoreZoneId));
 
-      for (const cardId of [
-        ...baseCards,
-        ...bfCards,
-        ...legendCards,
-        ...battlefieldRowCards,
-        ...championZoneCards,
-      ]) {
-        const owner = context.cards.getCardOwner(cardId);
-        if (owner !== playerId) {
+      for (const cardId of allBoardCards) {
+        const controller =
+          enumCardsBag.getCardController?.(cardId) ?? enumCardsBag.getCardOwner(cardId);
+        if (controller !== playerId) {
           continue;
         }
 
@@ -732,14 +783,12 @@ export const chainMoves: Partial<
             continue;
           }
 
-          // Rule 530: only the active player may activate an Action-timed
-          // Ability in Neutral Open (no chain / no showdown). See the matching
-          // Guard in the condition above.
-          if (
-            timing === "action" &&
-            turnState === "neutral-open" &&
-            state.turn.activePlayer !== playerId
-          ) {
+          // Rule 555 / 530: activated abilities default Action — "only on your
+          // Turn during a main phase". Skip Action-timed activations whenever
+          // The activator isn't the active turn player (regardless of turn
+          // State). Reaction-tagged activations bypass this gate; they're
+          // Allowed on opponent's turn during chain/showdown windows.
+          if (timing === "action" && state.turn.activePlayer !== playerId) {
             continue;
           }
 
@@ -840,10 +889,27 @@ export const chainMoves: Partial<
       // Location-relative targets) resolves to the host.
       const interaction = draft.interaction ?? createInteractionState();
       const turnOrder = Object.keys(draft.players);
+      const newChainItemId = `chain-${interaction.nextChainItemId}`;
       draft.interaction = addToChain(
         interaction,
         { cardId, controller: playerId, effect: ability.effect, type: "ability" },
         turnOrder,
+      );
+      // Engine-bus event: a new item was added to the chain.
+      dispatchEvent(
+        {
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          zones: context.zones,
+        } as unknown as Parameters<typeof dispatchEvent>[0],
+        {
+          cardId: cardId as string,
+          chainItemId: newChainItemId,
+          controller: playerId,
+          triggered: false,
+          type: "chainItemAdded",
+        },
       );
     },
   },
@@ -978,6 +1044,19 @@ export const chainMoves: Partial<
         playerId,
         opponent,
       );
+      // Engine-bus event: a Combat Showdown opened (the showdown that just
+      // Started is a combat one — the battlefield is Contested).
+      if (bf?.contested) {
+        dispatchEvent(
+          {
+            cards: context.cards,
+            counters: context.counters,
+            draft,
+            zones: context.zones,
+          } as unknown as Parameters<typeof dispatchEvent>[0],
+          { attackingPlayer: playerId, battlefieldId, type: "combatOpened" },
+        );
+      }
     },
   },
 

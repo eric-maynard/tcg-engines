@@ -3,7 +3,7 @@
     "id": "SFD",
     "name": "Spiritforged",
     "cardCount": 222,
-    "parsedCount": 222,
+    "parsedCount": 198,
     "errataCount": 15
   },
   "cards": [
@@ -25,19 +25,11 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nGive a friendly unit at a battlefield +2 [Might] this turn for each enemy unit there.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "amount": 2,
-            "duration": "turn",
-            "target": {
-              "type": "unit"
-            },
-            "type": "modify-might"
+            "text": "Give a friendly unit at a battlefield +2 :rb_might: this turn for each enemy unit there.",
+            "type": "raw"
           },
-          "timing": "action",
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -72,12 +64,8 @@
           "type": "keyword"
         },
         {
-          "effect": {
-            "description": "[Equip] one of your Equipment to me for :rb_rune_rainbow: less, even if it's already attached.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
+          "keyword": "Weaponmaster",
+          "type": "keyword"
         }
       ],
       "parseSuccess": true,
@@ -103,21 +91,17 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\n[Repeat] [1] (You may pay the additional cost to repeat this spell's effect.)\nGive a unit [Assault 2] this turn. (+2 [Might] while it's an attacker.)",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
-          "cost": {
-            "energy": 1
-          },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Give a unit [Assault 2] this turn",
-            "effects": [],
-            "type": "sequence"
+            "keyword": "Assault",
+            "target": {
+              "type": "unit"
+            },
+            "type": "grant-keyword",
+            "value": 2,
+            "duration": "turn"
+          },
+          "repeat": {
+            "energy": 1
           },
           "timing": "action",
           "type": "spell"
@@ -144,20 +128,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "Kill this, [Exhaust]: [Reaction] — [Add] [rainbow]. (Abilities that add resources can't be reacted to.)",
-      "abilities": [
-        {
-          "cost": {
-            "exhaust": true
-          },
-          "effect": {
-            "description": "[Reaction] — [Add] :rb_rune_rainbow:",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "activated"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/e878c39b562a4e870e93b819c6d85cdf3fdc5238-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -185,11 +157,25 @@
         },
         {
           "effect": {
-            "description": "Friendly units enter ready this turn. Play a Gold gear token exhausted",
-            "effects": [],
-            "type": "sequence"
+            "duration": "turn",
+            "target": {
+              "controller": "friendly",
+              "type": "unit"
+            },
+            "type": "enter-ready"
           },
           "type": "static"
+        },
+        {
+          "effect": {
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token"
+          },
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -216,10 +202,20 @@
       "abilities": [
         {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "kill"
+            "effects": [
+              {
+                "target": {
+                  "type": "gear"
+                },
+                "type": "kill"
+              },
+              {
+                "amount": 2,
+                "player": "opponent",
+                "type": "draw"
+              }
+            ],
+            "type": "sequence"
           },
           "timing": "action",
           "type": "spell"
@@ -249,6 +245,7 @@
       "abilities": [
         {
           "effect": {
+            "target": "self",
             "type": "enter-ready"
           },
           "type": "static"
@@ -278,14 +275,15 @@
       "abilities": [
         {
           "effect": {
-            "description": "give a unit [Ganking] this turn",
-            "effects": [],
-            "type": "sequence"
+            "keyword": "Ganking",
+            "target": {
+              "type": "unit"
+            },
+            "type": "grant-keyword",
+            "duration": "turn"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -313,12 +311,8 @@
       "rulesText": "[Weaponmaster] (When you play me, you may [Equip] one of your Equipment to me for [rainbow] less, even if it's already attached.)",
       "abilities": [
         {
-          "effect": {
-            "description": "[Equip] one of your Equipment to me for :rb_rune_rainbow: less, even if it's already attached.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
+          "keyword": "Weaponmaster",
+          "type": "keyword"
         }
       ],
       "parseSuccess": true,
@@ -375,9 +369,10 @@
       "abilities": [
         {
           "effect": {
-            "description": "I cost :rb_energy_2: less to play from anywhere other than your hand",
-            "effects": [],
-            "type": "sequence"
+            "reduction": 2,
+            "scope": "to play from anywhere other than your hand",
+            "target": "self",
+            "type": "cost-reduction"
           },
           "type": "static"
         }
@@ -405,16 +400,12 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a unit and an Equipment with the same controller. Attach that Equipment to that unit or detach that Equipment from that unit. Draw 1.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Choose a unit and an Equipment with the same controller. Attach that Equipment to that unit or detach that Equipment from that unit. Draw 1",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "type": "draw"
           },
-          "type": "static"
+          "timing": "reaction",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -441,9 +432,11 @@
       "abilities": [
         {
           "effect": {
-            "description": "I cost :rb_energy_1: less for each card you've played this turn, to a minimum of :rb_energy_1:",
-            "effects": [],
-            "type": "sequence"
+            "reduction": 1,
+            "scope": "for each card you've played this turn",
+            "minimum": 1,
+            "target": "self",
+            "type": "cost-reduction"
           },
           "type": "static"
         }
@@ -471,28 +464,29 @@
       "rulesText": "You may pay [1][fury] as an additional cost to play me.\nWhen you play me, if you paid the additional cost, deal 2 to a unit at a battlefield.",
       "abilities": [
         {
-          "cost": {
-            "energy": 1
-          },
           "effect": {
-            "description": "rb_rune_fury: as an additional cost to play me",
-            "effects": [],
-            "type": "sequence"
+            "additionalCost": ":rb_energy_1::rb_rune_fury:",
+            "optional": true,
+            "type": "additional-cost-option"
           },
-          "type": "activated"
+          "type": "static"
         },
         {
           "effect": {
-            "description": "if you paid the additional cost, deal 2 to a unit at a battlefield",
-            "effects": [],
-            "type": "sequence"
+            "amount": 2,
+            "target": {
+              "type": "unit",
+              "location": "battlefield"
+            },
+            "type": "damage"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "condition": {
+            "type": "paid-additional-cost"
+          }
         }
       ],
       "parseSuccess": true,
@@ -516,17 +510,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "Units can't move to base.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "Units can't move to base",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/77bb46cd667e59f26310797ac99686f3a4d19af5-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -547,17 +532,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "Play me only to a battlefield you conquered this turn. (You can't play me anywhere else.)",
-      "abilities": [
-        {
-          "effect": {
-            "description": "Play me only to a battlefield you conquered this turn",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/71af1587378c1c3feabd1b148fb776e42c7d27e8-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -614,18 +590,28 @@
           "type": "keyword"
         },
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "amount": 2,
-            "target": {
-              "type": "unit"
-            },
-            "type": "damage"
+            "effects": [
+              {
+                "amount": 2,
+                "target": {
+                  "type": "unit",
+                  "location": "battlefield"
+                },
+                "type": "damage"
+              },
+              {
+                "amount": 4,
+                "target": {
+                  "type": "unit"
+                },
+                "type": "damage"
+              }
+            ],
+            "type": "sequence"
           },
-          "type": "static"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -651,12 +637,27 @@
       "rulesText": "If you would reveal cards from a deck, look at the top card first. You may recycle it. Then reveal those cards.",
       "abilities": [
         {
-          "effect": {
-            "description": "If you would reveal cards from a deck, look at the top card first. You may recycle it. Then reveal those cards",
-            "effects": [],
+          "duration": "permanent",
+          "replacement": {
+            "effects": [
+              {
+                "amount": 1,
+                "from": "deck",
+                "then": {
+                  "recycle": "rest"
+                },
+                "type": "look"
+              },
+              {
+                "amount": 1,
+                "from": "deck",
+                "type": "reveal"
+              }
+            ],
             "type": "sequence"
           },
-          "type": "static"
+          "replaces": "reveal",
+          "type": "replacement"
         }
       ],
       "parseSuccess": true,
@@ -685,6 +686,11 @@
           "cost": {
             "energy": 1,
             "power": ["fury"],
+            "recycle": {
+              "amount": 1,
+              "from": "trash",
+              "text": "Recycle a unit from your trash"
+            },
             "exhaust": true
           },
           "effect": {
@@ -693,7 +699,8 @@
               "name": "Mech",
               "type": "unit"
             },
-            "type": "create-token"
+            "type": "create-token",
+            "location": "base"
           },
           "type": "activated"
         }
@@ -722,13 +729,14 @@
       "abilities": [
         {
           "effect": {
-            "description": "When I win a combat, play a Gold gear token exhausted",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
+            "event": "win-combat",
             "on": "self"
           },
           "type": "triggered"
@@ -736,18 +744,19 @@
         {
           "effect": {
             "amount": 2,
-            "duration": "turn",
-            "target": {
-              "type": "unit"
-            },
-            "type": "modify-might"
+            "target": "self",
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "optional": false,
           "trigger": {
-            "event": "attack",
+            "event": "attack-or-defend",
             "on": "self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true,
+          "condition": {
+            "type": "paid-additional-cost"
+          }
         }
       ],
       "parseSuccess": true,
@@ -779,7 +788,9 @@
               "name": "Mech",
               "type": "unit"
             },
-            "type": "create-token"
+            "type": "create-token",
+            "amount": 2,
+            "location": "base"
           },
           "keyword": "Deathknell",
           "type": "keyword"
@@ -808,21 +819,8 @@
       "rulesText": "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)\n[Equip] [fury] ([fury]: Attach this to a unit you control.)",
       "abilities": [
         {
-          "effect": {
-            "description": "[Quick-Draw] (This has",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        },
-        {
-          "effect": {
-            "description": ". When you play it, attach it to a unit you control.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "timing": "reaction",
-          "type": "spell"
+          "keyword": "Quick-Draw",
+          "type": "keyword"
         },
         {
           "cost": {
@@ -855,20 +853,20 @@
       "rulesText": "[Repeat] [2][fury] (You may pay the additional cost to repeat this spell's effect.)\nDeal 2 to a unit at a battlefield, then deal 2 to up to one other unit.",
       "abilities": [
         {
-          "cost": {
-            "energy": 2,
-            "power": ["fury"]
-          },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "amount": 2,
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "quantity": {
+                "upTo": 1
+              },
+              "location": "battlefield"
             },
             "type": "damage"
+          },
+          "repeat": {
+            "energy": 2,
+            "power": ["fury"]
           },
           "timing": "action",
           "type": "spell"
@@ -902,16 +900,15 @@
         },
         {
           "effect": {
-            "description": "play an Equipment with Energy cost no more than :rb_energy_2:, ignoring its cost. If you do, then do this: Attach it to me",
-            "effects": [],
-            "type": "sequence"
+            "text": "play an Equipment with Energy cost no more than :rb_energy_2:, ignoring its cost. If you do, then do this: Attach it to me.",
+            "type": "raw"
           },
-          "optional": true,
           "trigger": {
             "event": "attack",
             "on": "self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -937,19 +934,14 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve, including to a battlefield you control.)\n[Assault 2] (+2 [Might] while I'm an attacker.)\nI can be played to a battlefield you're attacking.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "keyword": "Assault",
           "type": "keyword",
           "value": 2
         },
         {
           "effect": {
-            "description": "I can be played to a battlefield you're attacking",
-            "effects": [],
-            "type": "sequence"
+            "text": "I can be played to a battlefield you're attacking.",
+            "type": "raw"
           },
           "type": "static"
         }
@@ -982,7 +974,9 @@
             "target": {
               "type": "unit",
               "controller": "friendly",
-              "tribe": "Mech"
+              "filter": {
+                "tag": "Mech"
+              }
             },
             "type": "grant-keyword"
           },
@@ -990,16 +984,15 @@
         },
         {
           "effect": {
-            "description": "recycle another friendly unit to play a Mech from your trash. Reduce its Energy cost by the Might of the unit you recycled",
-            "effects": [],
-            "type": "sequence"
+            "text": "recycle another friendly unit to play a Mech from your trash. Reduce its Energy cost by the Might of the unit you recycled.",
+            "type": "raw"
           },
-          "optional": true,
           "trigger": {
             "event": "conquer",
             "on": "self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -1025,10 +1018,18 @@
       "rulesText": "If you have two or fewer cards in your hand, I enter ready.\nWhen I hold, draw 2.",
       "abilities": [
         {
+          "condition": {
+            "count": 2,
+            "target": {
+              "controller": "friendly",
+              "location": "hand",
+              "type": "card"
+            },
+            "type": "has-at-most"
+          },
           "effect": {
-            "description": "If you have two or fewer cards in your hand, I enter ready",
-            "effects": [],
-            "type": "sequence"
+            "target": "self",
+            "type": "enter-ready"
           },
           "type": "static"
         },
@@ -1037,7 +1038,6 @@
             "amount": 2,
             "type": "draw"
           },
-          "optional": false,
           "trigger": {
             "event": "hold",
             "on": "self"
@@ -1074,11 +1074,16 @@
         },
         {
           "effect": {
-            "description": "deal damage equal to my [Assault] to an enemy unit here",
-            "effects": [],
-            "type": "sequence"
+            "amount": {
+              "might": "self"
+            },
+            "target": {
+              "type": "unit",
+              "controller": "enemy",
+              "location": "here"
+            },
+            "type": "damage"
           },
-          "optional": false,
           "trigger": {
             "event": "attack",
             "on": "self"
@@ -1188,17 +1193,16 @@
       "rulesText": "[Repeat] [2] (You may pay the additional cost to repeat this spell's effect.)\nPlay a 2 [Might] Sand Soldier unit token.",
       "abilities": [
         {
-          "cost": {
-            "energy": 2
-          },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Play a 2 Might Sand Soldier unit token",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "might": 2,
+              "name": "Sand Soldier",
+              "type": "unit"
+            },
+            "type": "create-token"
+          },
+          "repeat": {
+            "energy": 2
           },
           "timing": "action",
           "type": "spell"
@@ -1229,16 +1233,15 @@
         {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "gear"
             },
             "type": "kill"
           },
-          "optional": true,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -1294,26 +1297,18 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\n[Repeat] [2] (You may pay the additional cost to repeat this spell's effect.)\nGive a unit +2 [Might] this turn.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
-          "cost": {
-            "energy": 2
-          },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "amount": 2,
-            "duration": "turn",
             "target": {
               "type": "unit"
             },
-            "type": "modify-might"
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "timing": "action",
+          "repeat": {
+            "energy": 2
+          },
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -1341,16 +1336,18 @@
       "abilities": [
         {
           "effect": {
-            "description": "return a unit or gear from your trash to your hand",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "location": "trash",
+              "type": "permanent"
+            },
+            "type": "return-to-hand"
           },
-          "optional": true,
           "trigger": {
             "event": "hold",
             "on": "self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -1376,15 +1373,15 @@
       "rulesText": "[Deathknell] — If I died alone, draw 1. (When I die, get the effect. I'm alone if there are no other friendly units here.)",
       "abilities": [
         {
-          "condition": {
-            "type": "while-alone"
-          },
           "effect": {
             "amount": 1,
             "type": "draw"
           },
           "keyword": "Deathknell",
-          "type": "keyword"
+          "type": "keyword",
+          "condition": {
+            "type": "while-alone"
+          }
         }
       ],
       "parseSuccess": true,
@@ -1440,15 +1437,16 @@
         {
           "effect": {
             "amount": 1,
-            "duration": "turn",
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "controller": "friendly",
+              "excludeSelf": true
             },
-            "type": "modify-might"
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "optional": false,
           "trigger": {
-            "event": "move",
+            "event": "move-to-battlefield",
             "on": "self"
           },
           "type": "triggered"
@@ -1478,15 +1476,28 @@
       "abilities": [
         {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "ready"
+            "options": [
+              {
+                "effect": {
+                  "target": {
+                    "type": "unit"
+                  },
+                  "type": "ready"
+                }
+              },
+              {
+                "effect": {
+                  "target": {
+                    "type": "unit"
+                  },
+                  "type": "exhaust"
+                }
+              }
+            ],
+            "type": "choice"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -1514,22 +1525,17 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\n[Repeat] [2] (You may pay the additional cost to repeat this spell's effect.)\nStun an attacking unit. (It doesn't deal combat damage this turn.)",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
-          "cost": {
-            "energy": 2
-          },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "filter": {
+                "state": "attacking"
+              }
             },
             "type": "stun"
+          },
+          "repeat": {
+            "energy": 2
           },
           "timing": "action",
           "type": "spell"
@@ -1559,11 +1565,9 @@
       "abilities": [
         {
           "effect": {
-            "description": "reveal the top card of your Main Deck. If it's a gear, draw it. Otherwise, recycle it",
-            "effects": [],
-            "type": "sequence"
+            "text": "reveal the top card of your Main Deck. If it's a gear, draw it. Otherwise, recycle it.",
+            "type": "raw"
           },
-          "optional": false,
           "trigger": {
             "event": "move",
             "on": "self"
@@ -1628,13 +1632,11 @@
           "type": "keyword"
         },
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "target": {
-              "type": "unit"
+              "quantity": "all",
+              "type": "unit",
+              "controller": "friendly"
             },
             "to": "base",
             "type": "move"
@@ -1664,17 +1666,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "As an additional cost to play me, return a friendly gear to its owner's hand.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "As an additional cost to play me, return a friendly gear to its owner's hand",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/c09cc35ffc98b46f919c09e09a93b603d63eb73e-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -1697,16 +1690,10 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nCounter an enemy spell or ability that chooses a friendly unit or gear.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Counter an enemy spell or ability that chooses a friendly unit or gear",
-            "effects": [],
-            "type": "sequence"
+            "type": "counter"
           },
-          "timing": "action",
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -1734,26 +1721,21 @@
       "abilities": [
         {
           "effect": {
-            "description": "When you play this, draw 1",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "type": "draw"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         },
         {
           "cost": {
-            "energy": 1,
-            "power": ["calm"],
-            "exhaust": true
+            "energy": 1
           },
           "effect": {
-            "amount": 1,
-            "type": "draw"
+            "text": "rb_rune_calm:, :rb_exhaust:, Kill this: Draw 1.",
+            "type": "raw"
           },
           "type": "activated"
         }
@@ -1782,12 +1764,9 @@
       "abilities": [
         {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
+            "target": "self",
             "type": "ready"
           },
-          "optional": false,
           "trigger": {
             "event": "buff",
             "on": "self"
@@ -1822,7 +1801,6 @@
             "amount": 1,
             "type": "draw"
           },
-          "optional": false,
           "trigger": {
             "event": "move",
             "on": "self"
@@ -1854,11 +1832,14 @@
       "abilities": [
         {
           "effect": {
-            "description": "When you attach an Equipment to me, choose one that hasn't been chosen this turn —Ready 2 runes.Channel 1 rune exhausted.Buff a friendly unit",
-            "effects": [],
-            "type": "sequence"
+            "text": "choose one that hasn't been chosen this turn —Ready 2 runes.Channel 1 rune exhausted.Buff a friendly unit.",
+            "type": "raw"
           },
-          "type": "static"
+          "trigger": {
+            "event": "attach-equipment",
+            "on": "self"
+          },
+          "type": "triggered"
         }
       ],
       "parseSuccess": true,
@@ -1888,9 +1869,9 @@
             "power": ["calm"]
           },
           "effect": {
-            "description": "[Action] — Choose a unit you control. Move me to its location and it to my original location. If it's equipped, you may attach one of its Equipment to me. Use only once per turn",
-            "effects": [],
-            "type": "sequence"
+            "target": "self",
+            "to": "here",
+            "type": "move"
           },
           "type": "activated"
         }
@@ -1953,11 +1934,11 @@
           },
           "effect": {
             "amount": 3,
-            "duration": "turn",
             "target": {
               "type": "unit"
             },
-            "type": "modify-might"
+            "type": "modify-might",
+            "duration": "turn"
           },
           "type": "activated"
         }
@@ -1985,21 +1966,42 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve, including to a battlefield you control.)\nWhen you play me, heal your units here, then move up to one enemy unit from here to its base.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "heal your units here, then move up to one enemy unit from here to its base",
-            "effects": [],
-            "type": "sequence"
+            "effect": {
+              "effects": [
+                {
+                  "amount": "all",
+                  "target": {
+                    "type": "unit",
+                    "location": "here",
+                    "filter": {
+                      "tag": "Your"
+                    }
+                  },
+                  "type": "heal"
+                },
+                {
+                  "target": {
+                    "type": "unit",
+                    "controller": "enemy",
+                    "quantity": {
+                      "upTo": 1
+                    }
+                  },
+                  "to": "base",
+                  "type": "move",
+                  "from": "here"
+                }
+              ],
+              "type": "sequence"
+            },
+            "trigger": {
+              "event": "play-self"
+            },
+            "type": "triggered"
           },
-          "optional": false,
-          "trigger": {
-            "event": "play-self",
-            "on": "self"
-          },
-          "type": "triggered"
+          "timing": "reaction",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -2025,34 +2027,20 @@
       "rulesText": "[Deflect] (Opponents must pay [rainbow] to choose me with a spell or ability.)\nYour Equipment everywhere have [Quick-Draw]. (Each gains [Reaction]. When you play it, attach it to a unit you control.)",
       "abilities": [
         {
-          "effect": {
-            "description": "Your Equipment everywhere have",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        },
-        {
           "keyword": "Deflect",
           "type": "keyword",
           "value": 1
         },
         {
           "effect": {
-            "description": "[Quick-Draw]. (Each gains",
-            "effects": [],
-            "type": "sequence"
+            "keyword": "Quick-Draw",
+            "target": {
+              "type": "gear",
+              "controller": "friendly"
+            },
+            "type": "grant-keyword"
           },
           "type": "static"
-        },
-        {
-          "effect": {
-            "description": ". When you play it, attach it to a unit you control.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "timing": "reaction",
-          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -2088,9 +2076,10 @@
         },
         {
           "effect": {
-            "description": "I cost :rb_energy_2::rb_rune_calm: less for each point you scored from holding this turn",
-            "effects": [],
-            "type": "sequence"
+            "reduction": ":rb_energy_2::rb_rune_calm:",
+            "scope": "for each point you scored from holding this turn",
+            "target": "self",
+            "type": "cost-reduction"
           },
           "type": "static"
         }
@@ -2118,21 +2107,8 @@
       "rulesText": "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)\n[Equip] [calm] ([calm]: Attach this to a unit you control.)",
       "abilities": [
         {
-          "effect": {
-            "description": "[Quick-Draw] (This has",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        },
-        {
-          "effect": {
-            "description": ". When you play it, attach it to a unit you control.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "timing": "reaction",
-          "type": "spell"
+          "keyword": "Quick-Draw",
+          "type": "keyword"
         },
         {
           "cost": {
@@ -2172,15 +2148,12 @@
         {
           "effect": {
             "amount": 1,
-            "duration": "turn",
-            "target": {
-              "type": "unit"
-            },
-            "type": "modify-might"
+            "target": "self",
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "optional": false,
           "trigger": {
-            "event": "choose",
+            "event": "choose-or-ready",
             "on": "self"
           },
           "type": "triggered"
@@ -2210,13 +2183,12 @@
       "abilities": [
         {
           "effect": {
-            "description": "or when I hold, look at the top 4 cards of your Main Deck. You may reveal a gear from among them and draw it. Then recycle the rest",
-            "effects": [],
-            "type": "sequence"
+            "amount": 4,
+            "from": "deck",
+            "type": "look"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
+            "event": "play-self-or-hold",
             "on": "self"
           },
           "type": "triggered"
@@ -2251,6 +2223,13 @@
           },
           "keyword": "Equip",
           "type": "keyword"
+        },
+        {
+          "effect": {
+            "text": "As this is attached to a unit, copy that unit's text to this Equipment's effect text for as long as this is attached to it.",
+            "type": "raw"
+          },
+          "type": "static"
         }
       ],
       "parseSuccess": true,
@@ -2315,14 +2294,14 @@
       "abilities": [
         {
           "effect": {
-            "description": "return a gear from your trash to your hand",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "location": "trash",
+              "type": "gear"
+            },
+            "type": "return-to-hand"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -2352,14 +2331,17 @@
         {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "controller": "friendly",
+              "filter": {
+                "tag": "Mech"
+              },
+              "excludeSelf": true
             },
             "type": "ready"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -2385,23 +2367,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When you play a spell on an opponent's turn, you may exhaust me to play a Gold gear token exhausted.",
-      "abilities": [
-        {
-          "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "exhaust"
-          },
-          "optional": true,
-          "trigger": {
-            "event": "play-spell",
-            "on": "self"
-          },
-          "type": "triggered"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/39071feea6d3739a834a83b1841f496bdfc3a59a-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null
@@ -2424,21 +2391,8 @@
       "rulesText": "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)\n[Equip] [mind] ([mind]: Attach this to a unit you control.)",
       "abilities": [
         {
-          "effect": {
-            "description": "[Quick-Draw] (This has",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        },
-        {
-          "effect": {
-            "description": ". When you play it, attach it to a unit you control.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "timing": "reaction",
-          "type": "spell"
+          "keyword": "Quick-Draw",
+          "type": "keyword"
         },
         {
           "cost": {
@@ -2472,15 +2426,17 @@
       "abilities": [
         {
           "effect": {
-            "amount": 1,
-            "from": "deck",
-            "then": {
-              "recycle": 1
+            "keyword": "Vision",
+            "target": {
+              "type": "unit",
+              "controller": "friendly",
+              "filter": {
+                "tag": "Mech"
+              }
             },
-            "type": "look"
+            "type": "grant-keyword"
           },
-          "keyword": "Vision",
-          "type": "keyword"
+          "type": "static"
         }
       ],
       "parseSuccess": true,
@@ -2506,26 +2462,18 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\n[Repeat] [2] (You may pay the additional cost to repeat this spell's effect.)\nGive a unit -2 [Might] this turn.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
-          "cost": {
-            "energy": 2
-          },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "amount": -2,
-            "duration": "turn",
             "target": {
               "type": "unit"
             },
-            "type": "modify-might"
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "timing": "action",
+          "repeat": {
+            "energy": 2
+          },
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -2552,29 +2500,29 @@
       "rulesText": "You may pay [mind] as an additional cost to play me.\nWhen you play me, if you paid the additional cost, give a unit -2 [Might] this turn.",
       "abilities": [
         {
-          "cost": {},
           "effect": {
-            "description": "rb_rune_mind: as an additional cost to play me",
-            "effects": [],
-            "type": "sequence"
+            "additionalCost": ":rb_rune_mind:",
+            "optional": true,
+            "type": "additional-cost-option"
           },
-          "type": "activated"
+          "type": "static"
         },
         {
           "effect": {
             "amount": -2,
-            "duration": "turn",
             "target": {
               "type": "unit"
             },
-            "type": "modify-might"
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "condition": {
+            "type": "paid-additional-cost"
+          }
         }
       ],
       "parseSuccess": true,
@@ -2609,9 +2557,9 @@
         },
         {
           "effect": {
-            "description": "Each Equipment attached to me gives double its base Might bonus",
-            "effects": [],
-            "type": "sequence"
+            "multiplier": 2,
+            "source": "equipment",
+            "type": "modify-might"
           },
           "type": "static"
         }
@@ -2640,11 +2588,12 @@
       "abilities": [
         {
           "effect": {
-            "description": "play a Gold gear token exhausted",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token"
           },
-          "optional": false,
           "trigger": {
             "event": "conquer",
             "on": "self"
@@ -2679,16 +2628,24 @@
           "type": "keyword"
         },
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "amount": 3,
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "location": "battlefield"
             },
             "type": "damage"
+          },
+          "timing": "action",
+          "type": "spell"
+        },
+        {
+          "effect": {
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token"
           },
           "timing": "action",
           "type": "spell"
@@ -2718,19 +2675,29 @@
       "abilities": [
         {
           "effect": {
-            "description": "Your Mechs have",
-            "effects": [],
-            "type": "sequence"
+            "keywords": ["Deflect", "Ganking"],
+            "target": {
+              "type": "unit",
+              "controller": "friendly",
+              "filter": {
+                "tag": "Mech"
+              }
+            },
+            "type": "grant-keywords"
           },
           "type": "static"
         },
         {
-          "keyword": "Deflect",
-          "type": "keyword",
-          "value": 1
-        },
-        {
+          "condition": {
+            "target": {
+              "filter": {
+                "tag": "Mech"
+              }
+            },
+            "type": "control"
+          },
           "effect": {
+            "target": "self",
             "type": "enter-ready"
           },
           "type": "static"
@@ -2760,16 +2727,23 @@
       "abilities": [
         {
           "effect": {
-            "description": "if you control two or more gear, ready me",
-            "effects": [],
-            "type": "sequence"
+            "target": "self",
+            "type": "ready"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "condition": {
+            "target": {
+              "controller": "friendly",
+              "type": "gear",
+              "quantity": {
+                "atLeast": 2
+              }
+            },
+            "type": "control"
+          }
         }
       ],
       "parseSuccess": true,
@@ -2826,17 +2800,34 @@
       "abilities": [
         {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "kill"
+            "effects": [
+              {
+                "target": {
+                  "type": "gear"
+                },
+                "type": "kill"
+              },
+              {
+                "condition": {
+                  "type": "paid-additional-cost"
+                },
+                "then": {
+                  "token": {
+                    "name": "Gold",
+                    "type": "gear"
+                  },
+                  "type": "create-token"
+                },
+                "type": "conditional"
+              }
+            ],
+            "type": "sequence"
           },
-          "optional": true,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -2864,16 +2855,13 @@
         {
           "effect": {
             "amount": 1,
-            "duration": "turn",
-            "target": {
-              "type": "unit"
-            },
-            "type": "modify-might"
+            "target": "self",
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "optional": false,
           "trigger": {
-            "event": "use-ability",
-            "on": "self"
+            "event": "use-activated-ability",
+            "on": "controller"
           },
           "type": "triggered"
         }
@@ -2901,13 +2889,13 @@
       "rulesText": "This costs [2] less if you control a Mech.\nPlay a 3 [Might] Mech unit token to your base.\nDraw 1.",
       "abilities": [
         {
-          "cost": {},
           "effect": {
-            "description": "rb_energy_2: less if you control a Mech",
-            "effects": [],
-            "type": "sequence"
+            "reduction": 2,
+            "scope": "if you control a Mech",
+            "target": "self",
+            "type": "cost-reduction"
           },
-          "type": "activated"
+          "type": "static"
         },
         {
           "effect": {
@@ -2916,7 +2904,8 @@
               "name": "Mech",
               "type": "unit"
             },
-            "type": "create-token"
+            "type": "create-token",
+            "location": "base"
           },
           "timing": "action",
           "type": "spell"
@@ -2953,20 +2942,35 @@
       "rulesText": "[Repeat] [4][mind] (You may pay the additional cost to repeat this spell's effect, and may make different choices.)\nChoose one —Deal 4 to a unit in a base.Kill a gear.",
       "abilities": [
         {
-          "cost": {
+          "effect": {
+            "options": [
+              {
+                "effect": {
+                  "amount": 4,
+                  "target": {
+                    "type": "unit",
+                    "location": "base"
+                  },
+                  "type": "damage"
+                }
+              },
+              {
+                "effect": {
+                  "target": {
+                    "type": "gear"
+                  },
+                  "type": "kill"
+                }
+              }
+            ],
+            "type": "choice"
+          },
+          "repeat": {
             "energy": 4,
             "power": ["mind"]
           },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
-          "effect": {
-            "description": "Choose one —Deal 4 to a unit in a base.Kill a gear",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -2997,9 +3001,8 @@
             "exhaust": true
           },
           "effect": {
-            "description": "Give the next spell you play this turn [Repeat] equal to its cost",
-            "effects": [],
-            "type": "sequence"
+            "text": "Give the next spell you play this turn [Repeat] equal to its cost.",
+            "type": "raw"
           },
           "type": "activated"
         }
@@ -3028,24 +3031,31 @@
       "abilities": [
         {
           "effect": {
-            "description": "You may exhaust your legend as an additional cost to play me",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "type": "unit"
+            },
+            "type": "exhaust"
           },
-          "type": "static"
+          "timing": "action",
+          "type": "spell"
         },
         {
           "effect": {
-            "description": "if you paid the additional cost, move any number of your units to an open battlefield",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "quantity": "all",
+              "type": "unit",
+              "controller": "friendly"
+            },
+            "to": "base",
+            "type": "move"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "condition": {
+            "type": "paid-additional-cost"
+          }
         }
       ],
       "parseSuccess": true,
@@ -3071,24 +3081,20 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\n[Repeat] [1][mind] (You may pay the additional cost to repeat this spell's effect.)\nDeal 1 to up to three units at the same location.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
-          "cost": {
-            "energy": 1,
-            "power": ["mind"]
-          },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "amount": 1,
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "quantity": {
+                "upTo": 3
+              },
+              "location": "here"
             },
             "type": "damage"
+          },
+          "repeat": {
+            "energy": 1,
+            "power": ["mind"]
           },
           "timing": "action",
           "type": "spell"
@@ -3118,14 +3124,11 @@
       "abilities": [
         {
           "effect": {
-            "description": "you and each opponent may play a Gold gear token exhausted. For each opponent who did, you play a Gold gear token exhausted",
-            "effects": [],
-            "type": "sequence"
+            "text": "you and each opponent may play a Gold gear token exhausted. For each opponent who did, you play a Gold gear token exhausted.",
+            "type": "raw"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -3154,33 +3157,29 @@
       "abilities": [
         {
           "effect": {
-            "description": "or defend, deal damage equal to my Might to an enemy unit here",
-            "effects": [],
-            "type": "sequence"
+            "amount": {
+              "might": "self"
+            },
+            "target": {
+              "type": "unit",
+              "controller": "enemy",
+              "location": "here"
+            },
+            "type": "damage"
           },
-          "optional": false,
           "trigger": {
-            "event": "attack",
+            "event": "attack-or-defend",
             "on": "self"
           },
           "type": "triggered"
-        },
-        {
-          "effect": {
-            "description": "I don't deal combat damage",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
         },
         {
           "cost": {
             "power": ["mind"]
           },
           "effect": {
-            "description": "[Action] — Move me to your base",
-            "effects": [],
-            "type": "sequence"
+            "text": "[Action] — Move me to your base.",
+            "type": "raw"
           },
           "type": "activated"
         }
@@ -3212,11 +3211,11 @@
             "exhaust": true
           },
           "effect": {
-            "description": "[Reaction] — Pay any amount of :rb_rune_rainbow: to [Add] that much Energy",
-            "effects": [],
-            "type": "sequence"
+            "text": "Pay any amount of :rb_rune_rainbow: to [Add] that much Energy.",
+            "type": "raw"
           },
-          "type": "activated"
+          "type": "activated",
+          "timing": "reaction"
         }
       ],
       "parseSuccess": true,
@@ -3244,16 +3243,16 @@
         {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "gear",
+              "controller": "friendly"
             },
             "type": "kill"
           },
-          "optional": true,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -3284,18 +3283,15 @@
           "value": 2
         },
         {
-          "effect": {
-            "description": "[Equip] one of your Equipment to me for :rb_rune_rainbow: less, even if it's already attached.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
+          "keyword": "Weaponmaster",
+          "type": "keyword"
         },
         {
           "effect": {
-            "description": "I have +1 Might for each friendly gear",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "per": "friendly gear",
+            "target": "self",
+            "type": "modify-might"
           },
           "type": "static"
         }
@@ -3353,15 +3349,11 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nDraw 3.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "amount": 3,
             "type": "draw"
           },
-          "timing": "action",
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -3435,9 +3427,15 @@
       "abilities": [
         {
           "effect": {
-            "description": "Your Mechs have +1 Might",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "target": {
+              "type": "unit",
+              "controller": "friendly",
+              "filter": {
+                "tag": "Mech"
+              }
+            },
+            "type": "modify-might"
           },
           "type": "static"
         },
@@ -3448,9 +3446,9 @@
               "name": "Mech",
               "type": "unit"
             },
-            "type": "create-token"
+            "type": "create-token",
+            "location": "base"
           },
-          "optional": false,
           "trigger": {
             "event": "hold",
             "on": "self"
@@ -3490,13 +3488,11 @@
         },
         {
           "cost": {
-            "energy": 3,
-            "power": ["mind"]
+            "energy": 3
           },
           "effect": {
-            "description": "Play all units banished with this, ignoring their costs",
-            "effects": [],
-            "type": "sequence"
+            "text": "rb_rune_mind:, Banish this: Play all units banished with this, ignoring their costs.",
+            "type": "raw"
           },
           "type": "activated"
         }
@@ -3525,15 +3521,27 @@
       "abilities": [
         {
           "effect": {
-            "amount": 1,
-            "type": "draw"
+            "options": [
+              {
+                "effect": {
+                  "amount": 1,
+                  "type": "draw"
+                }
+              },
+              {
+                "effect": {
+                  "target": "self",
+                  "type": "buff"
+                }
+              }
+            ],
+            "type": "choice"
           },
-          "optional": true,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -3559,12 +3567,8 @@
       "rulesText": "[Weaponmaster] (When you play me, you may [Equip] one of your Equipment to me for [rainbow] less, even if it's already attached.)",
       "abilities": [
         {
-          "effect": {
-            "description": "[Equip] one of your Equipment to me for :rb_rune_rainbow: less, even if it's already attached.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
+          "keyword": "Weaponmaster",
+          "type": "keyword"
         }
       ],
       "parseSuccess": true,
@@ -3620,7 +3624,16 @@
       "rulesText": "I enter ready if you control another Dragon.",
       "abilities": [
         {
+          "condition": {
+            "target": {
+              "filter": {
+                "tag": "Dragon"
+              }
+            },
+            "type": "control"
+          },
           "effect": {
+            "target": "self",
             "type": "enter-ready"
           },
           "type": "static"
@@ -3677,13 +3690,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "Ganking (I can move from battlefield to battlefield.)",
-      "abilities": [
-        {
-          "keyword": "Ganking",
-          "type": "keyword"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/d9dac8bbc898bfead8338ef387f2d144302e278f-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -3706,17 +3714,13 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nGive a unit +5 [Might] this turn.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "amount": 5,
-            "duration": "turn",
             "target": {
               "type": "unit"
             },
-            "type": "modify-might"
+            "type": "modify-might",
+            "duration": "turn"
           },
           "timing": "action",
           "type": "spell"
@@ -3745,26 +3749,25 @@
       "rulesText": "You may pay [1] as an additional cost to play me.\nWhen you play me, if you paid the additional cost, buff me. (Give me a +1 [Might] buff if I don't already have one.)",
       "abilities": [
         {
-          "cost": {},
           "effect": {
-            "description": "rb_energy_1: as an additional cost to play me",
-            "effects": [],
-            "type": "sequence"
+            "additionalCost": ":rb_energy_1:",
+            "optional": true,
+            "type": "additional-cost-option"
           },
-          "type": "activated"
+          "type": "static"
         },
         {
           "effect": {
-            "description": "if you paid the additional cost, buff me",
-            "effects": [],
-            "type": "sequence"
+            "target": "self",
+            "type": "buff"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "condition": {
+            "type": "paid-additional-cost"
+          }
         }
       ],
       "parseSuccess": true,
@@ -3790,12 +3793,8 @@
       "rulesText": "[Weaponmaster] (When you play me, you may [Equip] one of your Equipment to me for [rainbow] less, even if it's already attached.)",
       "abilities": [
         {
-          "effect": {
-            "description": "[Equip] one of your Equipment to me for :rb_rune_rainbow: less, even if it's already attached.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
+          "keyword": "Weaponmaster",
+          "type": "keyword"
         }
       ],
       "parseSuccess": true,
@@ -3825,10 +3824,9 @@
             "amount": 1,
             "type": "draw"
           },
-          "optional": false,
           "trigger": {
             "event": "play-card",
-            "on": "self"
+            "on": "controller"
           },
           "type": "triggered"
         }
@@ -3857,14 +3855,30 @@
       "abilities": [
         {
           "effect": {
-            "description": "buff up to four friendly units",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "type": "unit",
+              "controller": "friendly",
+              "quantity": {
+                "upTo": 4
+              }
+            },
+            "type": "buff"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
+          },
+          "type": "triggered"
+        },
+        {
+          "effect": {
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token"
+          },
+          "trigger": {
+            "event": "spend-buff"
           },
           "type": "triggered"
         }
@@ -3931,9 +3945,10 @@
         },
         {
           "effect": {
-            "description": "I cost :rb_energy_2: less for each of your [Mighty] units",
-            "effects": [],
-            "type": "sequence"
+            "reduction": 2,
+            "scope": "for each of your [Mighty] units",
+            "target": "self",
+            "type": "cost-reduction"
           },
           "type": "static"
         }
@@ -3997,17 +4012,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "I can't be chosen by enemy spells and abilities.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "I can't be chosen by enemy spells and abilities",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/08abcf17d3356325b0c1b83a78a87be855e5a71a-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -4030,15 +4036,15 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nDraw 1 for each of your [Mighty] units. (A unit is Mighty while it has 5+ [Might].)",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "amount": 1,
+            "amount": {
+              "count": {
+                "type": "unit"
+              }
+            },
             "type": "draw"
           },
-          "timing": "action",
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -4066,11 +4072,13 @@
       "abilities": [
         {
           "effect": {
-            "description": "Choose an equipped friendly unit. It deals damage equal to its Might to an enemy unit. Then detach an Equipment from it",
-            "effects": [],
-            "type": "sequence"
+            "equipment": {
+              "type": "equipment"
+            },
+            "type": "detach"
           },
-          "type": "static"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -4130,28 +4138,39 @@
           "type": "keyword"
         },
         {
-          "cost": {
-            "power": ["body"]
-          },
           "effect": {
-            "description": "rb_rune_body: as an additional cost to play me",
-            "effects": [],
-            "type": "sequence"
+            "additionalCost": ":rb_rune_body::rb_rune_body:",
+            "optional": true,
+            "type": "additional-cost-option"
           },
-          "type": "activated"
+          "type": "static"
         },
         {
           "effect": {
-            "description": "if you paid the additional cost, move an enemy gear to your base. You control it until I leave the board. If it's an Equipment, attach it to me",
-            "effects": [],
+            "effects": [
+              {
+                "target": {
+                  "type": "gear",
+                  "controller": "enemy"
+                },
+                "to": "base",
+                "type": "move"
+              },
+              {
+                "equipment": "self",
+                "to": "self",
+                "type": "attach"
+              }
+            ],
             "type": "sequence"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "condition": {
+            "type": "paid-additional-cost"
+          }
         }
       ],
       "parseSuccess": true,
@@ -4175,22 +4194,8 @@
       "tags": ["Fiora"],
       "isChampion": true,
       "rulesText": "When I attack or defend one on one, double my Might this combat.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "or defend one on one, double my Might this combat",
-            "effects": [],
-            "type": "sequence"
-          },
-          "optional": false,
-          "trigger": {
-            "event": "attack",
-            "on": "self"
-          },
-          "type": "triggered"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3fb80fed6fb916f47b7cebd5b31a970f1d0d562a-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -4217,16 +4222,12 @@
           "type": "keyword"
         },
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "You may play a unit from hand to a battlefield you control, reducing its cost by :rb_energy_3:",
-            "effects": [],
-            "type": "sequence"
+            "text": "You may play a unit from hand to a battlefield you control, reducing its cost by :rb_energy_3:.",
+            "type": "raw"
           },
-          "type": "static"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -4258,13 +4259,11 @@
         },
         {
           "effect": {
-            "description": "give another friendly unit my keywords and +Might equal to my Might this turn",
-            "effects": [],
-            "type": "sequence"
+            "text": "give another friendly unit my keywords and +:rb_might: equal to my Might this turn.",
+            "type": "raw"
           },
-          "optional": false,
           "trigger": {
-            "event": "move",
+            "event": "move-to-battlefield",
             "on": "self"
           },
           "type": "triggered"
@@ -4293,24 +4292,22 @@
       "rulesText": "[Weaponmaster] (When you play me, you may [Equip] one of your Equipment to me for [rainbow] less, even if it's already attached.)\nThe first time I conquer each turn, ready me.",
       "abilities": [
         {
-          "effect": {
-            "description": "[Equip] one of your Equipment to me for :rb_rune_rainbow: less, even if it's already attached.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
+          "keyword": "Weaponmaster",
+          "type": "keyword"
         },
         {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
+            "target": "self",
             "type": "ready"
           },
-          "optional": false,
           "trigger": {
-            "event": "move",
-            "on": "self"
+            "event": "conquer",
+            "on": "self",
+            "restrictions": [
+              {
+                "type": "first-time-each-turn"
+              }
+            ]
           },
           "type": "triggered"
         }
@@ -4338,23 +4335,22 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\n[Repeat] [3] (You may pay the additional cost to repeat this spell's effect.)\nChoose a friendly unit anywhere and an enemy unit at a battlefield. They deal damage equal to their Mights to each other.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
-          "cost": {
+          "effect": {
+            "attacker": {
+              "controller": "friendly",
+              "type": "unit"
+            },
+            "defender": {
+              "controller": "enemy",
+              "type": "unit"
+            },
+            "type": "fight"
+          },
+          "repeat": {
             "energy": 3
           },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
-          "effect": {
-            "description": "Choose a friendly unit anywhere and an enemy unit at a battlefield. They deal damage equal to their Mights to each other",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -4410,25 +4406,15 @@
       "rulesText": "[Weaponmaster] (When you play me, you may [Equip] one of your Equipment to me for [rainbow] less, even if it's already attached.)\nWhen I conquer a battlefield that was uncontrolled, deal damage equal to my Might to an enemy unit in a base.",
       "abilities": [
         {
-          "effect": {
-            "description": "[Equip] one of your Equipment to me for :rb_rune_rainbow: less, even if it's already attached.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
+          "keyword": "Weaponmaster",
+          "type": "keyword"
         },
         {
           "effect": {
-            "description": "a battlefield that was uncontrolled, deal damage equal to my Might to an enemy unit in a base",
-            "effects": [],
-            "type": "sequence"
+            "text": "When I conquer a battlefield that was uncontrolled, deal damage equal to my Might to an enemy unit in a base.",
+            "type": "raw"
           },
-          "optional": false,
-          "trigger": {
-            "event": "conquer",
-            "on": "self"
-          },
-          "type": "triggered"
+          "type": "static"
         }
       ],
       "parseSuccess": true,
@@ -4458,11 +4444,11 @@
             "exhaust": true
           },
           "effect": {
-            "description": "[Reaction] — Pay any amount of Energy to [Add] that much :rb_rune_rainbow:",
-            "effects": [],
-            "type": "sequence"
+            "text": "Pay any amount of Energy to [Add] that much :rb_rune_rainbow:.",
+            "type": "raw"
           },
-          "type": "activated"
+          "type": "activated",
+          "timing": "reaction"
         }
       ],
       "parseSuccess": true,
@@ -4519,12 +4505,20 @@
       "rulesText": "[Weaponmaster] (When you play me, you may [Equip] one of your Equipment to me for [rainbow] less, even if it's already attached.)\nWhen you attach an Equipment to me, you may pay [1] to draw 1.",
       "abilities": [
         {
+          "keyword": "Weaponmaster",
+          "type": "keyword"
+        },
+        {
           "effect": {
-            "description": "[Equip] one of your Equipment to me for :rb_rune_rainbow: less, even if it's already attached.)",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "type": "draw"
           },
-          "type": "static"
+          "trigger": {
+            "event": "attach-equipment",
+            "on": "self"
+          },
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -4556,16 +4550,18 @@
         },
         {
           "effect": {
-            "description": "after an attack, if you assigned 5 or more excess damage to enemy units, you may deal that much to an enemy unit",
-            "effects": [],
-            "type": "sequence"
+            "text": "you may deal that much to an enemy unit.",
+            "type": "raw"
           },
-          "optional": false,
           "trigger": {
             "event": "conquer",
             "on": "self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "condition": {
+            "amount": 5,
+            "type": "excess-damage-assigned"
+          }
         }
       ],
       "parseSuccess": true,
@@ -4589,22 +4585,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When you play a card from face down, play a Gold gear token exhausted.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "play a Gold gear token exhausted",
-            "effects": [],
-            "type": "sequence"
-          },
-          "optional": false,
-          "trigger": {
-            "event": "play-card",
-            "on": "self"
-          },
-          "type": "triggered"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f167c95cea17981f20b767ff81c180aab8a383e2-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null
@@ -4627,21 +4609,13 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\n[Repeat] [chaos] (You may pay the additional cost to repeat this spell's effect.)\nLook at the top 2 cards of your Main Deck. Draw one and recycle the other.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
-          "cost": {
-            "power": ["chaos"]
-          },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Look at the top 2 cards of your Main Deck. Draw one and recycle the other",
-            "effects": [],
-            "type": "sequence"
+            "amount": 2,
+            "from": "deck",
+            "type": "look"
+          },
+          "repeat": {
+            "power": ["chaos"]
           },
           "timing": "action",
           "type": "spell"
@@ -4674,22 +4648,19 @@
             "amount": 1,
             "type": "discard"
           },
-          "optional": false,
           "trigger": {
-            "event": "move",
+            "event": "move-to-battlefield",
             "on": "self"
           },
           "type": "triggered"
         },
         {
           "effect": {
-            "description": "When I win a combat, draw 1",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "type": "draw"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
+            "event": "win-combat",
             "on": "self"
           },
           "type": "triggered"
@@ -4749,16 +4720,19 @@
       "abilities": [
         {
           "effect": {
-            "description": "pay :rb_rune_chaos: to move a unit you control to the same battlefield",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "type": "unit",
+              "controller": "friendly"
+            },
+            "to": "base",
+            "type": "move"
           },
-          "optional": true,
           "trigger": {
-            "event": "move",
+            "event": "move-to-battlefield",
             "on": "self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -4782,24 +4756,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When you defend at a battlefield, you may move me there.",
-      "abilities": [
-        {
-          "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "to": "base",
-            "type": "move"
-          },
-          "optional": true,
-          "trigger": {
-            "event": "defend",
-            "on": "self"
-          },
-          "type": "triggered"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2f15c4508900636e1560fa0e8832aff6b3160d0f-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -4822,12 +4780,8 @@
       "rulesText": "[Weaponmaster] (When you play me, you may [Equip] one of your Equipment to me for [rainbow] less, even if it's already attached.)",
       "abilities": [
         {
-          "effect": {
-            "description": "[Equip] one of your Equipment to me for :rb_rune_rainbow: less, even if it's already attached.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
+          "keyword": "Weaponmaster",
+          "type": "keyword"
         }
       ],
       "parseSuccess": true,
@@ -4854,17 +4808,30 @@
       "abilities": [
         {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "kill"
+            "effects": [
+              {
+                "target": "self",
+                "type": "kill"
+              },
+              {
+                "target": {
+                  "type": "unit",
+                  "filter": {
+                    "state": "attacking"
+                  }
+                },
+                "to": "base",
+                "type": "move"
+              }
+            ],
+            "type": "sequence"
           },
-          "optional": true,
           "trigger": {
             "event": "defend",
             "on": "self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -4890,19 +4857,16 @@
       "rulesText": "[Repeat] [2] (You may pay the additional cost to repeat this spell's effect.)\nMove an enemy unit to a location where there's a unit with the same controller.",
       "abilities": [
         {
-          "cost": {
-            "energy": 2
-          },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "controller": "enemy"
             },
             "to": "base",
             "type": "move"
+          },
+          "repeat": {
+            "energy": 2
           },
           "timing": "action",
           "type": "spell"
@@ -4932,11 +4896,12 @@
       "abilities": [
         {
           "effect": {
-            "description": "play a Gold gear token exhausted",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token"
           },
-          "optional": false,
           "trigger": {
             "event": "move",
             "on": "self"
@@ -5009,14 +4974,27 @@
       "abilities": [
         {
           "effect": {
-            "description": "return another friendly unit and an enemy unit to their owners' hands",
-            "effects": [],
+            "effects": [
+              {
+                "target": {
+                  "type": "unit",
+                  "controller": "friendly",
+                  "excludeSelf": true
+                },
+                "type": "return-to-hand"
+              },
+              {
+                "target": {
+                  "type": "unit",
+                  "controller": "enemy"
+                },
+                "type": "return-to-hand"
+              }
+            ],
             "type": "sequence"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -5104,14 +5082,11 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nReturn a gear to its owner's hand.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Return a gear to its owner's hand",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "type": "gear"
+            },
+            "type": "return-to-hand"
           },
           "timing": "action",
           "type": "spell"
@@ -5140,24 +5115,17 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\n[Repeat] [2] (You may pay the additional cost to repeat this spell's effect.)\nCounter a spell unless its controller pays [2].",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
-          "cost": {
+          "effect": {
+            "type": "counter",
+            "unless": {
+              "energy": 2
+            }
+          },
+          "repeat": {
             "energy": 2
           },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
-          "cost": {},
-          "effect": {
-            "description": "rb_energy_2:",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "activated"
+          "timing": "reaction",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -5185,15 +5153,12 @@
         {
           "effect": {
             "amount": 2,
-            "duration": "turn",
-            "target": {
-              "type": "unit"
-            },
-            "type": "modify-might"
+            "target": "self",
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "optional": false,
           "trigger": {
-            "event": "move",
+            "event": "move-from-battlefield",
             "on": "self"
           },
           "type": "triggered"
@@ -5222,21 +5187,24 @@
       "rulesText": "Hidden (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me, you may return another unit at a battlefield with 3 [Might] or less to its owner's hand.",
       "abilities": [
         {
-          "keyword": "Hidden",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "return another unit at a battlefield with 3 Might or less to its owner's hand",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "type": "unit",
+              "location": "battlefield",
+              "excludeSelf": true,
+              "filter": {
+                "might": {
+                  "lte": 3
+                }
+              }
+            },
+            "type": "return-to-hand"
           },
-          "optional": true,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -5267,13 +5235,15 @@
         },
         {
           "effect": {
-            "description": "When you play this from face down, attach it to a unit you control",
-            "effects": [],
-            "type": "sequence"
+            "equipment": "self",
+            "to": {
+              "type": "unit",
+              "controller": "friendly"
+            },
+            "type": "attach"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
+            "event": "play-from-hidden",
             "on": "self"
           },
           "type": "triggered"
@@ -5310,16 +5280,17 @@
       "abilities": [
         {
           "effect": {
-            "description": "play a spell from your trash with Energy cost no more than :rb_energy_3:, ignoring its Energy cost. Recycle that spell after you play it",
-            "effects": [],
-            "type": "sequence"
+            "from": "trash",
+            "target": {
+              "type": "spell"
+            },
+            "type": "play"
           },
-          "optional": true,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -5343,18 +5314,8 @@
       "tags": ["Irelia"],
       "isChampion": true,
       "rulesText": "Your spells that choose me cost [1] or [rainbow] less.",
-      "abilities": [
-        {
-          "cost": {},
-          "effect": {
-            "description": "rb_energy_1: or :rb_rune_rainbow: less",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "activated"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/03b9d73a7ef02447d7f4b67381a76616249061cc-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -5375,21 +5336,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When you choose me with a spell, draw 1.",
-      "abilities": [
-        {
-          "effect": {
-            "amount": 1,
-            "type": "draw"
-          },
-          "optional": false,
-          "trigger": {
-            "event": "choose",
-            "on": "self"
-          },
-          "type": "triggered"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/92eac6bb020a068d9c1668b59ecaaeab05112b3f-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -5420,10 +5368,15 @@
           "type": "keyword"
         },
         {
+          "condition": {
+            "type": "spent-power"
+          },
           "effect": {
-            "description": "If you've spent at least :rb_rune_rainbow::rb_rune_rainbow: this turn, I have +2 Might and [Ganking]",
-            "effects": [],
-            "type": "sequence"
+            "keyword": "Ganking",
+            "target": {
+              "type": "self"
+            },
+            "type": "grant-keyword"
           },
           "type": "static"
         }
@@ -5449,22 +5402,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When you choose a friendly unit, you may pay [1] and exhaust this to draw 1.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "pay :rb_energy_1: and exhaust this to draw 1",
-            "effects": [],
-            "type": "sequence"
-          },
-          "optional": true,
-          "trigger": {
-            "event": "choose",
-            "on": "self"
-          },
-          "type": "triggered"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/d83d994e6dc7949eb783da16f4bbdb64342a8dfb-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -5491,8 +5430,12 @@
           "type": "keyword"
         },
         {
-          "keyword": "Action",
-          "type": "keyword"
+          "effect": {
+            "text": "Swap the Might of two units at the same battlefield this turn.",
+            "type": "raw"
+          },
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -5518,9 +5461,29 @@
       "rulesText": "While I'm in combat, friendly spells cost [1][rainbow] less to a minimum of [1], and enemy spells cost [1][rainbow] more.",
       "abilities": [
         {
+          "condition": {
+            "type": "in-combat"
+          },
           "effect": {
-            "description": "While I'm in combat, friendly spells cost :rb_energy_1::rb_rune_rainbow: less to a minimum of :rb_energy_1:, and enemy spells cost :rb_energy_1::rb_rune_rainbow: more",
-            "effects": [],
+            "effects": [
+              {
+                "by": ":rb_energy_1::rb_rune_rainbow:",
+                "minimum": ":rb_energy_1:",
+                "target": {
+                  "controller": "friendly",
+                  "type": "spell"
+                },
+                "type": "cost-reduction"
+              },
+              {
+                "by": ":rb_energy_1::rb_rune_rainbow:",
+                "target": {
+                  "controller": "enemy",
+                  "type": "spell"
+                },
+                "type": "cost-increase"
+              }
+            ],
             "type": "sequence"
           },
           "type": "static"
@@ -5550,9 +5513,11 @@
       "abilities": [
         {
           "effect": {
-            "description": "Return all units and gear to their owners' hands",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "quantity": "all",
+              "type": "permanent"
+            },
+            "type": "return-to-hand"
           },
           "timing": "action",
           "type": "spell"
@@ -5587,29 +5552,12 @@
         },
         {
           "effect": {
-            "description": "you score 1 point",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "player": "opponent",
+            "type": "score"
           },
-          "optional": false,
-          "trigger": {
-            "event": "move",
-            "on": "self"
-          },
-          "type": "triggered"
-        },
-        {
-          "effect": {
-            "description": "in combat, choose an opponent. They score 1 point",
-            "effects": [],
-            "type": "sequence"
-          },
-          "optional": false,
-          "trigger": {
-            "event": "die",
-            "on": "self"
-          },
-          "type": "triggered"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -5636,24 +5584,22 @@
       "abilities": [
         {
           "effect": {
-            "amount": 1,
-            "type": "discard"
-          },
-          "optional": false,
-          "trigger": {
-            "event": "play-self",
-            "on": "self"
-          },
-          "type": "triggered"
-        },
-        {
-          "cost": {},
-          "effect": {
-            "description": "rb_energy_1: or :rb_rune_rainbow: less",
-            "effects": [],
+            "effects": [
+              {
+                "amount": 1,
+                "type": "discard"
+              },
+              {
+                "amount": 2,
+                "type": "draw"
+              }
+            ],
             "type": "sequence"
           },
-          "type": "activated"
+          "trigger": {
+            "event": "play-self"
+          },
+          "type": "triggered"
         }
       ],
       "parseSuccess": true,
@@ -5710,26 +5656,20 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\n[Repeat] [2] (You may pay the additional cost to repeat this spell's effect.)\nGive two friendly units each +1 [Might] this turn.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
-          "cost": {
-            "energy": 2
-          },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "amount": 1,
-            "duration": "turn",
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "controller": "friendly",
+              "quantity": 2
             },
-            "type": "modify-might"
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "timing": "action",
+          "repeat": {
+            "energy": 2
+          },
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -5757,11 +5697,13 @@
       "abilities": [
         {
           "effect": {
-            "description": "play two Gold gear tokens exhausted",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token",
+            "amount": 2
           },
-          "optional": false,
           "trigger": {
             "event": "hold",
             "on": "self"
@@ -5827,9 +5769,12 @@
         },
         {
           "effect": {
-            "description": "Play a 2 Might Sand Soldier unit token. You may pay :rb_rune_order: to ready it",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "might": 2,
+              "name": "Sand Soldier",
+              "type": "unit"
+            },
+            "type": "create-token"
           },
           "timing": "action",
           "type": "spell"
@@ -5859,9 +5804,11 @@
       "abilities": [
         {
           "effect": {
-            "description": "Play a Gold gear token exhausted",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token"
           },
           "keyword": "Deathknell",
           "type": "keyword"
@@ -5919,14 +5866,16 @@
       "abilities": [
         {
           "effect": {
-            "description": "play a 2 Might Sand Soldier unit token here",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "might": 2,
+              "name": "Sand Soldier",
+              "type": "unit"
+            },
+            "type": "create-token",
+            "location": "here"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -5956,14 +5905,13 @@
         {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "controller": "enemy"
             },
             "type": "kill"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -5992,9 +5940,13 @@
       "abilities": [
         {
           "effect": {
-            "description": "While you have another unit here, I have +1 Might",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "target": {
+              "type": "unit",
+              "excludeSelf": true,
+              "location": "here"
+            },
+            "type": "modify-might"
           },
           "type": "static"
         }
@@ -6023,24 +5975,18 @@
       "abilities": [
         {
           "effect": {
-            "description": "You may kill a friendly gear as an additional cost to play me",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "type": "gear"
+            },
+            "type": "kill"
           },
-          "type": "static"
-        },
-        {
-          "effect": {
-            "description": "if you paid the additional cost, kill a gear",
-            "effects": [],
-            "type": "sequence"
-          },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "condition": {
+            "type": "paid-additional-cost"
+          }
         }
       ],
       "parseSuccess": true,
@@ -6096,17 +6042,15 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nKill a unit at a battlefield with 2 [Might] or less. If it was an enemy unit, play a Gold gear token exhausted. If it was a friendly unit, play two Gold gear tokens exhausted.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "location": "battlefield"
             },
             "type": "kill"
           },
-          "type": "static"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -6132,24 +6076,23 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nKill a friendly unit. If you do, give +[Might] equal to its Might to another friendly unit this turn.\nDraw 1.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "kill"
+            "effects": [
+              {
+                "target": {
+                  "type": "unit",
+                  "controller": "friendly"
+                },
+                "type": "kill"
+              },
+              {
+                "amount": 1,
+                "type": "draw"
+              }
+            ],
+            "type": "sequence"
           },
-          "type": "static"
-        },
-        {
-          "effect": {
-            "amount": 1,
-            "type": "draw"
-          },
-          "timing": "action",
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -6176,21 +6119,10 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nI cost [2] less to play from anywhere other than your hand.\nKill a unit at a battlefield.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
-          "effect": {
-            "description": "I cost :rb_energy_2: less to play from anywhere other than your hand",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        },
-        {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "location": "battlefield"
             },
             "type": "kill"
           },
@@ -6222,9 +6154,11 @@
       "abilities": [
         {
           "effect": {
-            "description": "You may play a unit with cost no more than :rb_energy_3: and no more than :rb_rune_rainbow: from your trash, ignoring its cost",
-            "effects": [],
-            "type": "sequence"
+            "from": "trash",
+            "target": {
+              "type": "unit"
+            },
+            "type": "play"
           },
           "keyword": "Deathknell",
           "type": "keyword"
@@ -6253,27 +6187,9 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nWhen a friendly unit is played this turn, buff it. (If it doesn't have a buff, it gets a +1 [Might] buff.)\nDraw 1.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "target": {
-              "type": "self"
-            },
-            "type": "buff"
-          },
-          "optional": false,
-          "trigger": {
-            "event": "play-self",
-            "on": "self"
-          },
-          "type": "triggered"
-        },
-        {
-          "effect": {
-            "amount": 1,
-            "type": "draw"
+            "text": "When a friendly unit is played this turn, buff it.Draw 1.",
+            "type": "raw"
           },
           "timing": "action",
           "type": "spell"
@@ -6302,15 +6218,15 @@
       "rulesText": "[Deathknell] — If I was [Mighty], draw 2. (When I die, get the effect. I'm Mighty while I have 5+ [Might].)",
       "abilities": [
         {
-          "condition": {
-            "type": "while-mighty"
-          },
           "effect": {
             "amount": 2,
             "type": "draw"
           },
           "keyword": "Deathknell",
-          "type": "keyword"
+          "type": "keyword",
+          "condition": {
+            "type": "while-mighty"
+          }
         }
       ],
       "parseSuccess": true,
@@ -6340,9 +6256,13 @@
             "exhaust": true
           },
           "effect": {
-            "description": "Play three 1 Might Recruit unit tokens",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "might": 1,
+              "name": "Recruit",
+              "type": "unit"
+            },
+            "type": "create-token",
+            "amount": 3
           },
           "type": "activated"
         }
@@ -6371,17 +6291,18 @@
       "abilities": [
         {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "exhaust"
+            "text": "exhaust me to draw 1, then put a card from your hand on the top or bottom of your Main Deck.",
+            "type": "raw"
           },
-          "optional": true,
           "trigger": {
             "event": "die",
-            "on": "self"
+            "on": {
+              "controller": "friendly",
+              "type": "unit"
+            }
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -6408,16 +6329,15 @@
       "abilities": [
         {
           "effect": {
-            "description": "reveal the top 2 cards of your Main Deck. You may banish one, then play it. If it is a unit, you may play it here. Recycle the rest",
-            "effects": [],
-            "type": "sequence"
+            "text": "reveal the top 2 cards of your Main Deck. You may banish one, then play it. If it is a unit, you may play it here. Recycle the rest.",
+            "type": "raw"
           },
-          "optional": true,
           "trigger": {
             "event": "attack",
             "on": "self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -6441,17 +6361,8 @@
       "tags": ["Renata Glasc"],
       "isChampion": true,
       "rulesText": "Your tokens enter ready.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "Your tokens enter ready",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/edacb8a82d840f2fe46233de9157319a1dc6361a-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -6502,25 +6413,8 @@
       "tags": ["Soraka"],
       "isChampion": true,
       "rulesText": "I must be assigned combat damage last.\nIf another unit you control here would die, if it has less Might than me, instead heal it, exhaust it, and recall it. (Send it to base. This isn't a move.)",
-      "abilities": [
-        {
-          "effect": {
-            "description": "I must be assigned combat damage last",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        },
-        {
-          "effect": {
-            "description": "If another unit you control here would die, if it has less Might than me, instead heal it, exhaust it, and recall it",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/91fd5050b8caded842ce22c1e473f237cd991efd-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -6544,14 +6438,15 @@
       "abilities": [
         {
           "effect": {
-            "description": "play four Gold gear tokens exhausted",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token",
+            "amount": 4
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -6581,16 +6476,18 @@
         {
           "effect": {
             "amount": 2,
-            "duration": "turn",
             "target": {
+              "controller": "friendly",
+              "filter": {
+                "tag": "other units"
+              },
               "type": "unit"
             },
-            "type": "modify-might"
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -6622,7 +6519,13 @@
           "type": "keyword"
         },
         {
+          "condition": {
+            "count": "two",
+            "location": "base",
+            "type": "unit-count"
+          },
           "effect": {
+            "target": "self",
             "type": "enter-ready"
           },
           "type": "static"
@@ -6661,17 +6564,19 @@
         {
           "effect": {
             "target": {
-              "type": "unit"
+              "quantity": "all",
+              "type": "unit",
+              "controller": "friendly"
             },
-            "to": "base",
+            "to": "here",
             "type": "move"
           },
-          "optional": true,
           "trigger": {
             "event": "attack",
             "on": "self"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -6740,13 +6645,17 @@
         },
         {
           "effect": {
-            "description": "play three 1 Might Recruit unit tokens here",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "might": 1,
+              "name": "Recruit",
+              "type": "unit"
+            },
+            "type": "create-token",
+            "amount": 3,
+            "location": "here"
           },
-          "optional": false,
           "trigger": {
-            "event": "move",
+            "event": "move-to-battlefield",
             "on": "self"
           },
           "type": "triggered"
@@ -6773,22 +6682,8 @@
       "tags": ["Fiora"],
       "isChampion": true,
       "rulesText": "When a unit you control becomes [Mighty], you may pay [order] to ready it. (A unit is Mighty while it has 5+ [Might].)",
-      "abilities": [
-        {
-          "effect": {
-            "description": "pay :rb_rune_order: to ready it",
-            "effects": [],
-            "type": "sequence"
-          },
-          "optional": true,
-          "trigger": {
-            "event": "play-self",
-            "on": "self"
-          },
-          "type": "triggered"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7339e76b7796242a15e97cfddbe04c32d5a05063-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -6816,7 +6711,9 @@
             "target": {
               "type": "unit",
               "controller": "friendly",
-              "tribe": "Mech"
+              "filter": {
+                "tag": "Mech"
+              }
             },
             "type": "grant-keyword"
           },
@@ -6846,27 +6743,23 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\n[Repeat] [1][rainbow] (You may pay the additional cost to repeat this spell's effect.)\nGive your Mechs +1 [Might] this turn.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
-          "cost": {
+          "effect": {
+            "amount": 1,
+            "target": {
+              "controller": "friendly",
+              "filter": {
+                "tag": "Mechs"
+              },
+              "type": "unit"
+            },
+            "type": "modify-might",
+            "duration": "turn"
+          },
+          "repeat": {
             "energy": 1,
             "power": ["rainbow"]
           },
-          "keyword": "Repeat",
-          "type": "keyword"
-        },
-        {
-          "effect": {
-            "amount": 1,
-            "duration": "turn",
-            "target": {
-              "type": "unit"
-            },
-            "type": "modify-might"
-          },
-          "timing": "action",
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -6927,18 +6820,16 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nMove a friendly unit. You may attach an Equipment with the same controller to it. This turn, that unit has &quot;When I conquer, you may move me to my base.&quot;",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "controller": "friendly"
             },
             "to": "base",
             "type": "move"
           },
-          "type": "static"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -6968,10 +6859,9 @@
             "amount": 1,
             "type": "draw"
           },
-          "optional": false,
           "trigger": {
             "event": "win-combat",
-            "on": "self"
+            "on": "controller"
           },
           "type": "triggered"
         }
@@ -6999,21 +6889,8 @@
       "rulesText": "[Quick-Draw] (This has [Reaction]. When you play it, attach it to a unit you control.)\n[Equip] [rainbow] ([rainbow]: Attach this to a unit you control.)\n[Temporary] (If this is unattached, kill it at the start of its controller's Beginning Phase, before scoring.)",
       "abilities": [
         {
-          "effect": {
-            "description": "[Quick-Draw] (This has",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        },
-        {
-          "effect": {
-            "description": ". When you play it, attach it to a unit you control.)",
-            "effects": [],
-            "type": "sequence"
-          },
-          "timing": "reaction",
-          "type": "spell"
+          "keyword": "Quick-Draw",
+          "type": "keyword"
         },
         {
           "cost": {
@@ -7051,17 +6928,29 @@
       "abilities": [
         {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "exhaust"
+            "effects": [
+              {
+                "target": {
+                  "type": "unit"
+                },
+                "type": "exhaust"
+              },
+              {
+                "ignoreCost": true,
+                "target": {
+                  "type": "pending-value"
+                },
+                "type": "play"
+              }
+            ],
+            "type": "sequence"
           },
-          "optional": true,
           "trigger": {
             "event": "conquer",
-            "on": "self"
+            "on": "controller"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -7085,17 +6974,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "Reveal the top 2 cards of your Main Deck. You may banish one, then play it, reducing its cost by [2]. Draw any you didn't banish.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "Reveal the top 2 cards of your Main Deck. You may banish one, then play it, reducing its cost by :rb_energy_2:. Draw any you didn't banish",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/ce606f096ae76485cd8dd3cc337629b510f0d1e7-744x1039.png",
       "illustrator": null,
       "errata": "Clarified 'banish one, then play it'"
@@ -7122,11 +7002,11 @@
             "exhaust": true
           },
           "effect": {
-            "description": "[Reaction] — [Add] :rb_rune_rainbow:. Use only to play gear or use gear abilities",
-            "effects": [],
-            "type": "sequence"
+            "type": "add-resource",
+            "power": ["rainbow"]
           },
-          "type": "activated"
+          "type": "activated",
+          "timing": "reaction"
         }
       ],
       "parseSuccess": true,
@@ -7232,14 +7112,15 @@
         },
         {
           "effect": {
-            "description": "When you play this, ready your units",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "controller": "friendly",
+              "quantity": "all",
+              "type": "unit"
+            },
+            "type": "ready"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -7272,9 +7153,16 @@
             "exhaust": true
           },
           "effect": {
-            "description": "Attach a detached Equipment you control to a unit you control",
-            "effects": [],
-            "type": "sequence"
+            "equipment": {
+              "type": "equipment",
+              "controller": "friendly",
+              "filter": "detached"
+            },
+            "to": {
+              "type": "unit",
+              "controller": "friendly"
+            },
+            "type": "attach"
           },
           "type": "activated"
         },
@@ -7283,9 +7171,16 @@
             "exhaust": true
           },
           "effect": {
-            "description": "Attach an attached Equipment you control to a unit you control",
-            "effects": [],
-            "type": "sequence"
+            "equipment": {
+              "type": "equipment",
+              "controller": "friendly",
+              "filter": "attached"
+            },
+            "to": {
+              "type": "unit",
+              "controller": "friendly"
+            },
+            "type": "attach"
           },
           "type": "activated"
         }
@@ -7313,16 +7208,12 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a unit. The next time that unit would be dealt damage this turn, prevent it. Draw 1.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Choose a unit. The next time that unit would be dealt damage this turn, prevent it. Draw 1",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "type": "draw"
           },
-          "type": "static"
+          "timing": "reaction",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -7349,30 +7240,15 @@
       "abilities": [
         {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "exhaust"
+            "target": "self",
+            "type": "ready"
           },
-          "optional": true,
-          "trigger": {
-            "event": "choose",
-            "on": "self"
-          },
-          "type": "triggered"
-        },
-        {
-          "effect": {
-            "description": "pay :rb_energy_1: to ready me",
-            "effects": [],
-            "type": "sequence"
-          },
-          "optional": true,
           "trigger": {
             "event": "conquer",
-            "on": "self"
+            "on": "controller"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -7398,19 +7274,28 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nGive a unit +2 [Might] this turn and another unit -2 [Might] this turn.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "amount": 2,
-            "duration": "turn",
-            "target": {
-              "type": "unit"
-            },
-            "type": "modify-might"
+            "effects": [
+              {
+                "amount": 2,
+                "target": {
+                  "type": "unit"
+                },
+                "type": "modify-might",
+                "duration": "turn"
+              },
+              {
+                "amount": -2,
+                "target": {
+                  "type": "unit"
+                },
+                "type": "modify-might",
+                "duration": "turn"
+              }
+            ],
+            "type": "sequence"
           },
-          "timing": "action",
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -7441,23 +7326,27 @@
             "keyword": "Weaponmaster",
             "target": {
               "type": "unit",
-              "controller": "friendly"
+              "controller": "friendly",
+              "filter": {
+                "tag": "Sand Soldier"
+              }
             },
             "type": "grant-keyword"
           },
           "type": "static"
         },
         {
-          "cost": {
-            "energy": 1,
-            "exhaust": true
-          },
           "effect": {
-            "description": "Play a 2 Might Sand Soldier unit token to your base. Use only if you've played an Equipment this turn",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "might": 2,
+              "name": "Sand Soldier",
+              "type": "unit"
+            },
+            "type": "create-token",
+            "location": "base"
           },
-          "type": "activated"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -7481,18 +7370,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "Play a 2 [Might] Sand Soldier unit token for each Equipment you control. Then do this: Ready up to two of them.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "Play a 2 Might Sand Soldier unit token for each Equipment you control. Then do this: Ready up to two of them",
-            "effects": [],
-            "type": "sequence"
-          },
-          "timing": "action",
-          "type": "spell"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/346f4698fea2878dde88470c1793047140c981e3-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": "Changed 'ready two' to 'ready up to two'"
@@ -7519,11 +7398,11 @@
             "exhaust": true
           },
           "effect": {
-            "description": "[Reaction] — Draw 1. Use only if you've chosen enemy units and/or gear twice this turn with spells or unit abilities",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "type": "draw"
           },
-          "type": "activated"
+          "type": "activated",
+          "timing": "reaction"
         }
       ],
       "parseSuccess": true,
@@ -7549,16 +7428,48 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nBanish a friendly unit, then its owner plays it, ignoring its cost. Deal 3 to an enemy unit at a battlefield. Banish this.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Banish a friendly unit, then its owner plays it, ignoring its cost. Deal 3 to an enemy unit at a battlefield. Banish this",
-            "effects": [],
+            "effects": [
+              {
+                "target": {
+                  "type": "unit",
+                  "controller": "friendly"
+                },
+                "type": "banish"
+              },
+              {
+                "effects": [
+                  {
+                    "ignoreCost": true,
+                    "target": {
+                      "type": "pending-value"
+                    },
+                    "type": "play"
+                  },
+                  {
+                    "amount": 3,
+                    "target": {
+                      "type": "unit",
+                      "controller": "enemy",
+                      "location": "battlefield"
+                    },
+                    "type": "damage"
+                  },
+                  {
+                    "target": "self",
+                    "type": "banish"
+                  }
+                ],
+                "type": "sequence"
+              }
+            ],
+            "pendingValue": {
+              "source": 0
+            },
             "type": "sequence"
           },
-          "type": "static"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -7585,17 +7496,27 @@
       "abilities": [
         {
           "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "exhaust"
+            "effects": [
+              {
+                "target": "self",
+                "type": "exhaust"
+              },
+              {
+                "token": {
+                  "name": "Gold",
+                  "type": "gear"
+                },
+                "type": "create-token"
+              }
+            ],
+            "type": "sequence"
           },
-          "optional": true,
           "trigger": {
             "event": "hold",
-            "on": "self"
+            "on": "controller-or-allies"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -7626,9 +7547,12 @@
         },
         {
           "effect": {
-            "description": "Take control of an enemy unit at a battlefield. Ready it",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "type": "unit",
+              "controller": "enemy",
+              "location": "battlefield"
+            },
+            "type": "take-control"
           },
           "timing": "action",
           "type": "spell"
@@ -7655,22 +7579,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When you recycle a rune, you may exhaust me to play a Gold gear token exhausted.\nWhen one or more enemy units die, ready me.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "When one or more enemy units die, ready me",
-            "effects": [],
-            "type": "sequence"
-          },
-          "optional": false,
-          "trigger": {
-            "event": "play-self",
-            "on": "self"
-          },
-          "type": "triggered"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/fd060882c32a8deac04aea4241c6ab7b97236a05-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null
@@ -7695,6 +7605,8 @@
         {
           "effect": {
             "target": {
+              "controller": "friendly",
+              "quantity": "all",
               "type": "unit"
             },
             "type": "ready"
@@ -7724,23 +7636,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When one of your units becomes [Mighty], you may exhaust me to channel 1 rune exhausted. (A unit is Mighty while it has 5+ [Might].)",
-      "abilities": [
-        {
-          "effect": {
-            "target": {
-              "type": "unit"
-            },
-            "type": "exhaust"
-          },
-          "optional": true,
-          "trigger": {
-            "event": "play-self",
-            "on": "self"
-          },
-          "type": "triggered"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/37064aa79c13316b5dd28f0a2b054821a43f6650-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -7763,16 +7660,11 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a friendly unit and a spell. Counter that spell and give that unit +[Might] equal to that spell's Energy cost this turn.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Choose a friendly unit and a spell. Counter that spell and give that unit +Might equal to that spell's Energy cost this turn",
-            "effects": [],
-            "type": "sequence"
+            "type": "counter"
           },
-          "type": "static"
+          "timing": "reaction",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -7799,16 +7691,16 @@
       "abilities": [
         {
           "effect": {
-            "description": "pay :rb_energy_1: and return a unit you control here to its owner's hand. If you do, play a 2 Might Sand Soldier unit token here",
-            "effects": [],
-            "type": "sequence"
+            "text": "pay :rb_energy_1: and return a unit you control here to its owner's hand. If you do, play a 2 :rb_might: Sand Soldier unit token here.",
+            "type": "raw"
           },
-          "optional": true,
           "trigger": {
             "event": "conquer",
-            "on": "self"
+            "on": "controller",
+            "location": "here"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -7832,17 +7724,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "While you control this battlefield, friendly legends have &quot;[Exhaust]: Attach an Equipment you control to a unit you control.&quot;",
-      "abilities": [
-        {
-          "effect": {
-            "description": "While you control this battlefield, friendly legends have &quot;:rb_exhaust:: Attach an Equipment you control to a unit you control.&quot;",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/6ad10353e7fc1337d8cc79086f8eaac1c75f5598-1039x744.png",
       "illustrator": null,
       "errata": null
@@ -7863,17 +7746,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "Players can't score here until their third turn.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "Players can't score here until their third turn",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/b0c98558fccd68c9ac93cd5b3412c31c68b5ace9-1039x744.png",
       "illustrator": null,
       "errata": null
@@ -7897,16 +7771,19 @@
       "abilities": [
         {
           "effect": {
-            "description": "pay :rb_energy_1: to ready your legend",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "controller": "friendly",
+              "type": "legend"
+            },
+            "type": "ready"
           },
-          "optional": true,
           "trigger": {
             "event": "conquer",
-            "on": "self"
+            "on": "controller",
+            "location": "here"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -7932,10 +7809,13 @@
       "rulesText": "While you control this battlefield, friendly [Repeat] costs cost [1] less.",
       "abilities": [
         {
+          "condition": {
+            "type": "control-battlefield"
+          },
           "effect": {
-            "description": "While you control this battlefield, friendly [Repeat] costs cost :rb_energy_1: less",
-            "effects": [],
-            "type": "sequence"
+            "reduction": 1,
+            "target": "friendly [Repeat]",
+            "type": "cost-reduction"
           },
           "type": "static"
         }
@@ -7964,14 +7844,13 @@
       "abilities": [
         {
           "effect": {
-            "description": "put the top 2 cards of your Main Deck into your trash",
-            "effects": [],
-            "type": "sequence"
+            "text": "put the top 2 cards of your Main Deck into your trash.",
+            "type": "raw"
           },
-          "optional": false,
           "trigger": {
             "event": "conquer",
-            "on": "self"
+            "on": "controller",
+            "location": "here"
           },
           "type": "triggered"
         }
@@ -8000,11 +7879,25 @@
       "abilities": [
         {
           "effect": {
-            "description": "While you control this battlefield, the first friendly non-token gear played each turn costs :rb_energy_1: less",
-            "effects": [],
-            "type": "sequence"
+            "reduction": ":rb_energy_1:",
+            "restrictions": [
+              {
+                "type": "first-of-turn"
+              },
+              {
+                "type": "non-token"
+              }
+            ],
+            "target": {
+              "controller": "friendly",
+              "type": "gear"
+            },
+            "type": "cost-reduction"
           },
-          "type": "static"
+          "type": "static",
+          "condition": {
+            "type": "while-control-battlefield"
+          }
         }
       ],
       "parseSuccess": true,
@@ -8031,16 +7924,16 @@
       "abilities": [
         {
           "effect": {
-            "description": "pay :rb_rune_rainbow::rb_rune_rainbow::rb_rune_rainbow::rb_rune_rainbow: to score 1 point",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "type": "score"
           },
-          "optional": true,
           "trigger": {
             "event": "hold",
-            "on": "self"
+            "on": "controller",
+            "location": "here"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -8067,14 +7960,13 @@
       "abilities": [
         {
           "effect": {
-            "description": "reveal the top card of your Main Deck. If it's a spell, put it in your hand. Otherwise, recycle it",
-            "effects": [],
-            "type": "sequence"
+            "text": "reveal the top card of your Main Deck. If it's a spell, put it in your hand. Otherwise, recycle it.",
+            "type": "raw"
           },
-          "optional": false,
           "trigger": {
             "event": "defend",
-            "on": "self"
+            "on": "controller",
+            "location": "here"
           },
           "type": "triggered"
         }
@@ -8100,17 +7992,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "Units can't be played here.",
-      "abilities": [
-        {
-          "effect": {
-            "description": "Units can't be played here",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a1bde66bccf2786e7c0b9d44fcdcdaa6b59f0328-1039x744.png",
       "illustrator": null,
       "errata": null
@@ -8134,13 +8017,19 @@
       "abilities": [
         {
           "effect": {
-            "amount": 1,
+            "amount": {
+              "count": {
+                "controller": "friendly-or-allies",
+                "excludeSelf": true,
+                "type": "battlefield"
+              }
+            },
             "type": "draw"
           },
-          "optional": false,
           "trigger": {
             "event": "conquer",
-            "on": "self"
+            "on": "controller",
+            "location": "here"
           },
           "type": "triggered"
         }
@@ -8166,22 +8055,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When you conquer here with one or more [Mighty] units, you may pay [1] to draw 1. (A unit is Mighty while it has 5+ [Might].)",
-      "abilities": [
-        {
-          "effect": {
-            "description": "pay :rb_energy_1: to draw 1",
-            "effects": [],
-            "type": "sequence"
-          },
-          "optional": true,
-          "trigger": {
-            "event": "conquer",
-            "on": "self"
-          },
-          "type": "triggered"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/06f6d17929d19000006cf281d013ecbe1543af0e-1039x744.png",
       "illustrator": null,
       "errata": null
@@ -8205,14 +8080,15 @@
       "abilities": [
         {
           "effect": {
-            "description": "each player channels 1 rune exhausted",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "exhausted": true,
+            "type": "channel",
+            "player": "each"
           },
-          "optional": false,
           "trigger": {
             "event": "hold",
-            "on": "self"
+            "on": "controller",
+            "location": "here"
           },
           "type": "triggered"
         }
@@ -8241,16 +8117,19 @@
       "abilities": [
         {
           "effect": {
-            "description": "pay :rb_energy_1: to play a Gold gear token exhausted",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "name": "Gold",
+              "type": "gear"
+            },
+            "type": "create-token"
           },
-          "optional": true,
           "trigger": {
             "event": "conquer",
-            "on": "self"
+            "on": "controller",
+            "location": "here"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,
@@ -8278,16 +8157,18 @@
         {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "gear",
+              "controller": "friendly"
             },
             "type": "ready"
           },
-          "optional": true,
           "trigger": {
             "event": "conquer",
-            "on": "self"
+            "on": "controller",
+            "location": "here"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "optional": true
         }
       ],
       "parseSuccess": true,

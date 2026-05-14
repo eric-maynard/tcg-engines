@@ -1,0 +1,9 @@
+{
+  "kind": "rules-demo",
+  "demoTopic": "legion",
+  "questionText": "does legion trigger if the card was countered?",
+  "question": "Does the [Legion] trigger fire if the card that would have satisfied Legion was countered?",
+  "assumptions": [
+    "RiftJudge p1561 — abstract question about Legion + countering. The bridge's rules-demo legion topic explains: a played card increments `cardsPlayedThisTurn[controller]` at PLAY TIME (rule 555); even if the spell body is later countered (FAQ on 555.3), the play already happened — so subsequent Legion triggers DO see it. Counterspell stops the BODY of the spell, not the fact of the play."
+  ]
+}

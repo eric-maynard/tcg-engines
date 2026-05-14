@@ -105,6 +105,16 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       continue;
     }
 
+    // Rule 460.2.c.9 — "If a unit cannot be dealt damage, then no amount of
+    // Damage can be considered lethal." A unit flagged `cannotTakeDamage`
+    // (e.g. Kayn, Unleashed after moving twice) is never killed by marked
+    // Damage; clear any stray damage so it doesn't re-check next pass.
+    if (meta?.cannotTakeDamage === true) {
+      ctx.cards.updateCardMeta(cardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+      ctx.counters.clearCounter(cardId, "damage");
+      continue;
+    }
+
     // Only cards that are units (have a base Might) can die from damage —
     // Skip everything else (gear, runes, spells in odd zones, …).
     const baseMight = registry.getMight(cardId as string);
@@ -195,6 +205,44 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
   }
 
+  // Step 1.5: Tokens cease to exist when they enter a Non-Board Zone (rule
+  // 183.1: "If a token is put into any Non-Board Zone besides the chain, it
+  // Ceases to exist immediately after moving to its new zone."). Death moves
+  // A unit to trash; cease-to-exist moves a token to `banishment` and clears
+  // Its meta so it can't be referenced/triggered against. (Banishment is the
+  // Engine's "the card no longer exists" sink — tokens in banishment are not
+  // Counted as cards by deckbuilder/draw paths and are gone for game-logic
+  // Purposes; the only zone we strictly couldn't use here is the chain. We
+  // Intentionally do NOT delete the registry entry — the def is shared across
+  // All instances of that token type, and other live instances still need it.)
+  const tokenCeaseZones: string[] = ["trash", "hand", "mainDeck"];
+  for (const zoneId of tokenCeaseZones) {
+    const cardsInZone = ctx.zones.getCardsInZone(zoneId as CoreZoneId);
+    for (const cardId of cardsInZone) {
+      const def = registry.get(cardId as string);
+      if (def?.isToken !== true) {
+        continue;
+      }
+      ctx.zones.moveCard({
+        cardId: cardId as CoreCardId,
+        targetZoneId: "banishment" as CoreZoneId,
+      });
+      // Clear any lingering meta so listeners / static-recalc don't see it.
+      ctx.cards.updateCardMeta(cardId, {
+        buffed: false,
+        combatRole: null,
+        damage: 0,
+        equippedWith: undefined,
+        exhausted: false,
+        grantedKeywords: undefined,
+        mightModifier: 0,
+        stunned: false,
+      } as Partial<RiftboundCardMeta>);
+      ctx.counters.clearCounter(cardId, "damage");
+      stateChanged = true;
+    }
+  }
+
   // Step 2: Remove stale combat roles / re-assign designations (rules 521 +
   // 323.2). Under CR 2026-03-30 the Attacker/Defender designations only exist
   // For the duration of the combat that established them: a unit keeps its
@@ -213,6 +261,11 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     const cardsInZone = ctx.zones.getCardsInZone(zoneId as CoreZoneId);
     const isBattlefield = (zoneId as string).startsWith("battlefield-");
     let combatOngoingHere = false;
+    // The Attacker at a battlefield with an ongoing combat is the player who
+    // Applied the Contested status (`bf.contestedBy`), or — if a Combat
+    // Showdown is active there — its `attackingPlayer`. Everyone else's units
+    // Are Defenders (rule 459.2.b / 323.2).
+    let attackerHere: string | undefined;
     if (isBattlefield) {
       const bfId = (zoneId as string).slice("battlefield-".length);
       const bf = ctx.draft.battlefields[bfId];
@@ -222,16 +275,91 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         activeCombatShowdown.isCombatShowdown === true &&
         activeCombatShowdown.battlefieldId === bfId;
       combatOngoingHere = isContested || showdownHere;
+      if (combatOngoingHere) {
+        attackerHere =
+          (showdownHere ? activeCombatShowdown?.attackingPlayer : undefined) ??
+          bf?.contestedBy ??
+          undefined;
+      }
     }
 
     for (const cardId of cardsInZone) {
       const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
-      if (meta?.combatRole && !combatOngoingHere) {
+      if (!combatOngoingHere) {
+        // No combat at this location: a unit here keeps no combat designation.
+        if (meta?.combatRole) {
+          ctx.cards.updateCardMeta(cardId, {
+            combatRole: null,
+          } as Partial<RiftboundCardMeta>);
+          stateChanged = true;
+        }
+        continue;
+      }
+      // Rule 323.2.a / 459.2.b.3.a / 459.2.b.4.a — a unit present at a
+      // Battlefield with an ongoing combat that lacks a designation gains the
+      // Same designation as its CONTROLLER now. Rule 323.2.b — a unit holding
+      // The *opposite* designation of its CONTROLLER loses it and gains the
+      // Correct one. (Rule 323.2 says "their Controller" — after a
+      // `take-control` per rule 187/323.6, the new controller is what
+      // Determines attacker vs defender, not the original owner.)
+      const cardsBag = ctx.cards as typeof ctx.cards & {
+        getCardController?: (id: CoreCardId) => string | undefined;
+      };
+      const controllerOfCard =
+        cardsBag.getCardController?.(cardId) ?? ctx.cards.getCardOwner(cardId) ?? "";
+      const desiredRole: "attacker" | "defender" | undefined =
+        attackerHere === undefined
+          ? undefined
+          : (controllerOfCard === attackerHere
+            ? "attacker"
+            : "defender");
+      if (desiredRole === undefined) {
+        if (meta?.combatRole) {
+          ctx.cards.updateCardMeta(cardId, {
+            combatRole: null,
+          } as Partial<RiftboundCardMeta>);
+          stateChanged = true;
+        }
+        continue;
+      }
+      if (meta?.combatRole !== desiredRole) {
         ctx.cards.updateCardMeta(cardId, {
-          combatRole: null,
+          combatRole: desiredRole,
         } as Partial<RiftboundCardMeta>);
         stateChanged = true;
       }
+    }
+  }
+
+  // Rule 323.10 / 456.2 — a Combat that was Staged (the battlefield carries
+  // The Contested status) but has *not yet opened* (no Combat Showdown active
+  // There) ceases being Staged once units of two opposing players are no
+  // Longer both present there. Clear the Contested status so a stale staged
+  // Combat is never resolved. (If a Combat Showdown is already active at the
+  // Bf, the combat has opened — leave it to combat resolution to settle.)
+  for (const [bfId, bf] of Object.entries(ctx.draft.battlefields)) {
+    if (!bf.contested) {
+      continue;
+    }
+    const showdownOpenHere =
+      activeCombatShowdown?.active === true &&
+      activeCombatShowdown.isCombatShowdown === true &&
+      activeCombatShowdown.battlefieldId === bfId;
+    if (showdownOpenHere) {
+      continue;
+    }
+    const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
+    const owners = new Set<string>();
+    for (const unitId of ctx.zones.getCardsInZone(bfZoneId)) {
+      const o = ctx.cards.getCardOwner(unitId) ?? "";
+      if (o) {
+        owners.add(o);
+      }
+    }
+    if (owners.size < 2) {
+      bf.contested = false;
+      bf.contestedBy = undefined;
+      stateChanged = true;
     }
   }
 
@@ -341,6 +469,109 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       }
       ctx.cards.updateCardMeta(cardId, {
         exiledByThis: undefined,
+      } as Partial<RiftboundCardMeta>);
+      stateChanged = true;
+    }
+  }
+
+  // Step 5c: Resolve pending `until-leaves` control reverts (rule 187 / 323).
+  // When a `take-control` with `duration:"until-leaves"` was applied and the
+  // Target has since left the board (now in trash/hand/banishment/mainDeck),
+  // Restore the original controller and drop the entry. End-of-turn reverts
+  // (`expires:"end-of-turn"`) are handled separately by the Ending phase hook.
+  const stateWithReverts = ctx.draft as typeof ctx.draft & {
+    pendingControlReverts?: {
+      cardId: string;
+      originalController: string;
+      expires: "end-of-turn" | "until-leaves";
+    }[];
+  };
+  if (stateWithReverts.pendingControlReverts && stateWithReverts.pendingControlReverts.length > 0) {
+    // Build the set of cards currently on the board (any of the board zones)
+    // So we can detect a card that has left the board (trash / hand / banishment
+    // / deck) and trigger its until-leaves revert.
+    const onBoardCardIds = new Set<string>();
+    for (const zoneId of allBoardZones) {
+      for (const cardId of ctx.zones.getCardsInZone(zoneId as CoreZoneId)) {
+        onBoardCardIds.add(cardId as string);
+      }
+    }
+    const remaining: NonNullable<typeof stateWithReverts.pendingControlReverts> = [];
+    for (const r of stateWithReverts.pendingControlReverts) {
+      if (r.expires !== "until-leaves") {
+        remaining.push(r);
+        continue;
+      }
+      if (!onBoardCardIds.has(r.cardId)) {
+        const cardsBag = ctx.cards as {
+          setCardController?: (id: CoreCardId, controllerId: string) => void;
+        };
+        cardsBag.setCardController?.(r.cardId as CoreCardId, r.originalController);
+        stateChanged = true;
+        // Drop from list.
+      } else {
+        remaining.push(r);
+      }
+    }
+    stateWithReverts.pendingControlReverts = remaining;
+  }
+
+  // Step 5d: Strip live-board temp meta from any unit/card sitting in a
+  // Non-board zone (rule 705 + 711). The damage-kill path on Step 1 zeroes
+  // A unit's temp meta as it moves to trash, but ANY other way a unit can
+  // Leave play (return-to-hand, banish, voluntary discard, non-damage
+  // Destroy) historically left dangling meta on the card while it sat in
+  // The non-board zone — violating rule 705 ("If a Unit leaves play,
+  // Remove all Buffs from it") and rule 711 ("Units in Non-Board Zones
+  // Are evaluated according to their inherent Might"). This generic wipe
+  // Applies the same meta clear regardless of HOW the card got there, so
+  // The rule holds end-to-end without per-move opt-in. championZone is
+  // Also covered for rule 705.1 — "Champions do not retain Buffs in the
+  // Champion Zone, even if they return there somehow."
+  const nonBoardLeavePlayZones: string[] = [
+    "trash",
+    "hand",
+    "banishment",
+    "mainDeck",
+    "runeDeck",
+    "championZone",
+  ];
+  for (const zoneId of nonBoardLeavePlayZones) {
+    const cardsInZone = ctx.zones.getCardsInZone(zoneId as CoreZoneId);
+    for (const cardId of cardsInZone) {
+      const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
+      if (!meta) {
+        continue;
+      }
+      // Cheap dirty-check: only update when at least one tracked field is
+      // Non-default, so we don't flood `updateCardMeta` with no-ops and we
+      // Don't accidentally drive `stateChanged = true` on a stable state.
+      // NOTE: `damage` is intentionally NOT wiped here — Deathknell triggers
+      // Can legitimately deal damage to a unit that just moved to trash this
+      // Pass, and observers (witnesses / event-bus tests) need to see that
+      // Side-effect. The damage value on a trashed unit is functionally
+      // Ignored by rule 711 (non-board zones use inherent might) anyway.
+      const hasLiveMeta =
+        meta.buffed === true ||
+        (meta.mightModifier ?? 0) !== 0 ||
+        (meta.combatMightModifier ?? 0) !== 0 ||
+        (meta.staticMightBonus ?? 0) !== 0 ||
+        meta.combatRole != null ||
+        meta.exhausted === true ||
+        meta.stunned === true ||
+        (meta.grantedKeywords?.length ?? 0) > 0;
+      if (!hasLiveMeta) {
+        continue;
+      }
+      ctx.cards.updateCardMeta(cardId, {
+        buffed: false,
+        combatMightModifier: 0,
+        combatRole: null,
+        exhausted: false,
+        grantedKeywords: undefined,
+        mightModifier: 0,
+        staticMightBonus: 0,
+        stunned: false,
       } as Partial<RiftboundCardMeta>);
       stateChanged = true;
     }

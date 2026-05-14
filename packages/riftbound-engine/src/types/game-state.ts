@@ -106,6 +106,55 @@ export interface RiftboundCardMeta {
   restrictions?: string[];
 
   /**
+   * Number of times *this individual unit* has moved (a discretionary
+   * battlefield-to-battlefield move, rule 616-619) during the current turn.
+   * Reset to 0 at the start of every turn (Awaken phase). Used by abilities
+   * gated on a unit's own move count this turn, e.g. Kayn, Unleashed
+   * ("If I have moved twice this turn, I don't take damage.").
+   */
+  movedThisTurnCount?: number;
+
+  /**
+   * Rule 460.2.c.9 — "If a unit cannot be dealt damage, then no amount of
+   * damage can be considered lethal." When set, this unit never accumulates
+   * marked damage (the `damage` game action is a no-op against it) and is
+   * exempt from mandatory lethal-damage assignment in combat. Set by abilities
+   * like Kayn, Unleashed ("If I have moved twice this turn, I don't take
+   * damage."), and cleared when the condition no longer holds.
+   */
+  cannotTakeDamage?: boolean;
+
+  /**
+   * Rule 460.2.c.2 — abilities/effects may influence the order in which
+   * combat damage is assigned. A *lower* number means this unit must be
+   * assigned (lethal) combat damage *before* units with a higher number.
+   * Tank ≈ −1 ("first"), Backline ≈ +1 ("last"); an explicit value here
+   * overrides those keyword-derived defaults during combat damage
+   * distribution.
+   */
+  damageAssignmentPriority?: number;
+
+  /**
+   * Rule 437 — Prevent. The Prevent Value currently tracked on this Unit:
+   * the next damage that would be dealt to it is reduced by this much (never
+   * below 0), then the tracked value is reduced by the prevented amount; once
+   * it reaches 0 the Prevent effect expires (rule 437.2/.3). `"all"` means an
+   * infinite Prevent Value (rule 437.1.b.1.b) — it stays `"all"` and no
+   * damage is ever considered lethal against the unit (rule 437.5.b).
+   * Multiple Prevent actions on a unit are summed here (numeric + `"all"`
+   * resolves to `"all"`).
+   */
+  preventDamage?: number | "all";
+
+  /**
+   * Rule 712 — Barrier consumed flag. Set to `true` after the Barrier keyword
+   * on this unit has absorbed its first combat hit. Checked during combat unit
+   * assembly so the unit no longer benefits from `hasBarrier` on subsequent hits.
+   * Cleared when the unit leaves play (dies or is recalled).
+   */
+  barrierConsumed?: boolean;
+
+  /**
    * Card instance ID whose abilities/text are copied onto this card while
    * this card is attached/bound to it. Used by Svellsongur to copy the unit's
    * text to the equipment for as long as it's attached.
@@ -374,6 +423,36 @@ export interface RiftboundGameState {
    * order they were granted.
    */
   pendingExtraTurns?: PlayerId[];
+
+  /**
+   * Pending controller-revert records — rule 187.4 / 323.6.
+   *
+   * Each entry tracks a card whose controller was changed by a `take-control`
+   * effect with a non-permanent duration. The end-of-turn Ending-phase hook
+   * processes `expires:"end-of-turn"` entries (Hostile Takeover's "Lose
+   * control of that unit and recall it at end of turn."), and the per-move
+   * post-cleanup pass processes `expires:"until-leaves"` entries when the
+   * card has left the board (trash/banishment/hand/deck).
+   *
+   * Restores `controller` to `originalController`; owner is never changed
+   * (rule 174 — owner is sticky for the duration of the game).
+   */
+  pendingControlReverts?: {
+    cardId: CardId;
+    originalController: PlayerId;
+    expires: "end-of-turn" | "until-leaves";
+  }[];
+
+  /**
+   * Recent-deaths log — units that died during the CURRENT dispatch cascade,
+   * captured by `dispatchUnitDied` (rule 813 Deathknell). Cleared when the
+   * cascade settles (no recursive dispatch follows). Used by the target
+   * resolver's `"just-died-trash"` mode so a Deathknell trigger that wants
+   * to "play me/it from your trash" can target the dying card itself even
+   * though it's already been moved to trash by the time the trigger fires.
+   * Each entry includes the owner so per-controller filters work correctly.
+   */
+  recentDeaths?: { cardId: CardId; owner: PlayerId }[];
 
   /** Turn state */
   readonly turn: TurnState;

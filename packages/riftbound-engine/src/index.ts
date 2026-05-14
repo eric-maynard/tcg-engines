@@ -31,6 +31,22 @@ export { DeckBuilder } from "./deckbuilder";
 // Card registry export
 export { getGlobalCardRegistry } from "./operations/card-lookup";
 
+// Event bus — unified typed-event dispatcher + per-card listener registry
+export {
+  dispatchEvent,
+  dispatchUnitDied,
+  buildListenerRegistry,
+} from "./events";
+export type {
+  GameEvent,
+  GameEventType,
+  GameEventRecord,
+  EventLog,
+  DispatchContext,
+  CardListener,
+  ListenerRegistry,
+} from "./events";
+
 // Game definition export
 export { riftboundDefinition } from "./game-definition/definition";
 

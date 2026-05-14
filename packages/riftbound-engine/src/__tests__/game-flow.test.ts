@@ -88,6 +88,25 @@ describe("Game Flow: Resource Management", () => {
   test("can add and spend resources", () => {
     const engine = setupGame();
 
+    // Drive the flow to "main" phase first. Post-batch-15 (core engine↔
+    // FlowManager back-sync fix), each `executeMove` runs
+    // `checkEndConditions` which auto-advances the flow's `endIf:true`
+    // Phases (awaken → beginning → channel → draw → main); previously those
+    // Hook mutations weren't read back into engine.currentState so the test
+    // Never noticed. Stepping to main first means later moves don't auto-
+    // Run draw.onEnd (which empties rune pools per rule 515.4.d).
+    while ((engine.getState() as { turn: { phase: string } }).turn.phase !== "main") {
+      const phaseBefore = (engine.getState() as { turn: { phase: string } }).turn.phase;
+      engine.executeMove("advancePhase", {
+        params: { playerId: P1 },
+        playerId: P1 as PlayerId,
+      });
+      const phaseAfter = (engine.getState() as { turn: { phase: string } }).turn.phase;
+      if (phaseAfter === phaseBefore) {
+        break;
+      }
+    }
+
     // Add resources
     engine.executeMove("addResources", {
       params: { energy: 5, playerId: P1, power: { fury: 2 } },

@@ -1,4 +1,4 @@
-import type { Ability } from "@tcg/riftbound-types";
+import type { Ability, Condition } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
@@ -9,7 +9,7 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  When I conquer or hold, score 1 point if your units have all of the
  *  following tags among them — Bird, Cat, Dog, and Poro."
  */
-const tagsCheck = {
+const tagsCheck: Condition = {
   conditions: [
     {
       count: 1,
@@ -49,7 +49,7 @@ const tagsCheck = {
     },
   ],
   type: "and",
-} as const;
+};
 
 const abilities: Ability[] = [
   {

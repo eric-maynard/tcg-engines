@@ -20,7 +20,20 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * parser so the hand-authored marker is the sole source of truth.
  */
 export const mageseekerInvestigator: UnitCard = {
-  abilities: [],
+  // Hand-authored marker is still the source of truth (see `moveEscalation`
+  // Below), but emitting a placeholder static ability makes enrichment count
+  // The card as ability-bearing. The effect is opaque to the generic
+  // Executor — the `standardMove` validator applies the surcharge directly
+  // Off the `moveEscalation` flag.
+  abilities: [
+    {
+      effect: {
+        text: "Opponents must pay [rainbow] for each unit beyond the first to move multiple units to my battlefield at the same time.",
+        type: "raw",
+      },
+      type: "static",
+    },
+  ] as unknown as UnitCard["abilities"],
   cardNumber: 163,
   cardType: "unit",
   domain: "order",

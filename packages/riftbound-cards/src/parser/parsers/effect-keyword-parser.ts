@@ -13,6 +13,7 @@ import type {
   EffectKeywordAbility,
   Location,
 } from "@tcg/riftbound-types";
+import { normalizeEnergyMinimum } from "./static-parser";
 
 // ============================================================================
 // Types
@@ -228,7 +229,10 @@ function parseSimpleEffect(text: string): Effect | undefined {
   if (recycleToMatch) {
     const thenEffect = parseSimpleEffect(recycleToMatch[1].trim() + ".");
     if (thenEffect) {
-      return { effects: [{ target: "self", type: "recycle" }, thenEffect], type: "sequence" };
+      return {
+        effects: [{ target: "self" as AnyTarget, type: "recycle" }, thenEffect],
+        type: "sequence",
+      } as Effect;
     }
   }
 
@@ -283,7 +287,7 @@ function parseSimpleEffect(text: string): Effect | undefined {
       token: typeof token;
       amount?: number;
       ready?: boolean;
-      location?: string;
+      location?: Location;
     } = {
       token,
       type: "create-token",
@@ -297,9 +301,9 @@ function parseSimpleEffect(text: string): Effect | undefined {
     if (unitTokenMatch[7]) {
       const lower = unitTokenMatch[7].toLowerCase();
       if (lower === "here") {
-        effect.location = "here";
+        effect.location = "here" as Location;
       } else if (lower === "to your base" || lower === "into your base") {
-        effect.location = "base";
+        effect.location = "base" as Location;
       }
     }
     return effect;
@@ -347,28 +351,31 @@ function parseSimpleEffect(text: string): Effect | undefined {
   const playMatch = cleanText.match(/^(?:You may )?play a (\w+).*?from your (trash|hand|deck)/i);
   if (playMatch) {
     return {
-      from: playMatch[2].toLowerCase(),
-      target: { type: playMatch[1].toLowerCase() },
+      from: playMatch[2].toLowerCase() as "trash" | "hand" | "deck",
+      target: { type: playMatch[1].toLowerCase() } as AnyTarget,
       type: "play",
-    };
+    } as Effect;
   }
 
   // Try cost-reduction: "I cost COST less."
   const costReductionMatch = cleanText.match(/^I cost\s+(.+?)\s+less\.?$/i);
   if (costReductionMatch) {
     return {
-      reduction: costReductionMatch[1],
+      reduction: normalizeEnergyMinimum(costReductionMatch[1]),
       target: "self",
       type: "cost-reduction",
-    };
+    } as unknown as Effect;
   }
 
   // Try recycle effect: "Recycle me/a unit."
   const recycleMatch = cleanText.match(/^Recycle (me|a unit|a card|a gear)\.?$/i);
   if (recycleMatch) {
     const targetStr = recycleMatch[1].toLowerCase();
-    const target = targetStr === "me" ? "self" : { type: targetStr.replace(/^a /, "") };
-    return { target, type: "recycle" };
+    const target: AnyTarget =
+      targetStr === "me"
+        ? ("self" as AnyTarget)
+        : ({ type: targetStr.replace(/^a /, "") } as AnyTarget);
+    return { target, type: "recycle" } as Effect;
   }
 
   // Try kill effect: "Kill it[ now][ instead]." / "Kill a unit." / "Kill me."

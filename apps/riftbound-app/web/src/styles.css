@@ -1,0 +1,5000 @@
+/*
+ * Riftbound web — base styles. Phase B batch 21 TT.
+ *
+ * Goals:
+ *   - Dark, readable board.
+ *   - Distinct visual containers for hand, battlefields, and move log.
+ *   - Properly styled modal for the BattlefieldPicker (centered, backdrop).
+ *   - Positioned popover styling for the CardOverlay (shadow + arrow).
+ *
+ * NOTE: This file is layout-only — does NOT modify component logic or
+ *       reach into engine/app lanes. Class names are the stable ones
+ *       used by OO's BattlefieldPicker, QQ's CardOverlay, and PP's
+ *       PlayPage/PlayerPanel/BattlefieldList/MoveLog.
+ */
+
+/* ---------- Reset / Base ---------- */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  /* RiftAtlas starfield feel — warm blue-purple top glow fading to near-black. */
+  background: radial-gradient(ellipse at 50% 0%, rgba(20, 25, 60, 1) 0%, rgba(5, 8, 20, 1) 70%);
+  background-attachment: fixed;
+  color: #e6e6ec;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  height: 100vh;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* ---------- PlayPage layout ---------- */
+
+.play-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+}
+
+/* ---------- RiftAtlas-style board grid (batch 23 XX) ----------
+ *
+ * .board is a 2-column grid: main column with stacked
+ *   opponent-seat / battlefield-band / self-seat
+ * and a sidebar column holding the move log / phase indicator.
+ *
+ * This mirrors RiftAtlas's table-top orientation: opponent at top,
+ * battlefields centered, "us" at the bottom (player hand sits at the
+ * very bottom of the page for thumb-friendly play).
+ */
+
+.board {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  grid-template-rows: 1fr;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: 100%;
+  overflow: hidden;
+  width: 100%;
+}
+
+@media (max-width: 1000px) {
+  .board {
+    grid-template-columns: 1fr;
+  }
+}
+
+.board-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+  min-width: 600px; /* Task 5: prevent squish on narrow viewports */
+  overflow: hidden;
+}
+
+.board-side {
+  background: rgba(10, 15, 35, 0.85);
+  border-left: 1px solid rgba(80, 110, 170, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 100vh;
+  min-width: 280px;
+  overflow-y: auto;
+  /* Extra top padding reserves space for the absolutely-positioned
+   * .controls section that overlays the top of this sidebar. */
+  padding: 130px 10px 12px;
+  width: 280px;
+  max-width: 280px;
+}
+
+.seat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.seat-opponent {
+  /* Opponent panel rendered at top. Flip vertically by sourcing the
+   * hand row first then stats. Kept simple — just bottom-align hand. */
+  border-bottom: 1px solid rgba(80, 110, 170, 0.2);
+  flex-shrink: 0;
+  /* iter-43a: raised from 180px to 200px so compact hand chips + base zone
+   * don't clip at the border. */
+  max-height: 200px;
+  overflow: visible;
+  padding-bottom: 2px;
+  padding-top: 6px;
+}
+
+.seat-self {
+  /* Player seat — hand at the very bottom (handled by panel CSS). */
+  border-top: 1px solid rgba(80, 110, 170, 0.2);
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 2px;
+}
+
+.seat-self .player {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  overflow: hidden;
+}
+
+/* iter-6 gap 3: active-player gold ring around the whole seat. Stronger
+ * than the small "(active)" text marker — makes whose-turn unmistakable
+ * at a glance. Both opponent and self can flash gold when it's their turn. */
+.seat-active {
+  /* iter-8 gap 2: animated gold sweep across the active seat. A wide
+   * three-stop horizontal gradient with most positions transparent and a
+   * narrow gold band in the middle slides slowly across the panel,
+   * mimicking a "spotlight" on whose turn it is. Combined with the gold
+   * border + box-shadow + gold avatar treatment, the active state reads
+   * as one cohesive thing. */
+  background:
+    linear-gradient(
+      90deg,
+      rgba(212, 175, 60, 0) 0%,
+      rgba(212, 175, 60, 0) 35%,
+      rgba(255, 217, 107, 0.18) 50%,
+      rgba(212, 175, 60, 0) 65%,
+      rgba(212, 175, 60, 0) 100%
+    );
+  background-size: 220% 100%;
+  background-position: 0% 50%;
+  border: 1px solid rgba(212, 175, 60, 0.55);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px rgba(255, 217, 107, 0.25),
+    0 0 22px rgba(255, 200, 60, 0.18);
+  padding: 6px 8px;
+  animation: seat-active-sweep 8s linear infinite;
+}
+
+@keyframes seat-active-sweep {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.battlefield-band {
+  /* The dramatic middle row. RiftAtlas-parity: deeper teal glow, taller
+   * min-height, stronger inner shadow giving the mat a "lit-from-within"
+   * feel that dominates the center of the board (batch 26 III).
+   * iter-6: tightened padding (was 20px 18px) to compress vertical space.
+   * iter-20: added display:flex + flex-direction:column so children can
+   * stretch to fill the full band height (no empty space below tiles). */
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(60, 120, 180, 0.32) 0%, rgba(20, 35, 60, 0.55) 70%),
+    linear-gradient(180deg, rgba(40, 70, 110, 0.45) 0%, rgba(20, 35, 60, 0.45) 100%);
+  border: 1px solid rgba(140, 200, 240, 0.4);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 300px;
+  /* Removed max-height cap so the BF band fills all available space between
+   * the opponent and self seats on tall viewports. */
+  overflow: hidden;
+  padding: 10px 12px;
+  box-shadow:
+    inset 0 0 56px rgba(80, 150, 210, 0.22),
+    0 4px 18px rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+
+.turn-header {
+  border-bottom: 1px solid #2a2c38;
+  flex-shrink: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.turn-header h1 {
+  font-size: 18px;
+  margin: 0 0 8px 0;
+}
+
+.phase-strip {
+  align-items: center;
+  background: rgba(5, 10, 28, 0.8);
+  border-bottom: 1px solid rgba(60, 90, 160, 0.3);
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 6px 8px;
+  scrollbar-width: none;
+}
+
+.phase {
+  align-items: center;
+  background: #1a2030;
+  border: 1px solid #2c3a55;
+  border-radius: 14px;
+  color: #7a8aa6;
+  display: inline-flex;
+  font-size: 11px;
+  gap: 6px;
+  padding: 5px 10px;
+  /* iter-19 Gap 3: inactive pills share the strip width equally
+   * (flex: 1 1 0); the active pill below overrides to flex: 1.2 so
+   * the eye snaps to it. Pure CSS — no per-phase branching; the
+   * data-driven `.phase-active` class supplies the growth. */
+  flex: 1 1 0;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.15s ease, flex-grow 0.2s ease;
+}
+
+.phase-num {
+  align-items: center;
+  background: rgba(40, 55, 85, 0.7);
+  border-radius: 50%;
+  color: inherit;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 700;
+  height: 18px;
+  justify-content: center;
+  width: 18px;
+}
+
+.phase-label {
+  letter-spacing: 0.2px;
+}
+
+.phase:not(.phase-active) {
+  color: rgba(180, 200, 230, 0.5);
+  opacity: 0.7;
+}
+
+.phase-active {
+  background: #3a6fd4;
+  border-color: #3a6fd4;
+  box-shadow: 0 0 12px rgba(58, 111, 212, 0.7);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 12px;
+  transform: none;
+  /* iter-18 Gap 3: pulse magnitude bumped — brighter gold tint at peak +
+   * wider shadow expansion so the active phase pill clearly stands out
+   * vs other pills, especially on a busy board screenshot. ~1.8s loop. */
+  animation: phase-active-pulse 1.8s ease-in-out infinite;
+  /* iter-19 Gap 3: the active phase visibly grows ~20% wider than its
+   * neighbors so the eye snaps to it before reading the labels. The
+   * smooth transition on `flex-grow` (declared on `.phase`) animates
+   * the resize when the turn advances. */
+  flex: 1.2 1 0;
+}
+
+.phase-active .phase-num {
+  background: #ffd96b;
+  color: #1a1d2a;
+  box-shadow: 0 0 6px rgba(255, 217, 107, 0.8);
+}
+
+/* iter-8 stretch (Path B): phase icon glyph inside each phase pill. Small
+ * monochrome-ish badge sits between the number and the label. */
+.phase-icon {
+  display: inline-flex;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* iter-8 stretch: chevron arrow between consecutive phases. Sits as the
+ * last child of each phase span (except the final one — markup skips it).
+ * The arrow doesn't get the phase pill's background — we want it to read
+ * as inter-phase flow, not part of any one phase. */
+.phase-arrow {
+  color: #4a5b7a;
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: 4px;
+  margin-right: -2px;
+  /* The chevron lives OUTSIDE the rounded pill visually — push it past
+   * the right padding of the phase pill so it sits in the gap. */
+  position: relative;
+  right: -6px;
+}
+
+@keyframes phase-active-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 217, 107, 0.55),
+      0 4px 18px rgba(255, 200, 80, 0.55);
+    border-color: #ffd96b;
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px rgba(255, 230, 140, 0.95),
+      0 6px 32px rgba(255, 210, 100, 1);
+    border-color: #ffe89a;
+  }
+}
+
+.winner {
+  background: #2a4d3a;
+  border: 1px solid #4e9c70;
+  border-radius: 6px;
+  color: #b6f1cc;
+  margin-top: 6px;
+  padding: 6px 10px;
+}
+
+/* ---------- Controls ----------
+ *
+ * The controls row (End Turn, Step Bot, Refresh) renders in-flow above the
+ * .board div. We pull it out of in-flow using absolute positioning so it
+ * overlays the top of the .board-side (sidebar) column. The .play-page
+ * is position:relative, so right:0;top:0 anchors to the page top-right.
+ * Width matches .board-side (280px). The .board-side has padding-top 12px
+ * so the controls sit above the TurnBanner as the first sidebar element.
+ */
+.controls {
+  position: absolute;
+  right: 0;
+  top: 36px; /* approx height of .turn-header (phase strip) */
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 10px;
+  background: transparent;
+  z-index: 5;
+  pointer-events: auto;
+  /* Remove in-flow height so it doesn't push board down */
+  height: auto;
+}
+
+.controls button {
+  background: #25283a;
+  border: 1px solid #3a3e58;
+  border-radius: 6px;
+  color: #e6e6ec;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 6px 14px;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.controls button:hover:not(:disabled) {
+  background: #303451;
+}
+
+/* RiftAtlas-parity prominent END TURN button (batch 26 III). */
+.controls button[data-testid="end-turn"]:not(:disabled) {
+  background:
+    linear-gradient(180deg, #3e6ba8 0%, #285287 100%);
+  border: 1px solid #74a8df;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 6px 18px;
+  text-transform: uppercase;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.1) inset,
+    0 4px 12px rgba(40, 80, 130, 0.4);
+}
+
+.controls button[data-testid="end-turn"]:not(:disabled):hover {
+  background:
+    linear-gradient(180deg, #4c7fc1 0%, #2f5fa0 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.15) inset,
+    0 6px 16px rgba(60, 100, 160, 0.55);
+}
+
+/* polish pass: prominent blue CTA for end-turn (testid selector) */
+[data-testid="end-turn"]:not(:disabled) {
+  background: linear-gradient(135deg, #2255bb 0%, #3a7ad4 50%, #2255bb 100%);
+  border: none;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(34, 85, 187, 0.4);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 8px 14px;
+  text-transform: uppercase;
+  transition: box-shadow 150ms, transform 150ms;
+}
+[data-testid="end-turn"]:not(:disabled):hover {
+  box-shadow: 0 4px 14px rgba(34, 85, 187, 0.6);
+  transform: translateY(-1px);
+}
+
+.controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* iter-7 gap 1: icon-only refresh button. Smaller circular target with a ↻
+ * glyph; tooltip via title. Keeps testid="refresh" so existing tests pass. */
+.controls button.refresh-icon-btn {
+  align-items: center;
+  background: #25283a;
+  border: 1px solid #3a3e58;
+  border-radius: 50%;
+  color: #b9c5d8;
+  display: inline-flex;
+  font-size: 16px;
+  font-weight: 700;
+  height: 30px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 30px;
+}
+
+.controls button.refresh-icon-btn:hover:not(:disabled) {
+  background: #303451;
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(140, 175, 230, 0.4);
+}
+
+.controls .error {
+  color: #ff7e8a;
+  margin-left: 8px;
+}
+
+/* ---------- Players area ---------- */
+
+/* Legacy class kept for back-compat; the new layout uses .seat (defined
+ * in the board section above). Both render the same player chrome. */
+.players {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.player {
+  background:
+    linear-gradient(180deg, rgba(28, 40, 64, 0.7) 0%, rgba(18, 26, 42, 0.7) 100%);
+  border: 1px solid rgba(120, 160, 200, 0.25);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: 100%;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.player-active {
+  border-color: #6a72c4;
+  box-shadow: 0 0 0 1px rgba(106, 114, 196, 0.3);
+}
+
+/* Task 1: subtle ambient glow on local player's hand when it's their turn */
+.seat-self .player.player-active .hand {
+  box-shadow: inset 0 8px 20px rgba(70, 120, 230, 0.08);
+}
+
+.player h3 {
+  font-size: 14px;
+  margin: 0 0 6px 0;
+}
+
+.player-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  list-style: none;
+  margin: 0 0 8px 0;
+  padding: 0;
+  font-size: 12px;
+  color: #999ab0;
+}
+
+.player-stats li strong {
+  color: #e6e6ec;
+}
+
+/* ---------- Hand ---------- */
+
+.hand {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: center;
+  align-items: flex-end;
+  min-height: 32px;
+  padding: 8px 4px 4px;
+  /* Light "hand mat" under the cards so they read as a group (batch 26 III).
+   * iter-6 gap 1: hand is centered + fanned with slight overlap (negative
+   * margin) so cards fan like a real hand. The fan effect is purely CSS —
+   * each chip after the first overlaps the prior by 16px so a 6-card hand
+   * is more compact than 6 × 96px + gaps. */
+  background:
+    linear-gradient(180deg, rgba(20, 30, 50, 0) 0%, rgba(40, 60, 100, 0.18) 100%);
+  border-radius: 8px;
+}
+
+.seat-self .hand {
+  align-items: flex-end;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  min-height: 160px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 12px 12px;
+  scrollbar-width: none;
+}
+
+.hand .hand-chip + .hand-chip,
+.hand .card-overlay-wrapper + .card-overlay-wrapper {
+  /* Fan overlap — each card after the first overlaps the previous. The
+   * hover-lift on .hand-chip (translateY + box-shadow) already brings the
+   * focused card visually forward, but we also bump z-index on hover so
+   * the lift is unambiguous over neighbouring cards.
+   * iter-E: tighter -16px overlap for larger 96px chips. */
+  margin-left: -16px;
+}
+
+.hand .card-overlay-wrapper {
+  /* Each wrapper is the positioning context for its hand-chip; ensure
+   * stacking so hover-lift pops above neighbours. */
+  position: relative;
+  z-index: 0;
+  transition: z-index 0s 0.12s;
+}
+
+.hand .card-overlay-wrapper:hover,
+.hand .hand-chip:hover {
+  z-index: 10;
+  transition: z-index 0s 0s;
+}
+
+.hand .hand-chip:hover {
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.7),
+    0 0 0 2px rgba(200, 170, 60, 0.6);
+  transform: translateY(-12px) scale(1.04);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  z-index: 20;
+}
+
+.hand-empty {
+  color: #6a6c80;
+  font-style: italic;
+  margin: 0;
+}
+
+.hand-chip {
+  /* RiftAtlas-parity card-like tile (batch 26 III): taller vertical
+   * orientation, name banner at top, energy cost top-left badge, might
+   * bottom-right. Mimics the real card silhouette without needing an
+   * actual card-art image. */
+  background:
+    linear-gradient(180deg, #3a4878 0%, #232845 60%, #1a1f36 100%);
+  border: 1px solid #5e6ca0;
+  border-radius: 8px;
+  color: #e6e6ec;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 22px 10px 8px 10px;
+  transition: transform 150ms ease, box-shadow 150ms ease, background 0.12s ease;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 96px;
+  width: 96px;
+  flex-shrink: 0;
+  min-height: 136px;
+  height: 136px;
+  border-radius: 10px;
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.hand-chip:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4a5a92 0%, #2c3358 60%, #1f2542 100%);
+  transform: translateY(-6px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 8px 18px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(140, 175, 230, 0.4);
+}
+
+.hand-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* iter-8 gap 3: playable-card pulse hint. Cards the player can play right
+ * now (canPlay=true AND engine reported a non-empty legalLocations array)
+ * get a subtle gold glow that breathes ~2.4s. Stops on hover so the
+ * existing hover-lift dominates while the player aims at a card.
+ *
+ * iter-20: changed from green to gold so playable cards draw the eye more
+ * strongly against the dark background. Border tinted gold for extra cue.
+ *
+ * Pure CSS — no per-card if/else; the visual is gated purely off the
+ * `.hand-chip-playable` class which PlayerPanel sets from a single
+ * legalLocations.length>0 check. */
+.hand-chip-playable {
+  animation: hand-chip-playable-pulse 2.4s ease-in-out infinite;
+  border-color: rgba(200, 160, 40, 0.7);
+}
+
+.hand-chip-playable:hover {
+  animation: none;
+}
+
+@keyframes hand-chip-playable-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 2px 6px rgba(0, 0, 0, 0.5),
+      0 0 0 0 rgba(200, 160, 40, 0);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 2px 8px rgba(0, 0, 0, 0.55),
+      0 0 8px 2px rgba(200, 160, 40, 0.5);
+  }
+}
+
+.hand-chip-cost {
+  background: #d4af3c; /* RiftAtlas gold accent */
+  color: #1a1d2a;
+  font-weight: 700;
+  font-size: 11px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 220, 120, 0.4);
+}
+
+.hand-chip-name {
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  color: #f0eef4;
+  letter-spacing: 0.2px;
+  /* allow short multi-word names to wrap inside the card */
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hand-chip-might {
+  background: #c25060;
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  margin-left: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 150, 160, 0.4);
+}
+
+/* ---------- Battlefields (RiftAtlas-style row in middle) ---------- */
+
+.battlefield-row {
+  /* Phase B batch 27 iter-4: compact BF tiles laid out side-by-side
+   * (centered) rather than stretching to fill the band like text panels.
+   * Falls back to a wrapped row when there are too many BFs to fit.
+   * iter-20: flex:1 1 auto + align-items:stretch so tiles grow to fill
+   * the full band height with no empty space below. */
+  align-items: stretch;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 24px;
+  margin: 0;
+  min-height: 0;
+}
+
+.battlefield-list {
+  align-items: stretch;
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  height: 100%;
+  justify-content: center;
+  padding: 10px 20px;
+  width: 100%;
+}
+
+.bf-row-empty {
+  color: #6a6c80;
+  font-style: italic;
+  margin: 0;
+  text-align: center;
+}
+
+.bf,
+.bf-tile {
+  /* iter-17 Gap 1: landscape BF tile (~360×140) — RiftAtlas-style horizontal
+   * location pill. Card art clipped to the central column; unit slots are
+   * narrow side rails flanking the card. The tile is much shorter
+   * than the previous iter-4 square-ish geometry so the BF row reads as a
+   * map of locations, not a stack of mini-cards. */
+  align-self: stretch;
+  background:
+    linear-gradient(180deg, rgba(36, 56, 92, 0.55) 0%, rgba(20, 30, 50, 0.55) 100%);
+  border: 1px solid rgba(140, 180, 220, 0.35);
+  border-radius: 12px;
+  flex: 1 1 0;
+  max-width: 480px;
+  min-height: 200px;
+  min-width: 260px;
+  overflow: hidden;
+  padding: 12px 10px;
+  display: grid;
+  grid-template-columns: 76px 1fr 76px;
+  align-items: stretch;
+  gap: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  position: relative;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease,
+    filter 0.2s ease;
+}
+
+/* iter-E: dark bottom fade overlay to mask the card text/noise artifact
+ * that appears when scaled bf-image-full shows the card's bottom zone.
+ * z-index:1 sits above the bg image (z:0) but below the interactive
+ * grid children (z:2+) via the bf-side / bf-tile-center rules. */
+.bf::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28%;
+  background: linear-gradient(to bottom, transparent 0%, rgba(10, 14, 28, 0.85) 100%);
+  border-radius: 0 0 12px 12px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Side slots — empty placeholder + populated unit list.
+ *
+ * iter-10 gap 1: each side carries a `state` (controlled / contested /
+ * idle) projected as `data-side-state` + a `bf-side-{state}` class so a
+ * single set of CSS rules can color the slot per side without per-card
+ * branching. Local player side gets a blue accent when controlled, opp
+ * side gets red; contested forces both to red. */
+.bf-side {
+  align-items: center;
+  background: rgba(8, 12, 30, 0.3);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 4px;
+  justify-content: center;
+  min-width: 48px;
+  padding: 4px 2px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.bf-side-theirs {
+  align-items: flex-end;
+}
+
+/* Idle: kept neutral so empty boards don't shout. */
+.bf-side-idle {
+  border-color: transparent;
+}
+
+/* Controlled: gold border on the side whose player holds the BF. The
+ * inner shadow keeps the slot readable when art shows through. */
+.bf-side-controlled {
+  background: rgba(212, 175, 60, 0.07);
+  border-color: rgba(255, 217, 107, 0.65);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 217, 107, 0.25),
+    0 0 8px rgba(255, 200, 60, 0.25);
+}
+
+/* Contested: red on BOTH sides so the lane reads as a fight. Pairs
+ * with the parent `.bf-contested` red tile glow. */
+.bf-side-contested {
+  background: rgba(194, 80, 96, 0.1);
+  border-color: rgba(255, 130, 140, 0.7);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 130, 140, 0.3),
+    0 0 8px rgba(194, 80, 96, 0.3);
+}
+
+/* iter-10 gap 1.b: when ours side is local (blue) vs theirs (red) and
+ * NOT contested, distinguish them so the player reads the side at a
+ * glance. Overrides .bf-side-controlled only when the side is "ours" so
+ * the local seat is blue, opponent stays gold. */
+.bf-side-ours.bf-side-controlled {
+  background: rgba(60, 110, 180, 0.1);
+  border-color: rgba(140, 200, 255, 0.7);
+  box-shadow:
+    inset 0 0 0 1px rgba(140, 200, 255, 0.3),
+    0 0 8px rgba(60, 110, 180, 0.3);
+}
+
+.bf-slot-empty {
+  align-items: center;
+  background: transparent;
+  border: 1px dashed rgba(90, 130, 210, 0.12);
+  border-radius: 4px;
+  color: rgba(130, 165, 220, 0.15);
+  display: flex;
+  flex-direction: column;
+  font-size: 8px;
+  gap: 2px;
+  height: 36px;
+  justify-content: center;
+  letter-spacing: 0.4px;
+  text-align: center;
+  text-transform: uppercase;
+  width: 48px;
+}
+.bf-slot-empty::before {
+  display: none;
+}
+
+.bf-slot-empty-label {
+  opacity: 0.5;
+}
+
+.bf-tile-center {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 4px;
+  min-width: 0;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Active combat tile — brighter glow; inactive tiles — dimmed. */
+.bf-active {
+  border-color: #ffd96b;
+  box-shadow:
+    0 0 0 2px rgba(255, 217, 107, 0.45),
+    0 6px 22px rgba(255, 180, 60, 0.35);
+}
+
+.bf-inactive {
+  filter: saturate(0.55) brightness(0.7);
+  opacity: 0.75;
+}
+
+.bf-controlled {
+  border-color: #d4af3c; /* gold for controlled */
+  box-shadow: 0 0 0 1px rgba(212, 175, 60, 0.25), 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes contested-pulse {
+  0%, 100% { box-shadow: 0 0 16px rgba(220, 175, 40, 0.3), inset 0 0 0 2px rgba(220, 175, 40, 0.6); }
+  50%       { box-shadow: 0 0 28px rgba(220, 175, 40, 0.5), inset 0 0 0 2px rgba(220, 175, 40, 0.9); }
+}
+
+.bf-contested,
+[data-contested="true"] .bf-tile,
+.bf-tile[data-contested="true"] {
+  border-color: rgba(230, 185, 60, 0.8);
+  box-shadow:
+    inset 0 0 0 2px rgba(230, 185, 60, 0.8),
+    0 0 20px rgba(230, 185, 60, 0.4);
+}
+
+.bf[data-contested="true"] {
+  animation: contested-pulse 2s ease-in-out infinite;
+}
+
+.bf-header {
+  /* Task 4: BF name pinned to top-center of tile, horizontally centered,
+   * with dark backing for contrast. Position absolute so it floats over art.
+   * z-index: 3 keeps it above bf-inner (z-index: 1) so unit content never
+   * obscures the title. */
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 6px 8px;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 3;
+}
+
+.bf-title {
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 3px;
+  color: #ddeeff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  text-shadow: none; /* background handles contrast now */
+}
+
+/* iter-26: bf-inner vertically centers unit sides + center content inside
+ * the tile while leaving room for the absolutely-positioned bf-header. */
+.bf-inner {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  justify-content: space-between;
+  padding: 28px 8px 10px; /* top padding leaves room for absolute bf-header */
+  position: relative;
+  z-index: 1;
+}
+
+/* iter-7 gap 4: BF status as a glyph icon (lock/star/swords) instead of a
+ * yellow UNCONTROLLED text pill. Color-coded per state, less text noise. */
+.bf-status {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(140, 180, 220, 0.3);
+  border-radius: 50%;
+  color: #b9c5d8;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  width: 18px;
+}
+
+.bf-status-glyph {
+  display: inline-block;
+  line-height: 1;
+}
+
+.bf-status-uncontrolled {
+  background: rgba(60, 75, 100, 0.55);
+  border-color: rgba(140, 160, 190, 0.4);
+  color: #9ab0c6;
+}
+
+.bf-status-controlled {
+  background: rgba(212, 175, 60, 0.25);
+  border-color: rgba(255, 217, 107, 0.6);
+  color: #ffd96b;
+}
+
+.bf-status-contested {
+  background: rgba(194, 80, 96, 0.3);
+  border-color: rgba(255, 130, 140, 0.55);
+  color: #ff9aa4;
+}
+
+/* iter-18 Gap 2: inline might chip inside the BF header pill. Shows the
+ * total friendly might on the BF, or "ours vs theirs" when contested.
+ * Tiny — does not steal space from the BF title. */
+.bf-might-chip {
+  align-items: center;
+  background: rgba(212, 175, 60, 0.18);
+  border: 1px solid rgba(255, 217, 107, 0.55);
+  border-radius: 999px;
+  color: #ffd96b;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 2px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.bf-might-chip-contested {
+  background: rgba(194, 80, 96, 0.28);
+  border-color: rgba(255, 130, 140, 0.7);
+  color: #ffb1b8;
+}
+
+.bf-might-chip-glyph {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.bf-might-chip-value {
+  letter-spacing: 0.3px;
+}
+
+/* iter-7 gap 2: BF rules collapsed by default. Checkbox-driven [i] toggle
+ * in the header; pre stays in DOM (visible only when checkbox checked) so
+ * CardArt tests can still query bf-rules-text-{id}. */
+.bf-rules-toggle {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(140, 180, 220, 0.3);
+  border-radius: 50%;
+  color: #b9c5d8;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 700;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  width: 18px;
+}
+
+.bf-rules-toggle:hover {
+  background: rgba(60, 90, 130, 0.55);
+  border-color: rgba(140, 200, 240, 0.6);
+  color: #fff;
+}
+
+.bf-rules-toggle-input {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 0;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 0;
+}
+
+.bf-rules-toggle-glyph {
+  pointer-events: none;
+}
+
+/* Hide rules-text pre by default; reveal when sibling checkbox is checked. */
+.bf-tile-center > .bf-rules-text {
+  display: none;
+}
+
+.bf-tile-center
+  > .bf-header
+  .bf-rules-toggle-input:checked
+  ~ .bf-rules-toggle-glyph {
+  background: #4a78c0;
+  border-radius: 50%;
+  color: #fff;
+}
+
+/* Use :has() to reveal the pre when the toggle is checked. Falls back
+ * gracefully (always-hidden) in browsers without :has() support. */
+.bf-tile-center:has(.bf-rules-toggle-input:checked) > .bf-rules-text {
+  display: block;
+}
+
+.bf-empty {
+  color: #6a7c92;
+  font-style: italic;
+  font-size: 12px;
+  margin: 0;
+  text-align: center;
+}
+
+.bf-units {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bf-unit {
+  background: #1b243a;
+  border: 1px solid #344966;
+  border-radius: 4px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bf-unit-name {
+  color: #e6e6ec;
+  font-weight: 500;
+  flex: 1;
+}
+
+.bf-unit-might {
+  background: #c25060;
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+}
+
+.bf-unit-owner {
+  color: #6a7c92;
+}
+
+/* Visually-hidden but accessibility/test-tree visible. */
+.sr-only {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* ---------- iter-10 gap 2: BF mini-unit stack ----------
+ *
+ * When a slot has units, we render them as small overlapping chips
+ * (32×40) stacked vertically so 3+ units don't blow out the BF tile.
+ * Inline `margin-top` (per-chip from `data-stack-index`) creates the
+ * overlap; CSS just paints the chip silhouette.
+ */
+.bf-mini-stack {
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bf-mini-stack > li + li {
+  margin-left: -20px;
+}
+.bf-mini-stack > li:hover {
+  z-index: 10;
+}
+
+.bf-mini-chip {
+  background: linear-gradient(160deg, rgba(20,30,60,0.95) 0%, rgba(10,15,40,0.98) 100%);
+  backdrop-filter: blur(2px);
+  border: 1.5px solid rgba(100,140,200,0.6);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.15),
+    0 4px 12px rgba(0,0,0,0.8),
+    0 1px 3px rgba(0,0,0,0.6);
+  cursor: default;
+  height: 84px;
+  overflow: hidden;
+  position: relative;
+  z-index: 5;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  width: 60px;
+}
+.bf-mini-chip[data-has-image="true"] {
+  background: transparent;
+  border: 1.5px solid rgba(100,140,200,0.5);
+}
+.bf-mini-chip:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 4px 14px rgba(0, 0, 0, 0.7),
+    0 0 8px rgba(80, 140, 230, 0.35);
+  transform: translateY(-2px);
+}
+
+.bf-mini-chip[data-role="attacker"] {
+  border-color: rgba(220, 80, 80, 0.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 8px rgba(220, 80, 80, 0.4);
+}
+
+.bf-mini-chip[data-role="defender"] {
+  border-color: rgba(60, 130, 220, 0.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 8px rgba(60, 130, 220, 0.4);
+}
+
+.bf-mini-chip-image {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.bf-mini-chip-fallback {
+  align-items: center;
+  color: #cfe0f5;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  height: 100%;
+  justify-content: center;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  width: 100%;
+}
+
+.bf-mini-chip-might {
+  background: rgba(180, 40, 50, 0.9);
+  border-radius: 3px;
+  bottom: 3px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  min-width: 14px;
+  padding: 2px 4px;
+  position: absolute;
+  right: 3px;
+  text-align: center;
+}
+
+.bf-mini-chip-name-banner {
+  background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+  bottom: 0;
+  color: #e0eeff;
+  font-size: 8px;
+  font-weight: 600;
+  left: 0;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
+  opacity: 0;
+  overflow: hidden;
+  padding: 4px 3px 2px;
+  position: absolute;
+  right: 0;
+  text-align: center;
+  text-overflow: ellipsis;
+  transition: opacity 180ms ease;
+  white-space: nowrap;
+}
+.bf-mini-chip:hover .bf-mini-chip-name-banner {
+  opacity: 1;
+}
+
+/* ---------- Base zone (batch 23 XX, WW#1) ---------- */
+
+.base-zone {
+  background: rgba(26, 36, 56, 0.6);
+  border: 1px dashed rgba(120, 160, 200, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.base-zone-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #9ab0c6;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.base-zone-label {
+  font-weight: 600;
+}
+
+.base-zone-count {
+  background: #25324a;
+  border-radius: 10px;
+  color: #cfe0f5;
+  font-size: 10px;
+  padding: 1px 8px;
+}
+
+.base-zone-empty {
+  color: #5a6e88;
+  font-style: italic;
+  font-size: 11px;
+  margin: 0;
+}
+
+.base-zone-units {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.base-zone-unit {
+  background: #1f2a40;
+  border: 1px solid #3a4a66;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.base-zone-unit-name {
+  color: #e6e6ec;
+}
+
+.base-zone-unit-might {
+  background: #c25060;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+}
+
+/* ---------- iter-9 gap 1+2: Right-rail layout + Turn banner ---------- */
+
+/*
+ * The right rail is a flex column. The Turn banner pins the top, the
+ * Combat/Chain collapsible panels sit below, and the Move Log fills the
+ * remaining space (flex:1, internal scroll). This restructure replaces
+ * the prior layout where the move log was a fixed-height capped box that
+ * left dead space below it.
+ */
+.board-side {
+  min-height: 600px;
+}
+
+.turn-banner {
+  background: linear-gradient(180deg, #1c2640 0%, #131a2c 100%);
+  border: 1px solid #324562;
+  border-bottom: 1px solid rgba(60, 90, 150, 0.25);
+  border-radius: 10px;
+  margin-bottom: 0;
+  padding: 8px 10px 8px;
+  box-shadow:
+    0 0 0 1px rgba(180, 200, 255, 0.06) inset,
+    0 4px 14px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.turn-banner-turn-number {
+  color: #e0eeff;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.turn-banner-player-id {
+  color: #7090c0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+}
+
+.turn-banner-top {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.turn-banner-turn {
+  color: #f0eef4;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.turn-banner-status {
+  background: rgba(60, 90, 140, 0.5);
+  border: 1px solid rgba(140, 180, 220, 0.4);
+  border-radius: 999px;
+  color: #cfd8e8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 2px 10px;
+  text-transform: uppercase;
+}
+
+.turn-banner-status-playing {
+  background: rgba(60, 130, 90, 0.45);
+  border-color: rgba(120, 220, 160, 0.5);
+  color: #cdf3da;
+}
+
+.turn-banner-status-finished {
+  background: rgba(170, 90, 90, 0.45);
+  border-color: rgba(220, 130, 130, 0.6);
+  color: #fbd0d0;
+}
+
+.turn-banner-active {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.turn-banner-avatar {
+  align-items: center;
+  background: linear-gradient(180deg, #f6d77a 0%, #c89b2a 100%);
+  border: 1px solid #ffe7a0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px rgba(255, 217, 107, 0.25),
+    0 2px 6px rgba(0, 0, 0, 0.45);
+  color: #1a1d2a;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.turn-banner-active-name {
+  color: #f0eef4;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.turn-banner-phase {
+  background: rgba(60, 90, 140, 0.35);
+  border: 1px solid #324562;
+  border-radius: 6px;
+  color: #cfd8e8;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: auto;
+  padding: 2px 8px;
+}
+
+.turn-banner-winner {
+  background: linear-gradient(90deg, rgba(212, 175, 60, 0.35) 0%, rgba(212, 175, 60, 0) 100%);
+  border: 1px solid rgba(255, 217, 107, 0.5);
+  border-radius: 6px;
+  color: #ffeaa8;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+/* Collapsible rail sections wrap Combat + Chain panels in <details> so they
+ * tuck away when idle. Empty-state variants render a muted header so the
+ * player still knows the section exists. */
+.rail-section {
+  background: #161a26;
+  border: 1px solid #262b3c;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rail-section-summary {
+  background: linear-gradient(180deg, #1f2538 0%, #161a26 100%);
+  color: #cfd8e8;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  list-style: none;
+  padding: 6px 10px;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.rail-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.rail-section-summary::before {
+  color: #6b7a99;
+  content: "▸";
+  display: inline-block;
+  font-size: 10px;
+  margin-right: 6px;
+  transition: transform 0.15s ease;
+}
+
+.rail-section[open] > .rail-section-summary::before {
+  transform: rotate(90deg);
+}
+
+.rail-section-empty .rail-section-summary {
+  color: #7a8aa6;
+}
+
+.rail-section-empty-hint {
+  color: #6b7a99;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: none;
+}
+
+.rail-section-empty-body {
+  color: #6b7a99;
+  font-size: 11px;
+  font-style: italic;
+  margin: 0;
+  padding: 6px 12px 10px;
+}
+
+.rail-section-count {
+  color: #d4af3c;
+  font-weight: 800;
+}
+
+/* Move log container takes the remaining vertical space in the rail. */
+.move-log-fill {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 200px;
+}
+
+.move-log-fill > .move-log {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
+/* ---------- iter-9 gap 3: Unaffordable hand chip overlay ---------- */
+
+/* Cards the player can't pay for right now (energy/power short) are
+ * desaturated and dimmed, with a red ✗ badge in the corner. Stacks with
+ * `.hand-chip-playable` in the legal sense — the pulse will only ever
+ * apply when the engine reports the card playable AND it's the player's
+ * turn AND legalLocations>0, so we don't expect both classes at once in
+ * practice. Defensive ordering anyway: unaffordable wins (filter:grayscale
+ * dampens the green glow). */
+/* iter-10 fix: softer dim so the player can still SEE which cards they
+ * have and plan ahead. Iter-9 used grayscale 0.6 / opacity 0.78 which
+ * collapsed all unaffordable cards into a uniform blur. The red ✗ badge
+ * still does the heavy lifting for the affordance signal. */
+.hand-chip-unaffordable {
+  /* iter-20: stronger dim so unaffordable cards are clearly distinct from
+   * playable ones. The red ✗ badge still carries the primary affordance
+   * signal; filter + opacity add a quick-glance reinforcement. */
+  filter: grayscale(0.6) brightness(0.7);
+  opacity: 0.7;
+  position: relative;
+}
+
+.hand-chip-unaffordable:hover:not(:disabled) {
+  /* Full recovery on hover so the player gets crisp art for planning. */
+  filter: none;
+  opacity: 1;
+}
+
+.hand-chip-unaffordable-badge {
+  align-items: center;
+  background: rgba(180,40,40,0.85);
+  border: none;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+  color: #fff;
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 18px;
+  z-index: 3;
+}
+
+/* ---------- Sidebar section dividers ---------- */
+
+.combat-panel,
+.chain-panel,
+.move-log {
+  border-top: 1px solid rgba(80, 110, 170, 0.18);
+  padding-top: 10px;
+}
+
+/* iter-44a: combat panel — warm red-tinted dark card */
+.combat-panel {
+  background: rgba(40,15,15,0.6);
+  border-radius: 6px;
+  border-top: 1px solid rgba(160,40,40,0.4);
+  font-size: 13px;
+  margin-top: 4px;
+  padding: 8px;
+}
+
+/* iter-44a: chain panel — cool blue-tinted dark card */
+.chain-panel {
+  background: rgba(15,30,50,0.6);
+  border-radius: 6px;
+  border-top: 1px solid rgba(40,80,160,0.4);
+  margin-top: 4px;
+  padding: 8px;
+}
+
+/* iter-44a: countered chain items */
+.chain-item[data-countered="true"],
+.chain-panel-item[data-countered="true"] {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.board-side h4,
+.combat-panel h4,
+.chain-panel h4,
+.move-log h4 {
+  border-bottom: 1px solid rgba(60, 90, 150, 0.2);
+  color: #6080b0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin: 0 0 8px;
+  padding-bottom: 4px;
+  text-transform: uppercase;
+}
+
+/* ---------- Move Log ---------- */
+
+.move-log {
+  background: #1b1d29;
+  border: 1px solid #2a2c38;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.move-log h3 {
+  font-size: 13px;
+  margin: 0 0 6px 0;
+}
+
+.move-log .move-log-title {
+  color: #6a90c8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+/* iter-8 gap 4: flash the move-log header for ~0.8s every time a new step
+ * lands. Gives the player a peripheral hint that "the log changed" without
+ * forcing them to read the new entry. CSS transition handles the fade so
+ * the JS layer just toggles a boolean. */
+.move-log-header {
+  transition: color 0.2s ease, text-shadow 0.2s ease, background 0.2s ease;
+}
+
+.move-log-header-flash {
+  color: #ffd96b;
+  text-shadow: 0 0 8px rgba(255, 200, 60, 0.6);
+  background: linear-gradient(90deg, rgba(255, 217, 107, 0.18) 0%, rgba(255, 217, 107, 0) 100%);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-left: -4px;
+}
+
+.trail {
+  list-style: none;
+  margin: 0;
+  overflow-y: auto;       /* Task 6: enable smooth scroll for move log trail */
+  padding: 0;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+
+.step {
+  border-left: 2px solid #3a3e58;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+}
+
+.step-ok {
+  border-left-color: #4e9c70;
+}
+
+.step-fail {
+  border-left-color: #c25060;
+}
+
+.seq {
+  color: #6a6c80;
+}
+
+.err {
+  color: #ff7e8a;
+}
+
+.move-id {
+  color: #9ab0c6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.move-card-name {
+  color: #d4af3c; /* gold for card-name highlighting */
+  font-weight: 600;
+}
+
+.move-location {
+  color: #9ab0c6;
+  font-style: italic;
+}
+
+/* iter-6 gap 4: colored category dot in front of every move log line.
+ * Tiny circular badge with a single-char glyph; color encodes category
+ * (play=green, attack=red, end-turn=blue, etc.). Mapping lives in
+ * MoveLog.tsx::categorizeMove so categories stay data-driven. */
+.move-dot {
+  align-items: center;
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  font-weight: 800;
+  height: 14px;
+  justify-content: center;
+  line-height: 1;
+  margin-right: 2px;
+  text-align: center;
+  vertical-align: middle;
+  width: 14px;
+}
+
+.move-dot-play {
+  background: #4e9c70;
+}
+
+.move-dot-attack {
+  background: #c25060;
+}
+
+.move-dot-defend {
+  background: #5a7ec8;
+}
+
+.move-dot-combat {
+  background: #c97a3a;
+}
+
+.move-dot-end-turn {
+  background: #3e6ba8;
+}
+
+.move-dot-pass {
+  background: #6a7c92;
+}
+
+.move-dot-contest {
+  background: #b86bc0;
+}
+
+.move-dot-start {
+  background: #d4af3c;
+  color: #1a1d2a;
+}
+
+.move-dot-other {
+  background: #3a3e58;
+}
+
+/* ---------- BattlefieldPicker modal ---------- */
+
+.battlefield-picker {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.battlefield-picker-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.battlefield-picker-modal {
+  position: relative;
+  background: #1f2130;
+  border: 1px solid #3e4366;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  padding: 16px;
+  min-width: 320px;
+  max-width: 480px;
+}
+
+.battlefield-picker-modal h4 {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+}
+
+.battlefield-picker-card-id {
+  color: #6a6c80;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  margin: 0 0 12px 0;
+}
+
+.battlefield-picker-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.battlefield-picker-options button {
+  background: #25283a;
+  border: 1px solid #3a3e58;
+  border-radius: 4px;
+  color: #e6e6ec;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 8px 12px;
+  text-align: left;
+  transition: background 0.1s ease;
+}
+
+.battlefield-picker-options button[data-legal="true"]:hover {
+  background: #353a5a;
+}
+
+.battlefield-picker-options button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.picker-option-label {
+  font-weight: 600;
+}
+
+.picker-option-meta {
+  color: #999ab0;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.picker-cancel {
+  background: transparent;
+  border: 1px solid #3a3e58;
+  border-radius: 4px;
+  color: #999ab0;
+  cursor: pointer;
+  padding: 6px 12px;
+  width: 100%;
+}
+
+.picker-cancel:hover {
+  background: #25283a;
+  color: #e6e6ec;
+}
+
+/* ---------- CardOverlay popover ---------- */
+
+.card-overlay-wrapper {
+  display: inline-block;
+  position: relative;
+}
+
+/* Drop-shadow on the popover. The inline styles in CardOverlay.tsx already
+ * set background, border, position. We just augment with shadow + arrow. */
+.card-overlay-wrapper [data-testid$="-overlay-stub"],
+.card-overlay-wrapper [data-testid*="-overlay-"] {
+  /* applied to any descendant overlay panel */
+}
+
+.card-overlay-wrapper > span + div,
+.card-overlay-wrapper > div {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+}
+
+.card-overlay-header strong {
+  color: #fff;
+}
+
+.card-overlay-type {
+  color: #999ab0;
+  font-size: 11px;
+}
+
+.card-overlay-stat-row {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.card-overlay-stat-row strong {
+  color: #b9bcde;
+}
+
+.card-overlay-rules-text {
+  border-top: 1px solid #2a2c38;
+  padding-top: 4px;
+}
+
+.card-overlay-stub {
+  border-top: 1px solid #2a2c38;
+  padding-top: 4px;
+}
+
+.card-overlay-abilities li {
+  margin-bottom: 2px;
+}
+
+/* ---------- Loading ---------- */
+
+.loading {
+  color: #999ab0;
+  font-style: italic;
+  padding: 32px;
+  text-align: center;
+}
+
+/* ---------- Card Art (Phase B batch 26 JJJ) ---------- */
+
+/*
+ * Hand chips with card art swap from the compact text chip to a vertical
+ * card tile (image on top, name/cost/might overlaid). Mirrors RiftAtlas's
+ * mini-card chips. Chips WITHOUT imageUrl keep the previous flex layout.
+ */
+.hand-chip.hand-chip-art {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  height: 136px;
+  justify-content: flex-start;
+  min-width: 96px;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+  width: 96px;
+}
+
+.hand-chip-image {
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  inset: 0;
+  object-fit: cover;
+  object-position: top center;
+  position: absolute;
+  width: 100%;
+  /* iter-17 Gap 2: bump saturation + brightness so the hand-chip art pops
+   * against the dark background, matching the vivid card pops in the
+   * RiftAtlas reference. The unaffordable rule below still desaturates
+   * unplayable cards (via its own filter override). */
+  filter: saturate(1.18) brightness(1.06);
+}
+
+.hand-chip.hand-chip-art .hand-chip-name {
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 0 0 4px 4px;
+  bottom: 0;
+  color: #fff;
+  font-size: 10px;
+  left: 0;
+  overflow: hidden;
+  padding: 2px 4px;
+  position: absolute;
+  right: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hand-chip.hand-chip-art .hand-chip-cost {
+  background: rgba(40, 90, 160, 0.9);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  left: 2px;
+  padding: 1px 4px;
+  position: absolute;
+  top: 2px;
+  z-index: 1;
+}
+
+.hand-chip.hand-chip-art .hand-chip-might {
+  background: rgba(180, 60, 60, 0.9);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 4px;
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  z-index: 1;
+}
+
+/*
+ * Face-down hand chip (iter-5): opponent's hand renders as generic
+ * card-backs so the player cannot see the opponent's cards. CSS-only —
+ * no per-card art / name / cost leaks. Dimensions match .hand-chip-art so
+ * the row geometry stays consistent regardless of seat.
+ */
+.hand-chip.hand-chip-back {
+  align-items: stretch;
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  height: 132px;
+  justify-content: flex-start;
+  min-width: 96px;
+  padding: 0;
+  position: relative;
+  width: 96px;
+}
+
+.hand-chip.hand-chip-back .hand-chip-back-art {
+  background:
+    radial-gradient(
+      circle at 50% 35%,
+      rgba(120, 170, 230, 0.35) 0%,
+      rgba(30, 50, 90, 0.85) 55%,
+      rgba(10, 18, 36, 1) 100%
+    ),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.04) 0 4px,
+      rgba(0, 0, 0, 0.04) 4px 8px
+    );
+  border: 1px solid rgba(120, 160, 220, 0.45);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  display: block;
+  flex: 1 1 auto;
+  height: 100%;
+  width: 100%;
+}
+
+/*
+ * iter-19 Gap 1: compact opponent-hand chip variant.
+ *
+ * The opponent's face-down hand is now rendered with smaller 60×84
+ * chips (vs the local hand's 96×128) but still uses the SAME
+ * `.hand`-parent fan-overlap rule so the two hands are visually
+ * symmetric — both fan horizontally and stay centered in the panel.
+ * Smaller chips read as "further away / opponent-side" without
+ * forcing the layout into a separate code path.
+ *
+ * Pure CSS modifier — `.hand-chip-back-compact` is the only hook,
+ * applied by PlayerPanel when `revealHand === false`. No per-card
+ * ifs; same disabled face-down button as before.
+ */
+.hand-chip.hand-chip-back-compact {
+  height: 80px;
+  min-width: 58px;
+  width: 58px;
+}
+
+/* Dark card-back pattern applied directly to the chip elements for
+ * consistent appearance; the inner .hand-chip-back-art fills over this
+ * but having the background on the button itself avoids flash-of-white.
+ * iter-26: diagonal harlequin pattern replaces the subtle stripe for a
+ * more distinctive classic card-back look. */
+.hand-chip.hand-chip-back,
+.hand-chip.hand-chip-back-compact {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(50, 75, 150, 0.6) 0px,
+      rgba(50, 75, 150, 0.6) 3px,
+      rgba(20, 35, 80, 0.6) 3px,
+      rgba(20, 35, 80, 0.6) 12px
+    ),
+    linear-gradient(180deg, #1a2a5a 0%, #0d1635 100%);
+  border: 1.5px solid rgba(80, 120, 200, 0.5);
+  border-radius: 6px;
+}
+
+/* Tighter fan overlap for compact chips so the row stays visually
+ * grouped at the smaller scale (~10px overlap matches the 16px
+ * overlap on the full-size hand proportionally). */
+.hand[data-reveal="false"] .hand-chip + .hand-chip,
+.hand[data-reveal="false"]
+  .card-overlay-wrapper
+  + .card-overlay-wrapper {
+  margin-left: -10px;
+}
+
+/* Even tighter overlap for opponent face-down hand — cards fan close
+ * together to read as a compact deck-in-hand rather than splayed chips. */
+.seat-opponent .hand-chip-back + .hand-chip-back {
+  margin-left: -24px;
+}
+
+/*
+ * iter-19 Gap 2: contested BF "VS" divider.
+ *
+ * When a BF is contested (units on both sides), draw a thin gold
+ * vertical line down the center of the tile with a small "VS" pill
+ * floating at its midpoint. Pure CSS — placement is anchored to the
+ * BF tile's `position: relative`, vertical center, full height minus
+ * a small inset for breathing room. Read as a fight-line cutting
+ * between the two opposing rails.
+ *
+ * Only rendered when `bf.contested === true` (BattlefieldList.tsx).
+ */
+.bf-vs-divider {
+  /* Pin centered between the two side rails. Grid columns are
+   * 56px | 1fr | 56px so 50% of the parent lands at the center of
+   * the bf-tile-center column — the divider visually splits ours/
+   * theirs. */
+  pointer-events: none;
+  position: absolute;
+  inset: 12px auto 12px 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+}
+
+.bf-vs-divider-line {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 217, 107, 0) 0%,
+    rgba(255, 217, 107, 0.75) 20%,
+    rgba(255, 217, 107, 0.75) 80%,
+    rgba(255, 217, 107, 0) 100%
+  );
+  border-radius: 1px;
+  height: 100%;
+  position: absolute;
+  width: 2px;
+  box-shadow: 0 0 6px rgba(255, 200, 80, 0.55);
+}
+
+.bf-vs-divider-badge {
+  background: linear-gradient(180deg, #ffd96b 0%, #d4a01c 100%);
+  border: 1px solid rgba(20, 14, 4, 0.55);
+  border-radius: 999px;
+  color: #1a1208;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  position: relative;
+  z-index: 1;
+  box-shadow:
+    0 0 10px rgba(255, 200, 80, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Thin vertical VS divider (generic alias used by simpler layouts). */
+.bf-divider {
+  align-items: center;
+  color: rgba(200, 220, 255, 0.4);
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 4px;
+  letter-spacing: 1px;
+}
+.bf-divider::before,
+.bf-divider::after {
+  background: rgba(140, 175, 230, 0.2);
+  content: '';
+  flex: 1;
+  width: 1px;
+}
+
+/*
+ * Battlefield tiles with art: render the BF card image as a faded
+ * background behind the header/units so the UI keeps readable text.
+ */
+.bf.bf-art {
+  overflow: hidden;
+  position: relative;
+}
+
+.bf-image {
+  inset: 0;
+  /* iter-17 Gap 1: BF card-art is now the centerpiece of a short landscape
+   * tile. Center the crop on the card's printed art region (about 30% from
+   * the top of a portrait BF card) and feather both top + bottom edges so
+   * the tile reads as a clean horizontal "location" slab without bleeding
+   * printed rules text. Slightly brighter opacity than the iter-5 ghost
+   * art so the location reads as VIVID rather than faded.
+   */
+  object-fit: cover;
+  /* Match bf-image-full: target the bottom (our-side) portion of dual-orientation card images. */
+  object-position: center 95%;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 22%,
+    #000 78%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 22%,
+    #000 78%,
+    transparent 100%
+  );
+  /* iter-46: lightened so BF art is vivid rather than ghosted. */
+  filter: brightness(0.65) saturate(0.85);
+  opacity: 0.7;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* Alias selectors so external refs using .bf-tile-art-img or .bf-art-img
+ * also pick up the same art-dimming treatment. */
+.bf-tile-art-img,
+.bf-art-img {
+  filter: brightness(0.65) saturate(0.85);
+  height: 100%;
+  left: 0;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: 0;
+}
+
+.bf.bf-art .bf-header,
+.bf.bf-art .bf-empty,
+.bf.bf-art .bf-units,
+.bf.bf-art .bf-rules-text {
+  position: relative;
+  z-index: 1;
+}
+
+/* iter-43a: full-tile bg art variant — positioned relative to the .bf grid
+ * (which is position:relative) so the dimmed art covers the entire tile
+ * including the side-slot rails. The UnitSlots and bf-tile-center are all
+ * z-index:1+ so they render above the bg art. */
+.bf-image.bf-image-full {
+  border-radius: 10px;
+  filter: brightness(0.4) saturate(0.6);
+  height: 100%;
+  inset: 0;
+  object-fit: cover;
+  /* The BF card images are landscape 1038x744 with dual-orientation content:
+   * top ~25% = opponent text (upside-down), middle = art, bottom ~25% = our text.
+   * When displayed in the portrait tile, object-fit:cover scales by height so
+   * there is no vertical overflow — object-position has no vertical effect.
+   * Instead, use transform to scale up (creating overflow) and shift down to
+   * show only the art zone + our-side name, clipped by parent overflow:hidden.
+   * scale(1.55) → ~65% of height shown; transform-origin center 35% focuses
+   * on the art area and pushes the opponent text above the visible area. */
+  object-position: 50% 50%;
+  transform: scale(1.6);
+  transform-origin: 50% 45%;
+  opacity: 1;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  z-index: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* Ensure grid children sit above the full-tile bg art AND the ::after fade overlay */
+.bf .bf-side,
+.bf .bf-tile-center,
+.bf .bf-showdown-beam,
+.bf .bf-showdown-badge,
+.bf .bf-matchup-svg,
+.bf .bf-vs-divider {
+  position: relative;
+  z-index: 2;
+}
+
+/*
+ * Verbatim rules text for the battlefield card. Rendered on the tile
+ * directly so the player can read what the BF does without hovering.
+ * Multi-line, newline-preserved (white-space: pre-wrap), with a dark
+ * translucent panel for legibility against the faded card art.
+ */
+.bf-rules-text {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: #8090b0;
+  font-family: inherit;
+  font-size: 8px;
+  line-height: 1.3;
+  margin: 4px 0 0 0;
+  max-height: 48px;
+  overflow: hidden;
+  padding: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  opacity: 0.45;
+}
+
+/*
+ * Battlefield units / base-zone units with art swap to a card tile,
+ * with name banner pinned to the bottom.
+ */
+.bf-unit.bf-unit-art,
+.base-zone-unit.base-zone-unit-art {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  height: 84px;
+  overflow: hidden;
+  position: relative;
+  width: 64px;
+}
+
+.bf-unit-image,
+.base-zone-unit-image {
+  display: block;
+  flex: 1 1 auto;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.bf-unit.bf-unit-art .bf-unit-name,
+.base-zone-unit.base-zone-unit-art .base-zone-unit-name {
+  background: rgba(0, 0, 0, 0.65);
+  bottom: 0;
+  color: #fff;
+  font-size: 9px;
+  left: 0;
+  overflow: hidden;
+  padding: 1px 3px;
+  position: absolute;
+  right: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bf-unit.bf-unit-art .bf-unit-might,
+.base-zone-unit.base-zone-unit-art .base-zone-unit-might {
+  background: rgba(180, 60, 60, 0.9);
+  border-radius: 3px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 3px;
+  position: absolute;
+  right: 2px;
+  top: 2px;
+}
+
+.bf-unit.bf-unit-art .bf-unit-owner {
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+  color: #fff;
+  font-size: 8px;
+  left: 2px;
+  padding: 0 3px;
+  position: absolute;
+  top: 2px;
+}
+
+.card-overlay-image {
+  background: #0b0b10;
+}
+
+/* ---------- Player header + resources (Phase B batch 27 iter-3) ---------- */
+
+.player-header {
+  align-items: center;
+  border-bottom: 1px solid rgba(80, 110, 170, 0.15);
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: 6px 8px;
+}
+
+.player-header h3 {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  margin: 0;
+  overflow: hidden;
+}
+
+.player-active-marker {
+  color: #d4af3c;
+  margin-left: 6px;
+}
+
+/* iter-7 gap 5 (stretch): circular avatar with initial/numeral. Blue ring
+ * for active player, neutral steel otherwise. RiftAtlas-style prominent circle. */
+.player-avatar {
+  align-items: center;
+  background: linear-gradient(135deg, #2a4080 0%, #1a2850 100%);
+  border: 2px solid rgba(100, 140, 210, 0.5);
+  border-radius: 50%;
+  color: #c0d8f8;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 800;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.player-avatar.player-avatar-active {
+  border-color: #5a9af0;
+  box-shadow: 0 0 10px rgba(90, 154, 240, 0.5);
+}
+
+.player-id-label {
+  /* iter-20: truncate long player IDs with ellipsis instead of wrapping. */
+  color: #a0b8d8;
+  font-size: 12px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.player-resources {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: 2px 8px;
+}
+
+.player-piles {
+  align-items: flex-end;
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.player-stats,
+.player-stats-compact {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  opacity: 0.6;
+  padding: 2px 8px;
+}
+
+/* ---------- VP Badge ---------- */
+
+.vp-badge {
+  align-items: center;
+  background: rgba(20, 35, 80, 0.8);
+  border: 1px solid rgba(90, 130, 200, 0.4);
+  border-radius: 20px;
+  color: #c0d8f8;
+  display: flex;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 4px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.vp-badge-at-match-point {
+  border-color: rgba(220, 185, 40, 0.7);
+  box-shadow: 0 0 8px rgba(220, 185, 40, 0.3);
+  color: #f0d060;
+}
+
+.vp-badge-inner {
+  align-items: center;
+  background: #1a1f2e;
+  border-radius: 50%;
+  color: #f0eef4;
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  gap: 0;
+  height: 100%;
+  justify-content: center;
+  line-height: 1.05;
+  text-align: center;
+  width: 100%;
+}
+
+.vp-badge-current {
+  color: #ffd96b;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.vp-badge-sep {
+  color: #6a7c92;
+  font-size: 9px;
+  margin: -2px 0;
+}
+
+.vp-badge-target {
+  color: #b9c5d8;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.vp-badge-label {
+  color: #8e9bb3;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  margin-top: 1px;
+}
+
+.vp-badge-won {
+  box-shadow:
+    0 0 0 2px rgba(255, 220, 100, 0.7),
+    0 0 18px rgba(255, 200, 60, 0.6);
+}
+
+/* ---------- Power Glyphs (iter-20: color-keyed circular gems) ---------- */
+
+.power-glyphs {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.power-glyph-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Each gem is a positioned wrapper holding three stacked layers:
+   the colored gem disc, the faint identifying glyph (★ / letter), and
+   the count number on top. Using CSS variables (--gem-color) avoids
+   per-kind branching in the component. */
+.power-glyph {
+  --gem-size: 30px;
+  --gem-color: #6a7c92;
+  align-items: center;
+  cursor: default;
+  display: inline-flex;
+  height: var(--gem-size);
+  justify-content: center;
+  position: relative;
+  transition: transform 120ms ease-out, filter 120ms ease-out;
+  width: var(--gem-size);
+}
+
+.power-glyph-gem {
+  background:
+    radial-gradient(
+      circle at 32% 28%,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0.18) 28%,
+      rgba(0, 0, 0, 0) 55%
+    ),
+    radial-gradient(
+      circle at 50% 60%,
+      var(--gem-color) 0%,
+      color-mix(in srgb, var(--gem-color) 65%, #000 35%) 100%
+    );
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.4),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+
+.power-glyph-mark {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 9px;
+  font-weight: 800;
+  left: 4px;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  position: absolute;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.65);
+  top: 4px;
+}
+
+.power-glyph-count {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  position: relative;
+  text-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.85),
+    0 0 4px rgba(0, 0, 0, 0.55);
+}
+
+/* Zero-count gems read as "empty" — desaturated and dimmed. */
+.power-glyph-dim {
+  filter: grayscale(0.7) brightness(0.7);
+  opacity: 0.55;
+}
+
+/* Hover: subtle enlarge + brightness lift. Skipped on dim gems so
+   empty slots don't pop. */
+.power-glyph:hover {
+  filter: brightness(1.15);
+  transform: scale(1.08);
+}
+.power-glyph-dim:hover {
+  filter: grayscale(0.5) brightness(0.85);
+  transform: scale(1.04);
+}
+
+/* Active player: gentle pulse on the whole row so it catches the eye
+   without distracting. */
+@keyframes power-glyph-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 220, 120, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(255, 220, 120, 0.18);
+  }
+}
+.power-glyphs-active .power-glyph:not(.power-glyph-dim) {
+  animation: power-glyph-pulse 2.4s ease-in-out infinite;
+  border-radius: 50%;
+}
+
+.power-glyph-summary {
+  align-items: baseline;
+  color: rgba(220, 230, 245, 0.7);
+  display: inline-flex;
+  font-size: 10px;
+  gap: 6px;
+  letter-spacing: 0.6px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.power-glyph-summary-label {
+  color: rgba(180, 195, 215, 0.55);
+  font-weight: 700;
+}
+.power-glyph-summary-value {
+  color: rgba(235, 240, 250, 0.9);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: none;
+}
+
+/* ---------- Deck Pile (iter-21 stacked card-back refresh) ---------- */
+
+/*
+ * Each pile is a 3-layer stack of offset card-back tiles (back / mid /
+ * top), with a chunky pill count badge in the top-right and a small
+ * label below. Variant tints come from per-variant gradients applied
+ * to .deck-pile-card. Empty piles swap the stack for an outlined
+ * "0" frame so a depleted pile reads at a glance.
+ */
+
+.deck-pile {
+  height: 58px;
+  position: relative;
+  width: 44px;
+}
+
+.deck-pile-card {
+  align-items: center;
+  border: 1px solid rgba(140, 180, 220, 0.45);
+  border-radius: 5px;
+  display: flex;
+  height: 46px;
+  justify-content: center;
+  position: absolute;
+  width: 34px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.55);
+}
+
+/* Stack offsets — back-most has the largest offset, top sits flush. */
+.deck-pile-card-back {
+  left: 6px;
+  opacity: 0.55;
+  top: 6px;
+}
+
+.deck-pile-card-mid {
+  left: 3px;
+  opacity: 0.8;
+  top: 3px;
+}
+
+.deck-pile-card-top {
+  left: 0;
+  top: 0;
+}
+
+/* Variant tints — deep blue (deck), deep purple (rune), charcoal grey (trash). */
+.deck-pile-deck .deck-pile-card {
+  background: linear-gradient(135deg, #4a6cb0 0%, #1a2540 100%);
+  border-color: rgba(150, 190, 240, 0.55);
+}
+
+.deck-pile-rune .deck-pile-card {
+  background: linear-gradient(135deg, #7a4fb0 0%, #261540 100%);
+  border-color: rgba(190, 150, 230, 0.55);
+}
+
+.deck-pile-trash .deck-pile-card {
+  background: linear-gradient(135deg, #4a4e58 0%, #1a1c22 100%);
+  border-color: rgba(170, 175, 185, 0.5);
+}
+
+/* Top-tile glyph — centered, soft glow tied to the variant. */
+.deck-pile-glyph {
+  color: rgba(245, 248, 255, 0.85);
+  font-size: 16px;
+  line-height: 1;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.7);
+}
+
+.deck-pile-deck .deck-pile-glyph {
+  color: #ffe9a0;
+  text-shadow: 0 0 6px rgba(255, 215, 100, 0.45);
+}
+
+.deck-pile-rune .deck-pile-glyph {
+  color: #e7c8ff;
+  text-shadow: 0 0 6px rgba(200, 140, 255, 0.45);
+}
+
+.deck-pile-trash .deck-pile-glyph {
+  color: rgba(220, 224, 232, 0.75);
+}
+
+/* Chunky pill count badge — top-right corner with gold ring. */
+.deck-pile-count {
+  align-items: center;
+  background: #11141d;
+  border: 1.5px solid #d4af3c;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(212, 175, 60, 0.25);
+  color: #ffd96b;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  height: 20px;
+  justify-content: center;
+  letter-spacing: 0.3px;
+  min-width: 24px;
+  padding: 0 6px;
+  position: absolute;
+  right: -8px;
+  top: -6px;
+  z-index: 3;
+}
+
+.deck-pile-label {
+  bottom: -14px;
+  color: #8e9bb3;
+  font-size: 9px;
+  font-weight: 600;
+  left: 0;
+  letter-spacing: 0.6px;
+  position: absolute;
+  right: 0;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* Empty-state — outlined frame with a strikethrough zero. */
+.deck-pile-empty-frame {
+  align-items: center;
+  border: 1px dashed rgba(140, 150, 170, 0.5);
+  border-radius: 5px;
+  display: flex;
+  height: 46px;
+  justify-content: center;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 34px;
+  background: rgba(20, 22, 30, 0.55);
+}
+
+.deck-pile-empty-zero {
+  color: rgba(170, 180, 200, 0.7);
+  font-size: 18px;
+  font-weight: 700;
+  position: relative;
+}
+
+.deck-pile-empty-zero::after {
+  background: rgba(200, 100, 100, 0.75);
+  content: "";
+  height: 2px;
+  left: -3px;
+  position: absolute;
+  right: -3px;
+  top: 50%;
+  transform: rotate(-18deg);
+}
+
+.deck-pile-empty .deck-pile-count {
+  color: rgba(170, 180, 200, 0.65);
+  border-color: rgba(140, 150, 170, 0.5);
+}
+
+/* ---------- iter-10 gap 4: hand-chip name banner on hover ---------- */
+
+/*
+ * For art chips the name overlay is hidden by default (keeps the clean
+ * card-art look) and slides in from below on hover. The banner spans
+ * the bottom of the chip and uses an opacity+transform transition for
+ * the reveal. The fallback `.hand-chip-name` rule above still renders
+ * the name for image-less chips — those don't get the hover banner.
+ */
+.hand-chip-name-banner {
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
+  bottom: 0;
+  color: #e8d5a3;
+  font-size: 10px;
+  font-weight: 600;
+  left: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding: 4px 4px 6px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  text-align: center;
+  text-overflow: ellipsis;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.hand-chip.hand-chip-art:hover .hand-chip-name-banner,
+.hand-chip:hover .hand-chip-name-banner {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---------- iter-10 gap 3: phase strip responsive (icon-only @ narrow) ---------- */
+
+/*
+ * Below 1100px the phase strip wraps into multiple rows because each
+ * pill carries the full phase label. Collapse to icon-only here: hide
+ * the label text and rely on the existing icon + number for identity.
+ * The `title` attribute on each `.phase` element already surfaces the
+ * full label via native tooltip when the user hovers.
+ *
+ * Tooltip via `title` rather than custom HTML keeps zero new markup and
+ * works with keyboard focus — important since phases get clicked from
+ * the keyboard via TAB in some accessibility tests.
+ */
+@media (max-width: 1100px) {
+  .phase {
+    padding: 3px 6px 3px 4px;
+  }
+  .phase-label {
+    /* clip-path keeps a11y trees seeing the label; visually it's gone. */
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    position: absolute;
+    width: 1px;
+  }
+  .phase-arrow {
+    /* arrow only makes sense when labels exist — drop it at narrow widths. */
+    display: none;
+  }
+}
+
+/* ---------- iter-11 gap 1: active-showdown beam + SHOWDOWN badge ---------- */
+
+/*
+ * When the parent .bf carries `.bf-active`, we render an animated gold-
+ * gradient beam that slides across the BF tile (visualizing the energy
+ * exchange between attacker side and defender side). The badge anchors
+ * just above the tile and reads "SHOWDOWN — <phase>". Pure CSS — pointer-
+ * events:none so it never blocks clicks.
+ */
+.bf-active {
+  /* Stronger red glow when the BF is the active showdown lane. */
+  animation: bf-active-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes bf-active-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(255, 217, 107, 0.45),
+      0 6px 22px rgba(255, 180, 60, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px rgba(255, 140, 110, 0.55),
+      0 6px 28px rgba(255, 110, 90, 0.55);
+  }
+}
+
+/*
+ * iter-13 Gap 2: beam is now thicker (6px) with a brighter peak and a
+ * higher floor opacity so it never washes out to invisibility between
+ * keyframes. Sits above BF art (z=2) but below the role badges (z=5).
+ */
+.bf-showdown-beam {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 230, 140, 0.0) 12%,
+    rgba(255, 230, 140, 0.95) 50%,
+    rgba(255, 230, 140, 0.0) 88%,
+    transparent 100%
+  );
+  border-radius: 3px;
+  box-shadow: 0 0 12px rgba(255, 215, 90, 0.55);
+  height: 6px;
+  left: 4%;
+  pointer-events: none;
+  position: absolute;
+  right: 4%;
+  top: 50%;
+  transform: translateY(-50%);
+  animation: bf-showdown-beam-slide 1.6s ease-in-out infinite;
+  z-index: 2;
+}
+
+@keyframes bf-showdown-beam-slide {
+  0% {
+    opacity: 0.6;
+    transform: translateY(-50%) translateX(-14%);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+    transform: translateY(-50%) translateX(14%);
+  }
+}
+
+.bf-showdown-badge {
+  background: rgba(160, 40, 40, 0.6);
+  border: none;
+  border-radius: 4px;
+  box-shadow: none;
+  color: #ff9090;
+  font-size: 10px;
+  font-weight: 700;
+  left: 50%;
+  letter-spacing: 0.8px;
+  padding: 2px 8px;
+  pointer-events: none;
+  position: absolute;
+  text-transform: uppercase;
+  top: 4px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 4;
+}
+
+/* ---------- iter-12 Goal 1: showdown breadcrumb ---------- */
+
+.showdown-breadcrumb {
+  align-items: center;
+  background: linear-gradient(
+    180deg,
+    rgba(20, 26, 48, 0.85),
+    rgba(14, 18, 34, 0.85)
+  );
+  border: 1px solid rgba(255, 217, 107, 0.25);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  font-size: 10px;
+  gap: 4px;
+  letter-spacing: 0.4px;
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  text-transform: uppercase;
+}
+
+.sb-step {
+  align-items: center;
+  color: rgba(220, 226, 245, 0.45);
+  display: inline-flex;
+  font-weight: 600;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.sb-step-marker {
+  align-items: center;
+  background: rgba(220, 226, 245, 0.08);
+  border: 1px solid rgba(220, 226, 245, 0.25);
+  border-radius: 50%;
+  display: inline-flex;
+  font-size: 9px;
+  font-weight: 700;
+  height: 16px;
+  justify-content: center;
+  line-height: 1;
+  width: 16px;
+}
+
+.sb-step-done {
+  color: rgba(170, 220, 170, 0.7);
+}
+
+.sb-step-done .sb-step-marker {
+  background: rgba(110, 200, 120, 0.25);
+  border-color: rgba(170, 220, 170, 0.6);
+  color: rgba(220, 245, 220, 0.95);
+}
+
+.sb-step-active {
+  color: #ffd96b;
+  font-weight: 800;
+  text-shadow: 0 1px 6px rgba(255, 200, 90, 0.4);
+}
+
+.sb-step-active .sb-step-marker {
+  background: linear-gradient(180deg, #ffe48a 0%, #c98a2a 100%);
+  border-color: rgba(255, 230, 150, 0.85);
+  box-shadow: 0 0 8px rgba(255, 200, 90, 0.55);
+  color: #2a1d04;
+}
+
+.sb-step-future {
+  color: rgba(220, 226, 245, 0.35);
+}
+
+.sb-step-arrow {
+  color: rgba(220, 226, 245, 0.4);
+  font-size: 12px;
+  margin: 0 6px 0 4px;
+}
+
+/* ---------- iter-12 Goal 2: role-change flash ---------- */
+
+@keyframes bf-unit-role-flash-anim {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 217, 107, 0.0);
+    transform: scale(1);
+  }
+  25% {
+    box-shadow:
+      0 0 0 3px rgba(255, 217, 107, 0.9),
+      0 0 22px rgba(255, 200, 90, 0.85);
+    transform: scale(1.18);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 217, 107, 0.0);
+    transform: scale(1);
+  }
+}
+
+.bf-unit-role-flash {
+  animation: bf-unit-role-flash-anim 800ms ease-out;
+  position: relative;
+  z-index: 6;
+}
+
+/* ---------- iter-12 Goal 4: phase-strip hover tooltip ---------- */
+
+.phase {
+  position: relative;
+}
+
+.phase[data-phase-tip]::after {
+  background: linear-gradient(180deg, #1d2542 0%, #0f1428 100%);
+  border: 1px solid rgba(255, 217, 107, 0.35);
+  border-radius: 8px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+  color: #f1ecdd;
+  content: attr(data-phase-tip);
+  font-size: 11px;
+  font-weight: 500;
+  left: 50%;
+  letter-spacing: 0.2px;
+  line-height: 1.35;
+  max-width: 220px;
+  opacity: 0;
+  padding: 8px 12px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  text-transform: none;
+  transform: translateX(-50%) translateY(4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+  white-space: normal;
+  width: max-content;
+  z-index: 25;
+}
+
+.phase[data-phase-tip]:hover::after,
+.phase[data-phase-tip]:focus-within::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ---------- iter-11 gap 2: combat-role badges on units ---------- */
+
+/*
+ * iter-13 Gap 1: role badge is now a small horizontal pill anchored to
+ * the top-right of the unit chip. Text + glyph stays legible at
+ * screenshot scale (was previously a 14×14 circle that vanished on
+ * downscaled review captures).
+ */
+.bf-mini-chip-role-badge {
+  align-items: center;
+  border-radius: 3px;
+  display: flex;
+  font-size: 8px;
+  font-weight: 800;
+  gap: 2px;
+  left: 2px;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  padding: 2px 3px;
+  pointer-events: none;
+  position: absolute;
+  text-transform: uppercase;
+  top: 2px;
+  z-index: 5;
+}
+
+.bf-mini-chip-role-glyph {
+  font-size: 9px;
+}
+
+.bf-mini-chip-role-text {
+  font-size: 8px;
+}
+
+.bf-mini-chip-role-badge-attacker {
+  background: rgba(220, 60, 60, 0.85);
+  color: #fff;
+}
+
+.bf-mini-chip-role-badge-defender {
+  background: rgba(40, 120, 220, 0.85);
+  color: #fff;
+}
+
+/* ---------- iter-11 gap 3: selected hand chip ---------- */
+
+.hand-chip.hand-chip-selected,
+.hand-chip[data-selected="true"] {
+  border: 2px solid rgba(212,175,60,0.9) !important;
+  box-shadow:
+    0 0 12px rgba(212,175,60,0.6),
+    0 8px 24px rgba(0,0,0,0.5);
+  transform: translateY(-6px);
+  z-index: 15;
+}
+
+.hand-chip.hand-chip-selected:disabled,
+.hand-chip[data-selected="true"]:disabled {
+  cursor: progress;
+  opacity: 1; /* keep selected chip fully bright while picker is open */
+}
+
+/* ---------- iter-11 gap 4: game-over banner ---------- */
+
+.game-over-banner {
+  align-items: center;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  /* don't block clicks — keep the board reviewable. */
+  pointer-events: none;
+  position: fixed;
+  z-index: 50;
+}
+
+.game-over-banner-inner {
+  align-items: center;
+  background: linear-gradient(180deg, rgba(10, 20, 40, 0.62), rgba(10, 20, 40, 0.4));
+  border: 1px solid rgba(255, 217, 107, 0.45);
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 2px rgba(255, 217, 107, 0.25),
+    0 24px 80px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 28px 64px;
+  text-align: center;
+}
+
+.game-over-banner-title {
+  color: #ffd96b;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 10px;
+  text-transform: uppercase;
+  text-shadow: 0 0 18px rgba(255, 217, 107, 0.55);
+}
+
+.game-over-banner-winner {
+  color: #f8e060;
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  margin-top: 4px;
+  text-shadow:
+    0 0 30px rgba(248, 224, 96, 0.7),
+    0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* iter-15 Gap 3: game-over polish — bigger inner card, radial-burst aura,
+   and a "VICTORY" sub-tag for read-at-a-glance status. Pure cosmetic, all
+   driven by the same `.game-over-banner` markup that was already in the
+   DOM (no per-card branching). */
+.game-over-banner-inner {
+  padding: 36px 80px 32px;
+  position: relative;
+  animation: game-over-pop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+/* iter-16: trophy glyph + subtitle for a tighter, more dramatic banner.
+   Pure cosmetic — no per-card or per-winner branching. Trophy is a unicode
+   queen-crown glyph so we don't need an SVG asset. */
+.game-over-banner-trophy {
+  color: #ffd96b;
+  font-size: 48px;
+  line-height: 1;
+  margin-bottom: 4px;
+  text-shadow:
+    0 0 24px rgba(255, 217, 107, 0.7),
+    0 0 6px rgba(255, 217, 107, 0.9);
+  animation: game-over-trophy-pulse 2s ease-in-out infinite alternate;
+}
+
+.game-over-banner-subtitle {
+  color: rgba(255, 217, 107, 0.85);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  margin-top: 6px;
+  text-transform: uppercase;
+  text-shadow: 0 0 12px rgba(255, 217, 107, 0.45);
+}
+
+@keyframes game-over-trophy-pulse {
+  from { transform: scale(1); filter: brightness(1); }
+  to   { transform: scale(1.06); filter: brightness(1.2); }
+}
+
+.game-over-banner-inner::before,
+.game-over-banner-inner::after {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 217, 107, 0.35) 0%, transparent 32%),
+    radial-gradient(circle at 80% 70%, rgba(116, 196, 255, 0.28) 0%, transparent 36%),
+    radial-gradient(circle at 50% 100%, rgba(255, 110, 180, 0.22) 0%, transparent 38%);
+  filter: blur(2px);
+  pointer-events: none;
+  z-index: -1;
+  animation: game-over-burst 2.4s ease-in-out infinite alternate;
+}
+
+.game-over-banner-inner::after {
+  animation-delay: -1.2s;
+  inset: -60px;
+  opacity: 0.55;
+}
+
+@keyframes game-over-pop {
+  0% {
+    transform: scale(0.4) translateY(20px);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.05) translateY(-4px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes game-over-burst {
+  from {
+    transform: scale(0.96) rotate(-2deg);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1.05) rotate(2deg);
+    opacity: 1;
+  }
+}
+
+/* ---------- iter-13 Gap 3: combat rail polish ---------- */
+
+.combat-panel-meta {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.combat-panel-meta-row {
+  align-items: baseline;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 64px 1fr;
+}
+
+.combat-panel-meta-row dt {
+  color: rgba(220, 226, 245, 0.6);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.combat-panel-meta-row dd {
+  color: #e6ecff;
+  font-weight: 600;
+  margin: 0;
+}
+
+.combat-panel-unit {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.combat-panel-unit-avatar {
+  align-items: center;
+  background: rgba(40, 50, 80, 0.65);
+  border: 1px solid rgba(140, 180, 220, 0.35);
+  border-radius: 4px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 24px;
+  justify-content: center;
+  overflow: hidden;
+  width: 18px;
+}
+
+.combat-panel-unit-avatar-img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.combat-panel-unit-avatar-fallback {
+  color: rgba(230, 236, 255, 0.8);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.combat-panel-unit-name {
+  color: #e6ecff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.combat-panel-unit-might {
+  background: rgba(212, 175, 60, 0.18);
+  border: 1px solid rgba(255, 217, 107, 0.5);
+  border-radius: 3px;
+  color: #ffd96b;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+}
+
+.combat-panel-unit-controller {
+  color: rgba(220, 226, 245, 0.45);
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  margin-left: auto;
+}
+
+/* ---------- iter-14 Gap 2: SVG matchup-line overlay ---------- */
+
+/*
+ * The SVG sits absolutely positioned across the entire active BF tile so
+ * its coordinate space matches the tile's bounding rect (which is also
+ * what JS measures via getBoundingClientRect). pointer-events:none keeps
+ * chips clickable through the overlay; z=3 sits above the BF art (z=2 on
+ * the showdown beam) but below role badges (z=5+).
+ */
+.bf-matchup-svg {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 3;
+  /* iter-C: hide the SVG overlay — the diagonal line looks like a CSS
+   * artifact in screenshots; the feature is preserved in code but hidden
+   * until we have accurate headless chip positions. */
+  display: none;
+}
+
+.bf-matchup-line {
+  fill: none;
+  stroke: rgba(255, 217, 107, 0.95);
+  stroke-dasharray: 6 5;
+  stroke-linecap: round;
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 4px rgba(255, 200, 90, 0.7));
+  animation: bf-matchup-dash 1.2s linear infinite;
+}
+
+@keyframes bf-matchup-dash {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+/* iter-15 Gap 2: per-line might-vs-might damage labels at midpoints.
+   Visible only when the breadcrumb resolves to Strikes (or later) — the
+   SVG just doesn't render the <g> otherwise. */
+.bf-matchup-label-bg {
+  fill: rgba(8, 14, 32, 0.85);
+  stroke: rgba(255, 217, 107, 0.7);
+  stroke-width: 1;
+}
+
+.bf-matchup-label-text {
+  fill: #ffd96b;
+  font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+/* iter-15 polish: actionable friendly chips pulse gold while phase is
+   declare-attackers / declare-defenders so the human sees what's clickable. */
+.bf-mini-chip-actionable {
+  box-shadow:
+    0 0 0 2px rgba(255, 217, 107, 0.85),
+    0 0 14px rgba(255, 217, 107, 0.55);
+  animation: bf-mini-actionable-pulse 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+@keyframes bf-mini-actionable-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(255, 217, 107, 0.55),
+      0 0 8px rgba(255, 217, 107, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(255, 217, 107, 1),
+      0 0 18px rgba(255, 217, 107, 0.7);
+  }
+}
+
+/* ---------- iter-14 Gap 3: Combat action button polish ---------- */
+
+/*
+ * Combat flow actions get RiftAtlas-style prominent buttons:
+ *   - Pass Focus: small ghost-style secondary (subtle outline).
+ *   - Resolve Combat: large primary CTA with gold gradient + glow,
+ *     mirrors the END TURN button so it reads as the canonical
+ *     close-this-fight action.
+ *
+ * Pure CSS via testid selectors so we don't have to touch JSX classnames.
+ */
+.combat-panel-flow-actions {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.combat-panel-flow-actions [data-testid="combat-pass-focus"] {
+  background: transparent;
+  border: 1px solid rgba(220, 226, 245, 0.45);
+  border-radius: 6px;
+  color: rgba(220, 226, 245, 0.82);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  padding: 6px 10px;
+  text-transform: uppercase;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.combat-panel-flow-actions [data-testid="combat-pass-focus"]:hover:not(:disabled) {
+  background: rgba(220, 226, 245, 0.08);
+  border-color: rgba(220, 226, 245, 0.75);
+  color: #f1ecdd;
+}
+
+.combat-panel-flow-actions [data-testid="combat-pass-focus"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.combat-panel-flow-actions [data-testid="combat-resolve"] {
+  background: linear-gradient(180deg, #ffe48a 0%, #c98a2a 100%);
+  border: 1px solid rgba(255, 230, 150, 0.85);
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(255, 200, 90, 0.45), 0 3px 10px rgba(0, 0, 0, 0.35);
+  color: #2a1d04;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 10px 14px;
+  text-shadow: 0 1px 0 rgba(255, 240, 200, 0.5);
+  text-transform: uppercase;
+  transition: transform 0.1s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.combat-panel-flow-actions [data-testid="combat-resolve"]:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 0 16px rgba(255, 200, 90, 0.7), 0 4px 14px rgba(0, 0, 0, 0.4);
+  transform: translateY(-1px);
+}
+
+.combat-panel-flow-actions [data-testid="combat-resolve"]:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.combat-panel-flow-actions [data-testid="combat-resolve"]:disabled {
+  background: rgba(80, 70, 50, 0.4);
+  border-color: rgba(150, 130, 90, 0.4);
+  box-shadow: none;
+  color: rgba(220, 200, 160, 0.4);
+  cursor: not-allowed;
+  text-shadow: none;
+}
+
+/* polish pass: gold CTA aliases for resolve-combat button */
+.resolve-combat-btn,
+[data-testid="resolve-combat"] {
+  background: linear-gradient(135deg, #c8962a 0%, #e8b845 50%, #c8962a 100%);
+  border: none;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(200, 150, 42, 0.4);
+  color: #1a1200;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 10px 16px;
+  text-transform: uppercase;
+  transition: box-shadow 150ms, transform 150ms;
+  width: 100%;
+}
+[data-testid="resolve-combat"]:hover:not(:disabled) {
+  box-shadow: 0 4px 16px rgba(200, 150, 42, 0.6);
+  transform: translateY(-1px);
+}
+
+/* ---------- iter-14 Polish: move-log row enrichments ---------- */
+
+/*
+ * `.move-id` now renders the normalized phase label (when the move is
+ * phase-related) so the log reads "advancePhase Declare Attackers" instead
+ * of the raw move id only. The wrapping `.move-phase-label` adds a subtle
+ * accent so the player can scan phase transitions at a glance.
+ */
+.move-phase-label {
+  background: rgba(255, 217, 107, 0.12);
+  border: 1px solid rgba(255, 217, 107, 0.3);
+  border-radius: 4px;
+  color: #ffd96b;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  margin-left: 4px;
+  padding: 1px 5px;
+  text-transform: uppercase;
+}
+
+/* ---------- visual-polish: opponent panel compact row ---------- */
+
+.seat-opponent .player {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: 6px 8px;
+}
+
+.seat-opponent .player-header {
+  border-bottom: none;
+  flex: 1 1 auto;
+  padding: 0;
+}
+
+.seat-opponent .player-resources {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 0;
+}
+
+.seat-opponent .player-stats-compact {
+  display: none; /* hide verbose ul list in the opponent strip */
+}
+
+/* ---------- visual-polish: opponent face-down hand along top of BF ---------- */
+
+.seat-opponent .hand {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 2px;
+  justify-content: flex-start;
+  overflow-x: auto;
+  padding: 4px 8px;
+  scrollbar-width: none;
+}
+
+/* ---------- visual-polish: CardOverlay popover premium look ---------- */
+
+.card-overlay-popover,
+.card-info-panel {
+  background: linear-gradient(180deg, #0d1530 0%, #080f28 100%);
+  border: 1px solid rgba(80, 120, 200, 0.4);
+  border-radius: 8px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(60, 100, 180, 0.2);
+  overflow: hidden;
+  z-index: 100;
+}
+
+/* ---------- visual-polish: game-over overlay dramatic full-screen ---------- */
+
+.game-over,
+.victory-screen,
+[data-testid="game-over"] {
+  align-items: center;
+  background: radial-gradient(ellipse at center, rgba(30, 15, 60, 0.97) 0%, rgba(5, 8, 20, 0.99) 70%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 200;
+}
+
+.game-over h2,
+.victory-screen h2 {
+  color: #f0d060;
+  font-size: 48px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-shadow: 0 0 40px rgba(240, 208, 96, 0.6);
+  text-transform: uppercase;
+}
+
+/* iter-47: game-over banner — full-screen blocking overlay per RiftAtlas parity */
+.game-over-banner {
+  background: rgba(5, 8, 20, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+.game-over-banner h2,
+.game-over-banner-winner {
+  font-size: 52px;
+  font-weight: 900;
+  color: #d4af3c;
+  text-shadow: 0 0 60px rgba(212,175,60,0.6), 0 0 120px rgba(212,175,60,0.3);
+  text-align: center;
+}
+
+.game-over-banner-winner {
+  font-size: 52px;
+  letter-spacing: 2px;
+  text-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.8),
+    0 0 48px rgba(255, 217, 107, 0.7),
+    0 0 80px rgba(255, 217, 107, 0.3);
+}
+
+.game-over-banner-title {
+  font-size: 18px;
+  letter-spacing: 12px;
+  text-shadow: 0 0 28px rgba(255, 217, 107, 0.75);
+}
+
+/* ---------- iter-35 Task 2: opponent power glyphs visible in compact row ---------- */
+
+.seat-opponent .power-glyphs {
+  display: flex;
+  gap: 4px;
+}
+
+/* ---------- iter-35 Task 3: smaller gems for opponent strip ---------- */
+
+.seat-opponent .power-glyph {
+  height: 22px;
+  min-height: 22px;
+  min-width: 22px;
+  width: 22px;
+}
+
+.seat-opponent .power-glyph .power-count {
+  font-size: 9px;
+}
+
+/* ---------- iter-35 Task 4: BF contested badge ---------- */
+
+.bf-contested-badge,
+.bf-badge-contested {
+  background: rgba(200, 50, 50, 0.8);
+  border-radius: 3px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  text-transform: uppercase;
+}
+
+/* ---------- iter-35 Task 5: move log flash animation ---------- */
+
+@keyframes log-flash {
+  0%   { background: rgba(200, 170, 50, 0.2); }
+  100% { background: transparent; }
+}
+
+.move-log-entry.flash,
+.trail-step.flash,
+[data-flash="true"] {
+  animation: log-flash 800ms ease-out forwards;
+}
+
+/* ---------- CSS micro-polish: step-bot secondary button ---------- */
+
+[data-testid="step-bot"] {
+  background: rgba(40, 60, 120, 0.5);
+  border: 1px solid rgba(80, 120, 200, 0.4);
+  border-radius: 5px;
+  color: #8ab0e8;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  transition: background 150ms;
+}
+[data-testid="step-bot"]:hover:not(:disabled) {
+  background: rgba(50, 80, 160, 0.6);
+  color: #b0d0ff;
+}
+[data-testid="step-bot"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* ---------- CSS micro-polish: energy glyph glow when non-zero ---------- */
+
+.power-glyph[data-kind="energy"]:not([data-count="0"]) {
+  box-shadow: 0 0 8px rgba(200, 180, 40, 0.4);
+  border-radius: 50%;
+}
+
+/* ---------- iter-42a Task 1: opponent power glyphs wrap + smaller size ---------- */
+
+.seat-opponent .power-glyph-row { flex-wrap: wrap; gap: 2px; }
+.seat-opponent .power-glyph { width: 20px; height: 20px; font-size: 9px; }
+
+/* ---------- iter-42a Task 2: move log flash animation on new entries ---------- */
+
+@keyframes log-entry-flash {
+  0%   { background: rgba(100,140,200,0.25); }
+  100% { background: transparent; }
+}
+.trail li:first-child { animation: log-entry-flash 0.8s ease-out; }
+
+/* ---------- iter-42a Task 3: DeckPile RiftAtlas compact pips ---------- */
+
+.deck-pile { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 36px; }
+.deck-pile-count {
+  font-size: 14px; font-weight: 700;
+  color: #e8d5a3;
+  text-shadow: 0 0 6px rgba(200,160,40,0.5);
+  line-height: 1;
+}
+.deck-pile-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #6080b0; }
+.deck-pile[data-variant="trash"] .deck-pile-count { color: #b06060; }
+.deck-pile[data-variant="rune"] .deck-pile-count { color: #a0d0a0; }
+
+/* ---------- iter-42a Task 4 / iter-E: VpBadge gold pill ---------- */
+
+.vp-badge {
+  font-size: 12px; font-weight: 700;
+  padding: 2px 8px; border-radius: 10px;
+  background: rgba(212,175,60,0.15);
+  border: 1px solid rgba(212,175,60,0.5);
+  color: #d4af3c;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.vp-badge-at-match-point {
+  border-color: rgba(212,175,60,0.8);
+  color: #f0d060;
+  box-shadow: 0 0 8px rgba(212,175,60,0.4);
+}
+
+/* Flatten vp-badge inner so it doesn't fight the gold pill layout */
+.vp-badge .vp-badge-inner {
+  background: none;
+  border-radius: 0;
+  height: auto;
+  width: auto;
+  flex-direction: row;
+  gap: 2px;
+  font-size: inherit;
+  line-height: inherit;
+}
+.vp-badge .vp-badge-current {
+  color: #d4af3c;
+  font-size: 12px;
+  font-weight: 700;
+}
+.vp-badge .vp-badge-sep { display: none; }
+.vp-badge .vp-badge-target { display: none; }
+.vp-badge .vp-badge-label {
+  color: #d4af3c;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin-top: 0;
+}
+
+/* ---------- iter-E: player resources + xp dimming ---------- */
+
+.player-resources {
+  font-size: 10px;
+  color: rgba(160,180,220,0.6);
+}
+.player-xp-badge,
+.player-hand-count {
+  font-size: 10px;
+  color: rgba(140,170,210,0.7);
+}
+
+/* ---------- iter-42a Task 5: hand chip hover lift improvement ---------- */
+
+.hand-chip { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.hand-chip:hover {
+  transform: translateY(-14px) scale(1.05);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.7), 0 0 0 2px rgba(200,160,40,0.7);
+  z-index: 20;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* ---------- iter-42a Task 6: board-main mid gradient band ---------- */
+
+.board-main {
+  background: linear-gradient(
+    to bottom,
+    rgba(10,14,35,0.0) 0%,
+    rgba(15,20,45,0.3) 50%,
+    rgba(10,14,35,0.0) 100%
+  );
+}
+
+/* ---------- iter-42a Task 7: showdown breadcrumb more visible ---------- */
+
+.showdown-breadcrumb {
+  background: rgba(30,15,60,0.8);
+  border: 1px solid rgba(160,80,200,0.6);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px; font-weight: 600;
+  color: #c080e0;
+  text-align: center;
+  margin: 4px 0;
+}
+
+/* ---------- iter-43a Task A: opponent hand back count label ---------- */
+
+.hand-back-count-label {
+  align-items: center;
+  align-self: center;
+  background: rgba(20, 35, 70, 0.75);
+  border: 1px solid rgba(80, 120, 200, 0.35);
+  border-radius: 10px;
+  color: rgba(160, 190, 230, 0.8);
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  margin-right: 6px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+/* ---------- iter-43a Task B: BF side-slot z-index above full-tile art ---------- */
+
+/* .bf .bf-side already gets z-index:1 via the rule added above */
+
+/* ---------- iter-43a Task E: phase active pill stronger visibility ---------- */
+
+/* Strengthen the active pill beyond the current blue — gold border pulse
+ * already handles the animation; here we add a brighter background. */
+.phase-active {
+  background: #2e5fc8;
+  box-shadow:
+    0 0 0 1px rgba(255, 217, 107, 0.6),
+    0 0 14px rgba(58, 111, 212, 0.8);
+}
+
+/* ---------- iter-43a Task D: CardOverlay popover min/max width ---------- */
+
+/* The Popover renders inline styles; the wrapper provides the positioning
+ * context. Ensure the popover never narrows below 200px. */
+.card-overlay-wrapper {
+  min-width: 0; /* already set inline but ensure class-level safety */
+}
+
+/* ---------- iter-43a Task F: body radial gradient already in place ---------- */
+
+/* Confirmed: html,body,#root rule has radial-gradient at top of file. */
+
+/* ---------- iter-45a: visual polish batch ---------- */
+
+/* D. Power glyph data-kind colored orbs (fallback/override for --gem-color) */
+.power-glyph[data-kind="Body"] { --gem-color: rgba(180,50,50,1); }
+.power-glyph[data-kind="body"] { --gem-color: rgba(180,50,50,1); }
+.power-glyph[data-kind="Mind"] { --gem-color: rgba(50,80,180,1); }
+.power-glyph[data-kind="mind"] { --gem-color: rgba(50,80,180,1); }
+.power-glyph[data-kind="Spirit"] { --gem-color: rgba(50,160,80,1); }
+.power-glyph[data-kind="spirit"] { --gem-color: rgba(50,160,80,1); }
+.power-glyph[data-kind="Chaos"] { --gem-color: rgba(160,50,160,1); }
+.power-glyph[data-kind="chaos"] { --gem-color: rgba(160,50,160,1); }
+.power-glyph[data-kind="Fury"] { --gem-color: rgba(180,100,20,1); }
+.power-glyph[data-kind="fury"] { --gem-color: rgba(180,100,20,1); }
+.power-glyph[data-kind="Calm"] { --gem-color: rgba(50,175,120,1); }
+.power-glyph[data-kind="calm"] { --gem-color: rgba(50,175,120,1); }
+.power-glyph[data-kind="Order"] { --gem-color: rgba(200,210,224,1); }
+.power-glyph[data-kind="order"] { --gem-color: rgba(200,210,224,1); }
+.power-glyph[data-kind="energy"] { --gem-color: rgba(212,175,60,1); }
+
+/* E. XP display badge */
+.player-xp-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #90d0a0;
+  padding: 1px 5px;
+  background: rgba(20,60,30,0.6);
+  border-radius: 4px;
+  border: 1px solid rgba(80,160,80,0.4);
+}
+
+/* ---------- iter-46: visual polish batch ---------- */
+
+/* A. Self-seat power glyphs: compact 24px gems instead of 30px so the
+ *    resources row is shorter and more vertical space goes to the BF band. */
+.seat-self .power-glyph {
+  --gem-size: 24px;
+}
+.seat-self .power-glyph-summary {
+  font-size: 10px;
+}
+
+/* B. Deck pile compact in self seat — reduce size slightly. */
+.seat-self .deck-pile {
+  height: 48px;
+  width: 38px;
+}
+.seat-self .deck-pile-card {
+  height: 38px;
+}
+
+/* C. Board side flex fill: move-log expands to fill remaining sidebar. */
+.board-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.board-side > * { flex-shrink: 0; }
+.move-log-fill {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow-y: auto;
+}
+
+/* D. BF mini-chip image: ensure art fills the chip cleanly */
+.bf-mini-chip-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+/* E. Hand chip image: reinforce full-coverage fill */
+.hand-chip-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+/* F. Opponent seat: tighter — reduce max-height so BF gets more room */
+.seat-opponent {
+  max-height: 170px;
+}
+.seat-opponent .hand {
+  max-height: 90px;
+}
+
+/* G. Player stats row: tighter padding, less prominent */
+.player-stats,
+.player-stats-compact {
+  padding: 0 8px;
+  margin: 0;
+  font-size: 10px;
+  color: rgba(160,180,220,0.6);
+}
+.player-stats li strong,
+.player-stats-compact li strong {
+  color: rgba(180,200,240,0.7);
+  font-weight: 600;
+}
+
+/* H. Player header: tighter padding */
+.player-header {
+  padding: 4px 8px;
+}
+
+/* I. BF tile min-height: let tiles fill more of the band vertically */
+.bf,
+.bf-tile {
+  min-height: 220px;
+}
+
+/* J. Sidebar border line — make it crisper */
+.board-side {
+  border-left: 1px solid rgba(40, 60, 120, 0.5);
+  background: rgba(8, 12, 30, 0.92);
+}
+
+/* ---------- iter-47: move log trail item separators + hover ---------- */
+
+.trail-item,
+.trail li {
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(30, 45, 80, 0.5);
+  font-size: 11px;
+  color: #6080a0;
+  transition: background 0.15s;
+}
+
+.trail-item:hover,
+.trail li:hover {
+  background: rgba(40, 60, 100, 0.3);
+  color: #90b0d0;
+}
+
+.trail-item:first-child,
+.trail li:first-child {
+  color: #a0c0e0;
+  font-weight: 500;
+}
+
+/* ---------- iter-47: active player — stronger blue highlight + avatar glow ---------- */
+
+.player-active {
+  background: rgba(30, 50, 100, 0.4);
+  border: 1px solid rgba(58, 111, 212, 0.4);
+  border-radius: 8px;
+}
+
+.player-avatar-active {
+  box-shadow: 0 0 12px rgba(58, 111, 212, 0.8);
+  border-color: rgba(58, 111, 212, 0.8);
+}
+
+/* ---------- iter-48 visual-polish pass ---------- */
+
+/* A. bf-mini-chip: stronger dark backdrop for art chips so unit is legible
+ * over battlefield art. Remove the transparent override. */
+.bf-mini-chip[data-has-image="true"] {
+  background: linear-gradient(160deg, rgba(15,22,50,0.80) 0%, rgba(8,12,35,0.85) 100%) !important;
+  border: 1.5px solid rgba(100,140,200,0.55);
+}
+
+/* A2. name-banner: always show for attacker/defender role chips (not hover-only) */
+.bf-mini-chip[data-role="attacker"] .bf-mini-chip-name-banner,
+.bf-mini-chip[data-role="defender"] .bf-mini-chip-name-banner {
+  opacity: 1;
+}
+
+/* A3. might badge: more prominent */
+.bf-mini-chip-might {
+  background: rgba(180, 40, 50, 0.95) !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  min-width: 16px;
+  padding: 2px 5px;
+}
+
+/* B. RESOLVE COMBAT button: slightly larger padding + stronger disabled state */
+.combat-panel-flow-actions [data-testid="combat-resolve"] {
+  font-size: 13px !important;
+  padding: 12px 16px !important;
+  letter-spacing: 1.2px !important;
+  box-shadow: 0 0 14px rgba(255, 200, 90, 0.55), 0 4px 12px rgba(0,0,0,0.4) !important;
+}
+.combat-panel-flow-actions [data-testid="combat-resolve"]:disabled {
+  background: linear-gradient(180deg, #7a6038 0%, #4a3a18 100%) !important;
+  border-color: rgba(180, 150, 80, 0.5) !important;
+  color: rgba(220, 200, 140, 0.6) !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+  opacity: 0.75 !important;
+}
+
+/* C. End Turn button: taller + wider — make it the dominant CTA */
+[data-testid="end-turn"]:not(:disabled) {
+  font-size: 14px !important;
+  padding: 11px 20px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(34,85,187,0.5) !important;
+  letter-spacing: 0.06em !important;
+}
+
+/* D. BF title pill: darker background, white text, bolder */
+.bf-title {
+  background: rgba(0, 0, 0, 0.78) !important;
+  border-radius: 4px !important;
+  color: #e8f0ff !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em !important;
+  padding: 3px 8px !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* E. Game-over banner: stronger blur + slightly brighter inner glow */
+.game-over-banner {
+  background: rgba(4, 6, 18, 0.92) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+/* F. Showdown breadcrumb: more contrast */
+.showdown-breadcrumb,
+[data-testid="showdown-breadcrumb"] {
+  background: rgba(10, 15, 40, 0.9);
+  border: 1px solid rgba(80, 120, 200, 0.35);
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+}
+
+/* G. Combat panel header title: make bf id more scannable */
+.combat-panel-title {
+  color: #b0c8f0 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.3px;
+}
+
+/* H. BF slot empty: extremely subtle so real units pop more */
+.bf-slot-empty {
+  border: 1px dashed rgba(100, 130, 200, 0.3) !important;
+  border-radius: 4px !important;
+  opacity: 0.2;
+}
+
+/* I. bf-side with state=contested: stronger red glow outline */
+.bf-side-contested {
+  box-shadow: inset 0 0 0 2px rgba(220, 60, 60, 0.6), 0 0 8px rgba(220, 60, 60, 0.25) !important;
+}
+
+/* J. controls section: End Turn is full-width in the sidebar column; Step Bot
+ * and Refresh sit in a row below it. */
+[data-testid="end-turn"] {
+  width: 100%;
+}
+
+/* ---------- iter-49: visual-polish RiftAtlas parity ---------- */
+
+/* A. DeckPile stack wrapper — the 3 card-edge silhouettes sit inside this
+ * relative box so the count badge can remain positioned on the outer .deck-pile
+ * while the stack itself is a self-contained 32×44 block. */
+.deck-pile-stack {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 46px;
+  flex-shrink: 0;
+}
+
+/* B. Phase strip — replace the gold pulse with a calmer blue breathing glow
+ * that matches RiftAtlas. The gold pulse animation stays in place for the
+ * number badge (.phase-num); only the pill body gets the blue breathe. */
+@keyframes phase-breathe {
+  0%, 100% { box-shadow: 0 0 6px rgba(58, 111, 212, 0.5); }
+  50%       { box-shadow: 0 0 14px rgba(58, 111, 212, 0.9); }
+}
+
+/* Override the earlier phase-active rule: keep background/border, swap
+ * the heavy gold pulse on the pill body for a subtle blue breathe. */
+.phase-active {
+  animation: phase-breathe 2.5s ease-in-out infinite;
+}
+
+/* C. CardOverlay popover — premium floating panel CSS.
+ * The component renders the popover with inline styles, so these class
+ * selectors reinforce / polish the look for the .card-overlay-wrapper
+ * children that DO carry class names. */
+.card-overlay-popover {
+  position: absolute;
+  z-index: 200;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 220px;
+  background: linear-gradient(160deg, rgba(12, 20, 50, 0.98) 0%, rgba(8, 14, 36, 0.99) 100%);
+  border: 1.5px solid rgba(60, 100, 200, 0.5);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  animation: popover-fade-in 0.15s ease;
+}
+
+@keyframes popover-fade-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* D. CombatPanel unit chips — styled chip row with red might badge. */
+.combat-unit-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(20, 30, 60, 0.7);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.combat-unit-might {
+  background: rgba(160, 30, 30, 0.8);
+  color: #ffcccc;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Strengthen the existing combat-panel-unit-might to match the red spec. */
+.combat-panel-unit-might {
+  background: rgba(160, 30, 30, 0.85) !important;
+  border: 1px solid rgba(220, 80, 80, 0.6) !important;
+  border-radius: 3px !important;
+  color: #ffcccc !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  padding: 1px 5px !important;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* ---------- iter-C: visual polish ---------- */
+
+/* Issue 3: BF tile CSS background fallback when CDN art doesn't load
+ * (headless screenshots, offline). Gives each tile a distinctive dark
+ * gradient so tiles are clearly defined without the image asset. */
+.bf-tile {
+  background: linear-gradient(135deg, rgba(15,20,45,0.95) 0%, rgba(25,35,70,0.9) 100%);
+}
+
+/* Issue 4: contested tile gets a red-tinted background; idle tiles stay
+ * dark navy so the two BF lanes read as visually distinct states. */
+.bf[data-contested="true"],
+.bf-tile[data-contested="true"] {
+  background: linear-gradient(135deg, rgba(30,15,15,0.95) 0%, rgba(60,20,20,0.9) 100%);
+}
+
+/* Issue 5: ATTACKING badge — ensure the red pill spec is met.
+ * .bf-mini-chip-role-badge-attacker already covers this but we reinforce
+ * the exact values from the spec. */
+.bf-mini-chip-role-badge-attacker {
+  background: rgba(180,40,40,0.85);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+/* ===== ERIC FEEDBACK FIX (2026-05-13): landscape BF tiles, no scale hack =====
+ * Problem: BF tiles were portrait-shaped (flex-stretch made them very tall).
+ * With portrait tiles + landscape 1038×744 image, object-fit:cover scales by
+ * HEIGHT, showing the full card height → both our-side and opponent text visible.
+ * The scale(1.6) workaround cropped this but caused black-dot edge artifacts.
+ *
+ * Fix: cap battlefield-band + BF tiles to a fixed landscape height.
+ * Now object-fit:cover scales by WIDTH (tile is wider-than-tall relative to
+ * image), creating ~80px vertical overflow. object-position:50% 68% shifts
+ * into the lower art zone, hiding upside-down opponent text. No transform needed.
+ * ============================================================================= */
+
+.battlefield-band {
+  max-height: 210px !important;
+  min-height: 160px !important;
+  flex: 0 0 auto !important;
+}
+
+.bf,
+.bf-tile {
+  max-height: 185px !important;
+  min-height: 140px !important;
+}
+
+.bf-image.bf-image-full {
+  transform: none !important;
+  transform-origin: unset !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  object-position: 50% 68% !important;
+  filter: brightness(0.52) saturate(0.65) !important;
+}
+
+/* Fix dead space: seat-self should fill remaining board height after
+ * the landscape BF band is capped. */
+.seat-self {
+  flex: 1 1 auto !important;
+  min-height: 160px !important;
+}
+
+/* Pin hand chips to the bottom of the self-seat area (game-table feel). */
+.seat-self .player {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  justify-content: flex-end !important;
+}
+.seat-self .hand {
+  align-items: flex-end !important;
+  flex-shrink: 0 !important;
+  padding-bottom: 12px !important;
+}
+
+/* ---------- iter-F: layout compaction + hand chip sizing ---------- */
+
+/* 1. Collapse empty base zone — compact strip when no units present */
+.base-zone {
+  min-height: 0 !important;
+  flex-shrink: 1 !important;
+  transition: max-height 0.2s ease;
+}
+.base-zone[data-base-empty="true"] {
+  max-height: 36px !important;
+  overflow: hidden !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+
+/* 2. Hand chips larger — at least 88px wide */
+.hand-chip {
+  width: 88px !important;
+  height: 124px !important;
+  flex-shrink: 0 !important;
+  border-radius: 8px !important;
+}
+.seat-self .hand .hand-chip + .hand-chip,
+.seat-self .hand .card-overlay-wrapper + .card-overlay-wrapper {
+  margin-left: -14px !important;
+}
+
+/* 3. Player info strip — compact resource/hand labels */
+.player-resources,
+.player-hand-count {
+  font-size: 10px !important;
+  color: rgba(150, 170, 210, 0.55) !important;
+}
+
+/* 4. BATTLEFIELD watermark text — hide it */
+.bf-type-label,
+.bf-watermark,
+.battlefield-label {
+  display: none !important;
+}
+
+/* Mask BF card-image type text (e.g. "BATTLEFIELD" subtype from card art).
+ * A bottom gradient fade over the full-tile image hides the printed card text
+ * while preserving the art in the main body of the tile. */
+.bf-image.bf-image-full {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    black 68%,
+    transparent 92%
+  ) !important;
+  mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    black 68%,
+    transparent 92%
+  ) !important;
+}
+/* Also fade the top slightly to remove any remaining opponent-text bleed */
+.bf-image.bf-image-full {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.0) 0%,
+    black 8%,
+    black 70%,
+    transparent 92%
+  ) !important;
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.0) 0%,
+    black 8%,
+    black 70%,
+    transparent 92%
+  ) !important;
+}
+
+/* Tighten BF art mask: fade starts at 52% so card-type text is fully hidden. */
+.bf-image.bf-image-full {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0%,
+    black 6%,
+    black 52%,
+    transparent 88%
+  ) !important;
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0%,
+    black 6%,
+    black 52%,
+    transparent 88%
+  ) !important;
+}
+
+/* iter-G: force hand chip to portrait card size — hyper-specific selector beats
+ * the flat .hand-chip !important set in iter-F (which accidentally shrank chips
+ * to 88px, below the base rule's 96px). The 4-class chain beats every earlier
+ * rule without needing a new layer or :is() hack. */
+.seat-self .player .hand .hand-chip {
+  width: 96px !important;
+  height: 136px !important;
+  flex-shrink: 0 !important;
+  position: relative !important;
+  overflow: hidden !important;
+  border-radius: 8px !important;
+}
+.seat-self .player .hand .hand-chip + .hand-chip {
+  margin-left: -20px !important;
+}
+.seat-self .player .hand {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-end !important;
+  flex-wrap: nowrap !important;
+  padding: 4px 16px 16px !important;
+  gap: 0 !important;
+  overflow: visible !important;
+}
+.seat-self .player .hand .hand-chip .hand-chip-image,
+.seat-self .player .hand .hand-chip img {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: inherit !important;
+}
+
+/* iter-H: remove seat-self flex-grow so empty base doesn't create giant void */
+.seat-self {
+  flex: 0 0 auto !important;
+  min-height: unset !important;
+}
+.seat-self .player {
+  justify-content: flex-start !important;
+}
+.seat-self .hand {
+  padding-bottom: 16px !important;
+  padding-top: 8px !important;
+}
+
+/* iter-H: collapse empty base zone to near-zero — hide label and empty text */
+.base-zone[data-base-empty="true"] .base-zone-header,
+.base-zone[data-base-empty="true"] .base-zone-empty {
+  display: none !important;
+}
+.base-zone[data-base-empty="true"] {
+  max-height: 4px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  border-style: none !important;
+  min-height: 0 !important;
+}
+
+/* iter-J: hide opponent hand count text label — face-down chips convey count visually */
+.seat-opponent .hand-back-count-label {
+  display: none !important;
+}
+
+/* iter-J: hide stray close/remove buttons on BF tiles */
+.bf-tile-close,
+.bf-close-btn,
+.battlefield-remove {
+  display: none !important;
+}
+
+/* ========== iter-K fixes ========== */
+
+/* Problem 1: opponent compact face-down chips — shrink to 32×46px so
+ * they fit inside the narrow opponent strip (max-height:170px) without
+ * overflowing. The hand div is already styled as a flex row; we just
+ * override the compact chip size here for the opponent seat only. */
+.seat-opponent .hand-chip.hand-chip-back-compact {
+  width: 32px !important;
+  height: 46px !important;
+  min-width: 32px !important;
+  border-radius: 4px !important;
+}
+.seat-opponent .hand-chip-back + .hand-chip-back {
+  margin-left: -10px !important;
+}
+/* Show the opponent hand even when seat is compressed */
+.seat-opponent .hand {
+  overflow: visible !important;
+  max-height: none !important;
+}
+.seat-opponent {
+  max-height: 180px !important;
+}
+
+/* Problem 2: hide BF rules text that bleeds through the art gradient.
+ * The `.bf-tile-center > .bf-rules-text { display: none }` rule above
+ * already hides it by default; this !important version beats any late-
+ * arriving overrides and covers the direct .bf-rules-text selector too.
+ * The :has() rule that reveals it on checkbox check still takes priority
+ * because :has() specificity is higher — toggling [i] still works. */
+.bf-rules-text {
+  display: none !important;
+}
+/* Reveal only when the toggle checkbox is checked (preserves the [i] UX) */
+.bf-tile-center:has(.bf-rules-toggle-input:checked) > .bf-rules-text {
+  display: block !important;
+}
+
+/* Problem 3: hide the unaffordable ✗ badge unless the chip is hovered.
+ * The badge already conveys zero information at-a-glance (the
+ * grayscale+dim filter on the chip itself is the primary signal);
+ * showing it permanently clutters the hand, especially on the last
+ * chip where it reads as a "close" button to new players. */
+.hand-chip-unaffordable-badge {
+  opacity: 0 !important;
+  transition: opacity 0.15s !important;
+}
+.hand-chip:hover .hand-chip-unaffordable-badge,
+.hand-chip:focus-visible .hand-chip-unaffordable-badge {
+  opacity: 1 !important;
+}
+
+/* iter-K: tighten BF art mask so the printed card rules text at the
+ * bottom of the card image is fully covered. Previous masks faded at
+ * 52-88% of the tile height; tightening to 40-65% clips the bottom
+ * ~35% of the image, keeping the art centre-visible while the printed
+ * text (which lives in the lower ~25% of a 744px card) is masked out.
+ * Also add a solid dark overlay via ::after on the .bf-tile-center to
+ * guarantee the bottom edge is opaque regardless of mask precision. */
+.bf-image.bf-image-full {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0%,
+    black 6%,
+    black 40%,
+    transparent 65%
+  ) !important;
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0%,
+    black 6%,
+    black 40%,
+    transparent 65%
+  ) !important;
+}
+
+/* ============================================================
+ * iter-L: bottom-edge polish
+ * ============================================================ */
+
+/* iter-L Problem 1 — kill BF tile title overflow ("to ...").
+ *
+ * The `.bf.bf-art .bf-header` rule (line ~2323) flips the header from
+ * absolute-positioned (pinned to tile top) to relative-positioned,
+ * which lands it INSIDE the narrow 76px-wide `.bf-tile-center` column
+ * at the bottom of the tile. The `.bf-title` ("Altar to Unity") is
+ * wider than the column and overflows to the left, producing the
+ * visible "to ..." text fragment in the lower-left corner.
+ *
+ * Fix: constrain the header to its parent column and clip the title
+ * with ellipsis so it never bleeds outside `.bf-tile-center`. The
+ * title is still visible in the breadcrumb / combat panel, so losing
+ * a few characters on the tile is acceptable. */
+.bf .bf-tile-center {
+  overflow: hidden !important;
+  max-width: 100% !important;
+}
+.bf .bf-tile-center .bf-header {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  flex-wrap: nowrap !important;
+}
+.bf .bf-tile-center .bf-title {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+}
+/* Defensive — hide any rules-preview / name-preview sub-elements that
+ * might be added under .bf-tile in the future. */
+.bf-tile .bf-name-preview,
+.bf-tile .bf-text-preview,
+.bf-tile-preview-text,
+.bf-tile .bf-rules-preview {
+  display: none !important;
+}
+
+/* iter-L Problem 2 — compact empty board area.
+ *
+ * `.board-main` was previously `height: 100%` inside a `100vh` parent,
+ * stretching ~600px of empty dark blue below the player hand. Switch to
+ * content-based sizing and align the board to start so the empty area
+ * collapses. The sidebar keeps its own `max-height: 100vh; overflow-y:
+ * auto` so it is unaffected. */
+.board-main {
+  height: auto !important;
+  min-height: auto !important;
+  align-self: start !important;
+}
+.board {
+  align-items: start !important;
+}
+/* Add a subtle radial glow on whatever empty area remains so the
+ * background reads as a game table rather than a void. */
+.play-page {
+  background: radial-gradient(
+    ellipse 70% 40% at 50% 20%,
+    rgba(40, 60, 110, 0.25) 0%,
+    transparent 70%
+  ), linear-gradient(180deg, #0a1224 0%, #050911 100%);
+}
+
+/* iter-L Problem 3 — opponent face-down chips look more card-like.
+ *
+ * Previously the compact-mode chips were 32×46 thin strips with a
+ * stripe pattern, reading as vertical lines. Bump dimensions and add
+ * a card-mat gradient + inset border so they read as mini face-down
+ * cards. */
+.seat-opponent .hand-chip.hand-chip-back,
+.seat-opponent .hand-chip.hand-chip-back-compact {
+  width: 36px !important;
+  height: 50px !important;
+  min-width: 36px !important;
+  min-height: 50px !important;
+  padding: 0 !important;
+  background:
+    linear-gradient(135deg, #2a3458 0%, #1a2240 100%),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.04) 0 3px,
+      rgba(0, 0, 0, 0.1) 3px 6px
+    ) !important;
+  border: 1px solid #4a5a85 !important;
+  border-radius: 4px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(140, 175, 230, 0.1),
+    0 1px 3px rgba(0, 0, 0, 0.4) !important;
+  position: relative !important;
+}
+.seat-opponent .hand-chip.hand-chip-back::before,
+.seat-opponent .hand-chip.hand-chip-back-compact::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 4px !important;
+  border: 1px solid rgba(140, 175, 230, 0.25) !important;
+  border-radius: 2px !important;
+  pointer-events: none !important;
+}
+.seat-opponent .hand-chip-back + .hand-chip-back,
+.seat-opponent .hand-chip-back-compact + .hand-chip-back-compact {
+  margin-left: -14px !important;
+}
+
+/* ============================================================
+ * iter-M: bigger opponent chips + hover-zoom
+ * ============================================================ */
+
+/* iter-M Problem 1 — opponent face-down chips MUCH larger so Eric can
+ * see hand size at a glance. The iter-L compact 36×50 chips overlap
+ * to two thin stripes near the VP badge. Bump to 56×78, reduce the
+ * overlap to -8px so each chip is clearly card-shaped, and give the
+ * hand container room to fan out. */
+.seat-opponent .hand .hand-chip.hand-chip-back,
+.seat-opponent .hand-chip-back-compact,
+.hand-opponent-mini .hand-chip {
+  width: 56px !important;
+  height: 78px !important;
+  min-width: 56px !important;
+  min-height: 78px !important;
+  border-radius: 6px !important;
+}
+.seat-opponent .hand .hand-chip.hand-chip-back + .hand-chip.hand-chip-back,
+.seat-opponent .hand-chip-back-compact + .hand-chip-back-compact {
+  margin-left: -8px !important;
+}
+.seat-opponent .hand,
+.seat-opponent .hand-opponent-mini {
+  max-width: 360px !important;
+  overflow: visible !important;
+}
+/* Re-anchor the inner ::before frame for the larger chips. */
+.seat-opponent .hand-chip.hand-chip-back::before,
+.seat-opponent .hand-chip.hand-chip-back-compact::before {
+  inset: 6px !important;
+  border-radius: 3px !important;
+}
+
+/* iter-M Problem 2 — hover-zoom preview on cards.
+ *
+ * Any card element that sets the `--card-img` CSS custom property to
+ * a `url(...)` value renders a 240×336 preview to its right on hover.
+ * Falls back gracefully (no preview) when `--card-img` is unset.
+ *
+ * The preview is a `::after` pseudo so we don't need a portal / React
+ * tree change — pure CSS. `pointer-events: none` keeps the preview
+ * from stealing hover from the trigger and causing flicker. */
+.hand-chip,
+.bf-unit,
+.bf-mini-chip,
+.combat-panel-unit,
+.hand-chip-back {
+  position: relative;
+}
+.hand-chip:hover::after,
+.bf-unit:hover::after,
+.bf-mini-chip:hover::after,
+.combat-panel-unit:hover::after {
+  content: "";
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 240px;
+  height: 336px;
+  background-image: var(--card-img, none);
+  background-size: cover;
+  background-position: center;
+  background-color: transparent;
+  border-radius: 12px;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.7),
+    0 0 0 2px rgba(220, 180, 80, 0.6);
+  z-index: 9999;
+  pointer-events: none;
+  /* Suppress the preview entirely when no image URL is wired
+   * (the default `none` background renders an empty gold-bordered
+   * box, which is ugly — hide it by making it invisible). */
+  opacity: 1;
+}
+/* When --card-img is unset (e.g. opponent face-down chips, units
+ * without art), suppress the preview by hiding the pseudo. We use
+ * a fallback technique: a transparent 1x1 pixel as the default. */
+.hand-chip,
+.bf-unit,
+.bf-mini-chip,
+.combat-panel-unit {
+  --card-img: none;
+}
+.hand-chip[data-has-image="false"]:hover::after,
+.bf-unit[data-has-image="false"]:hover::after,
+.bf-mini-chip[data-has-image="false"]:hover::after,
+.combat-panel-unit[data-has-image="false"]:hover::after {
+  display: none;
+}
+
+/* iter-N: reveal-hand picker — disable invalid picks, enable valid ones */
+.hand-revealed .hand-chip[data-pickable="false"] {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.6) !important;
+}
+.hand-revealed .hand-chip[data-pickable="true"] {
+  cursor: pointer !important;
+  transition: transform 0.15s, box-shadow 0.15s !important;
+}
+.hand-revealed .hand-chip[data-pickable="true"]:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 8px 24px rgba(220, 180, 80, 0.4), 0 0 0 2px rgba(220, 180, 80, 0.7) !important;
+}
+
+/* iter-N: player-target picker variant — two big buttons (You / Opponent)
+ * instead of a list of battlefield-unit rows. Disabled state for the
+ * `which` axis (e.g. "opponent" disables You) keeps the button visible so
+ * the player can see WHY a side is illegal, but blocks the click. */
+.target-picker-options-player {
+  display: flex !important;
+  gap: 12px !important;
+  flex-direction: row !important;
+  justify-content: center !important;
+  padding: 12px 0 !important;
+}
+.target-picker-options-player > button {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 16px 12px !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  transition: transform 0.15s, box-shadow 0.15s !important;
+  min-width: 120px !important;
+}
+.target-picker-options-player > button:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.5) !important;
+}
+.target-picker-options-player > button:not(:disabled):hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px rgba(220, 180, 80, 0.35), 0 0 0 2px rgba(220, 180, 80, 0.6) !important;
+}
+.target-picker-options-player .target-option-label {
+  font-size: 1.1em !important;
+  font-weight: 600 !important;
+}
+.target-picker-options-player .target-option-meta {
+  font-size: 0.8em !important;
+  opacity: 0.75 !important;
+}
+
+/* iter-N: in revealer-pick mode, the "unaffordable" dimming would
+ * misleadingly grey out pickable cards (the opponent's energy doesn't
+ * matter — the prompter is the one picking). Override the unaffordable
+ * filter/opacity for pickable chips so the pick affordance reads
+ * clearly. Unpickable chips get the dim treatment from the rule above. */
+.hand-revealed .hand-chip-pickable.hand-chip-unaffordable {
+  opacity: 1 !important;
+  filter: none !important;
+}
+.hand-revealed .hand-chip-pickable .hand-chip-unaffordable-badge {
+  display: none !important;
+}

@@ -26,6 +26,15 @@ import { fireTriggers as engineFireTriggers } from "../../abilities/trigger-runn
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import type { GameEvent } from "../../abilities/game-events";
 import type { TurnInteractionState } from "../../chain/chain-state";
+import {
+  type DispatchContext,
+  type ListenerRegistry,
+  buildListenerRegistry,
+  dispatchEvent,
+  dispatchUnitDied,
+  runStateMaintenance,
+} from "../../events";
+import type { GameEventRecord } from "../../events";
 import { riftboundDefinition } from "../../game-definition/definition";
 import {
   type CardDefinitionLookup,
@@ -273,6 +282,21 @@ export function createMinimalGameState(overrides: MinimalStateOverrides = {}): A
   // TurnNumber=1 inside hooks.
   if (flowManager && overrides.turn !== undefined) {
     (flowManager as unknown as { turnNumber: number }).turnNumber = overrides.turn;
+  }
+  // Align the flow manager's internal `currentPhase` with the user-overridden
+  // State.turn.phase. After `nextGameSegment()` the flow manager set
+  // `currentPhase` to mainGame.turn.initialPhase ("awaken") — but the test
+  // Overrode the state phase via direct patch. Without this, any subsequent
+  // `executeMove` call would see `checkEndConditions` consult the stale
+  // `awaken` phase (endIf=true) and silently auto-advance the flow, which
+  // (post-batch-15 core fix that back-syncs flow-manager gameState into
+  // Engine.currentState) now leaks into the engine view as a surprise phase
+  // Change. Tests that intentionally want to "drive THROUGH" a phase via
+  // `advancePhase(engine, target)` should pass a starting phase EARLIER than
+  // The target so the flow manager walks (and fires hooks) on the way.
+  if (flowManager && overrides.phase !== undefined) {
+    (flowManager as unknown as { currentPhase: string | undefined }).currentPhase =
+      overrides.phase;
   }
 
   // Optional battlefields.
@@ -544,6 +568,15 @@ export function advancePhase(engine: AuditEngine, targetPhase: GamePhase): void 
     }
   }
 
+  // If we're already AT the target phase (post-batch-15: `createMinimalGameState`
+  // Sets the flow manager's currentPhase to the override phase up-front), step
+  // ONE phase forward and then come around back to the target via the normal
+  // Walk loop. This ensures the target phase's `onBegin` actually fires —
+  // Tests rely on the documented "Advance the game's phase up to (and
+  // Including the `onBegin` of) the target phase" contract.
+  if (flowManager.getCurrentPhase?.() === targetPhase) {
+    flowManager.nextPhase();
+  }
   steps = 0;
   while (flowManager.getCurrentPhase?.() !== targetPhase && steps++ < MAX_STEPS) {
     const before = flowManager.getCurrentPhase?.();
@@ -595,15 +628,24 @@ export function checkMoveLegal(
 }
 
 /**
- * Manually fire a game event through the trigger runner, bypassing moves.
- * Returns the number of triggers fired.
+ * Build a `TriggerRunnerContext` / `DispatchContext`-compatible bag backed
+ * by the audit engine's internal mutable state. Shared by `fireTrigger`,
+ * `dispatchEventForTest` and `buildListenerRegistryForTest`.
  */
-export function fireTrigger(engine: AuditEngine, event: GameEvent): number {
+export function buildTriggerCtxForTest(engine: AuditEngine): TriggerRunnerContext {
   const internal = asInternal(engine);
-  const ctx: TriggerRunnerContext = {
+  return {
     cards: {
+      getCardController: (cardId: CoreCardId) =>
+        internal.internalState.cards[cardId as string]?.controller,
       getCardMeta: (cardId) => internal.internalState.cardMetas[cardId as string],
       getCardOwner: (cardId) => internal.internalState.cards[cardId as string]?.owner,
+      setCardController: (cardId: CoreCardId, controllerId: CorePlayerId) => {
+        const card = internal.internalState.cards[cardId as string];
+        if (card) {
+          card.controller = controllerId;
+        }
+      },
       updateCardMeta: (cardId, meta) => {
         const current = internal.internalState.cardMetas[cardId as string];
         if (current) {
@@ -613,7 +655,7 @@ export function fireTrigger(engine: AuditEngine, event: GameEvent): number {
           };
         }
       },
-    },
+    } as TriggerRunnerContext["cards"],
     counters: {
       // AddCounter writes to `cardMetas[cardId].damage` for counter="damage",
       // Or to any other numeric meta field for named counters. Tests that
@@ -690,7 +732,110 @@ export function fireTrigger(engine: AuditEngine, event: GameEvent): number {
       },
     },
   };
-  return engineFireTriggers(event, ctx);
+}
+
+/**
+ * Manually fire a game event through the trigger runner, bypassing moves.
+ * Returns the number of triggers fired.
+ */
+export function fireTrigger(engine: AuditEngine, event: GameEvent): number {
+  return engineFireTriggers(event, buildTriggerCtxForTest(engine));
+}
+
+/**
+ * Dispatch a game event through the unified event-bus chokepoint
+ * (`events/dispatcher.ts#dispatchEvent`), bypassing moves. Optionally
+ * collects an event log so tests can assert it recorded the event.
+ * Returns the number of listener abilities that fired.
+ */
+export function dispatchEventForTest(
+  engine: AuditEngine,
+  event: GameEvent,
+  eventLog?: GameEventRecord[],
+): number {
+  const ctx = buildTriggerCtxForTest(engine) as DispatchContext;
+  if (eventLog) {
+    ctx.eventLog = eventLog;
+  }
+  return dispatchEvent(ctx, event);
+}
+
+/**
+ * Emit `unitDied` events for a batch of just-killed units through the
+ * single event-bus emission point (`dispatchUnitDied`). Returns the total
+ * number of listener abilities that fired.
+ */
+export function dispatchUnitDiedForTest(
+  engine: AuditEngine,
+  killed: readonly (string | { cardId: string; owner?: string })[],
+  eventLog?: GameEventRecord[],
+): number {
+  const ctx = buildTriggerCtxForTest(engine) as DispatchContext;
+  if (eventLog) {
+    ctx.eventLog = eventLog;
+  }
+  return dispatchUnitDied(ctx, killed);
+}
+
+/**
+ * Like {@link buildTriggerCtxForTest}, but also exposes a `counters.getCounter`
+ * (reading the same `meta.damage` / ad-hoc-field model the other counter ops
+ * write). The `dispatchEvent` static-recalc + state-based-checks maintenance
+ * pass only engages when the dispatch context exposes `getCounter`/`clearCounter`
+ * — the bare trigger context omits `getCounter` — so use this when a test wants
+ * the dispatcher to run static recalc + SBA (→ death emission) after an event.
+ */
+export function buildCleanupCapableCtxForTest(engine: AuditEngine): DispatchContext {
+  const ctx = buildTriggerCtxForTest(engine) as DispatchContext;
+  const internal = asInternal(engine);
+  (
+    ctx.counters as unknown as { getCounter: (cardId: CoreCardId, counter: string) => number }
+  ).getCounter = (cardId, counter) => {
+    const meta = internal.internalState.cardMetas[cardId as string];
+    if (!meta) {
+      return 0;
+    }
+    if (counter === "damage") {
+      return meta.damage ?? 0;
+    }
+    return (meta as unknown as Record<string, number>)[counter] ?? 0;
+  };
+  return ctx;
+}
+
+/**
+ * Dispatch an event through the chokepoint with a *cleanup-capable* context
+ * (see {@link buildCleanupCapableCtxForTest}) so the dispatcher's static
+ * recalc + state-based-checks maintenance pass runs afterwards. Returns the
+ * number of listener abilities that fired for the event itself.
+ */
+export function dispatchEventWithMaintenanceForTest(
+  engine: AuditEngine,
+  event: GameEvent,
+  eventLog?: GameEventRecord[],
+): number {
+  const ctx = buildCleanupCapableCtxForTest(engine);
+  if (eventLog) {
+    ctx.eventLog = eventLog;
+  }
+  return dispatchEvent(ctx, event);
+}
+
+/**
+ * Run the dispatcher's static-recalc + SBA + death-emission maintenance loop
+ * directly against the engine's current state (cleanup-capable ctx). Returns
+ * the total number of units reaped across all passes.
+ */
+export function runStateMaintenanceForTest(engine: AuditEngine): number {
+  return runStateMaintenance(buildCleanupCapableCtxForTest(engine));
+}
+
+/**
+ * Build the live listener registry for the engine's current state — the
+ * "every live card + the event types it subscribes to" enumeration.
+ */
+export function buildListenerRegistryForTest(engine: AuditEngine): ListenerRegistry {
+  return buildListenerRegistry(buildTriggerCtxForTest(engine));
 }
 
 /**
@@ -1204,6 +1349,16 @@ export function getCardOwner(engine: AuditEngine, cardId: CardId): string | unde
   return internal.internalState.cards[cardId as string]?.owner as string | undefined;
 }
 
+/**
+ * Read a card's current controller (rule 187 / 323.6). The controller is the
+ * player who has gameplay authority over the card right now — possibly
+ * different from its `owner` after a `take-control` effect (Hostile Takeover).
+ */
+export function getCardController(engine: AuditEngine, cardId: CardId): string | undefined {
+  const internal = asInternal(engine);
+  return internal.internalState.cards[cardId as string]?.controller as string | undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Scoring / Win-condition helpers (Wave 2D)
 // ---------------------------------------------------------------------------
@@ -1221,6 +1376,22 @@ export function setVictoryPoints(engine: AuditEngine, playerId: PlayerId, points
   const player = newState.players[playerId];
   if (player) {
     player.victoryPoints = points;
+  }
+  (internal as { currentState: RiftboundGameState }).currentState = newState;
+  engine.getFlowManager()?.syncState(newState);
+}
+
+/**
+ * Set a player's XP directly on the engine's internal state (used by tests
+ * exercising "while-level" / XP-threshold conditions without going through
+ * `gain-xp` effects).
+ */
+export function setPlayerXp(engine: AuditEngine, playerId: PlayerId, xp: number): void {
+  const internal = asInternal(engine);
+  const newState = structuredClone(internal.currentState) as RiftboundGameState;
+  const player = newState.players[playerId];
+  if (player) {
+    player.xp = xp;
   }
   (internal as { currentState: RiftboundGameState }).currentState = newState;
   engine.getFlowManager()?.syncState(newState);

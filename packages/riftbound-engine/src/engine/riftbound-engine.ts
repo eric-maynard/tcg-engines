@@ -36,7 +36,10 @@ export class RiftboundEngine {
     const { players, victoryScore = 8 } = config;
 
     // Initialize player states
-    const playerStates: Record<PlayerId, { id: PlayerId; victoryPoints: number; xp: number }> = {};
+    const playerStates: Record<
+      PlayerId,
+      { id: PlayerId; victoryPoints: number; xp: number; turnsTaken: number }
+    > = {};
     const runePools: Record<PlayerId, { energy: number; power: Record<string, number> }> = {};
     const conqueredThisTurn: Record<PlayerId, string[]> = {};
     const scoredThisTurn: Record<PlayerId, string[]> = {};
@@ -47,6 +50,7 @@ export class RiftboundEngine {
     for (const playerId of players) {
       playerStates[playerId as PlayerId] = {
         id: playerId as PlayerId,
+        turnsTaken: 0,
         victoryPoints: 0,
         xp: 0,
       };

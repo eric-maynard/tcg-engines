@@ -10,8 +10,12 @@ import type {
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
 } from "@tcg/core";
+import {
+  checkReplacement,
+  markReplacementConsumed,
+} from "../../abilities/replacement-effects";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
-import { hasPlayerWon } from "../win-conditions/victory";
+import { hasPlayerWonStrict } from "../win-conditions/victory";
 
 /**
  * Discard/trash move definitions
@@ -79,7 +83,7 @@ export const discardMoves: Partial<
       if (opponent) {
         opponent.victoryPoints += 1;
 
-        if (hasPlayerWon(draft, opponentId)) {
+        if (hasPlayerWonStrict(draft, opponentId)) {
           draft.status = "finished";
           draft.winner = opponentId;
 
@@ -141,8 +145,55 @@ export const discardMoves: Partial<
   },
 
   killUnit: {
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { cardId } = context.params;
+
+      // Rule 571-575: a "kill" instruction (rule 428) produces a "would die"
+      // Event, which a replacement effect on the board ("instead of dying,
+      // Heal/exhaust/recall…" — Zhonya's Hourglass, Tactical Retreat, Guardian
+      // Angel, Sett's legend, …) can intercede on. When a die-replacement
+      // Applies, the unit is NOT sent to the trash; per rule 357.2.a a cost
+      // Whose "kill" was replaced is still considered paid. We mirror the
+      // State-based-death-check's handling: treat any matched die-replacement
+      // As "skip the kill" (the engine doesn't yet execute the replacement's
+      // Own heal/exhaust/recall body — it just keeps the unit on the board),
+      // Consume single-fire `"next"`-duration replacements, and clear any
+      // Marked damage so the next cleanup pass doesn't re-kill it.
+      const owner =
+        (context.cards as { getCardOwner?: (id: CoreCardId) => string | undefined })
+          .getCardOwner?.(cardId as CoreCardId) ?? "";
+      const {getCardMeta} = (context.cards as {
+        getCardMeta?: (id: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
+      });
+      const getCardsInZone = context.zones.getCardsInZone as
+        | ((zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[])
+        | undefined;
+      if (getCardMeta && getCardsInZone) {
+        const replacement = checkReplacement(
+          { cardId: cardId as string, owner, type: "die" },
+          {
+            cards: {
+              getCardMeta: (id) => getCardMeta(id as CoreCardId),
+              getCardOwner: (id) =>
+                (context.cards as { getCardOwner?: (i: CoreCardId) => string | undefined })
+                  .getCardOwner?.(id as CoreCardId),
+            },
+            draft,
+            zones: { getCardsInZone },
+          },
+        );
+        if (replacement) {
+          markReplacementConsumed(draft, replacement);
+          // Clear lethal damage so the unit doesn't immediately re-die.
+          const {updateCardMeta} = (context.cards as {
+            updateCardMeta?: (id: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
+          });
+          updateCardMeta?.(cardId as CoreCardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+          context.counters.clearCounter?.(cardId as CoreCardId, "damage");
+          return;
+        }
+      }
+
       context.counters.clearAllCounters(cardId as CoreCardId);
       context.zones.moveCard({
         cardId: cardId as CoreCardId,

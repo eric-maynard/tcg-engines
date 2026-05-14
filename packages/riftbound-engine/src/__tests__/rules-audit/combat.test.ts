@@ -29,6 +29,7 @@ import {
   getCardMeta,
   getCardsInZone,
   getState,
+  runCleanup,
   runPhaseHook,
 } from "./helpers";
 import {
@@ -1029,7 +1030,7 @@ describe("Multi-player and chain-integration combat rules", () => {
     // "here" at the battlefield-empty zone → no units present.
     const targets = resolveTarget(
       { location: "battlefield-bf-empty", type: "unit" },
-      ctx as Parameters<typeof resolveTarget>[1],
+      ctx as unknown as Parameters<typeof resolveTarget>[1],
     );
     expect(targets).toHaveLength(0);
   });
@@ -1142,5 +1143,114 @@ describe("Multi-player and chain-integration combat rules", () => {
     state = after;
     expect(state.chain?.items ?? []).toHaveLength(0);
     expect(getActiveShowdown(state)?.active).toBe(true);
+  });
+});
+
+// ===========================================================================
+// Rule 460.2.c.2: Abilities or effects may influence the order in which
+// Combat damage is assigned (CR 2026-03-30). Tank (≈ "first") and Backline
+// (≈ "last") are the printed keyword cases; an effect-granted
+// `damageAssignmentPriority` overrides those defaults.
+// ===========================================================================
+
+describe("Rule 460.2.c.2: damage-assignment order can be influenced by effects", () => {
+  it("an explicit damageAssignmentPriority of -1 forces a unit to be assigned damage first (like Tank)", () => {
+    // 3 damage vs: a 3-Might unit flagged priority -1, plus two 3-Might units.
+    // The flagged unit must soak the full 3 before the others get any.
+    const defenders = [
+      unit({ baseMight: 3, damageAssignmentPriority: -1, id: "first", owner: P2 }),
+      unit({ baseMight: 3, id: "mid-a", owner: P2 }),
+      unit({ baseMight: 3, id: "mid-b", owner: P2 }),
+    ];
+    const assignment = distributeDamage(defenders, 3);
+    expect(assignment.first).toBe(3);
+    expect(assignment["mid-a"] ?? 0).toBe(0);
+    expect(assignment["mid-b"] ?? 0).toBe(0);
+  });
+
+  it("an explicit damageAssignmentPriority of +1 forces a unit to be assigned damage last (like Backline)", () => {
+    // 4 damage vs: a 2-Might unit flagged priority +1, plus a 2-Might normal unit.
+    // The normal unit must be assigned lethal (2) before the flagged one.
+    const defenders = [
+      unit({ baseMight: 2, damageAssignmentPriority: 1, id: "last", owner: P2 }),
+      unit({ baseMight: 2, id: "normal", owner: P2 }),
+    ];
+    const assignment = distributeDamage(defenders, 4);
+    expect(assignment.normal).toBe(2);
+    expect(assignment.last).toBe(2);
+  });
+
+  it("an explicit priority overrides the unit's keyword-derived default (Tank → forced last)", () => {
+    // A Tank that has been told (effect) "must be assigned damage last"
+    // (priority +1) loses to a plain unit for lethal-first ordering.
+    const defenders = [
+      unit({ baseMight: 2, damageAssignmentPriority: 1, id: "tank-but-last", keywords: ["Tank"], owner: P2 }),
+      unit({ baseMight: 2, id: "plain", owner: P2 }),
+    ];
+    const assignment = distributeDamage(defenders, 2);
+    expect(assignment.plain).toBe(2);
+    expect(assignment["tank-but-last"] ?? 0).toBe(0);
+  });
+});
+
+// ===========================================================================
+// Rule 460.2.c.9: "If a unit cannot be dealt damage, then no amount of damage
+// Can be considered lethal. Such a unit is exempt from any considerations of
+// Mandatory assignment." (e.g. Kayn, Unleashed after moving twice.)
+// ===========================================================================
+
+describe("Rule 460.2.c.9: a unit that cannot be dealt damage is exempt from mandatory lethal assignment", () => {
+  it("distributeDamage skips a cannotTakeDamage unit and sends lethal to the others first", () => {
+    // 2 damage vs: a 2-Might un-damageable unit + a 2-Might normal unit.
+    // The normal unit must take the full 2 (lethal); the un-damageable one gets none.
+    const defenders = [
+      unit({ baseMight: 2, cannotTakeDamage: true, id: "kayn", owner: P2 }),
+      unit({ baseMight: 2, id: "normal", owner: P2 }),
+    ];
+    const assignment = distributeDamage(defenders, 2);
+    expect(assignment.normal).toBe(2);
+    expect(assignment.kayn ?? 0).toBe(0);
+  });
+
+  it("excess damage only lands on a cannotTakeDamage unit when no other unit remains", () => {
+    // 5 damage vs only a single 2-Might un-damageable unit → it nominally
+    // Soaks the leftover (no other unit to dump on) but is still never killed.
+    const defenders = [unit({ baseMight: 2, cannotTakeDamage: true, id: "kayn", owner: P2 })];
+    const assignment = distributeDamage(defenders, 5);
+    expect(assignment.kayn).toBe(5);
+  });
+
+  it("resolveCombat never kills a cannotTakeDamage unit even when 'assigned' lethal damage", () => {
+    // 6-Might attacker vs a single 2-Might un-damageable defender.
+    // The 2-Might defender deals 2 back to the attacker (not lethal); the
+    // Defender takes none and is never killed → all defenders survive →
+    // Attackers recalled (rule 461 Combat Cleanup) → no conquer.
+    const result = resolveCombat(
+      [unit({ baseMight: 6, id: "atk", owner: P1 })],
+      [unit({ baseMight: 2, cannotTakeDamage: true, id: "kayn", owner: P2 })],
+    );
+    expect(result.killed).not.toContain("kayn");
+    // Attacker took 2 → survives (6 Might)
+    expect(result.killed).not.toContain("atk");
+    // Both sides have survivors → defender holds (attackers recalled)
+    expect(result.winner).toBe("defender");
+  });
+
+  it("a cannotTakeDamage unit with stray marked damage is never reaped by cleanup (rule 460.2.c.9 premise)", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    // Flag un-damageable AND mark a ton of damage on it. State-based checks
+    // Must NOT kill it — "no amount of damage can be considered lethal".
+    createCard(engine, "kayn", {
+      cardType: "unit",
+      meta: { cannotTakeDamage: true, damage: 99 },
+      might: 6,
+      owner: P1,
+      zone: "base",
+    });
+    const res = runCleanup(engine);
+    expect(res.killed).not.toContain("kayn");
+    expect(getCardsInZone(engine, "base", P1)).toContain("kayn");
+    // Stray damage was cleared so it doesn't re-check.
+    expect(getCardMeta(engine, "kayn")?.damage ?? 0).toBe(0);
   });
 });

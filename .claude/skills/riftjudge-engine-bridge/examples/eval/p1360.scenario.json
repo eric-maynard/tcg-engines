@@ -1,0 +1,22 @@
+{
+  "questionText": "if a card kills a unit with 3 might and the unit has 3 might and a buff (making it effectively +4) is it a valid target",
+  "question": "is it a valid target / does the kill spell go through?",
+  "premise": {
+    "turnPlayer": "me",
+    "units": [
+      { "id": "u", "side": "opp", "might": 3, "buffs": 1, "name": "(buffed 3-Might unit)" }
+    ],
+    "notes": "Unit is base 3 Might with 1 Buff counter -> effective 4 Might. A 'kill a unit with 3 or less Might' spell modeled as playSpell gated on targetMightCompare <= 3. Effective Might is 4, so the condition fails -> the spell fizzles -> the unit is NOT a valid target / nothing dies. (The asker's '+4' phrasing means effective Might 4.)"
+  },
+  "actions": [
+    {
+      "kind": "playSpell",
+      "name": "(kill a unit with 3 or less Might)",
+      "side": "me",
+      "condition": { "kind": "targetMightCompare", "target": "u", "op": "<=", "value": 3 },
+      "effects": [
+        { "kind": "killUnit", "target": "u", "source": "kill spell" }
+      ]
+    }
+  ]
+}

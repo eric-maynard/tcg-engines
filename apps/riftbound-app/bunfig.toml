@@ -1,0 +1,9 @@
+[install]
+linker = "isolated"
+
+# The `web/` subfolder is a Vite + React + vitest SPA. Its tests run under
+# vitest (they use jsdom + @testing-library + vitest-specific globals like
+# `vi.stubGlobal`). Exclude them from bun's auto-discovered test runner so
+# `bun test` from this dir only runs the server / engine-session tests.
+[test]
+pathIgnorePatterns = ["web/**"]

@@ -127,6 +127,19 @@ export const createZoneOperations = <TCardDef, TCardMeta>(
       return createdCards;
     },
 
+    createZone: (config) => {
+      logger?.trace("Creating zone", { zoneId: config.id });
+      const zoneId = config.id as unknown as string;
+      if (state.zones[zoneId]) {
+        // Idempotent: zone already exists, no-op.
+        return;
+      }
+      state.zones[zoneId] = {
+        cardIds: [],
+        config,
+      };
+    },
+
     drawCards: ({ from, to, count, playerId }) => {
       const sourceCards = zoneOps.getCardsInZone(from, playerId);
       const drawnCards: CardId[] = [];

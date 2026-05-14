@@ -276,4 +276,149 @@ describe("Trigger Matcher", () => {
       expect(matches).toHaveLength(1);
     });
   });
+
+  // ---------------------------------------------------------------------
+  // Type-specific play triggers (`play-unit` / `play-gear` / `play-legend` /
+  // `play-token-unit` / `play-spell`) fired by a generic `play-card` event.
+  // These are the parser-emitted shapes for "When you play a [Type], …" —
+  // The generic listener in `triggerMatchesEvent` resolves them without
+  // Any per-card if-statements.
+  // ---------------------------------------------------------------------
+  describe("type-specific play triggers via play-card", () => {
+    test("play-unit (on:friendly-units) matches play-card{cardType:unit} from same player", () => {
+      const observer = makeCard("watcher", [makeAbility("play-unit", "friendly-units")]);
+      const event: GameEvent = {
+        cardId: "newcomer",
+        cardType: "unit",
+        playerId: "p1",
+        type: "play-card",
+      };
+
+      const matches = findMatchingTriggers(event, [observer]);
+      expect(matches).toHaveLength(1);
+      expect(matches[0].cardId).toBe("watcher");
+    });
+
+    test("play-unit (on:friendly-units) does NOT match a play-card{cardType:spell}", () => {
+      const observer = makeCard("watcher", [makeAbility("play-unit", "friendly-units")]);
+      const event: GameEvent = {
+        cardId: "fireball",
+        cardType: "spell",
+        playerId: "p1",
+        type: "play-card",
+      };
+
+      expect(findMatchingTriggers(event, [observer])).toHaveLength(0);
+    });
+
+    test("play-unit (on:friendly-units) does NOT match opponent's play-card", () => {
+      const observer = makeCard("watcher", [makeAbility("play-unit", "friendly-units")]);
+      const event: GameEvent = {
+        cardId: "newcomer",
+        cardType: "unit",
+        playerId: "p2",
+        type: "play-card",
+      };
+
+      expect(findMatchingTriggers(event, [observer])).toHaveLength(0);
+    });
+
+    test("play-unit (on:another-friendly-units) excludes the played card itself", () => {
+      const observer = makeCard("watcher", [makeAbility("play-unit", "another-friendly-units")]);
+      const eventOther: GameEvent = {
+        cardId: "newcomer",
+        cardType: "unit",
+        playerId: "p1",
+        type: "play-card",
+      };
+      const eventSelf: GameEvent = {
+        cardId: "watcher",
+        cardType: "unit",
+        playerId: "p1",
+        type: "play-card",
+      };
+
+      expect(findMatchingTriggers(eventOther, [observer])).toHaveLength(1);
+      expect(findMatchingTriggers(eventSelf, [observer])).toHaveLength(0);
+    });
+
+    test("play-gear (on:controller) matches play-card{cardType:gear} by same player", () => {
+      const observer = makeCard("pit-crew", [makeAbility("play-gear", "controller")]);
+      const event: GameEvent = {
+        cardId: "gear-1",
+        cardType: "gear",
+        playerId: "p1",
+        type: "play-card",
+      };
+
+      expect(findMatchingTriggers(event, [observer])).toHaveLength(1);
+    });
+
+    test("play-legend (on:controller) matches play-card{cardType:legend}", () => {
+      const observer = makeCard("legend-watcher", [makeAbility("play-legend", "controller")]);
+      const event: GameEvent = {
+        cardId: "legend-1",
+        cardType: "legend",
+        playerId: "p1",
+        type: "play-card",
+      };
+
+      expect(findMatchingTriggers(event, [observer])).toHaveLength(1);
+    });
+
+    test("play-unit with object-form on (controller+cardType+excludeSelf) honors filters", () => {
+      const observer: CardWithAbilities = makeCard("obs", [
+        {
+          effect: { amount: 1, type: "draw" },
+          trigger: {
+            event: "play-unit",
+            // Intentionally cast through unknown — the matcher reads it generically
+            on: { cardType: "unit", controller: "friendly", excludeSelf: true } as unknown as string,
+          },
+          type: "triggered",
+        },
+      ]);
+      const friendlyOther: GameEvent = {
+        cardId: "ally",
+        cardType: "unit",
+        playerId: "p1",
+        type: "play-card",
+      };
+      const enemy: GameEvent = {
+        cardId: "foe",
+        cardType: "unit",
+        playerId: "p2",
+        type: "play-card",
+      };
+      const self: GameEvent = {
+        cardId: "obs",
+        cardType: "unit",
+        playerId: "p1",
+        type: "play-card",
+      };
+
+      expect(findMatchingTriggers(friendlyOther, [observer])).toHaveLength(1);
+      expect(findMatchingTriggers(enemy, [observer])).toHaveLength(0);
+      expect(findMatchingTriggers(self, [observer])).toHaveLength(0);
+    });
+
+    test("play-spell (on:opponent) matches an opponent's play-card{cardType:spell}", () => {
+      const observer = makeCard("counterspell-watcher", [makeAbility("play-spell", "opponent")]);
+      const opponentSpell: GameEvent = {
+        cardId: "fireball",
+        cardType: "spell",
+        playerId: "p2",
+        type: "play-card",
+      };
+      const ownSpell: GameEvent = {
+        cardId: "ownspell",
+        cardType: "spell",
+        playerId: "p1",
+        type: "play-card",
+      };
+
+      expect(findMatchingTriggers(opponentSpell, [observer])).toHaveLength(1);
+      expect(findMatchingTriggers(ownSpell, [observer])).toHaveLength(0);
+    });
+  });
 });

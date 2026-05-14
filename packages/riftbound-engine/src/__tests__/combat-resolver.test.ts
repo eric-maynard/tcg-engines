@@ -193,3 +193,62 @@ describe("Combat: Mutual Simultaneous Damage (rule 626)", () => {
     expect(result.killed).toContain("a1");
   });
 });
+
+// Task 4: Guard keyword interaction audit
+describe("Combat: Guard keyword (rule 460.2.c.2)", () => {
+  test("Guard unit receives lethal damage before non-Guard defenders", () => {
+    // Attacker has 5 might. Defender side: Guard unit (2 might) + regular unit (3 might).
+    // Attacker must assign lethal to Guard first, then remainder to regular.
+    const attackers = [unit("a1", 5, [], 0, "p1")];
+    const defenders = [
+      unit("d-guard", 2, ["Guard"], 0, "p2"),
+      unit("d-regular", 3, [], 0, "p2"),
+    ];
+    const result = resolveCombat(attackers, defenders);
+
+    // Guard unit must receive lethal (2) before non-Guard; with 5 total:
+    // 2 to d-guard (lethal), then 3 to d-regular (lethal).
+    expect(result.damageAssignment["d-guard"]).toBeGreaterThanOrEqual(2);
+    expect(result.damageAssignment["d-regular"]).toBeGreaterThanOrEqual(3);
+    expect(result.killed).toContain("d-guard");
+    expect(result.killed).toContain("d-regular");
+  });
+
+  test("Guard unit priority is higher than Tank (Guard = -2, Tank = -1)", () => {
+    // Both Guard and Tank are on the defender side; Guard must be assigned first.
+    const attackers = [unit("a1", 8, [], 0, "p1")];
+    const defenders = [
+      unit("d-tank", 3, ["Tank"], 0, "p2"),
+      unit("d-guard", 2, ["Guard"], 0, "p2"),
+      unit("d-normal", 1, [], 0, "p2"),
+    ];
+    const result = resolveCombat(attackers, defenders);
+
+    // Guard receives lethal first (2), then Tank (3), then normal (1). Total = 6; attacker has 8.
+    expect(result.damageAssignment["d-guard"]).toBeGreaterThanOrEqual(2);
+    expect(result.damageAssignment["d-tank"]).toBeGreaterThanOrEqual(3);
+    expect(result.damageAssignment["d-normal"]).toBeGreaterThanOrEqual(1);
+    expect(result.killed).toContain("d-guard");
+    expect(result.killed).toContain("d-tank");
+    expect(result.killed).toContain("d-normal");
+  });
+
+  test("attacker with insufficient damage to reach non-Guard unit cannot kill it", () => {
+    // Attacker has 3 might. Guard unit has 4 might (cannot be killed).
+    // Attacker must still put all damage on Guard; regular unit takes 0.
+    const attackers = [unit("a1", 3, [], 0, "p1")];
+    const defenders = [
+      unit("d-guard", 4, ["Guard"], 0, "p2"),
+      unit("d-regular", 2, [], 0, "p2"),
+    ];
+    const result = resolveCombat(attackers, defenders);
+
+    // All 3 attacker damage goes to Guard (lethal not met → Guard survives).
+    // Regular unit receives no damage (Guard not yet at lethal threshold).
+    expect(result.damageAssignment["d-guard"]).toBe(3);
+    // D-regular gets undefined (never assigned) or 0 — neither case deals lethal
+    expect(result.damageAssignment["d-regular"] ?? 0).toBe(0);
+    expect(result.killed).not.toContain("d-guard");
+    expect(result.killed).not.toContain("d-regular");
+  });
+});

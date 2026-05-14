@@ -1,0 +1,20 @@
+{
+  "kind": "engine-scenario",
+  "questionText": "if someone attacks in with yuumi by herself and plays poppy with ambush, does she give the other unit +3 might and tank?",
+  "question": "does Yuumi give the other unit +3 might and [Tank], and what does that do in combat?",
+  "premise": {
+    "turnPlayer": "opp",
+    "units": [
+      { "id": "atk", "side": "opp", "might": 3, "name": "(attacker)", "location": "bf" },
+      { "id": "yuumi", "side": "me", "might": 1, "name": "Yuumi, Magical Cat", "location": "bf" },
+      { "id": "poppy", "side": "me", "might": 1, "name": "Poppy", "location": "bf" }
+    ],
+    "battlefields": [{ "id": "bf", "controller": null, "contested": true, "contestedBy": "opp" }],
+    "notes": "Models the resolved end-state of Yuumi's 'when I defend, another unit gets +3 Might and [Tank] until end of turn' trigger: Poppy (the Ambushed unit, present on the chain before Yuumi's trigger resolves — RiftJudge p0822/p1064) gets +3 Might (modifyMight, until end of turn) and a granted [Tank] (grantKeyword). Then a combat is resolved. The point is that the granted keyword + buff are in effect for the Combat Damage Step: [Tank] forces lethal damage onto Poppy first, and +3 Might (1->4) lets Poppy survive the 3 combat damage. Yuumi's targeting-at-add-to-chain rule and the Ambush timing window are not modeled — this isolates 'granted keyword + buff applies in combat'."
+  },
+  "actions": [
+    { "kind": "modifyMight", "target": "poppy", "delta": 3, "source": "Yuumi (the +3 Might until end of turn)" },
+    { "kind": "grantKeyword", "target": "poppy", "keyword": "Tank", "source": "Yuumi (the [Tank] until end of turn)" },
+    { "kind": "resolveCombat", "battlefield": "bf", "attacker": "opp" }
+  ]
+}

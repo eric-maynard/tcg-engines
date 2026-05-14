@@ -17,13 +17,14 @@ function mockState(): RiftboundGameState {
     battlefields: { "bf-1": { contested: false, controller: "p1", id: "bf-1" } },
     conqueredThisTurn: {},
     gameId: "t",
-    players: { p1: { id: "p1", victoryPoints: 0 }, p2: { id: "p2", victoryPoints: 0 } },
+    players: { p1: { id: "p1", turnsTaken: 0, victoryPoints: 0, xp: 0 }, p2: { id: "p2", turnsTaken: 0, victoryPoints: 0, xp: 0 } },
     runePools: { p1: { energy: 0, power: {} }, p2: { energy: 0, power: {} } },
     scoredThisTurn: {},
     status: "playing",
     turn: { activePlayer: "p1", number: 1, phase: "main" },
     victoryScore: 8,
-  };
+    xpGainedThisTurn: {},
+  } as unknown as RiftboundGameState;
 }
 
 function mockCtx(

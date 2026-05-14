@@ -1,0 +1,9 @@
+{
+  "kind": "rules-demo",
+  "demoTopic": "tank",
+  "questionText": "how does elder dragon work in attribution damage with severals units? how does it interact with units with tank abilities",
+  "question": "How does combat damage assignment interact with [Tank] (Elder Dragon context)?",
+  "assumptions": [
+    "RiftJudge p2075 — about how lethal-damage assignment interacts with [Tank]. The bridge auto-builds a minimal [Tank] showdown to demonstrate the assignment ORDER ([Tank] units must be assigned lethal damage first, rule 460.2.c.2). The Elder-Dragon 'any amount is lethal' twist isn't in the engine vocab — the demo shows the underlying [Tank] priority that the asker's question hinges on."
+  ]
+}

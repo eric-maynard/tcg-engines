@@ -18,7 +18,21 @@ import type {
   RiftboundMoves,
 } from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import { fireTriggers } from "../../abilities/trigger-runner";
+import type { GameEvent } from "../../abilities/game-events";
+import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
+import { dispatchEvent } from "../../events/dispatcher";
+import { swiftExhaustsOnContest } from "../../keywords/keyword-effects";
+
+/**
+ * `move` events emitted by the movement moves flow through the unified
+ * event-bus chokepoint (`events/dispatcher.ts#dispatchEvent`). The old
+ * `fireTriggers` call sites took `(event, ctx)`; `dispatchEvent` is
+ * `(ctx, event)` — this thin adapter preserves the call-site shape while
+ * routing the emission through the bus.
+ */
+function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
+  return dispatchEvent(ctx, event);
+}
 
 /**
  * Check if a card has a specific keyword, considering both the card
@@ -256,8 +270,25 @@ export const movementMoves: Partial<
           (context.zones.getCardZone(unitId as CoreCardId) as string | undefined) ?? "base";
         const toZone = `battlefield-${destination}`;
 
-        // Exhaust the unit (cost of moving)
-        counters.setFlag(unitId as CoreCardId, "exhausted", true);
+        // Exhaust the unit (cost of moving), unless it has Swift (rule 718).
+        // Swift units contest a battlefield without exhausting — they stay ready.
+        const metaAccessorForSwift = (id: CoreCardId) =>
+          context.cards.getCardMeta?.(id) as Partial<RiftboundCardMeta> | undefined;
+        const unitHasSwift = hasKeyword(unitId, "Swift", metaAccessorForSwift);
+        if (swiftExhaustsOnContest(unitHasSwift)) {
+          counters.setFlag(unitId as CoreCardId, "exhausted", true);
+        }
+
+        // Track this unit's own move count this turn (rule 616-619). Abilities
+        // Such as Kayn, Unleashed gate on "if I have moved twice this turn".
+        if (context.cards.updateCardMeta) {
+          const moverMeta = context.cards.getCardMeta?.(unitId as CoreCardId) as
+            | Partial<RiftboundCardMeta>
+            | undefined;
+          context.cards.updateCardMeta(unitId as CoreCardId, {
+            movedThisTurnCount: (moverMeta?.movedThisTurnCount ?? 0) + 1,
+          } as Partial<RiftboundCardMeta>);
+        }
 
         // Move unit to destination battlefield
         zones.moveCard({
@@ -420,8 +451,25 @@ export const movementMoves: Partial<
         (context.zones.getCardZone(unitId as CoreCardId) as string | undefined) ?? "";
       const toZone = `battlefield-${toBattlefield}`;
 
-      // Exhaust the unit
-      counters.setFlag(unitId as CoreCardId, "exhausted", true);
+      // Exhaust the unit (cost of ganking move), unless it has Swift (rule 718).
+      // Swift units contest a battlefield without exhausting — they stay ready.
+      const metaAccessorForSwift = (id: CoreCardId) =>
+        context.cards.getCardMeta?.(id) as Partial<RiftboundCardMeta> | undefined;
+      const unitHasSwift = hasKeyword(unitId, "Swift", metaAccessorForSwift);
+      if (swiftExhaustsOnContest(unitHasSwift)) {
+        counters.setFlag(unitId as CoreCardId, "exhausted", true);
+      }
+
+      // Track this unit's own move count this turn (rule 616-619 / 722).
+      // Kayn, Unleashed gates "I don't take damage" on having moved twice.
+      if (context.cards.updateCardMeta) {
+        const moverMeta = context.cards.getCardMeta?.(unitId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        context.cards.updateCardMeta(unitId as CoreCardId, {
+          movedThisTurnCount: (moverMeta?.movedThisTurnCount ?? 0) + 1,
+        } as Partial<RiftboundCardMeta>);
+      }
 
       // Move unit to the target battlefield
       zones.moveCard({

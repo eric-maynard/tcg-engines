@@ -13,6 +13,7 @@ import type {
 } from "@tcg/core";
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { applyBattlefieldPermanentEffects } from "../../operations/battlefield-setup-effects";
+import { createBattlefieldZone, createFacedownZone } from "../../zones/zone-configs";
 
 /**
  * Setup move definitions
@@ -208,6 +209,24 @@ export const setupMoves: Partial<
       const { battlefieldIds } = context.params;
       const { zones } = context;
 
+      // Resolve the optional createZone API. Production RuleEngine always
+      // Provides this; some test stubs may not, in which case we fall
+      // Back gracefully — moves that need the per-battlefield zone will
+      // Then fail with the same "Target zone … does not exist" error
+      // That prompted this fix.
+      const {createZone} = (
+        zones as unknown as {
+          createZone?: (config: {
+            id: string;
+            name: string;
+            visibility: "public" | "private" | "secret";
+            ordered: boolean;
+            faceDown: boolean;
+            maxSize?: number;
+          }) => void;
+        }
+      );
+
       for (const battlefieldId of battlefieldIds) {
         // Move battlefield to battlefield row
         zones.moveCard({
@@ -221,6 +240,35 @@ export const setupMoves: Partial<
           controller: null,
           id: battlefieldId,
         };
+
+        // Create the per-battlefield zones (rule 723 / monkey-rescan batch
+        // 13 finding T-M2): standardMove and other reducers move units to
+        // `battlefield-<id>` and hide cards in `facedown-<id>`. Without
+        // These zones, the underlying `moveCard` throws "Target zone … does
+        // Not exist", making the entire combat / scoring loop unreachable
+        // For production-shaped state. The audit-helper `createBattlefield`
+        // Already did this for test fixtures; this brings the production
+        // Setup move to parity.
+        if (createZone) {
+          const bfConfig = createBattlefieldZone(battlefieldId as CoreCardId);
+          const facedownConfig = createFacedownZone(battlefieldId as CoreCardId);
+          createZone(bfConfig as unknown as {
+            id: string;
+            name: string;
+            visibility: "public" | "private" | "secret";
+            ordered: boolean;
+            faceDown: boolean;
+            maxSize?: number;
+          });
+          createZone(facedownConfig as unknown as {
+            id: string;
+            name: string;
+            visibility: "public" | "private" | "secret";
+            ordered: boolean;
+            faceDown: boolean;
+            maxSize?: number;
+          });
+        }
       }
     },
   },
@@ -233,16 +281,48 @@ export const setupMoves: Partial<
    */
   initializeMainDeck: {
     reducer: (_draft, context) => {
-      const { cardIds } = context.params;
+      const { cardIds, playerId } = context.params;
       const { zones } = context;
 
-      // Add each card to the main deck
+      // Create each card instance owned/controlled by `playerId` in the
+      // Main deck zone. Using `createCardInZone` (vs `moveCard`) ensures
+      // `state.cards[cardId]` is created with an owner — without this,
+      // `getCardsInZone(zone, playerId)` filters out the card because
+      // Its owner is undefined, and `drawCards` silently draws nothing.
+      // Without this fix, `drawInitialHand` is a no-op even though it
+      // Returns success.
+      const {createCardInZone} = (
+        zones as unknown as {
+          createCardInZone?: (params: {
+            cardId: CoreCardId;
+            definitionId: string;
+            zoneId: CoreZoneId;
+            ownerId: CorePlayerId;
+            controllerId?: CorePlayerId;
+            position?: "top" | "bottom" | number;
+          }) => void;
+        }
+      );
+
       for (const cardId of cardIds) {
-        zones.moveCard({
-          cardId: cardId as CoreCardId,
-          position: "bottom",
-          targetZoneId: "mainDeck" as CoreZoneId,
-        });
+        if (createCardInZone) {
+          createCardInZone({
+            cardId: cardId as CoreCardId,
+            controllerId: playerId as CorePlayerId,
+            definitionId: cardId as string,
+            ownerId: playerId as CorePlayerId,
+            position: "bottom",
+            zoneId: "mainDeck" as CoreZoneId,
+          });
+        } else {
+          // Backwards compatibility fallback if zone operations were
+          // Stubbed without createCardInZone (e.g. some test contexts).
+          zones.moveCard({
+            cardId: cardId as CoreCardId,
+            position: "bottom",
+            targetZoneId: "mainDeck" as CoreZoneId,
+          });
+        }
       }
     },
   },
@@ -254,16 +334,43 @@ export const setupMoves: Partial<
    */
   initializeRuneDeck: {
     reducer: (_draft, context) => {
-      const { runeIds } = context.params;
+      const { runeIds, playerId } = context.params;
       const { zones } = context;
 
-      // Add each rune to the rune deck
+      // Same ownership-creation pattern as initializeMainDeck. Without
+      // Creating the card with an owner here, the rune-pool / rune-deck
+      // Zone queries filtered by playerId return nothing — the channel
+      // Phase appears to do nothing.
+      const {createCardInZone} = (
+        zones as unknown as {
+          createCardInZone?: (params: {
+            cardId: CoreCardId;
+            definitionId: string;
+            zoneId: CoreZoneId;
+            ownerId: CorePlayerId;
+            controllerId?: CorePlayerId;
+            position?: "top" | "bottom" | number;
+          }) => void;
+        }
+      );
+
       for (const runeId of runeIds) {
-        zones.moveCard({
-          cardId: runeId as CoreCardId,
-          position: "bottom",
-          targetZoneId: "runeDeck" as CoreZoneId,
-        });
+        if (createCardInZone) {
+          createCardInZone({
+            cardId: runeId as CoreCardId,
+            controllerId: playerId as CorePlayerId,
+            definitionId: runeId as string,
+            ownerId: playerId as CorePlayerId,
+            position: "bottom",
+            zoneId: "runeDeck" as CoreZoneId,
+          });
+        } else {
+          zones.moveCard({
+            cardId: runeId as CoreCardId,
+            position: "bottom",
+            targetZoneId: "runeDeck" as CoreZoneId,
+          });
+        }
       }
     },
   },

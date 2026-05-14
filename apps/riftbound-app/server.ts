@@ -21,12 +21,26 @@ import { createDeck, deleteDeck, getDeck, listDecks, listPublicDecks, updateDeck
 import type { DeckCardEntry, FullDeck, GameVersion } from "./src/db/deck-repo";
 import { GameLogger } from "./src/game-logger";
 import { type LogEntry, actorName, makeLogEntry } from "./src/narrator";
+import {
+  EngineSession,
+  type GameView,
+  type HandCardView,
+  type LegalMove,
+} from "./lib/engine-session";
+import { BotDriver } from "./lib/bot-driver";
+import {
+  computeActionsLegal,
+  getHumanPlayerIds,
+  routeCombatOrChainMove,
+  tryPlayFromHand,
+} from "./lib/server-helpers";
+import { renderInteractiveBoard, renderInteractivePage } from "./components/InteractiveGameBoard";
 
 /** Sets that belong to each game version. Preview is a superset of standard. */
 const STANDARD_SETS = new Set(["OGN", "OGS", "SFD"]);
 const PREVIEW_SETS = new Set(["OGN", "OGS", "SFD", "UNL"]);
 
-const PORT = 3000;
+const PORT = Number(process.env.RIFTBOUND_PORT ?? 3000);
 const STATIC_DIR = path.join(import.meta.dir, "public");
 const IMAGES_DIR = path.join(import.meta.dir, "../../downloads/card-images");
 const SANDBOX_ENABLED = process.env.SANDBOX_ENABLED === "true";
@@ -250,6 +264,59 @@ interface WsData {
 }
 
 const gameSessions = new Map<string, GameSession>();
+
+/**
+ * Demo sessions — minimal EngineSession-based playground used by the
+ * interactive-board demo page (batch 15 sub-agent AA, stream 2). Kept
+ * separate from `gameSessions` (which is built around the heavy
+ * `GameSession` type with WebSocket clients and full deck plumbing) so
+ * that demo sessions don't accidentally show up in the regular game
+ * lobby.
+ */
+const demoSessions = new Map<string, EngineSession>();
+
+/**
+ * Build a per-player hand summary from an EngineSession.
+ *
+ * Delegates to `EngineSession.buildHandView()` so each card carries the full
+ * card-definition payload (name/cardType/might/energyCost/powerCost/rulesText/
+ * abilities) the SPA needs to render hover cards and play-validation tooltips.
+ * The legacy demo-board consumer only reads `id`/`definitionId`, but the
+ * wider HandCardView is structurally assignable to that narrower shape.
+ */
+function buildHandView(
+  session: EngineSession,
+): Record<string, readonly HandCardView[]> {
+  return session.buildHandView();
+}
+
+/** Bucket the legal-moves list by moveId so the UI can lookup `playUnit[...]`. */
+function bucketLegalMoves(moves: LegalMove[]): Record<string, LegalMove[]> {
+  const out: Record<string, LegalMove[]> = {};
+  for (const m of moves) {
+    (out[m.moveId] ?? (out[m.moveId] = [])).push(m);
+  }
+  return out;
+}
+
+/** Build args for the interactive board render. */
+function buildDemoBoardArgs(sessionId: string, session: EngineSession) {
+  const view: GameView = session.getView();
+  const hand = buildHandView(session);
+  // Collect legal moves for both players so the board can render hand
+  // Chips with the correct legal/illegal styling for either side.
+  const allMoves: LegalMove[] = [];
+  for (const pid of session.playerIds) {
+    allMoves.push(...session.legalMoves(pid));
+  }
+  const legalByMove = bucketLegalMoves(allMoves);
+  const trail = session.getTrail();
+  const {activePlayer} = view.turn;
+  const canEndTurn = allMoves.some(
+    (m) => m.moveId === "endTurn" && m.playerId === activePlayer,
+  ) || true; // EndTurn is broadly legal; fall back to true so the button is enabled.
+  return { canEndTurn, hand, legalByMove, sessionId, trail, view };
+}
 
 /** Broadcast a message to all WebSocket clients in a game session */
 function broadcast(session: GameSession, msg: Record<string, unknown>, exclude?: string) {
@@ -1521,6 +1588,513 @@ const server = Bun.serve({
     // Consume this instead of hard-coding the phase order/labels.
     if (pathname === "/api/flow") {
       return json({ phaseLabels: PHASE_LABELS, phases: TURN_PHASE_STRIP });
+    }
+
+    // ===========================================================
+    // Demo / interactive playground (batch 15, AA stream 2)
+    // ===========================================================
+
+    // GET /demo — top-level page. Creates a fresh demo session if no
+    // ?session=ID is supplied, then 302's to the per-session page.
+    // By default uses real decks (so hand cards have real card definitions
+    // And can actually be played). Pass `?synthetic=1` for the legacy
+    // Placeholder-id behaviour.
+    if (pathname === "/demo" && req.method === "GET") {
+      const existing = url.searchParams.get("session");
+      const useSynthetic = url.searchParams.get("synthetic") === "1";
+      const sessionId = existing ?? crypto.randomUUID();
+      if (!demoSessions.has(sessionId)) {
+        try {
+          demoSessions.set(
+            sessionId,
+            new EngineSession({
+              realDecks: !useSynthetic,
+              seed: `demo-${sessionId}`,
+            }),
+          );
+        } catch (error) {
+          // Fall back to synthetic deck if real-deck wiring fails. Surface
+          // the underlying error so the operator can fix the deck wiring.
+          console.error("[/demo] real-deck init failed, falling back to synthetic:", error);
+          demoSessions.set(sessionId, new EngineSession({ seed: `demo-${sessionId}` }));
+        }
+      }
+      const session = demoSessions.get(sessionId);
+      if (!session) {return json({ error: "demo session lost" }, 500);}
+      return new Response(renderInteractivePage(buildDemoBoardArgs(sessionId, session)), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // GET /api/demo/state/:id — render-only HTML snippet of the board.
+    if (pathname.startsWith("/api/demo/state/") && req.method === "GET") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return new Response("demo session not found", { status: 404 });}
+      return new Response(renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // POST /api/demo/move/:id — execute a move on the demo session and
+    // Return the fresh HTML snippet.
+    if (pathname.startsWith("/api/demo/move/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return new Response("demo session not found", { status: 404 });}
+      const body = (await req.json().catch(() => ({}))) as {
+        moveId?: string;
+        playerId?: string;
+        params?: Record<string, unknown>;
+      };
+      const moveId = body.moveId ?? "endTurn";
+      const playerId = body.playerId ?? session.getActivePlayer();
+      const params = body.params ?? {};
+      // Special-case: `playFromHand` is a UI alias — try playUnit, playSpell,
+      // PlayGear in order. The engine will reject all but the matching kind.
+      if (moveId === "playFromHand") {
+        const cardId = params.cardId as string | undefined;
+        const tryMoves = ["playUnit", "playSpell", "playGear", "playCard"] as const;
+        let lastErr = "no candidate moves matched";
+        for (const candidate of tryMoves) {
+          const r = session.applyMove(playerId, {
+            moveId: candidate,
+            params: { cardId, playerId, ...params },
+          });
+          if (r.success) {
+            return new Response(
+              renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)),
+              { headers: { "content-type": "text/html; charset=utf-8" } },
+            );
+          }
+          lastErr = r.error ?? lastErr;
+        }
+        // No legal kind matched — still return the board (with the failure in
+        // The trail) so the user can see what happened.
+        void lastErr;
+        return new Response(
+          renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)),
+          { headers: { "content-type": "text/html; charset=utf-8" } },
+        );
+      }
+      session.applyMove(playerId, { moveId, params });
+      return new Response(renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // POST /api/demo/step/:id — drive the active player through ONE move
+    // Using the priority-table BotDriver. This is the "step bot" button.
+    // Using BotDriver (rather than a raw legal-move scan) means the demo
+    // Surfaces the same priority logic the bot-vs-bot smoke test exercises,
+    // So a human can watch a goldfish opponent play in real time.
+    if (pathname.startsWith("/api/demo/step/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return new Response("demo session not found", { status: 404 });}
+      const active = session.getActivePlayer();
+      const bot = new BotDriver(active, { seed: `demo-step-${sessionId}` });
+      bot.step(session);
+      return new Response(renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // POST /api/demo/reset/:id — restart the demo session with a fresh seed.
+    if (pathname.startsWith("/api/demo/reset/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      try {
+        demoSessions.set(
+          sessionId,
+          new EngineSession({
+            realDecks: true,
+            seed: `demo-${sessionId}-${Date.now()}`,
+          }),
+        );
+      } catch (error) {
+        console.error("[/api/demo/reset] real-deck init failed:", error);
+        demoSessions.set(
+          sessionId,
+          new EngineSession({ seed: `demo-${sessionId}-${Date.now()}` }),
+        );
+      }
+      const session = demoSessions.get(sessionId);
+      if (!session) {return new Response("demo session lost", { status: 500 });}
+      return new Response(renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // ===========================================================
+    // V2 JSON API — used by the Vite + React SPA at apps/riftbound-app/web/.
+    // Same EngineSession + demoSessions registry as the /demo HTML routes;
+    // These just return JSON instead of pre-rendered HTML snippets so the
+    // React client can render the board itself.
+    // ===========================================================
+
+    // Helper: serialize a session into the SPA's StateResponse shape.
+    // Each hand card is annotated with `legalLocations` — the set of `location`
+    // Values the SPA can pass back to `playFromHand` for that card. Empty means
+    // "no legal play right now". Currently sourced from `playUnit` legal moves
+    // Only (spells/gear ignore location).
+    const buildSpaState = (sessionId: string, session: EngineSession) => {
+      // ALWAYS read fresh — never use a cached view. Phase B batch 23 Goal D:
+      // `EngineSession.applyMove` already invalidates by virtue of having no
+      // Internal cache (it just calls `engine.getState()` on each `getView`),
+      // But be defensive: derive everything from a single fresh call here
+      // And never reuse a prior snapshot across this helper.
+      const view = session.getView();
+      const trail = session.getTrail();
+      const rawHand = buildHandView(session);
+
+      // Collect legal-locations per cardId across all players' playUnit moves.
+      const playLocsByCard: Record<string, Set<string>> = {};
+      // Phase B batch 25 DDD: collect legal target tuples per spell cardId
+      // Across all players' playSpell moves so the TargetPicker can lock
+      // Its options to engine-validated targets instead of every unit.
+      const playTargetsByCard: Record<string, string[][]> = {};
+      for (const pid of session.playerIds) {
+        for (const m of session.legalMoves(pid)) {
+          if (m.moveId === "playUnit") {
+            const cardId = m.params.cardId as string | undefined;
+            const loc = m.params.location as string | undefined;
+            if (!cardId) {continue;}
+            const bucket = playLocsByCard[cardId] ?? (playLocsByCard[cardId] = new Set());
+            bucket.add(typeof loc === "string" ? loc : "base");
+          } else if (m.moveId === "playSpell") {
+            const cardId = m.params.cardId as string | undefined;
+            const targets = m.params.targets as string[] | undefined;
+            if (!cardId) {continue;}
+            const bucket = playTargetsByCard[cardId] ?? (playTargetsByCard[cardId] = []);
+            bucket.push(Array.isArray(targets) ? [...targets] : []);
+          }
+        }
+      }
+
+      // Spread each enriched HandCardView (id/definitionId + name/cardType/
+      // Might/energyCost/powerCost/rulesText/abilities) and tack on the per-
+      // Card legalLocations the SPA needs for play-validation styling.
+      const hand: Record<
+        string,
+        readonly (HandCardView & { legalLocations: string[]; legalTargets?: string[][] })[]
+      > = {};
+      for (const [pid, cards] of Object.entries(rawHand)) {
+        hand[pid] = cards.map((c) => {
+          const tuples = playTargetsByCard[c.id];
+          return {
+            ...c,
+            legalLocations: [...playLocsByCard[c.id] ?? new Set<string>()],
+            ...(tuples && tuples.length > 0 ? { legalTargets: tuples } : {}),
+          };
+        });
+      }
+
+      // ActionsLegal + whoseTurnNow — Phase B batch 23 Goals B+C. Delegates to
+      // ./lib/server-helpers so the same logic is unit-testable without
+      // Booting Bun.serve.
+      const { actionsLegal, whoseTurnNow } = computeActionsLegal(session, sessionId);
+
+      return {
+        actionsLegal,
+        hand,
+        isGameOver: view.winner !== null || view.status === "finished",
+        trail,
+        view,
+        whoseTurnNow,
+      };
+    };
+
+    // GET /api/v2/state/:id
+    if (pathname.startsWith("/api/v2/state/") && req.method === "GET") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      let session = demoSessions.get(sessionId);
+      if (!session) {
+        // Lazy-create a session for the SPA so a fresh page load works
+        // Without first hitting /demo. Mirrors /demo's real-decks default.
+        try {
+          session = new EngineSession({
+            realDecks: true,
+            seed: `demo-${sessionId}`,
+          });
+        } catch (error) {
+          console.error("[/api/v2/state] real-deck init failed, falling back to synthetic:", error);
+          session = new EngineSession({ seed: `demo-${sessionId}` });
+        }
+        demoSessions.set(sessionId, session);
+      }
+      return json(buildSpaState(sessionId, session));
+    }
+
+    // POST /api/v2/move/:id
+    if (pathname.startsWith("/api/v2/move/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return json({ error: "session not found" }, 404);}
+      const body = (await req.json().catch(() => ({}))) as {
+        moveId?: string;
+        playerId?: string;
+        cardId?: string;
+        location?: string;
+        params?: Record<string, unknown>;
+      };
+      const moveId = body.moveId ?? "endTurn";
+      const playerId = body.playerId ?? session.getActivePlayer();
+      // Accept top-level `cardId` and `location` as a UI convenience — they
+      // Get merged into `params` so the SPA doesn't have to nest its payload.
+      const params: Record<string, unknown> = { ...body.params };
+      if (body.cardId !== undefined && params.cardId === undefined) {
+        params.cardId = body.cardId;
+      }
+      if (body.location !== undefined && params.location === undefined) {
+        params.location = body.location;
+      }
+      let ok = true;
+      let error: string | undefined;
+      if (moveId === "playFromHand") {
+        const result = tryPlayFromHand(session, playerId, params);
+        ({ ok } = result);
+        ({ error } = result);
+      } else {
+        // Phase B batch 26 GGG: route combat / chain moves through the
+        // Explicit allow-list helper so we can audit which engine moves
+        // The SPA is allowed to dispatch. Unknown moves fall through to
+        // The generic engine-dispatch path (kept for legacy callers /
+        // Bot smoke tests that fire low-level moves like `endTurn`).
+        const routed = routeCombatOrChainMove(session, playerId, moveId, params);
+        if (routed.routed) {
+          ({ ok } = routed);
+          ({ error } = routed);
+        } else {
+          const r = session.applyMove(playerId, { moveId, params });
+          if (!r.success) { ok = false; ({ error } = r); }
+        }
+      }
+      return json({ error, ok, ...buildSpaState(sessionId, session) });
+    }
+
+    // POST /api/v2/step/:id
+    // Phase B batch 23 Goal B: Step Bot must ONLY advance the non-human
+    // Player. The previous implementation called BotDriver on whoever the
+    // Engine reported as active — meaning if it was the HUMAN's turn, the
+    // Bot would auto-play the human's hand. We now early-return
+    // `{ ok: true, skipped: true, reason }` so the SPA can grey out the
+    // Button without doing anything destructive.
+    if (pathname.startsWith("/api/v2/step/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return json({ error: "session not found" }, 404);}
+      const active = session.getActivePlayer();
+      const humanIds = getHumanPlayerIds(sessionId);
+      if (humanIds.has(active)) {
+        return json({
+          ok: true,
+          reason: "it's the human's turn",
+          skipped: true,
+          ...buildSpaState(sessionId, session),
+        });
+      }
+      const bot = new BotDriver(active, { seed: `demo-step-${sessionId}` });
+      bot.step(session);
+      return json({ ok: true, skipped: false, ...buildSpaState(sessionId, session) });
+    }
+
+    // POST /api/v2/scenario/mid-combat/:sessionId
+    // Iter 12: seed a known mid-combat state directly so the SPA can
+    // Screenshot active combat affordances (contested BF, showdown beam,
+    // Attacker badge, breadcrumb) without driving a real game to combat.
+    if (
+      pathname.startsWith("/api/v2/scenario/mid-combat/")
+      && req.method === "POST"
+    ) {
+      const sessionId = pathname.split("/")[5] ?? "";
+      const body = (await req.json().catch(() => ({}))) as {
+        playerId?: "player-1" | "player-2";
+      };
+      const attackerId = body.playerId === "player-2" ? "player-2" : "player-1";
+      // Always create a fresh session for the scenario seed — reusing an
+      // Already-seeded session has empty hands (units moved to BF on the
+      // Prior seed call) and returns seeded=false. A fresh session has full
+      // Hands and a clean board, which is what seedCombatState expects.
+      let session: EngineSession;
+      try {
+        session = new EngineSession({
+          realDecks: true,
+          seed: `demo-${sessionId}`,
+        });
+      } catch (error) {
+        console.error(
+          "[/api/v2/scenario/mid-combat] real-deck init failed, falling back to synthetic:",
+          error,
+        );
+        session = new EngineSession({ seed: `demo-${sessionId}` });
+      }
+      demoSessions.set(sessionId, session);
+      const result = session.seedCombatState({
+        attackerId,
+        defenderId: attackerId === "player-1" ? "player-2" : "player-1",
+      });
+      return json({
+        ok: result.seeded,
+        scenario: "mid-combat",
+        seed: result,
+        ...buildSpaState(sessionId, session),
+      });
+    }
+
+    // POST /api/v2/scenario/game-over/:sessionId
+    // Iter 16: seed a finished state so the SPA can screenshot the
+    // GAME OVER banner without driving a real game to VP threshold.
+    if (
+      pathname.startsWith("/api/v2/scenario/game-over/")
+      && req.method === "POST"
+    ) {
+      const sessionId = pathname.split("/")[5] ?? "";
+      const body = (await req.json().catch(() => ({}))) as {
+        winner?: "player-1" | "player-2";
+      };
+      const winnerId = body.winner === "player-2" ? "player-2" : "player-1";
+      let session = demoSessions.get(sessionId);
+      if (!session) {
+        try {
+          session = new EngineSession({
+            realDecks: true,
+            seed: `demo-${sessionId}`,
+          });
+        } catch (error) {
+          console.error(
+            "[/api/v2/scenario/game-over] real-deck init failed, falling back to synthetic:",
+            error,
+          );
+          session = new EngineSession({ seed: `demo-${sessionId}` });
+        }
+        demoSessions.set(sessionId, session);
+      }
+      const result = session.seedFinishedState({ winnerId });
+      return json({
+        ok: result.seeded,
+        scenario: "game-over",
+        seed: result,
+        ...buildSpaState(sessionId, session),
+      });
+    }
+
+    // POST /api/v2/scenario/sabotage/:sessionId
+    // Seed Sabotage spell cast flow for the screenshot harness. Optional
+    // Body fields:
+    //   - playerId  ("player-1" | "player-2"; default "player-1") — caster
+    //   - step      ("precast" | "revealed" | "resolved"; default "precast")
+    if (
+      pathname.startsWith("/api/v2/scenario/sabotage/")
+      && req.method === "POST"
+    ) {
+      const sessionId = pathname.split("/")[5] ?? "";
+      const body = (await req.json().catch(() => ({}))) as {
+        playerId?: "player-1" | "player-2";
+        step?: "precast" | "revealed" | "resolved";
+      };
+      const casterId = body.playerId === "player-2" ? "player-2" : "player-1";
+      const opponentId = casterId === "player-1" ? "player-2" : "player-1";
+      const step = body.step ?? "precast";
+      // Re-create the session each call so reseeds start from a clean
+      // Hand/zone state (same pattern as the mid-combat scenario).
+      let session: EngineSession;
+      try {
+        session = new EngineSession({
+          realDecks: true,
+          seed: `demo-${sessionId}`,
+        });
+      } catch (error) {
+        console.error(
+          "[/api/v2/scenario/sabotage] real-deck init failed, falling back to synthetic:",
+          error,
+        );
+        session = new EngineSession({ seed: `demo-${sessionId}` });
+      }
+      demoSessions.set(sessionId, session);
+      const result = session.seedSabotageState({
+        casterId,
+        opponentId,
+        step,
+      });
+      return json({
+        ok: result.seeded,
+        scenario: "sabotage",
+        seed: result,
+        ...buildSpaState(sessionId, session),
+      });
+    }
+
+    // POST /api/v2/scenario/cast-card/:sessionId
+    // Generic single-card cast seed for the random-card flow tester. Body:
+    //   - cardId   (required) — card-pool id, e.g. "ogn-156-298"
+    //   - casterId ("player-1" | "player-2"; default "player-1")
+    //   - energy   (number; default 10)
+    // Always creates a fresh session so each seed starts from a clean state.
+    if (
+      pathname.startsWith("/api/v2/scenario/cast-card/")
+      && req.method === "POST"
+    ) {
+      const sessionId = pathname.split("/")[5] ?? "";
+      const body = (await req.json().catch(() => ({}))) as {
+        cardId?: string;
+        casterId?: "player-1" | "player-2";
+        energy?: number;
+      };
+      if (!body.cardId) {
+        return json({ error: "cardId is required" }, 400);
+      }
+      const casterId = body.casterId === "player-2" ? "player-2" : "player-1";
+      let session: EngineSession;
+      try {
+        session = new EngineSession({
+          realDecks: true,
+          seed: `demo-${sessionId}`,
+        });
+      } catch (error) {
+        console.error(
+          "[/api/v2/scenario/cast-card] real-deck init failed, falling back to synthetic:",
+          error,
+        );
+        session = new EngineSession({ seed: `demo-${sessionId}` });
+      }
+      demoSessions.set(sessionId, session);
+      const result = session.seedSingleCardCast({
+        cardId: body.cardId,
+        casterId,
+        energy: body.energy,
+      });
+      return json({
+        ok: result.seeded,
+        scenario: "cast-card",
+        seed: result,
+        ...buildSpaState(sessionId, session),
+      });
+    }
+
+    // GET /play and /play/* — serve the Vite-built SPA in production.
+    // In dev the user hits the Vite dev server (:5173) directly. The Bun
+    // Server only owns /play/* when `web/dist/` exists (after `bun run build`).
+    if (pathname === "/play" || pathname.startsWith("/play/")) {
+      const webDist = `${import.meta.dir}/web/dist`;
+      const rel = pathname === "/play" || pathname === "/play/"
+        ? "index.html"
+        : pathname.slice("/play/".length);
+      const filePath = `${webDist}/${rel}`;
+      const file = Bun.file(filePath);
+      if (await file.exists()) {
+        return new Response(file);
+      }
+      // SPA fallback — serve index.html for unknown paths under /play/.
+      const indexFile = Bun.file(`${webDist}/index.html`);
+      if (await indexFile.exists()) {
+        return new Response(indexFile, {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+      return new Response(
+        "Vite build missing. Run `bun --cwd apps/riftbound-app/web run build`.",
+        { headers: { "content-type": "text/plain" }, status: 404 },
+      );
     }
 
     // GET /api/cards — all cards (with optional filters)

@@ -7,7 +7,36 @@
 
 import type { CardId as CoreCardId, GameMoveDefinitions } from "@tcg/core";
 import { cleanupAndFireDeaths } from "../../cleanup";
+import { dispatchEvent } from "../../events/dispatcher";
+import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+
+/**
+ * Emit a `counterChanged` event through the unified event bus. No card text
+ * subscribes to it today, but the event log (and future listeners) see every
+ * counter/damage/buff mutation — and routing it here keeps these mutation
+ * sites flowing through the one chokepoint, like the rest of the engine.
+ */
+function emitCounterChanged(
+  draft: RiftboundGameState,
+  context: {
+    cards: TriggerRunnerContext["cards"];
+    counters: TriggerRunnerContext["counters"];
+    zones: TriggerRunnerContext["zones"];
+  },
+  cardId: string,
+  counter: string,
+  delta: number,
+  cause: string,
+): void {
+  const triggerCtx = {
+    cards: context.cards,
+    counters: context.counters,
+    draft,
+    zones: context.zones,
+  } as unknown as TriggerRunnerContext;
+  dispatchEvent(triggerCtx, { cardId, cause, counter, delta, type: "counterChanged" });
+}
 
 /**
  * Counter/token move definitions
@@ -47,6 +76,8 @@ export const counterMoves: Partial<
         context.counters.removeCounter(cardId as CoreCardId, counterType, -delta);
       }
 
+      emitCounterChanged(draft, context, cardId as string, counterType, delta, "addCounter");
+
       // Fire state-based checks so static recalc picks up any passive
       // Effects gated on counter values, and fire die triggers if the
       // Change killed a unit (rule 540.x / 813). Critical for risk #1 in
@@ -59,6 +90,7 @@ export const counterMoves: Partial<
     reducer: (draft, context) => {
       const { cardId, amount } = context.params;
       context.counters.addCounter(cardId as CoreCardId, "damage", amount);
+      emitCounterChanged(draft, context, cardId as string, "damage", amount, "addDamage");
       // Damage may reach a unit's might → state-based kill (rule 540.x).
       // Run cleanup and fire on-death triggers (Deathknell etc.).
       cleanupAndFireDeaths(draft, context);
@@ -102,6 +134,9 @@ export const counterMoves: Partial<
         toughnessModifier: currentToughness + deltaToughness,
       } as Partial<RiftboundCardMeta>);
 
+      if (deltaMight !== 0) {
+        emitCounterChanged(draft, context, cardId as string, "might", deltaMight, "modifyBuff");
+      }
       cleanupAndFireDeaths(draft, context);
     },
   },

@@ -394,21 +394,24 @@ describe("Rule 585: Multiple triggers fire when their conditions are met simulta
   // Controller-chosen order. The engine's `orderTriggers` helper preserves
   // Insertion order within a single owner as the default/auto ordering.
   it("Rule 585.1: simultaneous same-player triggers preserve insertion order (default auto choice)", () => {
-    const matches = [
+    const matches: import("../../abilities/trigger-matcher").MatchedTrigger[] = [
       {
         ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
         cardId: "a",
         cardOwner: P1,
+        event: { type: "start-of-turn" } as never,
       },
       {
         ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
         cardId: "b",
         cardOwner: P1,
+        event: { type: "start-of-turn" } as never,
       },
       {
         ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
         cardId: "c",
         cardOwner: P1,
+        event: { type: "start-of-turn" } as never,
       },
     ];
     const ordered = orderTriggers(matches, P1, [P1, P2]);
@@ -418,21 +421,24 @@ describe("Rule 585: Multiple triggers fire when their conditions are met simulta
   // Rule 585.2: When triggers belong to different controllers, the turn
   // Player's triggers fire first, then subsequent players in turn order.
   it("Rule 585.2: turn player's triggers are ordered before non-turn-player triggers", () => {
-    const matches = [
+    const matches: import("../../abilities/trigger-matcher").MatchedTrigger[] = [
       {
         ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
         cardId: "p2-card",
         cardOwner: P2,
+        event: { type: "start-of-turn" } as never,
       },
       {
         ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
         cardId: "p1-card-first",
         cardOwner: P1,
+        event: { type: "start-of-turn" } as never,
       },
       {
         ability: { effect: {}, trigger: { event: "start-of-turn" }, type: "triggered" } as never,
         cardId: "p1-card-second",
         cardOwner: P1,
+        event: { type: "start-of-turn" } as never,
       },
     ];
     // P1 is the turn player → P1's triggers fire first, then P2's.

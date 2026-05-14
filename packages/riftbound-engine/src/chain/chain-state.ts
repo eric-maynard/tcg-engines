@@ -42,6 +42,15 @@ export interface ChainItem {
   /** Whether this is a triggered ability (auto-added, not player-initiated) */
   readonly triggered?: boolean;
   /**
+   * The triggered ability's `condition` (the "intervening if" predicate), if
+   * it has one. Carried onto the chain so that when this item resolves the
+   * engine RE-EVALUATES the condition against the *current* state — if it is
+   * no longer satisfied, the ability does nothing (its effect is skipped,
+   * exactly like a countered item). Plain spells / activated abilities don't
+   * carry this. See `events`/trigger-runner `evaluateAbilityCondition`.
+   */
+  readonly condition?: unknown;
+  /**
    * Whether this is an optional ("you may ...") triggered ability.
    *
    * Core Rules 2026-03-30: a "may" triggered ability is optional to place on

@@ -1,0 +1,9 @@
+{
+  "kind": "rules-demo",
+  "demoTopic": "when-i-attack",
+  "questionText": "If a card says when I attack is that occurring before a showdown begins?",
+  "question": "When does a 'When I attack' triggered ability fire relative to the showdown / combat?",
+  "assumptions": [
+    "RiftJudge p0941 — abstract question about when 'When I attack' triggers occur. The bridge's rules-demo when-i-attack topic explains: the engine dispatches an `attack` event when units become attackers, BEFORE the Combat Damage Step (rule 459.2.b / 461.2.a). The triggered ability goes on the chain at this point, BEFORE damage is dealt. The Showdown 'begins' when the battlefield becomes Contested; the attack/defend designation triggers fire as part of the Combat that resolves at that showdown."
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "rules-demo",
+  "demoTopic": "showdown",
+  "questionText": "on battle field, two units vs two units, how is damage assigned in combat",
+  "question": "How is combat damage assigned with multiple units per side?",
+  "assumptions": [
+    "RiftJudge p1846 — abstract 'how is damage assigned in combat' question. The bridge auto-builds a minimal showdown and runs it through the engine: each side sums its total Might and deals it simultaneously to the other side, lethal-to-one-unit-before-the-next (rule 460.2.c.3)."
+  ]
+}

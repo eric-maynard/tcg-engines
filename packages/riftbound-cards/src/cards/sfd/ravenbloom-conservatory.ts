@@ -16,7 +16,8 @@ const abilities: Ability[] = [
     effect: {
       amount: 1,
       from: "deck",
-      then: { draw: "chosen" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      then: { draw: "chosen" } as any,
       type: "reveal",
       until: "spell",
     },

@@ -63,8 +63,8 @@ function createMockState(overrides?: Partial<RiftboundGameState>): RiftboundGame
     conqueredThisTurn: { [P1]: [], [P2]: [] },
     gameId: "test-combat",
     players: {
-      [P1]: { id: P1, victoryPoints: 0 },
-      [P2]: { id: P2, victoryPoints: 0 },
+      [P1]: { id: P1, victoryPoints: 0, xp: 0, turnsTaken: 0 },
+      [P2]: { id: P2, victoryPoints: 0, xp: 0, turnsTaken: 0 },
     },
     runePools: {
       [P1]: { energy: 0, power: {} },
@@ -74,6 +74,7 @@ function createMockState(overrides?: Partial<RiftboundGameState>): RiftboundGame
     status: "playing",
     turn: { activePlayer: P1, number: 1, phase: "main" },
     victoryScore: 8,
+    xpGainedThisTurn: { [P1]: 0, [P2]: 0 },
     ...overrides,
   };
 }
@@ -722,9 +723,18 @@ describe("resolveFullCombat", () => {
       "gear-1": { owner: P1, zone: `battlefield-${bfId}` },
     });
 
-    // Gear should still be at battlefield (not treated as combatant, not killed)
+    // Gear is not treated as a combatant — it is not killed (not in trash).
+    // It IS auto-recalled from the battlefield to its owner's base by
+    // State-based checks (rule 518). That cleanup now runs via the dispatcher
+    // When combat events fire (and also via the post-move cleanup wrapper that
+    // Wraps `resolveFullCombat` in real games) — previously this test bypassed
+    // Both by calling the reducer raw, so it asserted the gear stayed put.
     const bfCards = mock.zoneContents.get(`battlefield-${bfId}`) ?? [];
-    expect(bfCards).toContain("gear-1");
+    expect(bfCards).not.toContain("gear-1");
+    const trashCards = mock.zoneContents.get("trash") ?? [];
+    expect(trashCards).not.toContain("gear-1");
+    const baseCards = mock.zoneContents.get("base") ?? [];
+    expect(baseCards).toContain("gear-1");
 
     // Attacker wins (6 vs 3)
     expect(draft.battlefields[bfId].controller).toBe(P1);
@@ -948,7 +958,7 @@ describe("resolveFullCombat enumerator and condition", () => {
     });
 
     const move = combatMoves.resolveFullCombat;
-    const results = move.enumerator!(state, {} as never);
+    const results = move!.enumerator!(state, {} as never);
 
     expect(results).toHaveLength(2);
     expect(results.map((r: { battlefieldId: string }) => r.battlefieldId).toSorted()).toEqual([
@@ -966,7 +976,7 @@ describe("resolveFullCombat enumerator and condition", () => {
     });
 
     const move = combatMoves.resolveFullCombat;
-    const results = move.enumerator!(state, {} as never);
+    const results = move!.enumerator!(state, {} as never);
 
     expect(results).toHaveLength(0);
   });
@@ -975,7 +985,7 @@ describe("resolveFullCombat enumerator and condition", () => {
     const state = createMockState({ status: "finished" as never });
 
     const move = combatMoves.resolveFullCombat;
-    const results = move.enumerator!(state, {} as never);
+    const results = move!.enumerator!(state, {} as never);
 
     expect(results).toHaveLength(0);
   });
@@ -988,7 +998,7 @@ describe("resolveFullCombat enumerator and condition", () => {
     });
 
     const move = combatMoves.resolveFullCombat;
-    const result = move.condition!(state, { params: { battlefieldId: "bf-1" } } as never);
+    const result = move!.condition!(state, { params: { battlefieldId: "bf-1" } } as never);
 
     expect(result).toBe(true);
   });
@@ -1001,7 +1011,7 @@ describe("resolveFullCombat enumerator and condition", () => {
     });
 
     const move = combatMoves.resolveFullCombat;
-    const result = move.condition!(state, { params: { battlefieldId: "bf-1" } } as never);
+    const result = move!.condition!(state, { params: { battlefieldId: "bf-1" } } as never);
 
     expect(result).toBe(false);
   });
@@ -1015,7 +1025,7 @@ describe("resolveFullCombat enumerator and condition", () => {
     });
 
     const move = combatMoves.resolveFullCombat;
-    const result = move.condition!(state, { params: { battlefieldId: "bf-1" } } as never);
+    const result = move!.condition!(state, { params: { battlefieldId: "bf-1" } } as never);
 
     expect(result).toBe(false);
   });

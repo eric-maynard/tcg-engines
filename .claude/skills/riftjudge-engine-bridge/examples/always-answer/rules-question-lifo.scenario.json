@@ -1,0 +1,11 @@
+{
+  "kind": "rules-question",
+  "questionText": "If I play a spell and my opponent responds with a Reaction, which one resolves first?",
+  "question": "in what order do chained spells resolve?",
+  "rulesAnswer": {
+    "verdict": "Your opponent's Reaction resolves first — the chain resolves last-in, first-out (LIFO).",
+    "reasoning": "Each spell played into a Showdown's open state adds an item to the Chain (rule 342.1). The Chain resolves top-down: the most recently added item resolves first, then the next, and so on, until the chain is empty. So: you play your spell (chain item 1); they respond with a Reaction (chain item 2, on top); item 2 resolves, then item 1. Practically this is why a Reaction that lowers a unit's Might 'in response' takes effect before the spell it's responding to.",
+    "cites": ["342", "342.1", "325 (Chains and Showdowns)"],
+    "confidence": "high"
+  }
+}

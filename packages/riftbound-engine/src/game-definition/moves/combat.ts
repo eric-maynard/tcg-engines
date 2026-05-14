@@ -13,11 +13,57 @@ import type {
 } from "@tcg/core";
 import type { Draft } from "immer";
 import type { CombatUnit } from "../../combat";
-import { resolveCombat } from "../../combat";
-import { fireDieTriggers, fireTriggers } from "../../abilities/trigger-runner";
+import { collectDamageRequirements, resolveCombat } from "../../combat";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
+import type { GameEvent } from "../../abilities/game-events";
 import { getActiveShowdown } from "../../chain";
+import { dispatchEvent, dispatchUnitDied } from "../../events/dispatcher";
 import { computeEffectiveMight, getGlobalCardRegistry } from "../../operations/card-lookup";
+
+/**
+ * Combat-related game events (attack / defend / conquer / win-combat /
+ * hold / score) emitted by the combat moves flow through the unified
+ * event-bus chokepoint (`events/dispatcher.ts#dispatchEvent`). The old
+ * `fireTriggers` call sites took `(event, ctx)`; `dispatchEvent` is
+ * `(ctx, event)` — this thin adapter preserves the call-site shape while
+ * routing the emission through the bus.
+ */
+function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
+  return dispatchEvent(ctx, event);
+}
+
+/**
+ * Reassign a battlefield's `controller` AND emit a `controlChanged` engine-bus
+ * event through the dispatcher (no-op if the controller didn't actually
+ * change). The single chokepoint for "control of a battlefield changed" —
+ * Establish-Control / Conquer / lose-control-when-empty all go through here.
+ */
+function setBattlefieldController(
+  draft: Draft<RiftboundGameState>,
+  context: { cards: TriggerRunnerContext["cards"]; counters: TriggerRunnerContext["counters"]; zones: TriggerRunnerContext["zones"] },
+  battlefieldId: string,
+  newController: string | null,
+  cause: string,
+): void {
+  const bf = draft.battlefields[battlefieldId];
+  if (!bf) {
+    return;
+  }
+  const prev = bf.controller ?? null;
+  if (prev === newController) {
+    return;
+  }
+  bf.controller = newController;
+  fireTriggers(
+    { battlefieldId, cause, controller: newController, previousController: prev, type: "controlChanged" },
+    {
+      cards: context.cards,
+      counters: context.counters,
+      draft: draft as unknown as RiftboundGameState,
+      zones: context.zones,
+    },
+  );
+}
 import { getHuntValue } from "../../operations/hunt-keyword";
 import type {
   GrantedKeyword,
@@ -25,9 +71,61 @@ import type {
   RiftboundGameState,
   RiftboundMoves,
 } from "../../types";
-import { hasPlayerWon } from "../win-conditions/victory";
+import { decideWinningPoint, hasPlayerWonStrict } from "../win-conditions/victory";
 import { canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
 import { areAllies, isTeamGame } from "../../operations/teams";
+
+/**
+ * Rule 466.1.b — apply the Winning-Point gate when a Conquer-source point
+ * would land. Mutates the draft and (if `draw` is the verdict) routes a
+ * card-draw through the zones API. Returns `true` if a point was actually
+ * gained (so the caller knows to also run `hasPlayerWon`), `false` if the
+ * gain was replaced by a draw or skipped.
+ *
+ * `bfsScoredThisTurnIncludingThis` is the count of distinct battlefields the
+ * player will have Scored this turn AFTER this Score completes — so the
+ * caller MUST update `scoredThisTurn` *before* calling this helper.
+ */
+function tryGainConquerPoint(
+  draft: RiftboundGameState,
+  playerId: string,
+  zones: {
+    drawCards?: (params: {
+      count: number;
+      from: CoreZoneId;
+      to: CoreZoneId;
+      playerId: CorePlayerId;
+    }) => void;
+  },
+  bfsScoredThisTurnIncludingThis: number,
+): boolean {
+  const player = draft.players[playerId];
+  if (!player) {
+    return false;
+  }
+  const totalBattlefields = Object.keys(draft.battlefields).length;
+  const decision = decideWinningPoint(
+    draft,
+    playerId,
+    "conquer",
+    bfsScoredThisTurnIncludingThis,
+    totalBattlefields,
+  );
+  if (decision === "gain") {
+    player.victoryPoints += 1;
+    return true;
+  }
+  if (decision === "draw") {
+    // Rule 466.1.b.2 — "that player draws a card." (mainDeck → hand).
+    zones.drawCards?.({
+      count: 1,
+      from: "mainDeck" as CoreZoneId,
+      playerId: playerId as CorePlayerId,
+      to: "hand" as CoreZoneId,
+    });
+  }
+  return false;
+}
 
 /**
  * Hunt keyword (rule 823): grant a player XP based on the [Hunt N] units
@@ -133,6 +231,16 @@ export function runCombatResolution(
     return;
   }
 
+  // Rule 447.x / p1472 — combat participants are LOCKED at showdown-begin.
+  // A unit that arrives at this battlefield mid-combat (e.g. spawned by a
+  // Deathknell trigger that fired during the Combat Damage Step) does NOT
+  // Join this combat: it is not assigned damage, is not part of the
+  // "winning"/"losing" survivor sets, and does not satisfy "sole remaining
+  // Player" tests for re-staging / Establish Control. Snapshot the
+  // Participant set NOW so subsequent re-reads of `getCardsInZone` (which
+  // Would see late arrivals) don't taint the resolution step.
+  const lockedParticipants = new Set<string>(unitIds.map((id) => id as string));
+
   // Look up card definitions from the global registry
   const registry = getGlobalCardRegistry();
 
@@ -140,13 +248,38 @@ export function runCombatResolution(
   const attackerUnits: CombatUnit[] = [];
   const defenderUnits: CombatUnit[] = [];
 
+  // Track non-might participants per side so we can recall them when only
+  // Their side's might-bearing units are absent — see the
+  // `endCombatNoDamage` block below. Without this, a 0-might "presence"
+  // Unit (e.g. a Scuttle-Crab-style utility unit) at a contested
+  // Battlefield would let the same player re-contest the bf indefinitely:
+  // ContestBattlefield sees their card present, resolveFullCombat skips it
+  // (no might), endCombatNoDamage sees `owners.size === 2` so no control
+  // Change happens, contested clears, and the next move enumeration offers
+  // ContestBattlefield again. Generic (no per-card ifs) — only the
+  // Attacker / defender role and the "no might units" bucket matter.
+  const attackerNonMightIds: string[] = [];
+  const defenderNonMightIds: string[] = [];
+
   for (const cardId of unitIds) {
     const owner = cards.getCardOwner(cardId) ?? "";
     const meta = cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
     const def = registry.get(cardId as string);
 
-    // Skip non-unit cards (no base Might).
+    // Skip non-unit cards (no base Might). Track them by side so they can
+    // Be recalled if their side ends up with no might-bearing participants.
     if ((def?.might ?? 0) <= 0) {
+      // Only `unit` cards register a "presence" — non-units (e.g. gear,
+      // Legends, equipment) shouldn't contribute to a contest and aren't
+      // Counted by `endCombatNoDamage`'s owner-set, so they don't drive the
+      // Re-contest loop. Filter by cardType to keep the recall surgical.
+      if (def?.cardType === "unit") {
+        if (owner === attackingPlayer) {
+          attackerNonMightIds.push(cardId as string);
+        } else {
+          defenderNonMightIds.push(cardId as string);
+        }
+      }
       continue;
     }
     // Rule 460.2.a/b: combat damage is summed from each side's *current*
@@ -182,13 +315,63 @@ export function runCombatResolution(
       }
     }
 
+    // Rule 460.2.c.7 — collect the FULL set of damage-assignment-requirement
+    // Priorities for this unit by fusing printed keywords + granted keywords
+    // + any explicit meta override. When ≥2 distinct requirements exist
+    // (e.g. printed [Patrolling] + granted [Tank]), the resolver consults
+    // The `ChooseRequirementHook` (or default: smallest = Tank-first). When
+    // Only ONE requirement exists, this is just the unit's single priority.
+    const damageAssignmentRequirements = collectDamageRequirements(
+      { keywords: allKeywords },
+      {
+        damageAssignmentPriority:
+          typeof meta?.damageAssignmentPriority === "number"
+            ? meta.damageAssignmentPriority
+            : undefined,
+        grantedKeywords,
+      },
+    );
+
     const unit: CombatUnit = {
       baseMight,
+      // Rule 460.2.c.9 — units that can't be dealt damage are exempt from
+      // Mandatory lethal assignment and are never killed by combat damage.
+      cannotTakeDamage: meta?.cannotTakeDamage === true ? true : undefined,
       currentDamage,
+      // Rule 460.2.c.2 — an effect-granted "must be assigned damage
+      // First/last" overrides the keyword-derived (Tank/Backline) default.
+      damageAssignmentPriority:
+        typeof meta?.damageAssignmentPriority === "number"
+          ? meta.damageAssignmentPriority
+          : undefined,
+      // Rule 460.2.c.7 — fused requirement list (printed + granted). Empty
+      // When no Tank/Backline/Patrolling/explicit-priority sources exist;
+      // In that case the resolver's existing keyword-fallback applies.
+      damageAssignmentRequirements:
+        damageAssignmentRequirements.length > 0
+          ? damageAssignmentRequirements
+          : undefined,
       id: cardId as string,
       keywordValues: Object.keys(keywordValues).length > 0 ? keywordValues : undefined,
       keywords: allKeywords,
       owner,
+      // Rule 712 — Barrier keyword: the first time this unit would be dealt
+      // Combat damage > 0, that damage is reduced to 0 and Barrier is removed.
+      // `meta.barrierConsumed` persists after the first hit so the unit does
+      // NOT benefit again on subsequent combats.
+      hasBarrier:
+        allKeywords.includes("Barrier") && !meta?.barrierConsumed ? true : undefined,
+      // Rule 437.5 — Prevent: a tracked Prevent Value raises this unit's
+      // Lethal-assignment threshold and reduces the combat damage dealt.
+      preventValue:
+        meta?.preventDamage === "all" || typeof meta?.preventDamage === "number"
+          ? meta.preventDamage
+          : undefined,
+      // Rule 423.1.b — a Stunned Unit does not contribute its might to
+      // Combat damage. The unit still takes damage and dies on damage ≥
+      // Its full Might (rule 423.1.c) — the suppression is *only* of the
+      // Unit's contribution to its side's combat-damage sum.
+      stunned: meta?.stunned === true ? true : undefined,
     };
 
     if (owner === attackingPlayer) {
@@ -200,13 +383,84 @@ export function runCombatResolution(
 
   // If either side is empty, skip combat damage resolution but still run the
   // Resolution Step (461) below so control / contested status settle.
+  //
+  // Phase B batch 17 FF (monkey-rescan finding FF-1) — before deferring to
+  // `endCombatNoDamage`, recall any non-might "presence" units from the
+  // Side that lacks combat-eligible attackers. Rationale:
+  //   - The attacker side has 0 might-bearing units (only e.g. 0-might
+  //     Scuttle Crab) → it cannot win combat; per Rule 461.1.a.2 a non-
+  //     Conquering attacker is recalled to base.
+  //   - The defender side has 0 might-bearing units → the attacker should
+  //     Establish Control freely, but `endCombatNoDamage`'s owner-set is
+  //     Polluted by the defender's 0-might cards so `owners.size === 2`
+  //     And no control change fires. Recalling them to base before
+  //     `endCombatNoDamage` lets the owner-set collapse to {attacker} so
+  //     Establish-Control runs.
+  // This is a GENERIC fix — keyed only on the (already-filtered) "no might
+  // Unit" bucket per side, no per-card branches.
   if (attackerUnits.length === 0 || defenderUnits.length === 0) {
+    if (attackerUnits.length === 0) {
+      for (const inertId of attackerNonMightIds) {
+        zones.moveCard({
+          cardId: inertId as CoreCardId,
+          targetZoneId: "base" as CoreZoneId,
+        });
+      }
+    }
+    if (defenderUnits.length === 0) {
+      for (const inertId of defenderNonMightIds) {
+        zones.moveCard({
+          cardId: inertId as CoreCardId,
+          targetZoneId: "base" as CoreZoneId,
+        });
+      }
+    }
     endCombatNoDamage(draft, context, battlefieldId);
     return;
   }
 
+  // Rule 459.2.b / 461.2.a — once attacker/defender designations are set for
+  // This combat (the units at this battlefield contesting / being contested),
+  // Emit `attack` / `defend` engine-bus events so triggered abilities of the
+  // Form "When I attack, …" / "When I defend, …" / "When a friendly unit
+  // Attacks, …" fire through the dispatcher in turn/APNAP order before the
+  // Combat Damage Step. Cards in the registry that subscribe to these events
+  // (parsed via `effect-keyword-parser`'s on-attack/on-defend patterns) thus
+  // See this combat. (`conquer` is dispatched at line 388-392 below if the
+  // Attacker wins, and at 1124 when conquerBattlefield runs as a move.)
+  for (const a of attackerUnits) {
+    fireTriggers(
+      { battlefieldId, cardId: a.id, type: "attack" },
+      { cards, counters, draft, zones },
+    );
+  }
+  for (const d of defenderUnits) {
+    fireTriggers(
+      { battlefieldId, cardId: d.id, type: "defend" },
+      { cards, counters, draft, zones },
+    );
+  }
+
   // Run the combat resolver
   const result = resolveCombat(attackerUnits, defenderUnits);
+
+  // Rule 437.2/.3 — write back any updated Prevent Values (Prevent absorbed
+  // Some combat damage; `undefined` means the Prevent effect expired).
+  for (const [unitId, remaining] of Object.entries(result.preventRemaining)) {
+    cards.updateCardMeta(
+      unitId as CoreCardId,
+      { preventDamage: remaining } as unknown as Partial<RiftboundCardMeta>,
+    );
+  }
+
+  // Rule 712 — Barrier consumed: mark units whose Barrier keyword was spent
+  // This combat so they do not absorb the next hit.
+  for (const unitId of result.barrierConsumed) {
+    cards.updateCardMeta(
+      unitId as CoreCardId,
+      { barrierConsumed: true } as unknown as Partial<RiftboundCardMeta>,
+    );
+  }
 
   // Apply damage to each unit from damageAssignment
   for (const [unitId, dmg] of Object.entries(result.damageAssignment)) {
@@ -239,6 +493,7 @@ export function runCombatResolution(
     cards.updateCardMeta(
       killedId as CoreCardId,
       {
+        barrierConsumed: undefined,
         buffed: false,
         combatRole: null,
         damage: 0,
@@ -257,33 +512,59 @@ export function runCombatResolution(
     });
   }
 
-  // Fire "die" triggers (rule 540.x / 813 Deathknell) for units killed in
-  // The Combat Damage Step, after they've all moved to the trash.
-  if (killedPairs.length > 0) {
-    fireDieTriggers(killedPairs, { cards, counters, draft, zones });
+  // Combat Cleanup step 3c (rule 461.1.a.1): "Heal all Units." Per
+  // RiftJudge FAQ #6111, ALL units everywhere in play heal all damage
+  // Simultaneously at the end of combat, not just the combat participants.
+  // Units that were NOT in this combat (at other battlefields or in bases)
+  // Also heal. Late arrivals (Deathknell summons during the Damage Step)
+  // Are NOT counted as lockedParticipants — but they still heal because
+  // The global heal sweeps all board zones anyway.
+  //
+  // IMPORTANT (p0259 / FAQ #10090 / FAQ #10018): Healing happens BEFORE
+  // Deathknell triggers resolve. Per the ruling: "the healing step occurs
+  // Before the Deathknell damage is dealt." Survivors are healed first so
+  // Deathknell damage cannot combine with combat damage to produce lethal
+  // On a unit that survived the Combat Damage Step. Only after healing are
+  // The `unitDied` events dispatched (which fire Deathknell inline when no
+  // Chain is active, or queue them when a chain is active — but in either
+  // Case they resolve after the heal).
+  //
+  // Build the full set: all units at all bases and all battlefields.
+  const allBoardCardIds = new Set<string>();
+  for (const pid of Object.keys(draft.players)) {
+    for (const cardId of zones.getCardsInZone("base" as CoreZoneId, pid as CorePlayerId)) {
+      allBoardCardIds.add(cardId as string);
+    }
+  }
+  for (const bfId of Object.keys(draft.battlefields)) {
+    for (const cardId of zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
+      allBoardCardIds.add(cardId as string);
+    }
+  }
+  // Killed units were already moved to trash above — they won't appear in
+  // Board zones anymore, so the set naturally excludes them.
+  for (const healId of allBoardCardIds) {
+    const meta = cards.getCardMeta(healId as CoreCardId) as Partial<RiftboundCardMeta> | undefined;
+    if (meta?.damage && meta.damage > 0) {
+      cards.updateCardMeta(healId as CoreCardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+      counters.clearCounter?.(healId as CoreCardId, "damage");
+    }
   }
 
-  // Combat Cleanup step 3c (rule 461.1.a.1): "Heal all Units." Combat
-  // Damage does NOT persist past the combat that dealt it — every unit
-  // That survived the Combat Damage Step is healed back to full at the
-  // Resolution Step.
-  const healedIds = new Set<string>([
-    ...result.winningSurvivors,
-    ...result.losingSurvivors,
-    ...zones
-      .getCardsInZone(battlefieldZoneId)
-      .map((c) => c as string)
-      .filter((c) => !result.killed.includes(c as CoreCardId)),
-  ]);
-  for (const healId of healedIds) {
-    cards.updateCardMeta(healId as CoreCardId, { damage: 0 } as Partial<RiftboundCardMeta>);
-    counters.clearCounter?.(healId as CoreCardId, "damage");
+  // Emit `unitDied` (rule 540.x / 813 Deathknell) for units killed in the
+  // Combat Damage Step — AFTER the heal sweep above (p0259 / FAQ #10090).
+  // Survivors are already healed, so Deathknell damage cannot stack with
+  // Combat damage to produce lethal on a unit that survived the Damage Step.
+  // Owners were snapshotted before the trash move, so deaths attribute to
+  // The right player.
+  if (killedPairs.length > 0) {
+    dispatchUnitDied({ cards, counters, draft, zones }, killedPairs);
   }
 
   // Apply outcome based on winner
   if (result.winner === "attacker") {
     // Attacker conquers the battlefield
-    battlefield.controller = attackingPlayer;
+    setBattlefieldController(draft, context, battlefieldId, attackingPlayer, "combat-conquer");
 
     // Track conquered battlefield for this turn
     if (!draft.conqueredThisTurn[attackingPlayer]) {
@@ -295,10 +576,20 @@ export function runCombatResolution(
     const scoringAllowed = canPlayerScoreAtBattlefield(draft, attackingPlayer, battlefieldId);
     const player = draft.players[attackingPlayer];
     if (player && scoringAllowed) {
-      player.victoryPoints += 1;
-
-      // Check for victory
-      if (hasPlayerWon(draft, attackingPlayer)) {
+      // Track as scored this turn BEFORE the winning-point gate (rule
+      // 466.1.b.2 needs the count *including* this score).
+      if (!draft.scoredThisTurn[attackingPlayer]) {
+        draft.scoredThisTurn[attackingPlayer] = [];
+      }
+      const alreadyScoredHere = draft.scoredThisTurn[attackingPlayer]?.includes(battlefieldId);
+      if (!alreadyScoredHere) {
+        draft.scoredThisTurn[attackingPlayer]?.push(battlefieldId);
+      }
+      const bfsScored = draft.scoredThisTurn[attackingPlayer]?.length ?? 0;
+      // Rule 466.1.b — Winning-Point gate: at-threshold Conquer that hasn't
+      // Scored every battlefield this turn draws a card instead.
+      const gained = tryGainConquerPoint(draft, attackingPlayer, zones, bfsScored);
+      if (gained && hasPlayerWonStrict(draft, attackingPlayer)) {
         draft.status = "finished";
         draft.winner = attackingPlayer;
 
@@ -344,7 +635,7 @@ export function runCombatResolution(
     if (defendingPlayer && battlefield.controller !== defendingPlayer) {
       const alreadyScored =
         draft.scoredThisTurn[defendingPlayer]?.includes(battlefieldId) ?? false;
-      battlefield.controller = defendingPlayer;
+      setBattlefieldController(draft, context, battlefieldId, defendingPlayer, "combat-defend-hold");
       if (!alreadyScored) {
         if (!draft.conqueredThisTurn[defendingPlayer]) {
           draft.conqueredThisTurn[defendingPlayer] = [];
@@ -353,17 +644,21 @@ export function runCombatResolution(
         const scoringAllowed = canPlayerScoreAtBattlefield(draft, defendingPlayer, battlefieldId);
         const dp = draft.players[defendingPlayer];
         if (dp && scoringAllowed) {
-          dp.victoryPoints += 1;
           if (!draft.scoredThisTurn[defendingPlayer]) {
             draft.scoredThisTurn[defendingPlayer] = [];
           }
           draft.scoredThisTurn[defendingPlayer].push(battlefieldId);
+          const bfsScored = draft.scoredThisTurn[defendingPlayer]?.length ?? 0;
+          // Rule 466.1.b — Winning-Point gate on the establish-control
+          // Conquer (this path triggers on a defender holding the field after
+          // A combat that flipped contested → controller).
+          const gained = tryGainConquerPoint(draft, defendingPlayer, zones, bfsScored);
           applyHuntXp(draft, battlefieldId, defendingPlayer, zones, cards);
           fireTriggers(
             { battlefieldId, playerId: defendingPlayer, type: "conquer" },
             { cards, counters, draft, zones },
           );
-          if (hasPlayerWon(draft, defendingPlayer)) {
+          if (gained && hasPlayerWonStrict(draft, defendingPlayer)) {
             draft.status = "finished";
             draft.winner = defendingPlayer;
             context.endGame?.({
@@ -378,10 +673,17 @@ export function runCombatResolution(
   }
   // For "tie"/"no-result": handled below.
 
-  // Rule 461.3.d.1: if "No Result" and BOTH players still have units, a new
-  // Combat is *staged* here — the contest does not end.
+  // Rule 461.3.d.1: if "No Result" and BOTH players still have units that
+  // WERE PARTICIPANTS in this combat (rule 447.x — late arrivals don't
+  // Count), a new Combat is *staged* here — the contest does not end. We
+  // Filter `getCardsInZone` by the locked participant snapshot so a unit
+  // Spawned mid-combat (Deathknell summon, p1472) is not counted as a
+  // Player presence that triggers re-stage.
   const survivorsByOwner = new Set<string>();
   for (const unitId of zones.getCardsInZone(battlefieldZoneId)) {
+    if (!lockedParticipants.has(unitId as string)) {
+      continue;
+    }
     const o = cards.getCardOwner(unitId as CoreCardId);
     if (o) {
       survivorsByOwner.add(o as string);
@@ -423,11 +725,10 @@ function endCombatNoDamage(
     const survivor = [...owners][0];
     if (battlefield.controller !== survivor) {
       const alreadyScored = draft.scoredThisTurn[survivor]?.includes(battlefieldId) ?? false;
-      battlefield.controller = survivor;
+      setBattlefieldController(draft, context, battlefieldId, survivor, "combat-establish-control");
       if (!alreadyScored && canPlayerScoreAtBattlefield(draft, survivor, battlefieldId)) {
         const p = draft.players[survivor];
         if (p) {
-          p.victoryPoints += 1;
           if (!draft.scoredThisTurn[survivor]) {
             draft.scoredThisTurn[survivor] = [];
           }
@@ -436,12 +737,15 @@ function endCombatNoDamage(
             draft.conqueredThisTurn[survivor] = [];
           }
           draft.conqueredThisTurn[survivor].push(battlefieldId);
+          const bfsScored = draft.scoredThisTurn[survivor]?.length ?? 0;
+          // Rule 466.1.b — Winning-Point gate.
+          const gained = tryGainConquerPoint(draft, survivor, zones, bfsScored);
           applyHuntXp(draft, battlefieldId, survivor, zones, cards);
           fireTriggers(
             { battlefieldId, playerId: survivor, type: "conquer" },
             { cards, counters, draft, zones },
           );
-          if (hasPlayerWon(draft, survivor)) {
+          if (gained && hasPlayerWonStrict(draft, survivor)) {
             draft.status = "finished";
             draft.winner = survivor;
             context.endGame?.({
@@ -455,7 +759,7 @@ function endCombatNoDamage(
     }
   } else if (owners.size === 0) {
     // Rule 461.5.b: no units → battlefield becomes Uncontrolled.
-    battlefield.controller = null;
+    setBattlefieldController(draft, context, battlefieldId, null, "combat-no-units");
   }
   finalizeCombatEnd(draft, context, battlefieldId);
 }
@@ -514,6 +818,18 @@ function finalizeCombatEnd(
     battlefield.contested = false;
     battlefield.contestedBy = undefined;
   }
+
+  // Engine-bus event: this combat is resolved. `winner` reflects the
+  // Post-resolution controller of the battlefield (null if Uncontrolled).
+  fireTriggers(
+    { battlefieldId, type: "combatResolved", winner: battlefield?.controller ?? null },
+    {
+      cards: context.cards,
+      counters: context.counters,
+      draft: draft as unknown as RiftboundGameState,
+      zones: context.zones,
+    },
+  );
 }
 
 /**
@@ -550,7 +866,7 @@ export function establishNonCombatShowdownControl(
   if (battlefield.controller === survivor) {
     return;
   }
-  battlefield.controller = survivor;
+  setBattlefieldController(draft, context, battlefieldId, survivor, "noncombat-showdown-establish-control");
   const alreadyScored = draft.scoredThisTurn[survivor]?.includes(battlefieldId) ?? false;
   if (alreadyScored) {
     return;
@@ -562,7 +878,6 @@ export function establishNonCombatShowdownControl(
   if (!p) {
     return;
   }
-  p.victoryPoints += 1;
   if (!draft.scoredThisTurn[survivor]) {
     draft.scoredThisTurn[survivor] = [];
   }
@@ -571,12 +886,15 @@ export function establishNonCombatShowdownControl(
     draft.conqueredThisTurn[survivor] = [];
   }
   draft.conqueredThisTurn[survivor].push(battlefieldId);
+  const bfsScored = draft.scoredThisTurn[survivor]?.length ?? 0;
+  // Rule 466.1.b — Winning-Point gate (noncombat showdown survivor conquer).
+  const gained = tryGainConquerPoint(draft, survivor, zones, bfsScored);
   applyHuntXp(draft, battlefieldId, survivor, zones, cards);
   fireTriggers(
     { battlefieldId, playerId: survivor, type: "conquer" },
     { cards, counters, draft, zones },
   );
-  if (hasPlayerWon(draft, survivor)) {
+  if (gained && hasPlayerWonStrict(draft, survivor)) {
     draft.status = "finished";
     draft.winner = survivor;
     context.endGame?.({
@@ -676,6 +994,17 @@ export const combatMoves: Partial<
       if (battlefield) {
         battlefield.contested = true;
         battlefield.contestedBy = playerId;
+        // Engine-bus event: a combat was staged here (battlefield became
+        // Contested). Routed through the dispatcher chokepoint.
+        fireTriggers(
+          { battlefieldId, contestedBy: playerId, type: "combatStaged" },
+          {
+            cards: context.cards,
+            counters: context.counters,
+            draft,
+            zones: context.zones,
+          },
+        );
       }
 
       // Rule 455.1 / 459.2: if a Showdown is already ongoing at the battlefield
@@ -707,6 +1036,17 @@ export const combatMoves: Partial<
               // Re-open: a Combat Showdown re-runs the focus rotation.
               passedPlayers: [],
             };
+            // Engine-bus event: a staged combat was opened (the ongoing
+            // Showdown became a Combat Showdown).
+            fireTriggers(
+              { attackingPlayer: playerId, battlefieldId, type: "combatOpened" },
+              {
+                cards: context.cards,
+                counters: context.counters,
+                draft,
+                zones: context.zones,
+              },
+            );
           }
         }
       }
@@ -718,8 +1058,17 @@ export const combatMoves: Partial<
    *
    * Designate a unit as an attacker in combat.
    * The attacker is the player who applied Contested status.
+   *
+   * Phase B batch 14 finding X-1: this primitive is engine-internal — the
+   * real combat flow funnels through `resolveFullCombat`, not through
+   * discretionary assignAttacker/Defender/Damage moves. Without a guard,
+   * the random monkey discovered + invoked it from any state, corrupting
+   * `combatRole` meta on units not actually in combat. Gate with
+   * `() => false` to match the pattern of `recallUnit` and `channelRunes`.
    */
   assignAttacker: {
+    condition: () => false,
+    enumerator: () => [],
     reducer: (_draft, context) => {
       const { unitId } = context.params;
       const { cards } = context;
@@ -739,8 +1088,12 @@ export const combatMoves: Partial<
    *
    * Designate a unit as a defender in combat.
    * The defender is the other player in combat.
+   *
+   * See `assignAttacker` for the same finding X-1 rationale.
    */
   assignDefender: {
+    condition: () => false,
+    enumerator: () => [],
     reducer: (_draft, context) => {
       const { unitId } = context.params;
       const { cards } = context;
@@ -762,8 +1115,12 @@ export const combatMoves: Partial<
    * Damage assignment rules:
    * - Units with Tank must receive lethal damage first
    * - Must assign lethal damage before moving to next unit
+   *
+   * See `assignAttacker` for the same finding X-1 rationale.
    */
   assignDamage: {
+    condition: () => false,
+    enumerator: () => [],
     reducer: (_draft, context) => {
       const { targetId, amount } = context.params;
       const { counters } = context;
@@ -781,8 +1138,22 @@ export const combatMoves: Partial<
    * - Only attackers remain: Battlefield conquered
    * - Only defenders remain: Defenders keep control
    * - Neither remain: No control change
+   *
+   * Phase B batch 14 finding X-1 (monkey-rescan): without a `condition`, this
+   * move was discoverable + invokable by ANY player at ANY time, which let
+   * the random monkey clear a `contested` flag on a battlefield without
+   * actually resolving the combat (no damage, no recall, no VP). That short-
+   * circuits the entire combat pipeline. Add the same gate as
+   * `resolveFullCombat`: the battlefield must actually be contested.
    */
   resolveCombat: {
+    condition: (state, context) => {
+      if (state.status !== "playing") {
+        return false;
+      }
+      const bf = state.battlefields[context.params.battlefieldId];
+      return bf?.contested === true;
+    },
     reducer: (draft, context) => {
       const { battlefieldId } = context.params;
 
@@ -973,7 +1344,17 @@ export const combatMoves: Partial<
 
       const battlefield = draft.battlefields[battlefieldId];
       if (battlefield) {
-        battlefield.controller = playerId;
+        setBattlefieldController(
+          draft,
+          context as unknown as {
+            cards: TriggerRunnerContext["cards"];
+            counters: TriggerRunnerContext["counters"];
+            zones: TriggerRunnerContext["zones"];
+          },
+          battlefieldId,
+          playerId,
+          "conquer-move",
+        );
         battlefield.contested = false;
         battlefield.contestedBy = undefined;
       }
@@ -989,15 +1370,18 @@ export const combatMoves: Partial<
       // This player from scoring here right now.
       const scoringAllowed = canPlayerScoreAtBattlefield(draft, playerId, battlefieldId);
       const player = draft.players[playerId];
-      if (player && scoringAllowed) {
-        player.victoryPoints += 1;
-      }
-
-      // Track as scored this turn to prevent double-scoring
+      // Track as scored this turn to prevent double-scoring; needed *before*
+      // The winning-point gate (rule 466.1.b.2).
       if (!draft.scoredThisTurn[playerId]) {
         draft.scoredThisTurn[playerId] = [];
       }
       draft.scoredThisTurn[playerId].push(battlefieldId);
+      let gained = false;
+      if (player && scoringAllowed) {
+        const bfsScored = draft.scoredThisTurn[playerId]?.length ?? 0;
+        // Rule 466.1.b — Winning-Point gate.
+        gained = tryGainConquerPoint(draft, playerId, context.zones, bfsScored);
+      }
 
       // Hunt keyword (rule 823): [Hunt N] units the player controls here
       // Grant N XP "when I conquer".
@@ -1016,7 +1400,7 @@ export const combatMoves: Partial<
       );
 
       // Check for victory
-      if (player && hasPlayerWon(draft, playerId)) {
+      if (gained && player && hasPlayerWonStrict(draft, playerId)) {
         draft.status = "finished";
         draft.winner = playerId;
 
@@ -1176,7 +1560,7 @@ export const combatMoves: Partial<
       fireTriggers(scoreEvent, { cards, counters, draft, zones });
 
       // Check for victory
-      if (hasPlayerWon(draft, playerId)) {
+      if (hasPlayerWonStrict(draft, playerId)) {
         draft.status = "finished";
         draft.winner = playerId;
 
@@ -1194,8 +1578,14 @@ export const combatMoves: Partial<
    *
    * Reset combat designations for all units at a battlefield.
    * Called after combat resolution.
+   *
+   * Phase B batch 14 finding X-1: engine-internal primitive — see
+   * `assignAttacker`. Gate with `() => false` to keep monkey/UI from
+   * invoking it discretionarily.
    */
   clearCombatState: {
+    condition: () => false,
+    enumerator: () => [],
     reducer: (_draft, context) => {
       const { battlefieldId } = context.params;
       const { zones, cards } = context;

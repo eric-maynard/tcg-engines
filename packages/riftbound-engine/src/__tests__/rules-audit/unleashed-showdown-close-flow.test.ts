@@ -115,7 +115,7 @@ describe("Rule 348.1 / 458-461: closing a Combat Showdown resolves combat", () =
     createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
     createCard(engine, "atk", {
       cardType: "unit",
-      meta: { grantedKeywords: [{ keyword: "Tank", duration: "combat" }] },
+      meta: { grantedKeywords: [{ duration: "combat", keyword: "Tank" }] },
       might: 5,
       owner: P1,
       zone: "battlefield-bf-1",
@@ -216,10 +216,13 @@ describe("Rule 348.2: closing a Non-Combat Showdown establishes control / conque
     expect(true).toBe(true);
   });
 
-  it("non-combat showdown closing does NOT touch a battlefield whose Contested flag is set (a combat is staged there)", () => {
+  it("non-combat showdown closing does NOT touch a battlefield with a real staged combat (units from both players)", () => {
     const engine = createMinimalGameState({ phase: "main" });
     createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    // A real staged combat needs units from two opposing players present
+    // (rule 456 / 323.10) — otherwise the stale Contested flag is destaged.
     createCard(engine, "u1", { cardType: "unit", might: 3, owner: P1, zone: "battlefield-bf-1" });
+    createCard(engine, "u2", { cardType: "unit", might: 3, owner: P2, zone: "battlefield-bf-1" });
 
     // Edge: a non-combat showdown stack entry pointing at a Contested bf.
     setInteractionStateForTest(
@@ -230,9 +233,27 @@ describe("Rule 348.2: closing a Non-Combat Showdown establishes control / conque
     closeShowdown(engine);
 
     const st = getState(engine);
-    // EstablishNonCombatShowdownControl is a no-op when bf.contested.
+    // EstablishNonCombatShowdownControl is a no-op when bf.contested, and the
+    // Combat stays staged because both opposing players are still present.
     expect(st.battlefields["bf-1"].controller).toBeNull();
     expect(st.battlefields["bf-1"].contested).toBe(true);
     expect(st.players[P1].victoryPoints).toBe(0);
+  });
+
+  it("a stale Contested flag (no opposing units) is destaged by rule 323.10 / 456.2 on the next cleanup", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createCard(engine, "u1", { cardType: "unit", might: 3, owner: P1, zone: "battlefield-bf-1" });
+
+    setInteractionStateForTest(
+      engine,
+      startShowdown(createInteractionState(), "bf-1", P1, [P1, P2], false, P1, P2),
+    );
+
+    closeShowdown(engine);
+
+    // The staged combat stopped being staged before it opened: no opposing
+    // Units are present (rule 323.10 / 456.2).
+    expect(getState(engine).battlefields["bf-1"].contested).toBe(false);
   });
 });

@@ -65,6 +65,15 @@ export interface CardDefinitionLookup {
    * Used by The Zero Drive.
    */
   readonly tracksExiledCards?: boolean;
+  /**
+   * Token marker (rule 176 / 182). A token is created by a spell or ability
+   * during play; it is not a card. Rule 183.1: if a token is put into any
+   * Non-Board Zone besides the Chain, it ceases to exist immediately after
+   * moving. The cleanup pipeline reads `isToken` off the registry definition
+   * and reaps token instances from trash / banishment / hand / mainDeck
+   * after every state-maintenance pass.
+   */
+  readonly isToken?: boolean;
   readonly abilities?: readonly {
     readonly type: string;
     readonly trigger?: { readonly event: string; readonly on?: string };

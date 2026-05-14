@@ -437,4 +437,82 @@ describe("Triggered Abilities on Chain (rule 541)", () => {
     expect(state.chain!.items).toHaveLength(2);
     expect(state.chain!.items[1].triggered).toBe(true);
   });
+
+  // Task 2, edge case 2: a triggered ability queued DURING resolution of another
+  // Triggered ability must go on top of the chain (LIFO — last in, resolves first).
+  test("triggered ability added during resolution goes on top of chain (LIFO)", () => {
+    let state = createInteractionState();
+    // Spell on chain
+    state = addToChain(state, { cardId: "spell-1", controller: P1, type: "spell" }, TURN_ORDER);
+    // Trigger from spell going on
+    state = addToChain(
+      state,
+      { cardId: "trigger-1", controller: P2, triggered: true, type: "ability" },
+      TURN_ORDER,
+    );
+    // A second trigger fires while trigger-1 is on the chain
+    state = addToChain(
+      state,
+      { cardId: "trigger-2", controller: P1, triggered: true, type: "ability" },
+      TURN_ORDER,
+    );
+
+    // Trigger-2 is the most recent item — must be at index 2 (top of LIFO stack)
+    expect(state.chain!.items).toHaveLength(3);
+    expect(state.chain!.items[2]!.cardId).toBe("trigger-2");
+
+    // Resolve: trigger-2 should resolve first
+    const { resolved: first } = resolveTopItem(state);
+    expect(first!.cardId).toBe("trigger-2");
+  });
+
+  // Task 2, edge case 1: two triggered abilities from the same event fire in
+  // APNAP (turn-player) order. The turn player's trigger is added first, so it
+  // Sits at a lower index. With LIFO resolution the NON-turn-player's trigger
+  // (added second, higher index) resolves first — then the turn player's.
+  // This matches rule 585.2: turn player's triggers are *placed* first, meaning
+  // They end up underneath (resolve last of the two).
+  test("two simultaneous triggers: addToChain in APNAP order → LIFO resolves opponent trigger first", () => {
+    let state = createInteractionState();
+    // Add base spell to open the chain
+    state = addToChain(state, { cardId: "event-spell", controller: P1, type: "spell" }, TURN_ORDER);
+
+    // P1 is turn player — add P1's trigger first per rule 585.2
+    state = addToChain(
+      state,
+      { cardId: "p1-trigger", controller: P1, triggered: true, type: "ability" },
+      TURN_ORDER,
+    );
+    // Then P2 (non-active player) trigger
+    state = addToChain(
+      state,
+      { cardId: "p2-trigger", controller: P2, triggered: true, type: "ability" },
+      TURN_ORDER,
+    );
+
+    expect(state.chain!.items).toHaveLength(3);
+    // P2's trigger is on top (index 2)
+    expect(state.chain!.items[2]!.cardId).toBe("p2-trigger");
+    // P1's trigger is beneath (index 1)
+    expect(state.chain!.items[1]!.cardId).toBe("p1-trigger");
+  });
+
+  // Task 2, edge case 3: passChainPriority with an empty / inactive chain
+  // Should no-op gracefully without throwing.
+  test("passPriority with no active chain is a graceful no-op", () => {
+    const state = createInteractionState();
+    // No chain active — should return unchanged state, not throw
+    const result = passPriority(state);
+    expect(result.chain).toBeNull();
+    expect(result).toEqual(state);
+  });
+
+  // Additional: passing priority with both players on an empty-chain-ready state
+  // Resolves correctly (all passed → chain item popped gracefully).
+  test("resolveTopItem on empty chain returns null and null chain", () => {
+    const state = createInteractionState();
+    const { resolved, newState } = resolveTopItem(state);
+    expect(resolved).toBeNull();
+    expect(newState.chain).toBeNull();
+  });
 });

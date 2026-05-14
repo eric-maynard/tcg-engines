@@ -43,7 +43,7 @@ export function parseTarget(text: string): AnyTarget {
     if (isPlural) {
       result.quantity = "all";
     }
-    return result as Target;
+    return result as unknown as Target;
   }
 
   // Parse "[a/an/that/the] [another] [controller] [TAG] CARD_TYPE [here/at a battlefield]"
@@ -82,7 +82,7 @@ export function parseTarget(text: string): AnyTarget {
       result.filter = { tag: capitalizeTag(tagStr) };
     }
 
-    return result as Target;
+    return result as unknown as Target;
   }
 
   // Fallback: "[a/an] [another] [controller] TAG" where TAG implies unit type
@@ -107,7 +107,7 @@ export function parseTarget(text: string): AnyTarget {
         result.excludeSelf = true;
       }
       result.filter = { tag: capitalizeTag(tagStr) };
-      return result as Target;
+      return result as unknown as Target;
     }
   }
 
