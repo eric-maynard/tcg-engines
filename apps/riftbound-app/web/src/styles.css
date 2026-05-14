@@ -5549,3 +5549,134 @@ button {
 .combat-panel-assist-safe {
   color: #6ed27a;
 }
+
+/* ---- Slice 6: Goldfish + Sealed pages ---------------------------------- */
+.goldfish-page,
+.sealed-page {
+  color: #e6e8ee;
+  background: #11131a;
+  min-height: 100vh;
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+.goldfish-header,
+.sealed-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+.goldfish-header h1,
+.sealed-header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.6rem;
+}
+.goldfish-subtitle,
+.sealed-subtitle {
+  margin: 0;
+  opacity: 0.75;
+  font-size: 0.95rem;
+}
+.goldfish-deck-picker {
+  margin: 1.5rem 0;
+}
+.goldfish-deck-picker h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem;
+}
+.goldfish-deck-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.goldfish-deck-list li {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.goldfish-deck-list label {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.goldfish-deck-meta {
+  opacity: 0.6;
+  font-size: 0.85rem;
+}
+.goldfish-actions,
+.sealed-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.goldfish-actions button,
+.sealed-actions button {
+  background: #3a4768;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0.55rem 1.1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.goldfish-actions button:disabled,
+.sealed-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.goldfish-error,
+.sealed-error {
+  color: #ff8a6b;
+  margin-top: 0.5rem;
+}
+.sealed-counter {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.sealed-seed {
+  opacity: 0.55;
+  font-size: 0.8rem;
+  font-family: monospace;
+}
+.sealed-pool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+.sealed-card {
+  background: #1a1f2e;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0.4rem;
+  color: #e6e8ee;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  transition: border-color 80ms ease, transform 80ms ease;
+}
+.sealed-card:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.sealed-card-picked {
+  border-color: #6ed27a;
+  background: rgba(110, 210, 122, 0.08);
+}
+.sealed-card-img {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.sealed-card-rarity {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+.sealed-rarity-rare { color: #6da7ff; }
+.sealed-rarity-epic { color: #c887ff; }
+.sealed-rarity-legendary { color: #ffb86c; }

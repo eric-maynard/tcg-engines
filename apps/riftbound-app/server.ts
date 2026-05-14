@@ -3159,6 +3159,169 @@ const server = Bun.serve({
       });
     }
 
+    // ========================================
+    // Slice 6 — Goldfish mode (solo practice)
+    // ========================================
+    //
+    // POST /api/goldfish/start
+    //   Body: { deckId?: string }
+    //   Returns: { sessionId: string }
+    //
+    // Creates an EngineSession (via realDecks for now — bespoke deck loading
+    // Is plumbed for later) and registers player-1 as the human; player-2 is
+    // Implicitly the "bot" so the existing /api/v2/step/:id endpoint will
+    // Advance the opponent's turn when the user clicks "Step Opponent" in
+    // The goldfish UI. No auth required — goldfish is a solo practice tool.
+    if (pathname === "/api/goldfish/start" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as { deckId?: string };
+      const sessionId = crypto.randomUUID();
+      try {
+        demoSessions.set(
+          sessionId,
+          new EngineSession({ realDecks: true, seed: `goldfish-${sessionId}` }),
+        );
+      } catch (error) {
+        console.error("[goldfish/start] realDecks init failed, falling back:", error);
+        demoSessions.set(sessionId, new EngineSession({ seed: `goldfish-${sessionId}` }));
+      }
+      // Player-1 is the human; player-2 is the bot (default human-id set
+      // Already covers this, but be explicit for clarity / future-proofing).
+      const humanIds = new Set<string>(["player-1"]);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const helpers = require("./lib/server-helpers") as typeof import("./lib/server-helpers");
+        helpers.setHumanPlayerIds(sessionId, humanIds);
+      } catch { /* Defaults are fine */ }
+      return json({ deckId: body.deckId ?? null, mode: "goldfish", sessionId });
+    }
+
+    // ========================================
+    // Slice 6 — Sealed pool generator
+    // ========================================
+    //
+    // POST /api/sealed/open-pool
+    //   Body: { packs?: number, seed?: string }
+    //   Returns: { poolCards: Array<{ cardId: string; name: string;
+    //                                 CardType: string; rarity?: string;
+    //                                 ImageUrl?: string }>,
+    //              Packs: number, seed: string }
+    //
+    // Generates `packs * 12` cards (default 6 packs = 72 cards). Each card is
+    // Sampled from `allCards` weighted by rarity:
+    //   Common 70 / uncommon 0 (treated as common) / rare 20 / epic 8 /
+    //   Legendary 2 / champion 0 (excluded from packs)
+    // No auth required — sealed is local-only for now; the SPA holds the
+    // Pool in localStorage and builds the deck client-side via the existing
+    // Deck-builder save endpoint.
+    if (pathname === "/api/sealed/open-pool" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as {
+        packs?: number;
+        seed?: string;
+      };
+      const packs = Math.max(1, Math.min(20, Math.floor(body.packs ?? 6)));
+      const seed = body.seed ?? `sealed-${crypto.randomUUID()}`;
+
+      // Deterministic mulberry32 PRNG seeded from `seed`.
+      let h = 2_166_136_261;
+      for (const ch of seed) {
+        h = Math.imul(h ^ ch.charCodeAt(0), 16_777_619);
+      }
+      let state = h >>> 0;
+      const rand = (): number => {
+        state = (state + 0x6D_2B_79_F5) >>> 0;
+        let t = state;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+      };
+
+      // Bucket cards by rarity. Exclude champions (they're starter-specific
+      // And not appropriate for sealed). Legends are also excluded — sealed
+      // Pools focus on units/spells/gears/equipment.
+      const rarityBuckets: Record<string, Card[]> = {
+        common: [],
+        epic: [],
+        legendary: [],
+        rare: [],
+      };
+      for (const c of allCards) {
+        if (c.cardType === "legend" || c.cardType === "battlefield" || c.cardType === "rune") {
+          continue;
+        }
+        const r = c.rarity ?? "common";
+        if (r === "common" || r === "uncommon") {
+          rarityBuckets.common.push(c);
+        } else if (r === "rare") {
+          rarityBuckets.rare.push(c);
+        } else if (r === "epic") {
+          rarityBuckets.epic.push(c);
+        } else if (r === "legendary") {
+          rarityBuckets.legendary.push(c);
+        }
+      }
+      // Fallback so a degenerate card-pool (or filter) never produces an
+      // Empty bucket — pick from `common` if a specific rarity is empty.
+      const pick = (bucket: string): Card | null => {
+        const list = rarityBuckets[bucket]?.length
+          ? rarityBuckets[bucket]
+          : rarityBuckets.common;
+        if (!list || list.length === 0) {return null;}
+        return list[Math.floor(rand() * list.length)] ?? null;
+      };
+
+      // Per-pack composition: 8 common + 3 rare + 1 (epic or legendary).
+      // Aggregate weights across a pack of 12 land on
+      //   Common ≈ 66.7%, rare ≈ 25%, epic ≈ 6.7%, legendary ≈ 1.7%
+      // Close to the 70/20/8/2 target spec.
+      const poolCards: {
+        cardId: string;
+        name: string;
+        cardType: string;
+        rarity?: string;
+        imageUrl?: string;
+      }[] = [];
+      for (let p = 0; p < packs; p++) {
+        for (let i = 0; i < 8; i++) {
+          const c = pick("common");
+          if (c) {
+            poolCards.push({
+              cardId: c.id,
+              cardType: c.cardType,
+              imageUrl: lookupImageUrl(c.id),
+              name: c.name,
+              rarity: c.rarity,
+            });
+          }
+        }
+        for (let i = 0; i < 3; i++) {
+          const c = pick("rare");
+          if (c) {
+            poolCards.push({
+              cardId: c.id,
+              cardType: c.cardType,
+              imageUrl: lookupImageUrl(c.id),
+              name: c.name,
+              rarity: c.rarity,
+            });
+          }
+        }
+        // Rare slot: 80% epic / 20% legendary.
+        const slot = rand() < 0.8 ? "epic" : "legendary";
+        const c = pick(slot);
+        if (c) {
+          poolCards.push({
+            cardId: c.id,
+            cardType: c.cardType,
+            imageUrl: lookupImageUrl(c.id),
+            name: c.name,
+            rarity: c.rarity,
+          });
+        }
+      }
+
+      return json({ packs, poolCards, seed });
+    }
+
     // GET /api/lobby/:id — get lobby state (legacy WS lobby system).
     if (pathname.match(/^\/api\/lobby\/[^/]+$/) && req.method === "GET") {
       const lobbyId = pathname.split("/")[3];

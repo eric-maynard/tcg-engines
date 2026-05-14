@@ -35,6 +35,13 @@ interface PlayPageProps {
    * Single-player tests keep working unchanged.
    */
   readonly localPlayerId?: string;
+  /**
+   * Slice 6 (goldfish mode): "goldfish" → render a "Step Opponent" button
+   * Instead of disabling the controls on the opponent's turn (since the
+   * Opponent is a bot, the user can advance it manually). "default" keeps
+   * The original 2P-aware behavior (disabled controls + waiting banner).
+   */
+  readonly mode?: "default" | "goldfish";
 }
 
 /**
@@ -145,7 +152,7 @@ const PHASE_TOOLTIP: Readonly<Record<string, string>> = {
   main: "Main: play units, spells, gear, and initiate showdowns.",
 };
 
-export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProps) {
+export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "default" }: PlayPageProps) {
   const [view, setView] = useState<GameView | null>(null);
   const [trail, setTrail] = useState<readonly TrailStep[]>([]);
   const [hand, setHand] = useState<Record<string, readonly HandCard[]>>({});
@@ -1111,21 +1118,40 @@ export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProp
             {undoLabel}
           </button>
         )}
-        <button
-          type="button"
-          data-testid="step-bot"
-          disabled={busy || isGameOver || !actionsLegal.stepBot || !isOurTurn}
-          title={
-            !isOurTurn
-              ? "Waiting for opponent…"
-              : (!actionsLegal.stepBot
+        {mode === "goldfish" ? (
+          // Slice 6 (goldfish): Step Opponent — enabled when it's the
+          // Bot/opponent's turn so the solo player can advance it manually.
+          // Re-uses the same /api/v2/step/:id endpoint as Step Bot.
+          <button
+            type="button"
+            data-testid="step-opponent"
+            disabled={busy || isGameOver || isOurTurn}
+            title={
+              isOurTurn
                 ? "It's your turn — make a move"
-                : undefined)
-          }
-          onClick={() => void stepBot()}
-        >
-          Step Bot
-        </button>
+                : "Advance the opponent's turn"
+            }
+            onClick={() => void stepBot()}
+          >
+            Step Opponent
+          </button>
+        ) : (
+          <button
+            type="button"
+            data-testid="step-bot"
+            disabled={busy || isGameOver || !actionsLegal.stepBot || !isOurTurn}
+            title={
+              !isOurTurn
+                ? "Waiting for opponent…"
+                : (!actionsLegal.stepBot
+                  ? "It's your turn — make a move"
+                  : undefined)
+            }
+            onClick={() => void stepBot()}
+          >
+            Step Bot
+          </button>
+        )}
         <button
           type="button"
           data-testid="refresh"
@@ -1162,7 +1188,9 @@ export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProp
           role="status"
           aria-live="polite"
         >
-          Waiting for opponent…
+          {mode === "goldfish"
+            ? "Opponent's turn — click “Step Opponent” to advance."
+            : "Waiting for opponent…"}
         </div>
       ) : null}
 
