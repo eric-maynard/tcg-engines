@@ -24,6 +24,13 @@ import { ShowdownBreadcrumb } from "./components/ShowdownBreadcrumb";
 
 interface PlayPageProps {
   readonly sessionId: string;
+  /**
+   * Local seat id for this browser. Drives which player renders at the
+   * Bottom ("you") vs. top ("opponent"), which hand is face-up, and which
+   * Inputs are enabled. Defaults to `"player-1"` so legacy callers /
+   * Single-player tests keep working unchanged.
+   */
+  readonly localPlayerId?: string;
 }
 
 /**
@@ -97,7 +104,7 @@ const PHASE_TOOLTIP: Readonly<Record<string, string>> = {
   main: "Main: play units, spells, gear, and initiate showdowns.",
 };
 
-export function PlayPage({ sessionId }: PlayPageProps) {
+export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProps) {
   const [view, setView] = useState<GameView | null>(null);
   const [trail, setTrail] = useState<readonly TrailStep[]>([]);
   const [hand, setHand] = useState<Record<string, readonly HandCard[]>>({});
@@ -271,18 +278,52 @@ export function PlayPage({ sessionId }: PlayPageProps) {
     void refresh();
   }, [refresh]);
 
+  // 2p live-sync: subscribe to /api/v2/stream/<sessionId> over SSE so we
+  // Receive `state` events whenever the OTHER browser applies a move. The
+  // EventSource lifecycle is bound to sessionId; we close on unmount /
+  // SessionId change.
+  //
+  // Test harness: vitest uses jsdom which doesn't ship `EventSource`. We
+  // Feature-check before constructing one — if absent, just skip the
+  // Subscription. The PlayPage still works (fetch-based refresh on each
+  // Move) and existing fetch-stub-based tests stay green.
+  useEffect(() => {
+    if (typeof window === "undefined") {return;}
+    const ES = (window as unknown as { EventSource?: typeof EventSource })
+      .EventSource;
+    if (typeof ES !== "function") {return;}
+    let cancelled = false;
+    const es = new ES(`/api/v2/stream/${encodeURIComponent(sessionId)}`);
+    es.addEventListener("state", (ev: MessageEvent) => {
+      if (cancelled) {return;}
+      try {
+        const next = JSON.parse(ev.data) as StateResponse;
+        applyState(next);
+      } catch {
+        // Bad payload — ignore. Next move will refresh state.
+      }
+    });
+    es.onerror = () => {
+      // Connection drop is non-fatal; the browser will auto-reconnect.
+    };
+    return () => {
+      cancelled = true;
+      try {es.close();} catch { /* Already closed */ }
+    };
+  }, [sessionId, applyState]);
+
   // Preload card images on mount to avoid first-hover network hit.
   useEffect(() => {
     if (!view && Object.keys(hand).length === 0) {return;}
     const urls = new Set<string>();
     // Hand cards
     for (const cards of Object.values(hand)) {
-      for (const c of cards) {if (c.imageUrl) urls.add(c.imageUrl);}
+      for (const c of cards) {if (c.imageUrl) {urls.add(c.imageUrl);}}
     }
     // Battlefield units and BF tile art
     for (const bf of view?.battlefields ?? []) {
       if (bf.imageUrl) {urls.add(bf.imageUrl);}
-      for (const u of bf.units ?? []) {if (u.imageUrl) urls.add(u.imageUrl);}
+      for (const u of bf.units ?? []) {if (u.imageUrl) {urls.add(u.imageUrl);}}
     }
     for (const url of urls) {
       const img = new Image();
@@ -371,9 +412,9 @@ export function PlayPage({ sessionId }: PlayPageProps) {
             hint,
             playerId,
             playerTarget: {
-              which,
               localPlayerId: playerId,
               opponentPlayerId,
+              which,
             },
           });
           return;
@@ -481,10 +522,10 @@ export function PlayPage({ sessionId }: PlayPageProps) {
             cardId: card.id,
             cardInTrashTarget: {
               cards: typeFiltered.map((c) => ({
+                cardType: c.cardType,
                 id: c.id,
                 name: c.name,
                 owner: c.owner,
-                cardType: c.cardType,
               })),
               casterId: playerId,
               controllerFilter,
@@ -575,9 +616,9 @@ export function PlayPage({ sessionId }: PlayPageProps) {
             hint,
             playerId,
             runeTarget: {
-              runes,
               casterId: playerId,
               controllerFilter,
+              runes,
             },
           });
           return;
@@ -784,14 +825,21 @@ export function PlayPage({ sessionId }: PlayPageProps) {
   // Extra selection bookkeeping. Either picker can be active, never both.
   const selectedHandCardId = picker?.cardId ?? targetPicker?.cardId ?? null;
 
-  // Sort players so the opponent renders on TOP and "us" (player-1 — the
-  // SPA's local seat) renders at the bottom. This mirrors the RiftAtlas
-  // Table-top orientation. If we ever wire a real "me" identity, swap this
-  // Sort key for the local seat id.
+  // Sort players so the opponent renders on TOP and "us" (the local seat
+  // From `?as=` / props) renders at the bottom. This mirrors the RiftAtlas
+  // Table-top orientation. The local seat is data-driven via the
+  // `localPlayerId` prop so a second browser with `?as=player-2` sees
+  // Player-2 at the bottom and player-1 at the top.
   const players = [...view.players];
-  const localId = "player-1";
+  const localId = localPlayerId;
   const us = players.find((p) => p.id === localId) ?? players[0]!;
   const opponent = players.find((p) => p.id !== us.id);
+  // 2p input gating: when the active player is NOT the local seat, the
+  // Board renders read-only. We still let SSE updates flow in; we just
+  // Disable mutation controls and skip opening pickers. Combat focus owner
+  // Overrides the active-player check (see CombatPanel which already gates
+  // On `localPlayerId` for assignAttacker / assignDefender).
+  const isOurTurn = us.id === active;
 
   // Phase B batch 24 AAA: read base-zone units directly off the per-player
   // GameViewPlayer field threaded through the v2 API. Falls back to `[]` if
@@ -854,8 +902,14 @@ export function PlayPage({ sessionId }: PlayPageProps) {
         <button
           type="button"
           data-testid="end-turn"
-          disabled={busy || isGameOver || !actionsLegal.endTurn}
-          title={!actionsLegal.endTurn ? "endTurn not legal right now" : undefined}
+          disabled={busy || isGameOver || !actionsLegal.endTurn || !isOurTurn}
+          title={
+            !isOurTurn
+              ? "Waiting for opponent…"
+              : (!actionsLegal.endTurn
+                ? "endTurn not legal right now"
+                : undefined)
+          }
           onClick={() => void runMove("endTurn", {}, active)}
         >
           End Turn
@@ -863,9 +917,13 @@ export function PlayPage({ sessionId }: PlayPageProps) {
         <button
           type="button"
           data-testid="step-bot"
-          disabled={busy || isGameOver || !actionsLegal.stepBot}
+          disabled={busy || isGameOver || !actionsLegal.stepBot || !isOurTurn}
           title={
-            !actionsLegal.stepBot ? "It's your turn — make a move" : undefined
+            !isOurTurn
+              ? "Waiting for opponent…"
+              : (!actionsLegal.stepBot
+                ? "It's your turn — make a move"
+                : undefined)
           }
           onClick={() => void stepBot()}
         >
@@ -900,6 +958,17 @@ export function PlayPage({ sessionId }: PlayPageProps) {
         </div>
       ) : null}
 
+      {!isOurTurn && !isGameOver ? (
+        <div
+          className="waiting-banner"
+          data-testid="waiting-banner"
+          role="status"
+          aria-live="polite"
+        >
+          Waiting for opponent…
+        </div>
+      ) : null}
+
       <div className="board" data-testid="board">
         <div className="board-main">
           {/* OPPONENT (top) */}
@@ -916,11 +985,14 @@ export function PlayPage({ sessionId }: PlayPageProps) {
                 isActive={opponent.id === active}
                 victoryScore={view.victoryScore}
                 hand={hand[opponent.id] ?? []}
-                canPlay={!busy && !isGameOver && opponent.id === active}
+                // 2p: the opponent seat is never playable from this browser
+                // (we only ever mutate the local player's hand). `canPlay`
+                // Stays false; the face-down hand chips are already disabled
+                // Visually by the `revealHand=false` path.
+                canPlay={false}
                 onPlayCard={(card) => handlePlayCard(opponent.id, card)}
                 revealHand={
-                  opponent.id === us.id
-                  || view.pendingChoice?.revealer === opponent.id
+                  view.pendingChoice?.revealer === opponent.id
                 }
                 selectedCardId={selectedHandCardId}
                 isLocalPlayer={false}

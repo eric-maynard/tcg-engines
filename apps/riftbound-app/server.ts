@@ -276,6 +276,41 @@ const gameSessions = new Map<string, GameSession>();
 const demoSessions = new Map<string, EngineSession>();
 
 /**
+ * SSE subscribers for v2 demo sessions. Keyed by sessionId; the value is a
+ * Set of writable controllers we can push `state` events to. Subscribers are
+ * registered when a client opens GET /api/v2/stream/:sessionId and removed
+ * on disconnect (Bun `signal.aborted` callback). After every successful
+ * POST /api/v2/move/:sessionId we serialize the fresh SPA state and fan it
+ * out to every subscriber for that session so both browsers see updates
+ * without polling.
+ */
+const v2Subscribers = new Map<
+  string,
+  Set<ReadableStreamDefaultController<Uint8Array>>
+>();
+
+const sseEncoder = new TextEncoder();
+
+function sseFormat(event: string, data: unknown): Uint8Array {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  return sseEncoder.encode(payload);
+}
+
+function broadcastV2State(sessionId: string, statePayload: unknown): void {
+  const subs = v2Subscribers.get(sessionId);
+  if (!subs || subs.size === 0) {return;}
+  const chunk = sseFormat("state", statePayload);
+  for (const controller of subs) {
+    try {
+      controller.enqueue(chunk);
+    } catch {
+      // Controller already closed — drop it on next disconnect tick.
+      subs.delete(controller);
+    }
+  }
+}
+
+/**
  * Build a per-player hand summary from an EngineSession.
  *
  * Delegates to `EngineSession.buildHandView()` so each card carries the full
@@ -1614,7 +1649,7 @@ const server = Bun.serve({
           );
         } catch (error) {
           // Fall back to synthetic deck if real-deck wiring fails. Surface
-          // the underlying error so the operator can fix the deck wiring.
+          // The underlying error so the operator can fix the deck wiring.
           console.error("[/demo] real-deck init failed, falling back to synthetic:", error);
           demoSessions.set(sessionId, new EngineSession({ seed: `demo-${sessionId}` }));
         }
@@ -1869,7 +1904,13 @@ const server = Bun.serve({
           if (!r.success) { ok = false; ({ error } = r); }
         }
       }
-      return json({ error, ok, ...buildSpaState(sessionId, session) });
+      const spaState = buildSpaState(sessionId, session);
+      // Fan the new state out to any open SSE subscribers (other browsers
+      // Looking at the same session). The poster also gets the response
+      // Inline, so duplicate state on the poster's tab is fine — applyState
+      // Is idempotent.
+      broadcastV2State(sessionId, spaState);
+      return json({ error, ok, ...spaState });
     }
 
     // POST /api/v2/step/:id
@@ -1895,7 +1936,79 @@ const server = Bun.serve({
       }
       const bot = new BotDriver(active, { seed: `demo-step-${sessionId}` });
       bot.step(session);
-      return json({ ok: true, skipped: false, ...buildSpaState(sessionId, session) });
+      const spaState = buildSpaState(sessionId, session);
+      broadcastV2State(sessionId, spaState);
+      return json({ ok: true, skipped: false, ...spaState });
+    }
+
+    // GET /api/v2/stream/:id — Server-Sent Events stream for live state
+    // Updates. Both browsers viewing the same session subscribe here; after
+    // Every successful POST /api/v2/move we broadcast a fresh state event
+    // So neither side has to refresh. Heartbeat every 20s keeps the
+    // Connection alive through proxies that idle-close.
+    if (pathname.startsWith("/api/v2/stream/") && req.method === "GET") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      if (!sessionId) {return json({ error: "missing session" }, 400);}
+      let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      const cleanup = () => {
+        if (heartbeat) {
+          clearInterval(heartbeat);
+          heartbeat = null;
+        }
+        const subs = v2Subscribers.get(sessionId);
+        if (subs && controllerRef) {
+          subs.delete(controllerRef);
+          if (subs.size === 0) {v2Subscribers.delete(sessionId);}
+        }
+      };
+      const stream = new ReadableStream<Uint8Array>({
+        cancel() {
+          cleanup();
+        },
+        start(controller) {
+          controllerRef = controller;
+          const subs =
+            v2Subscribers.get(sessionId)
+            ?? (() => {
+              const s = new Set<ReadableStreamDefaultController<Uint8Array>>();
+              v2Subscribers.set(sessionId, s);
+              return s;
+            })();
+          subs.add(controller);
+          // Greet the client with the current state so they don't need a
+          // Separate GET. If the session hasn't been created yet, skip the
+          // Greeting — the client's initial GET /state will create it.
+          const session = demoSessions.get(sessionId);
+          if (session) {
+            try {
+              controller.enqueue(sseFormat("state", buildSpaState(sessionId, session)));
+            } catch {
+              // Best-effort — connection still useful for future broadcasts.
+            }
+          }
+          // Heartbeat as an SSE comment so it never triggers a `state` handler.
+          heartbeat = setInterval(() => {
+            try {
+              controller.enqueue(sseEncoder.encode(`: ping ${Date.now()}\n\n`));
+            } catch {
+              cleanup();
+            }
+          }, 20_000);
+        },
+      });
+      req.signal.addEventListener("abort", () => {
+        try {controllerRef?.close();} catch { /* Already closed */ }
+        cleanup();
+      });
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          "Content-Type": "text/event-stream",
+        },
+      });
     }
 
     // POST /api/v2/scenario/mid-combat/:sessionId
@@ -2016,11 +2129,15 @@ const server = Bun.serve({
         opponentId,
         step,
       });
+      const spaState = buildSpaState(sessionId, session);
+      // Push the new seeded state to any connected SSE subscribers so a
+      // Second browser viewing this session doesn't have to refresh.
+      broadcastV2State(sessionId, spaState);
       return json({
         ok: result.seeded,
         scenario: "sabotage",
         seed: result,
-        ...buildSpaState(sessionId, session),
+        ...spaState,
       });
     }
 

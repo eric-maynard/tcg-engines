@@ -4998,3 +4998,24 @@ button {
 .hand-revealed .hand-chip-pickable .hand-chip-unaffordable-badge {
   display: none !important;
 }
+
+/* 2p: "Waiting for opponent" banner shown across the player strip when the
+ * Local seat is not the active player. Pure presentation — gating is owned
+ * By PlayPage's `isOurTurn` derivation. */
+.waiting-banner {
+  position: sticky;
+  top: 0.5rem;
+  margin: 0.5rem auto;
+  max-width: 24rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: rgba(20, 24, 36, 0.85);
+  color: #ffd54a;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  border: 1px solid rgba(255, 213, 74, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  z-index: 50;
+}
