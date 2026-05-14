@@ -19,6 +19,7 @@ import * as path from "node:path";
 import { authenticateUser, createUser, getUserById } from "./src/db/user-repo";
 import { createDeck, deleteDeck, getDeck, listDecks, listPublicDecks, updateDeck } from "./src/db/deck-repo";
 import type { DeckCardEntry, FullDeck, GameVersion } from "./src/db/deck-repo";
+import { formatDecklist, parseDecklist, validateDeck } from "./src/decklist";
 import { GameLogger } from "./src/game-logger";
 import { type LogEntry, actorName, makeLogEntry } from "./src/narrator";
 import {
@@ -26,6 +27,7 @@ import {
   type GameView,
   type HandCardView,
   type LegalMove,
+  lookupImageUrl,
 } from "./lib/engine-session";
 import { BotDriver } from "./lib/bot-driver";
 import {
@@ -2256,6 +2258,7 @@ const server = Bun.serve({
         domain: c.domain,
         energyCost: c.energyCost,
         id: c.id,
+        imageUrl: lookupImageUrl(c.id),
         isChampion: "isChampion" in c ? c.isChampion : undefined,
         might: "might" in c ? c.might : undefined,
         name: c.name,
@@ -3085,6 +3088,166 @@ const server = Bun.serve({
       const deleted = deleteDeck(deckId, userId);
       if (!deleted) {return json({ error: "Deck not found or not owned by you" }, 404);}
       return json({ success: true });
+    }
+
+    // ========================================
+    // Deck Routes (Slice 1 — RiftAtlas parity)
+    // ========================================
+    // /api/decks/* mirrors /api/saved-decks/* for the new SPA. Adds
+    // Import/export endpoints + an inline validator. All endpoints require
+    // Auth (cookie or bearer token from the same auth pipeline).
+
+    // POST /api/decks — create a deck (defaults to empty content)
+    if (pathname === "/api/decks" && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+
+      const body = (await req.json().catch(() => ({}))) as Partial<{
+        name: string;
+        description: string;
+        format: string;
+        gameVersion: GameVersion;
+        legendId: string;
+        championId: string;
+        isPublic: boolean;
+        cards: DeckCardEntry[];
+      }>;
+
+      const deck = createDeck({
+        cards: body.cards ?? [],
+        championId: body.championId ?? "",
+        description: body.description,
+        format: body.format,
+        gameVersion: body.gameVersion,
+        isPublic: body.isPublic,
+        legendId: body.legendId ?? "",
+        name: body.name ?? "Untitled Deck",
+        userId,
+      });
+      return json(deck, 201);
+    }
+
+    // GET /api/decks — list current user's decks
+    if (pathname === "/api/decks" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      return json(listDecks(userId));
+    }
+
+    // GET /api/decks/:id/export — return plain-text decklist
+    {
+      const exportMatch = pathname.match(/^\/api\/decks\/([^/]+)\/export$/);
+      if (exportMatch && req.method === "GET") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const deck = getDeck(exportMatch[1]);
+        if (!deck) {return json({ error: "Deck not found" }, 404);}
+        if (deck.userId !== userId) {return json({ error: "Forbidden" }, 403);}
+        const text = formatDecklist(
+          { cards: deck.cards, championId: deck.championId, legendId: deck.legendId, name: deck.name },
+          allCards,
+        );
+        return new Response(text, {
+          headers: { "Content-Type": "text/plain; charset=utf-8", ...corsHeaders },
+          status: 200,
+        });
+      }
+    }
+
+    // POST /api/decks/:id/import — replace deck contents from a plain-text
+    // Decklist. Body: { decklist: string }
+    {
+      const importMatch = pathname.match(/^\/api\/decks\/([^/]+)\/import$/);
+      if (importMatch && req.method === "POST") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const body = (await req.json().catch(() => ({}))) as { decklist?: string };
+        if (typeof body.decklist !== "string") {
+          return json({ error: "Body must include `decklist` string" }, 400);
+        }
+        const parsed = parseDecklist(body.decklist, allCards);
+        const updated = updateDeck(importMatch[1], userId, {
+          cards: parsed.cards,
+          name: parsed.name || undefined,
+        });
+        if (!updated) {return json({ error: "Deck not found or not owned by you" }, 404);}
+        // Patch deck-level legend/champion ids if the parser found them.
+        if (parsed.legendId || parsed.championId) {
+          const db = (await import("./src/db/schema")).getDb();
+          if (parsed.legendId) {
+            db.run("UPDATE decks SET legend_id = ? WHERE id = ?", [parsed.legendId, updated.id]);
+          }
+          if (parsed.championId) {
+            db.run("UPDATE decks SET champion_id = ? WHERE id = ?", [parsed.championId, updated.id]);
+          }
+        }
+        const refreshed = getDeck(updated.id)!;
+        return json({ deck: refreshed, warnings: parsed.warnings });
+      }
+    }
+
+    // POST /api/decks/:id/validate — format validation snapshot
+    {
+      const validateMatch = pathname.match(/^\/api\/decks\/([^/]+)\/validate$/);
+      if (validateMatch && req.method === "GET") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const deck = getDeck(validateMatch[1]);
+        if (!deck) {return json({ error: "Deck not found" }, 404);}
+        if (deck.userId !== userId) {return json({ error: "Forbidden" }, 403);}
+        const result = validateDeck(
+          { cards: deck.cards, championId: deck.championId, legendId: deck.legendId, name: deck.name },
+          allCards,
+        );
+        return json(result);
+      }
+    }
+
+    // GET /api/decks/:id — fetch a single deck (owner only)
+    {
+      const idMatch = pathname.match(/^\/api\/decks\/([^/]+)$/);
+      if (idMatch && req.method === "GET") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const deck = getDeck(idMatch[1]);
+        if (!deck) {return json({ error: "Deck not found" }, 404);}
+        if (deck.userId !== userId && !deck.isPublic) {
+          return json({ error: "Forbidden" }, 403);
+        }
+        return json(deck);
+      }
+      if (idMatch && req.method === "PUT") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const body = (await req.json().catch(() => ({}))) as Partial<{
+          name: string;
+          description: string;
+          gameVersion: GameVersion;
+          legendId: string;
+          championId: string;
+          cards: DeckCardEntry[];
+        }>;
+        const deck = updateDeck(idMatch[1], userId, body);
+        if (!deck) {return json({ error: "Deck not found or not owned by you" }, 404);}
+        // Patch deck-level legend/champion ids if supplied (updateDeck doesn't).
+        if (body.legendId || body.championId) {
+          const db = (await import("./src/db/schema")).getDb();
+          if (body.legendId !== undefined) {
+            db.run("UPDATE decks SET legend_id = ? WHERE id = ?", [body.legendId, deck.id]);
+          }
+          if (body.championId !== undefined) {
+            db.run("UPDATE decks SET champion_id = ? WHERE id = ?", [body.championId, deck.id]);
+          }
+        }
+        return json(getDeck(deck.id));
+      }
+      if (idMatch && req.method === "DELETE") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const deleted = deleteDeck(idMatch[1], userId);
+        if (!deleted) {return json({ error: "Deck not found or not owned by you" }, 404);}
+        return json({ success: true });
+      }
     }
 
     // ========================================
