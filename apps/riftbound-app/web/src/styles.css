@@ -6315,44 +6315,21 @@ button {
  * to the same value) so the children get an overflow-y:auto
  * Scroll instead of pushing the parent.
  * ============================================================ */
+/* iter-6 REVERT: the prior iter-5 height: 100vh on .board-side and
+ * fixed-height locks on .controls / .battlefield-row catastrophically
+ * broke the flex layout — sidebar collapsed, hand zone disappeared,
+ * move log spilled across the page (visible in /tmp/qa-v2-frames/
+ * frame-0010.png after iter-5 rebuild). Use min-only locks that
+ * prevent shrink but don't cap growth, and rely on the inner content
+ * containers' own overflow handling. */
 .board-side {
-  height: 100vh !important;
-  min-height: 100vh !important;
-  max-height: 100vh !important;
-  overflow-y: auto !important;
+  min-height: 600px !important;
 }
-
-/* Move log fills the rail's leftover space — but lock its
- * baseline so the rail's children sum to a stable total. The
- * outer scroll on .board-side handles content overflow. */
-.move-log-fill {
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-}
-
-/* Controls overlay (End Turn / Step Bot / Undo / Refresh /
- * waiting banner) — its height was driven by the conditional
- * waiting-banner + undo button (drifted 130 → 217 across turns).
- * Pin a fixed height matching the max so child render conditions
- * don't reflow the parent. The controls is absolute-positioned so
- * the fixed height doesn't push the .board down. */
 .controls {
-  min-height: 220px !important;
-  max-height: 220px !important;
-  height: 220px !important;
-  overflow: hidden !important;
+  min-height: 130px !important;
 }
-
-/* Battlefield row drifted 45px (140 → 185) when an extra row of
- * mini chips wrapped inside its BF tiles. Pin a fixed height so
- * the row stays stable and the chip rail scrolls instead. The
- * 185px figure is the max observed across the QA run. */
 .battlefield-row {
-  min-height: 185px !important;
-  max-height: 185px !important;
-  height: 185px !important;
-  overflow: hidden !important;
+  min-height: 140px !important;
 }
 
 /* ============================================================
@@ -6461,28 +6438,15 @@ button {
  * a relatively-positioned .move-log so the inner content scrolls
  * inside a fixed box regardless of trail length.
  * ============================================================ */
-.move-log {
-  position: relative !important;
-}
-
+/* iter-6 REVERT: the absolute-positioning made .move-log-fill spill
+ * its content over the page when it wasn't nested in .move-log
+ * (visible in /tmp/qa-v2-frames/frame-0010.png — trail entries
+ * rendering as plain text across the left half of the playmat). Use
+ * scroll-on-overflow instead — keeps the inner box stable without
+ * detaching from the flow. */
 .move-log-fill {
-  position: absolute !important;
-  inset: 0 !important;
   overflow-y: auto !important;
-  flex: none !important;
-  min-height: 0 !important;
-}
-
-/* The .move-log-fill is sometimes used as a board-side flex child
- * (it wraps the move log directly when there is no surrounding
- * .move-log). When .move-log-fill is itself a top-level rail child
- * (not nested in .move-log), keep the prior flex behaviour. The
- * `> .move-log` selector below ensures the absolute-positioning
- * applies only when nested inside .move-log. */
-.move-log > .move-log-fill,
-.move-log-fill > .move-log,
-.move-log-fill .move-log {
-  position: relative !important;
+  max-height: 100% !important;
 }
 
 /* ============================================================
