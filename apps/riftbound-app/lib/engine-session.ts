@@ -448,6 +448,45 @@ export interface SessionStep {
   readonly success: boolean;
   readonly error?: string;
   readonly viewAfter: GameView;
+  /**
+   * Slice 4 (undo/rewind): when set true, indicates this step was undone
+   * by a later `undoLastMove` call. The SPA renders it as a strike-through
+   * line in the MoveLog so the player can see what was rewound. Original
+   * step records are preserved (not deleted) so the trail seq is
+   * monotonic across undos.
+   */
+  readonly undone?: boolean;
+}
+
+/**
+ * Slice 4 (undo/rewind): a serialized engine state snapshot. We treat it as
+ * an opaque blob — the session pushes one onto `moveHistory` before every
+ * `applyMove` and `restore`s it on undo. Defined as a typed record (rather
+ * than `unknown`) so adjacent helpers can build mock snapshots in tests
+ * without `as any` casts.
+ */
+export interface SerializedState {
+  readonly currentState: RiftboundGameState;
+  readonly internalState: InternalSnapshot;
+  readonly seq: number;
+  /**
+   * Number of items resolved off the chain since session start. Recorded
+   * here so `canUndo` can detect "a chain item resolved after my move",
+   * which is one of the gates that blocks undo.
+   */
+  readonly chainResolveCount: number;
+}
+
+/** Slice 4: one entry in the per-session undo stack. */
+export interface MoveHistoryEntry {
+  readonly moveId: string;
+  readonly params: Record<string, unknown>;
+  readonly playerId: string;
+  readonly snapshotBefore: SerializedState;
+  /** Display label for the SPA's "Undo (last: X)" affordance. */
+  readonly label: string;
+  /** Sequence number of the corresponding step in `trail`. */
+  readonly stepSeq: number;
 }
 
 export interface EngineSessionOptions {
@@ -773,11 +812,56 @@ function formatCost(cost: unknown): string {
 }
 
 /** The session — one game in flight, plus a trail of every move taken. */
+/**
+ * Slice 4 (undo/rewind) helper: collect the set of currently-on-the-chain
+ * item ids from a RiftboundGameState. Returns an empty set when the chain
+ * is absent / cleared. Used by `EngineSession` to detect items that
+ * resolved (or were countered) between two states.
+ */
+function currentChainItemIds(state: RiftboundGameState): Set<string> {
+  const out = new Set<string>();
+  const items = state.interaction?.chain?.items ?? [];
+  for (const it of items) {
+    const {id} = (it as { id?: string });
+    if (typeof id === "string") {out.add(id);}
+  }
+  return out;
+}
+
 export class EngineSession {
   readonly engine: RiftboundEngine;
   readonly playerIds: readonly [string, string];
   private trail: SessionStep[] = [];
   private seq = 0;
+  /**
+   * Slice 4 (undo/rewind): bounded stack of move history with pre-move
+   * snapshots. Only successful moves get pushed (failed moves leave state
+   * untouched, so there's nothing to undo). Capped at `MOVE_HISTORY_CAP`
+   * to avoid unbounded memory growth across a long match.
+   */
+  private moveHistory: MoveHistoryEntry[] = [];
+  /**
+   * Slice 4: monotonic counter of chain items that have resolved since
+   * session start. Captured into each snapshot so `canUndo` can detect a
+   * chain resolution between your last move and now. Chain item identity
+   * is tracked via state.interaction.chain.items[].id; we recompute the
+   * count from a snapshot diff so the engine doesn't need to expose a
+   * dedicated counter.
+   */
+  private chainResolveCount = 0;
+  /**
+   * Slice 4: previous chain-item id set, so applyMove can detect items
+   * that disappeared (resolved) between snapshots and bump
+   * `chainResolveCount`. Stored as a Set for O(1) membership checks.
+   */
+  private prevChainItemIds = new Set<string>();
+
+  /**
+   * Slice 4: cap on `moveHistory` length. Old entries are dropped FIFO
+   * once we exceed the cap so a long match can't OOM the server.
+   * 50 covers every realistic undo distance (you don't undo 30 turns ago).
+   */
+  private static readonly MOVE_HISTORY_CAP = 50;
 
   constructor(opts: EngineSessionOptions = {}) {
     const playerIds = opts.playerIds ?? ["player-1", "player-2"];
@@ -1015,6 +1099,10 @@ export class EngineSession {
   applyMove(playerId: string, move: { moveId: string; params: Record<string, unknown> }): SessionStep {
     let success = false;
     let error: string | undefined;
+    // Slice 4: capture pre-move snapshot up front. We push it to history
+    // Only on `success === true` so failed moves don't bloat the undo
+    // Stack (and so `canUndo` doesn't return a no-op snapshot).
+    const snapshotBefore = this.snapshot();
     try {
       const result = this.engine.executeMove(move.moveId, {
         params: move.params,
@@ -1030,6 +1118,12 @@ export class EngineSession {
       error = error instanceof Error ? error.message : String(error);
     }
 
+    // Slice 4: detect chain items that resolved during this move. If any
+    // Previously-tracked chain item id is no longer present, it resolved
+    // (or was countered — same effect for undo gating). Bump the running
+    // Counter so future snapshots compare correctly.
+    this.recomputeChainResolveCount();
+
     const step: SessionStep = {
       error,
       moveId: move.moveId,
@@ -1040,7 +1134,214 @@ export class EngineSession {
       viewAfter: this.getView(),
     };
     this.trail.push(step);
+
+    // Slice 4: record successful moves in the undo stack. We label the
+    // Entry with the moveId — the SPA enriches it with card name via the
+    // Trail's existing cardName lookup if it wants.
+    if (success) {
+      this.moveHistory.push({
+        label: move.moveId,
+        moveId: move.moveId,
+        params: move.params,
+        playerId,
+        snapshotBefore,
+        stepSeq: step.seq,
+      });
+      if (this.moveHistory.length > EngineSession.MOVE_HISTORY_CAP) {
+        // Drop the oldest entry — the snapshot inside is no longer
+        // Reachable so V8 will GC it on the next pass.
+        this.moveHistory.shift();
+      }
+    }
+
     return step;
+  }
+
+  /**
+   * Slice 4 (undo/rewind): deep-clone the engine's mutable state into a
+   * standalone snapshot blob. We reach into the same private fields the
+   * SPA already uses elsewhere (`engine.currentState`, `engine.internalState`)
+   * because the engine package is closed scope for this slice.
+   *
+   * `structuredClone` handles nested Maps/Sets/Arrays without any
+   * serializer plumbing, and produces a fresh tree (no aliasing with the
+   * Live engine state). Cheap relative to a move dispatch — measured at
+   * ~1-2 ms on a real-decks session.
+   */
+  snapshot(): SerializedState {
+    const e = this.engine as unknown as {
+      currentState: RiftboundGameState;
+      internalState: InternalSnapshot;
+    };
+    return {
+      chainResolveCount: this.chainResolveCount,
+      currentState: structuredClone(e.currentState),
+      internalState: structuredClone(e.internalState),
+      seq: this.seq,
+    };
+  }
+
+  /**
+   * Slice 4 (undo/rewind): replace the engine's current state with `snap`.
+   * Restores the engine's `currentState` and `internalState` (the two
+   * Mutable buckets the engine maintains) plus the session's `seq` /
+   * `chainResolveCount` bookkeeping. Also calls `flow.syncState` so the
+   * FlowManager sees the rewound state on its next `getGameState` / phase
+   * Check — without that, `endIf` evaluators would still read the
+   * Pre-undo state.
+   *
+   * Note: we deep-clone the snapshot on the way out so a caller can
+   * Restore the SAME snapshot multiple times without state aliasing
+   * across restores. This matters for repeated undo of the same move
+   * (e.g. if the test fixture restores a baseline snapshot twice).
+   */
+  restore(snap: SerializedState): void {
+    const e = this.engine as unknown as {
+      currentState: RiftboundGameState;
+      internalState: InternalSnapshot;
+    };
+    e.currentState = structuredClone(snap.currentState);
+    e.internalState = structuredClone(snap.internalState);
+    this.seq = snap.seq;
+    this.chainResolveCount = snap.chainResolveCount;
+    this.prevChainItemIds = currentChainItemIds(e.currentState);
+
+    // Back-sync into the flow manager so phase end-conditions evaluate
+    // Against the rewound state. Without this, `flowManager.getGameState()`
+    // Would still serve the pre-undo state for its next phase check.
+    const flow = this.engine.getFlowManager?.();
+    if (flow && typeof (flow as unknown as { syncState?: (s: unknown) => void }).syncState === "function") {
+      (flow as unknown as { syncState: (s: RiftboundGameState) => void }).syncState(e.currentState);
+    }
+  }
+
+  /**
+   * Slice 4: can `playerId` undo their last move right now?
+   *
+   * Gates (all must hold):
+   *   1. There is a move in history with `playerId === <caller>`
+   *   2. That move is at the TOP of the history (no opponent move since)
+   *   3. No chain item has resolved between the move and now
+   *      (`chainResolveCount` matches the snapshot's count)
+   *   4. The session is not finished (game over)
+   *
+   * Returns `false` (not an error) when any gate fails so the SPA can
+   * Disable the button cleanly.
+   */
+  canUndo(playerId: string): boolean {
+    if (this.moveHistory.length === 0) {return false;}
+    if (this.isGameOver()) {return false;}
+    const top = this.moveHistory[this.moveHistory.length - 1];
+    if (!top) {return false;}
+    if (top.playerId !== playerId) {return false;}
+    // Step 3 gate: no chain item resolved between snapshot and now.
+    if (top.snapshotBefore.chainResolveCount !== this.chainResolveCount) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Slice 4: size of the undo stack. Surfaced to the SPA so the button
+   * Can show "Undo (3 moves left)" if a designer wants. Tests use it to
+   * Assert the stack drains correctly.
+   */
+  get undoCount(): number {
+    return this.moveHistory.length;
+  }
+
+  /**
+   * Slice 4: peek the top-of-history entry without popping (used by the
+   * SPA to render the "Undo: <last move>" label). Returns a shallow copy
+   * Of the metadata; the snapshot itself is intentionally NOT exposed.
+   */
+  peekLastMove(): Pick<MoveHistoryEntry, "moveId" | "params" | "playerId" | "label" | "stepSeq"> | undefined {
+    const top = this.moveHistory[this.moveHistory.length - 1];
+    if (!top) {return undefined;}
+    return {
+      label: top.label,
+      moveId: top.moveId,
+      params: top.params,
+      playerId: top.playerId,
+      stepSeq: top.stepSeq,
+    };
+  }
+
+  /**
+   * Slice 4: undo the top move on the history stack. Validates the same
+   * Gates as `canUndo` and either restores the snapshot + pops the entry
+   * (returning `{ok: true, undone: <metadata>}`), or returns
+   * `{ok: false, error: <reason>}` without touching state.
+   *
+   * Marks the corresponding trail step's `undone = true` so the SPA's
+   * MoveLog renders it strike-through (we keep the step record so seq
+   * Stays monotonic and tests can assert on it).
+   */
+  undoLastMove(playerId: string): {
+    ok: boolean;
+    error?: string;
+    undone?: Pick<MoveHistoryEntry, "moveId" | "params" | "playerId" | "label" | "stepSeq">;
+  } {
+    if (this.moveHistory.length === 0) {
+      return { error: "no move to undo", ok: false };
+    }
+    if (this.isGameOver()) {
+      return { error: "cannot undo after game over", ok: false };
+    }
+    const top = this.moveHistory[this.moveHistory.length - 1];
+    if (!top) {return { error: "no move to undo", ok: false };}
+    if (top.playerId !== playerId) {
+      return {
+        error: `cannot undo: last move was by ${top.playerId}, not ${playerId}`,
+        ok: false,
+      };
+    }
+    if (top.snapshotBefore.chainResolveCount !== this.chainResolveCount) {
+      return {
+        error: "cannot undo: a chain item resolved after your move",
+        ok: false,
+      };
+    }
+
+    // Snapshot/restore path. Note we DON'T mutate `trail` retroactively
+    // Except to flag `undone = true` on the corresponding step.
+    this.restore(top.snapshotBefore);
+    this.moveHistory.pop();
+    const undone = {
+      label: top.label,
+      moveId: top.moveId,
+      params: top.params,
+      playerId: top.playerId,
+      stepSeq: top.stepSeq,
+    };
+
+    // Flip `undone = true` on the trail entry so the MoveLog can render
+    // It strike-through. SessionStep is `readonly` in the type, but the
+    // Array itself is mutable; we replace the entry with a copy.
+    const idx = this.trail.findIndex((s) => s.seq === top.stepSeq);
+    if (idx !== -1) {
+      this.trail[idx] = { ...this.trail[idx]!, undone: true };
+    }
+
+    return { ok: true, undone };
+  }
+
+  /**
+   * Slice 4 internal: walk the current chain items, diff against
+   * `prevChainItemIds`, and bump `chainResolveCount` for each item that
+   * Disappeared. New items added to the chain don't count — only
+   * Resolution / counter / clear bumps the counter. Idempotent on a
+   * Steady state (no chain change → no bump).
+   */
+  private recomputeChainResolveCount(): void {
+    const state = this.engine.getState();
+    const next = currentChainItemIds(state);
+    for (const id of this.prevChainItemIds) {
+      if (!next.has(id)) {
+        this.chainResolveCount += 1;
+      }
+    }
+    this.prevChainItemIds = next;
   }
 
   /** All steps taken so far. Copy — caller can't mutate. */

@@ -1944,11 +1944,45 @@ const server = Bun.serve({
       // Booting Bun.serve.
       const { actionsLegal, whoseTurnNow } = computeActionsLegal(session, sessionId);
 
+      // Slice 4 (undo/rewind): expose per-player undo affordance state so
+      // The SPA can decide which player's "Undo" button to enable. We don't
+      // Send the snapshot itself; just the metadata needed for UI gating.
+      const undo: {
+        canUndoBy: Record<string, boolean>;
+        undoCount: number;
+        lastMove?: {
+          moveId: string;
+          playerId: string;
+          label: string;
+          stepSeq: number;
+          cardId?: string;
+        };
+      } = {
+        canUndoBy: {},
+        undoCount: session.undoCount,
+      };
+      for (const pid of session.playerIds) {
+        undo.canUndoBy[pid] = session.canUndo(pid);
+      }
+      const last = session.peekLastMove();
+      if (last) {
+        undo.lastMove = {
+          label: last.label,
+          moveId: last.moveId,
+          playerId: last.playerId,
+          stepSeq: last.stepSeq,
+          ...(typeof last.params.cardId === "string"
+            ? { cardId: last.params.cardId as string }
+            : {}),
+        };
+      }
+
       return {
         actionsLegal,
         hand,
         isGameOver: view.winner !== null || view.status === "finished",
         trail,
+        undo,
         view,
         whoseTurnNow,
       };
@@ -2054,6 +2088,41 @@ const server = Bun.serve({
       const spaState = buildSpaState(sessionId, session);
       broadcastV2State(sessionId, spaState);
       return json({ ok: true, skipped: false, ...spaState });
+    }
+
+    // POST /api/v2/undo/:id — Slice 4 (undo/rewind).
+    //
+    // Body: { playerId: string }. Validates via `EngineSession.canUndo` and
+    // Calls `undoLastMove`. On success, the engine state is rewound to the
+    // Snapshot taken before that move and the trail entry is flagged
+    // `undone = true`. Broadcasts the fresh SPA state over SSE so the
+    // OTHER browser sees the rewind in real-time (and can show a "Move
+    // Undone" toast).
+    //
+    // Returns the same { ok, error?, ...spaState } envelope the /move
+    // Endpoint returns so the SPA's `applyState` works unmodified. Adds an
+    // `undone` field on success with the rewound move's metadata so the
+    // SPA can show "Your <card> was undone".
+    if (pathname.startsWith("/api/v2/undo/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return json({ error: "session not found" }, 404);}
+      const body = (await req.json().catch(() => ({}))) as {
+        playerId?: string;
+      };
+      const playerId = body.playerId ?? session.getActivePlayer();
+      const result = session.undoLastMove(playerId);
+      const spaState = buildSpaState(sessionId, session);
+      if (result.ok) {
+        // Broadcast to SSE subscribers so the opponent's UI rewinds too.
+        broadcastV2State(sessionId, spaState);
+      }
+      return json({
+        error: result.error,
+        ok: result.ok,
+        undone: result.undone,
+        ...spaState,
+      });
     }
 
     // GET /api/v2/stream/:id — Server-Sent Events stream for live state

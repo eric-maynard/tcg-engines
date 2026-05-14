@@ -221,6 +221,31 @@ export interface TrailStep {
   readonly params: Record<string, unknown>;
   readonly success: boolean;
   readonly error?: string;
+  /**
+   * Slice 4 (undo/rewind): true when this step was rewound by a later
+   * `POST /api/v2/undo` call. The MoveLog renders these with a
+   * strike-through and slightly dimmed color so a viewer can see the
+   * full trail (including undone moves) at a glance.
+   */
+  readonly undone?: boolean;
+}
+
+/**
+ * Slice 4 (undo/rewind): per-session undo affordance state, threaded
+ * through the SPA state response. The SPA uses `canUndoBy[playerId]` to
+ * decide whether to enable the local player's "Undo" button, and
+ * `lastMove.label` to label the button ("Undo (Sabotage)").
+ */
+export interface UndoState {
+  readonly canUndoBy: Record<string, boolean>;
+  readonly undoCount: number;
+  readonly lastMove?: {
+    readonly moveId: string;
+    readonly playerId: string;
+    readonly label: string;
+    readonly stepSeq: number;
+    readonly cardId?: string;
+  };
 }
 
 export interface HandCard extends CardDefinitionFields {
@@ -302,6 +327,8 @@ export interface StateResponse {
   readonly isGameOver: boolean;
   readonly whoseTurnNow?: "human" | "bot";
   readonly actionsLegal?: ActionsLegal;
+  /** Slice 4 (undo/rewind): per-session undo affordance state. */
+  readonly undo?: UndoState;
 }
 
 export interface MoveResponse {
@@ -313,6 +340,8 @@ export interface MoveResponse {
   readonly error?: string;
   readonly whoseTurnNow?: "human" | "bot";
   readonly actionsLegal?: ActionsLegal;
+  /** Slice 4 (undo/rewind): per-session undo affordance state. */
+  readonly undo?: UndoState;
   /**
    * Set on `/api/v2/step/:id` when Step Bot was called but the active
    * player is human — the server refuses to advance and includes a
@@ -320,6 +349,16 @@ export interface MoveResponse {
    */
   readonly skipped?: boolean;
   readonly reason?: string;
+  /**
+   * Slice 4 (undo/rewind): set on a successful POST /api/v2/undo. The
+   * SPA uses this to render a "Move undone" toast naming the move.
+   */
+  readonly undone?: {
+    readonly moveId: string;
+    readonly playerId: string;
+    readonly label: string;
+    readonly stepSeq: number;
+  };
 }
 
 export interface MoveRequest {
@@ -362,6 +401,27 @@ export async function postStep(sessionId: string): Promise<MoveResponse> {
   });
   if (!res.ok) {
     throw new Error(`postStep failed: ${res.status} ${res.statusText}`);
+  }
+  return (await res.json()) as MoveResponse;
+}
+
+/**
+ * Slice 4 (undo/rewind): rewind the local player's last move. Server
+ * Validates the same gates `canUndo` checks (own-move only, no opponent
+ * Action since, no chain item resolved); on success it broadcasts the
+ * Rewound state via SSE so the opponent's UI catches up too.
+ */
+export async function postUndo(
+  sessionId: string,
+  playerId: string,
+): Promise<MoveResponse> {
+  const res = await fetch(`${BASE}/undo/${encodeURIComponent(sessionId)}`, {
+    body: JSON.stringify({ playerId }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  if (!res.ok) {
+    throw new Error(`postUndo failed: ${res.status} ${res.statusText}`);
   }
   return (await res.json()) as MoveResponse;
 }

@@ -135,12 +135,19 @@ export function MoveLog({ trail, cardNames }: MoveLogProps) {
           const cat = categorizeMove(s.moveId);
           // Build a small, readable inline summary. Keep the full params
           // As a tooltip for power users.
+          // Slice 4 (undo/rewind): when this step was rewound by a later
+          // POST /api/v2/undo call, the server flips `undone = true` on the
+          // Trail entry. Render the row with `movelog-row-undone` so it
+          // Shows up strike-through + dimmed (recommended visual per the
+          // Slice spec — keeps history clearer than silently deleting).
+          const undoneClass = s.undone ? " movelog-row-undone" : "";
           return (
             <li
               key={s.seq}
-              className={`step step-${s.success ? "ok" : "fail"}`}
+              className={`step step-${s.success ? "ok" : "fail"}${undoneClass}`}
               data-testid={`step-${s.seq}`}
               data-move-category={cat.category}
+              data-undone={s.undone ? "true" : undefined}
               title={JSON.stringify(s.params)}
             >
               <span

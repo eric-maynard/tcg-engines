@@ -5396,3 +5396,45 @@ button {
   cursor: pointer;
   font-size: 0.8rem;
 }
+
+/* Slice 4 (undo/rewind): Undo button + rewind pulse animation.
+ * Sits next to End Turn / Step Bot in the .controls row.  Warm amber palette
+ * so it's visually distinct from the blue End Turn CTA. */
+.controls button.undo-btn:not(:disabled) {
+  background: linear-gradient(180deg, #a86c28 0%, #7a4c1a 100%);
+  border: 1px solid #d9a86b;
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 6px 14px;
+  text-transform: uppercase;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 4px 10px rgba(150, 90, 30, 0.4);
+}
+.controls button.undo-btn:not(:disabled):hover {
+  background: linear-gradient(180deg, #c47f33 0%, #8e5722 100%);
+}
+.controls button.undo-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Rewind pulse — applied to .play-page for ~600ms after a successful undo
+ * so both browsers see a board-wide flash confirming the rewind. */
+@keyframes rb-rewind-pulse {
+  0%   { box-shadow: inset 0 0 0 0 rgba(216, 168, 107, 0); }
+  30%  { box-shadow: inset 0 0 60px 12px rgba(216, 168, 107, 0.35); }
+  100% { box-shadow: inset 0 0 0 0 rgba(216, 168, 107, 0); }
+}
+.play-page.rewind-pulse {
+  animation: rb-rewind-pulse 600ms ease-out;
+}
+
+/* MoveLog strike-through for undone moves. The MoveLog row picks up
+ * `.movelog-row-undone` when the corresponding trail step's `undone === true`. */
+.movelog-row-undone {
+  text-decoration: line-through;
+  opacity: 0.55;
+  font-style: italic;
+}

@@ -7,9 +7,11 @@ import {
   type MoveResponse,
   type StateResponse,
   type TrailStep,
+  type UndoState,
   fetchState,
   postMove,
   postStep,
+  postUndo,
 } from "./lib/api";
 import { PlayerPanel } from "./components/PlayerPanel";
 import { BattlefieldList } from "./components/BattlefieldList";
@@ -114,6 +116,19 @@ export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProp
   const [actionsLegal, setActionsLegal] = useState<ActionsLegal>(
     DEFAULT_ACTIONS_LEGAL,
   );
+  /**
+   * Slice 4 (undo/rewind): per-session undo affordance state. Sourced
+   * from the SPA state envelope so the button enables/disables in
+   * Lockstep with the engine's `canUndo` gates. `undefined` on legacy
+   * Mocked responses (most unit tests).
+   */
+  const [undoState, setUndoState] = useState<UndoState | undefined>(undefined);
+  /**
+   * Slice 4: rewind animation flag. Set true briefly after a successful
+   * Undo so a CSS class pulses the board. Cleared after the animation
+   * Window so re-triggering the same undo path works cleanly.
+   */
+  const [rewindPulse, setRewindPulse] = useState(false);
   const [picker, setPicker] = useState<{
     playerId: string;
     cardId: string;
@@ -260,6 +275,7 @@ export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProp
       setTrail(s.trail);
       setHand(s.hand);
       setActionsLegal(s.actionsLegal ?? DEFAULT_ACTIONS_LEGAL);
+      setUndoState(s.undo);
     },
     [],
   );
@@ -797,6 +813,38 @@ export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProp
   }, [sessionId, applyState, showToast]);
 
   /**
+   * Slice 4 (undo/rewind): rewind the local player's last move. Server
+   * Enforces the same gates `undoState.canUndoBy[localPlayerId]`
+   * Reflects, so this is best-effort — we still surface a toast on
+   * Failure (e.g. opponent moved in the window between SSE event and
+   * Click) so the human knows why nothing happened.
+   *
+   * On success: flash a brief board pulse + "Move undone" toast. The
+   * SSE broadcast (from the server) takes care of updating the opponent
+   * Browser, so we don't need to fan out anything client-side.
+   */
+  const undoLastMove = useCallback(async () => {
+    setBusy(true);
+    try {
+      const r = await postUndo(sessionId, localPlayerId);
+      applyState(r);
+      if (r.ok) {
+        const undoneLabel = r.undone?.label ?? "last move";
+        showToast(`Move undone (${undoneLabel})`);
+        setRewindPulse(true);
+        setTimeout(() => setRewindPulse(false), 600);
+        setError(null);
+      } else if (r.error) {
+        showToast(`Undo failed: ${r.error}`);
+      }
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [sessionId, localPlayerId, applyState, showToast]);
+
+  /**
    * Build a cardId → display-name lookup that the MoveLog uses to translate
    * raw `params.cardId` into a human-readable card name. The map covers
    * every card we currently have a name for: every player's hand + every
@@ -849,8 +897,25 @@ export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProp
     return p?.baseUnits ?? [];
   };
 
+  // Slice 4: derive Undo-button state. We only show the button when there's
+  // Actually a move in history (avoids a permanently-disabled button on a
+  // Fresh page). `canUndo` from the server is the source of truth for
+  // Enabled/disabled — but we additionally gate on "is it our turn or were
+  // We the last mover" so a non-active local seat can still undo their own
+  // Last move on the previous turn (the server already enforces this; this
+  // Is just a UI defensive default for legacy mocked responses).
+  const canUndo = Boolean(undoState?.canUndoBy?.[localPlayerId]);
+  const undoVisible = (undoState?.undoCount ?? 0) > 0;
+  const undoLabel = undoState?.lastMove?.label
+    ? `Undo (${undoState.lastMove.label})`
+    : "Undo";
+
   return (
-    <div className="play-page" data-testid="play-page">
+    <div
+      className={`play-page ${rewindPulse ? "rewind-pulse" : ""}`}
+      data-testid="play-page"
+      data-rewinding={rewindPulse ? "true" : "false"}
+    >
       <header className="turn-header">
         <div className="phase-strip" data-testid="phase-strip">
           {view.phaseStrip.map((p, idx) => {
@@ -914,6 +979,26 @@ export function PlayPage({ sessionId, localPlayerId = "player-1" }: PlayPageProp
         >
           End Turn
         </button>
+        {undoVisible && (
+          <button
+            type="button"
+            data-testid="undo"
+            className="undo-btn"
+            disabled={busy || isGameOver || !canUndo}
+            title={
+              canUndo
+                ? `Rewind your last move${
+                    undoState?.lastMove?.label
+                      ? ` (${undoState.lastMove.label})`
+                      : ""
+                  }`
+                : "Undo unavailable — opponent moved or chain resolved"
+            }
+            onClick={() => void undoLastMove()}
+          >
+            {undoLabel}
+          </button>
+        )}
         <button
           type="button"
           data-testid="step-bot"
