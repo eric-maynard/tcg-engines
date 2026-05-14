@@ -238,14 +238,32 @@ export interface GameView {
    * Pending-choice snapshot (e.g. Sabotage). When present the prompter must
    * resolve the choice; SPA reveals the revealer's hand.
    */
-  readonly pendingChoice?: {
-    readonly type: "reveal-and-pick";
-    readonly prompter: string;
-    readonly revealer: string;
-    readonly revealed: readonly string[];
-    readonly onPicked: "recycle" | "banish" | "discard";
-    readonly excludedCardTypes?: readonly string[];
-  };
+  readonly pendingChoice?:
+    | {
+        readonly type: "reveal-and-pick";
+        readonly prompter: string;
+        readonly revealer: string;
+        readonly revealed: readonly string[];
+        readonly onPicked: "recycle" | "banish" | "discard";
+        readonly excludedCardTypes?: readonly string[];
+      }
+    | {
+        // Stacked Deck pattern — caster looks at top N of their own deck
+        // And picks one (to hand by default); the rest go bottom-of-deck.
+        readonly type: "look-and-pick";
+        readonly prompter: string;
+        readonly revealer: string;
+        readonly revealed: readonly string[];
+        readonly onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle";
+        readonly onUnpicked: "recycle" | "to-top" | "trash";
+        readonly revealedCards: readonly {
+          readonly id: string;
+          readonly definitionId: string;
+          readonly name?: string;
+          readonly imageUrl?: string;
+          readonly cardType?: string;
+        }[];
+      };
 }
 
 export interface TrailStep {

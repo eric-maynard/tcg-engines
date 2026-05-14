@@ -333,12 +333,30 @@ export interface SetupState {
 /**
  * A pending player decision that blocks all other moves until resolved.
  *
- * Used for effects like Sabotage/Mindsplitter/Ashe Focused that require
- * an opponent to reveal their hand so the active player can pick a card
- * from it. While a pending choice exists, only `resolvePendingChoice` is
- * a legal move.
+ * Two variants are supported today:
+ *
+ *  - `"reveal-and-pick"` — opponent reveals their hand and the active
+ *    player picks a card from it (Sabotage / Mindsplitter / Ashe Focused).
+ *    The picked card is moved per `onPicked` ("recycle" / "banish" /
+ *    "discard"); other revealed cards stay in the opponent's hand.
+ *
+ *  - `"look-and-pick"` — the active player peeks at the top N cards of
+ *    their own deck and picks 1 (Stacked Deck — "Look at the top 3 cards
+ *    of your Main Deck. Put 1 into your hand and recycle the rest."). The
+ *    picked card goes to the destination in `onPicked` (default
+ *    `"to-hand"`); the un-picked remainder is handled by `onUnpicked`
+ *    (default `"recycle"`).
+ *
+ * While a pending choice exists, only `resolvePendingChoice` is a legal
+ * move.
  */
-export interface PendingChoice {
+export type PendingChoice = RevealAndPickChoice | LookAndPickChoice;
+
+/**
+ * Reveal-hand + pick variant. Backward-compatible with the original
+ * `PendingChoice` shape used by Sabotage et al.
+ */
+export interface RevealAndPickChoice {
   /** The kind of choice that is pending. */
   readonly type: "reveal-and-pick";
 
@@ -365,6 +383,44 @@ export interface PendingChoice {
    * sends it to the owner's trash.
    */
   readonly onPicked: "recycle" | "banish" | "discard";
+}
+
+/**
+ * Look-at-top-of-deck + pick variant. Used by Stacked Deck ("Look at the
+ * top 3 cards of your Main Deck. Put 1 into your hand and recycle the
+ * rest.") and the same family of effects.
+ *
+ * The revealed snapshot is the top N cards of the prompter's main deck.
+ * On resolution, the picked card is moved per `onPicked`, and the
+ * remaining cards are handled per `onUnpicked`.
+ */
+export interface LookAndPickChoice {
+  /** The kind of choice that is pending. */
+  readonly type: "look-and-pick";
+
+  /** Player who triggered the choice and picks the card. */
+  readonly prompter: PlayerId;
+
+  /** The deck owner (whose top N cards were revealed). Usually === prompter. */
+  readonly revealer: PlayerId;
+
+  /** Snapshot of the top N card IDs of the revealer's main deck. */
+  readonly revealed: CardId[];
+
+  /**
+   * What to do with the PICKED card. Defaults to `"to-hand"` (Stacked Deck
+   * pattern). `"recycle"` puts the picked card on the bottom of the
+   * revealer's main deck (rare — most look-then-pick effects move the
+   * pick to a useful zone).
+   */
+  readonly onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle";
+
+  /**
+   * What to do with the cards that were NOT picked. Defaults to
+   * `"recycle"` (Stacked Deck pattern — bottom of deck). `"to-top"`
+   * preserves printed order on top of deck. `"trash"` mills the rest.
+   */
+  readonly onUnpicked: "recycle" | "to-top" | "trash";
 }
 
 /**

@@ -19,6 +19,7 @@ import { PlayerPanel } from "./components/PlayerPanel";
 import { BattlefieldList } from "./components/BattlefieldList";
 import { BattlefieldPicker } from "./components/BattlefieldPicker";
 import { TargetPicker } from "./components/TargetPicker";
+import { LookPicker } from "./components/LookPicker";
 import { BaseZone } from "./components/BaseZone";
 import { CombatPanel } from "./components/CombatPanel";
 import { ChainPanel } from "./components/ChainPanel";
@@ -1647,6 +1648,24 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
           legalLocations={picker.legalLocations}
           onPick={pickLocation}
           onCancel={() => setPicker(null)}
+        />
+      ) : null}
+
+      {/* Look-and-pick pendingChoice modal (Stacked Deck pattern). Renders
+       * face-up the top-N revealed cards; clicking one dispatches the
+       * engine's resolvePendingChoice with the chosen id. The TargetPicker
+       * below is for spell-targeting; this is a separate modal for the
+       * deck-peek choice flow. */}
+      {view.pendingChoice?.type === "look-and-pick" &&
+      view.pendingChoice.prompter === us.id ? (
+        <LookPicker
+          cardLabel="Look"
+          revealedCards={
+            view.pendingChoice.revealedCards
+            ?? view.pendingChoice.revealed.map((id) => ({ definitionId: id, id }))
+          }
+          onPickedDest={view.pendingChoice.onPicked}
+          onPick={resolvePendingChoice}
         />
       ) : null}
 

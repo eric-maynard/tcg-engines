@@ -113,14 +113,33 @@ interface PlayerPanelProps {
    * are optional and default to inert behavior so unrelated panels are
    * unaffected.
    */
-  readonly pendingChoice?: {
-    readonly type: "reveal-and-pick";
-    readonly prompter: string;
-    readonly revealer: string;
-    readonly revealed: readonly string[];
-    readonly onPicked: "recycle" | "banish" | "discard";
-    readonly excludedCardTypes?: readonly string[];
-  };
+  readonly pendingChoice?:
+    | {
+        readonly type: "reveal-and-pick";
+        readonly prompter: string;
+        readonly revealer: string;
+        readonly revealed: readonly string[];
+        readonly onPicked: "recycle" | "banish" | "discard";
+        readonly excludedCardTypes?: readonly string[];
+      }
+    | {
+        // Look-and-pick is rendered by a dedicated modal in PlayPage, not
+        // The hand-chip pickable affordance — the PlayerPanel accepts the
+        // Union for type compatibility but treats this variant as inert.
+        readonly type: "look-and-pick";
+        readonly prompter: string;
+        readonly revealer: string;
+        readonly revealed: readonly string[];
+        readonly onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle";
+        readonly onUnpicked: "recycle" | "to-top" | "trash";
+        readonly revealedCards?: readonly {
+          readonly id: string;
+          readonly definitionId: string;
+          readonly name?: string;
+          readonly imageUrl?: string;
+          readonly cardType?: string;
+        }[];
+      };
   readonly onPickRevealedCard?: (cardId: string) => void;
   /**
    * Admin feedback 2026-05-14 — RiftAtlas parity: trash zone must be
@@ -153,13 +172,18 @@ export function PlayerPanel({
   // (or a dimmed non-pick if its card type is in `excludedCardTypes`).
   // The picker pipeline reuses the existing `hand-revealed` parent class
   // So styling can attach via `.hand-revealed .hand-chip[data-pickable=...]`.
+  // `look-and-pick` choices are surfaced by a dedicated modal (LookPicker)
+  // In PlayPage, not by the in-panel hand-reveal affordance. We only
+  // Activate the reveal/pick rendering for the `reveal-and-pick` variant.
+  const revealAndPickChoice =
+    pendingChoice && pendingChoice.type === "reveal-and-pick" ? pendingChoice : undefined;
   const isRevealerPanel =
-    Boolean(pendingChoice) && pendingChoice.revealer === player.id;
-  const excludedSet = new Set(pendingChoice?.excludedCardTypes ?? []);
+    Boolean(revealAndPickChoice) && revealAndPickChoice?.revealer === player.id;
+  const excludedSet = new Set(revealAndPickChoice?.excludedCardTypes ?? []);
   const canPickFromHand = isRevealerPanel && Boolean(onPickRevealedCard);
   const isPickable = (c: HandCard): boolean => {
     if (!canPickFromHand) {return false;}
-    if (pendingChoice?.revealed && !pendingChoice.revealed.includes(c.id)) {
+    if (revealAndPickChoice?.revealed && !revealAndPickChoice.revealed.includes(c.id)) {
       return false;
     }
     const t = (c.cardType ?? "").toLowerCase();
@@ -314,7 +338,7 @@ export function PlayerPanel({
                   title={
                     isRevealerChip
                       ? (pickable
-                        ? `Pick ${c.name ?? c.definitionId} — ${pendingChoice?.onPicked ?? "resolve"}`
+                        ? `Pick ${c.name ?? c.definitionId} — ${revealAndPickChoice?.onPicked ?? "resolve"}`
                         : `${c.name ?? c.definitionId} — not a legal pick (${c.cardType ?? "card"})`)
                       : (locs.length > 0
                         ? `${c.name ?? c.definitionId} — legal: ${locs.join(", ")}${showUnaffordable ? " (unaffordable)" : ""}`

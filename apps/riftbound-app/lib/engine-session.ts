@@ -276,14 +276,38 @@ export interface GameView {
    * resolve via `resolvePendingChoice`. The SPA uses this to reveal the
    * revealer's hand face-up.
    */
-  readonly pendingChoice?: {
-    readonly type: "reveal-and-pick";
-    readonly prompter: string;
-    readonly revealer: string;
-    readonly revealed: readonly string[];
-    readonly onPicked: "recycle" | "banish" | "discard";
-    readonly excludedCardTypes?: readonly string[];
-  };
+  readonly pendingChoice?:
+    | {
+        readonly type: "reveal-and-pick";
+        readonly prompter: string;
+        readonly revealer: string;
+        readonly revealed: readonly string[];
+        readonly onPicked: "recycle" | "banish" | "discard";
+        readonly excludedCardTypes?: readonly string[];
+      }
+    | {
+        // Stacked Deck pattern: prompter looks at top N of their own deck
+        // And picks 1. Picked → destination (default `to-hand`); rest →
+        // `onUnpicked` (default `recycle` — bottom of deck).
+        readonly type: "look-and-pick";
+        readonly prompter: string;
+        readonly revealer: string;
+        readonly revealed: readonly string[];
+        readonly onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle";
+        readonly onUnpicked: "recycle" | "to-top" | "trash";
+        /**
+         * Per-revealed-card enrichment (name + image URL + cardType) so
+         * the SPA can render the LookPicker face-up without doing its
+         * own registry lookups. Same shape as `cardsInTrash`/HandCard.
+         */
+        readonly revealedCards: readonly {
+          readonly id: string;
+          readonly definitionId: string;
+          readonly name?: string;
+          readonly imageUrl?: string;
+          readonly cardType?: string;
+        }[];
+      };
   /**
    * Chain (spell stack) view. Present when `state.interaction.chain` exists
    * and has any items. LIFO — items[items.length-1] resolves first.
@@ -2322,19 +2346,99 @@ function buildView(engine: RiftboundEngine): GameView {
   const chain = buildChainView(state, internal);
   // Pending-choice (Sabotage et al.) — surface to the SPA so it can reveal
   // The revealer's hand.
-  const pc = (state as RiftboundGameState & { pendingChoice?: { type: string; prompter: string; revealer: string; revealed: string[]; onPicked: "recycle" | "banish" | "discard"; filter?: { excludeCardTypes?: readonly string[] } } }).pendingChoice;
-  const pendingChoice = pc
-    ? {
-        excludedCardTypes: pc.filter?.excludeCardTypes
-          ? [...pc.filter.excludeCardTypes]
-          : undefined,
-        onPicked: pc.onPicked,
-        prompter: pc.prompter,
-        revealed: [...pc.revealed],
-        revealer: pc.revealer,
-        type: "reveal-and-pick" as const,
+  const pc = (
+    state as RiftboundGameState & {
+      pendingChoice?:
+        | {
+            type: "reveal-and-pick";
+            prompter: string;
+            revealer: string;
+            revealed: string[];
+            onPicked: "recycle" | "banish" | "discard";
+            filter?: { excludeCardTypes?: readonly string[] };
+          }
+        | {
+            type: "look-and-pick";
+            prompter: string;
+            revealer: string;
+            revealed: string[];
+            onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle";
+            onUnpicked: "recycle" | "to-top" | "trash";
+          };
+    }
+  ).pendingChoice;
+  let pendingChoice:
+    | {
+        type: "reveal-and-pick";
+        prompter: string;
+        revealer: string;
+        revealed: string[];
+        onPicked: "recycle" | "banish" | "discard";
+        excludedCardTypes?: readonly string[];
       }
-    : undefined;
+    | {
+        type: "look-and-pick";
+        prompter: string;
+        revealer: string;
+        revealed: string[];
+        onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle";
+        onUnpicked: "recycle" | "to-top" | "trash";
+        revealedCards: {
+          id: string;
+          definitionId: string;
+          name?: string;
+          imageUrl?: string;
+          cardType?: string;
+        }[];
+      }
+    | undefined;
+  if (pc?.type === "look-and-pick") {
+    const revealedCards: {
+      id: string;
+      definitionId: string;
+      name?: string;
+      imageUrl?: string;
+      cardType?: string;
+    }[] = [];
+    for (const cardId of pc.revealed) {
+      const card = internal.cards?.[cardId];
+      const definitionId = card?.definitionId ?? cardId;
+      const def = getCardDefinition(cardId, definitionId);
+      let cardType: string | undefined;
+      try {
+        cardType = getGlobalCardRegistry().get(cardId)?.cardType;
+      } catch {
+        cardType = undefined;
+      }
+      revealedCards.push({
+        definitionId,
+        id: cardId,
+        ...(def.name ? { name: def.name } : {}),
+        ...(def.imageUrl ? { imageUrl: def.imageUrl } : {}),
+        ...(cardType ? { cardType } : {}),
+      });
+    }
+    pendingChoice = {
+      onPicked: pc.onPicked,
+      onUnpicked: pc.onUnpicked,
+      prompter: pc.prompter,
+      revealed: [...pc.revealed],
+      revealedCards,
+      revealer: pc.revealer,
+      type: "look-and-pick" as const,
+    };
+  } else if (pc) {
+    pendingChoice = {
+      excludedCardTypes: pc.filter?.excludeCardTypes
+        ? [...pc.filter.excludeCardTypes]
+        : undefined,
+      onPicked: pc.onPicked,
+      prompter: pc.prompter,
+      revealed: [...pc.revealed],
+      revealer: pc.revealer,
+      type: "reveal-and-pick" as const,
+    };
+  }
 
   return {
     battlefields,

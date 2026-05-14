@@ -64,6 +64,7 @@ interface MakeViewOpts {
   readonly chain?: GameView["chain"];
   readonly localBaseUnits?: readonly BattlefieldUnit[];
   readonly opponentBaseUnits?: readonly BattlefieldUnit[];
+  readonly pendingChoice?: GameView["pendingChoice"];
 }
 
 function makeView(opts: MakeViewOpts = {}): GameView {
@@ -75,6 +76,7 @@ function makeView(opts: MakeViewOpts = {}): GameView {
     chain: opts.chain,
     gameId: "harness-game",
     gearsInPlay: opts.gearsInPlay ?? [],
+    pendingChoice: opts.pendingChoice,
     phaseStrip: [{ id: "main", label: "Main" }],
     players: [
       {
@@ -133,6 +135,8 @@ export interface RenderOpts {
   readonly extraHand?: readonly HandCard[];
   /** Opponent hand cards (face-down by default in the SPA). */
   readonly opponentHand?: readonly HandCard[];
+  /** Optional pending-choice snapshot pre-seeded on the view (e.g. Stacked Deck's look-and-pick). */
+  readonly pendingChoice?: GameView["pendingChoice"];
 }
 
 /**
@@ -158,6 +162,7 @@ export async function renderPlayPageWithCard(opts: RenderOpts): Promise<{
     gearsInPlay: opts.gearsInPlay,
     localId,
     opponentId,
+    pendingChoice: opts.pendingChoice,
     runesInPool: opts.runesInPool,
   });
   const state: StateResponse = {

@@ -223,12 +223,40 @@ try {
     await chip.click();
   }
 
-  // Race a picker open. Stacked Deck's parsed ability has no target
-  // Descriptor (effect.type=look from deck, no target.* fields), so no
-  // Picker is expected. We still wait briefly so the video records the
-  // Settle, and a picker selector race is cheap insurance.
+  // Stacked Deck is a spell: clicking the hand chip dispatches `playSpell`,
+  // Which puts the spell on the chain rather than resolving it. To make
+  // The `look` effect actually fire (writing the `look-and-pick`
+  // PendingChoice), both players must pass priority. The single-browser
+  // Demo simulates the opponent by issuing the priority-pass moves
+  // Directly via the v2 move API.
+  async function passPriority(playerId: string): Promise<void> {
+    const r = await fetch(
+      `${ORIGIN}/api/v2/move/${encodeURIComponent(SESSION_ID)}`,
+      {
+        body: JSON.stringify({
+          moveId: "passChainPriority",
+          params: { playerId },
+          playerId,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      },
+    );
+    if (!r.ok) {
+      console.error(`[priority] ${playerId} pass failed: HTTP ${r.status}`);
+    }
+  }
+  // Brief wait for the playSpell move to land before passing priority.
+  await sleep(500);
+  await passPriority(CASTER);
+  await passPriority("player-2");
+
+  // Race a picker open. After both priority passes the engine resolves the
+  // Spell, executes the `look` effect, and writes the `look-and-pick`
+  // PendingChoice. The SPA's LookPicker (data-testid="target-picker",
+  // Data-variant="look-and-pick") then mounts on the next state poll.
   const pickerHandle = await page
-    .waitForSelector(TARGET_PICKER_SELECTOR, { timeout: 1500 })
+    .waitForSelector(TARGET_PICKER_SELECTOR, { timeout: 3000 })
     .catch(() => null);
   pickerOpened = Boolean(pickerHandle);
   console.log(`[click] picker opened? ${pickerOpened}`);
@@ -239,11 +267,15 @@ try {
   /* Stage 3 — picking */
   // If a picker is open: hover the first option (no click — we want the
   // Hovered state captured before commitment). If not: just dwell so the
-  // Video shows the auto-resolved transition.
+  // Video shows the auto-resolved transition. The LookPicker variant emits
+  // `look-option-*` testids (one per revealed card); the legacy
+  // TargetPicker emits `target-option-*`. We try both so this script
+  // Survives changes to picker emission ids.
+  const OPTION_SELECTOR =
+    `${TARGET_PICKER_SELECTOR} button[data-testid^="look-option-"], ` +
+    `${TARGET_PICKER_SELECTOR} button[data-testid^="target-option-"]`;
   if (pickerOpened) {
-    const firstOption = await page.$(
-      `${TARGET_PICKER_SELECTOR} button[data-testid^="target-option-"]`,
-    );
+    const firstOption = await page.$(OPTION_SELECTOR);
     if (firstOption) {
       await firstOption.hover();
     }
@@ -253,9 +285,7 @@ try {
 
   // If picker is open, confirm the first option (or skip).
   if (pickerOpened) {
-    const firstOption = await page.$(
-      `${TARGET_PICKER_SELECTOR} button[data-testid^="target-option-"]`,
-    );
+    const firstOption = await page.$(OPTION_SELECTOR);
     if (firstOption) {
       await firstOption.click();
     } else {

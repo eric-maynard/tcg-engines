@@ -1706,8 +1706,103 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "look": {
-      // Peek at top N cards of a zone — informational only, no state change needed
-      // In a full UI implementation this would show cards to the player
+      // Two paths:
+      //   1. Informational-only "look" (no `then` directive). For example,
+      //      Twisted Fate's "reveal the top rune of your rune deck, then
+      //      Recycle it" sequence uses look + recycle as separate steps;
+      //      The look step itself is just a peek.
+      //   2. Interactive "look, then pick" (`then.draw === "chosen"` or
+      //      `then.recycle === "rest"`). This is the Stacked Deck pattern:
+      //      "Look at the top 3 cards of your Main Deck. Put 1 into your
+      //      Hand and recycle the rest." We write a `look-and-pick`
+      //      PendingChoice; `resolvePendingChoice` then routes the picked
+      //      Card to its destination and recycles the rest.
+      //
+      // The look effect's shape (from LookEffect in @tcg/riftbound-types):
+      //   { type: "look", amount: number, from: "deck" | "rune-deck" | "opponent-hand",
+      //     Then?: { draw?: number | "chosen", recycle?: number | "rest" } }
+      const lookEffect = effect as unknown as {
+        amount?: number;
+        from?: "deck" | "rune-deck" | "opponent-hand";
+        then?: {
+          draw?: number | "chosen";
+          recycle?: number | "rest";
+          play?: boolean;
+          reveal?: boolean;
+        };
+      };
+      const rawLookCount = lookEffect.amount ?? 1;
+      const lookCount =
+        typeof rawLookCount === "number"
+          ? rawLookCount
+          : resolveAmount(rawLookCount as Record<string, unknown>, ctx);
+      const fromKind = lookEffect.from ?? "deck";
+
+      // Map the "from" kind to a concrete zone + owner. Opponent-hand is
+      // Not currently part of the pick flow — it routes through the
+      // `reveal-hand` effect — so we skip the pendingChoice write there.
+      let zoneId: CoreZoneId | undefined;
+      const owner: string = ctx.playerId;
+      if (fromKind === "deck") {
+        zoneId = "mainDeck" as CoreZoneId;
+      } else if (fromKind === "rune-deck") {
+        zoneId = "runeDeck" as CoreZoneId;
+      }
+      // For opponent-hand or unknown kinds → informational only.
+      if (!zoneId) {
+        break;
+      }
+
+      const deckCards = ctx.zones.getCardsInZone(zoneId, owner as CorePlayerId);
+      const topN = deckCards.slice(0, Math.max(0, lookCount));
+      if (topN.length === 0) {
+        // Nothing to look at — informational no-op.
+        break;
+      }
+
+      // If there is no `then` directive, this is a pure peek. Headless
+      // Play needs no state change; an interactive UI would show the
+      // Cards to the player and then resume.
+      const thenDir = lookEffect.then;
+      if (!thenDir) {
+        break;
+      }
+
+      // Decide whether this is an interactive pick. The Stacked Deck
+      // Pattern is `then: { recycle: "rest" }` with the IMPLIED destination
+      // For the pick being the hand (the rules text reads "Put 1 into your
+      // Hand and recycle the rest"). `then: { draw: "chosen" }` is the
+      // Explicit form. Both mean "pick 1, the rest go somewhere".
+      const isPickFromRest = thenDir.recycle === "rest";
+      const isChosenDraw = thenDir.draw === "chosen";
+      if (!isPickFromRest && !isChosenDraw) {
+        // Other `then` shapes (specific counts, play=true, etc.) are out
+        // Of scope for this handler — fall through to no-op so we don't
+        // Silently mishandle them.
+        break;
+      }
+
+      // Resolve onPicked / onUnpicked from the spec. `then.recycle: "rest"`
+      // Implies pick → hand (Stacked Deck); explicit `then.draw: "chosen"`
+      // Also implies pick → hand. We default unpicked → recycle.
+      const onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle" = "to-hand";
+      const onUnpicked: "recycle" | "to-top" | "trash" =
+        thenDir.recycle === "rest"
+          ? "recycle"
+          : (thenDir.recycle != null
+            ? "recycle"
+            : "recycle");
+
+      // Active player is always the picker; for "from deck"/"rune-deck"
+      // The deck is the active player's own deck.
+      ctx.draft.pendingChoice = {
+        onPicked,
+        onUnpicked,
+        prompter: ctx.playerId,
+        revealed: [...topN] as unknown as string[],
+        revealer: owner,
+        type: "look-and-pick",
+      };
       break;
     }
 
