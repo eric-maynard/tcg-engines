@@ -6,6 +6,8 @@ import { LobbyPage } from "./LobbyPage";
 import { RoomPage } from "./RoomPage";
 import { GoldfishPage } from "./GoldfishPage";
 import { SealedPage } from "./SealedPage";
+import { ProfilePage } from "./ProfilePage";
+import { ReplayViewerPage } from "./ReplayViewerPage";
 import { AuthBadge } from "./components/AuthBadge";
 
 /**
@@ -40,7 +42,9 @@ type Route =
   | { kind: "lobby" }
   | { kind: "room"; code: string }
   | { kind: "goldfish" }
-  | { kind: "sealed" };
+  | { kind: "sealed" }
+  | { kind: "profile" }
+  | { kind: "replay"; gameId: string };
 
 function readRoute(): Route {
   const path = window.location.pathname;
@@ -70,6 +74,17 @@ function readRoute(): Route {
   // /play/sealed/ — sealed pool builder
   if (path.match(/^\/play\/sealed\/?$/)) {
     return { kind: "sealed" };
+  }
+
+  // /play/profile/ — slice 7 profile page
+  if (path.match(/^\/play\/profile\/?$/)) {
+    return { kind: "profile" };
+  }
+
+  // /play/replays/:gameId — slice 7 replay viewer
+  const replayMatch = path.match(/^\/play\/replays\/(.+?)\/?$/);
+  if (replayMatch) {
+    return { gameId: replayMatch[1], kind: "replay" };
   }
 
   // Default: play view.
@@ -110,6 +125,11 @@ export function App() {
   const goLobby = useCallback(() => navigate("/play/lobby/"), []);
   const goGoldfish = useCallback(() => navigate("/play/goldfish/"), []);
   const goSealed = useCallback(() => navigate("/play/sealed/"), []);
+  const goProfile = useCallback(() => navigate("/play/profile/"), []);
+  const goReplay = useCallback(
+    (gameId: string) => navigate(`/play/replays/${encodeURIComponent(gameId)}`),
+    [],
+  );
   const goRoom = useCallback((code: string) => navigate(`/play/lobby/${encodeURIComponent(code)}`), []);
   const goPlayWithSession = useCallback((sessionId: string, as: "player-1" | "player-2") => {
     navigate(`/play/?session=${encodeURIComponent(sessionId)}&as=${as}`);
@@ -129,6 +149,7 @@ export function App() {
     onGoldfish: goGoldfish,
     onLobby: goLobby,
     onPlay: goPlay,
+    onProfile: goProfile,
     onSealed: goSealed,
   };
 
@@ -196,6 +217,26 @@ export function App() {
     );
   }
 
+  if (route.kind === "profile") {
+    return (
+      <>
+        <AuthBadge />
+        <TopNav {...navProps} current="profile" />
+        <ProfilePage onOpenReplay={goReplay} />
+      </>
+    );
+  }
+
+  if (route.kind === "replay") {
+    return (
+      <>
+        <AuthBadge />
+        <TopNav {...navProps} current="profile" />
+        <ReplayViewerPage gameId={route.gameId} onBack={goProfile} />
+      </>
+    );
+  }
+
   // Route.kind === "play"
   return (
     <>
@@ -216,6 +257,7 @@ function TopNav({
   onLobby,
   onGoldfish,
   onSealed,
+  onProfile,
   current,
 }: {
   onPlay: () => void;
@@ -223,7 +265,8 @@ function TopNav({
   onLobby: () => void;
   onGoldfish: () => void;
   onSealed: () => void;
-  current: "play" | "decks" | "lobby" | "goldfish" | "sealed";
+  onProfile: () => void;
+  current: "play" | "decks" | "lobby" | "goldfish" | "sealed" | "profile";
 }) {
   return (
     <nav className="app-top-nav" data-testid="app-top-nav">
@@ -266,6 +309,14 @@ function TopNav({
         aria-current={current === "sealed" ? "page" : undefined}
       >
         Sealed
+      </button>
+      <button
+        type="button"
+        onClick={onProfile}
+        data-testid="nav-profile"
+        aria-current={current === "profile" ? "page" : undefined}
+      >
+        Profile
       </button>
     </nav>
   );

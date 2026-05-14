@@ -19,6 +19,16 @@ import * as path from "node:path";
 import { authenticateUser, createUser, getActiveDeckId, getUserById, setActiveDeck } from "./src/db/user-repo";
 import { createDeck, deleteDeck, getDeck, listDecks, listPublicDecks, updateDeck } from "./src/db/deck-repo";
 import type { DeckCardEntry, FullDeck, GameVersion } from "./src/db/deck-repo";
+import {
+  getGameWithLog,
+  getStatsForUser,
+  listGamesForUser,
+} from "./src/db/games-repo";
+import {
+  acceptFriendRequest,
+  listFriendsForUser,
+  sendFriendRequest,
+} from "./src/db/friends-repo";
 import { formatDecklist, parseDecklist, validateDeck } from "./src/decklist";
 import { GameLogger } from "./src/game-logger";
 import { type LogEntry, actorName, makeLogEntry } from "./src/narrator";
@@ -385,6 +395,63 @@ const gameSessions = new Map<string, GameSession>();
  */
 const demoSessions = new Map<string, EngineSession>();
 
+// ============================================================================
+// Slice 7 — Profile / replays / friends
+// ============================================================================
+//
+// `sessionMeta` maps a sessionId → its owning context (which users + which
+// Room code) so the game-end hook can persist a `games` row with the right
+// FK linkage. Populated by /api/lobby/room/:code/start (2P matches) and left
+// Empty for goldfish / demo sessions (those get inserted with null user ids
+// So the row still records the move log for replay viewing).
+interface SessionMeta {
+  hostUserId: string | null;
+  guestUserId: string | null;
+  roomCode: string | null;
+  startedAt: string;
+  /**
+   * Player-id → user-id map. Lets the game-end hook resolve which user the
+   * engine's `winner` (a player-id like "player-1") refers to.
+   */
+  playerToUser: Record<string, string | null>;
+}
+const sessionMeta = new Map<string, SessionMeta>();
+
+// Sessions for which we've already inserted a `games` row. The game-end hook
+// Fires on every state broadcast; dedupe so a finished game isn't re-recorded
+// On every subsequent state read.
+const recordedGames = new Map<string, string>(); // SessionId → gameId
+
+// In-memory lobby invites: friend invites pushed via SSE rather than a poll.
+// Keyed by recipient userId → list of unconsumed invites.
+interface PendingInvite {
+  id: string;
+  fromUserId: string;
+  fromUsername: string;
+  roomCode: string;
+  createdAt: number;
+}
+const pendingInvites = new Map<string, PendingInvite[]>();
+
+// Friends SSE — one writer per user so the invite stream pushes events
+// Without polling. Map<userId, Set<controller>>.
+const friendSubscribers = new Map<
+  string,
+  Set<ReadableStreamDefaultController<Uint8Array>>
+>();
+
+function pushInviteToUser(userId: string, invite: PendingInvite): void {
+  const list = pendingInvites.get(userId) ?? [];
+  list.push(invite);
+  pendingInvites.set(userId, list);
+  const subs = friendSubscribers.get(userId);
+  if (!subs || subs.size === 0) {return;}
+  const chunk = sseFormat("invite", invite);
+  for (const c of subs) {
+    try { c.enqueue(chunk); } catch { subs.delete(c); }
+  }
+}
+
 /**
  * SSE subscribers for v2 demo sessions. Keyed by sessionId; the value is a
  * Set of writable controllers we can push `state` events to. Subscribers are
@@ -418,6 +485,67 @@ function broadcastV2State(sessionId: string, statePayload: unknown): void {
       subs.delete(controller);
     }
   }
+}
+
+/**
+ * Slice 7 — Game-end recorder.
+ *
+ * Inspect a session and, if it has reached a finished state, insert a row
+ * into the `games` table with the full move log so the replay viewer can
+ * walk steps. Idempotent — repeated calls on a finished session no-op via
+ * `recordedGames`. Returns the gameId of the newly recorded game (or the
+ * existing one) so callers can include it in the response payload.
+ */
+function recordGameIfFinished(sessionId: string, session: EngineSession): string | null {
+  if (recordedGames.has(sessionId)) {return recordedGames.get(sessionId) ?? null;}
+  const view = session.getView();
+  const finished = view.winner !== null || view.status === "finished";
+  if (!finished) {return null;}
+
+  // Lazy-import games-repo so test environments that don't touch the
+  // SQLite-backed schema don't hit a migration during module load.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const games = require("./src/db/games-repo") as typeof import("./src/db/games-repo");
+
+  const meta = sessionMeta.get(sessionId) ?? {
+    guestUserId: null,
+    hostUserId: null,
+    playerToUser: {},
+    roomCode: null,
+    startedAt: new Date().toISOString(),
+  };
+
+  const winnerPlayerId = view.winner ?? null;
+  const winnerUserId =
+    (winnerPlayerId && meta.playerToUser[winnerPlayerId]) ?? null;
+
+  // Strip viewAfter from the trail before persisting — it's huge and the
+  // Replay viewer reconstructs board state from the move list, not from a
+  // Stored snapshot.
+  const moveLog = session.getTrail().map((s) => ({
+    moveId: s.moveId,
+    params: s.params,
+    playerId: s.playerId,
+    seq: s.seq,
+    success: s.success,
+    ...(s.error ? { error: s.error } : {}),
+    ...(s.undone ? { undone: true } : {}),
+  }));
+
+  const row = games.createGame({
+    guestUserId: meta.guestUserId,
+    hostUserId: meta.hostUserId,
+    moveCount: moveLog.length,
+    moveLog,
+    result: winnerUserId || winnerPlayerId ? "win" : "draw",
+    roomCode: meta.roomCode,
+    sessionId,
+    startedAt: meta.startedAt,
+    winnerUserId,
+  });
+
+  recordedGames.set(sessionId, row.id);
+  return row.id;
 }
 
 /**
@@ -2083,6 +2211,8 @@ const server = Bun.serve({
       // Inline, so duplicate state on the poster's tab is fine — applyState
       // Is idempotent.
       broadcastV2State(sessionId, spaState);
+      // Slice 7 — persist a `games` row once a winner appears.
+      recordGameIfFinished(sessionId, session);
       return json({ error, ok, ...spaState });
     }
 
@@ -2111,6 +2241,7 @@ const server = Bun.serve({
       bot.step(session);
       const spaState = buildSpaState(sessionId, session);
       broadcastV2State(sessionId, spaState);
+      recordGameIfFinished(sessionId, session);
       return json({ ok: true, skipped: false, ...spaState });
     }
 
@@ -2339,6 +2470,9 @@ const server = Bun.serve({
         demoSessions.set(sessionId, session);
       }
       const result = session.seedFinishedState({ winnerId });
+      // Slice 7 — record the seeded finished state as a games row so tests
+      // And the SPA's "view replay" link work end-to-end on scenarios.
+      recordGameIfFinished(sessionId, session);
       return json({
         ok: result.seeded,
         scenario: "game-over",
@@ -3071,6 +3205,18 @@ const server = Bun.serve({
 
       room.sessionId = sessionId;
       room.status = "in-progress";
+      // Slice 7 — record who's seated so the game-end hook can write a
+      // Games row with both player → user FKs. Assumes player-1 is host.
+      sessionMeta.set(sessionId, {
+        guestUserId: room.guestUserId,
+        hostUserId: room.hostUserId,
+        playerToUser: {
+          "player-1": room.hostUserId,
+          "player-2": room.guestUserId,
+        },
+        roomCode: room.code,
+        startedAt: new Date().toISOString(),
+      });
       broadcastRoom(code);
       return json(buildRoomView(room));
     }
@@ -3673,6 +3819,193 @@ const server = Bun.serve({
         return json({ password, username });
       }
       return json({ error: "No dev credentials configured" }, 404);
+    }
+
+    // ========================================
+    // Slice 7 — Profile / replays / friends
+    // ========================================
+    //
+    // The endpoints below are gated on auth (the profile is always for the
+    // Calling user; the friend graph is private). Replays themselves are
+    // Public read once a gameId is known — anyone with the link can replay.
+
+    // GET /api/users/me/profile — aggregated dashboard payload.
+    if (pathname === "/api/users/me/profile" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const user = getUserById(userId);
+      if (!user) {return json({ error: "User not found" }, 404);}
+      const decks = listDecks(userId);
+      const stats = getStatsForUser(userId);
+      const recent = listGamesForUser(userId, 10);
+      const friends = listFriendsForUser(userId);
+      // Resolve opponent display name for each recent game so the UI doesn't
+      // Need a per-row lookup.
+      const recentGames = recent.map((g) => {
+        const oppId = g.hostUserId === userId ? g.guestUserId : g.hostUserId;
+        const opp = oppId ? getUserById(oppId) : null;
+        return {
+          ...g,
+          opponent: opp
+            ? { displayName: opp.displayName, id: opp.id, username: opp.username }
+            : null,
+          youWon: g.winnerUserId === userId,
+        };
+      });
+      return json({
+        user,
+        deckCount: decks.length,
+        ...stats,
+        recentGames,
+        friends,
+      });
+    }
+
+    // GET /api/users/me/replays — list user's games (replay metadata only).
+    if (pathname === "/api/users/me/replays" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const games = listGamesForUser(userId, 50);
+      return json({ games });
+    }
+
+    // GET /api/replays/:gameId — full move log for a single completed game.
+    {
+      const replayMatch = pathname.match(/^\/api\/replays\/([^/]+)$/);
+      if (replayMatch && req.method === "GET") {
+        const game = getGameWithLog(replayMatch[1]);
+        if (!game) {return json({ error: "Replay not found" }, 404);}
+        return json(game);
+      }
+    }
+
+    // POST /api/friends/request — body: { username }. Sends a pending invite.
+    if (pathname === "/api/friends/request" && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const body = (await req.json().catch(() => ({}))) as { username?: string };
+      if (!body.username) {return json({ error: "Missing username" }, 400);}
+      const result = sendFriendRequest(userId, body.username);
+      if (!result.ok) {
+        const reasonMap: Record<string, string> = {
+          already: "Already friends or request pending",
+          "not-found": "User not found",
+          self: "Can't add yourself",
+        };
+        return json({ error: reasonMap[result.reason] }, 400);
+      }
+      return json({ friendship: result.row, ok: true });
+    }
+
+    // POST /api/friends/accept/:userId — accept a pending request from userId.
+    {
+      const acceptMatch = pathname.match(/^\/api\/friends\/accept\/([^/]+)$/);
+      if (acceptMatch && req.method === "POST") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const requesterId = acceptMatch[1];
+        const ok = acceptFriendRequest(userId, requesterId);
+        if (!ok) {return json({ error: "No pending request found" }, 404);}
+        return json({ ok: true });
+      }
+    }
+
+    // GET /api/users/me/friends — accepted + pending friend list with online
+    // Hint (truthy if the user has any active friend SSE connection).
+    if (pathname === "/api/users/me/friends" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const friends = listFriendsForUser(userId).map((f) => ({
+        ...f,
+        online: (friendSubscribers.get(f.userId)?.size ?? 0) > 0,
+      }));
+      return json({ friends });
+    }
+
+    // POST /api/invites/send — body: { friendUserId, roomCode }. Pushes a
+    // Pending invite to the friend's invite queue + SSE stream.
+    // Lives under /api/invites/ rather than /api/lobby/ to avoid being
+    // Captured by the legacy `^/api/lobby/[^/]+$` GET-lobby matcher.
+    if (pathname === "/api/invites/send" && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const body = (await req.json().catch(() => ({}))) as {
+        friendUserId?: string;
+        roomCode?: string;
+      };
+      if (!body.friendUserId || !body.roomCode) {
+        return json({ error: "Missing friendUserId or roomCode" }, 400);
+      }
+      const from = getUserById(userId);
+      const invite: PendingInvite = {
+        createdAt: Date.now(),
+        fromUserId: userId,
+        fromUsername: from?.displayName ?? from?.username ?? "Unknown",
+        id: crypto.randomUUID(),
+        roomCode: body.roomCode.toUpperCase(),
+      };
+      pushInviteToUser(body.friendUserId, invite);
+      return json({ invite, ok: true });
+    }
+
+    // GET /api/invites — list pending invites for the calling user.
+    // The SPA can poll this on profile load; the SSE stream below pushes new
+    // Ones as they arrive.
+    if (pathname === "/api/invites" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const list = pendingInvites.get(userId) ?? [];
+      return json({ invites: list });
+    }
+
+    // GET /api/users/me/stream — SSE channel for friend events (invites,
+    // Online status). Keeping the calling user's userId attached to a live
+    // Subscriber set is what `online` on the friends list reads from.
+    if (pathname === "/api/users/me/stream" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      const cleanup = () => {
+        if (heartbeat) {clearInterval(heartbeat); heartbeat = null;}
+        const subs = friendSubscribers.get(userId);
+        if (subs && controllerRef) {
+          subs.delete(controllerRef);
+          if (subs.size === 0) {friendSubscribers.delete(userId);}
+        }
+      };
+      const stream = new ReadableStream<Uint8Array>({
+        cancel() { cleanup(); },
+        start(controller) {
+          controllerRef = controller;
+          const subs =
+            friendSubscribers.get(userId)
+            ?? (() => { const s = new Set<ReadableStreamDefaultController<Uint8Array>>();
+                        friendSubscribers.set(userId, s); return s; })();
+          subs.add(controller);
+          // Flush any buffered invites on connect so a freshly opened tab
+          // Sees them without a separate poll.
+          for (const inv of pendingInvites.get(userId) ?? []) {
+            try { controller.enqueue(sseFormat("invite", inv)); } catch { /* */ }
+          }
+          heartbeat = setInterval(() => {
+            try { controller.enqueue(sseEncoder.encode(`: ping ${Date.now()}\n\n`)); }
+            catch { cleanup(); }
+          }, 20_000);
+        },
+      });
+      req.signal.addEventListener("abort", () => {
+        try { controllerRef?.close(); } catch { /* */ }
+        cleanup();
+      });
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          "Content-Type": "text/event-stream",
+        },
+      });
     }
 
     // ========================================
