@@ -1606,6 +1606,11 @@ function json(data: unknown, status = 200): Response {
 
 const server = Bun.serve({
   port: PORT,
+  // SSE streams (GET /api/v2/stream) are long-lived. Bun's default
+  // `idleTimeout` is 10s which kills them mid-flight, causing Chrome to
+  // Spam `ERR_INCOMPLETE_CHUNKED_ENCODING` + reconnect storms. We pick a
+  // Generous window that still lets actual hung sockets die eventually.
+  idleTimeout: 255,
   async fetch(req) {
     const url = new URL(req.url);
     const {pathname} = url;

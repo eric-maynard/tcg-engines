@@ -72,6 +72,9 @@ const browser = await puppeteer.launch({
   defaultViewport: VIEWPORT,
   executablePath: CHROME_PATH,
   headless: true,
+  // SSE stream keeps a long-lived response open; bump the CDP protocol
+  // Timeout so `$$eval` / clicks / waitFor don't trip the default 30s.
+  protocolTimeout: 120_000,
 });
 
 let exitCode = 0;
@@ -93,9 +96,9 @@ try {
     console.error(`[B pageerror]`, e.message),
   );
 
-  await pageA.goto(URL_A, { timeout: 20_000, waitUntil: "networkidle2" });
+  await pageA.goto(URL_A, { timeout: 20_000, waitUntil: "domcontentloaded" });
   await waitForPlayPage(pageA, "A");
-  await pageB.goto(URL_B, { timeout: 20_000, waitUntil: "networkidle2" });
+  await pageB.goto(URL_B, { timeout: 20_000, waitUntil: "domcontentloaded" });
   await waitForPlayPage(pageB, "B");
 
   await snap(pageA, "/tmp/2p-A-precast.jpg", "A precast");
@@ -120,12 +123,30 @@ try {
   // Click the Sabotage hand chip (stable instance id from seedSabotageState).
   const sabotageSelector =
     '[data-testid="hand-chip-sabotage-demo-player-1"]';
-  await pageA
-    .waitForSelector(sabotageSelector, { timeout: 5000 })
-    .catch((error) =>
-      console.error(`[A] sabotage chip not found:`, (error as Error).message),
-    );
-  await pageA.click(sabotageSelector);
+  // Dump what player-1's hand actually contains so we can diagnose missing
+  // Chips without re-running.
+  const handAChipIds = await pageA.$$eval(
+    '[data-testid="hand-player-1"] .hand-chip',
+    (els) => els.map((e) => e.getAttribute("data-testid")),
+  );
+  console.log(`[A] player-1 hand chip ids:`, handAChipIds);
+  const sabotageHandle = await pageA.waitForSelector(sabotageSelector, {
+    timeout: 5000,
+  }).catch((error) => {
+    console.error(`[A] sabotage chip not found:`, (error as Error).message);
+    return null;
+  });
+  if (!sabotageHandle) {
+    throw new Error("[A] sabotage chip never appeared in DOM");
+  }
+  // Click directly via evaluate to bypass puppeteer's element-scroll/wait
+  // Pipeline — the long-lived SSE response seems to keep the CDP busy
+  // Enough that the standard ElementHandle.click() can timeout.
+  await pageA.evaluate((sel) => {
+    const el = document.querySelector(sel) as HTMLElement | null;
+    el?.click();
+  }, sabotageSelector);
+  console.log(`[A] clicked sabotage chip`);
   // Player-target picker should open. Click the Opponent button.
   await pageA
     .waitForSelector('[data-testid="target-picker"]', { timeout: 3000 })
@@ -139,39 +160,58 @@ try {
     '[data-testid="target-picker-player-player-2"]',
     '[data-testid="target-picker-opponent"]',
   ];
-  let opponentClicked = false;
-  for (const sel of opponentCandidates) {
-    const found = await pageA.$(sel);
-    if (found) {
-      await pageA.click(sel);
-      opponentClicked = true;
-      console.log(`[A] clicked opponent via ${sel}`);
-      break;
+  const opponentClicked = await pageA.evaluate((selectors) => {
+    for (const sel of selectors) {
+      const el = document.querySelector(sel) as HTMLElement | null;
+      if (el) {
+        el.click();
+        return sel;
+      }
     }
-  }
-  if (!opponentClicked) {
-    // Fallback: click a button whose text contains "Opponent".
-    const handle = await pageA.evaluateHandle(() => {
-      const btns = [...document.querySelectorAll('[data-testid="target-picker"] button')];
-      return btns.find((b) =>
-        /opponent/i.test((b as HTMLElement).textContent),
-      ) ?? null;
-    });
-    const el = handle.asElement();
-    if (el) {
-      await (el as unknown as { click: () => Promise<void> }).click();
-      opponentClicked = true;
-      console.log(`[A] clicked opponent via text fallback`);
+    // Text fallback: any button under target-picker that says "Opponent".
+    const fallback = [
+      ...document.querySelectorAll(
+        '[data-testid="target-picker"] button',
+      ),
+    ].find((b) => /opponent/i.test((b as HTMLElement).textContent ?? ""));
+    if (fallback) {
+      (fallback as HTMLElement).click();
+      return "text-fallback";
     }
-  }
+    return null;
+  }, opponentCandidates);
   if (!opponentClicked) {
     throw new Error("[A] failed to click Opponent in target picker");
   }
+  console.log(`[A] clicked opponent via ${opponentClicked}`);
 
-  // After the picker submits, the engine transitions to a reveal-and-pick
-  // PendingChoice. The TARGET (player-2's hand) becomes face-up on A's view
-  // For the prompter to pick. Wait for the revealed hand to appear, then
-  // Click the first pickable revealed chip.
+  // After the picker submits, the spell goes on the chain. Both players
+  // Must pass chain priority before it resolves. We POST those directly
+  // From the script (each pass is a separate "move" and triggers SSE
+  // Broadcasts to both browsers — exactly the cross-browser sync we want
+  // To verify). Browser B's view should observe the chain → pendingChoice
+  // Transition without any reload.
+  await fetch(`${ORIGIN}/api/v2/move/${encodeURIComponent(SESSION)}`, {
+    body: JSON.stringify({
+      cardId: "",
+      moveId: "passChainPriority",
+      playerId: "player-1",
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  await fetch(`${ORIGIN}/api/v2/move/${encodeURIComponent(SESSION)}`, {
+    body: JSON.stringify({
+      cardId: "",
+      moveId: "passChainPriority",
+      playerId: "player-2",
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  // Engine now has a `pendingChoice` reveal-and-pick. The TARGET
+  // (player-2's hand) becomes face-up on A's view for the prompter to
+  // Pick. Wait for the revealed hand to appear, then click a pickable chip.
   await pageA.waitForFunction(
     () =>
       document.querySelector(
@@ -181,9 +221,13 @@ try {
   ).catch((error) =>
     console.error(`[A] pickable revealed chip wait failed:`, (error as Error).message),
   );
-  await pageA.click(
-    '[data-testid="hand-player-2"][data-revealer="true"] .hand-chip-pickable',
-  );
+  await pageA.evaluate(() => {
+    const el = document.querySelector(
+      '[data-testid="hand-player-2"][data-revealer="true"] .hand-chip-pickable',
+    ) as HTMLElement | null;
+    el?.click();
+  });
+  console.log(`[A] clicked first pickable revealed chip`);
 
   // Wait briefly for B to receive the SSE push.
   await new Promise((r) => setTimeout(r, 1500));
