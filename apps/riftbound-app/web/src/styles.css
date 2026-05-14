@@ -6154,3 +6154,16 @@ button {
   color: rgba(212, 175, 60, 0.55);
   font-weight: 800;
 }
+
+/* D6: game-over modal should visually take precedence over top nav.
+ * Previously the banner sat at z-index 50 while .app-top-nav was at 90,
+ * so the dimmed backdrop ended UNDER the nav and the nav stayed bright
+ * during GAME OVER. Lift the banner above the nav so the backdrop
+ * covers the whole viewport (nav included). Nav buttons remain
+ * tappable because the banner itself uses pointer-events: none. */
+.game-over-banner,
+[data-testid="game-over-banner"] {
+  z-index: 999 !important;
+  position: fixed !important;
+  inset: 0 !important;
+}
