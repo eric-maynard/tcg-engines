@@ -1,0 +1,146 @@
+{
+  "_comment": "Structural primitives we EXPECT to see in a TCG online play page based on riftatlas (and other reference TCG online platforms like MTGO/Arena, Hearthstone, Limitless). The Layer C reviewer checks the DOM against each entry. Missing zones/actions = blockers; missing card states = majors. Selectors are a list of fallback CSS selectors — the first one that matches wins.",
+  "required_zones": [
+    {
+      "name": "hand",
+      "selectors": ["[data-testid^='hand-player-']", ".hand"],
+      "description": "the local player's hand of cards"
+    },
+    {
+      "name": "battlefield",
+      "selectors": [".battlefield-row", ".bf-row", "[data-testid='battlefield-band']"],
+      "description": "the contested battlefield area in the middle of the board"
+    },
+    {
+      "name": "trash",
+      "selectors": [".trash-pile-button", "[data-testid^='trash-pile-button-']", ".deck-pile[data-variant='trash']"],
+      "description": "a visible, clickable trash pile per player (NOT just a number in a pill)"
+    },
+    {
+      "name": "deck",
+      "selectors": [".deck-pile[data-variant='deck']", "[data-testid^='deck-pile-']"],
+      "description": "a visible deck pile per player"
+    },
+    {
+      "name": "runes",
+      "selectors": [".rune-pool", "[data-testid^='rune-pool-']", ".deck-pile[data-variant='rune']"],
+      "description": "per-player rune pool with tappable rune chips"
+    },
+    {
+      "name": "phase_strip",
+      "selectors": [".phase-strip", ".turn-banner-phase", "[data-testid*='phase']"],
+      "description": "list of game phases with the current phase highlighted"
+    },
+    {
+      "name": "turn_indicator",
+      "selectors": [".turn-banner", "[data-testid='turn-banner']", ".turn-marker", "[data-testid^='turn-marker-']"],
+      "description": "clear visual cue for whose turn it is"
+    },
+    {
+      "name": "vp_score",
+      "selectors": [".vp-badge", "[data-testid^='vp-badge-']", "[data-testid='turn-banner-vp-you']"],
+      "description": "victory-point counters for both players"
+    },
+    {
+      "name": "move_log",
+      "selectors": [".move-log", ".move-log-fill", "[data-testid='move-log']"],
+      "description": "scrollable log of moves taken in the game"
+    },
+    {
+      "name": "combat_panel",
+      "selectors": [".combat-panel", "[data-testid='rail-section-combat']", "[data-testid='combat-panel']"],
+      "description": "panel exposing combat actions (attackers, defenders, damage)"
+    },
+    {
+      "name": "base_zone",
+      "selectors": [".base-zone", "[data-testid^='base-zone-']"],
+      "description": "per-player base zone for units not yet on a battlefield"
+    }
+  ],
+  "required_per_player": [
+    {
+      "name": "hand",
+      "selectors": ["[data-testid='hand-player-1']", "[data-testid='hand-player-2']"]
+    },
+    {
+      "name": "trash",
+      "selectors": ["[data-testid='trash-pile-button-player-1']", "[data-testid='trash-pile-button-player-2']"]
+    },
+    {
+      "name": "deck",
+      "selectors": ["[data-testid='deck-pile-player-1']", "[data-testid='deck-pile-player-2']"]
+    },
+    {
+      "name": "runes",
+      "selectors": ["[data-testid='rune-pile-player-1']", "[data-testid='rune-pile-player-2']", "[data-testid^='rune-pool-player-']"]
+    },
+    {
+      "name": "base",
+      "selectors": ["[data-testid^='base-zone-player-']", ".base-zone"]
+    }
+  ],
+  "required_actions": [
+    {
+      "name": "play_card_from_hand",
+      "selectors": [".hand-chip", "[data-testid^='hand-chip-']"],
+      "description": "the player must be able to click cards in their hand to play them"
+    },
+    {
+      "name": "tap_rune",
+      "selectors": [".rune-chip", "[data-testid^='rune-chip-']", ".rune-pool button"],
+      "description": "individual rune chips must be clickable (count-only pill is a fail)"
+    },
+    {
+      "name": "declare_attackers",
+      "selectors": [".combat-attackers", "[data-testid='assign-attacker']", ".bf-mini-chip[data-role='attacker']", "[data-attackable='true']"],
+      "description": "way to designate attackers during showdown"
+    },
+    {
+      "name": "declare_defenders",
+      "selectors": [".combat-defenders", "[data-testid='assign-defender']", ".bf-mini-chip[data-role='defender']", "[data-defendable='true']"],
+      "description": "way to designate defenders during showdown"
+    },
+    {
+      "name": "pass_priority",
+      "selectors": ["[data-testid='pass-priority']", "[data-testid='pass-chain-priority']", "[data-testid='pass-showdown-focus']", ".pass-priority-btn"],
+      "description": "button to pass priority / showdown focus"
+    },
+    {
+      "name": "end_turn",
+      "selectors": ["[data-testid='end-turn']", ".end-turn-btn", "button[data-action='end-turn']"],
+      "description": "button to end the current player's turn"
+    },
+    {
+      "name": "view_trash",
+      "selectors": [".trash-pile-button", "[data-testid^='trash-pile-button-']"],
+      "description": "click on the trash pile must open a modal showing its contents"
+    },
+    {
+      "name": "view_deck",
+      "selectors": [".deck-pile[data-variant='deck']", "[data-testid^='deck-pile-']"],
+      "description": "deck pile must be visible (contents are private — count + back is sufficient)"
+    }
+  ],
+  "expected_card_states": [
+    {
+      "name": "exhausted_rotated_90",
+      "selectors": [".bf-mini-chip[data-exhausted='true']", ".base-zone-unit[data-exhausted='true']", ".rune-chip[data-exhausted='true']"],
+      "description": "exhausted cards/runes render rotated 90deg (TCG convention)"
+    },
+    {
+      "name": "damage_chip_visible",
+      "selectors": [".unit-damage-chip", "[data-testid^='damage-chip-']", "[data-damage]"],
+      "description": "units with damage > 0 surface a red damage chip"
+    },
+    {
+      "name": "counter_chip_visible",
+      "selectors": [".unit-counter-chip", "[data-testid^='counter-chip-']", "[data-counters]"],
+      "description": "units with +1/+1 counters or other tokens surface a counter chip"
+    },
+    {
+      "name": "controller_distinction",
+      "selectors": [".bf-mini-chip[data-controller]", ".base-zone-unit[data-controller]"],
+      "description": "units carry a visual cue indicating which player controls them"
+    }
+  ]
+}

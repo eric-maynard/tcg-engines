@@ -1086,6 +1086,15 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
     return p?.baseUnits ?? [];
   };
 
+  // Admin feedback 2026-05-14 — RiftAtlas parity: each player's trash zone
+  // Is now a clickable pile with a modal. `view.cardsInTrash` is already a
+  // Flat list (owner-tagged), so we pre-filter per-player here and hand the
+  // Slice to `PlayerPanel` → `TrashView`. Defaults to `[]` when the view
+  // Doesn't expose the field (legacy mocked tests).
+  const trashCardsFor = (
+    playerId: string,
+  ): readonly NonNullable<typeof view.cardsInTrash>[number][] => (view.cardsInTrash ?? []).filter((c) => c.owner === playerId);
+
   // Slice 4: derive Undo-button state. We only show the button when there's
   // Actually a move in history (avoids a permanently-disabled button on a
   // Fresh page). `canUndo` from the server is the source of truth for
@@ -1384,6 +1393,7 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
                 isLocalPlayer={false}
                 pendingChoice={view.pendingChoice}
                 onPickRevealedCard={resolvePendingChoice}
+                cardsInTrash={trashCardsFor(opponent.id)}
               />
               {/* Iter-RunePoolUI: opponent's rune pool — read-only chips so
                * the local player can see at-a-glance how many runes the
@@ -1462,6 +1472,7 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
               isLocalPlayer
               pendingChoice={view.pendingChoice}
               onPickRevealedCard={resolvePendingChoice}
+              cardsInTrash={trashCardsFor(us.id)}
             />
           </section>
         </div>

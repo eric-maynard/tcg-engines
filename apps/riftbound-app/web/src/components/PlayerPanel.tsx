@@ -3,6 +3,7 @@ import type { GameViewPlayer, HandCard } from "../lib/api";
 import { type CardInfo, CardOverlay } from "./CardOverlay";
 import { DeckPile } from "./DeckPile";
 import { PowerGlyphs } from "./PowerGlyphs";
+import { type TrashCard, TrashView } from "./TrashView";
 import { VpBadge } from "./VpBadge";
 
 /**
@@ -121,6 +122,15 @@ interface PlayerPanelProps {
     readonly excludedCardTypes?: readonly string[];
   };
   readonly onPickRevealedCard?: (cardId: string) => void;
+  /**
+   * Admin feedback 2026-05-14 — RiftAtlas parity: trash zone must be
+   * visible as a tangible pile that opens a modal when clicked. The
+   * parent (PlayPage) is the source of truth for `view.cardsInTrash`
+   * and pre-filters by owner before handing the slice in. Defaults to
+   * `[]` so older callers / tests work unchanged (the modal then opens
+   * with an "(no cards in trash)" empty state).
+   */
+  readonly cardsInTrash?: readonly TrashCard[];
 }
 
 export function PlayerPanel({
@@ -135,6 +145,7 @@ export function PlayerPanel({
   isLocalPlayer = false,
   pendingChoice,
   onPickRevealedCard,
+  cardsInTrash = [],
 }: PlayerPanelProps) {
   const displayName = isLocalPlayer ? "You" : "Opponent";
   // Iter-N: when this panel's player is the `revealer` of a pendingChoice,
@@ -212,12 +223,11 @@ export function PlayerPanel({
             testId={`rune-pile-${player.id}`}
             zoneId={`${player.id}-runes`}
           />
-          <DeckPile
+          <TrashView
+            playerId={player.id}
             size={player.trashSize}
-            label="trash"
-            variant="trash"
-            testId={`trash-pile-${player.id}`}
-            zoneId={`${player.id}-trash`}
+            cards={cardsInTrash}
+            isLocalPlayer={isLocalPlayer}
           />
         </div>
       </div>

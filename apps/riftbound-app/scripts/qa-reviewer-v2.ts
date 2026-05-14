@@ -529,10 +529,10 @@ function checkLayerB(checkpoints: readonly Checkpoint[]): void {
         evidence: {
           heightRange: hRange,
           samples: samples.map((s) => ({
-            turn: s.turn,
-            phase: s.phase,
-            w: s.rect!.width,
             h: s.rect!.height,
+            phase: s.phase,
+            turn: s.turn,
+            w: s.rect!.width,
           })),
           selector: sel,
           widthRange: wRange,
@@ -547,8 +547,8 @@ function checkLayerB(checkpoints: readonly Checkpoint[]): void {
       flag({
         evidence: {
           samples: samples.map((s) => ({
-            turn: s.turn,
             phase: s.phase,
+            turn: s.turn,
             x: s.rect!.x,
             y: s.rect!.y,
           })),
@@ -661,6 +661,128 @@ interface OurFeatures {
   readonly hasShowdownBreadcrumb: boolean;
   readonly hasCombatPanel: boolean;
   readonly hasPriorityBannerEverShown: boolean;
+}
+
+// ------------------------------------------------------------------
+// Layer C — structural fixture (riftatlas / generic TCG online play page).
+//
+// Admin keeps saying "compare to riftatlas" but riftatlas is auth-walled
+// Past the marketing landing, so we can't pixel-diff. Instead we encode
+// The expected structural primitives (zones / actions / card-states) in a
+// Fixture file and assert the DOM exposes a matching selector for each.
+// ------------------------------------------------------------------
+
+interface FixtureEntry {
+  readonly name: string;
+  readonly selectors: readonly string[];
+  readonly description?: string;
+}
+
+interface StructuralFixture {
+  readonly required_zones: readonly FixtureEntry[];
+  readonly required_per_player: readonly FixtureEntry[];
+  readonly required_actions: readonly FixtureEntry[];
+  readonly expected_card_states: readonly FixtureEntry[];
+}
+
+const FIXTURE_PATH = path.join(
+  path.dirname(new URL(import.meta.url).pathname),
+  "riftatlas-structural-fixture.json",
+);
+
+function loadStructuralFixture(): StructuralFixture | null {
+  try {
+    const raw = fs.readFileSync(FIXTURE_PATH, "utf8");
+    return JSON.parse(raw) as StructuralFixture;
+  } catch (error) {
+    console.warn(
+      `[qa-v2/C] failed to load structural fixture from ${FIXTURE_PATH}: ${(error as Error).message}`,
+    );
+    return null;
+  }
+}
+
+interface StructuralProbeResult {
+  readonly category: "zone" | "per_player" | "action" | "card_state";
+  readonly name: string;
+  readonly description?: string;
+  readonly matchedSelector: string | null;
+}
+
+/**
+ * Run page.evaluate to check every required selector group against the DOM.
+ * For each entry, we return the first selector that matched (or null).
+ * Card-state entries are pre-screened — many will legitimately be absent
+ * mid-game (no exhausted units yet, no damage taken yet), so we mark them
+ * as "expected" rather than "required" and surface a different defect
+ * severity downstream.
+ */
+async function probeStructural(
+  page: Page,
+  fx: StructuralFixture,
+): Promise<readonly StructuralProbeResult[]> {
+  const entries: { category: StructuralProbeResult["category"]; entry: FixtureEntry }[] = [
+    ...fx.required_zones.map((e) => ({ category: "zone" as const, entry: e })),
+    ...fx.required_per_player.map((e) => ({ category: "per_player" as const, entry: e })),
+    ...fx.required_actions.map((e) => ({ category: "action" as const, entry: e })),
+    ...fx.expected_card_states.map((e) => ({ category: "card_state" as const, entry: e })),
+  ];
+  return await page.evaluate((items) => items.map((it) => {
+      let matched: string | null = null;
+      for (const sel of it.entry.selectors) {
+        try {
+          if (document.querySelector(sel)) {
+            matched = sel;
+            break;
+          }
+        } catch {
+          // Invalid selector — skip
+        }
+      }
+      return {
+        category: it.category,
+        name: it.entry.name,
+        description: it.entry.description,
+        matchedSelector: matched,
+      };
+    }), entries as unknown as { category: StructuralProbeResult["category"]; entry: FixtureEntry }[]);
+}
+
+/**
+ * Severity heuristics for fixture-driven checks.
+ *
+ * - Missing required zones / per-player zones → blocker (the player can't
+ *   see fundamental game state).
+ * - Missing required actions → blocker (the player can't DO a required
+ *   game action).
+ * - Missing expected card states → minor (may legitimately be absent if
+ *   no card is currently in that state; only flagged for visibility).
+ */
+function severityForFixtureMiss(
+  category: StructuralProbeResult["category"],
+): Severity {
+  if (category === "card_state") {return "minor";}
+  return "blocker";
+}
+
+function checkLayerCStructural(
+  results: readonly StructuralProbeResult[],
+): void {
+  for (const r of results) {
+    if (r.matchedSelector != null) {continue;}
+    const sev = severityForFixtureMiss(r.category);
+    const id = `C-missing-${r.category}-${r.name.replace(/_/g, "-")}`;
+    flag({
+      category: sev === "blocker" ? "CORE_ACTION_MISSING" : undefined,
+      evidence: { description: r.description, expectedAny: r.name },
+      id,
+      layer: "C",
+      message:
+        `structural fixture: ${r.category} "${r.name}" not found in DOM` +
+        (r.description ? ` — ${r.description}` : ""),
+      severity: sev,
+    });
+  }
 }
 
 function checkLayerC(ours: OurFeatures, atlas: AtlasFeatures): void {
@@ -995,9 +1117,9 @@ async function main(): Promise<void> {
     console.log(`\n[qa-v2] Layer B — checking layout stability across ${checkpoints.length} checkpoints`);
     checkLayerB(checkpoints);
 
-    // Layer C: riftatlas diff.
+    // Layer C: riftatlas reference + structural fixture diff.
     if (!SKIP_C) {
-      console.log(`\n[qa-v2] Layer C — probing play.riftatlas.com`);
+      console.log(`\n[qa-v2] Layer C — probing play.riftatlas.com + structural fixture`);
       const atlas = await probeRiftAtlas(browser);
       const ours: OurFeatures = {
         hasPhaseStrip: phaseStripEverPresent,
@@ -1012,10 +1134,31 @@ async function main(): Promise<void> {
         hasPriorityBannerEverShown: priorityBannerEverShown,
       };
       checkLayerC(ours, atlas);
+
+      // Structural fixture diff — runs against the LIVE page (which is
+      // Currently sitting on a goldfish game post-loop). For each required
+      // Zone / action / per-player zone the fixture lists fallback CSS
+      // Selectors; we accept any match. Missing selectors are emitted as
+      // C-missing-{category}-{name} defects (blocker for zones+actions,
+      // Minor for card-states which may legitimately be absent).
+      const fixture = loadStructuralFixture();
+      let structuralResults: readonly StructuralProbeResult[] = [];
+      if (fixture) {
+        structuralResults = await probeStructural(page, fixture);
+        checkLayerCStructural(structuralResults);
+      } else {
+        flag({
+          id: "C-fixture-missing",
+          layer: "C",
+          message: `structural fixture file not loadable at ${FIXTURE_PATH}`,
+          severity: "minor",
+        });
+      }
+
       // Save what we learned.
       fs.writeFileSync(
         path.join(FRAMES_DIR, "layer-c-atlas-notes.json"),
-        JSON.stringify({ atlas, ours }, null, 2),
+        JSON.stringify({ atlas, ours, structuralResults }, null, 2),
       );
     } else {
       console.log(`[qa-v2] Layer C skipped (QA_V2_SKIP_LAYER_C=1)`);
