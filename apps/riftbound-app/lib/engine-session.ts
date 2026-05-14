@@ -65,7 +65,7 @@ function getImageUrlByDefId(): Map<string, string> | null {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const unl = require("../../../packages/riftbound-cards/src/data/sets/unl.json");
     const all = [ogn, ogs, sfd, unl] as {
-      cards?: ReadonlyArray<{ id?: string; imageUrl?: string }>;
+      cards?: readonly { id?: string; imageUrl?: string }[];
     }[];
     const map = new Map<string, string>();
     for (const setMod of all) {
@@ -174,13 +174,13 @@ export interface GameView {
      * `"base"`) and cards there are tagged by `card.owner`, so the SPA can't
      * derive per-player base contents from `battlefields[]` alone.
      */
-    readonly baseUnits: ReadonlyArray<BattlefieldUnitView>;
+    readonly baseUnits: readonly BattlefieldUnitView[];
   }[];
   readonly battlefields: readonly {
     readonly id: string;
     readonly controller: string | null;
     readonly contested: boolean;
-    readonly units: ReadonlyArray<BattlefieldUnitView>;
+    readonly units: readonly BattlefieldUnitView[];
     /** Phase B batch 26 JJJ: BF card's display name (e.g. "The Grand Plaza"). */
     readonly name?: string;
     /** Phase B batch 26 JJJ: BF card's official art URL, for tile background. */
@@ -603,8 +603,17 @@ export function spellRequiresExplicitTarget(cardInstanceId: string): boolean {
   } else {
     return false;
   }
-  const target = (ability?.effect as { target?: { type?: string } } | undefined)?.target;
-  return Boolean(target) && target.type !== "self";
+  const target = (ability?.effect as {
+    target?: { type?: string } | string;
+  } | undefined)?.target;
+  // Iter-R follow-up: some abilities encode `target: "self"` as a bare string
+  // Rather than `{ type: "self" }`. Treat both forms as "no explicit target
+  // Needed". This unblocks Time Warp (`ogn-122-298`) and any other card with
+  // A string-shape self target — the random tester flagged it as MISMATCH at
+  // Seed=42 N=240 because the picker opened for a self-banish spell.
+  if (!target) {return false;}
+  if (typeof target === "string") {return target !== "self";}
+  return target.type !== undefined && target.type !== "self";
 }
 
 /**
@@ -1227,16 +1236,16 @@ export class EngineSession {
     } catch {
       cardsModule = null;
     }
-    if (!cardsModule) {return { seeded: false, cardId: opts.cardId, casterId };}
+    if (!cardsModule) {return { cardId: opts.cardId, casterId, seeded: false };}
     const cardRegistry = cardsModule.getCardRegistry();
     const def = cardRegistry.get(opts.cardId) as
       | ({ name: string; cardType: string; abilities?: { effect?: { target?: { type?: string } }; type?: string }[] } & Record<string, unknown>)
       | undefined;
-    if (!def) {return { seeded: false, cardId: opts.cardId, casterId };}
+    if (!def) {return { cardId: opts.cardId, casterId, seeded: false };}
 
     const internal = getInternalSnapshot(this.engine);
     const handZone = internal.zones?.["hand"];
-    if (!handZone) {return { seeded: false, cardId: opts.cardId, casterId };}
+    if (!handZone) {return { cardId: opts.cardId, casterId, seeded: false };}
     const cardReg = getGlobalCardRegistry();
     const instanceId = `castdemo-${opts.cardId}-${casterId}`;
     const friendlyUnitId = `castdemo-friendly-${casterId}`;

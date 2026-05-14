@@ -78,35 +78,35 @@ function makeView(opts: MakeViewOpts = {}): GameView {
     phaseStrip: [{ id: "main", label: "Main" }],
     players: [
       {
-        id: localId,
-        victoryPoints: 0,
-        xp: 0,
-        handSize: 1,
+        baseUnits: opts.localBaseUnits ?? [],
         deckSize: 30,
+        energy: 10,
+        handSize: 1,
+        id: localId,
+        power: { body: 3, mind: 3, calm: 3, chaos: 3, fury: 3, order: 3 },
         runeDeckSize: 12,
         trashSize: 0,
-        energy: 10,
-        power: { body: 3, mind: 3, calm: 3, chaos: 3, fury: 3, order: 3 },
-        baseUnits: opts.localBaseUnits ?? [],
+        victoryPoints: 0,
+        xp: 0,
       },
       {
-        id: opponentId,
-        victoryPoints: 0,
-        xp: 0,
-        handSize: 0,
+        baseUnits: opts.opponentBaseUnits ?? [],
         deckSize: 30,
+        energy: 0,
+        handSize: 0,
+        id: opponentId,
+        power: {},
         runeDeckSize: 12,
         trashSize: 0,
-        energy: 0,
-        power: {},
-        baseUnits: opts.opponentBaseUnits ?? [],
+        victoryPoints: 0,
+        xp: 0,
       },
     ],
     runesInPool: opts.runesInPool ?? [],
     status: "playing",
     turn: {
-      number: 1,
       activePlayer: localId,
+      number: 1,
       phase: "main",
       phaseLabel: "Main",
     },
@@ -237,6 +237,200 @@ export async function renderPlayPageWithCard(opts: RenderOpts): Promise<{
 /** Click the hand chip for `cardId` (the focus card). */
 export function clickHandChip(cardId: string): void {
   fireEvent.click(screen.getByTestId(`hand-chip-${cardId}`));
+}
+
+/* ============================================================================
+ * Engine-assert harness (iter-S)
+ *
+ * Up to now this file proved the SPA dispatched the right move; we never
+ * actually fed that move into a real `RiftboundEngine` to check the post-move
+ * state. Eric asked for FE↔BE parity — each card-integration test should run
+ * the same scenario as the corresponding engine test and assert end state.
+ *
+ * `applyDispatchedMoveToEngine` does the round-trip:
+ *   1. Boots a fresh `EngineSession` (real-decks off so we can place exactly
+ *      what we want).
+ *   2. Calls `seedSingleCardCast` to install the card-under-test in
+ *      `player-1`'s hand plus a friendly + enemy prop unit on a battlefield.
+ *      This is the SAME seed the `/api/v2/scenario/cast-card` endpoint (used
+ *      by the random-card-flow puppeteer tester) calls.
+ *   3. Translates the FE-side dispatched move's `cardId` and `targets` from
+ *      the synthesized test ids (e.g. `instance-sabotage`, `u-friendly-1`) to
+ *      the engine-side seeded instance ids (`castdemo-ogn-156-298-player-1`,
+ *      `castdemo-friendly-player-1`).
+ *   4. Dispatches via the same `tryPlayFromHand` helper the v2 server uses,
+ *      so we run through the exact same play-move routing logic.
+ *   5. Returns `{ session, state, snapshot, error, success }` for assertions.
+ *
+ * Intentionally returns BOTH the public `GameView` (`state`) and the raw
+ * `InternalSnapshot` (`snapshot`) so tests can drop into either layer
+ * depending on what they're asserting. Trash / hand / deck contents are most
+ * directly checked via `snapshot.zones[...]` + `snapshot.cards[...]` because
+ * `GameView` only surfaces sizes.
+ * ========================================================================== */
+
+import { EngineSession, getInternalSnapshot } from "../../../../lib/engine-session";
+import { tryPlayFromHand } from "../../../../lib/server-helpers";
+
+/** Result of replaying a dispatched move through a real engine session. */
+export interface EngineApplyResult {
+  /** The session (so a follow-up assertion can poke deeper if needed). */
+  readonly session: EngineSession;
+  /** Public game view AFTER the move applied. */
+  readonly state: ReturnType<EngineSession["getView"]>;
+  /** Internal zones+cards snapshot AFTER the move applied. */
+  readonly snapshot: {
+    zones: Record<string, { cardIds: string[] }>;
+    cards: Record<string, { owner: string; controller: string; zone: string; definitionId: string }>;
+  };
+  /** Public game view BEFORE the move applied (sanity reference). */
+  readonly stateBefore: ReturnType<EngineSession["getView"]>;
+  /** True iff the engine accepted the move. */
+  readonly success: boolean;
+  /** Engine-side error message when `success === false`. */
+  readonly error?: string;
+  /** Seeded id of the focus card on the engine side (in `casterId`'s hand). */
+  readonly engineCardId: string;
+  /** Seeded id of the prop friendly unit (on first battlefield). */
+  readonly friendlyUnitId: string;
+  /** Seeded id of the prop enemy unit (on first battlefield). */
+  readonly enemyUnitId: string;
+}
+
+/** Mapping the FE-side test ids use → engine-side seeded ids. */
+export interface EngineApplyOpts {
+  /** Real card definition id, e.g. `sabotage.id`. */
+  readonly cardId: string;
+  /** Dispatched move from `getLastDispatchedMove()`. */
+  readonly dispatched: DispatchedMove;
+  /**
+   * Mapping for `params.targets[]`: from the FE-side synthesized id (e.g.
+   * `"u-friendly-1"` or `"player-2"`) to the engine-side id. The helper
+   * pre-populates the well-known unit / player ids so most tests can pass
+   * `{}` and let the defaults work:
+   *
+   *   - `"u-friendly-1"` → seeded friendly unit id
+   *   - `"u-enemy-1"`    → seeded enemy unit id
+   *   - `"player-1"`     → caster id (left as-is)
+   *   - `"player-2"`     → opponent id (left as-is)
+   *
+   * Tests with custom-named units / gears / cards-in-trash should pass
+   * explicit mappings.
+   */
+  readonly targetIdMap?: Record<string, string>;
+  /** Optional caster id; defaults to `player-1`. */
+  readonly casterId?: string;
+  /**
+   * Optional pre-apply mutations on the seeded internal state. Used by
+   * scenarios like Morbid Return where the engine-side scenario needs a
+   * specific card in trash before the move is applied.
+   *
+   * Receives the mutable internal snapshot — same surface `seedSingleCardCast`
+   * uses. Mutations apply directly; no need to return anything.
+   */
+  readonly seedMutate?: (
+    snapshot: ReturnType<typeof getInternalSnapshot>,
+    seeded: { engineCardId: string; friendlyUnitId: string; enemyUnitId: string },
+  ) => void;
+}
+
+/**
+ * Run the FE-dispatched move through a real `RiftboundEngine` and return
+ * before/after state. See module doc for the full round-trip.
+ */
+export function applyDispatchedMoveToEngine(
+  opts: EngineApplyOpts,
+): EngineApplyResult {
+  const casterId = opts.casterId ?? "player-1";
+  const opponentId = casterId === "player-1" ? "player-2" : "player-1";
+
+  // 1. Fresh engine session (synthetic decks — `seedSingleCardCast` will
+  //    Place real card definitions on top).
+  const session = new EngineSession({
+    playerIds: [casterId, opponentId] as [string, string],
+    seed: `engine-assert-${opts.cardId}-${Date.now()}`,
+  });
+
+  // 2. Seed the focus card in caster's hand + prop friendly/enemy units.
+  const seed = session.seedSingleCardCast({
+    cardId: opts.cardId,
+    casterId,
+    energy: 10,
+  });
+  if (!seed.seeded || !seed.instanceId) {
+    throw new Error(
+      `applyDispatchedMoveToEngine: seedSingleCardCast failed for ${opts.cardId}`,
+    );
+  }
+
+  const engineCardId = seed.instanceId;
+  const friendlyUnitId = `castdemo-friendly-${casterId}`;
+  const enemyUnitId = `castdemo-enemy-${opponentId}`;
+
+  // 3. Optional pre-apply mutations (e.g. seed a card into trash for
+  //    Morbid Return).
+  if (opts.seedMutate) {
+    const snap = getInternalSnapshot(session.engine);
+    opts.seedMutate(snap, { enemyUnitId, engineCardId, friendlyUnitId });
+  }
+
+  const stateBefore = session.getView();
+
+  // 4. Translate the FE-dispatched move into engine-side ids.
+  const defaultMap: Record<string, string> = {
+    "u-friendly-1": friendlyUnitId,
+    "u-enemy-1": enemyUnitId,
+    [casterId]: casterId,
+    [opponentId]: opponentId,
+  };
+  const idMap: Record<string, string> = { ...defaultMap, ...opts.targetIdMap };
+  const remapTarget = (id: unknown): unknown => {
+    if (typeof id !== "string") {return id;}
+    return idMap[id] ?? id;
+  };
+  const fe = opts.dispatched;
+  const targets = Array.isArray(fe.params.targets)
+    ? (fe.params.targets as unknown[]).map(remapTarget)
+    : fe.params.targets;
+  const remappedParams: Record<string, unknown> = {
+    ...fe.params,
+    cardId: engineCardId,
+    playerId: casterId,
+    ...(targets !== undefined ? { targets } : {}),
+  };
+
+  // 5. Dispatch via the same routing helper the v2 server uses for
+  //    `playFromHand`.
+  const r = tryPlayFromHand(session, casterId, remappedParams);
+
+  const snapshot = getInternalSnapshot(session.engine);
+  const state = session.getView();
+  return {
+    enemyUnitId,
+    engineCardId,
+    error: r.error,
+    friendlyUnitId,
+    session,
+    snapshot,
+    state,
+    stateBefore,
+    success: r.ok,
+  };
+}
+
+/**
+ * Convenience: read every card-id currently in a given zone, optionally
+ * filtered by owner. Returns a fresh array.
+ */
+export function getZoneCardIds(
+  snapshot: { zones: Record<string, { cardIds: string[] }>; cards: Record<string, { owner: string }> },
+  zoneId: string,
+  owner?: string,
+): string[] {
+  const zone = snapshot.zones[zoneId];
+  if (!zone) {return [];}
+  if (!owner) {return [...zone.cardIds];}
+  return zone.cardIds.filter((cid) => snapshot.cards[cid]?.owner === owner);
 }
 
 /**
