@@ -20,6 +20,9 @@ FROM oven/bun:1.3.3-alpine AS deps
 
 WORKDIR /app
 
+# Native build deps for better-sqlite3 et al.
+RUN apk add --no-cache python3 make g++ libc6-compat
+
 # Workspace manifests first so install layer caches well.
 COPY package.json bun.lock bunfig.toml ./
 COPY packages/core/package.json ./packages/core/
@@ -35,16 +38,30 @@ COPY apps/riftbound-app/package.json ./apps/riftbound-app/
 COPY apps/riftbound-app/web/package.json ./apps/riftbound-app/web/
 
 # Install the full workspace (bun's resolver wants every package present
-# at install time to wire `workspace:*` deps).
-RUN bun install --frozen-lockfile
+# at install time to wire `workspace:*` deps). Don't use --frozen-lockfile
+# because partial package.json copy can trigger a lockfile mismatch even
+# when the lockfile is current — the resolver re-evaluates against the
+# minimal set of manifests visible in the build context.
+RUN bun install
 
 # ---------- Stage 2: builder ----------
 FROM oven/bun:1.3.3-alpine AS builder
 
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
+# Native build deps (some workspace deps still want them at build time)
+RUN apk add --no-cache python3 make g++ libc6-compat
+
 COPY . .
+
+# Nuke any node_modules that bled in from the host (likely darwin-arm64
+# binaries that won't run inside this linux-arm64-musl container).
+RUN rm -rf node_modules apps/*/node_modules apps/*/*/node_modules packages/*/node_modules
+
+# Install fresh inside the container so platform-specific optional
+# binaries (e.g., @rollup/rollup-linux-arm64-musl, better-sqlite3) are
+# correctly built for linux-arm64-musl.
+RUN bun install
 
 # Build the SPA (web/dist).
 RUN cd apps/riftbound-app/web && bun run build
