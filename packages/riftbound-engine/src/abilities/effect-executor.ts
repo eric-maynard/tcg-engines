@@ -32,8 +32,12 @@ export interface ExecutableEffect {
   readonly effects?: ExecutableEffect[];
   /** For attach effect: the equipment to attach */
   readonly equipment?: TargetDescriptor;
-  /** For attach effect: the unit to attach to */
-  readonly to?: TargetDescriptor;
+  /**
+   * For attach effect: the unit to attach to (TargetDescriptor shape).
+   * For move effect: the destination location (string or BattlefieldLocation
+   * object — e.g. "base", "battlefield", "here", { battlefield: "controlled" }).
+   */
+  readonly to?: TargetDescriptor | string | { battlefield: string };
   /** For detach: ready state override */
   readonly ready?: boolean;
   /** For grant-keyword: the keyword to grant */
@@ -770,6 +774,231 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           ctx.zones.moveCard({
             cardId: targetId as CoreCardId,
             targetZoneId: "base" as CoreZoneId,
+          });
+        }
+      }
+      break;
+    }
+
+    case "move": {
+      // Rule 188 (Move) — move a unit between its base and a battlefield, or
+      // From one battlefield to another. The parsed `MoveEffect` shape is:
+      //   { type: "move", target, to, from? }
+      //
+      // - `target`     describes the unit(s) to move (any AnyTarget shape)
+      // - `to`         is a Location (string `"base" | "battlefield" | "here"`
+      //                | { battlefield: ... }) — the destination
+      // - `from`       optional Location — only target units currently in that
+      //                Source zone (e.g. "Move a unit FROM a battlefield to its
+      //                Base"). If omitted, the target descriptor's own
+      //                `location` is responsible for restricting the pool, or
+      //                Any board location is acceptable.
+      //
+      // Implemented variants:
+      //   - target → "base"          (Charm, Fight or Flight, Flash, Stealthy
+      //                               Pursuer when destination is owner's base)
+      //   - target → "battlefield"   (move TO a battlefield; we pick the first
+      //                               Battlefield that's not the current zone,
+      //                               So base→battlefield and bf→other-bf both
+      //                               Work; if `to` is `{ battlefield: ... }`
+      //                               Same fallback applies)
+      //   - target → "here"          (move TO the source card's current zone —
+      //                               Used by triggered abilities like
+      //                               Blitzcrank Impassive "move an enemy unit
+      //                               To here")
+      //   - target → "trash"/"hand"  (transitional — same shape as recall /
+      //                               Return-to-hand for completeness; not
+      //                               Commonly emitted by parser but we
+      //                               Support them anyway)
+      //
+      // For destination "battlefield" with multiple battlefields, the resolver
+      // Is deterministic (picks first non-current battlefield) since there's no
+      // Live chooser plumbed through `executeEffect`. Real-game UI selection is
+      // The caller's concern; for the engine's bot-vs-bot and audit harnesses
+      // The deterministic pick is sufficient to fire `moveCard` and unblock
+      // The 34 broken cards. A future iteration can add a `pendingChoice` of
+      // Type `"pick-destination-for-move"` for cards that genuinely require
+      // Player choice; for now the move at least lands in a valid destination
+      // Zone and the engine state stays consistent.
+      const rawTo = (effect as { to?: unknown }).to;
+      const rawFrom = (effect as { from?: unknown }).from;
+
+      // Merge the effect's `from` (source-zone restriction) into the target
+      // Descriptor's `location` BEFORE we resolve. The parser emits `from`
+      // As a sibling of `target` (e.g. `from: "battlefield", target: { type:
+      // "unit" }`); resolving the bare target would pick up units anywhere on
+      // The board, then `quantity: 1` slices off the first one, which often
+      // Sits in the wrong zone.
+      //
+      // We ALSO expand the resolver pass to `quantity: "all"` so we get the
+      // Full candidate pool back, then filter to "viable" candidates (units
+      // Whose move would actually do something — i.e. their CURRENT zone
+      // Differs from the computed destination) before applying the original
+      // Quantity. This means "move a friendly unit to base" never picks a
+      // Friendly unit that's already on base when there's a battlefield-
+      // Resident sibling available.
+      const fromStr = typeof rawFrom === "string" ? rawFrom : undefined;
+      const isObjectTarget =
+        typeof effect.target === "object" && effect.target !== null;
+      const originalQuantity = isObjectTarget
+        ? (effect.target as TargetDescriptor).quantity
+        : undefined;
+      const expandedTarget: TargetDescriptor | undefined = isObjectTarget
+        ? {
+            ...(effect.target as TargetDescriptor),
+            ...(fromStr && !(effect.target as { location?: string }).location
+              ? { location: fromStr }
+              : {}),
+            quantity: "all",
+          }
+        : (effect.target as TargetDescriptor | undefined);
+      const expandedEffect: ExecutableEffect = {
+        ...effect,
+        target: expandedTarget,
+      } as ExecutableEffect;
+
+      const rawCandidates = getTargetIds(expandedEffect, ctx);
+      const isSelfTarget =
+        effect.target === ("self" as unknown as TargetDescriptor) ||
+        (typeof effect.target === "object" &&
+          effect.target !== null &&
+          (effect.target as { type?: string }).type === "self");
+      const candidates =
+        rawCandidates.length === 0
+          ? (isSelfTarget
+            ? [ctx.sourceCardId]
+            : [])
+          : rawCandidates;
+
+      // Belt-and-suspenders: re-apply the from-zone restriction at execution
+      // Time (the resolver's `location` filter only handles a few well-known
+      // Values; non-matching targets might slip through).
+      const candidatesAfterFrom = fromStr
+        ? candidates.filter((id) => {
+            const zone = ctx.zones.getCardZone(id as CoreCardId);
+            if (!zone) {
+              return false;
+            }
+            if (fromStr === "base") {
+              return zone === "base";
+            }
+            if (fromStr === "battlefield") {
+              return zone.startsWith("battlefield");
+            }
+            if (fromStr === "here") {
+              return ctx.sourceZone !== undefined && zone === ctx.sourceZone;
+            }
+            return zone === fromStr;
+          })
+        : candidates;
+
+      // Resolve destination zone-id. `to` can be:
+      //   - string Location  → "base" | "battlefield" | "here" | "trash" | "hand"
+      //   - { battlefield: "controlled" | "enemy" | "open" | "any" } object
+      //     (BattlefieldLocation) — we currently treat all variants as "any
+      //     Battlefield" and pick the first non-current one.
+      const battlefieldIds = Object.keys(ctx.draft.battlefields ?? {});
+      const resolveDestination = (moverId: string): string | undefined => {
+        // BattlefieldLocation object form.
+        if (rawTo && typeof rawTo === "object" && "battlefield" in rawTo) {
+          const currentZone = ctx.zones.getCardZone(moverId as CoreCardId) ?? "";
+          for (const bfId of battlefieldIds) {
+            const candidate = `battlefield-${bfId}`;
+            if (candidate !== currentZone) {
+              return candidate;
+            }
+          }
+          return battlefieldIds[0] ? `battlefield-${battlefieldIds[0]}` : undefined;
+        }
+        if (typeof rawTo !== "string") {
+          return undefined;
+        }
+        if (rawTo === "here") {
+          return ctx.sourceZone;
+        }
+        if (rawTo === "base") {
+          return "base";
+        }
+        if (rawTo === "trash") {
+          return "trash";
+        }
+        if (rawTo === "hand") {
+          return "hand";
+        }
+        if (rawTo === "battlefield") {
+          // Pick the first battlefield that ISN'T the unit's current zone.
+          // This handles both base→battlefield (current zone is "base", so
+          // Any battlefield is fine) and battlefield→other-battlefield
+          // (current zone is `battlefield-X`, pick `battlefield-Y`). When
+          // There's only one battlefield AND the unit is already on it,
+          // We skip the move (a "move to battlefield" effect on a unit
+          // Already on the only battlefield is a no-op rather than a crash).
+          const currentZone = ctx.zones.getCardZone(moverId as CoreCardId) ?? "";
+          for (const bfId of battlefieldIds) {
+            const candidate = `battlefield-${bfId}`;
+            if (candidate !== currentZone) {
+              return candidate;
+            }
+          }
+          return undefined;
+        }
+        return rawTo;
+      };
+
+      // Restrict to candidates whose move would actually change zone (skip
+      // Units already at the destination — see comment block above for why).
+      const viableMovers = candidatesAfterFrom.filter((id) => {
+        const destZoneId = resolveDestination(id);
+        if (!destZoneId) {
+          return false;
+        }
+        const currentZone = ctx.zones.getCardZone(id as CoreCardId);
+        return currentZone !== destZoneId;
+      });
+
+      // Apply the original quantity (now that we have only viable candidates).
+      // Default is 1 ("a unit"); "all" / `{ upTo: N }` / `{ atLeast: N }` /
+      // Explicit numbers behave the same way the resolver does — see the
+      // Comment in `target-resolver.ts` on `TargetDescriptor.quantity`.
+      let movers = viableMovers;
+      if (originalQuantity === "all") {
+        movers = viableMovers;
+      } else if (typeof originalQuantity === "object" && originalQuantity !== null) {
+        if ("upTo" in originalQuantity) {
+          movers = viableMovers.slice(0, Math.max(0, originalQuantity.upTo));
+        } else if ("atLeast" in originalQuantity) {
+          movers = viableMovers;
+        }
+      } else if (typeof originalQuantity === "number") {
+        movers = viableMovers.slice(0, originalQuantity);
+      } else {
+        // Undefined → exactly 1
+        movers = viableMovers.slice(0, 1);
+      }
+
+      for (const moverId of movers) {
+        const targetZoneId = resolveDestination(moverId);
+        if (!targetZoneId) {
+          continue;
+        }
+        const currentZone = ctx.zones.getCardZone(moverId as CoreCardId);
+        if (currentZone === targetZoneId) {
+          continue;
+        }
+        ctx.zones.moveCard({
+          cardId: moverId as CoreCardId,
+          targetZoneId: targetZoneId as CoreZoneId,
+        });
+        // Fire a "move" game event so triggered abilities listening for
+        // "when a unit moves" (rule 191; Reaver's Row, Iascylla, etc.) can
+        // React. Best-effort: if `fireTriggers` isn't wired we silently skip
+        // (matches the `become-mighty` trigger handling pattern in this file).
+        if (ctx.fireTriggers) {
+          ctx.fireTriggers({
+            cardId: moverId,
+            from: currentZone ?? "",
+            to: targetZoneId,
+            type: "move",
           });
         }
       }
