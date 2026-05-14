@@ -28,7 +28,19 @@ import type { RiftboundGameState } from "../types";
 export interface TargetDescriptor {
   readonly type: string;
   readonly controller?: "friendly" | "enemy" | "any";
-  readonly location?: string;
+  /**
+   * Where on the board the target must live. Two shapes — both produced by
+   * the parser:
+   *   - string: "base" | "battlefield" | "here" | "trash" | "hand" | "deck" |
+   *     "rune-deck" | "champion-zone" | "anywhere" | "same" | "just-died-trash"
+   *   - object: `{ battlefield: "controlled" | "enemy" | "open" | "contested" |
+   *     "any" }` — the typed `BattlefieldLocation` form, emitted for "at my
+   *     battlefield" / "at an enemy battlefield" wording. The resolver treats
+   *     the bare string `"battlefield"` and the object form as a battlefield
+   *     filter and applies the optional controller qualifier ("controlled" =
+   *     active player's, "enemy" = opponent's) when filtering candidates.
+   */
+  readonly location?: string | { readonly battlefield: string };
   readonly filter?: Record<string, unknown>;
   /**
    * How many candidates this descriptor resolves to.
@@ -204,21 +216,50 @@ export function resolveTarget(
     });
   }
 
-  // Filter by location
-  if (target.location === "here" && ctx.sourceZone) {
+  // Filter by location. `target.location` can be either a string ("here",
+  // "base", "battlefield", …) or the typed `BattlefieldLocation` object form
+  // `{ battlefield: "controlled" | "enemy" | "open" | "contested" | "any" }`
+  // Emitted by the parser for "at my battlefield" / "at an enemy
+  // Battlefield" wording. We normalise both into a common decision below.
+  const loc = target.location;
+  const battlefieldQual: string | undefined =
+    typeof loc === "object" && loc !== null && "battlefield" in loc
+      ? (loc.battlefield as string)
+      : (typeof loc === "string" && loc.startsWith("battlefield")
+        ? "any"
+        : undefined);
+  if (loc === "here" && ctx.sourceZone) {
     filtered = filtered.filter((id) => {
       const zone = ctx.zones.getCardZone(id as CoreCardId);
       return zone === ctx.sourceZone;
     });
-  } else if (target.location === "base") {
+  } else if (loc === "base") {
     filtered = filtered.filter((id) => {
       const zone = ctx.zones.getCardZone(id as CoreCardId);
       return zone === "base";
     });
-  } else if (target.location?.startsWith("battlefield")) {
+  } else if (battlefieldQual !== undefined) {
     filtered = filtered.filter((id) => {
       const zone = ctx.zones.getCardZone(id as CoreCardId) ?? "";
-      return zone.startsWith("battlefield");
+      if (!zone.startsWith("battlefield")) {return false;}
+      if (battlefieldQual === "any") {return true;}
+      // "controlled" / "enemy" — battlefields don't have a controller field
+      // Per se in the zone API, but we approximate using the source's
+      // Controller for "controlled" (the source unit's battlefield), and any
+      // OTHER battlefield for "enemy". For now `controlled` resolves to
+      // "same battlefield as source" when sourceZone is a battlefield;
+      // "enemy" resolves to any other battlefield. This is the same
+      // Approximation the parser intends ("at my battlefield" → same
+      // Battlefield the source is on).
+      if (battlefieldQual === "controlled") {
+        return ctx.sourceZone ? zone === ctx.sourceZone : true;
+      }
+      if (battlefieldQual === "enemy") {
+        return ctx.sourceZone ? zone !== ctx.sourceZone : true;
+      }
+      // "open" / "contested" — no zone-level data available; accept any
+      // Battlefield until those qualifiers gain first-class engine support.
+      return true;
     });
   }
 

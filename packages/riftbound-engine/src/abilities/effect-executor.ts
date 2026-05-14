@@ -197,11 +197,22 @@ function getEffectiveMight(cardId: string, ctx: EffectContext): number {
  * Handles dynamic amounts like "equal to this unit's Might",
  * "number of cards in hand", "number of cards in trash", or "count of matching targets".
  */
-function resolveAmount(amount: number | Record<string, unknown>, ctx: EffectContext): number {
+function resolveAmount(amount: unknown, ctx: EffectContext): number {
   if (typeof amount === "number") {
     return amount;
   }
-
+  // Strings sneak in for a few card shapes (e.g. `amount: "all"` on prevent —
+  // Handled separately by callers; or numeric strings produced by older
+  // Parser branches). Parse decimal-string forms here; everything else
+  // (booleans, null, undefined, strings like "all") falls through to 0 so
+  // Callers can recover instead of throwing `"might" in <primitive>`.
+  if (typeof amount === "string") {
+    const n = Number.parseInt(amount, 10);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (amount === null || typeof amount !== "object") {
+    return 0;
+  }
   // Handle AmountExpression objects
   if ("might" in amount) {
     const target = amount.might as string;
@@ -1569,8 +1580,18 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     case "add-resource": {
       const pool = ctx.draft.runePools[ctx.playerId];
       if (pool) {
-        if (effect.energy) {
-          pool.energy += effect.energy;
+        // `effect.energy` is typed `number` but card data sometimes passes
+        // An AmountExpression object (Hextech Anomaly: `energy: { variable:
+        // "x" }` for X-cost add-energy). Run any non-numeric energy slot
+        // Through `resolveAmount` so we never end up doing
+        // `(number) + (object)` which JS would coerce into the string
+        // `"0[object Object]"` and silently corrupt the rune pool.
+        if (effect.energy !== undefined && effect.energy !== null) {
+          const energyAmt =
+            typeof effect.energy === "number"
+              ? effect.energy
+              : resolveAmount(effect.energy as unknown, ctx);
+          pool.energy += energyAmt;
         }
         if (effect.power) {
           for (const domain of effect.power) {
@@ -1951,7 +1972,7 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       //   { type: "look", amount: number, from: "deck" | "rune-deck" | "opponent-hand",
       //     Then?: { draw?: number | "chosen", recycle?: number | "rest" } }
       const lookEffect = effect as unknown as {
-        amount?: number;
+        amount?: number | Record<string, unknown>;
         from?: "deck" | "rune-deck" | "opponent-hand";
         then?: {
           draw?: number | "chosen";
@@ -1997,30 +2018,67 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
         break;
       }
 
-      // Decide whether this is an interactive pick. The Stacked Deck
-      // Pattern is `then: { recycle: "rest" }` with the IMPLIED destination
-      // For the pick being the hand (the rules text reads "Put 1 into your
-      // Hand and recycle the rest"). `then: { draw: "chosen" }` is the
-      // Explicit form. Both mean "pick 1, the rest go somewhere".
+      // Decide whether this is an interactive pick and where picked vs.
+      // Unpicked cards go. We recognise the following `then` shapes:
+      //
+      //   { recycle: "rest" }         — Stacked Deck pattern. "Look at top N,
+      //                                  Put 1 into your Hand, recycle the
+      //                                  Rest." (legacy form; still works.)
+      //   { draw: "chosen" }          — Explicit pick → hand; rest recycled.
+      //   { draw: N }                 — Pick N → hand; rest recycled. (When
+      //                                  N === topN.length, it's a draw-all;
+      //                                  Still flows through pendingChoice
+      //                                  For animation/decision parity.)
+      //   { recycle: N }              — Vision pattern. "Look at top card.
+      //                                  You MAY recycle it." Pick 0..N to
+      //                                  Recycle, the unpicked stay on top
+      //                                  Of the deck. We model this as
+      //                                  Pick → recycle, unpicked → to-top.
+      //   { play: true }              — Vision keyword cards (look at top,
+      //                                  Pick to PLAY it instead of drawing).
+      //                                  Pick → play; unpicked → to-top.
+      //   { reveal: true }            — Reveal then pick from the revealed
+      //                                  Set. Same pick→hand semantics as
+      //                                  "draw: chosen"; the reveal is
+      //                                  Presentational and surfaced via the
+      //                                  PendingChoice.
+      //
+      // Anything else falls through to a no-op so we don't silently
+      // Mishandle a future `then` shape.
+      let onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle";
+      let onUnpicked: "recycle" | "to-top" | "trash";
       const isPickFromRest = thenDir.recycle === "rest";
       const isChosenDraw = thenDir.draw === "chosen";
-      if (!isPickFromRest && !isChosenDraw) {
-        // Other `then` shapes (specific counts, play=true, etc.) are out
-        // Of scope for this handler — fall through to no-op so we don't
-        // Silently mishandle them.
+      const isNumericDraw = typeof thenDir.draw === "number";
+      const isNumericRecycle = typeof thenDir.recycle === "number";
+      const isPlayChosen = thenDir.play === true;
+      const isRevealChosen = thenDir.reveal === true;
+      if (isPickFromRest || isChosenDraw || isNumericDraw || isRevealChosen) {
+        // Pick goes to hand; rest recycled. The numeric-draw form keeps the
+        // Same routing — the UI surface decides how many picks (the
+        // `pendingChoice` schema currently captures 1; multi-pick is a
+        // Future extension but the side-effect of writing pendingChoice is
+        // What the audit verifies).
+        onPicked = "to-hand";
+        onUnpicked = "recycle";
+      } else if (isPlayChosen) {
+        // Vision card pick → play; the unpicked stays on top of deck (the
+        // Rules text reads "you may play it").
+        onPicked = "to-play";
+        onUnpicked = "to-top";
+      } else if (isNumericRecycle) {
+        // "You may recycle it" — pick is what gets recycled; everything
+        // Else stays on top of deck (the Vision reminder text is
+        // `[Vision] (Look at the top card of your Main Deck. You may
+        // Recycle it.)`). The "may" is captured by the pickable nature of
+        // The choice — UI offers 0 or 1 picks.
+        onPicked = "recycle";
+        onUnpicked = "to-top";
+      } else {
+        // Unknown `then` shape — log and skip rather than silently doing
+        // The wrong thing.
         break;
       }
-
-      // Resolve onPicked / onUnpicked from the spec. `then.recycle: "rest"`
-      // Implies pick → hand (Stacked Deck); explicit `then.draw: "chosen"`
-      // Also implies pick → hand. We default unpicked → recycle.
-      const onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle" = "to-hand";
-      const onUnpicked: "recycle" | "to-top" | "trash" =
-        thenDir.recycle === "rest"
-          ? "recycle"
-          : (thenDir.recycle != null
-            ? "recycle"
-            : "recycle");
 
       // Active player is always the picker; for "from deck"/"rune-deck"
       // The deck is the active player's own deck.

@@ -342,6 +342,124 @@ describe("resolvePendingChoice for look-and-pick", () => {
 // 3. End-to-end: look writes pendingChoice, resolve completes the flow
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 3b. Extended `then` shapes — Vision keyword cards and numeric variants
+// ---------------------------------------------------------------------------
+
+describe("look effect — extended `then` shapes", () => {
+  it("writes pendingChoice for `then: { recycle: 1 }` (Vision keyword)", () => {
+    // Jeweled Colossus / Mystic Poro / Sai Scout / Gemcraft Seer /
+    // Karma Channeler / Jhin Meticulous Killer / Divining Shells — the
+    // [Vision] reminder text expands to "look at the top card of your
+    // Main deck; you MAY recycle it". The parser emits this as
+    // `then: { recycle: 1 }` (numeric, NOT the "rest" sentinel).
+    const { ctx, draft } = buildMockCtx({ deckTop: ["vis-top"] });
+    const effect: ExecutableEffect = {
+      amount: 1,
+      from: "deck",
+      then: { recycle: 1 },
+      type: "look",
+    } as unknown as ExecutableEffect;
+
+    executeEffect(effect, ctx);
+
+    expect(draft.pendingChoice).toBeDefined();
+    expect(draft.pendingChoice?.type).toBe("look-and-pick");
+    const pc = draft.pendingChoice as LookAndPickChoice;
+    expect(pc.revealed).toEqual(["vis-top"]);
+    // "You may recycle it" — pick = recycle, unpicked stays on top.
+    expect(pc.onPicked).toBe("recycle");
+    expect(pc.onUnpicked).toBe("to-top");
+  });
+
+  it("writes pendingChoice for `then: { play: true }` (Vision-play variant)", () => {
+    const { ctx, draft } = buildMockCtx({ deckTop: ["play-me"] });
+    const effect: ExecutableEffect = {
+      amount: 1,
+      from: "deck",
+      then: { play: true },
+      type: "look",
+    } as unknown as ExecutableEffect;
+
+    executeEffect(effect, ctx);
+
+    expect(draft.pendingChoice?.type).toBe("look-and-pick");
+    const pc = draft.pendingChoice as LookAndPickChoice;
+    expect(pc.revealed).toEqual(["play-me"]);
+    expect(pc.onPicked).toBe("to-play");
+    expect(pc.onUnpicked).toBe("to-top");
+  });
+
+  it("writes pendingChoice for `then: { reveal: true }` (reveal then pick)", () => {
+    const { ctx, draft } = buildMockCtx({ deckTop: ["a", "b", "c"] });
+    const effect: ExecutableEffect = {
+      amount: 3,
+      from: "deck",
+      then: { reveal: true },
+      type: "look",
+    } as unknown as ExecutableEffect;
+
+    executeEffect(effect, ctx);
+
+    expect(draft.pendingChoice?.type).toBe("look-and-pick");
+    const pc = draft.pendingChoice as LookAndPickChoice;
+    expect(pc.revealed).toEqual(["a", "b", "c"]);
+    // Reveal-then-pick: chosen → hand, rest recycled.
+    expect(pc.onPicked).toBe("to-hand");
+    expect(pc.onUnpicked).toBe("recycle");
+  });
+
+  it("writes pendingChoice for `then: { draw: 1 }` (numeric draw)", () => {
+    const { ctx, draft } = buildMockCtx({ deckTop: ["a", "b", "c", "d"] });
+    const effect: ExecutableEffect = {
+      amount: 4,
+      from: "deck",
+      then: { draw: 1 },
+      type: "look",
+    } as unknown as ExecutableEffect;
+
+    executeEffect(effect, ctx);
+
+    expect(draft.pendingChoice?.type).toBe("look-and-pick");
+    const pc = draft.pendingChoice as LookAndPickChoice;
+    expect(pc.revealed).toEqual(["a", "b", "c", "d"]);
+    expect(pc.onPicked).toBe("to-hand");
+    expect(pc.onUnpicked).toBe("recycle");
+  });
+
+  it("falls through to no-op for an unrecognised `then` shape", () => {
+    const { ctx, draft } = buildMockCtx({ deckTop: ["x"] });
+    const effect: ExecutableEffect = {
+      amount: 1,
+      from: "deck",
+      // No recognised key — handler should bail out without writing
+      // PendingChoice rather than mishandling it.
+      then: { some_future_directive: true } as unknown as { recycle: number },
+      type: "look",
+    } as unknown as ExecutableEffect;
+
+    executeEffect(effect, ctx);
+
+    expect(draft.pendingChoice).toBeUndefined();
+  });
+
+  it("clamps numeric recycle reveal count to deck size", () => {
+    // A Vision card on an empty/short deck just reveals what's there.
+    const { ctx, draft } = buildMockCtx({ deckTop: [] });
+    const effect: ExecutableEffect = {
+      amount: 1,
+      from: "deck",
+      then: { recycle: 1 },
+      type: "look",
+    } as unknown as ExecutableEffect;
+
+    executeEffect(effect, ctx);
+
+    // Deck empty → no pendingChoice (informational no-op).
+    expect(draft.pendingChoice).toBeUndefined();
+  });
+});
+
 describe("look → resolve end-to-end (Stacked Deck pattern)", () => {
   it("look(3) + resolve picks one to hand and recycles the other two", () => {
     const { ctx, draft, movedCalls } = buildMockCtx({

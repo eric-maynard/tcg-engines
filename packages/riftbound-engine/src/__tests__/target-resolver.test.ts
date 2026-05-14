@@ -190,6 +190,121 @@ describe("Target Resolver", () => {
     expect(result).toHaveLength(0);
   });
 
+  // -----------------------------------------------------------------------
+  // BattlefieldLocation object form — `location: { battlefield: "..." }`
+  // -----------------------------------------------------------------------
+  //
+  // The parser emits `target.location` as the typed `BattlefieldLocation`
+  // Object `{ battlefield: "controlled" | "enemy" | "open" | "contested"
+  // | "any" }` for wording like "at my battlefield" / "at an enemy
+  // Battlefield" (Kog'Maw, Caustic — "Deal 4 to all units at my
+  // Battlefield"). Until 2026-05, the resolver only handled the string
+  // Form, so `location?.startsWith(...)` threw `is not a function` on the
+  // Object form. These tests pin the new behaviour.
+  test("location: { battlefield: 'any' } matches any battlefield zone", () => {
+    const registry = new CardDefinitionRegistry();
+    registry.register("u-bf", { cardType: "unit", id: "u-bf", might: 3, name: "Bf Unit" });
+    registry.register("u-base", { cardType: "unit", id: "u-base", might: 3, name: "Base Unit" });
+    setGlobalCardRegistry(registry);
+
+    const ctx = mockCtx(
+      {
+        "u-base": { owner: "p2", zone: "base" },
+        "u-bf": { owner: "p2", zone: "battlefield-bf-1" },
+      },
+      "p1",
+      "source",
+    );
+
+    const result = resolveTarget(
+      // Biome-ignore lint/suspicious/noExplicitAny: cross-package shape
+      { location: { battlefield: "any" } as any, type: "unit" },
+      ctx,
+    );
+    expect(result).toContain("u-bf");
+    expect(result).not.toContain("u-base");
+
+    clearGlobalCardRegistry();
+  });
+
+  test("location: { battlefield: 'controlled' } restricts to source's battlefield", () => {
+    // Kog'Maw, Caustic — "deal 4 to all units at my battlefield". The
+    // Source is on `battlefield-bf-1`; units on other battlefields must
+    // NOT be picked up.
+    const registry = new CardDefinitionRegistry();
+    registry.register("u-here", { cardType: "unit", id: "u-here", might: 3, name: "Here" });
+    registry.register("u-other-bf", {
+      cardType: "unit",
+      id: "u-other-bf",
+      might: 3,
+      name: "Other Bf",
+    });
+    registry.register("source", { cardType: "unit", id: "source", might: 1, name: "Src" });
+    setGlobalCardRegistry(registry);
+
+    const ctx: TargetResolverContext = {
+      ...mockCtx(
+        {
+          source: { owner: "p1", zone: "battlefield-bf-1" },
+          "u-here": { owner: "p2", zone: "battlefield-bf-1" },
+          "u-other-bf": { owner: "p2", zone: "battlefield-bf-2" },
+        },
+        "p1",
+        "source",
+      ),
+      sourceZone: "battlefield-bf-1",
+    };
+
+    const result = resolveTarget(
+      // Biome-ignore lint/suspicious/noExplicitAny: cross-package shape
+      { location: { battlefield: "controlled" } as any, quantity: "all", type: "unit" },
+      ctx,
+    );
+    expect(result).toContain("u-here");
+    expect(result).not.toContain("u-other-bf");
+
+    clearGlobalCardRegistry();
+  });
+
+  test("location: 'battlefield' string still works (back-compat)", () => {
+    const registry = new CardDefinitionRegistry();
+    registry.register("u-bf", { cardType: "unit", id: "u-bf", might: 3, name: "Bf" });
+    registry.register("u-base", { cardType: "unit", id: "u-base", might: 3, name: "Base" });
+    setGlobalCardRegistry(registry);
+
+    const ctx = mockCtx(
+      {
+        "u-base": { owner: "p2", zone: "base" },
+        "u-bf": { owner: "p2", zone: "battlefield-bf-1" },
+      },
+      "p1",
+      "source",
+    );
+
+    const result = resolveTarget({ location: "battlefield", type: "unit" }, ctx);
+    expect(result).toContain("u-bf");
+    expect(result).not.toContain("u-base");
+
+    clearGlobalCardRegistry();
+  });
+
+  test("location: { battlefield: ... } doesn't throw — regression for Kog'Maw", () => {
+    // Bare smoke test: regardless of qualifier, the object form must not
+    // Throw. (Pre-fix: `target.location?.startsWith(...)` threw because
+    // `{ battlefield: "controlled" }` has no `startsWith` method.)
+    const registry = new CardDefinitionRegistry();
+    setGlobalCardRegistry(registry);
+    const ctx = mockCtx({}, "p1", "source");
+    expect(() =>
+      resolveTarget(
+        // Biome-ignore lint/suspicious/noExplicitAny: cross-package shape
+        { location: { battlefield: "controlled" } as any, type: "unit" },
+        ctx,
+      ),
+    ).not.toThrow();
+    clearGlobalCardRegistry();
+  });
+
   test("gear target type", () => {
     const registry = new CardDefinitionRegistry();
     registry.register("g1", { cardType: "gear", id: "g1", name: "Gear" });
