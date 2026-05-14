@@ -337,7 +337,7 @@ function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; 
         if (prev) {
           const arr = zoneCards.get(prev) ?? [];
           const idx = arr.indexOf(mc as string);
-          if (idx >= 0) {arr.splice(idx, 1);}
+          if (idx !== -1) {arr.splice(idx, 1);}
           zoneCards.set(prev, arr);
         }
         zoneOf.set(mc as string, targetZoneId as string);
@@ -697,19 +697,15 @@ for (const card of allCards) {
       continue;
     }
 
-    // Decide source zone. Most triggered/play-time/attack-time abilities on
-    // Units resolve while the unit is at a battlefield (or moving through
-    // One), so we place units there so that "here" / "battlefield" target
-    // Filters can find both the source and the dummy enemy on the same
-    // Battlefield. Spells cast from hand.
-    const sourceZone =
-      card.cardType === "unit" || card.cardType === "champion" || card.cardType === "legend"
-        ? "battlefield-bf-1"
-        : card.cardType === "gear" || card.cardType === "equipment"
-          ? "battlefield-bf-1"
-          : card.cardType === "battlefield"
-            ? "battlefield-bf-1"
-            : "hand";
+    // Decide source zone. For most cards (units / gear / battlefields / and
+    // Spells too) the resolution context is "at a battlefield" — spells get
+    // A target picked at a battlefield, and `location: "here"` in target
+    // Descriptors means the resolution-time battlefield. We use a single
+    // Battlefield zone for every source so target filters that key off
+    // "here" / "battlefield" resolve consistently. Real engine source-zone
+    // Semantics for hand-resident spells are slightly different, but most
+    // Card text either doesn't care or means the battlefield context.
+    const sourceZone = "battlefield-bf-1";
 
     // Static abilities flow through static-abilities.ts (recalculated at
     // Board scans), NOT through executeEffect. Running executeEffect on a
