@@ -1036,9 +1036,36 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
       data-rewinding={rewindPulse ? "true" : "false"}
     >
       <header className="turn-header">
-        <div className="phase-strip" data-testid="phase-strip">
+        {/* Defect 4 (D-no-turn-indicator): top-of-page badge announcing whose
+         * turn it is. Read aloud by screen readers via aria-live so the cue
+         * isn't purely visual. Renders next to the phase strip so the active
+         * phase pill + this badge form one coherent "what's happening"
+         * cluster. */}
+        <div
+          className={`turn-indicator ${isOurTurn ? "turn-indicator-yours" : "turn-indicator-theirs"}`}
+          data-testid="turn-indicator"
+          data-your-turn={isOurTurn ? "true" : "false"}
+          role="status"
+          aria-live="polite"
+        >
+          {isOurTurn ? "Your turn" : "Opponent's turn"}
+        </div>
+        <div
+          className="phase-strip"
+          data-testid="phase-strip"
+          data-your-turn={view.turn.activePlayer === localPlayerId ? "true" : "false"}
+        >
+          {/* Defect 4 (D-no-turn-indicator): the inactive player saw the same
+           * phase-strip chrome as the active player — no visible cue for
+           * "your turn" vs "waiting". We surface a data-your-turn flag on the
+           * strip so CSS can paint an amber underline / glow on the active
+           * phase pill when it's our seat's turn, and a calmer state
+           * otherwise. The previous .phase-active class kept its existing
+           * pulse animation — we layer the new active-yours look on top via
+           * a sibling class so existing tests / styles keep working. */}
           {view.phaseStrip.map((p, idx) => {
             const isActive = p.id === view.turn.phase;
+            const isYourTurn = view.turn.activePlayer === localPlayerId;
             // Iter-8 stretch (Path B): each phase carries a small icon glyph
             // Looked up from a tiny data-driven map. Falls back to the phase
             // Number for unknown ids (defensive — keeps unit-test phaseStrips
@@ -1048,9 +1075,15 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
             return (
               <span
                 key={p.id}
-                className={`phase ${isActive ? "phase-active" : ""}`}
+                className={[
+                  "phase",
+                  isActive ? "phase-active" : "",
+                  isActive && isYourTurn ? "phase-active-yours" : "",
+                  isActive && !isYourTurn ? "phase-active-theirs" : "",
+                ].filter(Boolean).join(" ")}
                 data-testid={`phase-${p.id}`}
                 data-active={isActive ? "true" : "false"}
+                data-active-seat={isActive ? (isYourTurn ? "you" : "opponent") : ""}
                 data-phase-tip={tip}
                 title={tip}
                 aria-label={p.label}

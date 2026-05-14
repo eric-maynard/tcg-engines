@@ -2295,7 +2295,14 @@ function buildCombatView(
   const stack = interaction.showdownStack ?? [];
   if (stack.length === 0) {return undefined;}
   const top = stack[stack.length - 1];
-  if (!top || !top.active) {return undefined;}
+  // QA v2 Defect 2 (D-showdown-no-ui): previously we returned undefined as
+  // Soon as `top.active === false`, but the engine flips that flag during
+  // The focus-pass loop (rules 545-553) — both players pass focus, then the
+  // Stack frame becomes inactive while the strike effects still run. Keep
+  // The CombatView populated as long as there's a top frame with a
+  // Battlefield id so the SPA renders the attackers/defenders panel for
+  // The duration of the showdown, not just the assign-roles window.
+  if (!top || !top.battlefieldId) {return undefined;}
 
   const bfZoneId = `battlefield-${top.battlefieldId}`;
   const cardIds = internal.zones?.[bfZoneId]?.cardIds ?? [];

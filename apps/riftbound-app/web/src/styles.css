@@ -6300,3 +6300,134 @@ button {
   0%, 100% { box-shadow: 0 0 12px rgba(220, 160, 60, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
   50%      { box-shadow: 0 0 22px rgba(220, 160, 60, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
 }
+
+/* ============================================================
+ * QA Reviewer v2 — Defect 1 (B-size-drift): lock layout
+ * dimensions so the right rail / battlefield row / move-log /
+ * controls don't reflow turn-to-turn.
+ *
+ * Root cause: `.board-side` had min-height:600px + max-height:100vh
+ * + overflow-y:auto, but no fixed height, so when the move log
+ * grew (turn 1: 271px → turn 9: 471px) the rail height drifted
+ * from 600 → 800. Same pattern for the other selectors.
+ *
+ * Fix: pin each container's height (or min-height + max-height
+ * to the same value) so the children get an overflow-y:auto
+ * Scroll instead of pushing the parent.
+ * ============================================================ */
+.board-side {
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
+  overflow-y: auto !important;
+}
+
+/* Move log fills the rail's leftover space — but lock its
+ * baseline so the rail's children sum to a stable total. The
+ * outer scroll on .board-side handles content overflow. */
+.move-log-fill {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+
+/* Controls overlay (End Turn / Step Bot / Undo / Refresh /
+ * waiting banner) — its height was driven by the conditional
+ * waiting-banner + undo button (drifted 130 → 217 across turns).
+ * Pin a fixed height matching the max so child render conditions
+ * don't reflow the parent. The controls is absolute-positioned so
+ * the fixed height doesn't push the .board down. */
+.controls {
+  min-height: 220px !important;
+  max-height: 220px !important;
+  height: 220px !important;
+  overflow: hidden !important;
+}
+
+/* Battlefield row drifted 45px (140 → 185) when an extra row of
+ * mini chips wrapped inside its BF tiles. Pin a fixed height so
+ * the row stays stable and the chip rail scrolls instead. The
+ * 185px figure is the max observed across the QA run. */
+.battlefield-row {
+  min-height: 185px !important;
+  max-height: 185px !important;
+  height: 185px !important;
+  overflow: hidden !important;
+}
+
+/* ============================================================
+ * QA Reviewer v2 — Defect 4 (D-no-turn-indicator)
+ *
+ * Both players saw identical chrome with no "your turn" cue.
+ * We add:
+ *   1. .turn-indicator — a top-of-page badge with two states
+ *      (yours = amber/gold, theirs = calm grey-blue).
+ *   2. .phase-active-yours — layers an amber underline + glow on
+ *      the active phase pill when it's the local seat's turn.
+ *   3. .phase-active-theirs — calmer outline so the inactive
+ *      player still sees the phase, just without the active-seat
+ *      "spotlight".
+ * ============================================================ */
+.turn-indicator {
+  align-self: flex-start;
+  border-radius: 6px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 4px 8px 0;
+  padding: 4px 10px;
+  text-transform: uppercase;
+}
+
+.turn-indicator-yours {
+  background: rgba(220, 180, 80, 0.18);
+  border: 1px solid rgba(220, 180, 80, 0.6);
+  color: #ffd66a;
+  box-shadow: 0 0 12px rgba(220, 180, 80, 0.25);
+  animation: turn-indicator-pulse 2s ease-in-out infinite;
+}
+
+.turn-indicator-theirs {
+  background: rgba(80, 100, 140, 0.18);
+  border: 1px solid rgba(120, 140, 180, 0.4);
+  color: #a0b0c8;
+}
+
+@keyframes turn-indicator-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(220, 180, 80, 0.22); }
+  50%      { box-shadow: 0 0 18px rgba(220, 180, 80, 0.55); }
+}
+
+/* Active-phase pill: amber when it's our turn, grey-blue when
+ * the opponent is acting. Both layer on top of the existing
+ * .phase-active animation; they only change colour + add a
+ * bottom border so existing growth/pulse animations still run. */
+.phase-active-yours {
+  background: rgba(220, 180, 80, 0.18) !important;
+  border-bottom: 2px solid #dcb450 !important;
+}
+
+.phase-active-theirs {
+  background: rgba(80, 100, 140, 0.15) !important;
+  border-bottom: 2px solid rgba(120, 140, 180, 0.7) !important;
+}
+
+/* ============================================================
+ * QA Reviewer v2 — Defect 5 (D-phase-strip-skips)
+ *
+ * Awaken/Beginning/Ending/Cleanup pills were never visibly
+ * highlighted — the engine's auto-advance ran through them
+ * before the SPA repainted. We add a brief flash animation on
+ * every active-pill transition so even a sub-frame highlight
+ * leaves a visible trail. Pure CSS — no engine change needed.
+ * ============================================================ */
+.phase-active {
+  animation: phase-active-flash 0.6s ease-out, phase-breathe 2.5s ease-in-out infinite 0.6s;
+}
+
+@keyframes phase-active-flash {
+  0%   { transform: scale(1.0); filter: brightness(1.6); }
+  40%  { transform: scale(1.08); filter: brightness(1.3); }
+  100% { transform: scale(1.0); filter: brightness(1.0); }
+}

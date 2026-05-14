@@ -2321,6 +2321,25 @@ const server = Bun.serve({
         if (!step) {break;}
         movesApplied++;
         lastMoveId = step.moveId;
+        // QA v2 Defect 2/3/5 (D-showdown-no-ui / D-priority-prompt-missing /
+        // D-phase-strip-skips): broadcast state AFTER each individual bot
+        // Move so SSE subscribers see intermediate states (showdown focus
+        // Passes, chain pushes, phase transitions). Without this, a single
+        // /step call that runs 4+ moves to drive through a showdown emits
+        // Only one state event at the end — by which time combat has
+        // Resolved and the CombatPanel never gets to render.
+        //
+        // We DON'T broadcast on the final iteration since the caller will
+        // Broadcast once below anyway (avoiding duplicate work). The cost
+        // Of intermediate broadcasts is minimal — each SSE subscriber just
+        // Receives an extra `state` event and calls applyState (idempotent).
+        try {
+          const interim = buildSpaState(sessionId, session);
+          broadcastV2State(sessionId, interim);
+        } catch {
+          // Broadcast failures are non-fatal — the final state broadcast
+          // After the loop will reconcile any missed subscribers.
+        }
         // Successful endTurn = one full bot turn fired. Stop so the SPA
         // Gets a chance to re-render before we start the opponent's turn.
         if (step.moveId === "endTurn" && step.success) {break;}
