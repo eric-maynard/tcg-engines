@@ -192,6 +192,74 @@ function renderUnit(u: CombatUnit, localPlayerId?: string) {
   );
 }
 
+/**
+ * Defect-3 fix: PriorityPrompt — a prominent banner inside CombatPanel that
+ * surfaces "who has Focus right now" in the showdown's chain-priority loop
+ * (Riftbound rules 545-553, "Focus passes when Chain resolves; player with
+ * Focus may play Action/Reaction spell, activate ability, invite, or pass").
+ *
+ * Two visual states (pure data-driven from `focusOwner === localPlayerId`):
+ *   - "ours": pulsing gold banner — "You have priority — play a reaction
+ *     or pass". Shows a "Pass Priority" button gated on `canPassFocus`.
+ *   - "theirs": calm blue banner — "Waiting for opponent to act or pass..."
+ *     No action button (engine drives the opposing seat).
+ *
+ * Renders nothing when `localPlayerId` is not provided (lobby / spectator).
+ */
+function PriorityPrompt({
+  focusOwner,
+  localPlayerId,
+  canPassFocus,
+  onPassFocus,
+  disabled,
+}: {
+  readonly focusOwner: string;
+  readonly localPlayerId: string | undefined;
+  readonly canPassFocus: boolean;
+  readonly onPassFocus?: () => void;
+  readonly disabled?: boolean;
+}) {
+  if (!localPlayerId) {return null;}
+  const oursFocus = focusOwner === localPlayerId;
+  return (
+    <div
+      className="priority-prompt"
+      data-testid="priority-prompt"
+      data-focus={oursFocus ? "ours" : "theirs"}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="priority-prompt-title" data-testid="priority-prompt-title">
+        {oursFocus
+          ? "You have priority — play a reaction or pass"
+          : "Waiting for opponent to act or pass…"}
+      </div>
+      <div className="priority-prompt-hint">
+        {oursFocus
+          ? "Focus is yours: play an Action/Reaction spell, activate an ability, or pass."
+          : "Opponent holds Focus on the chain."}
+      </div>
+      {oursFocus && onPassFocus ? (
+        <div className="priority-prompt-actions">
+          <button
+            type="button"
+            data-testid="priority-prompt-pass"
+            disabled={disabled || !canPassFocus}
+            title={
+              !canPassFocus
+                ? "Pass Priority not legal right now"
+                : "Pass priority to opponent"
+            }
+            onClick={() => onPassFocus()}
+          >
+            Pass Priority
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function CombatPanel({
   combat,
   battlefieldName,
@@ -294,6 +362,20 @@ export function CombatPanel({
           ) : null}
         </dl>
       </header>
+      {/* Defect-3 fix: priority/focus popup banner. During a showdown the
+          Rules grant Focus to one player at a time (rules 545-553); the
+          Focused player may play a Reaction or Pass. The SPA was hiding
+          this — the only signal was a tiny "Focus: You/Opponent" row in
+          the meta. Surface a prominent prompt so the human knows when
+          it's their turn to act vs wait. Pure data-driven from
+          `combat.focusOwner === localPlayerId`. */}
+      <PriorityPrompt
+        focusOwner={combat.focusOwner}
+        localPlayerId={localPlayerId}
+        canPassFocus={canPassFocus}
+        onPassFocus={onPassFocus}
+        disabled={disabled}
+      />
       <div className="combat-panel-body">
         <div
           className="combat-panel-side combat-panel-attackers"

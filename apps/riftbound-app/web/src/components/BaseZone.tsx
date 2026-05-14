@@ -54,10 +54,11 @@ export function BaseZone({ playerId, units, label }: BaseZoneProps) {
             return (
               <li
                 key={u.id}
-                className={`base-zone-unit${u.imageUrl ? " base-zone-unit-art" : ""}`}
+                className={`base-zone-unit${u.imageUrl ? " base-zone-unit-art" : ""}${u.exhausted ? " base-zone-unit-exhausted" : ""}`}
                 data-testid={`base-zone-unit-${u.id}`}
                 data-card-id={u.id}
                 data-has-image={u.imageUrl ? "true" : "false"}
+                data-exhausted={u.exhausted ? "true" : "false"}
               >
                 {u.imageUrl ? (
                   <img

@@ -49,6 +49,19 @@ const CHECKLIST: readonly string[] = [
   "8. Is text legible (no white-on-white, no clipping, no ellipsis on critical labels)?",
   "9. Are combat-role badges (ATTACKING / DEFENDING) visible when in showdown?",
   "10. Does the overall layout match the intended game-table aesthetic (no giant voids)?",
+  // R9 — defect-1 cross-frame check (TCG convention: exhausted units rotate 90°).
+  "R9. Are exhausted units rendered ROTATED 90° clockwise (TCG 'tapped' convention)?",
+  "    Cross-frame: pick a unit visible across turns N and N+1. If meta says",
+  "    exhausted=true at N+1, the chip must be sideways at N+1 but upright at N.",
+  // R10 — defect-3: focus / priority popup during showdowns.
+  "R10. During an active showdown chain, is the focus/priority prompt visible",
+  "     (banner reads 'You have priority — play a reaction or pass' OR",
+  "      'Waiting for opponent to act or pass…')?",
+  // U9 — defect-2: cross-frame element-geometry stability.
+  "U9. No element resize between frames — compare bounding rects of .hand,",
+  "    .move-log, .sidebar, .bf-row across consecutive frames. Use",
+  "    page.evaluate(() => document.querySelector(SEL).getBoundingClientRect())",
+  "    and assert deltas < 5px on each axis for stable elements.",
 ];
 
 function inspect(p: string): ImageInfo {

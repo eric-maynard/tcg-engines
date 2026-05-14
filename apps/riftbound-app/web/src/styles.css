@@ -6167,3 +6167,136 @@ button {
   position: fixed !important;
   inset: 0 !important;
 }
+
+/* ============================================================
+ * Defect-1 fix: exhausted ("tapped") units rotate 90° clockwise.
+ * TCG visual convention — see riftbound-rules combat/showdown.
+ * Applied on battlefield mini chips, base zone units, and hand
+ * chips when the engine marks `cardMetas[id].exhausted = true`.
+ * ============================================================ */
+.bf-mini-chip.bf-mini-chip-exhausted,
+.hand-chip.hand-chip-exhausted {
+  transform: rotate(90deg);
+  transform-origin: center;
+  /* Compensate for rotation overlap so neighbours don't collide. */
+  margin: 12px 4px;
+  transition: transform 0.25s ease;
+}
+
+.base-zone-unit.base-zone-unit-exhausted {
+  transform: rotate(90deg);
+  transform-origin: center;
+  margin: 8px 4px;
+  transition: transform 0.25s ease;
+}
+
+/* When an exhausted chip is also being hovered, KEEP the rotation
+ * so the visual cue isn't lost mid-hover. The default
+ * `.bf-mini-chip:hover { transform: translateY(-2px); }` would
+ * overwrite our rotate(), so we re-apply rotate + lift here. */
+.bf-mini-chip.bf-mini-chip-exhausted:hover {
+  transform: rotate(90deg) translateY(-2px);
+}
+
+/* ============================================================
+ * Defect-2 fix: lock geometry on the major panels so cards
+ * moving between zones don't reflow the rest of the page.
+ * Each container gets a sticky min-size; the move log gets a
+ * fixed scroll viewport. Cross-frame bounding rects should now
+ * be ±5px stable while units shuffle around.
+ * ============================================================ */
+.hand,
+.seat-self .hand {
+  min-height: 160px;
+  min-width: 600px;
+}
+
+.base-zone {
+  min-height: 80px;
+}
+
+.move-log {
+  min-height: 200px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* ============================================================
+ * Defect-3 fix: priority / focus popup during showdowns.
+ * Renders inside CombatPanel above the attacker/defender lists
+ * so the player can see at-a-glance whether they currently hold
+ * focus / priority and can play a reaction (or pass).
+ * ============================================================ */
+.priority-prompt {
+  background: linear-gradient(180deg, rgba(60, 30, 30, 0.85) 0%, rgba(40, 15, 15, 0.95) 100%);
+  border: 2px solid rgba(220, 160, 60, 0.7);
+  border-radius: 8px;
+  box-shadow:
+    0 0 12px rgba(220, 160, 60, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: #ffe6a8;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 12px 14px;
+  text-align: center;
+  animation: priority-pulse 1.6s ease-in-out infinite;
+}
+
+.priority-prompt[data-focus="theirs"] {
+  background: linear-gradient(180deg, rgba(30, 35, 60, 0.85) 0%, rgba(15, 20, 40, 0.95) 100%);
+  border-color: rgba(100, 140, 220, 0.55);
+  box-shadow:
+    0 0 12px rgba(100, 140, 220, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #bcd1f0;
+  animation: none;
+}
+
+.priority-prompt-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.priority-prompt-hint {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.priority-prompt-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.priority-prompt-actions button {
+  background: rgba(220, 160, 60, 0.85);
+  border: 1px solid rgba(255, 200, 90, 0.9);
+  border-radius: 4px;
+  color: #1a1208;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 6px 14px;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.priority-prompt-actions button:hover:not(:disabled) {
+  background: rgba(240, 190, 90, 1);
+  transform: translateY(-1px);
+}
+
+.priority-prompt-actions button:disabled {
+  background: rgba(120, 100, 60, 0.5);
+  border-color: rgba(160, 140, 90, 0.5);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@keyframes priority-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(220, 160, 60, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+  50%      { box-shadow: 0 0 22px rgba(220, 160, 60, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+}

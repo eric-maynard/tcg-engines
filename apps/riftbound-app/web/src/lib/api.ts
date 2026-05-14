@@ -67,6 +67,13 @@ export interface BattlefieldUnit extends CardDefinitionFields {
    * Registered definition so neither field is set.
    */
   readonly baseMight?: number;
+  /**
+   * Defect-1 fix: TCG visual convention — exhausted ("tapped") units render
+   * rotated 90° clockwise. Sourced from
+   * `engine.internalState.cardMetas[id].exhausted`. Optional; defaults to
+   * `false` when missing (synthetic decks / pre-exhaustion-aware fixtures).
+   */
+  readonly exhausted?: boolean;
 }
 
 export interface GameViewBattlefield {

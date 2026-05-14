@@ -368,6 +368,15 @@ export interface BattlefieldUnitView extends CardDefinitionView {
    * Decks), in which case the badge is suppressed.
    */
   readonly baseMight?: number;
+  /**
+   * Defect-1 fix: TCG visual convention — an exhausted ("tapped") unit is
+   * rotated 90° in the SPA. The engine already tracks this on
+   * `internalState.cardMetas[unitId].exhausted`; we surface it on the view so
+   * `BattlefieldList` / `BaseZone` can apply `.bf-mini-chip-exhausted`
+   * without having to reach into engine internals.
+   * Defaults to `false` when the meta is missing.
+   */
+  readonly exhausted?: boolean;
 }
 
 /**
@@ -2008,11 +2017,24 @@ function buildView(engine: RiftboundEngine): GameView {
     if (!bucket) {continue;}
     const definitionId = card.definitionId ?? cardId;
     const def = getCardDefinition(cardId, definitionId);
+    // Defect-1 fix: propagate per-unit exhausted from cardMetas so the
+    // SPA can render exhausted units rotated 90° (TCG visual convention).
+    // The authoritative live exhausted state lives on the counter system's
+    // `__flags.exhausted` (see server.ts line 984+: setFlag writes there);
+    // `meta.exhausted` is the initial-seed value and may be stale. Read
+    // Both and OR them so the view reflects the live state.
+    const meta = internal.cardMetas?.[cardId] as
+      | { exhausted?: boolean; __flags?: Record<string, boolean> }
+      | undefined;
+    const isExhausted = Boolean(
+      meta?.__flags?.exhausted ?? meta?.exhausted,
+    );
     bucket.push({
       controller: card.controller ?? card.owner,
       definitionId,
       id: cardId,
       ...def,
+      ...(isExhausted ? { exhausted: true } : {}),
     });
   }
 
@@ -2130,6 +2152,8 @@ function buildView(engine: RiftboundEngine): GameView {
             combatMightModifier?: number;
             staticMightBonus?: number;
             equippedWith?: readonly string[];
+            exhausted?: boolean;
+            __flags?: Record<string, boolean>;
           }
         | undefined;
       const mightInfo = computeEffectiveMightAppLayer(cid, meta);
@@ -2143,12 +2167,20 @@ function buildView(engine: RiftboundEngine): GameView {
               might: mightInfo.effectiveMight ?? mightInfo.baseMight,
             }
           : {};
+      // Defect-1 fix: read live exhausted from `__flags.exhausted` (where
+      // The counter system writes via setFlag — see server.ts line 984+),
+      // Falling back to the seed `meta.exhausted` so older fixtures still
+      // Work. SPA rotates the chip 90° when this is true.
+      const isExhausted = Boolean(
+        meta?.__flags?.exhausted ?? meta?.exhausted,
+      );
       return {
         controller: card?.controller ?? "",
         definitionId,
         id: cid,
         ...def,
         ...mightFields,
+        ...(isExhausted ? { exhausted: true } : {}),
       };
     });
     // The battlefield IS itself a card — bfId is the CardId (see

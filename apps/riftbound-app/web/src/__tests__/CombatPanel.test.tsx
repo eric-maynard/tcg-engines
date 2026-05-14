@@ -154,6 +154,95 @@ describe("CombatPanel", () => {
     expect(onResolveCombat).toHaveBeenCalledWith("bf-7");
   });
 
+  // Defect-3 fix: priority/focus popup banner.
+  it("priority prompt shows 'You have priority' when local seat has focus", () => {
+    const combat: CombatView = {
+      attackers: [],
+      battlefieldId: "bf-1",
+      defenders: [],
+      focusOwner: "player-1",
+      isCombat: true,
+      phase: "main",
+    };
+    render(
+      <CombatPanel
+        combat={combat}
+        localPlayerId="player-1"
+        actionsLegal={ALL_LEGAL}
+        onPassFocus={() => {}}
+      />,
+    );
+    const prompt = screen.getByTestId("priority-prompt");
+    expect(prompt).toBeInTheDocument();
+    expect(prompt.getAttribute("data-focus")).toBe("ours");
+    expect(screen.getByTestId("priority-prompt-title").textContent).toContain(
+      "You have priority",
+    );
+    // Pass Priority button is enabled and live.
+    expect(screen.getByTestId("priority-prompt-pass")).not.toBeDisabled();
+  });
+
+  it("priority prompt shows 'Waiting for opponent' when opponent has focus", () => {
+    const combat: CombatView = {
+      attackers: [],
+      battlefieldId: "bf-1",
+      defenders: [],
+      focusOwner: "player-2",
+      isCombat: true,
+      phase: "main",
+    };
+    render(
+      <CombatPanel
+        combat={combat}
+        localPlayerId="player-1"
+        actionsLegal={ALL_LEGAL}
+        onPassFocus={() => {}}
+      />,
+    );
+    const prompt = screen.getByTestId("priority-prompt");
+    expect(prompt.getAttribute("data-focus")).toBe("theirs");
+    expect(screen.getByTestId("priority-prompt-title").textContent).toContain(
+      "Waiting for opponent",
+    );
+    // No Pass Priority button when opponent holds focus.
+    expect(screen.queryByTestId("priority-prompt-pass")).toBeNull();
+  });
+
+  it("priority prompt is omitted when no localPlayerId is provided", () => {
+    const combat: CombatView = {
+      attackers: [],
+      battlefieldId: "bf-1",
+      defenders: [],
+      focusOwner: "player-1",
+      isCombat: true,
+      phase: "main",
+    };
+    render(<CombatPanel combat={combat} />);
+    expect(screen.queryByTestId("priority-prompt")).toBeNull();
+  });
+
+  it("priority prompt Pass button fires onPassFocus when local seat has focus", () => {
+    const combat: CombatView = {
+      attackers: [],
+      battlefieldId: "bf-1",
+      defenders: [],
+      focusOwner: "player-1",
+      isCombat: true,
+      phase: "main",
+    };
+    const onPassFocus = vi.fn();
+    render(
+      <CombatPanel
+        combat={combat}
+        localPlayerId="player-1"
+        actionsLegal={ALL_LEGAL}
+        onPassFocus={onPassFocus}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("priority-prompt-pass"));
+    expect(onPassFocus).toHaveBeenCalledTimes(1);
+  });
+
   it("renders empty placeholders when one side has no units", () => {
     const combat: CombatView = {
       attackers: [

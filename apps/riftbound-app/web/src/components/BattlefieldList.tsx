@@ -139,7 +139,7 @@ function UnitSlot({
             return (
             <li
               key={u.id}
-              className={`bf-unit bf-mini-chip${u.imageUrl ? " bf-mini-chip-art bf-unit-art" : ""}${role !== "none" ? ` bf-mini-chip-role-${role}` : ""}${isFlashing ? " bf-unit-role-flash" : ""}${isActionable ? ` bf-mini-chip-actionable bf-mini-chip-actionable-${actionableRolePhase}` : ""}`}
+              className={`bf-unit bf-mini-chip${u.imageUrl ? " bf-mini-chip-art bf-unit-art" : ""}${role !== "none" ? ` bf-mini-chip-role-${role}` : ""}${isFlashing ? " bf-unit-role-flash" : ""}${isActionable ? ` bf-mini-chip-actionable bf-mini-chip-actionable-${actionableRolePhase}` : ""}${u.exhausted ? " bf-mini-chip-exhausted" : ""}`}
               data-testid={`bf-unit-${u.id}`}
               data-mini-chip-id={u.id}
               data-card-id={u.id}
@@ -150,6 +150,7 @@ function UnitSlot({
               data-role={role !== "none" ? role : undefined}
               data-role-flash={isFlashing ? "true" : "false"}
               data-actionable={isActionable ? "true" : "false"}
+              data-exhausted={u.exhausted ? "true" : "false"}
               style={{
                 // Each chip after the first is pulled up by 18px so they
                 // Overlap vertically — pure inline style so per-card
