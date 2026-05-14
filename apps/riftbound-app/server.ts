@@ -4377,6 +4377,13 @@ const server = Bun.serve({
       logger: NODE_ENV === "test"
         ? () => {}
         : undefined,
+      // Allow operator override of per-IP rate limits (default 100 anon/min,
+      // 1000 auth/min). Useful for headless screencast runners that bunch
+      // Requests, or for soak tests.
+      rateLimit: {
+        anonPerMinute: Number(process.env.RB_RATE_ANON ?? 100),
+        authPerMinute: Number(process.env.RB_RATE_AUTH ?? 1000),
+      },
     },
   ),
 
