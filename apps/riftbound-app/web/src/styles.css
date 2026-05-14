@@ -6001,3 +6001,156 @@ button {
 .bf::after {
   z-index: 1 !important;
 }
+
+/* ============================================================
+ * iter-W (QA-iter1 fixes 2026-05-14):
+ *
+ * After iter-V, BF unit chips render in 76px-wide side rails but
+ * are small (52x72) and visually overlap the centered title pill
+ * once 2+ chips stack — see QA defects D1 (chips too subtle, look
+ * "empty") and D2 (chip overlaps title on Aspirant's Climb at turn 11).
+ *
+ * Fix: lift the title pill to the top-center of the tile (absolute
+ * positioning), bump its contrast (background + text-shadow per D3),
+ * and resize the chips so they read more clearly. The chips stay in
+ * the same column-stack rails introduced by iter-V; we just give them
+ * more headroom by pinning the title above them. This also covers
+ * D4 (GameOver backdrop dim) and the VP row introduced for D5 on
+ * the TurnBanner.
+ * ============================================================ */
+
+/* D2 + D3: title pill — pin to top-center, opaque dark pill with
+ * text-shadow, sits above chips on z-axis. */
+.bf .bf-tile-center .bf-header {
+  position: absolute !important;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6 !important;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 24px);
+  pointer-events: auto;
+}
+
+.bf .bf-title,
+.bf .bf-name-pill {
+  background: rgba(10, 18, 36, 0.88) !important;
+  color: #e8ecf2 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 2px 6px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+/* The rules-text panel (when expanded) needs its own positioning so
+ * it doesn't collide with the absolutely-positioned header. */
+.bf .bf-tile-center {
+  position: static !important;
+}
+.bf .bf-tile-center > .bf-rules-text {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  max-width: 80%;
+}
+
+/* D1: chips — larger + brighter so they read at a glance even at
+ * compact viewport sizes. Bumping from 52x72 → 60x80 with a stronger
+ * border and a gentle glow. Side rails reserve enough width
+ * automatically (we widen them below). */
+.bf {
+  grid-template-columns: 92px 1fr 92px !important;
+}
+.bf .bf-mini-chip {
+  width: 80px !important;
+  height: 96px !important;
+  border-radius: 6px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 4px 10px rgba(0, 0, 0, 0.75),
+    0 0 0 1.5px rgba(180, 210, 240, 0.65) !important;
+}
+
+/* When stacked vertically (iter-V column), pull subsequent chips up
+ * more aggressively so the rail can show ~2 chips at a glance even
+ * with the larger tile. Combined with chip height 80, this is a 44px
+ * stride per chip. */
+.bf .bf-mini-stack > li + li {
+  margin-top: -36px !important;
+}
+
+/* Top-pad the side rails so the title pill at the top of the tile
+ * never overlaps the topmost chip. 28px = title height (20) + 8 gap. */
+.bf .bf-side {
+  padding-top: 28px !important;
+  z-index: 2;
+}
+
+/* The contains-multiple-children bf-tile-center sub-elements need to
+ * Stay centered below the absolute-positioned title. */
+.bf .bf-tile-center {
+  justify-content: flex-end !important;
+  padding-top: 30px;
+}
+
+/* D4: GameOver backdrop — soften so the playmat ghosts through. */
+.game-over-banner {
+  background: rgba(5, 8, 20, 0.62) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+/* D5: VP row inside the TurnBanner. Compact two-column pill row
+ * showing local & opp VP totals out of the victory threshold. Sits
+ * directly below the active-player line so the human can read it at
+ * the same eye-line as TURN N. */
+.turn-banner-vp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(20, 35, 80, 0.6);
+  border: 1px solid rgba(212, 175, 60, 0.35);
+  font-size: 12px;
+  font-weight: 700;
+  color: #e8ecf2;
+}
+.turn-banner-vp {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+.turn-banner-vp-label {
+  color: #b9c5d8;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.turn-banner-vp-value {
+  color: #ffd96b;
+  font-size: 15px;
+  font-weight: 800;
+}
+.turn-banner-vp-sep,
+.turn-banner-vp-target {
+  color: #8e9bb3;
+  font-size: 11px;
+}
+.turn-banner-vp-divider {
+  color: rgba(212, 175, 60, 0.55);
+  font-weight: 800;
+}

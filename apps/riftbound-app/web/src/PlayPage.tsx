@@ -1318,6 +1318,10 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
             status={view.status}
             winner={view.winner}
             localPlayerId={us.id}
+            localVp={us.victoryPoints}
+            opponentVp={opponent?.victoryPoints}
+            opponentPlayerId={opponent?.id}
+            victoryScore={view.victoryScore}
           />
           {/* Iter-12 Goal 1: showdown timeline breadcrumb. Renders just
               below the TurnBanner when a combat is active, so the player
