@@ -101,7 +101,12 @@ describe("Slice 5 — smart showdown assist", () => {
   });
 });
 
-describe("Slice 5 — might counter badge", () => {
+describe("Admin feedback A1 — might counter badge removed", () => {
+  // Admin feedback (2026-05-14, item A1): the +N/-N might-counter badge is
+  // Intentionally removed because cards already display their effective might
+  // Directly. The badge was visual clutter. These tests assert the badge is
+  // NEVER rendered, even for buffed/debuffed units (the engine still sets
+  // BaseMight ≠ might in those cases).
   function mkBf(units: BattlefieldUnit[]): GameViewBattlefield {
     return {
       contested: false,
@@ -112,7 +117,7 @@ describe("Slice 5 — might counter badge", () => {
     };
   }
 
-  it("renders a +N pill when effective might > base might", () => {
+  it("does not render a +N badge for a buffed unit", () => {
     const units: BattlefieldUnit[] = [
       {
         baseMight: 2,
@@ -129,13 +134,10 @@ describe("Slice 5 — might counter badge", () => {
         localPlayerId="player-1"
       />,
     );
-    const badge = screen.getByTestId("bf-might-counter-u-buffed");
-    expect(badge).toBeInTheDocument();
-    expect(badge.textContent).toBe("+2");
-    expect(badge.className).toContain("bf-might-counter-pos");
+    expect(screen.queryByTestId("bf-might-counter-u-buffed")).not.toBeInTheDocument();
   });
 
-  it("renders a -N pill when effective might < base might", () => {
+  it("does not render a -N badge for a debuffed unit", () => {
     const units: BattlefieldUnit[] = [
       {
         baseMight: 5,
@@ -152,9 +154,7 @@ describe("Slice 5 — might counter badge", () => {
         localPlayerId="player-1"
       />,
     );
-    const badge = screen.getByTestId("bf-might-counter-u-debuffed");
-    expect(badge.textContent).toBe("-3");
-    expect(badge.className).toContain("bf-might-counter-neg");
+    expect(screen.queryByTestId("bf-might-counter-u-debuffed")).not.toBeInTheDocument();
   });
 
   it("does not render a badge when effective equals base", () => {
@@ -194,6 +194,124 @@ describe("Slice 5 — might counter badge", () => {
       />,
     );
     expect(screen.queryByTestId("bf-might-counter-u-no-base")).not.toBeInTheDocument();
+  });
+});
+
+describe("Admin feedback A2 — damage + counters chips", () => {
+  function mkBf(units: BattlefieldUnit[]): GameViewBattlefield {
+    return {
+      contested: false,
+      controller: null,
+      id: "bf-1",
+      name: "Test BF",
+      units,
+    };
+  }
+
+  it("renders a damage chip when u.damage > 0", () => {
+    const units: BattlefieldUnit[] = [
+      {
+        controller: "player-1",
+        damage: 3,
+        definitionId: "scout",
+        id: "u-hurt",
+        might: 4,
+        name: "Hurt Scout",
+      },
+    ];
+    render(
+      <BattlefieldList
+        battlefields={[mkBf(units)]}
+        localPlayerId="player-1"
+      />,
+    );
+    const chip = screen.getByTestId("bf-unit-damage-u-hurt");
+    expect(chip.textContent).toBe("3");
+  });
+
+  it("renders a counters chip when u.counters > 0", () => {
+    const units: BattlefieldUnit[] = [
+      {
+        controller: "player-1",
+        counters: 2,
+        definitionId: "scout",
+        id: "u-buffed",
+        might: 4,
+        name: "Buffed Scout",
+      },
+    ];
+    render(
+      <BattlefieldList
+        battlefields={[mkBf(units)]}
+        localPlayerId="player-1"
+      />,
+    );
+    const chip = screen.getByTestId("bf-unit-counter-u-buffed");
+    expect(chip.textContent).toBe("+2");
+  });
+
+  it("renders neither chip when damage and counters are zero/absent", () => {
+    const units: BattlefieldUnit[] = [
+      {
+        controller: "player-1",
+        definitionId: "scout",
+        id: "u-clean",
+        might: 3,
+        name: "Plain Scout",
+      },
+    ];
+    render(
+      <BattlefieldList
+        battlefields={[mkBf(units)]}
+        localPlayerId="player-1"
+      />,
+    );
+    expect(screen.queryByTestId("bf-unit-damage-u-clean")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("bf-unit-counter-u-clean")).not.toBeInTheDocument();
+  });
+});
+
+describe("Admin feedback A3 — friendly/enemy distinction", () => {
+  function mkBf(units: BattlefieldUnit[]): GameViewBattlefield {
+    return {
+      contested: true,
+      controller: null,
+      id: "bf-1",
+      name: "Test BF",
+      units,
+    };
+  }
+
+  it("tags friendly chip with bf-mini-chip-friendly + data-ownership=friendly", () => {
+    const units: BattlefieldUnit[] = [
+      {
+        controller: "player-1",
+        definitionId: "scout",
+        id: "u-mine",
+        might: 3,
+        name: "Ally",
+      },
+      {
+        controller: "player-2",
+        definitionId: "scout",
+        id: "u-theirs",
+        might: 3,
+        name: "Foe",
+      },
+    ];
+    render(
+      <BattlefieldList
+        battlefields={[mkBf(units)]}
+        localPlayerId="player-1"
+      />,
+    );
+    const friendly = screen.getByTestId("bf-unit-u-mine");
+    expect(friendly.className).toContain("bf-mini-chip-friendly");
+    expect(friendly.getAttribute("data-ownership")).toBe("friendly");
+
+    const enemy = screen.getByTestId("bf-unit-u-theirs");
+    expect(enemy.className).toContain("bf-mini-chip-enemy");
+    expect(enemy.getAttribute("data-ownership")).toBe("enemy");
   });
 });
 

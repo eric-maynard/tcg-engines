@@ -377,6 +377,21 @@ export interface BattlefieldUnitView extends CardDefinitionView {
    * Defaults to `false` when the meta is missing.
    */
   readonly exhausted?: boolean;
+  /**
+   * Admin feedback (2026-05-14, item A2): damage counters accumulated on the
+   * unit (carries through showdowns until end-of-phase per Riftbound rules).
+   * Sourced from `internalState.cardMetas[id].damage`. Omitted when zero so
+   * the SPA can chip-check on truthy.
+   */
+  readonly damage?: number;
+  /**
+   * Admin feedback (2026-05-14, item A2): non-damage counter tally
+   * (+1/+1 counters, buff counters, etc.). Today the engine tracks a binary
+   * `buffed` flag and a `mightModifier` number; we surface the truthy
+   * `buffed` flag as a "1" count plus any positive `mightModifier` so the
+   * SPA can render a green +N chip when buffs are active. Omitted when zero.
+   */
+  readonly counters?: number;
 }
 
 /**
@@ -2153,6 +2168,7 @@ function buildView(engine: RiftboundEngine): GameView {
             staticMightBonus?: number;
             equippedWith?: readonly string[];
             exhausted?: boolean;
+            damage?: number;
             __flags?: Record<string, boolean>;
           }
         | undefined;
@@ -2174,6 +2190,18 @@ function buildView(engine: RiftboundEngine): GameView {
       const isExhausted = Boolean(
         meta?.__flags?.exhausted ?? meta?.exhausted,
       );
+      // Admin feedback A2: surface damage + buff/might-modifier counters so
+      // The BattlefieldList can render visible chips. Damage is a raw counter
+      // From the engine; counters folds the binary `buffed` flag together
+      // With any positive `mightModifier` so a single green "+N" chip
+      // Communicates accumulated buffs. Both omitted when zero so falsy
+      // Checks in the view layer chip-suppress correctly.
+      const damageVal = typeof meta?.damage === "number" ? meta.damage : 0;
+      const buffCount =
+        (meta?.buffed ? 1 : 0)
+        + (typeof meta?.mightModifier === "number" && meta.mightModifier > 0
+          ? meta.mightModifier
+          : 0);
       return {
         controller: card?.controller ?? "",
         definitionId,
@@ -2181,6 +2209,8 @@ function buildView(engine: RiftboundEngine): GameView {
         ...def,
         ...mightFields,
         ...(isExhausted ? { exhausted: true } : {}),
+        ...(damageVal > 0 ? { damage: damageVal } : {}),
+        ...(buffCount > 0 ? { counters: buffCount } : {}),
       };
     });
     // The battlefield IS itself a card — bfId is the CardId (see

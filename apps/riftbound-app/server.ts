@@ -2285,6 +2285,18 @@ const server = Bun.serve({
       let movesApplied = 0;
       let lastMoveId: string | undefined;
       const seenNoMovePlayers = new Set<string>();
+      // QA v2 iter-7 Layer D (D-phase-strip-stuck-channel /
+      // D-awaken/beginning/ending/cleanup-phase-invisible): the bot loop
+      // Used to run until endTurn / game-over / human-active, sometimes
+      // Cycling through multiple phases in one call. The /api/v2/step
+      // Endpoint then returned a single end-state and the SPA never saw
+      // The intervening phases (awaken/beginning/ending/cleanup are
+      // Player-move-less so they zipped past in microseconds). Capture the
+      // Phase at loop entry so we can also break on a phase transition —
+      // The caller will re-invoke /step and the SPA gets a frame per
+      // Phase. Combined with the per-move broadcastV2State below this
+      // Makes every phase observable in SSE + QA frame captures.
+      const phaseAtEntry = session.getView().turn.phase;
       while (movesApplied < maxMoves) {
         if (session.isGameOver()) {break;}
         const curActive = session.getActivePlayer();
@@ -2343,6 +2355,18 @@ const server = Bun.serve({
         // Successful endTurn = one full bot turn fired. Stop so the SPA
         // Gets a chance to re-render before we start the opponent's turn.
         if (step.moveId === "endTurn" && step.success) {break;}
+        // QA v2 iter-7 Layer D (D-phase-strip-stuck-channel /
+        // D-showdown-ui-absent): break on a phase transition so the SPA /
+        // QA reviewer gets a chance to render at least one frame per
+        // Phase. Without this, the phase strip appeared stuck on the
+        // Last "interesting" phase (typically Channel) because the bot
+        // Ran through awaken/beginning/main/ending/cleanup in a single
+        // /step call. We also break right after a `contestBattlefield`
+        // Move so the CombatPanel is visible for at least one frame
+        // Before the showdown auto-resolves.
+        const phaseNow = session.getView().turn.phase;
+        if (phaseNow !== phaseAtEntry) {break;}
+        if (step.moveId === "contestBattlefield" && step.success) {break;}
       }
       const spaState = buildSpaState(sessionId, session);
       broadcastV2State(sessionId, spaState);

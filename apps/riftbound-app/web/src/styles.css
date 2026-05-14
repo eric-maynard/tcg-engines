@@ -5506,11 +5506,27 @@ button {
  * (buffed), negative deltas are red (debuffed). Pure CSS — no JS animation;
  * the badge just appears whenever the data attribute flips.
  */
-.bf-might-counter {
+/* Admin feedback (2026-05-14, item A1): removed +N/-N might-counter badge
+ * because cards already display their effective might number directly. The
+ * .bf-might-counter class is hidden defensively in case any stale code path
+ * still emits it.
+ */
+.bf-might-counter,
+.bf-might-counter-pos,
+.bf-might-counter-neg {
+  display: none !important;
+}
+
+/* Admin feedback (2026-05-14, item A2): damage counter chip on BF unit.
+ * Red disc bottom-left of the chip. Carries through showdowns until end of
+ * Phase per Riftbound rules; SPA simply renders whatever the engine reports
+ * on cardMetas[id].damage.
+ */
+.bf-mini-chip-damage {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  z-index: 6;
+  bottom: -6px;
+  left: -6px;
+  z-index: 7;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5522,16 +5538,54 @@ button {
   font-weight: 700;
   line-height: 1;
   border: 1.5px solid rgba(20, 30, 40, 0.85);
+  background: linear-gradient(180deg, #e0696e 0%, #b32d36 100%);
+  color: #1a0808;
   pointer-events: none;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
-.bf-might-counter-pos {
+
+/* Admin feedback (2026-05-14, item A2): non-damage counter chip on BF unit.
+ * Green "+N" disc top-right, communicates +1/+1 / buff counters / positive
+ * mightModifier-as-counter accumulation. Opposite corner from the damage
+ * chip so they never collide.
+ */
+.bf-mini-chip-counter {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  border: 1.5px solid rgba(20, 30, 40, 0.85);
   background: linear-gradient(180deg, #6ed27a 0%, #3aa64f 100%);
   color: #0a1a10;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
-.bf-might-counter-neg {
-  background: linear-gradient(180deg, #e0696e 0%, #b32d36 100%);
-  color: #1a0808;
+
+/* Admin feedback (2026-05-14, item A3): friendly/enemy distinction on BF
+ * unit chips. Blue border + cool halo for friendly units; red border +
+ * warm halo for enemy. Combined with the existing side-rail partitioning
+ * (ours left, theirs right) this makes ownership unambiguous regardless of
+ * which slot the unit landed in (contested lanes can have units from both
+ * sides on either rail). Border thickness intentionally outranks the
+ * role/exhaust borders so ownership is the first thing a player sees.
+ */
+.bf-mini-chip-friendly {
+  border: 2px solid #4a8fff !important;
+  box-shadow: 0 0 8px rgba(74, 143, 255, 0.4);
+}
+.bf-mini-chip-enemy {
+  border: 2px solid #ff5555 !important;
+  box-shadow: 0 0 8px rgba(255, 85, 85, 0.4);
 }
 
 /* Slice 5 (UX affordances) — smart showdown assist block in CombatPanel.

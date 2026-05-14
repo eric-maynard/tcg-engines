@@ -87,6 +87,7 @@ function UnitSlot({
   defenderIds,
   flashIds,
   actionableRolePhase,
+  localPlayerId,
 }: {
   readonly side: "ours" | "theirs";
   readonly units: readonly BattlefieldUnit[];
@@ -101,6 +102,15 @@ function UnitSlot({
    * the role-id sets — no per-card branching.
    */
   readonly actionableRolePhase?: "attacker" | "defender" | null;
+  /**
+   * Admin feedback (2026-05-14, item A3): id of the local seat used to
+   * Decide friendly/enemy chip styling INSIDE this slot. The slot itself
+   * Is already side-partitioned ("ours" vs "theirs"), but a slot may
+   * Render units from either controller during contested combat, so the
+   * Per-chip friendly/enemy class derives from `u.controller === localPlayerId`
+   * Not the slot side.
+   */
+  readonly localPlayerId?: string | null;
 }) {
   return (
     <div
@@ -136,14 +146,23 @@ function UnitSlot({
             // No role yet while the phase asks for an action of that kind.
             const isActionable =
               side === "ours" && role === "none" && Boolean(actionableRolePhase);
+            // Admin feedback (2026-05-14, item A3): per-chip friendly/enemy
+            // Class derived from u.controller vs localPlayerId. Drives a blue
+            // Border + halo for friendly units and red border + halo for
+            // Enemy units so the player can tell sides apart at a glance
+            // Regardless of which slot the unit landed in.
+            const ownership: "friendly" | "enemy" | "neutral" = localPlayerId
+              ? (u.controller === localPlayerId ? "friendly" : "enemy")
+              : "neutral";
             return (
             <li
               key={u.id}
-              className={`bf-unit bf-mini-chip${u.imageUrl ? " bf-mini-chip-art bf-unit-art" : ""}${role !== "none" ? ` bf-mini-chip-role-${role}` : ""}${isFlashing ? " bf-unit-role-flash" : ""}${isActionable ? ` bf-mini-chip-actionable bf-mini-chip-actionable-${actionableRolePhase}` : ""}${u.exhausted ? " bf-mini-chip-exhausted" : ""}`}
+              className={`bf-unit bf-mini-chip${u.imageUrl ? " bf-mini-chip-art bf-unit-art" : ""}${role !== "none" ? ` bf-mini-chip-role-${role}` : ""}${isFlashing ? " bf-unit-role-flash" : ""}${isActionable ? ` bf-mini-chip-actionable bf-mini-chip-actionable-${actionableRolePhase}` : ""}${u.exhausted ? " bf-mini-chip-exhausted" : ""}${ownership !== "neutral" ? ` bf-mini-chip-${ownership}` : ""}`}
               data-testid={`bf-unit-${u.id}`}
               data-mini-chip-id={u.id}
               data-card-id={u.id}
               data-controller={u.controller}
+              data-ownership={ownership}
               data-stack-index={idx}
               data-has-image={u.imageUrl ? "true" : "false"}
               data-combat-role={role}
@@ -190,30 +209,40 @@ function UnitSlot({
               {u.might !== undefined ? (
                 <span className="bf-mini-chip-might bf-unit-might">{u.might}</span>
               ) : null}
-              {/* Slice 5 (UX affordances): might-counter badge. Surfaced
-                  whenever effective might differs from the printed
-                  (base) might — e.g. a buffed unit, an equipped unit,
-                  or one under a static aura. Pure data-driven from
-                  `u.baseMight` vs `u.might`. */}
-              {u.baseMight !== undefined
-                && u.might !== undefined
-                && u.might !== u.baseMight ? (
+              {/* Admin feedback (2026-05-14, item A1): the previous Slice-5
+                  +N/-N might-counter badge has been removed. Cards already
+                  show their effective might number directly, so a separate
+                  badge is redundant clutter. */}
+              {/* Admin feedback (2026-05-14, item A2): damage counters chip.
+                  Red number bottom-left when the unit has taken damage that
+                  hasn't yet been cleared (carries through showdowns until
+                  end of phase per Riftbound rules). Sourced from
+                  `cardMetas[id].damage` via engine-session.buildView. */}
+              {u.damage !== undefined && u.damage > 0 ? (
                 <span
-                  className={`bf-might-counter ${
-                    u.might > u.baseMight
-                      ? "bf-might-counter-pos"
-                      : "bf-might-counter-neg"
-                  }`}
-                  data-testid={`bf-might-counter-${u.id}`}
-                  data-base-might={u.baseMight}
-                  data-effective-might={u.might}
-                  aria-label={`Might modifier: ${
-                    u.might > u.baseMight ? "+" : ""
-                  }${u.might - u.baseMight}`}
-                  title={`Effective ${u.might}, base ${u.baseMight}`}
+                  className="bf-mini-chip-damage"
+                  data-testid={`bf-unit-damage-${u.id}`}
+                  data-damage={u.damage}
+                  aria-label={`${u.damage} damage`}
+                  title={`${u.damage} damage`}
                 >
-                  {u.might > u.baseMight ? "+" : ""}
-                  {u.might - u.baseMight}
+                  {u.damage}
+                </span>
+              ) : null}
+              {/* Admin feedback (2026-05-14, item A2): buff-counter chip.
+                  Green +N at top-right when the unit carries +1/+1 or buff
+                  counters (sourced from `cardMetas[id].buffed` + positive
+                  `mightModifier`). Stays out of the way of the role badge
+                  by sitting in the opposite corner of the damage chip. */}
+              {u.counters !== undefined && u.counters > 0 ? (
+                <span
+                  className="bf-mini-chip-counter"
+                  data-testid={`bf-unit-counter-${u.id}`}
+                  data-counter={u.counters}
+                  aria-label={`${u.counters} counters`}
+                  title={`+${u.counters} counter${u.counters > 1 ? "s" : ""}`}
+                >
+                  +{u.counters}
                 </span>
               ) : null}
               {/* Hidden accessible name + owner for tests + screen readers. */}
@@ -684,6 +713,7 @@ function BattlefieldTile({
         defenderIds={isActive ? defenderIds : EMPTY_IDS}
         flashIds={isActive ? flashIds : EMPTY_FLASH}
         actionableRolePhase={isActive ? actionableRolePhase ?? null : null}
+        localPlayerId={localPlayerId ?? null}
       />
       {isActive ? (
         <>
@@ -843,6 +873,7 @@ function BattlefieldTile({
         defenderIds={isActive ? defenderIds : EMPTY_IDS}
         flashIds={isActive ? flashIds : EMPTY_FLASH}
         actionableRolePhase={null}
+        localPlayerId={localPlayerId ?? null}
       />
       {/* Iter-19 Gap 2: vertical "VS" divider floating between the two
           side rails — only renders when the BF is contested (units on

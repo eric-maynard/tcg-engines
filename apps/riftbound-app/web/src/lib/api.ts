@@ -74,6 +74,21 @@ export interface BattlefieldUnit extends CardDefinitionFields {
    * `false` when missing (synthetic decks / pre-exhaustion-aware fixtures).
    */
   readonly exhausted?: boolean;
+  /**
+   * Admin feedback (2026-05-14, item A2): damage counters accumulated on the
+   * unit. Sourced from `internalState.cardMetas[id].damage`. Surfaced as a
+   * small red chip on the unit chip so the player can see "this unit has
+   * taken N damage this combat / phase". Optional — synthetic decks default
+   * to 0 (and we render no chip).
+   */
+  readonly damage?: number;
+  /**
+   * Admin feedback (2026-05-14, item A2): non-damage counters (+1/+1
+   * counters, buff counters, etc.). The engine currently surfaces a binary
+   * `buffed` flag; we promote that to a count when available, plus expose a
+   * generic `counters` map for future per-type tokens. Optional.
+   */
+  readonly counters?: number;
 }
 
 export interface GameViewBattlefield {
