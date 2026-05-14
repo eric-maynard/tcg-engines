@@ -25,6 +25,7 @@ import { ChainPanel } from "./components/ChainPanel";
 import { MoveLog, buildCardNameMap } from "./components/MoveLog";
 import { TurnBanner } from "./components/TurnBanner";
 import { ShowdownBreadcrumb } from "./components/ShowdownBreadcrumb";
+import { RunePool } from "./components/RunePool";
 
 interface PlayPageProps {
   readonly sessionId: string;
@@ -150,6 +151,24 @@ const PHASE_TOOLTIP: Readonly<Record<string, string>> = {
   draw: "Draw: draw a card from your deck.",
   ending: "Ending: end-of-turn triggers fire.",
   main: "Main: play units, spells, gear, and initiate showdowns.",
+};
+
+/**
+ * QA Reviewer v2 iter-8 — Defect 4 (D-phase-stuck-channel).
+ * Short role descriptor shown under each phase pill so a new player
+ * can tell at a glance what each phase DOES (channel = "get 2 runes
+ * (auto)", main = "play cards"), not just its bare engine id. Engine
+ * naming is canonical so we don't rename phases — we annotate them.
+ * Per rule 515 of the Riftbound Core Rules.
+ */
+const PHASE_ROLE: Readonly<Record<string, string>> = {
+  awaken: "ready",
+  beginning: "upkeep",
+  channel: "get runes",
+  cleanup: "discard",
+  draw: "draw 1",
+  ending: "end triggers",
+  main: "play cards",
 };
 
 export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "default" }: PlayPageProps) {
@@ -374,6 +393,38 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
       try {
         const ping = JSON.parse(ev.data) as PingPayload;
         applyPingPulse(ping);
+      } catch {
+        // Bad payload — ignore.
+      }
+    });
+    // QA Reviewer v2 iter-8 — Defect 4 (D-no-phase-progression):
+    // Listen for synthetic phase-transition events emitted by the
+    // Server whenever the engine cascaded through phases atomically.
+    // We flash the matching .phase pill briefly so the player sees
+    // The 6-phase turn structure (rule 515) even when individual
+    // Phases auto-fire in microseconds. Pure DOM-side animation —
+    // The authoritative state event still drives the real strip.
+    es.addEventListener("phase-transition", (ev: MessageEvent) => {
+      if (cancelled) {return;}
+      try {
+        const t = JSON.parse(ev.data) as { phase?: string };
+        const phaseId = String(t.phase ?? "").toLowerCase();
+        if (!phaseId) {return;}
+        // Find the matching pill in the live DOM and apply a transient
+        // Class for the keyframe duration. We deliberately don't touch
+        // React state — the next state event will reconcile if the
+        // Engine's phase actually settled here.
+        const el = document.querySelector(
+          `[data-testid="phase-${phaseId}"]`,
+        );
+        if (!el) {return;}
+        el.classList.remove("phase-transition-pulse");
+        // Force reflow so the animation restarts even on rapid bursts.
+        void (el as HTMLElement).offsetWidth;
+        el.classList.add("phase-transition-pulse");
+        setTimeout(() => {
+          el.classList.remove("phase-transition-pulse");
+        }, 1000);
       } catch {
         // Bad payload — ignore.
       }
@@ -839,6 +890,25 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
     [view?.pendingChoice, runMove],
   );
 
+  /**
+   * Iter-RunePoolUI: tap (exhaust) a friendly rune in the local player's
+   * rune pool. POSTs the engine's `exhaustRune` move (server.ts case
+   * "exhaustRune"). The view refreshes via the standard applyState path
+   * (move response → state event), so the chip will re-render rotated
+   * 90° on next tick. We don't optimistically mutate local state — the
+   * engine is the source of truth.
+   */
+  const handleExhaustRune = useCallback(
+    (runeId: string) => {
+      void runMove(
+        "exhaustRune",
+        { playerId: localPlayerId, runeId },
+        localPlayerId,
+      );
+    },
+    [runMove, localPlayerId],
+  );
+
   const pickLocation = useCallback(
     (location: string) => {
       if (!picker) {return;}
@@ -1083,6 +1153,10 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
             // With synthetic ids like "main" working without a phase icon).
             const icon = PHASE_ICON[p.id.toLowerCase()] ?? null;
             const tip = PHASE_TOOLTIP[p.id.toLowerCase()] ?? p.label;
+            // QA v2 iter-8 (D-phase-stuck-channel): role descriptor surfaced
+            // As data-phase-role so the CSS ::after rule renders it under
+            // The label. Empty string for unknown phases (no descriptor shown).
+            const role = PHASE_ROLE[p.id.toLowerCase()] ?? "";
             // QA Reviewer v2 iter-5 — Defect 3: when the active pill carries
             // The live phase id as the React key it re-mounts every phase
             // Change so the .phase-active-flash animation runs again, leaving
@@ -1104,6 +1178,7 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
                 data-active={isActive ? "true" : "false"}
                 data-active-seat={isActive ? (isYourTurn ? "you" : "opponent") : ""}
                 data-phase-tip={tip}
+                data-phase-role={role || undefined}
                 title={tip}
                 aria-label={p.label}
                 tabIndex={0}
@@ -1160,6 +1235,15 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
         <button
           type="button"
           data-testid="end-turn"
+          // QA Reviewer v2 iter-8 — Defect 3 (D-endturn-inactive-player):
+          // Hide the END TURN button when it's the opponent's turn. The
+          // Button stays in the DOM (and `disabled`) so existing tests
+          // That query it by data-testid still find it, but CSS keyed on
+          // Aria-hidden="true" visually removes it. The player can no
+          // Longer "see" a disabled End Turn affordance during the opp's
+          // Channel/Draw — eliminating the source of "why can't I end my
+          // Turn" confusion.
+          aria-hidden={!isOurTurn ? "true" : undefined}
           disabled={busy || isGameOver || !actionsLegal.endTurn || !isOurTurn}
           title={
             !isOurTurn
@@ -1301,6 +1385,15 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
                 pendingChoice={view.pendingChoice}
                 onPickRevealedCard={resolvePendingChoice}
               />
+              {/* Iter-RunePoolUI: opponent's rune pool — read-only chips so
+               * the local player can see at-a-glance how many runes the
+               * opponent has and which are exhausted. Both panels are visible
+               * at all times so the player can plan. */}
+              <RunePool
+                runes={view.runesInPool ?? []}
+                playerId={opponent.id}
+                isLocalPlayer={false}
+              />
               <BaseZone
                 playerId={opponent.id}
                 units={baseUnitsFor(opponent.id)}
@@ -1344,6 +1437,17 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
               playerId={us.id}
               units={baseUnitsFor(us.id)}
               label="Your base"
+            />
+            {/* Iter-RunePoolUI: local player's rune pool — clickable chips so
+             * the human can tap (exhaust) friendly ready runes to pay costs.
+             * Sits above the hand so it's the first thing the eye lands on
+             * when planning a play. The click handler dispatches the
+             * `exhaustRune` engine move. */}
+            <RunePool
+              runes={view.runesInPool ?? []}
+              playerId={us.id}
+              isLocalPlayer
+              onExhaust={handleExhaustRune}
             />
             <PlayerPanel
               key={us.id}

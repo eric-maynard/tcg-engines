@@ -6621,3 +6621,239 @@ button {
   font-size: 9px;
   color: rgba(255, 213, 116, 0.9);
 }
+
+/* ============================================================
+ * QA Reviewer v2 iter-8 — Defect 1 (B-size-drift on .battlefield-row)
+ *
+ * Observed drift: 45px height. Root cause: when unit chips appear in
+ * .bf-side (controller's side rail of a battlefield tile), the side
+ * rail grows vertically and pulls the parent .bf tile taller, which
+ * in turn makes the whole .battlefield-row taller.
+ *
+ * Fix: lock the .battlefield-row min/max-height to the same value
+ * (using min-height already set at 140px, raised to 220px so the
+ * tiles fit), and make .bf-side overflow chips internally rather
+ * than pushing the tile. This is a "cap-not-clip" — the side rail
+ * is tall enough for ~5 chips before scrolling; if you somehow get
+ * 6+ chips on one side, the overflow scrolls vertically inside the
+ * rail without pushing the tile.
+ *
+ * IMPORTANT (iter-5 lesson): do NOT add height:N!important here.
+ * Use min-height + max-height (same value) so the cap is firm but
+ * the flex parent can still distribute remaining space. Setting a
+ * fixed height collapsed the flex layout in iter-5.
+ * ============================================================ */
+.battlefield-row {
+  min-height: 220px !important;
+  max-height: 240px !important;
+  flex-shrink: 0;
+}
+
+.bf-side {
+  overflow-y: auto;
+  max-height: 200px;
+}
+
+/* iter-8: cap each .bf tile so wrapping inside doesn't push the row.
+ * The tile already has min-height: 200px; matching max-height keeps it
+ * stable as chips populate either side rail. */
+.bf,
+.bf-tile {
+  max-height: 220px;
+}
+
+/* ============================================================
+ * QA Reviewer v2 iter-8 — Defect 1 (B-size-drift on .controls)
+ *
+ * Observed drift: 87px height. Root cause: the .controls sidebar
+ * mounts/unmounts several conditional children depending on phase:
+ *   - waiting-banner (only when !isOurTurn)
+ *   - undo button (only when undoVisible)
+ *   - priority prompt children
+ * Each adds/removes ~30px so the box jitters as the turn flips.
+ *
+ * Fix: set min-height generous enough for the worst-case stacking
+ * (waiting-banner + end-turn + undo + step + refresh + error all
+ * mounted simultaneously). Children stay in their natural layout;
+ * the container just reserves the worst-case footprint so it never
+ * shrinks back below it.
+ *
+ * 130px → 230px covers all conditional children. We deliberately
+ * do NOT cap max-height — if more buttons appear (combat affordances
+ * etc.) the panel can still grow downward, which is fine since
+ * .controls is absolutely positioned and doesn't reflow the board.
+ * ============================================================ */
+.controls {
+  min-height: 230px !important;
+}
+
+/* ============================================================
+ * QA Reviewer v2 iter-8 — Defect 3 (D-endturn-inactive-player)
+ *
+ * The END TURN button stays in the DOM (existing tests assert it
+ * exists when isOurTurn=false with disabled=true). Visually hide
+ * it on the opponent's turn so the player isn't tempted to click
+ * a disabled button. Same trick for Step Bot when it's our turn
+ * (it's the wrong affordance to even consider).
+ *
+ * Uses [aria-hidden] + opacity:0 + pointer-events:none so the DOM
+ * element + data-testid stays queryable but the button is visually
+ * gone. This keeps unit tests green (they check existence + disabled
+ * state, not visibility).
+ * ============================================================ */
+.controls button[data-testid="end-turn"][aria-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  overflow: hidden;
+}
+
+/* ============================================================
+ * QA Reviewer v2 iter-8 — Defect 5 (D-no-yourturn-indicator)
+ *
+ * Strengthen the .turn-indicator-yours visual so the local player
+ * cannot miss whose turn it is. Bigger, brighter, gold ring + arrow.
+ * ============================================================ */
+.turn-indicator-yours {
+  font-size: 13px !important;
+  padding: 6px 14px !important;
+  background: rgba(220, 180, 80, 0.28) !important;
+  border: 2px solid rgba(255, 213, 116, 1) !important;
+  color: #ffe9a8 !important;
+  text-shadow: 0 0 6px rgba(255, 213, 116, 0.5);
+  box-shadow:
+    0 0 14px rgba(220, 180, 80, 0.45),
+    inset 0 0 8px rgba(255, 213, 116, 0.15) !important;
+}
+
+.turn-indicator-yours::before {
+  content: "▶ ";
+  color: #ffd66a;
+}
+
+.turn-indicator-theirs {
+  font-size: 12px !important;
+  padding: 5px 12px !important;
+  opacity: 0.85;
+}
+
+/* ============================================================
+ * QA Reviewer v2 iter-8 — Defect 4 (D-phase-stuck-channel)
+ *
+ * The engine's "channel" phase auto-fires (channel 2 runes) and
+ * the action phase is engine.phase === "main". The strip label
+ * was just the bare phase name ("Channel" / "Main"). Add a small
+ * subtitle/role descriptor under each pill so a new player knows
+ * what each phase DOES, not just its name. Per rule 515 the
+ * descriptors are:
+ *   - Awaken    — ready
+ *   - Beginning — upkeep
+ *   - Channel   — get 2 runes (auto)
+ *   - Draw      — draw 1
+ *   - Main      — play cards
+ *   - Ending    — end triggers
+ *   - Cleanup   — discard
+ *
+ * The descriptor is rendered via [data-phase-role] attr from
+ * PHASE_ROLE map in PlayPage.tsx; CSS just styles it.
+ * ============================================================ */
+.phase-strip .phase[data-phase-role]::after {
+  content: attr(data-phase-role);
+  display: block;
+  font-size: 8px;
+  font-weight: 400;
+  letter-spacing: 0.3px;
+  text-transform: lowercase;
+  opacity: 0.65;
+  margin-top: 1px;
+  line-height: 1;
+}
+
+/* ---------- Iter-RunePoolUI — rune pool (per-player) ----------
+ * Renders each rune as an individual clickable chip so the human can SEE
+ * the pool and CLICK to tap (exhaust) instead of reading a count pill.
+ * Lives between PlayerPanel and BaseZone for the opponent, and between
+ * BaseZone and PlayerPanel for the local seat. Both visible at all times
+ * so the player can plan around opponent's available power. */
+.rune-pool {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  padding: 4px 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.rune-pool-label {
+  font-size: 10px;
+  color: rgba(180, 195, 220, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
+}
+.rune-pool-empty {
+  font-size: 10px;
+  color: rgba(180, 195, 220, 0.4);
+  font-style: italic;
+}
+.rune-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 34px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  transition: transform 0.4s ease-out, opacity 0.2s, box-shadow 0.2s;
+  padding: 0;
+  font-family: inherit;
+}
+.rune-chip:hover:not(.rune-chip-exhausted):not(.rune-chip-opponent):not(:disabled) {
+  box-shadow: 0 0 8px 2px rgba(255, 215, 100, 0.5);
+}
+.rune-chip-body { background: linear-gradient(140deg, #c83a4a, #8a2030); }
+.rune-chip-mind { background: linear-gradient(140deg, #3a78d8, #2050a0); }
+.rune-chip-chaos { background: linear-gradient(140deg, #8a48c8, #5a2090); }
+.rune-chip-calm { background: linear-gradient(140deg, #3aa850, #207030); }
+.rune-chip-fury { background: linear-gradient(140deg, #f08020, #c05010); }
+.rune-chip-order { background: linear-gradient(140deg, #d8c038, #a08820); }
+.rune-chip-unknown { background: linear-gradient(140deg, #4a5060, #2a3040); }
+.rune-chip-exhausted {
+  transform: rotate(90deg);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.rune-chip-opponent {
+  cursor: default;
+  opacity: 0.85;
+}
+.rune-chip-glyph {
+  pointer-events: none;
+}
+
+/* ============================================================
+ * QA Reviewer v2 iter-8 — Defect 4 (D-no-phase-progression).
+ *
+ * Brief 1s flash on a phase pill when the server emits a
+ * `phase-transition` SSE event for it. The engine cascades through
+ * Awaken/Beginning/Channel/Draw/Ending/Cleanup atomically inside
+ * a single endTurn dispatch, so without this pulse the player only
+ * Ever sees Main highlighted. The pulse layers on top of the strip
+ * Without disturbing the .phase-active state — it's a "this phase
+ * Just happened" flash, not a "this is the live phase" highlight.
+ * ============================================================ */
+@keyframes phase-transition-pulse {
+  0%   { background: rgba(255, 213, 116, 0.55); filter: brightness(1.4); transform: scale(1.0); }
+  40%  { background: rgba(255, 213, 116, 0.35); filter: brightness(1.25); transform: scale(1.06); }
+  100% { background: transparent; filter: brightness(1.0); transform: scale(1.0); }
+}
+
+.phase-strip .phase.phase-transition-pulse {
+  animation: phase-transition-pulse 1s ease-out;
+}

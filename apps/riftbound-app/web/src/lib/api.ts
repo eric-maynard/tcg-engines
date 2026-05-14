@@ -225,6 +225,10 @@ export interface GameView {
     readonly owner: string;
     readonly name?: string;
     readonly imageUrl?: string;
+    /** Iter-RunePoolUI: rune domain (body/mind/chaos/calm/fury/order) — drives chip color. */
+    readonly domain?: string;
+    /** Iter-RunePoolUI: live exhausted/tapped state — drives 90° chip rotation. */
+    readonly exhausted?: boolean;
   }[];
   /** Phase B batch 25 EEE: optional combat snapshot when a showdown is active. */
   readonly combat?: CombatView;

@@ -554,6 +554,79 @@ function recordGameIfFinished(sessionId: string, session: EngineSession): string
 }
 
 /**
+ * QA Reviewer v2 iter-8 — Defect 4 (D-no-phase-progression).
+ *
+ * Synthesise `phase-transition` SSE events for every phase the engine
+ * cascaded through between two snapshots. The engine atomically runs
+ * awaken → beginning → channel → draw → main inside a single endTurn
+ * dispatch — without these events, SSE subscribers only see the final
+ * "main" state and never witness the 4 intervening phases.
+ *
+ * We walk the canonical PHASE_ORDER from (prePhase+1) up through the
+ * end of the pre-turn, then (if the active player changed) wrap around
+ * to start-of-turn and walk again up to (postPhase). Each step emits
+ * one `phase-transition` event with `{phase, turn, active}` so the SPA
+ * can pulse the matching pill briefly.
+ *
+ * Pure data — no engine introspection. We don't actually know if the
+ * Engine ran each intermediate phase (it might skip e.g. cleanup if
+ * there's nothing to clean up) but the pulse animation is visual flair,
+ * not state truth. The actual game state in the main `state` event is
+ * still authoritative.
+ */
+const PHASE_CYCLE: readonly string[] = [
+  "awaken",
+  "beginning",
+  "channel",
+  "draw",
+  "main",
+  "ending",
+  "cleanup",
+];
+
+function emitPhaseTransitions(
+  sessionId: string,
+  prePhase: string,
+  preTurn: number,
+  preActive: string,
+  postView: { turn: { phase: string; number: number; activePlayer: string } },
+): void {
+  const postPhase = postView.turn.phase;
+  const postTurn = postView.turn.number;
+  const postActive = postView.turn.activePlayer;
+  // No-op when nothing changed.
+  if (prePhase === postPhase && preTurn === postTurn && preActive === postActive) {
+    return;
+  }
+  const preIdx = PHASE_CYCLE.indexOf(String(prePhase).toLowerCase());
+  const postIdx = PHASE_CYCLE.indexOf(String(postPhase).toLowerCase());
+  if (preIdx === -1 || postIdx === -1) {return;}
+  const events: { phase: string; turn: number; active: string }[] = [];
+  if (preTurn === postTurn && preActive === postActive) {
+    // Same turn: emit pulses for every phase strictly between pre and post.
+    for (let i = preIdx + 1; i < postIdx; i++) {
+      events.push({ active: postActive, phase: PHASE_CYCLE[i]!, turn: postTurn });
+    }
+  } else {
+    // Crossed turn boundary: finish the pre-turn (preIdx+1 .. cleanup) on
+    // The pre-active, then start the post-turn (awaken .. postIdx-1) on
+    // The post-active. Both segments are visual hints only.
+    for (let i = preIdx + 1; i < PHASE_CYCLE.length; i++) {
+      events.push({ active: preActive, phase: PHASE_CYCLE[i]!, turn: preTurn });
+    }
+    for (let i = 0; i < postIdx; i++) {
+      events.push({ active: postActive, phase: PHASE_CYCLE[i]!, turn: postTurn });
+    }
+  }
+  // Always include the final post-phase as a transition so the SPA can
+  // Re-trigger its flash animation even if main → main same-name.
+  events.push({ active: postActive, phase: postPhase, turn: postTurn });
+  for (const ev of events) {
+    broadcastV2Event(sessionId, "phase-transition", ev);
+  }
+}
+
+/**
  * Slice 5 (UX affordances): broadcast an arbitrary named SSE event to every
  * subscriber of `sessionId`. Used for ephemeral signals like pings that
  * are not persisted into game state but still need to reach the opponent's
@@ -2195,6 +2268,19 @@ const server = Bun.serve({
       }
       let ok = true;
       let error: string | undefined;
+      // QA Reviewer v2 iter-8 — Defect 4 (D-no-phase-progression): capture
+      // The phase + turn + active player BEFORE the move so we can emit a
+      // `phase-transition` SSE event for each phase the engine cascaded
+      // Through. The engine atomically advances awaken→beginning→channel→
+      // Draw→main inside a single endTurn dispatch; SSE subscribers
+      // Otherwise see only the final "main" state and never witness the
+      // 4 intervening phases. The SPA listens for this event and pulses
+      // The matching pill in the strip so the 6-phase structure (rule 515)
+      // Is visible.
+      const preView = session.getView();
+      const prePhase = preView.turn.phase;
+      const preTurn = preView.turn.number;
+      const preActive = preView.turn.activePlayer;
       if (moveId === "playFromHand") {
         const result = tryPlayFromHand(session, playerId, params);
         ({ ok } = result);
@@ -2220,6 +2306,20 @@ const server = Bun.serve({
       // Inline, so duplicate state on the poster's tab is fine — applyState
       // Is idempotent.
       broadcastV2State(sessionId, spaState);
+      // QA v2 iter-8 — Defect 4: emit phase-transition events for every
+      // Phase the engine cascaded through during this move. Pulled out as
+      // A helper so /step uses it too.
+      try {
+        emitPhaseTransitions(
+          sessionId,
+          prePhase,
+          preTurn,
+          preActive,
+          session.getView(),
+        );
+      } catch {
+        // Best-effort — the SPA's main strip update still works without it.
+      }
       // Slice 7 — persist a `games` row once a winner appears.
       recordGameIfFinished(sessionId, session);
       return json({ error, ok, ...spaState });
@@ -2301,6 +2401,12 @@ const server = Bun.serve({
         if (session.isGameOver()) {break;}
         const curActive = session.getActivePlayer();
         if (!force && humanIds.has(curActive)) {break;}
+        // QA v2 iter-8 — Defect 4: snapshot pre-iteration state so we can
+        // Diff against post-iteration for phase-transition events.
+        const iterStartView = session.getView();
+        const phaseAtIterStart = iterStartView.turn.phase;
+        const turnAtIterStart = iterStartView.turn.number;
+        const activeAtIterStart = iterStartView.turn.activePlayer;
         // Try the active player first.
         const activeBot = new BotDriver(curActive, {
           policy,
@@ -2348,6 +2454,16 @@ const server = Bun.serve({
         try {
           const interim = buildSpaState(sessionId, session);
           broadcastV2State(sessionId, interim);
+          // QA v2 iter-8 — Defect 4 (D-no-phase-progression): emit
+          // Synthetic phase-transition events for any phases the engine
+          // Skipped silently between iterations of this bot loop.
+          emitPhaseTransitions(
+            sessionId,
+            phaseAtIterStart,
+            turnAtIterStart,
+            activeAtIterStart,
+            session.getView(),
+          );
         } catch {
           // Broadcast failures are non-fatal — the final state broadcast
           // After the loop will reconcile any missed subscribers.

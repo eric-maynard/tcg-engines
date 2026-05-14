@@ -77,6 +77,21 @@ const CHROME_PATH =
 const FFMPEG = "/opt/homebrew/bin/ffmpeg";
 
 type Severity = "blocker" | "major" | "minor";
+/**
+ * Iter-RunePoolUI / reviewer-prioritization fix.
+ *
+ * Categorize every defect so the report can rank "the player CAN'T DO X"
+ * above "color contrast could be 5% better". Layer D sub-agent emits this
+ * field and our auto-upgrade step promotes CORE_ACTION_MISSING defects to
+ * blocker regardless of the sub-agent's first-pass severity guess.
+ *
+ *   CORE_ACTION_MISSING — something the player needs to DO that the UI
+ *     doesn't expose (tap a rune, declare attackers, play a card, choose
+ *     a target, pass priority).
+ *   COSMETIC — visual polish (color contrast, layout drift, missing
+ *     label, animation).
+ */
+type DefectCategory = "CORE_ACTION_MISSING" | "COSMETIC";
 interface Defect {
   readonly layer: "A" | "B" | "C" | "D";
   readonly severity: Severity;
@@ -85,6 +100,7 @@ interface Defect {
   readonly turn?: number;
   readonly phase?: string;
   readonly evidence?: Record<string, unknown>;
+  readonly category?: DefectCategory;
 }
 
 const defects: Defect[] = [];
@@ -299,7 +315,7 @@ async function snapshotDom(page: Page): Promise<DomSnapshot> {
       turnBannerText: tb?.textContent ?? "",
       turnBannerVpOpp: vpOpp,
       turnBannerVpYou: vpYou,
-      waitingBannerPresent: !!wb,
+      waitingBannerPresent: Boolean(wb),
       waitingBannerText: wb?.textContent ?? "",
     };
   }, LAYOUT_SELECTORS as unknown as string[]);
@@ -326,7 +342,7 @@ function checkLayerA(
   for (const u of allEngineUnits) {
     if (!domChipIds.has(u.id)) {
       flag({
-        evidence: { unitId: u.id, controller: u.controller },
+        evidence: { controller: u.controller, unitId: u.id },
         id: "A-missing-bf-chip",
         layer: "A",
         message: `engine reports unit ${u.name ?? u.id} on a battlefield but no .bf-mini-chip[data-card-id="${u.id}"] in the DOM`,
@@ -363,10 +379,10 @@ function checkLayerA(
     if (!isRotated(chip.transform)) {
       flag({
         evidence: {
-          unitId: u.id,
           classes: chip.classes,
           dataExhausted: chip.dataExhausted,
           transform: chip.transform,
+          unitId: u.id,
         },
         id: "A-exhausted-not-rotated-bf",
         layer: "A",
@@ -384,7 +400,7 @@ function checkLayerA(
       if (!chip) {continue;}
       if (!isRotated(chip.transform)) {
         flag({
-          evidence: { unitId: u.id, transform: chip.transform },
+          evidence: { transform: chip.transform, unitId: u.id },
           id: "A-exhausted-not-rotated-base",
           layer: "A",
           message: `base unit ${u.name ?? u.id} is engine.exhausted=true but DOM transform="${chip.transform}" is NOT rotated`,
@@ -407,7 +423,7 @@ function checkLayerA(
       // For the opponent, the chips have a different class (.hand-chip-back)
       // And may still be counted, so disagreement here is suspect.
       flag({
-        evidence: { engineHand, domCount, playerId: p.id },
+        evidence: { domCount, engineHand, playerId: p.id },
         id: "A-hand-size-mismatch",
         layer: "A",
         message: `player ${p.id} engine.hand=${engineHand} vs DOM hand-chips=${domCount}`,
@@ -476,12 +492,19 @@ function checkLayerB(checkpoints: readonly Checkpoint[]): void {
     return;
   }
   // For each selector, compute width / height range across checkpoints.
+  //
+  // QA v2 iter-8 (B-size-drift on .board-side / .move-log-fill): these two
+  // Selectors are SCROLL CONTAINERS — they're explicitly designed to grow
+  // Their inner content (move log entries accumulate as the game progresses,
+  // Sidebar shows more rail sections, etc.) and let the user scroll. Drift
+  // Here is *intentional* growth, not a layout regression. We previously
+  // Tried locking their heights and broke the entire layout (iter-5 disaster).
+  // Whitelist them so the reviewer focuses on selectors where drift truly
+  // Is a layout bug.
   const STABLE_SELECTORS = [
     ".app-top-nav",
     ".turn-banner",
-    ".board-side",
     ".battlefield-row",
-    ".move-log-fill",
     ".controls",
   ];
   for (const sel of STABLE_SELECTORS) {
@@ -504,8 +527,6 @@ function checkLayerB(checkpoints: readonly Checkpoint[]): void {
     if (wRange > 5 || hRange > 5) {
       flag({
         evidence: {
-          selector: sel,
-          widthRange: wRange,
           heightRange: hRange,
           samples: samples.map((s) => ({
             turn: s.turn,
@@ -513,6 +534,8 @@ function checkLayerB(checkpoints: readonly Checkpoint[]): void {
             w: s.rect!.width,
             h: s.rect!.height,
           })),
+          selector: sel,
+          widthRange: wRange,
         },
         id: "B-size-drift",
         layer: "B",
@@ -523,15 +546,15 @@ function checkLayerB(checkpoints: readonly Checkpoint[]): void {
     if (xRange > 5 || yRange > 5) {
       flag({
         evidence: {
-          selector: sel,
-          xRange,
-          yRange,
           samples: samples.map((s) => ({
             turn: s.turn,
             phase: s.phase,
             x: s.rect!.x,
             y: s.rect!.y,
           })),
+          selector: sel,
+          xRange,
+          yRange,
         },
         id: "B-position-drift",
         layer: "B",
@@ -734,6 +757,7 @@ interface SubAgentOutput {
     readonly severity: Severity;
     readonly message: string;
     readonly phase?: string;
+    readonly category?: DefectCategory;
   }[];
   readonly error?: string;
 }
@@ -759,11 +783,16 @@ Audit each phase that appears in the trail (Awaken, Beginning, Channel, Draw, Ma
 - Channel/Draw/Main should give the active player a clear "your turn" indicator vs waiting banner for the inactive player
 - Showdown should display attacker/defender comparison + a priority prompt
 - Cleanup should remove dead units
+- Runes should be VISIBLE as individual clickable chips with domain color (body=red, mind=blue, chaos=purple, calm=green, fury=orange, order=yellow), exhausted ones rotated 90°. A count-only pill is a CORE_ACTION_MISSING defect — the player cannot tap a count.
+
+For EVERY defect, categorize:
+- "CORE_ACTION_MISSING": something the player needs to DO that the UI doesn't expose (tap a rune, declare attackers, play a card, choose a target, pass priority, end turn, etc.). Missing visible affordance for a required game action ALWAYS counts as core-action-missing — even if the underlying engine state is correct.
+- "COSMETIC": visual polish only (color contrast, layout drift, missing label, animation timing, text alignment).
 
 Look at 3-5 representative frames in ${args.framesDir} (Read tool). Don't read all of them.
 
 Output ONLY a JSON object on the final line, no prose, no markdown fences:
-{"defects":[{"id":"D-<slug>","severity":"major"|"minor","phase":"<phase>","message":"<one-line>"}]}
+{"defects":[{"id":"D-<slug>","severity":"blocker"|"major"|"minor","category":"CORE_ACTION_MISSING"|"COSMETIC","phase":"<phase>","message":"<one-line>"}]}
 
 If nothing is wrong: {"defects":[]}.`;
 
@@ -838,14 +867,14 @@ If nothing is wrong: {"defects":[]}.`;
       }
       try {
         const parsed = JSON.parse(m[0]) as {
-          defects?: { id: string; severity: Severity; message: string; phase?: string }[];
+          defects?: { id: string; severity: Severity; message: string; phase?: string; category?: DefectCategory }[];
         };
         finish({ defects: parsed.defects ?? [], raw: agentText });
       } catch (error) {
         finish({
-          raw: agentText,
           defects: [],
           error: `failed to parse sub-agent JSON: ${(error as Error).message}`,
+          raw: agentText,
         });
       }
     });
@@ -1032,12 +1061,23 @@ async function main(): Promise<void> {
         });
       }
       for (const d of subOut.defects) {
+        // Iter-RunePoolUI / reviewer-prioritization fix: auto-upgrade any
+        // CORE_ACTION_MISSING defect to "blocker" regardless of how the
+        // Sub-agent labelled it. The sub-agent's first-pass severity
+        // Doesn't always reflect that "I can't tap my runes" is gameplay-
+        // Blocking — this normalisation makes core-action-missing always
+        // Win the priority race against cosmetic polish.
+        let effectiveSeverity: Severity = d.severity ?? "major";
+        if (d.category === "CORE_ACTION_MISSING") {
+          effectiveSeverity = "blocker";
+        }
         flag({
+          category: d.category,
           id: d.id,
           layer: "D",
           message: d.message,
           phase: d.phase,
-          severity: d.severity ?? "major",
+          severity: effectiveSeverity,
         });
       }
       // Save the raw sub-agent output for debugging.
@@ -1051,10 +1091,10 @@ async function main(): Promise<void> {
   } catch (error) {
     console.error(`[qa-v2] ERR`, (error as Error).stack ?? (error as Error).message);
     flag({
-      layer: "A",
-      severity: "blocker",
       id: "driver-error",
+      layer: "A",
       message: `qa-reviewer-v2 driver crashed: ${(error as Error).message}`,
+      severity: "blocker",
     });
   } finally {
     await browser.close();
@@ -1104,15 +1144,29 @@ async function main(): Promise<void> {
   lines.push(`- Minors: ${totals.minors}`);
   lines.push(``);
 
+  // Iter-RunePoolUI / reviewer-prioritization fix: sort by (severity asc,
+  // Category asc) so blockers come first AND within each tier the
+  // CORE_ACTION_MISSING defects sort above COSMETIC ones. This ensures
+  // "I can't tap my runes" wins over "the title pill could be 5% more
+  // Contrasty" even when the sub-agent labels them at the same severity.
   const SEV_RANK: Record<Severity, number> = { blocker: 0, major: 1, minor: 2 };
-  const ranked = [...defects].toSorted(
-    (a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity],
-  );
-  lines.push(`## Top defects (severity-ranked)`);
+  const CAT_RANK: Record<DefectCategory, number> = {
+    CORE_ACTION_MISSING: 0,
+    COSMETIC: 1,
+  };
+  const catKey = (d: Defect): number =>
+    d.category ? CAT_RANK[d.category] : 0.5; // Unlabelled defects sort between.
+  const ranked = [...defects].toSorted((a, b) => {
+    const sev = SEV_RANK[a.severity] - SEV_RANK[b.severity];
+    if (sev !== 0) {return sev;}
+    return catKey(a) - catKey(b);
+  });
+  lines.push(`## Top defects (severity-ranked, core-actions first)`);
   lines.push(``);
   for (const d of ranked.slice(0, 10)) {
+    const catTag = d.category ? ` [${d.category}]` : "";
     lines.push(
-      `- **[${d.layer}/${d.severity}] ${d.id}** — ${d.message}` +
+      `- **[${d.layer}/${d.severity}]${catTag} ${d.id}** — ${d.message}` +
         (d.turn != null ? ` _(turn ${d.turn} ${d.phase ?? ""})_` : ""),
     );
   }
@@ -1132,9 +1186,16 @@ async function main(): Promise<void> {
       lines.push(``);
       continue;
     }
-    for (const d of ds) {
+    // Same severity-then-category sort applied within each layer section.
+    const sortedDs = [...ds].toSorted((a, b) => {
+      const sev = SEV_RANK[a.severity] - SEV_RANK[b.severity];
+      if (sev !== 0) {return sev;}
+      return catKey(a) - catKey(b);
+    });
+    for (const d of sortedDs) {
+      const catTag = d.category ? ` [${d.category}]` : "";
       lines.push(
-        `- **[${d.severity}] ${d.id}** — ${d.message}` +
+        `- **[${d.severity}]${catTag} ${d.id}** — ${d.message}` +
           (d.turn != null ? ` _(turn ${d.turn} ${d.phase ?? ""})_` : ""),
       );
     }

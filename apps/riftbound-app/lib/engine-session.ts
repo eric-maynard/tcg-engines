@@ -245,6 +245,21 @@ export interface GameView {
     readonly owner: string;
     readonly name?: string;
     readonly imageUrl?: string;
+    /**
+     * Iter-RunePoolUI: rune domain (one of body / mind / chaos / calm / fury /
+     * order). Sourced from the engine card registry (or raw card module
+     * fallback). Drives the RunePool chip's domain-colored background.
+     * Omitted when not known (synthetic decks may register runes without
+     * a domain field).
+     */
+    readonly domain?: string;
+    /**
+     * Iter-RunePoolUI: live exhausted/tapped state, sourced from the engine's
+     * `internal.cardMetas[runeId].__flags.exhausted` (where the counter
+     * system writes — see server.ts setFlag). Falls back to the seed
+     * `meta.exhausted`. Drives the 90° rotation + dim styling on the chip.
+     */
+    readonly exhausted?: boolean;
   }[];
   /**
    * Combat / showdown view. Present when the engine's `state.interaction`
@@ -2130,21 +2145,60 @@ function buildView(engine: RiftboundEngine): GameView {
     });
   }
 
-  // Iter-Q: enumerate runePool for the rune TargetPicker variant. Like trash,
-  // RunePool is a single global zone (`runePool`) with cards tagged by owner.
-  // The engine tracks rune state (exhausted/ready) elsewhere — for now we
-  // Surface owner + definition so the picker can render friendly/enemy.
+  // Iter-Q / Iter-RunePoolUI: enumerate runePool for both the rune-target
+  // TargetPicker AND the visible RunePool component on the play page. The
+  // RunePool needs per-rune `domain` (chip color) + `exhausted` (rotation)
+  // So players can SEE each rune individually and CLICK to tap. The
+  // RunePool zone is global; cards are tagged by owner. Domain comes from
+  // Either the engine registry (preferred — populated by registerDeckCardsWithEngine)
+  // Or the raw `@tcg/riftbound-cards` module as a fallback. Exhausted state
+  // Mirrors the unit pattern: __flags.exhausted wins, seed meta.exhausted falls back.
   const runesInPool: GameView["runesInPool"] = [];
   for (const [cardId, card] of Object.entries(internal.cards ?? {})) {
     if (!card || card.zone !== "runePool") {continue;}
     const definitionId = card.definitionId ?? cardId;
     const def = getCardDefinition(cardId, definitionId);
+    // Domain lookup. Engine registry first (per-instance), raw module second
+    // (for synthetic / unregistered decks). Both paths use the same extractor
+    // Logic that `getCardDefinition` does.
+    let domain: string | undefined;
+    try {
+      const lookup = getGlobalCardRegistry().get(cardId);
+      const dom = (lookup as { domain?: string | string[] } | undefined)?.domain;
+      if (typeof dom === "string") {domain = dom;}
+      else if (Array.isArray(dom) && dom.length > 0) {domain = dom[0];}
+    } catch { /* Registry miss — try raw next */ }
+    if (!domain) {
+      const cardsModule = getRiftboundCardsModule();
+      if (cardsModule) {
+        try {
+          const reg = cardsModule.getCardRegistry();
+          let rawDef = reg.get(definitionId);
+          if (!rawDef) {
+            const extracted = extractDefIdFromInstanceId(definitionId);
+            if (extracted) {rawDef = reg.get(extracted);}
+          }
+          const rawDom = (rawDef as { domain?: string | string[] } | undefined)?.domain;
+          if (typeof rawDom === "string") {domain = rawDom;}
+          else if (Array.isArray(rawDom) && rawDom.length > 0) {domain = rawDom[0];}
+        } catch { /* Synthetic deck — no domain */ }
+      }
+    }
+    // Exhausted state — mirror the unit pattern.
+    const meta = internal.cardMetas?.[cardId] as
+      | { exhausted?: boolean; __flags?: Record<string, boolean> }
+      | undefined;
+    const isExhausted = Boolean(
+      meta?.__flags?.exhausted ?? meta?.exhausted,
+    );
     runesInPool.push({
       definitionId,
       id: cardId,
       owner: card.owner,
       ...(def.name ? { name: def.name } : {}),
       ...(def.imageUrl ? { imageUrl: def.imageUrl } : {}),
+      ...(domain ? { domain: domain.toLowerCase() } : {}),
+      ...(isExhausted ? { exhausted: true } : {}),
     });
   }
 
