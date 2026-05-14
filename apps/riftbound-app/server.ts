@@ -2232,13 +2232,41 @@ const server = Bun.serve({
     // Bot would auto-play the human's hand. We now early-return
     // `{ ok: true, skipped: true, reason }` so the SPA can grey out the
     // Button without doing anything destructive.
+    //
+    // Aggressive-stepping (2026-05-14 admin review): a single step that
+    // Plays one move per click made for a deeply boring bot — the move log
+    // Filled with `drawCard` / `endTurn` and the board never changed. We now
+    // Loop the bot through MULTIPLE moves per call until one of these
+    // Terminal conditions:
+    //   - game over
+    //   - active player became a human (unless `force: true`)
+    //   - a successful `endTurn` (one full bot turn fired)
+    //   - the bot returns no move (deadlock or showdown-focus-owned-by-other)
+    //   - hit `maxMoves` cap (default 16) — safety belt for runaway loops
+    //
+    // Body params (all optional):
+    //   - `force`:    bypass the human-active guard. Used by the headless
+    //                 Video recorder to drive BOTH seats via this endpoint.
+    //   - `policy`:   `"board-eval"` (default) or `"priority-table"`. The
+    //                 Board-eval policy plays cards aggressively (the
+    //                 Priority-table baseline was the source of the
+    //                 "bot does nothing" symptom).
+    //   - `maxMoves`: cap on moves per call. Default 16.
     if (pathname.startsWith("/api/v2/step/") && req.method === "POST") {
       const sessionId = pathname.split("/")[4] ?? "";
       const session = demoSessions.get(sessionId);
       if (!session) {return json({ error: "session not found" }, 404);}
-      const active = session.getActivePlayer();
+      const body = (await req.json().catch(() => ({}))) as {
+        force?: boolean;
+        policy?: "board-eval" | "priority-table";
+        maxMoves?: number;
+      };
+      const force = body.force === true;
+      const policy = body.policy ?? "board-eval";
+      const maxMoves = Math.max(1, Math.min(64, Math.floor(body.maxMoves ?? 16)));
       const humanIds = getHumanPlayerIds(sessionId);
-      if (humanIds.has(active)) {
+      const active = session.getActivePlayer();
+      if (!force && humanIds.has(active)) {
         return json({
           ok: true,
           reason: "it's the human's turn",
@@ -2246,12 +2274,67 @@ const server = Bun.serve({
           ...buildSpaState(sessionId, session),
         });
       }
-      const bot = new BotDriver(active, { seed: `demo-step-${sessionId}` });
-      bot.step(session);
+      // Multi-move loop. Each iteration:
+      //   1. Pick the player who needs to act:
+      //      - active player (default), or
+      //      - the showdown-focus / chain-priority owner if the active
+      //        Player has no moves but a non-active player does (this is
+      //        The case during showdown).
+      //   2. Step ONE move via BotDriver for that player.
+      //   3. Stop on endTurn-success, game-over, human-active, no-progress.
+      let movesApplied = 0;
+      let lastMoveId: string | undefined;
+      const seenNoMovePlayers = new Set<string>();
+      while (movesApplied < maxMoves) {
+        if (session.isGameOver()) {break;}
+        const curActive = session.getActivePlayer();
+        if (!force && humanIds.has(curActive)) {break;}
+        // Try the active player first.
+        const activeBot = new BotDriver(curActive, {
+          policy,
+          seed: `demo-step-${sessionId}-${curActive}`,
+        });
+        let step = activeBot.step(session);
+        if (!step) {
+          // Active player has no useful moves (e.g. showdown focus owned
+          // By opponent). Find someone with legal moves and force-step
+          // Them so the game doesn't deadlock.
+          let acted = false;
+          for (const p of session.getView().players) {
+            if (p.id === curActive) {continue;}
+            if (seenNoMovePlayers.has(p.id)) {continue;}
+            if (!force && humanIds.has(p.id)) {continue;}
+            const lm = session.legalMoves(p.id).filter((m) => m.moveId !== "concede");
+            if (lm.length === 0) {continue;}
+            const altBot = new BotDriver(p.id, {
+              policy,
+              seed: `demo-step-${sessionId}-${p.id}`,
+            });
+            step = altBot.step(session, { force: true });
+            if (step) {acted = true; break;}
+          }
+          if (!acted) {
+            seenNoMovePlayers.add(curActive);
+            break;
+          }
+        }
+        if (!step) {break;}
+        movesApplied++;
+        lastMoveId = step.moveId;
+        // Successful endTurn = one full bot turn fired. Stop so the SPA
+        // Gets a chance to re-render before we start the opponent's turn.
+        if (step.moveId === "endTurn" && step.success) {break;}
+      }
       const spaState = buildSpaState(sessionId, session);
       broadcastV2State(sessionId, spaState);
       recordGameIfFinished(sessionId, session);
-      return json({ ok: true, skipped: false, ...spaState });
+      return json({
+        lastMoveId,
+        movesApplied,
+        ok: true,
+        skipped: movesApplied === 0,
+        ...spaState,
+      });
     }
 
     // POST /api/v2/undo/:id — Slice 4 (undo/rewind).

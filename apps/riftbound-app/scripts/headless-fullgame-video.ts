@@ -7,15 +7,20 @@
  * stitches them into an MP4 via ffmpeg.
  *
  * Driving model:
- *   - Player-2 advances via POST /api/v2/step/:id (BotDriver under the hood).
- *   - Player-1 ALSO advances via a server-side BotDriver — to do that
- *     without the goldfish guard, we hit /api/v2/move/:id directly with
- *     endTurn (and occasionally a `playFromHand` attempt) for the human seat.
+ *   - Both seats advance via POST /api/v2/step/:id with `{force:true}`,
+ *     which bypasses the goldfish human-guard and runs the BotDriver
+ *     (board-eval policy) for whichever player is currently active. Each
+ *     call drives the active player through one full turn (up to endTurn).
+ *   - Previously player-1 was advanced via raw /api/v2/move/:id calls
+ *     (endTurn / playFromHand). That path failed silently — every move
+ *     hit "condition not met" because the SPA's move shape doesn't carry
+ *     the engine's required params (e.g. rune ids, target locations) —
+ *     so the game got stuck on turn 1 with only drawCard/endTurn entries.
+ *     The new path uses BotDriver, which calls `enumerateMoves(validOnly)`
+ *     and so always picks a move the engine will accept.
  *
  * The browser is purely an observer (just watches SSE state push from the
- * server). This avoids the UI-input-gating headaches of clicking the actual
- * "End Turn" button when phase rules are not satisfied — the engine accepts
- * endTurn at any time and auto-rolls through phases.
+ * server).
  *
  * Usage:
  *   bun run apps/riftbound-app/scripts/headless-fullgame-video.ts
@@ -102,13 +107,21 @@ async function postMove(
   return (await r.json()) as { ok?: boolean; error?: string } & SpaState;
 }
 
-async function stepBot(sessionId: string): Promise<{
+async function stepBot(
+  sessionId: string,
+  opts: { force?: boolean; maxMoves?: number } = {},
+): Promise<{
   ok?: boolean;
   skipped?: boolean;
   reason?: string;
+  movesApplied?: number;
+  lastMoveId?: string;
 } & SpaState> {
   const r = await fetch(`${ORIGIN}/api/v2/step/${encodeURIComponent(sessionId)}`, {
-    body: "{}",
+    body: JSON.stringify({
+      force: opts.force ?? false,
+      maxMoves: opts.maxMoves,
+    }),
     headers: { "Content-Type": "application/json" },
     method: "POST",
   });
@@ -116,6 +129,8 @@ async function stepBot(sessionId: string): Promise<{
     ok?: boolean;
     skipped?: boolean;
     reason?: string;
+    movesApplied?: number;
+    lastMoveId?: string;
   } & SpaState;
 }
 
@@ -208,52 +223,21 @@ try {
       break;
     }
 
-    if (info.active === "player-2") {
-      // Bot's turn — let the step endpoint advance it.
-      const r = await stepBot(sessionId);
-      if (r.skipped) {
+    if (info.active === "player-1" || info.active === "player-2") {
+      // Both seats advance via the aggressive Step Bot endpoint with
+      // Force=true (board-eval policy). Each call drives the active
+      // Player through one full turn (until endTurn or no progress).
+      const r = await stepBot(sessionId, { force: true });
+      if ((r.movesApplied ?? 0) === 0) {
         consecutiveSkip += 1;
+        console.warn(`[move ${move}] no moves applied for active=${info.active}`);
       } else {
         consecutiveSkip = 0;
-      }
-    } else if (info.active === "player-1") {
-      // Player-1 (the "human" seat in goldfish). To make the video
-      // Visually interesting, try to play cards from hand before passing.
-      // The engine has many phases (Channel / Main / Combat / End); we
-      // Just keep firing playFromHand for each hand card; whichever
-      // Succeeds advances the game. If none do, we endTurn.
-      const hand = st.hand?.["player-1"] ?? [];
-      let didPlay = false;
-      for (const card of hand) {
-        const r = await postMove(sessionId, "player-1", "playFromHand", {
-          cardId: card.id,
-        });
-        if (r.ok) {
-          didPlay = true;
-          break;
+        if ((r.movesApplied ?? 0) >= 3) {
+          console.log(
+            `[move ${move}] ${info.active}: applied=${r.movesApplied} last=${r.lastMoveId}`,
+          );
         }
-      }
-      if (!didPlay) {
-        // Try a no-arg generic step too — channelRunes is a common pre-Main
-        // Phase action. If that fails, endTurn.
-        const r1 = await postMove(sessionId, "player-1", "channelRunes", {
-          params: { playerId: "player-1" },
-        });
-        if (!r1.ok) {
-          const r2 = await postMove(sessionId, "player-1", "endTurn", {
-            params: { playerId: "player-1" },
-          });
-          if (!r2.ok) {
-            console.warn(`[move ${move}] player-1 endTurn failed: ${r2.error}`);
-            consecutiveSkip += 1;
-          } else {
-            consecutiveSkip = 0;
-          }
-        } else {
-          consecutiveSkip = 0;
-        }
-      } else {
-        consecutiveSkip = 0;
       }
     } else {
       console.warn(`[move ${move}] no active player resolvable; state.active=${info.active}`);
@@ -266,8 +250,14 @@ try {
     }
 
     // Wait for SSE to push the new state to the browser, then snap.
+    // Capture HOLD_FRAMES_PER_MOVE so a viewer has time to read what
+    // Changed each turn before the next move fires.
+    const holdFrames = Number(process.env.FULLGAME_HOLD_FRAMES ?? 3);
     await sleep(FRAME_DELAY_MS);
-    await snap(page, "tick");
+    for (let i = 0; i < holdFrames; i++) {
+      await snap(page, `tick-${i}`);
+      if (i < holdFrames - 1) {await sleep(180);}
+    }
   }
 
   console.log(`[done] captured ${frameCounter} frames in ${FRAMES_DIR}`);

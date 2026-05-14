@@ -1083,6 +1083,28 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
       </header>
 
       <section className="controls">
+        {/*
+         * Admin review 2026-05-14: previously this banner rendered between
+         * `</section>` and `<div className="board">` in the main flow with
+         * `position: sticky`, which pushed every element below it down ~20-30
+         * px when it appeared/disappeared (every turn flip). Moving it inside
+         * the absolutely-positioned `.controls` sidebar keeps it next to End
+         * Turn / Step Opponent and OUT of the main flow, so the board no
+         * longer jitters on turn changes. The data-testid is preserved so
+         * existing scripts ([data-testid="waiting-banner"]) still match.
+         */}
+        {!isOurTurn && !isGameOver ? (
+          <div
+            className="waiting-banner waiting-banner-sidebar"
+            data-testid="waiting-banner"
+            role="status"
+            aria-live="polite"
+          >
+            {mode === "goldfish"
+              ? "Opponent's turn — click “Step Opponent”."
+              : "Waiting for opponent…"}
+          </div>
+        ) : null}
         <button
           type="button"
           data-testid="end-turn"
@@ -1181,18 +1203,8 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
         </div>
       ) : null}
 
-      {!isOurTurn && !isGameOver ? (
-        <div
-          className="waiting-banner"
-          data-testid="waiting-banner"
-          role="status"
-          aria-live="polite"
-        >
-          {mode === "goldfish"
-            ? "Opponent's turn — click “Step Opponent” to advance."
-            : "Waiting for opponent…"}
-        </div>
-      ) : null}
+      {/* Waiting-banner moved into <section className="controls"> above to
+       * avoid pushing the board down on turn flips (admin review 2026-05-14). */}
 
       <div
         className="board"

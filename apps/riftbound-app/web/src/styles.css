@@ -5001,7 +5001,15 @@ button {
 
 /* 2p: "Waiting for opponent" banner shown across the player strip when the
  * Local seat is not the active player. Pure presentation — gating is owned
- * By PlayPage's `isOurTurn` derivation. */
+ * By PlayPage's `isOurTurn` derivation.
+ *
+ * Admin review 2026-05-14: the original `position: sticky` rule reserved
+ * Layout height, so each appear/disappear cycle pushed the board down ~20-
+ * 30 px. The banner now lives INSIDE `.controls` (absolutely positioned
+ * Sidebar at right:0; top:36px) and uses `.waiting-banner-sidebar` overrides
+ * Below to fit the 280-px column without reflow. The legacy `.waiting-banner`
+ * Rule is kept (sticky variant) so any consumer outside `.controls` still
+ * Gets a reasonable look. */
 .waiting-banner {
   position: sticky;
   top: 0.5rem;
@@ -5018,6 +5026,25 @@ button {
   border: 1px solid rgba(255, 213, 74, 0.35);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   z-index: 50;
+}
+
+/* Sidebar variant: lives inside `.controls`, never reflows the board.
+ * Width matches the column; padding/font slightly tighter than the legacy
+ * Banner. Pulsing border draws the eye without screaming. */
+.waiting-banner-sidebar {
+  position: static;
+  margin: 0 0 4px 0;
+  max-width: 100%;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  border-radius: 8px;
+  animation: waiting-banner-pulse 2s ease-in-out infinite;
+}
+
+@keyframes waiting-banner-pulse {
+  0%, 100% { border-color: rgba(255, 213, 74, 0.35); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); }
+  50%      { border-color: rgba(255, 213, 74, 0.75); box-shadow: 0 4px 18px rgba(255, 213, 74, 0.18); }
 }
 
 /* Auth badge — Slice 0 (RiftAtlas parity). Fixed top-right; sits above
