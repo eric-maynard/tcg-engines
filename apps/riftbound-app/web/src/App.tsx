@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { PlayPage } from "./PlayPage";
+import { AuthBadge } from "./components/AuthBadge";
 
 /**
  * Root SPA component. The session id comes from `?session=<uuid>` in the
@@ -42,5 +43,10 @@ export function App() {
     return <div>Booting session…</div>;
   }
 
-  return <PlayPage sessionId={sessionId} localPlayerId={localPlayerId} />;
+  return (
+    <>
+      <AuthBadge />
+      <PlayPage sessionId={sessionId} localPlayerId={localPlayerId} />
+    </>
+  );
 }

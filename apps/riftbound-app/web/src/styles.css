@@ -5019,3 +5019,57 @@ button {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   z-index: 50;
 }
+
+/* Auth badge — Slice 0 (RiftAtlas parity). Fixed top-right; sits above
+ * the play page. Visual is restrained on purpose; this is a placeholder
+ * until the proper account menu lands in a later slice. */
+.auth-badge {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(20, 24, 36, 0.85);
+  color: #e6e8ee;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+.auth-badge-loading {
+  opacity: 0.6;
+}
+.auth-badge-signin {
+  color: #ffd54a;
+  text-decoration: none;
+  font-weight: 600;
+}
+.auth-badge-signin:hover {
+  text-decoration: underline;
+}
+.auth-badge-name {
+  font-weight: 600;
+  color: #e6e8ee;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auth-badge-signout {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #c0c4cc;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.auth-badge-signout:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
