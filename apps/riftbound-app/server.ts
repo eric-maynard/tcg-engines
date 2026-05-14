@@ -16,7 +16,7 @@ import { RuleEngine } from "@tcg/core";
 import type { PlayerId } from "@tcg/core";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { authenticateUser, createUser, getUserById } from "./src/db/user-repo";
+import { authenticateUser, createUser, getActiveDeckId, getUserById, setActiveDeck } from "./src/db/user-repo";
 import { createDeck, deleteDeck, getDeck, listDecks, listPublicDecks, updateDeck } from "./src/db/deck-repo";
 import type { DeckCardEntry, FullDeck, GameVersion } from "./src/db/deck-repo";
 import { formatDecklist, parseDecklist, validateDeck } from "./src/decklist";
@@ -199,6 +199,114 @@ setInterval(() => {
     if (now - lobby.createdAt > 30 * 60 * 1000 && lobby.status !== "started") {
       lobbyByCode.delete(lobby.code);
       lobbies.delete(id);
+    }
+  }
+}, 5 * 60 * 1000);
+
+// ========================================
+// Slice 2 — Matchmaking Rooms (HTTP/SSE)
+// ========================================
+//
+// A second, lighter-weight lobby system that lives alongside the WebSocket
+// Lobbies above. Used by /play/lobby/ in the SPA. Differences from the WS
+// System:
+//   - 6-char join codes (no O/0/I/1 ambiguous chars)
+//   - Always auth'd — host/guest map to a real `users` row, so a deck the
+//     Player picks can be looked up via `getDeck()` for engine session seed.
+//   - Real-time updates via SSE (matches `/api/v2/stream/:id` pattern).
+//   - Bridges into the existing /api/v2 engine session machinery on `start`
+//     — i.e. the lobby's job ends once the EngineSession is seeded with the
+//     Two decks; from then on slice 3 takes over for in-game realtime.
+interface RoomState {
+  code: string;
+  hostUserId: string;
+  hostDeckId: string | null;
+  guestUserId: string | null;
+  guestDeckId: string | null;
+  status: "waiting" | "ready" | "in-progress";
+  sessionId: string | null;
+  createdAt: number;
+}
+
+const rooms = new Map<string, RoomState>();
+const roomSubscribers = new Map<
+  string,
+  Set<ReadableStreamDefaultController<Uint8Array>>
+>();
+
+/** 6-char join code, no ambiguous chars (no O/0/I/1). */
+function generateRoomCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  for (let attempt = 0; attempt < 32; attempt++) {
+    let code = "";
+    for (let i = 0; i < 6; i++) {code += chars[Math.floor(Math.random() * chars.length)];}
+    if (!rooms.has(code)) {return code;}
+  }
+  throw new Error("Failed to generate unique room code after 32 attempts");
+}
+
+function buildRoomView(room: RoomState) {
+  // Expose user display names so the UI can show "Alice vs Bob" without
+  // An extra round-trip per player.
+  const host = getUserById(room.hostUserId);
+  const guest = room.guestUserId ? getUserById(room.guestUserId) : null;
+  return {
+    code: room.code,
+    createdAt: room.createdAt,
+    guest: room.guestUserId
+      ? {
+          deckId: room.guestDeckId,
+          displayName: guest?.displayName ?? guest?.username ?? "Player 2",
+          hasDeck: Boolean(room.guestDeckId),
+          userId: room.guestUserId,
+        }
+      : null,
+    host: {
+      deckId: room.hostDeckId,
+      displayName: host?.displayName ?? host?.username ?? "Player 1",
+      hasDeck: Boolean(room.hostDeckId),
+      userId: room.hostUserId,
+    },
+    sessionId: room.sessionId,
+    status: room.status,
+  };
+}
+
+function broadcastRoom(code: string): void {
+  const room = rooms.get(code);
+  if (!room) {return;}
+  const subs = roomSubscribers.get(code);
+  if (!subs || subs.size === 0) {return;}
+  const chunk = sseFormat("room", buildRoomView(room));
+  for (const controller of subs) {
+    try {
+      controller.enqueue(chunk);
+    } catch {
+      subs.delete(controller);
+    }
+  }
+}
+
+function destroyRoom(code: string): void {
+  const subs = roomSubscribers.get(code);
+  if (subs) {
+    for (const controller of subs) {
+      try {
+        controller.enqueue(sseFormat("closed", { code }));
+        controller.close();
+      } catch { /* Already closed */ }
+    }
+    roomSubscribers.delete(code);
+  }
+  rooms.delete(code);
+}
+
+// Reap rooms older than 30m that never started.
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, room] of rooms) {
+    if (now - room.createdAt > 30 * 60 * 1000 && room.status !== "in-progress") {
+      destroyRoom(code);
     }
   }
 }, 5 * 60 * 1000);
@@ -2681,7 +2789,236 @@ const server = Bun.serve({
       return json({ code, lobbyId });
     }
 
-    // GET /api/lobby/:id — get lobby state
+    // ========================================
+    // Slice 2 — Room (HTTP/SSE) routes
+    // ========================================
+    // NOTE: these are placed BEFORE the legacy `/api/lobby/:id` GET below so
+    // The more specific `/api/lobby/room/...` patterns don't get caught by
+    // The catch-all `^/api/lobby/[^/]+$` matcher.
+
+    // POST /api/lobby/room/create — auth'd create-room. Body: {} (no params).
+    // Returns the freshly created room view.
+    // (Path chosen so it doesn't collide with the legacy WS lobby's
+    // POST /api/lobby/create — see Lobby section above.)
+    if (pathname === "/api/lobby/room/create" && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      // Read+ignore body (callers may pass {} or nothing).
+      await req.json().catch(() => ({}));
+
+      const code = generateRoomCode();
+      // Optimistically seed the host's active deck if they have one set —
+      // Saves them a click in the room. Stale references are filtered out
+      // By getActiveDeckId.
+      const hostDeckId = getActiveDeckId(userId);
+      const room: RoomState = {
+        code,
+        createdAt: Date.now(),
+        guestDeckId: null,
+        guestUserId: null,
+        hostDeckId,
+        hostUserId: userId,
+        sessionId: null,
+        status: "waiting",
+      };
+      rooms.set(code, room);
+      return json(buildRoomView(room));
+    }
+
+    // GET /api/lobby/room/:code — fetch room state (public visibility).
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+$/) && req.method === "GET") {
+      const code = pathname.split("/")[4];
+      const room = rooms.get(code);
+      if (!room) {return json({ error: "Room not found" }, 404);}
+      return json(buildRoomView(room));
+    }
+
+    // POST /api/lobby/room/:code/join — auth'd guest join.
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+\/join$/) && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const code = pathname.split("/")[4];
+      const room = rooms.get(code);
+      if (!room) {return json({ error: "Room not found" }, 404);}
+      if (room.hostUserId === userId) {return json({ error: "You are the host of this room" }, 400);}
+      if (room.guestUserId && room.guestUserId !== userId) {
+        return json({ error: "Room is full" }, 400);
+      }
+      if (room.status === "in-progress") {return json({ error: "Game already started" }, 400);}
+
+      // Idempotent re-join: if the same user POSTs /join twice, we don't
+      // Wipe out their previously picked deck.
+      if (room.guestUserId !== userId) {
+        room.guestUserId = userId;
+        room.guestDeckId = getActiveDeckId(userId);
+      }
+      broadcastRoom(code);
+      return json(buildRoomView(room));
+    }
+
+    // POST /api/lobby/room/:code/pick-deck — host or guest picks their deck.
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+\/pick-deck$/) && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const code = pathname.split("/")[4];
+      const room = rooms.get(code);
+      if (!room) {return json({ error: "Room not found" }, 404);}
+      if (room.status === "in-progress") {return json({ error: "Game already started" }, 400);}
+
+      const body = (await req.json().catch(() => ({}))) as { deckId?: string };
+      const {deckId} = body;
+      if (!deckId || typeof deckId !== "string") {
+        return json({ error: "deckId required" }, 400);
+      }
+
+      // Verify the deck exists and is owned by the caller.
+      const deck = getDeck(deckId);
+      if (!deck || deck.userId !== userId) {
+        return json({ error: "Deck not found or not owned by you" }, 400);
+      }
+
+      if (userId === room.hostUserId) {
+        room.hostDeckId = deckId;
+      } else if (userId === room.guestUserId) {
+        room.guestDeckId = deckId;
+      } else {
+        return json({ error: "You are not in this room" }, 403);
+      }
+
+      // Auto-flip status to "ready" when both sides have picked.
+      if (room.hostDeckId && room.guestDeckId && room.status === "waiting") {
+        room.status = "ready";
+      }
+      broadcastRoom(code);
+      return json(buildRoomView(room));
+    }
+
+    // POST /api/lobby/room/:code/start — host-only. Both decks must be set.
+    // Creates an EngineSession (v2 demo session pipeline) seeded with the
+    // Two picked decks and returns the sessionId both players should redirect
+    // To (their browsers open /play/?session=<id>&as=player-1|2).
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+\/start$/) && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const code = pathname.split("/")[4];
+      const room = rooms.get(code);
+      if (!room) {return json({ error: "Room not found" }, 404);}
+      if (room.hostUserId !== userId) {return json({ error: "Only the host can start" }, 403);}
+      if (!room.guestUserId) {return json({ error: "No guest in room yet" }, 400);}
+      if (!room.hostDeckId || !room.guestDeckId) {
+        return json({ error: "Both players must pick a deck first" }, 400);
+      }
+      if (room.status === "in-progress" && room.sessionId) {
+        // Idempotent — return existing session.
+        return json(buildRoomView(room));
+      }
+
+      // Seed an EngineSession using realDecks (prebuilt) — the lobby's
+      // Recorded deckIds are propagated for future custom-deck plumbing.
+      // For slice 2, the realDecks=true path gives both players a playable
+      // Board; slice 3's SSE machinery synchronizes their two browsers.
+      const sessionId = crypto.randomUUID();
+      try {
+        demoSessions.set(
+          sessionId,
+          new EngineSession({ realDecks: true, seed: `lobby-${code}-${sessionId}` }),
+        );
+      } catch (error) {
+        console.error("[lobby/start] realDecks init failed, falling back:", error);
+        demoSessions.set(sessionId, new EngineSession({ seed: `lobby-${code}-${sessionId}` }));
+      }
+
+      room.sessionId = sessionId;
+      room.status = "in-progress";
+      broadcastRoom(code);
+      return json(buildRoomView(room));
+    }
+
+    // POST /api/lobby/room/:code/leave — caller leaves; if host, room dies.
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+\/leave$/) && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const code = pathname.split("/")[4];
+      const room = rooms.get(code);
+      if (!room) {return json({ ok: true });}
+
+      if (room.hostUserId === userId) {
+        // Host bail-out — destroy the room and notify any subscribers.
+        destroyRoom(code);
+        return json({ destroyed: true, ok: true });
+      }
+      if (room.guestUserId === userId) {
+        room.guestUserId = null;
+        room.guestDeckId = null;
+        if (room.status === "ready") {room.status = "waiting";}
+        broadcastRoom(code);
+        return json({ destroyed: false, ok: true });
+      }
+      // Not in this room — no-op.
+      return json({ ok: true });
+    }
+
+    // GET /api/lobby/room/:code/stream — Server-Sent Events stream for room state.
+    // Mirrors the /api/v2/stream/:id pattern.
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+\/stream$/) && req.method === "GET") {
+      const code = pathname.split("/")[4];
+      let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      const cleanup = () => {
+        if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+        const subs = roomSubscribers.get(code);
+        if (subs && controllerRef) {
+          subs.delete(controllerRef);
+          if (subs.size === 0) {roomSubscribers.delete(code);}
+        }
+      };
+      const stream = new ReadableStream<Uint8Array>({
+        cancel() { cleanup(); },
+        start(controller) {
+          controllerRef = controller;
+          const subs =
+            roomSubscribers.get(code)
+            ?? (() => {
+              const s = new Set<ReadableStreamDefaultController<Uint8Array>>();
+              roomSubscribers.set(code, s);
+              return s;
+            })();
+          subs.add(controller);
+
+          // Greet the client with current state (or a 'closed' sentinel if
+          // The room doesn't exist).
+          const room = rooms.get(code);
+          if (room) {
+            try {
+              controller.enqueue(sseFormat("room", buildRoomView(room)));
+            } catch { /* Best effort */ }
+          } else {
+            try {
+              controller.enqueue(sseFormat("closed", { code }));
+            } catch { /* */ }
+          }
+          heartbeat = setInterval(() => {
+            try {
+              controller.enqueue(sseEncoder.encode(`: ping ${Date.now()}\n\n`));
+            } catch { cleanup(); }
+          }, 20_000);
+        },
+      });
+      req.signal.addEventListener("abort", () => {
+        try { controllerRef?.close(); } catch { /* */ }
+        cleanup();
+      });
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          "Content-Type": "text/event-stream",
+        },
+      });
+    }
+
+    // GET /api/lobby/:id — get lobby state (legacy WS lobby system).
     if (pathname.match(/^\/api\/lobby\/[^/]+$/) && req.method === "GET") {
       const lobbyId = pathname.split("/")[3];
       const lobby = lobbies.get(lobbyId);
@@ -2997,6 +3334,31 @@ const server = Bun.serve({
       const user = getUserById(userId);
       if (!user) {return json({ error: "User not found" }, 404);}
       return json({ user });
+    }
+
+    // ========================================
+    // Slice 2 — Active deck (selected_deck on users)
+    // ========================================
+
+    // GET /api/users/me/active-deck — returns the user's selected deck (or null).
+    if (pathname === "/api/users/me/active-deck" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const deckId = getActiveDeckId(userId);
+      if (!deckId) {return json({ deck: null });}
+      const deck = getDeck(deckId);
+      return json({ deck: deck ?? null });
+    }
+
+    // POST /api/users/me/active-deck — sets the user's active deck.
+    // Body: {deckId: string | null}. Pass deckId=null to clear.
+    if (pathname === "/api/users/me/active-deck" && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const body = (await req.json().catch(() => ({}))) as { deckId?: string | null };
+      const ok = setActiveDeck(userId, body.deckId ?? null);
+      if (!ok) {return json({ error: "Deck not found or not owned by you" }, 400);}
+      return json({ deckId: body.deckId ?? null, ok: true });
     }
 
     // GET /api/auth/dev-credentials — auto-login for local dev

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { type SavedDeck, createDeck, deleteDeck, listDecks } from "./lib/deck-api";
+import { fetchActiveDeck, setActiveDeck } from "./lib/lobby-api";
 import { useAuth } from "./lib/useAuth";
 
 /**
  * DeckListPage — landing view at /play/decks/.
  *
  * Lists the signed-in user's saved decks with a "New Deck" button and per-row
- * Edit / Delete actions. Unauthenticated users see a sign-in prompt instead.
+ * Edit / Delete / Set-Active actions. The active deck (slice 2 step 1) is
+ * shown with an "Active" badge — it's the deck auto-selected when the user
+ * creates or joins a matchmaking room.
  */
 export function DeckListPage({
   onOpenDeck,
@@ -17,12 +20,15 @@ export function DeckListPage({
 }) {
   const { user, loading } = useAuth();
   const [decks, setDecks] = useState<SavedDeck[] | null>(null);
+  const [activeDeckId, setActiveDeckId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      setDecks(await listDecks());
+      const [d, a] = await Promise.all([listDecks(), fetchActiveDeck()]);
+      setDecks(d);
+      setActiveDeckId(a.deck?.id ?? null);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
     }
@@ -68,6 +74,15 @@ export function DeckListPage({
     }
   };
 
+  const onSetActive = async (id: string) => {
+    try {
+      await setActiveDeck(id);
+      setActiveDeckId(id);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   return (
     <div className="deck-list-page" data-testid="deck-list-page">
       <header className="deck-list-header">
@@ -106,9 +121,27 @@ export function DeckListPage({
               >
                 {d.name}
               </button>
+              {d.id === activeDeckId && (
+                <span
+                  className="deck-list-active-badge"
+                  data-testid={`deck-active-badge-${d.id}`}
+                >
+                  Active
+                </span>
+              )}
               <span className="deck-list-meta">
                 {d.format} · {d.gameVersion} · updated {d.updatedAt}
               </span>
+              {d.id !== activeDeckId && (
+                <button
+                  type="button"
+                  className="deck-list-set-active"
+                  onClick={() => void onSetActive(d.id)}
+                  data-testid={`deck-set-active-${d.id}`}
+                >
+                  Set as active
+                </button>
+              )}
               <button
                 type="button"
                 className="deck-list-delete"

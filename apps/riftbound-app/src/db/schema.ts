@@ -100,4 +100,13 @@ function runMigrations(db: Database): void {
     db.run("INSERT INTO schema_version (version) VALUES (3)");
     console.log("Database migrated to version 3");
   }
+
+  if (version < 4) {
+    // Selected_deck — the user's currently-active deck for matchmaking.
+    // Nullable; we don't use REFERENCES decks(id) here so that deleting a
+    // Deck doesn't blow up users' rows. The endpoint validates the FK.
+    db.run("ALTER TABLE users ADD COLUMN selected_deck TEXT");
+    db.run("INSERT INTO schema_version (version) VALUES (4)");
+    console.log("Database migrated to version 4");
+  }
 }

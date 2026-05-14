@@ -5244,3 +5244,155 @@ button {
   font-variant-numeric: tabular-nums;
 }
 .deck-zone-list button:hover { background: rgba(255,120,120,0.08); border-color: rgba(255,120,120,0.2); }
+
+/* ============================================================
+ * Slice 2 — Lobby + Room pages
+ * ============================================================ */
+.lobby-page, .room-page {
+  color: #e6e8ee;
+  background: #11131a;
+  min-height: 100vh;
+  padding: 4rem 1.5rem 1.5rem;
+  box-sizing: border-box;
+}
+.lobby-page h1, .room-page h1 { margin: 0 0 0.25rem; }
+.lobby-subtitle { color: #888c96; margin-top: 0; margin-bottom: 2rem; }
+
+.lobby-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  max-width: 720px;
+}
+.lobby-action-card {
+  background: #181a23;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.lobby-action-card h2 { margin: 0; font-size: 1.1rem; }
+.lobby-action-card p { margin: 0; color: #888c96; font-size: 0.9rem; }
+.lobby-action-card input {
+  background: #0c0e15;
+  color: #e6e8ee;
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+.lobby-action-card button {
+  background: #2a3147;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.lobby-action-card button:disabled { opacity: 0.5; cursor: not-allowed; }
+.lobby-error, .room-error {
+  background: rgba(255, 80, 80, 0.15);
+  border: 1px solid rgba(255, 80, 80, 0.35);
+  color: #ffc4c4;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  margin-top: 1rem;
+}
+
+.room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.room-code-bar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.room-code {
+  background: #0c0e15;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  padding: 0.4rem 0.9rem;
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 1.3rem;
+  letter-spacing: 0.3em;
+  color: #92b6ff;
+}
+.room-code-bar button {
+  background: #2a3147;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 0.4rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.room-players {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  max-width: 720px;
+  margin-bottom: 1.5rem;
+}
+.room-player-card {
+  background: #181a23;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.room-player-card.is-empty { opacity: 0.6; }
+.room-player-card.is-you { border-color: rgba(146,182,255,0.4); }
+.room-player-card h2 { margin: 0; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888c96; }
+.room-you-pill { color: #92b6ff; font-size: 0.75rem; text-transform: none; letter-spacing: 0; }
+.room-player-name { font-size: 1rem; }
+.room-player-deck { color: #888c96; font-size: 0.85rem; }
+.room-player-card select {
+  background: #0c0e15;
+  color: #e6e8ee;
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+}
+.room-status { color: #c0c4cc; font-size: 0.95rem; margin-bottom: 1rem; }
+.room-actions { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.room-actions button {
+  background: #2a3147;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.room-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.room-hint { color: #888c96; font-size: 0.85rem; }
+
+.deck-list-active-badge {
+  background: rgba(146,182,255,0.18);
+  color: #92b6ff;
+  border: 1px solid rgba(146,182,255,0.35);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.deck-list-set-active {
+  background: transparent;
+  color: #92b6ff;
+  border: 1px solid rgba(146,182,255,0.3);
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+}

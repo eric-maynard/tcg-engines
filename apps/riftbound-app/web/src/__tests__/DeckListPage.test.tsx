@@ -52,6 +52,7 @@ describe("DeckListPage", () => {
     mockFetchByPath({
       "/api/auth/me": { body: { user: { displayName: null, id: "u-1", username: "eric" } }, status: 200 },
       "/api/decks": { body: [], status: 200 },
+      "/api/users/me/active-deck": { body: { deck: null }, status: 200 },
     });
     render(<DeckListPage onOpenDeck={() => {}} onNavigatePlay={() => {}} />);
     await waitFor(() => {
@@ -92,6 +93,7 @@ describe("DeckListPage", () => {
     mockFetchByPath({
       "/api/auth/me": { body: { user: { displayName: null, id: "u-1", username: "eric" } }, status: 200 },
       "/api/decks": { body: decks, status: 200 },
+      "/api/users/me/active-deck": { body: { deck: null }, status: 200 },
     });
     render(<DeckListPage onOpenDeck={() => {}} onNavigatePlay={() => {}} />);
     await waitFor(() => {
@@ -99,5 +101,39 @@ describe("DeckListPage", () => {
     });
     expect(screen.getByText("Aggro Trundle")).toBeInTheDocument();
     expect(screen.getByText("Control Lulu")).toBeInTheDocument();
+  });
+
+  it("renders an Active badge on the user's currently-active deck", async () => {
+    const decks = [
+      {
+        championId: "c1",
+        createdAt: "2026-05-01",
+        description: "",
+        format: "duel",
+        gameVersion: "standard",
+        id: "deck-1",
+        isPublic: false,
+        legendId: "l1",
+        name: "Aggro Trundle",
+        updatedAt: "2026-05-13",
+        userId: "u-1",
+      },
+    ];
+    mockFetchByPath({
+      "/api/auth/me": { body: { user: { displayName: null, id: "u-1", username: "eric" } }, status: 200 },
+      "/api/decks": { body: decks, status: 200 },
+      "/api/users/me/active-deck": {
+        body: {
+          deck: { championId: "c1", id: "deck-1", legendId: "l1", name: "Aggro Trundle" },
+        },
+        status: 200,
+      },
+    });
+    render(<DeckListPage onOpenDeck={() => {}} onNavigatePlay={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByTestId("deck-active-badge-deck-1")).toBeInTheDocument();
+    });
+    // The active deck does NOT show a "Set as active" button (already active).
+    expect(screen.queryByTestId("deck-set-active-deck-1")).not.toBeInTheDocument();
   });
 });
