@@ -261,10 +261,26 @@ export function App() {
   }
 
   // Route.kind === "play"
+  // RiftAtlas parity: the play board fills the whole viewport. Top nav is
+  // Hidden during gameplay so chrome doesn't crowd the table. The user
+  // Still has an "Exit" affordance via the small floating link in the
+  // Top-left corner (rendered below). AuthBadge remains visible so the
+  // Session indicator stays available.
   return (
     <>
       <AuthBadge />
-      <TopNav {...navProps} current="play" />
+      <a
+        href="/play/lobby/"
+        className="rb-exit-room"
+        data-testid="rb-exit-room"
+        title="Exit to lobby"
+        onClick={(ev) => {
+          ev.preventDefault();
+          goLobby();
+        }}
+      >
+        ← Lobby
+      </a>
       <PlayPage
         sessionId={route.sessionId}
         localPlayerId={route.localPlayerId}

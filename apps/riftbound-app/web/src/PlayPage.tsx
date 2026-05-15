@@ -1629,8 +1629,15 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
         ================================================================ */}
         <div className="board-main rb-board-main" data-testid="rb-board-main">
 
-            {/* Score tracks 0..8 — opponent (top-right) + player (bottom-left). */}
-            <div className="rb-identity-rail rb-identity-rail--opponent" aria-hidden="true">
+            {/* Score tracks 0..8 — opponent (top-right) + player (bottom-left).
+                data-name drives the rotated side label (CSS ::after pulls it
+                from this attribute, so "Tester" / "Goldfish" can match the
+                player display names without leaking text into the a11y tree. */}
+            <div
+              className="rb-identity-rail rb-identity-rail--opponent"
+              aria-hidden="true"
+              data-name={opponent?.name ?? opponent?.id ?? "Opponent"}
+            >
               {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
                 <div
                   key={`opp-${n}`}
@@ -1642,7 +1649,11 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
                 </div>
               ))}
             </div>
-            <div className="rb-identity-rail rb-identity-rail--player" aria-hidden="true">
+            <div
+              className="rb-identity-rail rb-identity-rail--player"
+              aria-hidden="true"
+              data-name={us.name ?? us.id ?? "You"}
+            >
               {[8, 7, 6, 5, 4, 3, 2, 1, 0].map((n) => (
                 <div
                   key={`self-${n}`}
