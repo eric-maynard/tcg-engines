@@ -347,10 +347,18 @@ export interface SetupState {
  *    `"to-hand"`); the un-picked remainder is handled by `onUnpicked`
  *    (default `"recycle"`).
  *
+ *  - `"pick-mode"` — modal/choose-one effect (Flurry of Feathers —
+ *    "Choose one — Counter a spell. Play four Bird tokens."). The caster
+ *    picks an option index; the engine then fires that branch's effect.
+ *    Used for any `type:"choice"` effect with an `options[]` array.
+ *
  * While a pending choice exists, only `resolvePendingChoice` is a legal
  * move.
  */
-export type PendingChoice = RevealAndPickChoice | LookAndPickChoice;
+export type PendingChoice =
+  | RevealAndPickChoice
+  | LookAndPickChoice
+  | PickModeChoice;
 
 /**
  * Reveal-hand + pick variant. Backward-compatible with the original
@@ -421,6 +429,61 @@ export interface LookAndPickChoice {
    * preserves printed order on top of deck. `"trash"` mills the rest.
    */
   readonly onUnpicked: "recycle" | "to-top" | "trash";
+}
+
+/**
+ * Pick-mode variant — caster chooses one of N modes (Flurry of Feathers
+ * "Choose one — Counter a spell. Play 4 Bird tokens.").
+ *
+ * Stored on the game state when a `type:"choice"` effect with `options[]`
+ * resolves. The caster picks an `index` (0..options.length-1) via
+ * `resolvePendingChoice`, after which the engine fires that option's
+ * `effect` through `executeEffect` and clears the pendingChoice.
+ *
+ * Source-card context (`sourceCardId`, `sourceZone`) is captured at the
+ * moment the choice is offered so the chosen branch resolves with the
+ * original source/cast context (e.g. so "Counter a spell" knows what to
+ * counter — it walks the chain — rather than treating the resolution as
+ * a free-standing effect).
+ */
+export interface PickModeChoice {
+  /** Discriminator. */
+  readonly type: "pick-mode";
+
+  /** The picker (active player / caster). */
+  readonly prompter: PlayerId;
+
+  /**
+   * Source card that produced this choice. Forwarded as `sourceCardId`
+   * when the chosen branch is executed.
+   */
+  readonly sourceCardId: CardId;
+
+  /**
+   * Zone the source card was in when the choice was offered.
+   * Forwarded as `sourceZone` when the chosen branch is executed.
+   */
+  readonly sourceZone?: string;
+
+  /**
+   * Variables (e.g. X-cost values) captured at the time the choice was
+   * offered. Forwarded into the resolution context so the chosen branch
+   * resolves with the same numeric bindings.
+   */
+  readonly variables?: Record<string, number>;
+
+  /**
+   * The modes the player is choosing between. `index` is the canonical
+   * key the resolution move uses; `label` is human-readable. `effect` is
+   * the opaque `ExecutableEffect` payload to fire when the option is
+   * picked (typed as `unknown` here to avoid an import cycle with
+   * `effect-executor.ts`).
+   */
+  readonly options: readonly {
+    readonly index: number;
+    readonly label: string;
+    readonly effect: unknown;
+  }[];
 }
 
 /**

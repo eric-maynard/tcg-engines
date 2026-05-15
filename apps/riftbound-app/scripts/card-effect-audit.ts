@@ -156,10 +156,21 @@ interface BuildArgs {
   cardId: string;
   cardType: string; // Unit / spell / gear / equipment / rune / legend / champion / battlefield
   sourceZone: string;
+  /**
+   * Optional override for where the source card is physically placed.
+   * Defaults to `sourceZone`. Set this when you want `ctx.sourceZone`
+   * (the "here" anchor used by the move handler) to differ from the
+   * Source card's actual zone — used to model "move me to here"
+   * Triggers that fire while the source unit sits on base but the
+   * Trigger context (e.g. a defend at a battlefield) anchors "here"
+   * Elsewhere.
+   */
+  sourceCardZone?: string;
 }
 
 function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; zoneOf: Map<string, string> } {
   const { cardId, sourceZone } = args;
+  const sourceCardZone = args.sourceCardZone ?? sourceZone;
 
   // Populate dummies so target resolution + zone scans find SOMETHING.
   // We populate every zone the various effect handlers might read.
@@ -183,13 +194,20 @@ function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; 
   // Observe. In a real game the parser would resolve `self` to the
   // *Chosen* unit's might; we don't model that, so we just set the source
   // Might to a fixed positive value.
-  addCard(cardId, sourceZone, { cardType: args.cardType, id: cardId, might: 3, name: "source" });
+  addCard(cardId, sourceCardZone, { cardType: args.cardType, id: cardId, might: 3, name: "source" });
 
   // Friendly units on base + a battlefield so unit-target effects resolve.
   addCard("dummy-friendly-unit-base", "base", { cardType: "unit", id: "dummy-friendly-unit-base", might: 3, name: "dummy-friendly" });
   addCard("dummy-friendly-unit-bf", "battlefield-bf-1", { cardType: "unit", id: "dummy-friendly-unit-bf", might: 3, name: "dummy-friendly-bf" });
   // Enemy unit on the same battlefield so enemy-controller targets work.
   addCard("dummy-enemy-unit-bf", "battlefield-bf-1", { cardType: "unit", id: "dummy-enemy-unit-bf", might: 3, name: "dummy-enemy" });
+  // Enemy unit on a SECOND battlefield so "move to here" effects that
+  // Target enemies "at a different location" (Iascylla, Evelynn
+  // Entrancing) have a candidate that isn't already at the destination.
+  // Without a second battlefield the only enemy unit is at source-zone
+  // (bf-1), and the move handler's "skip if already at destination"
+  // Filter drops it — masking the move handler as broken.
+  addCard("dummy-enemy-unit-bf2", "battlefield-bf-2", { cardType: "unit", id: "dummy-enemy-unit-bf2", might: 3, name: "dummy-enemy-bf2" });
   // Friendly gear / equipment so gear-target effects resolve.
   addCard("dummy-friendly-gear", "base", { cardType: "gear", id: "dummy-friendly-gear", might: 0, name: "dummy-gear" });
   // Cards in hand so `discard` works.
@@ -215,6 +233,7 @@ function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; 
   ownerOf.set("dummy-friendly-unit-base", PLAYER);
   ownerOf.set("dummy-friendly-unit-bf", PLAYER);
   ownerOf.set("dummy-enemy-unit-bf", OPP);
+  ownerOf.set("dummy-enemy-unit-bf2", OPP);
   ownerOf.set("dummy-friendly-gear", PLAYER);
   ownerOf.set("dummy-hand-1", PLAYER);
   ownerOf.set("dummy-hand-2", PLAYER);
@@ -237,7 +256,13 @@ function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; 
     shuffleCalls: [],
   };
 
-  const battlefields: Record<string, unknown> = { "bf-1": { controllingPlayer: undefined, id: "bf-1" } };
+  // Two battlefields so move-to-here effects targeting enemy units "at a
+  // Different location" (Iascylla, Evelynn Entrancing) have a candidate
+  // That isn't already at the destination.
+  const battlefields: Record<string, unknown> = {
+    "bf-1": { controllingPlayer: undefined, id: "bf-1" },
+    "bf-2": { controllingPlayer: undefined, id: "bf-2" },
+  };
 
   const draft = {
     battlefields,
@@ -705,7 +730,24 @@ for (const card of allCards) {
     // "here" / "battlefield" resolve consistently. Real engine source-zone
     // Semantics for hand-resident spells are slightly different, but most
     // Card text either doesn't care or means the battlefield context.
+    //
+    // Default sourceZone (= "here" anchor used by the move handler) is
+    // The battlefield. For `move` effects with `target: "self"` AND
+    // `to: "here"` (Loyal Pup, Azir Ascendant, Vex Mocking — "you may
+    // Move me there"), the SOURCE CARD is placed on base instead so the
+    // Move actually transitions a zone (base → battlefield). In a real
+    // Game the defend/attack trigger context anchors "here" at a
+    // Battlefield while the unit waiting to react sits on base.
+    const primaryEffect = info.primary as { type?: string; target?: unknown; to?: unknown } | null;
+    const isSelfToHere =
+      primaryEffect?.type === "move" &&
+      (primaryEffect.target === "self" ||
+        (typeof primaryEffect.target === "object" &&
+          primaryEffect.target !== null &&
+          (primaryEffect.target as { type?: string }).type === "self")) &&
+      primaryEffect.to === "here";
     const sourceZone = "battlefield-bf-1";
+    const sourceCardZone = isSelfToHere ? "base" : sourceZone;
 
     // Static abilities flow through static-abilities.ts (recalculated at
     // Board scans), NOT through executeEffect. Running executeEffect on a
@@ -731,6 +773,7 @@ for (const card of allCards) {
       const { ctx, rec } = buildContext({
         cardId: card.id as string,
         cardType: card.cardType as string,
+        sourceCardZone,
         sourceZone,
       });
       executeEffect(info.primary, ctx);

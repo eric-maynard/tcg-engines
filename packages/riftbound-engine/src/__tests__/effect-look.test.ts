@@ -174,7 +174,7 @@ describe("look effect (Stacked Deck pattern)", () => {
 
     executeEffect(effect, ctx);
 
-    expect(draft.pendingChoice?.revealed).toEqual(["only-1"]);
+    expect((draft.pendingChoice as { revealed?: readonly string[] } | undefined)?.revealed).toEqual(["only-1"]);
   });
 
   it("uses runeDeck zone when from === 'rune-deck'", () => {
@@ -201,7 +201,7 @@ describe("look effect (Stacked Deck pattern)", () => {
     executeEffect(effect, ctx);
 
     expect(observedZone).toBe("runeDeck");
-    expect(draft.pendingChoice?.revealed).toEqual(["rune-top"]);
+    expect((draft.pendingChoice as { revealed?: readonly string[] } | undefined)?.revealed).toEqual(["rune-top"]);
   });
 });
 
@@ -477,7 +477,7 @@ describe("look → resolve end-to-end (Stacked Deck pattern)", () => {
       ctx,
     );
     expect(draft.pendingChoice?.type).toBe("look-and-pick");
-    expect(draft.pendingChoice?.revealed).toEqual(["a", "b", "c"]);
+    expect((draft.pendingChoice as { revealed?: readonly string[] } | undefined)?.revealed).toEqual(["a", "b", "c"]);
 
     // Step 2: resolve — pick "b".
     const moves: { cardId: string; targetZoneId: string; position?: string }[] = [];

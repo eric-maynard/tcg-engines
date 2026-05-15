@@ -122,6 +122,18 @@ export function resolveTarget(
     return [];
   }
 
+  // Bare-string "self" target — some card definitions use the shorthand
+  // `target: "self"` rather than the object form `{ type: "self" }`
+  // (e.g. Ezreal Dashing's activated move-self-to-base ability). Without
+  // This branch the bare string falls through to the board-scan logic
+  // Below, where the runtime accesses `.type` / `.controller` / `.location`
+  // On a string (all `undefined`), and the resolver returns an arbitrary
+  // Board card instead of the source. Match `target.type === "self"`
+  // Below stays for the object form.
+  if ((target as unknown) === "self") {
+    return [ctx.sourceCardId];
+  }
+
   // Self target
   if (target.type === "self") {
     return [ctx.sourceCardId];
@@ -276,6 +288,14 @@ export function resolveTarget(
   //   - `number` → exactly N (slice; if fewer candidates, return what's there)
   //   - undefined → exactly 1 (back-compat default)
   if (target.quantity === "all") {
+    return filtered;
+  }
+  // `quantity: "any"` — player chooses any number of matching candidates,
+  // Including zero. The deterministic resolver returns ALL matching
+  // Candidates; the caller's effect handler decides how many to act on
+  // (Tricksy Tentacles moves all chosen units; without this case the
+  // Default `slice(0, 1)` below caps multi-target moves at one card).
+  if (target.quantity === "any") {
     return filtered;
   }
   if (typeof target.quantity === "object" && target.quantity !== null) {

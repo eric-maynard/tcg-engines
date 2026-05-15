@@ -465,4 +465,77 @@ describe("move effect (edge cases)", () => {
 
     expect(movedCalls).toHaveLength(0);
   });
+
+  // Regression: Ezreal, Dashing — bare-string `target: "self"` with other
+  // Board cards present. Before the resolver-side fix, the bare string
+  // Fell through to the board-scan branch, which returned a non-self card
+  // And caused the move handler to act on the wrong unit (or no-op).
+  it("moves the source even when other unrelated units exist on the board (bare-string target: 'self')", () => {
+    const { ctx, movedCalls, zoneOf } = buildMockCtx({
+      cards: [
+        { id: "decoy-friendly-base", owner: "p1", zone: "base" },
+        { id: "decoy-friendly-bf", owner: "p1", zone: "battlefield-bf-1" },
+        { id: "decoy-enemy-bf", owner: "p2", zone: "battlefield-bf-1" },
+      ],
+      sourceCardId: "ezreal",
+      sourceZone: "battlefield-bf-1",
+    });
+
+    const effect: ExecutableEffect = {
+      target: "self",
+      to: "base",
+      type: "move",
+    } as unknown as ExecutableEffect;
+
+    executeEffect(effect, ctx);
+
+    expect(movedCalls).toHaveLength(1);
+    expect(movedCalls[0]).toEqual({ cardId: "ezreal", targetZoneId: "base" });
+    expect(zoneOf.get("ezreal")).toBe("base");
+    // Decoys untouched.
+    expect(zoneOf.get("decoy-friendly-base")).toBe("base");
+    expect(zoneOf.get("decoy-friendly-bf")).toBe("battlefield-bf-1");
+    expect(zoneOf.get("decoy-enemy-bf")).toBe("battlefield-bf-1");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tricksy Tentacles pattern: `quantity: "any"` — multi-target move
+// ---------------------------------------------------------------------------
+
+describe("move effect (Tricksy Tentacles pattern: quantity 'any')", () => {
+  it("moves all matching enemy units when quantity is 'any'", () => {
+    const { ctx, movedCalls, zoneOf } = buildMockCtx({
+      battlefieldIds: ["bf-1", "bf-2"],
+      cards: [
+        { id: "e1", owner: "p2", zone: "battlefield-bf-1" },
+        { id: "e2", owner: "p2", zone: "battlefield-bf-1" },
+        { id: "e3", owner: "p2", zone: "battlefield-bf-1" },
+        { id: "friend", owner: "p1", zone: "battlefield-bf-1" },
+      ],
+      sourceCardId: "tricksy",
+      sourceZone: "battlefield-bf-1",
+    });
+
+    const effect: ExecutableEffect = {
+      target: {
+        controller: "enemy",
+        location: "battlefield",
+        quantity: "any",
+        type: "unit",
+      },
+      to: { battlefield: "any" },
+      type: "move",
+    } as unknown as ExecutableEffect;
+
+    executeEffect(effect, ctx);
+
+    // All three enemies should move to bf-2 (the non-source battlefield).
+    expect(movedCalls).toHaveLength(3);
+    for (const e of ["e1", "e2", "e3"]) {
+      expect(zoneOf.get(e)).toBe("battlefield-bf-2");
+    }
+    // Friendly unit untouched.
+    expect(zoneOf.get("friend")).toBe("battlefield-bf-1");
+  });
 });

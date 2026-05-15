@@ -15,8 +15,16 @@
  * disposition, and clears the state.
  */
 
-import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
+import type {
+  CardId as CoreCardId,
+  PlayerId as CorePlayerId,
+  ZoneId as CoreZoneId,
+  GameMoveDefinitions,
+} from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { executeEffect } from "../../abilities/effect-executor";
+import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
+import { dispatchEvent } from "../../events/dispatcher";
 import type {
   LookAndPickChoice,
   PendingChoice,
@@ -31,6 +39,11 @@ import type {
  * choice (i.e., is in the revealed snapshot and passes the filter).
  */
 export function isValidPendingPick(choice: PendingChoice, cardId: string): boolean {
+  // Pick-mode uses a numeric option index in its own move param —
+  // `resolvePendingChoice.pickedCardId` is not consulted for this variant.
+  if (choice.type === "pick-mode") {
+    return false;
+  }
   if (!choice.revealed.includes(cardId)) {
     return false;
   }
@@ -49,10 +62,27 @@ export function isValidPendingPick(choice: PendingChoice, cardId: string): boole
 }
 
 /**
+ * Returns true when the given option index is a valid pick for a
+ * pick-mode pendingChoice.
+ */
+export function isValidPendingOption(choice: PendingChoice, index: number): boolean {
+  if (choice.type !== "pick-mode") {
+    return false;
+  }
+  return Number.isInteger(index) && index >= 0 && index < choice.options.length;
+}
+
+/**
  * Pick a default (goldfish) card for the choice: the first revealed card
  * that passes the filter. Returns undefined if no valid pick exists.
  */
 export function pickDefaultForChoice(choice: PendingChoice): string | undefined {
+  if (choice.type === "pick-mode") {
+    // Pick-mode doesn't pick a card. Callers that goldfish a pick-mode
+    // Should consult `options[0]?.index` and use the `pickedOptionIndex`
+    // Move param instead.
+    return undefined;
+  }
   return choice.revealed.find((id) => isValidPendingPick(choice, id));
 }
 
@@ -116,6 +146,9 @@ export const pendingChoiceMoves: Partial<
       if (choice.prompter !== context.params.playerId) {
         return false;
       }
+      if (choice.type === "pick-mode") {
+        return isValidPendingOption(choice, context.params.pickedOptionIndex as number);
+      }
       return isValidPendingPick(choice, context.params.pickedCardId as string);
     },
     enumerator: (state, context) => {
@@ -125,6 +158,21 @@ export const pendingChoiceMoves: Partial<
       }
       if (choice.prompter !== (context.playerId as string)) {
         return [];
+      }
+      if (choice.type === "pick-mode") {
+        // Pick-mode enumerates by option index, not by revealed card id.
+        const results: {
+          playerId: string;
+          pickedOptionIndex: number;
+          pickedCardId?: string;
+        }[] = [];
+        for (const opt of choice.options) {
+          results.push({
+            pickedOptionIndex: opt.index,
+            playerId: context.playerId as string,
+          });
+        }
+        return results;
       }
       const results: { playerId: string; pickedCardId: string }[] = [];
       for (const cardId of choice.revealed) {
@@ -142,6 +190,79 @@ export const pendingChoiceMoves: Partial<
       if (!choice) {
         return;
       }
+
+      // Pick-mode (modal "Choose one — A. B.") — fire the chosen option's
+      // Effect through `executeEffect` and clear the pendingChoice.
+      if (choice.type === "pick-mode") {
+        const { pickedOptionIndex } = context.params;
+        if (!isValidPendingOption(choice, pickedOptionIndex as number)) {
+          return;
+        }
+        const option = choice.options[pickedOptionIndex as number];
+        if (!option) {
+          return;
+        }
+        // Clear the choice BEFORE firing the option's effect so the chosen
+        // Branch can itself set a new pendingChoice (e.g. an option that
+        // Does a `look` / `reveal-hand`).
+        const optionEffect = option.effect as ExecutableEffect;
+        const {sourceCardId} = choice;
+        const {sourceZone} = choice;
+        const {variables} = choice;
+        draft.pendingChoice = undefined;
+
+        // Build the EffectContext from the reducer's `context` so the
+        // Option's effect resolves with the same zone/card/counter ops the
+        // Engine normally provides during effect resolution.
+        const effectCtx: EffectContext = {
+          cards: {
+            getCardController: context.cards.getCardController as
+              | EffectContext["cards"]["getCardController"]
+              | undefined,
+            getCardMeta: context.cards.getCardMeta as
+              EffectContext["cards"]["getCardMeta"],
+            getCardOwner: context.cards.getCardOwner,
+            setCardController: context.cards.setCardController as
+              | EffectContext["cards"]["setCardController"]
+              | undefined,
+            updateCardMeta: context.cards.updateCardMeta as
+              EffectContext["cards"]["updateCardMeta"],
+          },
+          counters: {
+            addCounter: context.counters.addCounter,
+            clearCounter: context.counters.clearCounter,
+            removeCounter: context.counters.removeCounter,
+            setFlag: context.counters.setFlag,
+          },
+          draft,
+          fireTriggers: (event) =>
+            dispatchEvent(
+              {
+                cards: context.cards,
+                counters: context.counters,
+                draft,
+                zones: context.zones,
+              } as unknown as Parameters<typeof dispatchEvent>[0],
+              event,
+            ),
+          playerId: choice.prompter as CorePlayerId,
+          sourceCardId,
+          sourceZone,
+          ...(variables ? { variables } : {}),
+          zones: {
+            drawCards: context.zones.drawCards as EffectContext["zones"]["drawCards"],
+            getCardZone: context.zones.getCardZone as EffectContext["zones"]["getCardZone"],
+            getCardsInZone: context.zones.getCardsInZone,
+            moveCard: context.zones.moveCard as EffectContext["zones"]["moveCard"],
+            shuffleZone: context.zones.shuffleZone as
+              | EffectContext["zones"]["shuffleZone"]
+              | undefined,
+          },
+        };
+        executeEffect(optionEffect, effectCtx);
+        return;
+      }
+
       const { pickedCardId } = context.params;
 
       if (!isValidPendingPick(choice, pickedCardId as string)) {

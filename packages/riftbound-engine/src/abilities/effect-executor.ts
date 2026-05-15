@@ -69,6 +69,23 @@ export interface ExecutableEffect {
   readonly then?: ExecutableEffect;
   /** For conditional effects: the branch executed when the condition is false. */
   readonly else?: ExecutableEffect;
+  /**
+   * For `damage` effects: when true, the source distributes the total
+   * damage `amount` *across* the resolved targets (Alpha Strike: "deals
+   * damage equal to its Might split among enemy units at battlefields").
+   * Without `split`, the amount is dealt to every target independently
+   * (rule 715.2 / standard "deal N damage to each X" wording).
+   *
+   * Distribution policy (real play: active player chooses; goldfish /
+   * audit: deterministic): the engine divides the total `amount` evenly
+   * across targets, distributing any remainder to the earliest-resolved
+   * targets one extra each. So 5 damage split across 3 targets becomes
+   * [2, 2, 1]. With more damage than targets, the engine guarantees every
+   * target takes at least 1 (assuming `amount >= targets.length`).
+   */
+  readonly split?: boolean;
+  /** For `choice` effects: parser-emitted options list. */
+  readonly options?: { effect: ExecutableEffect }[];
 }
 
 /**
@@ -215,9 +232,31 @@ function resolveAmount(amount: unknown, ctx: EffectContext): number {
   }
   // Handle AmountExpression objects
   if ("might" in amount) {
-    const target = amount.might as string;
-    if (target === "self") {
+    const mightSpec = (amount as { might: unknown }).might;
+    // `{ might: "self" }` — the source card's effective Might. Used by
+    // Stormbringer-style "deals damage equal to its Might" effects.
+    if (mightSpec === "self") {
       return getEffectiveMight(ctx.sourceCardId, ctx);
+    }
+    // `{ might: <TargetDescriptor> }` — pick a unit matching the
+    // Descriptor and use that unit's effective Might. This is the shape the
+    // Parser emits for Alpha Strike-style "deals damage equal to its Might"
+    // Where "it" is a chosen friendly unit (TargetDescriptor object).
+    // Real play: the player picks the unit; the audit / goldfish picks the
+    // First match deterministically.
+    if (mightSpec && typeof mightSpec === "object") {
+      const targets = resolveTarget(mightSpec as TargetDescriptor, {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      });
+      if (targets.length > 0 && targets[0]) {
+        return getEffectiveMight(targets[0] as string, ctx);
+      }
+      return 0;
     }
   }
   if ("cardsInHand" in amount) {
@@ -558,7 +597,26 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       const damageBonus = getBonusDamage(ctx.sourceCardId, sourceKind, ctx.playerId, ctx);
       const amount = baseAmount + damageBonus;
       const targets = getTargetIds(effect, ctx);
-      for (const targetId of targets) {
+      // Per-target damage allocations. When `split: true` (Alpha Strike
+      // Style), the source distributes the total `amount` across the
+      // Resolved targets evenly with remainder front-loaded. Without
+      // `split`, every target takes the full `amount` (standard
+      // "deals N damage to each" wording).
+      const splitAcross = effect.split === true && targets.length > 0;
+      let perTarget: number[];
+      if (splitAcross) {
+        const base = Math.floor(amount / targets.length);
+        const remainder = amount - base * targets.length;
+        perTarget = targets.map((_, i) => base + (i < remainder ? 1 : 0));
+      } else {
+        perTarget = targets.map(() => amount);
+      }
+      for (let i = 0; i < targets.length; i++) {
+        const targetId = targets[i] as string;
+        const targetAmount = perTarget[i] ?? 0;
+        if (targetAmount <= 0) {
+          continue;
+        }
         // Rule 460.2.c.9 — a unit that cannot be dealt damage takes none
         // (the `damage` game action is a no-op against it).
         const targetMeta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
@@ -578,7 +636,7 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           zones: { getCardsInZone: ctx.zones.getCardsInZone },
         };
         const replacement = checkReplacement(
-          { amount, cardId: targetId, owner, type: "take-damage" },
+          { amount: targetAmount, cardId: targetId, owner, type: "take-damage" },
           replacementCtx as Parameters<typeof checkReplacement>[1],
         );
         if (replacement) {
@@ -595,7 +653,7 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
         // Reduce the dealt damage by it (never below 0) and reduce the
         // Tracked value by the prevented amount; expire it when it hits 0.
         const tracked = targetMeta?.preventDamage as number | "all" | undefined;
-        const { dealt, remaining } = applyPrevent(amount, tracked);
+        const { dealt, remaining } = applyPrevent(targetAmount, tracked);
         if (tracked !== undefined && remaining !== tracked) {
           ctx.cards.updateCardMeta?.(
             targetId as CoreCardId,
@@ -972,7 +1030,12 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       // Explicit numbers behave the same way the resolver does — see the
       // Comment in `target-resolver.ts` on `TargetDescriptor.quantity`.
       let movers = viableMovers;
-      if (originalQuantity === "all") {
+      if (originalQuantity === "all" || originalQuantity === "any") {
+        // "all" — every matching candidate. "any" — player chooses any
+        // Number; the deterministic engine resolves to all (UI would
+        // Render a chooser). Tricksy Tentacles "Move any number of enemy
+        // Units" relies on the "any" branch — without it the default
+        // Slice(0,1) below caps the move at a single unit.
         movers = viableMovers;
       } else if (typeof originalQuantity === "object" && originalQuantity !== null) {
         if ("upTo" in originalQuantity) {
@@ -1789,11 +1852,42 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "choice": {
-      // Player chooses one option — pick the first option for now (needs UI input)
-      const { options } = effect as unknown as { options?: { effect: ExecutableEffect }[] };
-      if (options && options.length > 0 && options[0]?.effect) {
-        executeEffect(options[0].effect, ctx);
+      // Modal "Choose one — A. B." effect (Flurry of Feathers, Disposal
+      // Order, Curtain Call, …). Write a `pick-mode` pendingChoice so the
+      // UI (or AI) can pick a branch; the chosen branch is fired by
+      // `resolvePendingChoice` (see moves/pending-choice.ts).
+      //
+      // Auto-resolving to "the first executable option" here was wrong for
+      // Modal spells — the caster is the one who picks. We now pause play
+      // Until the caster (or, for goldfish runs, the harness) resolves
+      // The pendingChoice via the move API.
+      const { options } = effect as unknown as {
+        options?: {
+          effect: ExecutableEffect;
+          label?: string;
+          description?: string;
+        }[];
+      };
+      if (!options || options.length === 0) {
+        break;
       }
+      // If a pendingChoice is already set (rare nested case — e.g. a
+      // Modal effect's earlier option fired a `look`), don't clobber it.
+      if (ctx.draft.pendingChoice) {
+        break;
+      }
+      ctx.draft.pendingChoice = {
+        options: options.map((opt, i) => ({
+          effect: opt.effect as unknown,
+          index: i,
+          label: opt.label ?? opt.description ?? `Option ${i + 1}`,
+        })),
+        prompter: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        type: "pick-mode",
+        ...(ctx.sourceZone ? { sourceZone: ctx.sourceZone } : {}),
+        ...(ctx.variables ? { variables: { ...ctx.variables } } : {}),
+      };
       break;
     }
 
