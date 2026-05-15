@@ -1178,7 +1178,7 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
             onClick: () => {
               void manualSpawnToken(sessionId, {
                 controller,
-                tokenSpec: { name: "Bird Token", might: 1 },
+                tokenSpec: { might: 1, name: "Bird Token" },
                 zone: zoneId,
               }).then((r) => applyManualResponse(r, `spawn token (${controller})`));
             },
@@ -1200,7 +1200,7 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
             if (controller === null) {return;}
             void manualSpawnToken(sessionId, {
               controller,
-              tokenSpec: { name, might },
+              tokenSpec: { might, name },
               zone: zoneId,
             }).then((r) => applyManualResponse(r, `spawn ${name}`));
           },
@@ -1371,6 +1371,7 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
       data-rewinding={rewindPulse ? "true" : "false"}
       data-phase={currentPhaseId}
       data-manual-mode={manualMode ? "true" : "false"}
+      data-board-style="riftatlas"
     >
       <header className="turn-header">
         {/* Defect 4 (D-no-turn-indicator): top-of-page badge announcing whose
@@ -1605,7 +1606,7 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
        * avoid pushing the board down on turn flips (admin review 2026-05-14). */}
 
       <div
-        className="board"
+        className="board rb-board"
         data-testid="board"
         onContextMenu={(ev) => {
           // Manual-mode override: when the admin "Manual" toggle is ON, open
@@ -1630,141 +1631,185 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
           if (ev.shiftKey) {handleBoardPing(ev);}
         }}
       >
-        <div className="board-main">
-          {/* OPPONENT (top) */}
-          {opponent ? (
-            <section
-              className={`seat seat-opponent${opponent.id === active ? " seat-active" : ""}`}
-              data-testid="seat-opponent"
-              data-player-id={opponent.id}
-              data-active={opponent.id === active ? "true" : "false"}
-            >
-              <PlayerPanel
-                key={opponent.id}
-                player={opponent}
-                isActive={opponent.id === active}
-                victoryScore={view.victoryScore}
-                hand={hand[opponent.id] ?? []}
-                // 2p: the opponent seat is never playable from this browser
-                // (we only ever mutate the local player's hand). `canPlay`
-                // Stays false; the face-down hand chips are already disabled
-                // Visually by the `revealHand=false` path.
-                canPlay={false}
-                onPlayCard={(card) => handlePlayCard(opponent.id, card)}
-                revealHand={
-                  view.pendingChoice?.revealer === opponent.id
-                }
-                selectedCardId={selectedHandCardId}
-                isLocalPlayer={false}
-                pendingChoice={view.pendingChoice}
-                onPickRevealedCard={resolvePendingChoice}
-                cardsInTrash={trashCardsFor(opponent.id)}
-              />
-              {/* Iter-RunePoolUI: opponent's rune pool — read-only chips so
-               * the local player can see at-a-glance how many runes the
-               * opponent has and which are exhausted. Both panels are visible
-               * at all times so the player can plan. */}
-              <RunePool
-                runes={view.runesInPool ?? []}
-                playerId={opponent.id}
-                isLocalPlayer={false}
-              />
-              <BaseZone
-                playerId={opponent.id}
-                units={baseUnitsFor(opponent.id)}
-                label="Opponent base"
-              />
-              {/* Iter-LegendChampion (admin priority 2026-05-15): dedicated
-                  Legend + Champion slots for the opponent, rendered just above
-                  the central battlefield band. Without this the player can't
-                  see WHO they're playing against — the legend card is what
-                  defines the opponent's deck identity. Always rendered (empty
-                  placeholder when the zone is empty). */}
-              <LegendChampionZone
-                playerId={opponent.id}
-                legend={legendFor(opponent.id)}
-                champion={championFor(opponent.id)}
-                side="opponent"
-              />
-            </section>
-          ) : null}
+        {/* ================================================================
+            RiftAtlas-parity board (port 2026-05-15).
 
-          {/* BATTLEFIELDS (middle) */}
-          <section className="battlefield-band" data-testid="battlefield-band">
-            <BattlefieldList
-              battlefields={view.battlefields}
-              activeBattlefieldId={view.combat?.battlefieldId ?? null}
-              localPlayerId={us.id}
-              combatPhase={view.combat?.phase ?? null}
-              attackerIds={view.combat?.attackers.map((u) => u.id) ?? []}
-              defenderIds={view.combat?.defenders.map((u) => u.id) ?? []}
-              pairs={view.combat?.pairs}
-              combatAttackers={view.combat?.attackers}
-              combatDefenders={view.combat?.defenders}
-              actionableRolePhase={
-                view.combat
-                  ? actionsLegal.assignAttacker
-                    ? "attacker"
-                    : actionsLegal.assignDefender
-                      ? "defender"
+            Layout (matches play.riftatlas.com gb-board grid):
+              ┌──────────────────────────────────────────┬─────────┐
+              │ ┌── opponent band (top 40%) ─────────────┐│         │
+              │ │ runes │ HAND │ act │ leg │ champ        ││  side   │
+              │ ├── battlefield strip (middle) ──────────┤│  bar    │
+              │ │ │ BF SLOT 1            │ BF SLOT 2 │ │  (chain/   │
+              │ ├── self band (bottom 40%) ──────────────┤│  log)   │
+              │ │ runes │ HAND │ act │ leg │ champ        ││         │
+              └──────────────────────────────────────────┴─────────┘
+            Identity rails (score tracks) hug the far edges:
+              opponent → top-right ;  self → bottom-left.
+        ================================================================ */}
+        <div className="board-main rb-board-main" data-testid="rb-board-main">
+
+            {/* Score tracks 0..8 — opponent (top-right) + player (bottom-left). */}
+            <div className="rb-identity-rail rb-identity-rail--opponent" aria-hidden="true">
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                <div
+                  key={`opp-${n}`}
+                  className="rb-track-node"
+                  data-current={opponent?.victoryPoints === n ? "true" : "false"}
+                  data-victory={n === view.victoryScore ? "true" : "false"}
+                >
+                  {n}
+                </div>
+              ))}
+            </div>
+            <div className="rb-identity-rail rb-identity-rail--player" aria-hidden="true">
+              {[8, 7, 6, 5, 4, 3, 2, 1, 0].map((n) => (
+                <div
+                  key={`self-${n}`}
+                  className="rb-track-node"
+                  data-current={us.victoryPoints === n ? "true" : "false"}
+                  data-victory={n === view.victoryScore ? "true" : "false"}
+                >
+                  {n}
+                </div>
+              ))}
+            </div>
+
+            {/* ── OPPONENT BAND (top) ─────────────────────────────────── */}
+            {opponent ? (
+              <section
+                className={`rb-player-band rb-player-band--opponent seat seat-opponent${opponent.id === active ? " seat-active" : ""}`}
+                data-testid="seat-opponent"
+                data-player-id={opponent.id}
+                data-active={opponent.id === active ? "true" : "false"}
+              >
+                <div className="rb-band-left-lanes">
+                  <div className="rb-rune-lane rb-band-readable">
+                    <RunePool
+                      runes={view.runesInPool ?? []}
+                      playerId={opponent.id}
+                      isLocalPlayer={false}
+                    />
+                  </div>
+                  <div className="rb-front-lane rb-band-readable">
+                    <BaseZone
+                      playerId={opponent.id}
+                      units={baseUnitsFor(opponent.id)}
+                      label="Opponent base"
+                    />
+                  </div>
+                </div>
+                <div className="rb-band-hand rb-band-readable">
+                  <PlayerPanel
+                    key={opponent.id}
+                    player={opponent}
+                    isActive={opponent.id === active}
+                    victoryScore={view.victoryScore}
+                    hand={hand[opponent.id] ?? []}
+                    canPlay={false}
+                    onPlayCard={(card) => handlePlayCard(opponent.id, card)}
+                    revealHand={view.pendingChoice?.revealer === opponent.id}
+                    selectedCardId={selectedHandCardId}
+                    isLocalPlayer={false}
+                    pendingChoice={view.pendingChoice}
+                    onPickRevealedCard={resolvePendingChoice}
+                    cardsInTrash={trashCardsFor(opponent.id)}
+                  />
+                </div>
+                <div className="rb-band-actions rb-band-readable" />
+                <div className="rb-band-right-main rb-band-readable">
+                  <LegendChampionZone
+                    playerId={opponent.id}
+                    legend={legendFor(opponent.id)}
+                    champion={championFor(opponent.id)}
+                    side="opponent"
+                  />
+                </div>
+                <div className="rb-band-right-side rb-band-readable" />
+              </section>
+            ) : null}
+
+            {/* ── BATTLEFIELD STRIP (middle, between the two bands) ──── */}
+            <div className="rb-battlefield-strip">
+              <section className="rb-battlefield-slot battlefield-band" data-testid="battlefield-band">
+                <BattlefieldList
+                  battlefields={view.battlefields}
+                  activeBattlefieldId={view.combat?.battlefieldId ?? null}
+                  localPlayerId={us.id}
+                  combatPhase={view.combat?.phase ?? null}
+                  attackerIds={view.combat?.attackers.map((u) => u.id) ?? []}
+                  defenderIds={view.combat?.defenders.map((u) => u.id) ?? []}
+                  pairs={view.combat?.pairs}
+                  combatAttackers={view.combat?.attackers}
+                  combatDefenders={view.combat?.defenders}
+                  actionableRolePhase={
+                    view.combat
+                      ? actionsLegal.assignAttacker
+                        ? "attacker"
+                        : actionsLegal.assignDefender
+                          ? "defender"
+                          : null
                       : null
-                  : null
-              }
-            />
-          </section>
+                  }
+                />
+              </section>
+            </div>
 
-          {/* US (bottom) */}
-          <section
-            className={`seat seat-self${us.id === active ? " seat-active" : ""}`}
-            data-testid="seat-self"
-            data-player-id={us.id}
-            data-active={us.id === active ? "true" : "false"}
-          >
-            {/* Iter-LegendChampion: local-player Legend + Champion slots —
-                rendered ABOVE the player's base so they sit nearest the
-                battlefield band (closest to the action). The opponent's
-                LegendChampionZone mirrors this layout above the BF band. */}
-            <LegendChampionZone
-              playerId={us.id}
-              legend={legendFor(us.id)}
-              champion={championFor(us.id)}
-              side="self"
-            />
-            <BaseZone
-              playerId={us.id}
-              units={baseUnitsFor(us.id)}
-              label="Your base"
-            />
-            {/* Iter-RunePoolUI: local player's rune pool — clickable chips so
-             * the human can tap (exhaust) friendly ready runes to pay costs.
-             * Sits above the hand so it's the first thing the eye lands on
-             * when planning a play. The click handler dispatches the
-             * `exhaustRune` engine move. */}
-            <RunePool
-              runes={view.runesInPool ?? []}
-              playerId={us.id}
-              isLocalPlayer
-              onExhaust={handleExhaustRune}
-            />
-            <PlayerPanel
-              key={us.id}
-              player={us}
-              isActive={us.id === active}
-              victoryScore={view.victoryScore}
-              hand={hand[us.id] ?? []}
-              canPlay={!busy && !isGameOver && us.id === active}
-              onPlayCard={(card) => handlePlayCard(us.id, card)}
-              revealHand
-              selectedCardId={selectedHandCardId}
-              isLocalPlayer
-              pendingChoice={view.pendingChoice}
-              onPickRevealedCard={resolvePendingChoice}
-              cardsInTrash={trashCardsFor(us.id)}
-            />
-          </section>
+            {/* ── SELF BAND (bottom) ───────────────────────────────────── */}
+            <section
+              className={`rb-player-band rb-player-band--self seat seat-self${us.id === active ? " seat-active" : ""}`}
+              data-testid="seat-self"
+              data-player-id={us.id}
+              data-active={us.id === active ? "true" : "false"}
+            >
+              <div className="rb-band-left-lanes">
+                <div className="rb-rune-lane">
+                  <RunePool
+                    runes={view.runesInPool ?? []}
+                    playerId={us.id}
+                    isLocalPlayer
+                    onExhaust={handleExhaustRune}
+                  />
+                </div>
+                <div className="rb-front-lane">
+                  <BaseZone
+                    playerId={us.id}
+                    units={baseUnitsFor(us.id)}
+                    label="Your base"
+                  />
+                </div>
+              </div>
+              <div className="rb-band-hand">
+                <PlayerPanel
+                  key={us.id}
+                  player={us}
+                  isActive={us.id === active}
+                  victoryScore={view.victoryScore}
+                  hand={hand[us.id] ?? []}
+                  canPlay={!busy && !isGameOver && us.id === active}
+                  onPlayCard={(card) => handlePlayCard(us.id, card)}
+                  revealHand
+                  selectedCardId={selectedHandCardId}
+                  isLocalPlayer
+                  pendingChoice={view.pendingChoice}
+                  onPickRevealedCard={resolvePendingChoice}
+                  cardsInTrash={trashCardsFor(us.id)}
+                />
+              </div>
+              <div className="rb-band-actions" />
+              <div className="rb-band-right-main">
+                <LegendChampionZone
+                  playerId={us.id}
+                  legend={legendFor(us.id)}
+                  champion={championFor(us.id)}
+                  side="self"
+                />
+              </div>
+              <div className="rb-band-right-side" />
+            </section>
+
         </div>
 
-        <aside className="board-side" data-testid="board-side">
+        <aside className="board-side rb-sidebar" data-testid="board-side">
           <TurnBanner
             turnNumber={view.turn.number}
             phaseLabel={view.turn.phaseLabel}
