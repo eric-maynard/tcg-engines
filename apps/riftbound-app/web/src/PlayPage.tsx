@@ -22,6 +22,7 @@ import { TargetPicker } from "./components/TargetPicker";
 import { LookPicker } from "./components/LookPicker";
 import { ChoiceModePicker } from "./components/ChoiceModePicker";
 import { BaseZone } from "./components/BaseZone";
+import { LegendChampionZone } from "./components/LegendChampionZone";
 import { CombatPanel } from "./components/CombatPanel";
 import { ChainPanel } from "./components/ChainPanel";
 import { MoveLog, buildCardNameMap } from "./components/MoveLog";
@@ -1176,9 +1177,9 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
             label: `Controller: ${controller}`,
             onClick: () => {
               void manualSpawnToken(sessionId, {
-                zone: zoneId,
                 controller,
                 tokenSpec: { name: "Bird Token", might: 1 },
+                zone: zoneId,
               }).then((r) => applyManualResponse(r, `spawn token (${controller})`));
             },
           })),
@@ -1198,9 +1199,9 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
             );
             if (controller === null) {return;}
             void manualSpawnToken(sessionId, {
-              zone: zoneId,
               controller,
               tokenSpec: { name, might },
+              zone: zoneId,
             }).then((r) => applyManualResponse(r, `spawn ${name}`));
           },
         },
@@ -1322,6 +1323,19 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
   const baseUnitsFor = (playerId: string): readonly BattlefieldUnit[] => {
     const p = players.find((pp) => pp.id === playerId);
     return p?.baseUnits ?? [];
+  };
+
+  // Iter-LegendChampion (admin priority 2026-05-15): per-player legend +
+  // Champion accessors. The engine view exposes one of each (max 1 per
+  // Zone — see zone-configs.ts); defaults to `null` when the slot is
+  // Empty or when the view field is missing on a legacy mocked response.
+  const legendFor = (playerId: string): BattlefieldUnit | null => {
+    const p = players.find((pp) => pp.id === playerId);
+    return p?.legend ?? null;
+  };
+  const championFor = (playerId: string): BattlefieldUnit | null => {
+    const p = players.find((pp) => pp.id === playerId);
+    return p?.champion ?? null;
   };
 
   // Admin feedback 2026-05-14 — RiftAtlas parity: each player's trash zone
@@ -1660,6 +1674,18 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
                 units={baseUnitsFor(opponent.id)}
                 label="Opponent base"
               />
+              {/* Iter-LegendChampion (admin priority 2026-05-15): dedicated
+                  Legend + Champion slots for the opponent, rendered just above
+                  the central battlefield band. Without this the player can't
+                  see WHO they're playing against — the legend card is what
+                  defines the opponent's deck identity. Always rendered (empty
+                  placeholder when the zone is empty). */}
+              <LegendChampionZone
+                playerId={opponent.id}
+                legend={legendFor(opponent.id)}
+                champion={championFor(opponent.id)}
+                side="opponent"
+              />
             </section>
           ) : null}
 
@@ -1694,6 +1720,16 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
             data-player-id={us.id}
             data-active={us.id === active ? "true" : "false"}
           >
+            {/* Iter-LegendChampion: local-player Legend + Champion slots —
+                rendered ABOVE the player's base so they sit nearest the
+                battlefield band (closest to the action). The opponent's
+                LegendChampionZone mirrors this layout above the BF band. */}
+            <LegendChampionZone
+              playerId={us.id}
+              legend={legendFor(us.id)}
+              champion={championFor(us.id)}
+              side="self"
+            />
             <BaseZone
               playerId={us.id}
               units={baseUnitsFor(us.id)}

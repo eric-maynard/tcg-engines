@@ -7199,3 +7199,267 @@ button {
 .rb-context-menu-item.has-submenu:focus-within > .rb-context-menu-submenu {
   display: block;
 }
+
+/* ============================================================
+ * Iter-LegendChampion (admin priority 2026-05-15)
+ * Visible Legend + Champion zones for both players.
+ *
+ * Each player gets a dedicated row with two slots side-by-side:
+ *   ┌─────────┬─────────┐
+ *   │ LEGEND  │CHAMPION │
+ *   └─────────┴─────────┘
+ *
+ * Slots are landscape-portrait ~104×148 with the card art (when
+ * available) filling the slot under a tag chip. Empty slots
+ * render a dashed placeholder so the zone is always visible.
+ *
+ * The opponent zone sits BELOW the opponent panel, just above the
+ * battlefield band; the self zone sits ABOVE the self panel, just
+ * below the battlefield band. Mirrors RiftAtlas-style "Legend/
+ * Champion is between you and the battlefield".
+ * ============================================================ */
+
+.lc-zone {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 8px;
+  flex-shrink: 0;
+  z-index: 2; /* above any background art */
+}
+
+.lc-zone-opponent {
+  border-bottom: 1px solid rgba(255, 130, 140, 0.18);
+  padding-bottom: 6px;
+}
+
+.lc-zone-self {
+  border-top: 1px solid rgba(140, 200, 255, 0.18);
+  padding-top: 6px;
+}
+
+.lc-slot {
+  align-items: center;
+  background: linear-gradient(180deg, rgba(36, 56, 92, 0.65) 0%, rgba(20, 30, 50, 0.7) 100%);
+  border: 1px solid rgba(140, 180, 220, 0.45);
+  border-radius: 8px;
+  box-shadow:
+    inset 0 0 0 1px rgba(80, 120, 200, 0.18),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+  color: #d6e0f5;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 4px;
+  /* Landscape portrait — wide enough to read the card name, tall enough
+   * for the art chip + tag. Matches the BaseZone unit chip aesthetic but
+   * larger so the player can SEE the legend/champion at a glance. */
+  height: 148px;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding: 4px;
+  position: relative;
+  width: 104px;
+}
+
+.lc-slot-legend {
+  border-color: rgba(212, 175, 60, 0.6);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 217, 107, 0.18),
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    0 0 10px rgba(255, 200, 60, 0.15);
+}
+
+.lc-slot-champion {
+  border-color: rgba(140, 200, 255, 0.55);
+  box-shadow:
+    inset 0 0 0 1px rgba(140, 200, 255, 0.2),
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    0 0 10px rgba(60, 110, 180, 0.18);
+}
+
+.lc-slot-empty {
+  background: rgba(10, 14, 28, 0.4);
+  border-style: dashed;
+  border-color: rgba(120, 150, 200, 0.3);
+  box-shadow: none;
+  opacity: 0.7;
+}
+
+.lc-slot-tag {
+  background: rgba(8, 12, 30, 0.85);
+  border-radius: 3px;
+  color: rgba(220, 230, 250, 0.85);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 2px 5px;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  text-transform: uppercase;
+  z-index: 3;
+}
+
+.lc-slot-legend .lc-slot-tag {
+  background: rgba(80, 60, 10, 0.85);
+  color: #ffd96b;
+}
+
+.lc-slot-champion .lc-slot-tag {
+  background: rgba(15, 30, 60, 0.9);
+  color: #8cc8ff;
+}
+
+.lc-slot-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+.lc-slot-name {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.45) 70%, transparent 100%);
+  bottom: 0;
+  color: #f0f4ff;
+  font-size: 10px;
+  font-weight: 600;
+  left: 0;
+  letter-spacing: 0.1px;
+  padding: 8px 4px 4px;
+  position: absolute;
+  right: 0;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  z-index: 2;
+}
+
+.lc-slot-might {
+  background: rgba(180, 30, 30, 0.92);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 1px 5px;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.lc-slot-placeholder {
+  color: rgba(160, 180, 220, 0.45);
+  font-size: 10px;
+  font-style: italic;
+  letter-spacing: 0.4px;
+  margin: auto;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+ * Iter-LegendChampion: opponent seat visibility fixes.
+ *
+ * The seat-opponent was capped at 200px max-height (line ~125)
+ * which made the base zone + nameplate get clipped and the
+ * opponent visually disappear. Lift the cap so the opponent
+ * panel + base zone + legend/champion zone are all visible.
+ * Done as an !important override so later cascades don't
+ * accidentally re-clip.
+ * ============================================================ */
+.seat-opponent {
+  max-height: unset !important;
+  min-height: 180px !important;
+  padding-bottom: 6px !important;
+}
+
+/* Don't hide the OPPONENT'S base zone even when empty — the player
+ * needs to see the opponent's base region so they know it's there.
+ * Keep the local-player empty-base collapse from iter-H, but exempt
+ * the opponent. */
+.seat-opponent .base-zone[data-base-empty="true"] {
+  max-height: 48px !important;
+  min-height: 48px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+  border-style: dashed !important;
+  border-color: rgba(120, 150, 200, 0.25) !important;
+  border-width: 1px !important;
+  background: rgba(20, 25, 45, 0.45) !important;
+}
+.seat-opponent .base-zone[data-base-empty="true"] .base-zone-header {
+  display: flex !important;
+}
+.seat-opponent .base-zone[data-base-empty="true"] .base-zone-empty {
+  display: block !important;
+  font-size: 10px !important;
+  color: rgba(160, 180, 220, 0.4) !important;
+  padding: 2px 0 !important;
+}
+
+/* Same for local-player's base zone: don't fully collapse — keep a
+ * visible empty placeholder. The original iter-H collapse hid both
+ * label and empty text; lift that just enough to leave a visible
+ * "Your base" header strip. */
+.seat-self .base-zone[data-base-empty="true"] {
+  max-height: 48px !important;
+  min-height: 48px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+  border-style: dashed !important;
+  border-color: rgba(120, 150, 200, 0.25) !important;
+  border-width: 1px !important;
+  background: rgba(20, 25, 45, 0.45) !important;
+}
+.seat-self .base-zone[data-base-empty="true"] .base-zone-header {
+  display: flex !important;
+}
+.seat-self .base-zone[data-base-empty="true"] .base-zone-empty {
+  display: block !important;
+  font-size: 10px !important;
+  color: rgba(160, 180, 220, 0.4) !important;
+  padding: 2px 0 !important;
+}
+
+/* Bump base zone unit-card size so units are recognizable */
+.base-zone-units {
+  gap: 6px !important;
+}
+.base-zone-unit {
+  min-width: 78px !important;
+  min-height: 100px !important;
+}
+.base-zone-unit.base-zone-unit-art .base-zone-unit-image {
+  min-height: 80px !important;
+}
+
+/* Make BF side rails wider so units there are legible at-a-glance.
+ * Original grid: 76px 1fr 76px. Bump to 92px so a unit chip with
+ * art fits comfortably and the rail reads as "this is YOUR side"
+ * rather than a narrow stripe. */
+.bf,
+.bf-tile {
+  grid-template-columns: 96px 1fr 96px !important;
+  min-height: 220px !important;
+}
+.bf-side {
+  min-width: 88px !important;
+  gap: 6px !important;
+}
+.bf-side-ours {
+  /* Local-player rail — add a subtle blue tint even when idle so the
+   * player can ALWAYS see which side is theirs. */
+  background: rgba(40, 80, 140, 0.18) !important;
+  border-left: 2px solid rgba(140, 200, 255, 0.35) !important;
+}
+.bf-side-theirs {
+  /* Opponent rail — subtle red tint always-on. */
+  background: rgba(140, 40, 60, 0.18) !important;
+  border-right: 2px solid rgba(255, 130, 140, 0.35) !important;
+}
+

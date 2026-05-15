@@ -175,6 +175,20 @@ export interface GameView {
      * derive per-player base contents from `battlefields[]` alone.
      */
     readonly baseUnits: readonly BattlefieldUnitView[];
+    /**
+     * Iter-LegendChampion (admin-priority 2026-05-15): the player's Legend
+     * Card sitting in `legendZone` (max 1 — see zone-configs). Surfaced so
+     * the SPA can render a dedicated LegendZone slot per player. `null` for
+     * decks without a legend (e.g. synthetic test decks) so the renderer
+     * can show an empty placeholder.
+     */
+    readonly legend: BattlefieldUnitView | null;
+    /**
+     * Iter-LegendChampion: the player's Chosen Champion sitting in
+     * `championZone` (max 1). Same semantics as `legend` — `null` when
+     * empty.
+     */
+    readonly champion: BattlefieldUnitView | null;
   }[];
   readonly battlefields: readonly {
     readonly id: string;
@@ -2313,16 +2327,55 @@ function buildView(engine: RiftboundEngine): GameView {
     });
   }
 
+  // Iter-LegendChampion: per-player Legend + Champion cards. legendZone and
+  // ChampionZone are per-player (max 1 each — see zone-configs.ts).
+  // Partition by `card.owner` the same way baseUnits does. Enrich with
+  // Card-definition fields (name, imageUrl, might, etc.) so the SPA can
+  // Render proper card art in the dedicated zones.
+  const legendByOwner: Record<string, BattlefieldUnitView | null> = {};
+  const championByOwner: Record<string, BattlefieldUnitView | null> = {};
+  for (const pid of playerIds) {
+    legendByOwner[pid] = null;
+    championByOwner[pid] = null;
+  }
+  for (const [cardId, card] of Object.entries(internal.cards ?? {})) {
+    if (!card) {continue;}
+    const z = card.zone;
+    if (z !== "legendZone" && z !== "championZone") {continue;}
+    const definitionId = card.definitionId ?? cardId;
+    const def = getCardDefinition(cardId, definitionId);
+    const meta = internal.cardMetas?.[cardId] as
+      | { exhausted?: boolean; __flags?: Record<string, boolean> }
+      | undefined;
+    const isExhausted = Boolean(
+      meta?.__flags?.exhausted ?? meta?.exhausted,
+    );
+    const entry: BattlefieldUnitView = {
+      controller: card.controller ?? card.owner,
+      definitionId,
+      id: cardId,
+      ...def,
+      ...(isExhausted ? { exhausted: true } : {}),
+    };
+    if (z === "legendZone") {
+      legendByOwner[card.owner] = entry;
+    } else {
+      championByOwner[card.owner] = entry;
+    }
+  }
+
   const players = playerIds.map((pid) => {
     const player = state.players[pid];
     const pool = state.runePools[pid];
     const counts = ownerZoneCounts[pid] ?? {};
     return {
       baseUnits: baseUnitsByOwner[pid] ?? [],
+      champion: championByOwner[pid] ?? null,
       deckSize: counts.mainDeck ?? 0,
       energy: pool?.energy ?? 0,
       handSize: counts.hand ?? 0,
       id: pid,
+      legend: legendByOwner[pid] ?? null,
       power: { ...pool?.power },
       runeDeckSize: counts.runeDeck ?? 0,
       trashSize: counts.trash ?? 0,

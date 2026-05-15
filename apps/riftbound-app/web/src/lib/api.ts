@@ -23,6 +23,21 @@ export interface GameViewPlayer {
    * mocked responses; callers should default to `[]`.
    */
   readonly baseUnits?: readonly BattlefieldUnit[];
+  /**
+   * Iter-LegendChampion (admin-priority 2026-05-15): card in the player's
+   * Legend Zone (max 1). The SPA renders this as a dedicated slot near the
+   * player nameplate so the chosen Champion Legend is visible at a glance.
+   * `null` when the slot is empty (e.g. synthetic test decks with no
+   * registered legend). Optional on the type so legacy mocked responses
+   * (which omit the field) still type-check.
+   */
+  readonly legend?: BattlefieldUnit | null;
+  /**
+   * Iter-LegendChampion: card in the player's Champion Zone (max 1) — the
+   * Chosen Champion that hasn't been played from this zone into play yet.
+   * Same semantics as `legend`.
+   */
+  readonly champion?: BattlefieldUnit | null;
 }
 
 /**

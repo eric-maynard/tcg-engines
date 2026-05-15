@@ -114,6 +114,67 @@ describe("EngineSession", () => {
     expect(p2.baseUnits[0].controller).toBe("player-2");
   });
 
+  test("view exposes legend + champion on every player (null at start)", () => {
+    // Iter-LegendChampion (admin priority 2026-05-15): GameView.players[]
+    // Now includes per-player `legend` and `champion` cards (max 1 each per
+    // Engine zone-configs). Before setup places a legend, both are null.
+    const session = new EngineSession({ seed: "lc-empty" });
+    const view = session.getView();
+    for (const p of view.players) {
+      expect(p.legend).toBeNull();
+      expect(p.champion).toBeNull();
+    }
+  });
+
+  test("legend + champion populate per-player when cards live in those zones", () => {
+    // Mirror the baseUnits test pattern: surgically place cards in
+    // `legendZone` and `championZone` and assert the view surfaces them
+    // On the correct player. Tests the view-builder's zone partitioning,
+    // Not the engine's setup reducers.
+    const session = new EngineSession({ seed: "lc-surgery" });
+    const internal = (session.engine as unknown as {
+      internalState: {
+        zones: Record<string, { cardIds: string[] }>;
+        cards: Record<
+          string,
+          {
+            definitionId: string;
+            owner: string;
+            controller: string;
+            zone: string;
+          }
+        >;
+      };
+    }).internalState;
+
+    internal.zones.legendZone = internal.zones.legendZone ?? { cardIds: [] };
+    internal.zones.championZone = internal.zones.championZone ?? { cardIds: [] };
+    const legendA = "test-legend-p1";
+    const champB = "test-champion-p2";
+    internal.cards[legendA] = {
+      controller: "player-1",
+      definitionId: legendA,
+      owner: "player-1",
+      zone: "legendZone",
+    };
+    internal.cards[champB] = {
+      controller: "player-2",
+      definitionId: champB,
+      owner: "player-2",
+      zone: "championZone",
+    };
+    internal.zones.legendZone.cardIds.push(legendA);
+    internal.zones.championZone.cardIds.push(champB);
+
+    const view = session.getView();
+    const p1 = view.players.find((p) => p.id === "player-1")!;
+    const p2 = view.players.find((p) => p.id === "player-2")!;
+    expect(p1.legend?.id).toBe(legendA);
+    expect(p1.champion).toBeNull();
+    expect(p2.legend).toBeNull();
+    expect(p2.champion?.id).toBe(champB);
+  });
+
   test("view exposes battlefields after placeBattlefields", () => {
     const session = new EngineSession({ battlefieldCount: 2, seed: "bfs" });
     const view = session.getView();
@@ -283,15 +344,15 @@ describe("EngineSession", () => {
   test("summariseAbilities formats triggered/static/keyword/activated", () => {
     const summaries = summariseAbilities([
       {
-        effect: { type: "draw", amount: 1 },
+        effect: { amount: 1, type: "draw" },
         trigger: { event: "play", on: "self" },
         type: "triggered",
       },
-      { effect: { type: "modify-might", amount: 1 }, type: "static" },
+      { effect: { amount: 1, type: "modify-might" }, type: "static" },
       { keyword: "Hunt", type: "keyword", value: 2 },
       {
         cost: { exhaust: true },
-        effect: { type: "draw", amount: 1 },
+        effect: { amount: 1, type: "draw" },
         type: "activated",
       },
       {
