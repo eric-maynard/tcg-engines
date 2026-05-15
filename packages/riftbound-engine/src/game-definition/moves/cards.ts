@@ -12,17 +12,99 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
-import { fireTriggers } from "../../abilities/trigger-runner";
+import type { GameEvent } from "../../abilities/game-events";
+import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
+import { dispatchEvent } from "../../events/dispatcher";
 import { resolveTarget } from "../../abilities/target-resolver";
-import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../chain";
+import {
+  addToChain,
+  createInteractionState,
+  getPriorityHolder,
+  getTurnState,
+  isLegalTiming,
+} from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import { canPlayViaAmbush } from "../../keywords/keyword-effects";
+import {
+  type CostReductionContext,
+  applyStaticCostReduction,
+  computeStaticCostReduction,
+} from "../../operations/static-cost-reduction";
+import { canPlayViaAmbush, hasteEntersExhausted } from "../../keywords/keyword-effects";
+import { evaluateLegionCondition } from "../../abilities/legion-conditions";
 import {
   extractBattlefieldId,
   getBattlefieldZoneId,
   getFacedownZoneId,
   isBattlefieldZone,
 } from "../../zones/zone-configs";
+
+/**
+ * Play / hide events emitted by the card-play moves flow through the
+ * unified event-bus chokepoint (`events/dispatcher.ts#dispatchEvent`)
+ * rather than calling the trigger runner ad-hoc. The old `fireTriggers`
+ * call sites kept the `(event, ctx)` signature; `dispatchEvent` is
+ * `(ctx, event)` — this thin adapter preserves the call-site shape while
+ * routing the emission through the bus (so an attached event log / any
+ * future centralised event handling sees these too).
+ */
+function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
+  return dispatchEvent(ctx, event);
+}
+
+/**
+ * Phase B batch 26 HHH: subset-emission helpers for `playSpell` enumeration.
+ *
+ * Multi-target spells (`{ upTo: N }`, `{ atLeast: N }`, numeric N>1) enumerate
+ * ONE legal-move per legal target SUBSET so SPAs can drive a multi-pick UX
+ * by inspecting `legalMoves`. To prevent combinatorial blowup (e.g. upTo:3
+ * over 20 candidates ≈ 1.4k subsets) we cap total subsets per spell at
+ * MAX_SUBSETS. When a kind would exceed the cap the enumerator falls back
+ * to a single "select-all" move whose params carry a `_truncated: true`
+ * hint flag.
+ */
+const MAX_SUBSETS = 64;
+
+/**
+ * Enumerate every subset of `items` whose size lies in `[lo, hi]` (inclusive),
+ * stopping early and returning `null` if the count would exceed `cap`.
+ *
+ * Pure function — no per-card branching. Order is deterministic (size-ascending,
+ * left-to-right within a size) so tests can pin tuple shape if needed.
+ */
+function subsetsOfSizes(
+  items: readonly string[],
+  lo: number,
+  hi: number,
+  cap: number,
+): string[][] | null {
+  const out: string[][] = [];
+  const n = items.length;
+  const loC = Math.max(0, lo);
+  const hiC = Math.min(n, hi);
+  if (loC > hiC) {
+    return out;
+  }
+  for (let size = loC; size <= hiC; size++) {
+    // Generate combinations of `items` of length `size` lexicographically.
+    if (size === 0) {
+      out.push([]);
+      if (out.length > cap) {return null;}
+      continue;
+    }
+    const idx = Array.from({ length: size }, (_, i) => i);
+    while (true) {
+      out.push(idx.map((i) => items[i] as string));
+      if (out.length > cap) {return null;}
+      // Advance idx to next combination
+      let i = size - 1;
+      while (i >= 0 && idx[i] === n - size + i) {i--;}
+      if (i < 0) {break;}
+      idx[i] = (idx[i] as number) + 1;
+      for (let j = i + 1; j < size; j++) {idx[j] = (idx[j - 1] as number) + 1;}
+    }
+  }
+  return out;
+}
 
 /**
  * Calculate the Deflect surcharge for targeting a card (rule 721.1.b).
@@ -59,6 +141,34 @@ function getDeflectSurcharge(
     surcharge += targetSurcharge;
   }
   return surcharge;
+}
+
+/**
+ * Detect a "Legion play-from-trash" alternate-play permission (rule 724 +
+ * rule 555).
+ *
+ * Cards like Undying Legion carry
+ * `{ type: "keyword", keyword: "Legion", effect: { type: "play",
+ *    from: "trash", target: { type: "unit", ... } } }` — a [Legion][>]
+ * ability that lets the owner play the card from their trash for the
+ * printed alternate cost (which, for the known Unleashed card, equals the
+ * card's normal `energyCost`/`domain`, so the standard cost path applies).
+ *
+ * Returns `true` when the card has such an ability AND it would play a
+ * unit (i.e. the [>] play-permission applies to playing it as a unit).
+ */
+function hasLegionPlayFromTrash(cardId: string): boolean {
+  const registry = getGlobalCardRegistry();
+  for (const ability of registry.getAbilities(cardId) ?? []) {
+    if (ability.type !== "keyword" || ability.keyword !== "Legion") {
+      continue;
+    }
+    const {effect} = (ability as { effect?: { type?: string; from?: string } });
+    if (effect && effect.type === "play" && effect.from === "trash") {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -177,6 +287,45 @@ function getRepeatEnergySurcharge(cardId: string, repeatCount: number): number {
 }
 
 /**
+ * Compute the effective energy cost to deduct for `cardId` at this moment.
+ * Shared by `canAffordCard` (check) and `deductCost` (apply).
+ *
+ * Combines: printed base + per-card `costModifier` meta (one-shot triggers
+ * like Legion "I cost N less" land here) + interactive reduction +
+ * **static cost-reduction** scanned from the player's permanents (rule 466
+ * — aura-style "your spells cost N less") + X surcharge + Repeat surcharge.
+ *
+ * Static cost-reduction is gated behind `boardCtx` — callers in flows that
+ * have a zones/cards context (move reducers/conditions) pass it through;
+ * paths that don't (legacy ad-hoc tests) get the old behaviour.
+ */
+function computeEffectiveEnergyCost(
+  cardId: string,
+  baseEnergy: number,
+  extras: CostExtras,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+  boardCtx?: CostReductionContext,
+  playerId?: string,
+): number {
+  const modifier = getCostModifier(cardId, getCardMeta);
+  const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
+  const xAmount = Math.max(0, extras.xAmount ?? 0);
+  const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  // Step 1: base + per-card meta-modifier + interactive reduction.
+  const beforeStatic =
+    Math.max(0, baseEnergy + modifier - interactive) + xAmount + repeatSurcharge;
+  // Step 2: scan player's permanents for static cost-reductions and clamp
+  // To each aura's minimum (and to ≥0).
+  if (boardCtx && playerId) {
+    const staticRed = computeStaticCostReduction(boardCtx, playerId, cardId);
+    if (staticRed.reduction > 0) {
+      return applyStaticCostReduction(beforeStatic, staticRed);
+    }
+  }
+  return beforeStatic;
+}
+
+/**
  * Check if player can afford a card's cost from their rune pool.
  */
 function canAffordCard(
@@ -185,6 +334,7 @@ function canAffordCard(
   cardId: string,
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+  boardCtx?: CostReductionContext,
 ): boolean {
   const registry = getGlobalCardRegistry();
   const pool = state.runePools[playerId];
@@ -192,13 +342,15 @@ function canAffordCard(
     return false;
   }
 
-  const modifier = getCostModifier(cardId, getCardMeta);
   const baseCost = registry.getCostToDeduct(cardId);
-  const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
-  const xAmount = Math.max(0, extras.xAmount ?? 0);
-  const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
-  const adjustedEnergy =
-    Math.max(0, baseCost.energy + modifier - interactive) + xAmount + repeatSurcharge;
+  const adjustedEnergy = computeEffectiveEnergyCost(
+    cardId,
+    baseCost.energy,
+    extras,
+    getCardMeta,
+    boardCtx,
+    playerId,
+  );
 
   if (pool.energy < adjustedEnergy) {
     return false;
@@ -231,6 +383,7 @@ function deductCost(
   cardId: string,
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+  boardCtx?: CostReductionContext,
 ): void {
   const registry = getGlobalCardRegistry();
   const cost = registry.getCostToDeduct(cardId);
@@ -239,12 +392,14 @@ function deductCost(
     return;
   }
 
-  const modifier = getCostModifier(cardId, getCardMeta);
-  const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
-  const xAmount = Math.max(0, extras.xAmount ?? 0);
-  const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
-  const adjustedEnergy =
-    Math.max(0, cost.energy + modifier - interactive) + xAmount + repeatSurcharge;
+  const adjustedEnergy = computeEffectiveEnergyCost(
+    cardId,
+    cost.energy,
+    extras,
+    getCardMeta,
+    boardCtx,
+    playerId,
+  );
 
   pool.energy = Math.max(0, pool.energy - adjustedEnergy);
   for (const [domain, amount] of Object.entries(cost.power)) {
@@ -258,6 +413,30 @@ function deductCost(
   if (deflectCost > 0) {
     pool.energy = Math.max(0, pool.energy - deflectCost);
   }
+}
+
+/**
+ * Build a `CostReductionContext` from a move reducer/condition `context`.
+ * Centralised so all callers thread the same shape into `canAffordCard` /
+ * `deductCost`. Pure pass-through — no new state.
+ */
+function buildBoardCtx(
+  draft: RiftboundGameState,
+  context: { zones: { getCardsInZone: (z: CoreZoneId, p?: CorePlayerId) => readonly CoreCardId[] }; cards: { getCardMeta: (id: CoreCardId) => unknown; getCardOwner: (id: CoreCardId) => string | undefined; getCardController?: (id: CoreCardId) => string | undefined; updateCardMeta: (id: CoreCardId, m: Partial<RiftboundCardMeta>) => void } },
+): CostReductionContext {
+  return {
+    cards: {
+      getCardController: context.cards.getCardController,
+      getCardMeta: (id) =>
+        context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
+      getCardOwner: context.cards.getCardOwner,
+      updateCardMeta: context.cards.updateCardMeta,
+    },
+    draft,
+    zones: {
+      getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
+    },
+  };
 }
 
 /**
@@ -279,7 +458,9 @@ export const cardPlayMoves: Partial<
       }
 
       const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
-      if (zone !== "hand") {
+      const isLegionTrashPlay =
+        zone === "trash" && hasLegionPlayFromTrash(context.params.cardId);
+      if (zone !== "hand" && !isLegionTrashPlay) {
         return false;
       }
 
@@ -289,12 +470,50 @@ export const cardPlayMoves: Partial<
         return false;
       }
 
+      // Rule 724 (Legion) [>] play-from-trash permission (e.g. Undying
+      // Legion): only legal when the owner has played another card this
+      // Turn, on their own turn during the main phase, to their base.
+      if (isLegionTrashPlay) {
+        if (
+          !evaluateLegionCondition(
+            state,
+            context.params.playerId as Parameters<typeof evaluateLegionCondition>[1],
+          )
+        ) {
+          return false;
+        }
+        if (state.turn.activePlayer !== context.params.playerId) {
+          return false;
+        }
+        if (state.turn.phase !== "main") {
+          return false;
+        }
+        const trashLocation = context.params.location as string | undefined;
+        if (trashLocation && isBattlefieldZone(trashLocation)) {
+          // Undying Legion's [>] permission plays it to base, not a bf.
+          return false;
+        }
+        if (
+          !canAffordCard(
+            state,
+            context.params.playerId,
+            context.params.cardId,
+            {},
+            createMetaAccessor(context.cards),
+            buildBoardCtx(state, context),
+          )
+        ) {
+          return false;
+        }
+        return true;
+      }
+
       // Rule 577.3.c (Ambush): a unit with Ambush may be played to a
       // Battlefield where the player has friendly units, as a Reaction.
       // Otherwise the unit must be played on its controller's turn during
       // The main phase to the player's base.
       const location = context.params.location as string | undefined;
-      const targetIsBattlefield = Boolean(location) && isBattlefieldZone(location);
+      const targetIsBattlefield = Boolean(location) && isBattlefieldZone(location as string);
       const registry = getGlobalCardRegistry();
       const hasAmbush = registry.hasKeyword(context.params.cardId, "Ambush");
 
@@ -338,6 +557,7 @@ export const cardPlayMoves: Partial<
           context.params.cardId,
           {},
           createMetaAccessor(context.cards),
+          buildBoardCtx(state, context),
         )
       ) {
         return false;
@@ -352,12 +572,6 @@ export const cardPlayMoves: Partial<
       if (state.pendingChoice) {
         return [];
       }
-      if (state.turn.activePlayer !== (context.playerId as string)) {
-        return [];
-      }
-      if (state.turn.phase !== "main") {
-        return [];
-      }
 
       const registry = getGlobalCardRegistry();
       const pool = state.runePools[context.playerId as string];
@@ -370,6 +584,19 @@ export const cardPlayMoves: Partial<
         context.playerId as CorePlayerId,
       );
 
+      // Standard play path: enumerated only on the player's own turn during
+      // The main phase (rule 554), playing to base.
+      const isOwnMainPhase =
+        state.turn.activePlayer === (context.playerId as string) && state.turn.phase === "main";
+
+      // Rule 822 (Ambush): an Ambush unit "may be played to a battlefield
+      // Where you control Units" and "has [Reaction] as long as I'm being
+      // Played to a battlefield where you control Units." So an Ambush unit
+      // Is also playable to any such battlefield during a Reaction window —
+      // Off-turn, outside the main phase, etc. — provided the player
+      // Controls at least one unit there.
+      const battlefieldIds = Object.keys(state.battlefields ?? {});
+
       const results: { playerId: string; cardId: string; location: string }[] = [];
       for (const cardId of handCards) {
         const def = registry.get(cardId as string);
@@ -380,11 +607,68 @@ export const cardPlayMoves: Partial<
           continue;
         }
 
-        results.push({
-          cardId: cardId as string,
-          location: "base",
-          playerId: context.playerId as string,
-        });
+        if (isOwnMainPhase) {
+          results.push({
+            cardId: cardId as string,
+            location: "base",
+            playerId: context.playerId as string,
+          });
+        }
+
+        // Ambush battlefield plays — always available (rule 822: Reaction
+        // Timing is always legal) at battlefields where the player controls
+        // A unit.
+        if (registry.hasKeyword(cardId as string, "Ambush")) {
+          for (const bfId of battlefieldIds) {
+            const bfZoneId = getBattlefieldZoneId(bfId);
+            const unitsAtBf = context.zones.getCardsInZone(
+              bfZoneId as CoreZoneId,
+              context.playerId as CorePlayerId,
+            );
+            if (unitsAtBf.length > 0) {
+              results.push({
+                cardId: cardId as string,
+                location: bfZoneId,
+                playerId: context.playerId as string,
+              });
+            }
+          }
+        }
+      }
+
+      // Rule 724 (Legion) [>] play-from-trash permission (e.g. Undying
+      // Legion): on the player's own main phase, with another card already
+      // Played this turn, a unit in the trash that carries a
+      // `{keyword:"Legion", effect:{type:"play", from:"trash"}}` ability may
+      // Be played to base for its printed alternate cost.
+      if (
+        isOwnMainPhase &&
+        evaluateLegionCondition(
+          state,
+          context.playerId as Parameters<typeof evaluateLegionCondition>[1],
+        )
+      ) {
+        const trashCards = context.zones.getCardsInZone(
+          "trash" as CoreZoneId,
+          context.playerId as CorePlayerId,
+        );
+        for (const cardId of trashCards) {
+          const def = registry.get(cardId as string);
+          if (!def || def.cardType !== "unit") {
+            continue;
+          }
+          if (!hasLegionPlayFromTrash(cardId as string)) {
+            continue;
+          }
+          if (!registry.canAfford(cardId as string, pool)) {
+            continue;
+          }
+          results.push({
+            cardId: cardId as string,
+            location: "base",
+            playerId: context.playerId as string,
+          });
+        }
       }
       return results;
     },
@@ -392,14 +676,25 @@ export const cardPlayMoves: Partial<
       const { cardId, playerId, location } = context.params;
       const { zones, counters } = context;
 
-      deductCost(draft, playerId, cardId, {}, createMetaAccessor(context.cards));
+      deductCost(
+        draft,
+        playerId,
+        cardId,
+        {},
+        createMetaAccessor(context.cards),
+        buildBoardCtx(draft, context),
+      );
 
       zones.moveCard({
         cardId: cardId as CoreCardId,
         targetZoneId: location as CoreZoneId,
       });
 
-      counters.setFlag(cardId as CoreCardId, "exhausted", true);
+      // Units normally enter play exhausted (rule 554). Haste units enter
+      // Ready and can act immediately (rule 719).
+      const registry = getGlobalCardRegistry();
+      const unitHasHaste = registry.hasKeyword(cardId, "Haste");
+      counters.setFlag(cardId as CoreCardId, "exhausted", hasteEntersExhausted(unitHasHaste));
 
       // Fire "play-self" and "play-card" triggers BEFORE incrementing the
       // Rule-724 counter, so a Legion trigger on this card itself cannot
@@ -458,6 +753,7 @@ export const cardPlayMoves: Partial<
           context.params.cardId,
           { chosenTargetId: context.params.chosenTargetId },
           createMetaAccessor(context.cards),
+          buildBoardCtx(state, context),
         )
       ) {
         return false;
@@ -513,7 +809,14 @@ export const cardPlayMoves: Partial<
       const { cardId, playerId, chosenTargetId } = context.params;
       const { zones } = context;
 
-      deductCost(draft, playerId, cardId, { chosenTargetId }, createMetaAccessor(context.cards));
+      deductCost(
+        draft,
+        playerId,
+        cardId,
+        { chosenTargetId },
+        createMetaAccessor(context.cards),
+        buildBoardCtx(draft, context),
+      );
 
       zones.moveCard({
         cardId: cardId as CoreCardId,
@@ -583,6 +886,7 @@ export const cardPlayMoves: Partial<
             xAmount: context.params.xAmount,
           },
           createMetaAccessor(context.cards),
+          buildBoardCtx(state, context),
         )
       ) {
         return false;
@@ -600,12 +904,21 @@ export const cardPlayMoves: Partial<
       }
 
       // Rule 530: in Neutral Open state, only the active player holds
-      // Priority, so only they may play an Action-timed spell. Reaction
-      // Spells can be played by any relevant player in a Closed state.
+      // Priority, so only they may play an Action-timed spell.
       if (timing === "action" && turnState === "neutral-open") {
         if (state.turn.activePlayer !== context.params.playerId) {
           return false;
         }
+      }
+
+      // Rules 510 / 530 / 543.x — once a chain or showdown is ongoing, only
+      // The player who currently holds Priority (chain) / Focus (showdown) may
+      // Add to the chain. A Reaction spell is *not* free for anyone to play
+      // Mid-chain; it waits for that player's window. (Neutral Open is gated
+      // By the rule-530 check above; `getPriorityHolder` returns null there.)
+      const priorityHolder = getPriorityHolder(interaction);
+      if (priorityHolder !== null && priorityHolder !== context.params.playerId) {
+        return false;
       }
 
       // Rule 537: Check that required targets exist before allowing the spell
@@ -661,7 +974,17 @@ export const cardPlayMoves: Partial<
         context.playerId as CorePlayerId,
       );
 
-      const results: { playerId: string; cardId: string; targets?: string[] }[] = [];
+      const results: {
+        playerId: string;
+        cardId: string;
+        targets?: string[];
+        // Phase B batch 26 HHH: when subset enumeration would blow past
+        // MAX_SUBSETS, we collapse to a single "select-all" move and set
+        // This hint flag so UIs can render a multi-pick affordance instead
+        // Of an exploded subset list. Engine apply-time validation ignores
+        // This field (it's not part of the typed playSpell params).
+        _truncated?: boolean;
+      }[] = [];
       for (const cardId of handCards) {
         const def = registry.get(cardId as string);
         if (!def || def.cardType !== "spell") {
@@ -679,40 +1002,145 @@ export const cardPlayMoves: Partial<
           continue;
         }
 
-        // Check that the spell has at least one legal target (rule 537)
+        // Phase B batch 25 DDD: emit one legal-move per legal target tuple,
+        // Mirroring how `playUnit` enumerates per `{cardId, location}`. This
+        // Lets UIs (TargetPicker) restrict the picker to engine-validated
+        // Targets rather than every battlefield unit.
+        //
+        // Rules:
+        //   - No target descriptor          → 1 move, targets: []
+        //   - Self-target descriptor        → 1 move, targets: [] (implicit)
+        //   - Non-self target descriptor    → 1 move per legal target id;
+        //                                     0 candidates ⇒ no move (rule 537)
         const abilities = registry.getAbilities(cardId as string) ?? [];
         const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
         const effect = spellAbility?.effect as { target?: { type: string } } | undefined;
-        if (effect?.target && effect.target.type !== "self") {
-          const resolved = resolveTarget(
-            effect.target as {
-              type: string;
-              controller?: "friendly" | "enemy" | "any";
-              location?: string;
-              quantity?: number | "all";
-            },
-            {
-              cards: {
-                getCardOwner: (c) => context.cards.getCardOwner(c),
-              },
-              draft: state,
-              playerId: context.playerId as string,
-              sourceCardId: cardId as string,
-              zones: {
-                getCardZone: (c) => context.zones.getCardZone(c),
-                getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
-              },
-            },
-          );
-          if (resolved.length === 0) {
-            continue;
-          }
+        const targetDescriptor = effect?.target;
+
+        if (!targetDescriptor || targetDescriptor.type === "self") {
+          results.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: [],
+          });
+          continue;
         }
 
-        results.push({
-          cardId: cardId as string,
-          playerId: context.playerId as string,
-        });
+        // To enumerate one tuple per legal CHOICE, ask the resolver for the
+        // FULL candidate set (override `quantity: "all"`) — the resolver's
+        // Default quantity=1 would silently keep only the first id. We then
+        // Decide tuple shape based on the original descriptor's quantity.
+        const fullCandidates = resolveTarget(
+          {
+            ...(targetDescriptor as Record<string, unknown>),
+            quantity: "all",
+          } as {
+            type: string;
+            controller?: "friendly" | "enemy" | "any";
+            location?: string;
+            quantity?: number | "all";
+          },
+          {
+            cards: {
+              getCardOwner: (c) => context.cards.getCardOwner(c),
+            },
+            draft: state,
+            playerId: context.playerId as string,
+            sourceCardId: cardId as string,
+            zones: {
+              getCardZone: (c) => context.zones.getCardZone(c),
+              getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
+            },
+          },
+        );
+        if (fullCandidates.length === 0) {
+          continue; // Rule 537: no legal target ⇒ spell is not playable
+        }
+        // Phase B batch 26 HHH: per-subset enumeration for multi-target spells.
+        //
+        // Quantity kinds and emission formula:
+        //   - undefined / 1 / single-target  → one move per legal candidate (sizes-1 only)
+        //   - "all"                          → one move with the full candidate set
+        //   - { upTo: N }                    → every subset of sizes 0..min(N, K)
+        //   - { atLeast: N }                 → every subset of sizes min(N,K)..K
+        //   - numeric N (N > 1)              → every subset of EXACTLY size min(N, K)
+        // Where K = fullCandidates.length.
+        //
+        // To prevent combinatorial blowup we cap total emitted subsets per
+        // Spell at MAX_SUBSETS. If a kind would emit more than that we fall
+        // Back to a single "select-all" move with `_truncated: true` so UIs
+        // Can render a multi-pick affordance instead of an exploded subset
+        // List. Apply-time validation accepts any subset of legal IDs, so
+        // Truncation never blocks a legal play.
+        const qty = (targetDescriptor as { quantity?: unknown }).quantity;
+        const K = fullCandidates.length;
+        const cardIdStr = cardId as string;
+        const playerIdStr = context.playerId as string;
+
+        type Subset = readonly string[];
+        const emitSubsets = (subsets: Subset[]): void => {
+          for (const s of subsets) {
+            results.push({
+              cardId: cardIdStr,
+              playerId: playerIdStr,
+              targets: [...s],
+            });
+          }
+        };
+        const emitTruncated = (): void => {
+          results.push({
+            _truncated: true,
+            cardId: cardIdStr,
+            playerId: playerIdStr,
+            targets: fullCandidates,
+          });
+        };
+
+        if (qty === "all") {
+          // Single tuple with every legal id.
+          results.push({
+            cardId: cardIdStr,
+            playerId: playerIdStr,
+            targets: fullCandidates,
+          });
+        } else if (
+          typeof qty === "object" &&
+          qty !== null &&
+          ("upTo" in qty || "atLeast" in qty)
+        ) {
+          const {upTo} = (qty as { upTo?: number });
+          const {atLeast} = (qty as { atLeast?: number });
+          const lo = typeof atLeast === "number" ? Math.max(0, Math.min(atLeast, K)) : 0;
+          const hi = typeof upTo === "number" ? Math.max(0, Math.min(upTo, K)) : K;
+          const subsets = subsetsOfSizes(fullCandidates, lo, hi, MAX_SUBSETS);
+          if (subsets === null) {
+            emitTruncated();
+          } else {
+            emitSubsets(subsets);
+            // The largest legal subset (`hi`) is already enumerated, so we
+            // Intentionally do NOT emit an extra "select-all" move here —
+            // That would duplicate (for { atLeast }) or be illegal (for
+            // { upTo: N } where K > N). UIs can use the size-`hi` subset
+            // As the "max" affordance.
+          }
+        } else if (typeof qty === "number" && qty > 1) {
+          const n = Math.min(qty, K);
+          const subsets = subsetsOfSizes(fullCandidates, n, n, MAX_SUBSETS);
+          if (subsets === null) {
+            emitTruncated();
+          } else {
+            emitSubsets(subsets);
+          }
+        } else {
+          // Default: single-target spell — one tuple per legal candidate.
+          for (const targetId of fullCandidates) {
+            results.push({
+              cardId: cardIdStr,
+              playerId: playerIdStr,
+              targets: [targetId],
+            });
+          }
+        }
       }
       return results;
     },
@@ -727,6 +1155,7 @@ export const cardPlayMoves: Partial<
         cardId,
         { repeatCount: repeatN, targets, xAmount },
         createMetaAccessor(context.cards),
+        buildBoardCtx(draft, context),
       );
 
       // Look up spell effect from card definition
@@ -760,10 +1189,22 @@ export const cardPlayMoves: Partial<
       // Add spell to the chain (rule 537)
       const interaction = draft.interaction ?? createInteractionState();
       const turnOrder = Object.keys(draft.players);
+      const newChainItemId = `chain-${interaction.nextChainItemId}`;
       draft.interaction = addToChain(
         interaction,
         { cardId, controller: playerId, effect: effectToStore, type: "spell" },
         turnOrder,
+      );
+      // Engine-bus event: a new (spell) item was added to the chain.
+      fireTriggers(
+        {
+          cardId: cardId as string,
+          chainItemId: newChainItemId,
+          controller: playerId,
+          triggered: false,
+          type: "chainItemAdded",
+        },
+        { cards: context.cards, counters: context.counters, draft, zones },
       );
 
       // Fire triggers BEFORE incrementing the Rule-724 counter (see
@@ -917,6 +1358,7 @@ export const cardPlayMoves: Partial<
         const spellEffect = spellAbility?.effect;
         const interaction = draft.interaction ?? createInteractionState();
         const turnOrder = Object.keys(draft.players);
+        const newChainItemId = `chain-${interaction.nextChainItemId}`;
         draft.interaction = addToChain(
           interaction,
           { cardId, controller: playerId, effect: spellEffect, type: "spell" },
@@ -926,6 +1368,17 @@ export const cardPlayMoves: Partial<
           cardId: cardId as CoreCardId,
           targetZoneId: "trash" as CoreZoneId,
         });
+        // Engine-bus event: a new (spell) item was added to the chain.
+        fireTriggers(
+          {
+            cardId: cardId as string,
+            chainItemId: newChainItemId,
+            controller: playerId,
+            triggered: false,
+            type: "chainItemAdded",
+          },
+          { cards, counters, draft, zones },
+        );
         fireTriggers({ cardId, playerId, type: "play-spell" }, { cards, counters, draft, zones });
         fireTriggers(
           { cardId, cardType: "spell", playerId, type: "play-card" },
@@ -1000,14 +1453,14 @@ export const cardPlayMoves: Partial<
       }
 
       const energy = state.runePools?.[context.playerId]?.energy ?? 0;
-      const results: { playerId: PlayerId; location: string }[] = [];
+      const results: { playerId: CorePlayerId; location: string }[] = [];
       for (const cardId of championZoneCards) {
-        const def = context.registry?.get(cardId);
+        const def = (context.registry as { get?: (id: CoreCardId) => { energyCost?: number } | undefined } | undefined)?.get?.(cardId);
         const cost = def?.energyCost ?? 0;
         if (cost > energy) {
           continue;
         }
-        results.push({ location: "base", playerId: context.playerId as PlayerId });
+        results.push({ location: "base", playerId: context.playerId as CorePlayerId });
       }
       return results;
     },
@@ -1023,7 +1476,14 @@ export const cardPlayMoves: Partial<
       if (championZoneCards.length > 0) {
         const championId = championZoneCards[0];
         if (championId) {
-          deductCost(draft, playerId, championId as string, {}, createMetaAccessor(context.cards));
+          deductCost(
+            draft,
+            playerId,
+            championId as string,
+            {},
+            createMetaAccessor(context.cards),
+            buildBoardCtx(draft, context),
+          );
 
           zones.moveCard({
             cardId: championId,

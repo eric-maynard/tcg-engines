@@ -63,8 +63,8 @@ function createMockState(): RiftboundGameState {
     conqueredThisTurn: { [P1]: [], [P2]: [] },
     gameId: "test-target",
     players: {
-      [P1]: { id: P1, victoryPoints: 0 },
-      [P2]: { id: P2, victoryPoints: 0 },
+      [P1]: { id: P1, turnsTaken: 0, victoryPoints: 0, xp: 0 },
+      [P2]: { id: P2, turnsTaken: 0, victoryPoints: 0, xp: 0 },
     },
     runePools: {
       [P1]: { energy: 0, power: {} },
@@ -74,7 +74,8 @@ function createMockState(): RiftboundGameState {
     status: "playing",
     turn: { activePlayer: P1, number: 1, phase: "main" },
     victoryScore: 8,
-  };
+    xpGainedThisTurn: {},
+  } as unknown as RiftboundGameState;
 }
 
 /**
@@ -249,7 +250,7 @@ describe("resolveTarget", () => {
       registerUnit("bf-unit", 2);
 
       const state = createMockState();
-      state.battlefields = { bf1: { controller: P1 } } as Record<
+      (state as { battlefields: unknown }).battlefields = { bf1: { controller: P1 } } as Record<
         string,
         unknown
       > as typeof state.battlefields;
@@ -271,6 +272,110 @@ describe("resolveTarget", () => {
 
       const result = resolveTarget(target, ctx);
       expect(result).toContain("bf-unit");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Multi-target quantity shapes — `{ upTo: N }` (parser emits this for "up
+  // To N", e.g. "Deal 2 to up to 2 enemy units") and `{ atLeast: N }`.
+  // The parser's target-parser produces these shapes; previously the
+  // Resolver's `typeof target.quantity === "number"` check fell through to
+  // The default of 1 for both, so "up to 3 units" silently targeted 1.
+  // -------------------------------------------------------------------------
+  describe("quantity { upTo: N } — up-to-N multi-target", () => {
+    test("up-to-2 with 3 candidates returns 2 (max allowed)", () => {
+      registerUnit("u1", 1);
+      registerUnit("u2", 1);
+      registerUnit("u3", 1);
+      const target: TargetDescriptor = {
+        controller: "friendly",
+        quantity: { upTo: 2 },
+        type: "unit",
+      };
+      const ctx = buildContext(
+        {
+          base: [
+            { cardId: "u1", owner: P1 },
+            { cardId: "u2", owner: P1 },
+            { cardId: "u3", owner: P1 },
+          ],
+        },
+        "spell-1",
+        P1,
+      );
+      expect(resolveTarget(target, ctx)).toHaveLength(2);
+    });
+
+    test("up-to-3 with only 1 candidate returns 1", () => {
+      registerUnit("u1", 1);
+      const target: TargetDescriptor = {
+        controller: "friendly",
+        quantity: { upTo: 3 },
+        type: "unit",
+      };
+      const ctx = buildContext(
+        { base: [{ cardId: "u1", owner: P1 }] },
+        "spell-1",
+        P1,
+      );
+      expect(resolveTarget(target, ctx)).toEqual(["u1"]);
+    });
+
+    test("up-to-0 returns 0 candidates (edge case)", () => {
+      registerUnit("u1", 1);
+      const target: TargetDescriptor = {
+        controller: "friendly",
+        quantity: { upTo: 0 },
+        type: "unit",
+      };
+      const ctx = buildContext(
+        { base: [{ cardId: "u1", owner: P1 }] },
+        "spell-1",
+        P1,
+      );
+      expect(resolveTarget(target, ctx)).toEqual([]);
+    });
+
+    test("up-to-2 with negative/zero remaining is clamped", () => {
+      // Defensive: if upTo went negative, slice(0, -N) would weirdly return
+      // Candidates.slice(0, candidates.length - N) — we clamp to >= 0.
+      registerUnit("u1", 1);
+      const target: TargetDescriptor = {
+        controller: "friendly",
+        quantity: { upTo: -5 },
+        type: "unit",
+      };
+      const ctx = buildContext(
+        { base: [{ cardId: "u1", owner: P1 }] },
+        "spell-1",
+        P1,
+      );
+      expect(resolveTarget(target, ctx)).toEqual([]);
+    });
+  });
+
+  describe("quantity { atLeast: N } — at-least-N multi-target", () => {
+    test("atLeast-1 with 3 candidates returns all 3", () => {
+      registerUnit("u1", 1);
+      registerUnit("u2", 1);
+      registerUnit("u3", 1);
+      const target: TargetDescriptor = {
+        controller: "friendly",
+        quantity: { atLeast: 1 },
+        type: "unit",
+      };
+      const ctx = buildContext(
+        {
+          base: [
+            { cardId: "u1", owner: P1 },
+            { cardId: "u2", owner: P1 },
+            { cardId: "u3", owner: P1 },
+          ],
+        },
+        "spell-1",
+        P1,
+      );
+      expect(resolveTarget(target, ctx)).toHaveLength(3);
     });
   });
 });

@@ -130,6 +130,13 @@ function connectWs() {
       case "game_ping":
         handlePing(msg);
         break;
+
+      case "chat":
+        // M8 — incoming player chat. Ignore our own echo (already shown).
+        if (msg.from !== viewingPlayer && typeof appendChatMessage === "function") {
+          appendChatMessage(msg.from, msg.text || "", { name: msg.name || pName(msg.from) });
+        }
+        break;
     }
   };
 

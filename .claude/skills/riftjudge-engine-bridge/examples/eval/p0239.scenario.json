@@ -1,0 +1,14 @@
+{
+  "questionText": "if I play eclipse on a 3 might unit does the unit die since it's at -1 might total",
+  "question": "does the unit die?",
+  "premise": {
+    "turnPlayer": "me",
+    "units": [
+      { "id": "u", "side": "opp", "might": 3, "name": "(target 3-Might unit)" }
+    ],
+    "notes": "Eclipse modeled as modifyMight -4 (the asker says it brings a 3-Might unit to -1). The unit has no damage marked, so even at <=0 effective Might it should not die by a state-based check (death requires marked damage >= current Might, and 0 damage is not lethal)."
+  },
+  "actions": [
+    { "kind": "modifyMight", "target": "u", "delta": -4, "source": "Eclipse" }
+  ]
+}

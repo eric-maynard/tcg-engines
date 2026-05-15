@@ -166,16 +166,39 @@ describe("Play: Spell Timing", () => {
   });
 });
 
-describe("State: Deflect", () => {
+describe("State: Deflect (rule 721)", () => {
   test("costs 1 rainbow per Deflect", () => {
     expect(getDeflectCost(1)).toBe(1);
   });
 
-  test("stacks", () => {
+  test("stacks — Deflect 3 costs 3 rainbow", () => {
     expect(getDeflectCost(3)).toBe(3);
   });
 
   test("no cost without Deflect", () => {
     expect(getDeflectCost(0)).toBe(0);
+  });
+
+  // Regression: rule 721.2 — multiple Deflect instances on same target stack
+  test("Deflect 2 costs exactly 2 rainbow (rule 721.2 stacking)", () => {
+    expect(getDeflectCost(2)).toBe(2);
+  });
+
+  // P0734: ability that targets a unit with Deflect must pay the surcharge
+  // The surcharge is additive; the cost is not refunded if countered (rule 721.1.b).
+  test("Deflect surcharge is non-zero for any positive Deflect value", () => {
+    for (const n of [1, 2, 3, 5]) {
+      expect(getDeflectCost(n)).toBeGreaterThan(0);
+    }
+  });
+
+  // P0742: paying a Deflect cost is an expenditure, not a "floating" action.
+  // The cost function returns the spend amount; it does not create floating resources.
+  test("getDeflectCost returns the spend amount — no resource is created or floated", () => {
+    // If it were floating, a value would need to be tracked externally.
+    // The function purely returns the cost value; callers drain from the energy pool.
+    const cost = getDeflectCost(2);
+    expect(typeof cost).toBe("number");
+    expect(cost).toBe(2); // Exactly spent, nothing remains
   });
 });

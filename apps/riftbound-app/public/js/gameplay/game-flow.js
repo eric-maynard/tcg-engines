@@ -28,8 +28,14 @@ function executeMove(moveId, params, playerId) {
 
 // Phase Bar, End Turn, Game Over
 
-const PHASE_ORDER = ["awaken", "beginning", "channel", "draw", "main", "ending", "cleanup"];
-const PHASE_LABELS = {
+// The turn-phase structure is ENGINE-DEFINED. The UI fetches it from
+// /api/flow (which re-exports `TURN_PHASE_STRIP`/`PHASE_LABELS` from the
+// @tcg/riftbound package) so the renderer never duplicates the turn model.
+// The literals below are only a bootstrap fallback used before the fetch
+// resolves (or if the server is unreachable); they are replaced in place.
+let PHASE_ORDER = ["awaken", "beginning", "channel", "draw", "main", "ending", "cleanup"];
+let PHASE_LABELS = {
+  setup: "Setup",
   awaken: "Awaken",
   beginning: "Beginning",
   channel: "Channel",
@@ -38,6 +44,30 @@ const PHASE_LABELS = {
   ending: "Ending",
   cleanup: "Cleanup",
 };
+
+/** One-shot: pull the engine-defined phase strip and replace the bootstrap copy. */
+(function loadEnginePhaseFlow() {
+  try {
+    fetch("/api/flow")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        if (Array.isArray(data.phases) && data.phases.length) {
+          PHASE_ORDER = data.phases.map((p) => p.id);
+          PHASE_LABELS = Object.fromEntries(data.phases.map((p) => [p.id, p.label]));
+          if (data.phaseLabels && typeof data.phaseLabels === "object") {
+            PHASE_LABELS = { ...PHASE_LABELS, ...data.phaseLabels };
+          }
+        } else if (data.phaseLabels && typeof data.phaseLabels === "object") {
+          PHASE_LABELS = { ...PHASE_LABELS, ...data.phaseLabels };
+        }
+        if (typeof gameState !== "undefined" && gameState) {
+          try { renderPhaseBar(); } catch (_e) { /* render not ready */ }
+        }
+      })
+      .catch(() => { /* keep bootstrap fallback */ });
+  } catch (_e) { /* fetch unavailable */ }
+})();
 
 /** Track previous phase for transition animation */
 let _prevPhase = null;

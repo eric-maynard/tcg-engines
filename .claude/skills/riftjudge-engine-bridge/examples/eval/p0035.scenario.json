@@ -1,0 +1,9 @@
+{
+  "kind": "rules-demo",
+  "demoTopic": "backline",
+  "questionText": "if two units with backline attack a battlefield what happens with damage assignment",
+  "question": "How does [Backline] affect combat damage assignment?",
+  "assumptions": [
+    "RiftJudge p0035 — abstract '[Backline] units attacking' question. The bridge auto-builds a minimal [Backline] showdown: [Backline] units are assigned combat damage last (rule 460.2.c.2 / 826) — non-[Backline] units must receive lethal first."
+  ]
+}

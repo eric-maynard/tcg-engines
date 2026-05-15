@@ -14,7 +14,7 @@ import type {
 } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "../abilities/effect-executor";
 import { executeEffect } from "../abilities/effect-executor";
-import type { PendingChoice, RiftboundGameState } from "../types";
+import type { PendingChoice, RevealAndPickChoice, RiftboundGameState } from "../types";
 import {
   isValidPendingPick,
   pendingChoiceMoves,
@@ -133,9 +133,10 @@ describe("reveal-hand effect", () => {
     expect(draft.pendingChoice).toBeDefined();
     expect(draft.pendingChoice?.type).toBe("reveal-and-pick");
     expect(draft.pendingChoice?.prompter).toBe("p1");
-    expect(draft.pendingChoice?.revealer).toBe("p2");
-    expect(draft.pendingChoice?.revealed).toEqual(["card-a", "card-b", "card-c"]);
-    expect(draft.pendingChoice?.onPicked).toBe("recycle");
+    const rp = draft.pendingChoice as RevealAndPickChoice;
+    expect(rp.revealer).toBe("p2");
+    expect(rp.revealed).toEqual(["card-a", "card-b", "card-c"]);
+    expect(rp.onPicked).toBe("recycle");
   });
 
   it("stores the excludeCardTypes filter", () => {
@@ -153,7 +154,7 @@ describe("reveal-hand effect", () => {
 
     executeEffect(effect, ctx);
 
-    expect(draft.pendingChoice?.filter?.excludeCardTypes).toEqual(["unit"]);
+    expect((draft.pendingChoice as RevealAndPickChoice).filter?.excludeCardTypes).toEqual(["unit"]);
   });
 
   it("does nothing when the revealer has an empty hand", () => {
@@ -183,7 +184,7 @@ describe("reveal-hand effect", () => {
 
     executeEffect(effect, ctx);
 
-    expect(draft.pendingChoice?.onPicked).toBe("recycle");
+    expect((draft.pendingChoice as RevealAndPickChoice).onPicked).toBe("recycle");
   });
 });
 
@@ -393,7 +394,7 @@ describe("resolvePendingChoice move", () => {
   it("reducer moves the picked card to banishment when onPicked is banish", () => {
     const state = makeState(false);
     if (state.pendingChoice) {
-      (state.pendingChoice as { onPicked: PendingChoice["onPicked"] }).onPicked = "banish";
+      (state.pendingChoice as { onPicked: RevealAndPickChoice["onPicked"] }).onPicked = "banish";
     }
     const moves: { cardId: string; targetZoneId: string }[] = [];
     const context = {
@@ -417,7 +418,7 @@ describe("resolvePendingChoice move", () => {
   it("reducer moves the picked card to trash when onPicked is discard", () => {
     const state = makeState(false);
     if (state.pendingChoice) {
-      (state.pendingChoice as { onPicked: PendingChoice["onPicked"] }).onPicked = "discard";
+      (state.pendingChoice as { onPicked: RevealAndPickChoice["onPicked"] }).onPicked = "discard";
     }
     const moves: { cardId: string; targetZoneId: string }[] = [];
     const context = {

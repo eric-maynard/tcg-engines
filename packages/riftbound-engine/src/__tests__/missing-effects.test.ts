@@ -173,7 +173,7 @@ describe("Conditional effects", () => {
       else: { restriction: "weakened", type: "add-restriction" },
       then: { restriction: "boosted", type: "add-restriction" },
       type: "conditional",
-    };
+    } as unknown as ExecutableEffect;
 
     executeEffect(effect, ctx);
 
@@ -305,14 +305,15 @@ const createMockEffectContext = (
 
   const boardCardIds = options.boardCardIds ?? [];
 
-  const ctx: EffectContext & { updatedMeta: Map<string, Partial<RiftboundCardMeta>> } = {
+  const ctx = {
     cards: {
       getCardMeta: (cardId: string) => updatedMeta.get(cardId) ?? {},
+      getCardOwner: (_cardId: string) => "player-1",
       updateCardMeta: (cardId: string, updates: Record<string, unknown>) => {
         const existing = updatedMeta.get(cardId) ?? {};
         updatedMeta.set(cardId, { ...existing, ...updates } as Partial<RiftboundCardMeta>);
       },
-    },
+    } as unknown as EffectContext["cards"],
     draft: {
       battlefields: {},
       conqueredThisTurn: {},
@@ -340,10 +341,10 @@ const createMockEffectContext = (
     updatedMeta,
     zones: {
       getCardsInZone: (_zoneId: string, _playerId?: string) => boardCardIds,
-    },
+    } as unknown as EffectContext["zones"],
   };
 
-  return ctx;
+  return ctx as unknown as EffectContext & { updatedMeta: Map<string, Partial<RiftboundCardMeta>> };
 };
 
 interface MockStaticConditionContextOptions {

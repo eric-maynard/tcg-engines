@@ -3,7 +3,7 @@
     "id": "OGS",
     "name": "Origins Showcase",
     "cardCount": 24,
-    "parsedCount": 24,
+    "parsedCount": 22,
     "errataCount": 2
   },
   "cards": [
@@ -23,17 +23,8 @@
       "tags": ["Annie"],
       "isChampion": true,
       "rulesText": "Your spells and abilities deal 1 Bonus Damage. (Each instance of damage the spell deals is increased by 1.)",
-      "abilities": [
-        {
-          "effect": {
-            "description": "Your spells and abilities deal 1 Bonus Damage",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/532d75dc36a16eb5954253a77366fcceac7aec62-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null
@@ -59,7 +50,10 @@
           "effect": {
             "amount": 3,
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "controller": "enemy",
+              "quantity": "all",
+              "location": "battlefield"
             },
             "type": "damage"
           },
@@ -90,14 +84,11 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nDeal 2 to a unit at a battlefield.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "amount": 2,
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "location": "battlefield"
             },
             "type": "damage"
           },
@@ -129,9 +120,11 @@
       "abilities": [
         {
           "effect": {
-            "description": "While you have 8+ runes, I have +4 Might",
-            "effects": [],
-            "type": "sequence"
+            "amount": 4,
+            "target": {
+              "type": "unit"
+            },
+            "type": "modify-might"
           },
           "type": "static"
         }
@@ -189,16 +182,13 @@
         {
           "effect": {
             "amount": 3,
-            "duration": "turn",
-            "target": {
-              "type": "unit"
-            },
-            "type": "modify-might"
+            "target": "self",
+            "type": "modify-might",
+            "duration": "turn"
           },
-          "optional": false,
           "trigger": {
             "event": "play-spell",
-            "on": "self"
+            "on": "controller"
           },
           "type": "triggered"
         }
@@ -259,19 +249,19 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nGive a friendly unit +3 [Might] this turn. Then choose an enemy unit. They deal damage equal to their Mights to each other.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "amount": 3,
-            "duration": "turn",
-            "target": {
+            "attacker": {
+              "controller": "friendly",
               "type": "unit"
             },
-            "type": "modify-might"
+            "defender": {
+              "controller": "enemy",
+              "type": "unit"
+            },
+            "type": "fight"
           },
-          "type": "static"
+          "timing": "action",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -302,6 +292,7 @@
         },
         {
           "effect": {
+            "target": "self",
             "type": "enter-ready"
           },
           "type": "static"
@@ -331,14 +322,14 @@
       "abilities": [
         {
           "effect": {
-            "description": "return a spell from your trash to your hand",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "location": "trash",
+              "type": "spell"
+            },
+            "type": "return-to-hand"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -366,18 +357,18 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nMove up to 2 friendly units to base.",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "controller": "friendly",
+              "quantity": {
+                "upTo": 2
+              }
             },
             "to": "base",
             "type": "move"
           },
-          "timing": "action",
+          "timing": "reaction",
           "type": "spell"
         }
       ],
@@ -404,13 +395,10 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nKill a unit at a battlefield.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "location": "battlefield"
             },
             "type": "kill"
           },
@@ -442,9 +430,14 @@
       "abilities": [
         {
           "effect": {
-            "description": "Other friendly units have +1 Might here",
-            "effects": [],
-            "type": "sequence"
+            "amount": 1,
+            "target": {
+              "type": "unit",
+              "excludeSelf": true,
+              "controller": "friendly",
+              "location": "here"
+            },
+            "type": "modify-might"
           },
           "type": "static"
         }
@@ -476,11 +469,11 @@
             "exhaust": true
           },
           "effect": {
-            "description": "[Reaction] — [Add] :rb_energy_2:. Use only to play spells",
-            "effects": [],
-            "type": "sequence"
+            "type": "add-resource",
+            "energy": 2
           },
-          "type": "activated"
+          "type": "activated",
+          "timing": "reaction"
         }
       ],
       "parseSuccess": true,
@@ -506,14 +499,14 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nPlay four 1 [Might] Recruit unit tokens. (They can be played to your base or to battlefields you control.)",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Play four 1 Might Recruit unit tokens",
-            "effects": [],
-            "type": "sequence"
+            "token": {
+              "might": 1,
+              "name": "Recruit",
+              "type": "unit"
+            },
+            "type": "create-token",
+            "amount": 4
           },
           "timing": "action",
           "type": "spell"
@@ -543,6 +536,7 @@
       "abilities": [
         {
           "effect": {
+            "target": "self",
             "type": "enter-ready"
           },
           "type": "static"
@@ -573,14 +567,17 @@
         {
           "effect": {
             "target": {
-              "type": "unit"
+              "type": "rune",
+              "quantity": {
+                "upTo": 2
+              }
             },
             "type": "ready"
           },
-          "optional": false,
           "trigger": {
             "event": "end-of-turn",
-            "on": "self"
+            "on": "controller",
+            "timing": "at"
           },
           "type": "triggered"
         }
@@ -611,14 +608,14 @@
           "effect": {
             "amount": 3,
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "quantity": "all",
+              "location": "battlefield"
             },
             "type": "damage"
           },
-          "optional": false,
           "trigger": {
-            "event": "play-self",
-            "on": "self"
+            "event": "play-self"
           },
           "type": "triggered"
         }
@@ -644,17 +641,8 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "While a friendly unit defends alone, it gets +2 [Might].",
-      "abilities": [
-        {
-          "effect": {
-            "description": "While a friendly unit defends alone, it gets +2 Might",
-            "effects": [],
-            "type": "sequence"
-          },
-          "type": "static"
-        }
-      ],
-      "parseSuccess": true,
+      "abilities": [],
+      "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/8231ced23eaf22ca3bf62ec8cb86b83a3e222da6-744x1039.png",
       "illustrator": null,
       "errata": null
@@ -677,16 +665,37 @@
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a friendly unit. The next time it would die this turn, heal it, exhaust it, and recall it instead. (Send it to base. This isn't a move.)",
       "abilities": [
         {
-          "keyword": "Reaction",
-          "type": "keyword"
-        },
-        {
           "effect": {
-            "description": "Choose a friendly unit. The next time it would die this turn, heal it, exhaust it, and recall it instead",
-            "effects": [],
-            "type": "sequence"
+            "duration": "next",
+            "replacement": {
+              "effects": [
+                {
+                  "amount": "all",
+                  "target": {
+                    "type": "unit"
+                  },
+                  "type": "heal"
+                },
+                {
+                  "target": {
+                    "type": "unit"
+                  },
+                  "type": "exhaust"
+                },
+                {
+                  "target": {
+                    "type": "unit"
+                  },
+                  "type": "recall"
+                }
+              ],
+              "type": "sequence"
+            },
+            "replaces": "die",
+            "type": "replacement"
           },
-          "type": "static"
+          "timing": "reaction",
+          "type": "spell"
         }
       ],
       "parseSuccess": true,
@@ -716,10 +725,9 @@
             "amount": 1,
             "type": "draw"
           },
-          "optional": false,
           "trigger": {
             "event": "play-spell",
-            "on": "self"
+            "on": "controller"
           },
           "type": "triggered"
         }
@@ -746,10 +754,6 @@
       "isChampion": false,
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nDeal 8 to a unit.",
       "abilities": [
-        {
-          "keyword": "Action",
-          "type": "keyword"
-        },
         {
           "effect": {
             "amount": 8,
@@ -786,16 +790,23 @@
       "abilities": [
         {
           "effect": {
-            "description": "if you have 4+ units at that battlefield, draw 2",
-            "effects": [],
-            "type": "sequence"
+            "amount": 2,
+            "type": "draw"
           },
-          "optional": false,
           "trigger": {
             "event": "conquer",
-            "on": "self"
+            "on": "controller"
           },
-          "type": "triggered"
+          "type": "triggered",
+          "condition": {
+            "count": 4,
+            "target": {
+              "controller": "friendly",
+              "location": "trigger-battlefield",
+              "type": "unit"
+            },
+            "type": "has-at-least"
+          }
         }
       ],
       "parseSuccess": true,
@@ -821,17 +832,14 @@
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nGive friendly units +2 [Might] this turn.",
       "abilities": [
         {
-          "keyword": "Action",
-          "type": "keyword"
-        },
-        {
           "effect": {
             "amount": 2,
-            "duration": "turn",
             "target": {
-              "type": "unit"
+              "type": "unit",
+              "controller": "friendly"
             },
-            "type": "modify-might"
+            "type": "modify-might",
+            "duration": "turn"
           },
           "timing": "action",
           "type": "spell"

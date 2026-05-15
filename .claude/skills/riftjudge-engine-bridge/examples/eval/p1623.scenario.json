@@ -1,0 +1,18 @@
+{
+  "kind": "out-of-engine-scope",
+  "questionText": "Can I play Ride the Wind in response to Hidden Blade? If so, would Hidden Blade fizzle if I Ride The Wind to base?",
+  "question": "can Ride the Wind be played in response to Hidden Blade, and would it dodge the spell by moving the unit to base?",
+  "premise": {
+    "turnPlayer": "opp",
+    "units": [{ "id": "u", "side": "me", "might": 4, "name": "(my unit, Hidden Blade's target)", "location": "bf" }],
+    "battlefields": [{ "id": "bf", "controller": "me" }],
+    "notes": "Opponent plays Hidden Blade targeting my unit u. I'd like to react with Ride the Wind to move u to base so Hidden Blade fizzles on an illegal target."
+  },
+  "whatsUnsupported": "chain timing / [Action]-vs-[Reaction] play windows and Flash-to-base movement — the engine has a recallToBase primitive but not the timing-window legality check this question hinges on",
+  "rulesAnswer": {
+    "verdict": "No — you can't play Ride the Wind in response to Hidden Blade. It's an [Action] spell; once Hidden Blade is on the chain the state is Closed and only [Reaction] cards can be added, so Ride the Wind can't be played there. Since it can't be played in that window, it can't be used to move your unit to base and dodge Hidden Blade.",
+    "reasoning": "Hidden Blade, when played, starts a chain — the game state becomes Closed (rule 309.1). In a Closed State, only cards with [Reaction] (or being played from a Hidden zone, which grants [Reaction] — rule 811.6) can be added to the chain (rule 338.1.a.1 / 813.1.c.1). Ride the Wind is an [Action] spell (rule 158.2.a / FAQ 7535: [Action] spells can only be played in an Open State to start a new chain — never added to an existing one), and it isn't being played from Hidden, so it doesn't gain [Reaction]. Therefore you have no window to play it in response to Hidden Blade. The 'move to base = illegal target = Hidden Blade fizzles' line (rule 359.3.e.2) only works with a [Reaction] mover such as Fight or Flight, which CAN be played in the Closed window (FAQs 8957/5878/35); Ride the Wind can't. Engine note: the bridge can model the *movement* (recallToBase moves u to base, and a unit recalled out of a Showdown leaves it), but the bridge does not model the Closed-state play-window legality that makes this play impossible in the first place — hence Track B.",
+    "cites": ["309.1", "338.1.a.1", "813.1.c.1", "158.2.a", "811.6", "359.3.e.2"],
+    "confidence": "high"
+  }
+}

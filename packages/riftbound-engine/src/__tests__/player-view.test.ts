@@ -50,8 +50,8 @@ function createTestState(overrides?: Partial<RiftboundGameState>): RiftboundGame
     },
     gameId: "test-game-123",
     players: {
-      [PLAYER_ONE]: { id: PLAYER_ONE, victoryPoints: 3 },
-      [PLAYER_TWO]: { id: PLAYER_TWO, victoryPoints: 5 },
+      [PLAYER_ONE]: { id: PLAYER_ONE, victoryPoints: 3, xp: 0, turnsTaken: 0 },
+      [PLAYER_TWO]: { id: PLAYER_TWO, victoryPoints: 5, xp: 0, turnsTaken: 0 },
     },
     runePools: {
       [PLAYER_ONE]: { energy: 4, power: { calm: 1, fury: 2 } },
@@ -68,6 +68,7 @@ function createTestState(overrides?: Partial<RiftboundGameState>): RiftboundGame
       phase: "main",
     },
     victoryScore: 8,
+    xpGainedThisTurn: { [PLAYER_ONE]: 0, [PLAYER_TWO]: 0 },
     ...overrides,
   };
 }
@@ -238,8 +239,8 @@ describe("createPlayerView", () => {
     test("works when game is finished", () => {
       const state = createTestState({
         players: {
-          [PLAYER_ONE]: { id: PLAYER_ONE, victoryPoints: 8 },
-          [PLAYER_TWO]: { id: PLAYER_TWO, victoryPoints: 6 },
+          [PLAYER_ONE]: { id: PLAYER_ONE, turnsTaken: 0, victoryPoints: 8, xp: 0 },
+          [PLAYER_TWO]: { id: PLAYER_TWO, turnsTaken: 0, victoryPoints: 6, xp: 0 },
         },
         status: "finished",
         winner: PLAYER_ONE,

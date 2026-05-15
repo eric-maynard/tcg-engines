@@ -33,14 +33,15 @@ function createMockState(overrides?: Partial<RiftboundGameState>): RiftboundGame
     conqueredThisTurn: { p1: [], p2: [] },
     gameId: "test",
     players: {
-      p1: { id: "p1", victoryPoints: 0, xp: 0 },
-      p2: { id: "p2", victoryPoints: 0, xp: 0 },
+      p1: { id: "p1", victoryPoints: 0, xp: 0, turnsTaken: 0 },
+      p2: { id: "p2", victoryPoints: 0, xp: 0, turnsTaken: 0 },
     },
     runePools: { p1: { energy: 5, power: { fury: 2 } }, p2: { energy: 3, power: {} } },
     scoredThisTurn: { p1: [], p2: [] },
     status: "playing",
     turn: { activePlayer: "p1", number: 1, phase: "main" },
     victoryScore: 8,
+    xpGainedThisTurn: { p1: 0, p2: 0 },
     ...overrides,
   };
 }
@@ -99,9 +100,10 @@ describe("passChainPriority enumerator", () => {
       chain: {
         active: true,
         activePlayer: P1,
-        items: [{ cardId: "spell-1", controller: P1, type: "spell" }],
+        items: [{ cardId: "spell-1", controller: P1, id: "ci-1", type: "spell" }],
         passedPlayers: [],
         relevantPlayers: [P1, P2],
+        turnOrder: [P1, P2],
       },
     };
     const state = createMockState({ interaction });
@@ -126,9 +128,10 @@ describe("passChainPriority enumerator", () => {
       chain: {
         active: true,
         activePlayer: P2,
-        items: [{ cardId: "spell-1", controller: P1, type: "spell" }],
+        items: [{ cardId: "spell-1", controller: P1, id: "ci-1", type: "spell" }],
         passedPlayers: [],
         relevantPlayers: [P1, P2],
+        turnOrder: [P1, P2],
       },
     };
     const state = createMockState({ interaction });
@@ -153,9 +156,10 @@ describe("resolveChain enumerator", () => {
       chain: {
         active: true,
         activePlayer: P1,
-        items: [{ cardId: "spell-1", controller: P1, type: "spell" }],
+        items: [{ cardId: "spell-1", controller: P1, id: "ci-1", type: "spell" }],
         passedPlayers: [P1, P2],
         relevantPlayers: [P1, P2],
+        turnOrder: [P1, P2],
       },
     };
     const state = createMockState({ interaction });
@@ -172,9 +176,10 @@ describe("resolveChain enumerator", () => {
       chain: {
         active: true,
         activePlayer: P1,
-        items: [{ cardId: "spell-1", controller: P1, type: "spell" }],
+        items: [{ cardId: "spell-1", controller: P1, id: "ci-1", type: "spell" }],
         passedPlayers: [P1],
         relevantPlayers: [P1, P2],
+        turnOrder: [P1, P2],
       },
     };
     const state = createMockState({ interaction });
@@ -279,7 +284,7 @@ describe("endShowdown enumerator", () => {
     let interaction = createInteractionState();
     interaction = startShowdown(interaction, "bf-1", P1, [P1, P2], false, P1, P2);
     // Manually mark the active showdown as inactive (ended)
-    const showdown = getActiveShowdown(interaction);
+    const showdown = getActiveShowdown(interaction) as { active: boolean } | null;
     if (showdown) {
       showdown.active = false;
     }
@@ -329,7 +334,7 @@ describe("activateAbility enumerator", () => {
   test("enumerates activated abilities on base cards", () => {
     registry.register("card-1", {
       abilities: [{ effect: { amount: 1, type: "draw" }, type: "activated" }],
-    });
+    } as never);
 
     const state = createMockState();
     const context = createMockEnumContext(P1, { base: ["card-1"] });
@@ -341,7 +346,7 @@ describe("activateAbility enumerator", () => {
   test("enumerates activated abilities on battlefield cards", () => {
     registry.register("card-2", {
       abilities: [{ effect: { amount: 2, type: "damage" }, type: "activated" }],
-    });
+    } as never);
 
     const state = createMockState();
     const context = createMockEnumContext(P1, { "battlefield-bf-1": ["card-2"] });
@@ -353,11 +358,11 @@ describe("activateAbility enumerator", () => {
   test("skips non-activated abilities", () => {
     registry.register("card-3", {
       abilities: [
-        { effect: { amount: 1, type: "draw" }, trigger: { type: "onPlay" }, type: "triggered" },
+        { effect: { amount: 1, type: "draw" }, trigger: { event: "onPlay" }, type: "triggered" },
         { effect: { amount: 1, type: "draw" }, type: "activated" },
         { effect: { amount: 1, type: "modify-might" }, type: "static" },
       ],
-    });
+    } as never);
 
     const state = createMockState();
     const context = createMockEnumContext(P1, { base: ["card-3"] });
@@ -369,7 +374,7 @@ describe("activateAbility enumerator", () => {
   test("skips abilities player cannot afford", () => {
     registry.register("card-expensive", {
       abilities: [{ cost: { energy: 99 }, effect: { amount: 5, type: "draw" }, type: "activated" }],
-    });
+    } as never);
 
     const state = createMockState();
     const context = createMockEnumContext(P1, { base: ["card-expensive"] });
@@ -389,7 +394,7 @@ describe("activateAbility enumerator", () => {
   test("returns [] when no cards have activated abilities", () => {
     registry.register("card-passive", {
       abilities: [{ effect: { amount: 1, type: "modify-might" }, type: "static" }],
-    });
+    } as never);
 
     const state = createMockState();
     const context = createMockEnumContext(P1, { base: ["card-passive"] });

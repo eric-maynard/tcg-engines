@@ -129,6 +129,22 @@ export interface RiftboundMoves {
     targetChainItemId: string;
   };
 
+  /**
+   * Decline an optional ("you may ...") triggered ability on the chain
+   * (Core Rules 2026-03-30).
+   *
+   * A "may" triggered ability is optional to place on the chain — the
+   * engine adds it by default so headless play does not stall, then the
+   * controller of that item may call this move to opt out before it
+   * resolves. Mechanically it marks the item as countered (effect skipped
+   * on resolve). Only the item's own controller may decline it, and only
+   * items flagged `optional` are eligible.
+   */
+  declineTrigger: {
+    playerId: PlayerId;
+    targetChainItemId: string;
+  };
+
   /** Transition from setup to main game */
   transitionToPlay: Record<string, never>;
 
@@ -412,7 +428,20 @@ export interface RiftboundMoves {
    * to let the active player pick a card from an opponent's revealed hand.
    * The chosen card is recycled/banished/discarded per the stored effect.
    */
-  resolvePendingChoice: { playerId: PlayerId; pickedCardId: CardId };
+  resolvePendingChoice: {
+    playerId: PlayerId;
+    /**
+     * For `reveal-and-pick` and `look-and-pick`: the chosen card id.
+     * Ignored for `pick-mode` choices.
+     */
+    pickedCardId?: CardId;
+    /**
+     * For `pick-mode` choices (modal "Choose one — A. B."): the chosen
+     * option's index (0..options.length-1). Ignored for the card-pick
+     * variants.
+     */
+    pickedOptionIndex?: number;
+  };
 
   // ============================================
   // Token & Sandbox Meta Moves (W10)

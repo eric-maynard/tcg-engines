@@ -133,6 +133,7 @@ function createHarness(cardData: Record<string, CardData>) {
   const counters = {
     addCounter: () => {},
     clearCounter: () => {},
+    getCounter: () => 0,
     removeCounter: () => {},
     setFlag: (cardId: CoreCardId, flag: string, value: boolean) => {
       const card = cardStore.get(cardId as string);

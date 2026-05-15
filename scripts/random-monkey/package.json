@@ -1,0 +1,19 @@
+{
+  "name": "@tcg/random-monkey",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "monkey": "bun run run.ts"
+  },
+  "dependencies": {
+    "@tcg/core": "workspace:*",
+    "@tcg/riftbound": "workspace:*",
+    "@tcg/riftbound-cards": "workspace:*",
+    "@tcg/riftbound-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.4",
+    "typescript": "5.9.3"
+  }
+}

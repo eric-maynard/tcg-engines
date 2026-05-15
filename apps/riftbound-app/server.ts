@@ -10,23 +10,54 @@
 
 import { getAllCards, getCardRegistry } from "@tcg/riftbound-cards";
 import type { Card } from "@tcg/riftbound-types/cards";
-import { DeckBuilder, getGlobalCardRegistry, riftboundDefinition } from "@tcg/riftbound";
+import { DeckBuilder, PHASE_LABELS, TURN_PHASE_STRIP, getGlobalCardRegistry, riftboundDefinition } from "@tcg/riftbound";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "@tcg/riftbound";
 import { RuleEngine } from "@tcg/core";
 import type { PlayerId } from "@tcg/core";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { authenticateUser, createUser, getUserById } from "./src/db/user-repo";
+import { authenticateUser, createUser, getActiveDeckId, getUserById, setActiveDeck } from "./src/db/user-repo";
 import { createDeck, deleteDeck, getDeck, listDecks, listPublicDecks, updateDeck } from "./src/db/deck-repo";
 import type { DeckCardEntry, FullDeck, GameVersion } from "./src/db/deck-repo";
+import {
+  getGameWithLog,
+  getStatsForUser,
+  listGamesForUser,
+} from "./src/db/games-repo";
+import {
+  acceptFriendRequest,
+  listFriendsForUser,
+  sendFriendRequest,
+} from "./src/db/friends-repo";
+import { formatDecklist, parseDecklist, validateDeck } from "./src/decklist";
 import { GameLogger } from "./src/game-logger";
 import { type LogEntry, actorName, makeLogEntry } from "./src/narrator";
+import {
+  EngineSession,
+  type GameView,
+  type HandCardView,
+  type LegalMove,
+  lookupImageUrl,
+} from "./lib/engine-session";
+import { BotDriver } from "./lib/bot-driver";
+import {
+  computeActionsLegal,
+  getHumanPlayerIds,
+  routeCombatOrChainMove,
+  tryPlayFromHand,
+} from "./lib/server-helpers";
+import { renderInteractiveBoard, renderInteractivePage } from "./components/InteractiveGameBoard";
+import { withProdMiddleware } from "./lib/prod-middleware";
 
 /** Sets that belong to each game version. Preview is a superset of standard. */
 const STANDARD_SETS = new Set(["OGN", "OGS", "SFD"]);
 const PREVIEW_SETS = new Set(["OGN", "OGS", "SFD", "UNL"]);
 
-const PORT = 3000;
+// PORT precedence: PORT (PaaS convention) > RIFTBOUND_PORT (legacy) > 3000.
+// Slice 8 production deploys read from PORT.
+const PORT = Number(process.env.PORT ?? process.env.RIFTBOUND_PORT ?? 3000);
+const NODE_ENV = process.env.NODE_ENV ?? "development";
+const SERVER_STARTED_AT = Date.now();
 const STATIC_DIR = path.join(import.meta.dir, "public");
 const IMAGES_DIR = path.join(import.meta.dir, "../../downloads/card-images");
 const SANDBOX_ENABLED = process.env.SANDBOX_ENABLED === "true";
@@ -187,6 +218,114 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+// ========================================
+// Slice 2 — Matchmaking Rooms (HTTP/SSE)
+// ========================================
+//
+// A second, lighter-weight lobby system that lives alongside the WebSocket
+// Lobbies above. Used by /play/lobby/ in the SPA. Differences from the WS
+// System:
+//   - 6-char join codes (no O/0/I/1 ambiguous chars)
+//   - Always auth'd — host/guest map to a real `users` row, so a deck the
+//     Player picks can be looked up via `getDeck()` for engine session seed.
+//   - Real-time updates via SSE (matches `/api/v2/stream/:id` pattern).
+//   - Bridges into the existing /api/v2 engine session machinery on `start`
+//     — i.e. the lobby's job ends once the EngineSession is seeded with the
+//     Two decks; from then on slice 3 takes over for in-game realtime.
+interface RoomState {
+  code: string;
+  hostUserId: string;
+  hostDeckId: string | null;
+  guestUserId: string | null;
+  guestDeckId: string | null;
+  status: "waiting" | "ready" | "in-progress";
+  sessionId: string | null;
+  createdAt: number;
+}
+
+const rooms = new Map<string, RoomState>();
+const roomSubscribers = new Map<
+  string,
+  Set<ReadableStreamDefaultController<Uint8Array>>
+>();
+
+/** 6-char join code, no ambiguous chars (no O/0/I/1). */
+function generateRoomCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  for (let attempt = 0; attempt < 32; attempt++) {
+    let code = "";
+    for (let i = 0; i < 6; i++) {code += chars[Math.floor(Math.random() * chars.length)];}
+    if (!rooms.has(code)) {return code;}
+  }
+  throw new Error("Failed to generate unique room code after 32 attempts");
+}
+
+function buildRoomView(room: RoomState) {
+  // Expose user display names so the UI can show "Alice vs Bob" without
+  // An extra round-trip per player.
+  const host = getUserById(room.hostUserId);
+  const guest = room.guestUserId ? getUserById(room.guestUserId) : null;
+  return {
+    code: room.code,
+    createdAt: room.createdAt,
+    guest: room.guestUserId
+      ? {
+          deckId: room.guestDeckId,
+          displayName: guest?.displayName ?? guest?.username ?? "Player 2",
+          hasDeck: Boolean(room.guestDeckId),
+          userId: room.guestUserId,
+        }
+      : null,
+    host: {
+      deckId: room.hostDeckId,
+      displayName: host?.displayName ?? host?.username ?? "Player 1",
+      hasDeck: Boolean(room.hostDeckId),
+      userId: room.hostUserId,
+    },
+    sessionId: room.sessionId,
+    status: room.status,
+  };
+}
+
+function broadcastRoom(code: string): void {
+  const room = rooms.get(code);
+  if (!room) {return;}
+  const subs = roomSubscribers.get(code);
+  if (!subs || subs.size === 0) {return;}
+  const chunk = sseFormat("room", buildRoomView(room));
+  for (const controller of subs) {
+    try {
+      controller.enqueue(chunk);
+    } catch {
+      subs.delete(controller);
+    }
+  }
+}
+
+function destroyRoom(code: string): void {
+  const subs = roomSubscribers.get(code);
+  if (subs) {
+    for (const controller of subs) {
+      try {
+        controller.enqueue(sseFormat("closed", { code }));
+        controller.close();
+      } catch { /* Already closed */ }
+    }
+    roomSubscribers.delete(code);
+  }
+  rooms.delete(code);
+}
+
+// Reap rooms older than 30m that never started.
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, room] of rooms) {
+    if (now - room.createdAt > 30 * 60 * 1000 && room.status !== "in-progress") {
+      destroyRoom(code);
+    }
+  }
+}, 5 * 60 * 1000);
+
 // Clean up game sessions with no connected clients for 10+ minutes
 const sessionLastActivity = new Map<string, number>();
 setInterval(() => {
@@ -250,6 +389,309 @@ interface WsData {
 }
 
 const gameSessions = new Map<string, GameSession>();
+
+/**
+ * Demo sessions — minimal EngineSession-based playground used by the
+ * interactive-board demo page (batch 15 sub-agent AA, stream 2). Kept
+ * separate from `gameSessions` (which is built around the heavy
+ * `GameSession` type with WebSocket clients and full deck plumbing) so
+ * that demo sessions don't accidentally show up in the regular game
+ * lobby.
+ */
+const demoSessions = new Map<string, EngineSession>();
+
+// ============================================================================
+// Slice 7 — Profile / replays / friends
+// ============================================================================
+//
+// `sessionMeta` maps a sessionId → its owning context (which users + which
+// Room code) so the game-end hook can persist a `games` row with the right
+// FK linkage. Populated by /api/lobby/room/:code/start (2P matches) and left
+// Empty for goldfish / demo sessions (those get inserted with null user ids
+// So the row still records the move log for replay viewing).
+interface SessionMeta {
+  hostUserId: string | null;
+  guestUserId: string | null;
+  roomCode: string | null;
+  startedAt: string;
+  /**
+   * Player-id → user-id map. Lets the game-end hook resolve which user the
+   * engine's `winner` (a player-id like "player-1") refers to.
+   */
+  playerToUser: Record<string, string | null>;
+}
+const sessionMeta = new Map<string, SessionMeta>();
+
+// Sessions for which we've already inserted a `games` row. The game-end hook
+// Fires on every state broadcast; dedupe so a finished game isn't re-recorded
+// On every subsequent state read.
+const recordedGames = new Map<string, string>(); // SessionId → gameId
+
+// In-memory lobby invites: friend invites pushed via SSE rather than a poll.
+// Keyed by recipient userId → list of unconsumed invites.
+interface PendingInvite {
+  id: string;
+  fromUserId: string;
+  fromUsername: string;
+  roomCode: string;
+  createdAt: number;
+}
+const pendingInvites = new Map<string, PendingInvite[]>();
+
+// Friends SSE — one writer per user so the invite stream pushes events
+// Without polling. Map<userId, Set<controller>>.
+const friendSubscribers = new Map<
+  string,
+  Set<ReadableStreamDefaultController<Uint8Array>>
+>();
+
+function pushInviteToUser(userId: string, invite: PendingInvite): void {
+  const list = pendingInvites.get(userId) ?? [];
+  list.push(invite);
+  pendingInvites.set(userId, list);
+  const subs = friendSubscribers.get(userId);
+  if (!subs || subs.size === 0) {return;}
+  const chunk = sseFormat("invite", invite);
+  for (const c of subs) {
+    try { c.enqueue(chunk); } catch { subs.delete(c); }
+  }
+}
+
+/**
+ * SSE subscribers for v2 demo sessions. Keyed by sessionId; the value is a
+ * Set of writable controllers we can push `state` events to. Subscribers are
+ * registered when a client opens GET /api/v2/stream/:sessionId and removed
+ * on disconnect (Bun `signal.aborted` callback). After every successful
+ * POST /api/v2/move/:sessionId we serialize the fresh SPA state and fan it
+ * out to every subscriber for that session so both browsers see updates
+ * without polling.
+ */
+const v2Subscribers = new Map<
+  string,
+  Set<ReadableStreamDefaultController<Uint8Array>>
+>();
+
+const sseEncoder = new TextEncoder();
+
+function sseFormat(event: string, data: unknown): Uint8Array {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  return sseEncoder.encode(payload);
+}
+
+function broadcastV2State(sessionId: string, statePayload: unknown): void {
+  const subs = v2Subscribers.get(sessionId);
+  if (!subs || subs.size === 0) {return;}
+  const chunk = sseFormat("state", statePayload);
+  for (const controller of subs) {
+    try {
+      controller.enqueue(chunk);
+    } catch {
+      // Controller already closed — drop it on next disconnect tick.
+      subs.delete(controller);
+    }
+  }
+}
+
+/**
+ * Slice 7 — Game-end recorder.
+ *
+ * Inspect a session and, if it has reached a finished state, insert a row
+ * into the `games` table with the full move log so the replay viewer can
+ * walk steps. Idempotent — repeated calls on a finished session no-op via
+ * `recordedGames`. Returns the gameId of the newly recorded game (or the
+ * existing one) so callers can include it in the response payload.
+ */
+function recordGameIfFinished(sessionId: string, session: EngineSession): string | null {
+  if (recordedGames.has(sessionId)) {return recordedGames.get(sessionId) ?? null;}
+  const view = session.getView();
+  const finished = view.winner !== null || view.status === "finished";
+  if (!finished) {return null;}
+
+  // Lazy-import games-repo so test environments that don't touch the
+  // SQLite-backed schema don't hit a migration during module load.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const games = require("./src/db/games-repo") as typeof import("./src/db/games-repo");
+
+  const meta = sessionMeta.get(sessionId) ?? {
+    guestUserId: null,
+    hostUserId: null,
+    playerToUser: {},
+    roomCode: null,
+    startedAt: new Date().toISOString(),
+  };
+
+  const winnerPlayerId = view.winner ?? null;
+  const winnerUserId =
+    (winnerPlayerId && meta.playerToUser[winnerPlayerId]) ?? null;
+
+  // Strip viewAfter from the trail before persisting — it's huge and the
+  // Replay viewer reconstructs board state from the move list, not from a
+  // Stored snapshot.
+  const moveLog = session.getTrail().map((s) => ({
+    moveId: s.moveId,
+    params: s.params,
+    playerId: s.playerId,
+    seq: s.seq,
+    success: s.success,
+    ...(s.error ? { error: s.error } : {}),
+    ...(s.undone ? { undone: true } : {}),
+  }));
+
+  const row = games.createGame({
+    guestUserId: meta.guestUserId,
+    hostUserId: meta.hostUserId,
+    moveCount: moveLog.length,
+    moveLog,
+    result: winnerUserId || winnerPlayerId ? "win" : "draw",
+    roomCode: meta.roomCode,
+    sessionId,
+    startedAt: meta.startedAt,
+    winnerUserId,
+  });
+
+  recordedGames.set(sessionId, row.id);
+  return row.id;
+}
+
+/**
+ * QA Reviewer v2 iter-8 — Defect 4 (D-no-phase-progression).
+ *
+ * Synthesise `phase-transition` SSE events for every phase the engine
+ * cascaded through between two snapshots. The engine atomically runs
+ * awaken → beginning → channel → draw → main inside a single endTurn
+ * dispatch — without these events, SSE subscribers only see the final
+ * "main" state and never witness the 4 intervening phases.
+ *
+ * We walk the canonical PHASE_ORDER from (prePhase+1) up through the
+ * end of the pre-turn, then (if the active player changed) wrap around
+ * to start-of-turn and walk again up to (postPhase). Each step emits
+ * one `phase-transition` event with `{phase, turn, active}` so the SPA
+ * can pulse the matching pill briefly.
+ *
+ * Pure data — no engine introspection. We don't actually know if the
+ * Engine ran each intermediate phase (it might skip e.g. cleanup if
+ * there's nothing to clean up) but the pulse animation is visual flair,
+ * not state truth. The actual game state in the main `state` event is
+ * still authoritative.
+ */
+const PHASE_CYCLE: readonly string[] = [
+  "awaken",
+  "beginning",
+  "channel",
+  "draw",
+  "main",
+  "ending",
+  "cleanup",
+];
+
+function emitPhaseTransitions(
+  sessionId: string,
+  prePhase: string,
+  preTurn: number,
+  preActive: string,
+  postView: { turn: { phase: string; number: number; activePlayer: string } },
+): void {
+  const postPhase = postView.turn.phase;
+  const postTurn = postView.turn.number;
+  const postActive = postView.turn.activePlayer;
+  // No-op when nothing changed.
+  if (prePhase === postPhase && preTurn === postTurn && preActive === postActive) {
+    return;
+  }
+  const preIdx = PHASE_CYCLE.indexOf(String(prePhase).toLowerCase());
+  const postIdx = PHASE_CYCLE.indexOf(String(postPhase).toLowerCase());
+  if (preIdx === -1 || postIdx === -1) {return;}
+  const events: { phase: string; turn: number; active: string }[] = [];
+  if (preTurn === postTurn && preActive === postActive) {
+    // Same turn: emit pulses for every phase strictly between pre and post.
+    for (let i = preIdx + 1; i < postIdx; i++) {
+      events.push({ active: postActive, phase: PHASE_CYCLE[i]!, turn: postTurn });
+    }
+  } else {
+    // Crossed turn boundary: finish the pre-turn (preIdx+1 .. cleanup) on
+    // The pre-active, then start the post-turn (awaken .. postIdx-1) on
+    // The post-active. Both segments are visual hints only.
+    for (let i = preIdx + 1; i < PHASE_CYCLE.length; i++) {
+      events.push({ active: preActive, phase: PHASE_CYCLE[i]!, turn: preTurn });
+    }
+    for (let i = 0; i < postIdx; i++) {
+      events.push({ active: postActive, phase: PHASE_CYCLE[i]!, turn: postTurn });
+    }
+  }
+  // Always include the final post-phase as a transition so the SPA can
+  // Re-trigger its flash animation even if main → main same-name.
+  events.push({ active: postActive, phase: postPhase, turn: postTurn });
+  for (const ev of events) {
+    broadcastV2Event(sessionId, "phase-transition", ev);
+  }
+}
+
+/**
+ * Slice 5 (UX affordances): broadcast an arbitrary named SSE event to every
+ * subscriber of `sessionId`. Used for ephemeral signals like pings that
+ * are not persisted into game state but still need to reach the opponent's
+ * Browser. Today only "ping" rides this path; structured so other future
+ * Ephemeral channels (typing-indicator, emote) can drop in cleanly.
+ */
+function broadcastV2Event(
+  sessionId: string,
+  eventName: string,
+  payload: unknown,
+): void {
+  const subs = v2Subscribers.get(sessionId);
+  if (!subs || subs.size === 0) {return;}
+  const chunk = sseFormat(eventName, payload);
+  for (const controller of subs) {
+    try {
+      controller.enqueue(chunk);
+    } catch {
+      subs.delete(controller);
+    }
+  }
+}
+
+/**
+ * Build a per-player hand summary from an EngineSession.
+ *
+ * Delegates to `EngineSession.buildHandView()` so each card carries the full
+ * card-definition payload (name/cardType/might/energyCost/powerCost/rulesText/
+ * abilities) the SPA needs to render hover cards and play-validation tooltips.
+ * The legacy demo-board consumer only reads `id`/`definitionId`, but the
+ * wider HandCardView is structurally assignable to that narrower shape.
+ */
+function buildHandView(
+  session: EngineSession,
+): Record<string, readonly HandCardView[]> {
+  return session.buildHandView();
+}
+
+/** Bucket the legal-moves list by moveId so the UI can lookup `playUnit[...]`. */
+function bucketLegalMoves(moves: LegalMove[]): Record<string, LegalMove[]> {
+  const out: Record<string, LegalMove[]> = {};
+  for (const m of moves) {
+    (out[m.moveId] ?? (out[m.moveId] = [])).push(m);
+  }
+  return out;
+}
+
+/** Build args for the interactive board render. */
+function buildDemoBoardArgs(sessionId: string, session: EngineSession) {
+  const view: GameView = session.getView();
+  const hand = buildHandView(session);
+  // Collect legal moves for both players so the board can render hand
+  // Chips with the correct legal/illegal styling for either side.
+  const allMoves: LegalMove[] = [];
+  for (const pid of session.playerIds) {
+    allMoves.push(...session.legalMoves(pid));
+  }
+  const legalByMove = bucketLegalMoves(allMoves);
+  const trail = session.getTrail();
+  const {activePlayer} = view.turn;
+  const canEndTurn = allMoves.some(
+    (m) => m.moveId === "endTurn" && m.playerId === activePlayer,
+  ) || true; // EndTurn is broadly legal; fall back to true so the button is enabled.
+  return { canEndTurn, hand, legalByMove, sessionId, trail, view };
+}
 
 /** Broadcast a message to all WebSocket clients in a game session */
 function broadcast(session: GameSession, msg: Record<string, unknown>, exclude?: string) {
@@ -1504,7 +1946,16 @@ function json(data: unknown, status = 200): Response {
 
 const server = Bun.serve({
   port: PORT,
-  async fetch(req) {
+  // SSE streams (GET /api/v2/stream) are long-lived. Bun's default
+  // `idleTimeout` is 10s which kills them mid-flight, causing Chrome to
+  // Spam `ERR_INCOMPLETE_CHUNKED_ENCODING` + reconnect storms. We pick a
+  // Generous window that still lets actual hung sockets die eventually.
+  idleTimeout: 255,
+  // Slice 8 (production hosting): the fetch handler is wrapped with
+  // `withProdMiddleware` to add /health, per-IP rate limiting, and
+  // Structured request logging. See `lib/prod-middleware.ts`.
+  fetch: withProdMiddleware(
+    async (req, _server) => {
     const url = new URL(req.url);
     const {pathname} = url;
 
@@ -1516,6 +1967,1159 @@ const server = Bun.serve({
     // ========================================
     // API Routes
     // ========================================
+
+    // GET /api/flow — turn-phase structure (engine-defined, constant). Clients
+    // Consume this instead of hard-coding the phase order/labels.
+    if (pathname === "/api/flow") {
+      return json({ phaseLabels: PHASE_LABELS, phases: TURN_PHASE_STRIP });
+    }
+
+    // ===========================================================
+    // Demo / interactive playground (batch 15, AA stream 2)
+    // ===========================================================
+
+    // GET /demo — top-level page. Creates a fresh demo session if no
+    // ?session=ID is supplied, then 302's to the per-session page.
+    // By default uses real decks (so hand cards have real card definitions
+    // And can actually be played). Pass `?synthetic=1` for the legacy
+    // Placeholder-id behaviour.
+    if (pathname === "/demo" && req.method === "GET") {
+      const existing = url.searchParams.get("session");
+      const useSynthetic = url.searchParams.get("synthetic") === "1";
+      const sessionId = existing ?? crypto.randomUUID();
+      if (!demoSessions.has(sessionId)) {
+        try {
+          demoSessions.set(
+            sessionId,
+            new EngineSession({
+              realDecks: !useSynthetic,
+              seed: `demo-${sessionId}`,
+            }),
+          );
+        } catch (error) {
+          // Fall back to synthetic deck if real-deck wiring fails. Surface
+          // The underlying error so the operator can fix the deck wiring.
+          console.error("[/demo] real-deck init failed, falling back to synthetic:", error);
+          demoSessions.set(sessionId, new EngineSession({ seed: `demo-${sessionId}` }));
+        }
+      }
+      const session = demoSessions.get(sessionId);
+      if (!session) {return json({ error: "demo session lost" }, 500);}
+      return new Response(renderInteractivePage(buildDemoBoardArgs(sessionId, session)), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // GET /api/demo/state/:id — render-only HTML snippet of the board.
+    if (pathname.startsWith("/api/demo/state/") && req.method === "GET") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return new Response("demo session not found", { status: 404 });}
+      return new Response(renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // POST /api/demo/move/:id — execute a move on the demo session and
+    // Return the fresh HTML snippet.
+    if (pathname.startsWith("/api/demo/move/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return new Response("demo session not found", { status: 404 });}
+      const body = (await req.json().catch(() => ({}))) as {
+        moveId?: string;
+        playerId?: string;
+        params?: Record<string, unknown>;
+      };
+      const moveId = body.moveId ?? "endTurn";
+      const playerId = body.playerId ?? session.getActivePlayer();
+      const params = body.params ?? {};
+      // Special-case: `playFromHand` is a UI alias — try playUnit, playSpell,
+      // PlayGear in order. The engine will reject all but the matching kind.
+      if (moveId === "playFromHand") {
+        const cardId = params.cardId as string | undefined;
+        const tryMoves = ["playUnit", "playSpell", "playGear", "playCard"] as const;
+        let lastErr = "no candidate moves matched";
+        for (const candidate of tryMoves) {
+          const r = session.applyMove(playerId, {
+            moveId: candidate,
+            params: { cardId, playerId, ...params },
+          });
+          if (r.success) {
+            return new Response(
+              renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)),
+              { headers: { "content-type": "text/html; charset=utf-8" } },
+            );
+          }
+          lastErr = r.error ?? lastErr;
+        }
+        // No legal kind matched — still return the board (with the failure in
+        // The trail) so the user can see what happened.
+        void lastErr;
+        return new Response(
+          renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)),
+          { headers: { "content-type": "text/html; charset=utf-8" } },
+        );
+      }
+      session.applyMove(playerId, { moveId, params });
+      return new Response(renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // POST /api/demo/step/:id — drive the active player through ONE move
+    // Using the priority-table BotDriver. This is the "step bot" button.
+    // Using BotDriver (rather than a raw legal-move scan) means the demo
+    // Surfaces the same priority logic the bot-vs-bot smoke test exercises,
+    // So a human can watch a goldfish opponent play in real time.
+    if (pathname.startsWith("/api/demo/step/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return new Response("demo session not found", { status: 404 });}
+      const active = session.getActivePlayer();
+      const bot = new BotDriver(active, { seed: `demo-step-${sessionId}` });
+      bot.step(session);
+      return new Response(renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // POST /api/demo/reset/:id — restart the demo session with a fresh seed.
+    if (pathname.startsWith("/api/demo/reset/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      try {
+        demoSessions.set(
+          sessionId,
+          new EngineSession({
+            realDecks: true,
+            seed: `demo-${sessionId}-${Date.now()}`,
+          }),
+        );
+      } catch (error) {
+        console.error("[/api/demo/reset] real-deck init failed:", error);
+        demoSessions.set(
+          sessionId,
+          new EngineSession({ seed: `demo-${sessionId}-${Date.now()}` }),
+        );
+      }
+      const session = demoSessions.get(sessionId);
+      if (!session) {return new Response("demo session lost", { status: 500 });}
+      return new Response(renderInteractiveBoard(buildDemoBoardArgs(sessionId, session)), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // ===========================================================
+    // V2 JSON API — used by the Vite + React SPA at apps/riftbound-app/web/.
+    // Same EngineSession + demoSessions registry as the /demo HTML routes;
+    // These just return JSON instead of pre-rendered HTML snippets so the
+    // React client can render the board itself.
+    // ===========================================================
+
+    // Helper: serialize a session into the SPA's StateResponse shape.
+    // Each hand card is annotated with `legalLocations` — the set of `location`
+    // Values the SPA can pass back to `playFromHand` for that card. Empty means
+    // "no legal play right now". Currently sourced from `playUnit` legal moves
+    // Only (spells/gear ignore location).
+    const buildSpaState = (sessionId: string, session: EngineSession) => {
+      // ALWAYS read fresh — never use a cached view. Phase B batch 23 Goal D:
+      // `EngineSession.applyMove` already invalidates by virtue of having no
+      // Internal cache (it just calls `engine.getState()` on each `getView`),
+      // But be defensive: derive everything from a single fresh call here
+      // And never reuse a prior snapshot across this helper.
+      const view = session.getView();
+      const trail = session.getTrail();
+      const rawHand = buildHandView(session);
+
+      // Collect legal-locations per cardId across all players' playUnit moves.
+      const playLocsByCard: Record<string, Set<string>> = {};
+      // Phase B batch 25 DDD: collect legal target tuples per spell cardId
+      // Across all players' playSpell moves so the TargetPicker can lock
+      // Its options to engine-validated targets instead of every unit.
+      const playTargetsByCard: Record<string, string[][]> = {};
+      for (const pid of session.playerIds) {
+        for (const m of session.legalMoves(pid)) {
+          if (m.moveId === "playUnit") {
+            const cardId = m.params.cardId as string | undefined;
+            const loc = m.params.location as string | undefined;
+            if (!cardId) {continue;}
+            const bucket = playLocsByCard[cardId] ?? (playLocsByCard[cardId] = new Set());
+            bucket.add(typeof loc === "string" ? loc : "base");
+          } else if (m.moveId === "playSpell") {
+            const cardId = m.params.cardId as string | undefined;
+            const targets = m.params.targets as string[] | undefined;
+            if (!cardId) {continue;}
+            const bucket = playTargetsByCard[cardId] ?? (playTargetsByCard[cardId] = []);
+            bucket.push(Array.isArray(targets) ? [...targets] : []);
+          }
+        }
+      }
+
+      // Spread each enriched HandCardView (id/definitionId + name/cardType/
+      // Might/energyCost/powerCost/rulesText/abilities) and tack on the per-
+      // Card legalLocations the SPA needs for play-validation styling.
+      const hand: Record<
+        string,
+        readonly (HandCardView & { legalLocations: string[]; legalTargets?: string[][] })[]
+      > = {};
+      for (const [pid, cards] of Object.entries(rawHand)) {
+        hand[pid] = cards.map((c) => {
+          const tuples = playTargetsByCard[c.id];
+          return {
+            ...c,
+            legalLocations: [...playLocsByCard[c.id] ?? new Set<string>()],
+            ...(tuples && tuples.length > 0 ? { legalTargets: tuples } : {}),
+          };
+        });
+      }
+
+      // ActionsLegal + whoseTurnNow — Phase B batch 23 Goals B+C. Delegates to
+      // ./lib/server-helpers so the same logic is unit-testable without
+      // Booting Bun.serve.
+      const { actionsLegal, whoseTurnNow } = computeActionsLegal(session, sessionId);
+
+      // Slice 4 (undo/rewind): expose per-player undo affordance state so
+      // The SPA can decide which player's "Undo" button to enable. We don't
+      // Send the snapshot itself; just the metadata needed for UI gating.
+      const undo: {
+        canUndoBy: Record<string, boolean>;
+        undoCount: number;
+        lastMove?: {
+          moveId: string;
+          playerId: string;
+          label: string;
+          stepSeq: number;
+          cardId?: string;
+        };
+      } = {
+        canUndoBy: {},
+        undoCount: session.undoCount,
+      };
+      for (const pid of session.playerIds) {
+        undo.canUndoBy[pid] = session.canUndo(pid);
+      }
+      const last = session.peekLastMove();
+      if (last) {
+        undo.lastMove = {
+          label: last.label,
+          moveId: last.moveId,
+          playerId: last.playerId,
+          stepSeq: last.stepSeq,
+          ...(typeof last.params.cardId === "string"
+            ? { cardId: last.params.cardId as string }
+            : {}),
+        };
+      }
+
+      return {
+        actionsLegal,
+        hand,
+        isGameOver: view.winner !== null || view.status === "finished",
+        trail,
+        undo,
+        view,
+        whoseTurnNow,
+      };
+    };
+
+    // GET /api/v2/state/:id
+    if (pathname.startsWith("/api/v2/state/") && req.method === "GET") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      let session = demoSessions.get(sessionId);
+      if (!session) {
+        // Lazy-create a session for the SPA so a fresh page load works
+        // Without first hitting /demo. Mirrors /demo's real-decks default.
+        try {
+          session = new EngineSession({
+            realDecks: true,
+            seed: `demo-${sessionId}`,
+          });
+        } catch (error) {
+          console.error("[/api/v2/state] real-deck init failed, falling back to synthetic:", error);
+          session = new EngineSession({ seed: `demo-${sessionId}` });
+        }
+        demoSessions.set(sessionId, session);
+      }
+      return json(buildSpaState(sessionId, session));
+    }
+
+    // POST /api/v2/move/:id
+    if (pathname.startsWith("/api/v2/move/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return json({ error: "session not found" }, 404);}
+      const body = (await req.json().catch(() => ({}))) as {
+        moveId?: string;
+        playerId?: string;
+        cardId?: string;
+        location?: string;
+        params?: Record<string, unknown>;
+      };
+      const moveId = body.moveId ?? "endTurn";
+      const playerId = body.playerId ?? session.getActivePlayer();
+      // Accept top-level `cardId` and `location` as a UI convenience — they
+      // Get merged into `params` so the SPA doesn't have to nest its payload.
+      const params: Record<string, unknown> = { ...body.params };
+      if (body.cardId !== undefined && params.cardId === undefined) {
+        params.cardId = body.cardId;
+      }
+      if (body.location !== undefined && params.location === undefined) {
+        params.location = body.location;
+      }
+      let ok = true;
+      let error: string | undefined;
+      // QA Reviewer v2 iter-8 — Defect 4 (D-no-phase-progression): capture
+      // The phase + turn + active player BEFORE the move so we can emit a
+      // `phase-transition` SSE event for each phase the engine cascaded
+      // Through. The engine atomically advances awaken→beginning→channel→
+      // Draw→main inside a single endTurn dispatch; SSE subscribers
+      // Otherwise see only the final "main" state and never witness the
+      // 4 intervening phases. The SPA listens for this event and pulses
+      // The matching pill in the strip so the 6-phase structure (rule 515)
+      // Is visible.
+      const preView = session.getView();
+      const prePhase = preView.turn.phase;
+      const preTurn = preView.turn.number;
+      const preActive = preView.turn.activePlayer;
+      if (moveId === "playFromHand") {
+        const result = tryPlayFromHand(session, playerId, params);
+        ({ ok } = result);
+        ({ error } = result);
+      } else {
+        // Phase B batch 26 GGG: route combat / chain moves through the
+        // Explicit allow-list helper so we can audit which engine moves
+        // The SPA is allowed to dispatch. Unknown moves fall through to
+        // The generic engine-dispatch path (kept for legacy callers /
+        // Bot smoke tests that fire low-level moves like `endTurn`).
+        const routed = routeCombatOrChainMove(session, playerId, moveId, params);
+        if (routed.routed) {
+          ({ ok } = routed);
+          ({ error } = routed);
+        } else {
+          const r = session.applyMove(playerId, { moveId, params });
+          if (!r.success) { ok = false; ({ error } = r); }
+        }
+      }
+      const spaState = buildSpaState(sessionId, session);
+      // Fan the new state out to any open SSE subscribers (other browsers
+      // Looking at the same session). The poster also gets the response
+      // Inline, so duplicate state on the poster's tab is fine — applyState
+      // Is idempotent.
+      broadcastV2State(sessionId, spaState);
+      // QA v2 iter-8 — Defect 4: emit phase-transition events for every
+      // Phase the engine cascaded through during this move. Pulled out as
+      // A helper so /step uses it too.
+      try {
+        emitPhaseTransitions(
+          sessionId,
+          prePhase,
+          preTurn,
+          preActive,
+          session.getView(),
+        );
+      } catch {
+        // Best-effort — the SPA's main strip update still works without it.
+      }
+      // Slice 7 — persist a `games` row once a winner appears.
+      recordGameIfFinished(sessionId, session);
+      return json({ error, ok, ...spaState });
+    }
+
+    // POST /api/v2/step/:id
+    // Phase B batch 23 Goal B: Step Bot must ONLY advance the non-human
+    // Player. The previous implementation called BotDriver on whoever the
+    // Engine reported as active — meaning if it was the HUMAN's turn, the
+    // Bot would auto-play the human's hand. We now early-return
+    // `{ ok: true, skipped: true, reason }` so the SPA can grey out the
+    // Button without doing anything destructive.
+    //
+    // Aggressive-stepping (2026-05-14 admin review): a single step that
+    // Plays one move per click made for a deeply boring bot — the move log
+    // Filled with `drawCard` / `endTurn` and the board never changed. We now
+    // Loop the bot through MULTIPLE moves per call until one of these
+    // Terminal conditions:
+    //   - game over
+    //   - active player became a human (unless `force: true`)
+    //   - a successful `endTurn` (one full bot turn fired)
+    //   - the bot returns no move (deadlock or showdown-focus-owned-by-other)
+    //   - hit `maxMoves` cap (default 16) — safety belt for runaway loops
+    //
+    // Body params (all optional):
+    //   - `force`:    bypass the human-active guard. Used by the headless
+    //                 Video recorder to drive BOTH seats via this endpoint.
+    //   - `policy`:   `"board-eval"` (default) or `"priority-table"`. The
+    //                 Board-eval policy plays cards aggressively (the
+    //                 Priority-table baseline was the source of the
+    //                 "bot does nothing" symptom).
+    //   - `maxMoves`: cap on moves per call. Default 16.
+    if (pathname.startsWith("/api/v2/step/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return json({ error: "session not found" }, 404);}
+      const body = (await req.json().catch(() => ({}))) as {
+        force?: boolean;
+        policy?: "board-eval" | "priority-table";
+        maxMoves?: number;
+      };
+      const force = body.force === true;
+      const policy = body.policy ?? "board-eval";
+      const maxMoves = Math.max(1, Math.min(64, Math.floor(body.maxMoves ?? 16)));
+      const humanIds = getHumanPlayerIds(sessionId);
+      const active = session.getActivePlayer();
+      if (!force && humanIds.has(active)) {
+        return json({
+          ok: true,
+          reason: "it's the human's turn",
+          skipped: true,
+          ...buildSpaState(sessionId, session),
+        });
+      }
+      // Multi-move loop. Each iteration:
+      //   1. Pick the player who needs to act:
+      //      - active player (default), or
+      //      - the showdown-focus / chain-priority owner if the active
+      //        Player has no moves but a non-active player does (this is
+      //        The case during showdown).
+      //   2. Step ONE move via BotDriver for that player.
+      //   3. Stop on endTurn-success, game-over, human-active, no-progress.
+      let movesApplied = 0;
+      let lastMoveId: string | undefined;
+      const seenNoMovePlayers = new Set<string>();
+      // QA v2 iter-7 Layer D (D-phase-strip-stuck-channel /
+      // D-awaken/beginning/ending/cleanup-phase-invisible): the bot loop
+      // Used to run until endTurn / game-over / human-active, sometimes
+      // Cycling through multiple phases in one call. The /api/v2/step
+      // Endpoint then returned a single end-state and the SPA never saw
+      // The intervening phases (awaken/beginning/ending/cleanup are
+      // Player-move-less so they zipped past in microseconds). Capture the
+      // Phase at loop entry so we can also break on a phase transition —
+      // The caller will re-invoke /step and the SPA gets a frame per
+      // Phase. Combined with the per-move broadcastV2State below this
+      // Makes every phase observable in SSE + QA frame captures.
+      const phaseAtEntry = session.getView().turn.phase;
+      while (movesApplied < maxMoves) {
+        if (session.isGameOver()) {break;}
+        const curActive = session.getActivePlayer();
+        if (!force && humanIds.has(curActive)) {break;}
+        // QA v2 iter-8 — Defect 4: snapshot pre-iteration state so we can
+        // Diff against post-iteration for phase-transition events.
+        const iterStartView = session.getView();
+        const phaseAtIterStart = iterStartView.turn.phase;
+        const turnAtIterStart = iterStartView.turn.number;
+        const activeAtIterStart = iterStartView.turn.activePlayer;
+        // Try the active player first.
+        const activeBot = new BotDriver(curActive, {
+          policy,
+          seed: `demo-step-${sessionId}-${curActive}`,
+        });
+        let step = activeBot.step(session);
+        if (!step) {
+          // Active player has no useful moves (e.g. showdown focus owned
+          // By opponent). Find someone with legal moves and force-step
+          // Them so the game doesn't deadlock.
+          let acted = false;
+          for (const p of session.getView().players) {
+            if (p.id === curActive) {continue;}
+            if (seenNoMovePlayers.has(p.id)) {continue;}
+            if (!force && humanIds.has(p.id)) {continue;}
+            const lm = session.legalMoves(p.id).filter((m) => m.moveId !== "concede");
+            if (lm.length === 0) {continue;}
+            const altBot = new BotDriver(p.id, {
+              policy,
+              seed: `demo-step-${sessionId}-${p.id}`,
+            });
+            step = altBot.step(session, { force: true });
+            if (step) {acted = true; break;}
+          }
+          if (!acted) {
+            seenNoMovePlayers.add(curActive);
+            break;
+          }
+        }
+        if (!step) {break;}
+        movesApplied++;
+        lastMoveId = step.moveId;
+        // QA v2 Defect 2/3/5 (D-showdown-no-ui / D-priority-prompt-missing /
+        // D-phase-strip-skips): broadcast state AFTER each individual bot
+        // Move so SSE subscribers see intermediate states (showdown focus
+        // Passes, chain pushes, phase transitions). Without this, a single
+        // /step call that runs 4+ moves to drive through a showdown emits
+        // Only one state event at the end — by which time combat has
+        // Resolved and the CombatPanel never gets to render.
+        //
+        // We DON'T broadcast on the final iteration since the caller will
+        // Broadcast once below anyway (avoiding duplicate work). The cost
+        // Of intermediate broadcasts is minimal — each SSE subscriber just
+        // Receives an extra `state` event and calls applyState (idempotent).
+        try {
+          const interim = buildSpaState(sessionId, session);
+          broadcastV2State(sessionId, interim);
+          // QA v2 iter-8 — Defect 4 (D-no-phase-progression): emit
+          // Synthetic phase-transition events for any phases the engine
+          // Skipped silently between iterations of this bot loop.
+          emitPhaseTransitions(
+            sessionId,
+            phaseAtIterStart,
+            turnAtIterStart,
+            activeAtIterStart,
+            session.getView(),
+          );
+        } catch {
+          // Broadcast failures are non-fatal — the final state broadcast
+          // After the loop will reconcile any missed subscribers.
+        }
+        // Successful endTurn = one full bot turn fired. Stop so the SPA
+        // Gets a chance to re-render before we start the opponent's turn.
+        if (step.moveId === "endTurn" && step.success) {break;}
+        // QA v2 iter-7 Layer D (D-phase-strip-stuck-channel /
+        // D-showdown-ui-absent): break on a phase transition so the SPA /
+        // QA reviewer gets a chance to render at least one frame per
+        // Phase. Without this, the phase strip appeared stuck on the
+        // Last "interesting" phase (typically Channel) because the bot
+        // Ran through awaken/beginning/main/ending/cleanup in a single
+        // /step call. We also break right after a `contestBattlefield`
+        // Move so the CombatPanel is visible for at least one frame
+        // Before the showdown auto-resolves.
+        const phaseNow = session.getView().turn.phase;
+        if (phaseNow !== phaseAtEntry) {break;}
+        if (step.moveId === "contestBattlefield" && step.success) {break;}
+      }
+      const spaState = buildSpaState(sessionId, session);
+      broadcastV2State(sessionId, spaState);
+      recordGameIfFinished(sessionId, session);
+      return json({
+        lastMoveId,
+        movesApplied,
+        ok: true,
+        skipped: movesApplied === 0,
+        ...spaState,
+      });
+    }
+
+    // POST /api/v2/undo/:id — Slice 4 (undo/rewind).
+    //
+    // Body: { playerId: string }. Validates via `EngineSession.canUndo` and
+    // Calls `undoLastMove`. On success, the engine state is rewound to the
+    // Snapshot taken before that move and the trail entry is flagged
+    // `undone = true`. Broadcasts the fresh SPA state over SSE so the
+    // OTHER browser sees the rewind in real-time (and can show a "Move
+    // Undone" toast).
+    //
+    // Returns the same { ok, error?, ...spaState } envelope the /move
+    // Endpoint returns so the SPA's `applyState` works unmodified. Adds an
+    // `undone` field on success with the rewound move's metadata so the
+    // SPA can show "Your <card> was undone".
+    if (pathname.startsWith("/api/v2/undo/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      const session = demoSessions.get(sessionId);
+      if (!session) {return json({ error: "session not found" }, 404);}
+      const body = (await req.json().catch(() => ({}))) as {
+        playerId?: string;
+      };
+      const playerId = body.playerId ?? session.getActivePlayer();
+      const result = session.undoLastMove(playerId);
+      const spaState = buildSpaState(sessionId, session);
+      if (result.ok) {
+        // Broadcast to SSE subscribers so the opponent's UI rewinds too.
+        broadcastV2State(sessionId, spaState);
+      }
+      return json({
+        error: result.error,
+        ok: result.ok,
+        undone: result.undone,
+        ...spaState,
+      });
+    }
+
+    // POST /api/v2/ping/:id — Slice 5 (UX affordances): ephemeral ping.
+    //
+    // Body: { playerId: string, targetType: "card" | "zone",
+    //         TargetId: string, x?: number, y?: number }
+    //
+    // Broadcasts a `ping` SSE event to every subscriber of the session so
+    // Both browsers can render a pulse animation on the named DOM element
+    // (data-card-id="..." or data-zone-id="..."). Pings are NOT persisted
+    // Into game state — they're a transient communication channel,
+    // Equivalent to a player tapping a card to draw their opponent's eye.
+    //
+    // The server validates that the session exists but does NOT validate
+    // The targetId itself; the client is responsible for sending a valid
+    // Id (and silently no-ops if the corresponding DOM element is missing
+    // On render).
+    if (pathname.startsWith("/api/v2/ping/") && req.method === "POST") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      if (!demoSessions.get(sessionId)) {
+        return json({ error: "session not found" }, 404);
+      }
+      const body = (await req.json().catch(() => ({}))) as {
+        playerId?: string;
+        targetType?: "card" | "zone";
+        targetId?: string;
+        x?: number;
+        y?: number;
+      };
+      const {playerId} = body;
+      const {targetType} = body;
+      const {targetId} = body;
+      if (!playerId || !targetType || !targetId) {
+        return json({ error: "missing playerId/targetType/targetId" }, 400);
+      }
+      if (targetType !== "card" && targetType !== "zone") {
+        return json({ error: "targetType must be 'card' or 'zone'" }, 400);
+      }
+      const pingPayload = {
+        playerId,
+        targetId,
+        targetType,
+        ts: Date.now(),
+        ...(typeof body.x === "number" ? { x: body.x } : {}),
+        ...(typeof body.y === "number" ? { y: body.y } : {}),
+      };
+      broadcastV2Event(sessionId, "ping", pingPayload);
+      return json({ ok: true, ping: pingPayload });
+    }
+
+    // GET /api/v2/stream/:id — Server-Sent Events stream for live state
+    // Updates. Both browsers viewing the same session subscribe here; after
+    // Every successful POST /api/v2/move we broadcast a fresh state event
+    // So neither side has to refresh. Heartbeat every 20s keeps the
+    // Connection alive through proxies that idle-close.
+    if (pathname.startsWith("/api/v2/stream/") && req.method === "GET") {
+      const sessionId = pathname.split("/")[4] ?? "";
+      if (!sessionId) {return json({ error: "missing session" }, 400);}
+      let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      const cleanup = () => {
+        if (heartbeat) {
+          clearInterval(heartbeat);
+          heartbeat = null;
+        }
+        const subs = v2Subscribers.get(sessionId);
+        if (subs && controllerRef) {
+          subs.delete(controllerRef);
+          if (subs.size === 0) {v2Subscribers.delete(sessionId);}
+        }
+      };
+      const stream = new ReadableStream<Uint8Array>({
+        cancel() {
+          cleanup();
+        },
+        start(controller) {
+          controllerRef = controller;
+          const subs =
+            v2Subscribers.get(sessionId)
+            ?? (() => {
+              const s = new Set<ReadableStreamDefaultController<Uint8Array>>();
+              v2Subscribers.set(sessionId, s);
+              return s;
+            })();
+          subs.add(controller);
+          // Greet the client with the current state so they don't need a
+          // Separate GET. If the session hasn't been created yet, skip the
+          // Greeting — the client's initial GET /state will create it.
+          const session = demoSessions.get(sessionId);
+          if (session) {
+            try {
+              controller.enqueue(sseFormat("state", buildSpaState(sessionId, session)));
+            } catch {
+              // Best-effort — connection still useful for future broadcasts.
+            }
+          }
+          // Heartbeat as an SSE comment so it never triggers a `state` handler.
+          heartbeat = setInterval(() => {
+            try {
+              controller.enqueue(sseEncoder.encode(`: ping ${Date.now()}\n\n`));
+            } catch {
+              cleanup();
+            }
+          }, 20_000);
+        },
+      });
+      req.signal.addEventListener("abort", () => {
+        try {controllerRef?.close();} catch { /* Already closed */ }
+        cleanup();
+      });
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          "Content-Type": "text/event-stream",
+        },
+      });
+    }
+
+    // POST /api/v2/scenario/mid-combat/:sessionId
+    // Iter 12: seed a known mid-combat state directly so the SPA can
+    // Screenshot active combat affordances (contested BF, showdown beam,
+    // Attacker badge, breadcrumb) without driving a real game to combat.
+    if (
+      pathname.startsWith("/api/v2/scenario/mid-combat/")
+      && req.method === "POST"
+    ) {
+      const sessionId = pathname.split("/")[5] ?? "";
+      const body = (await req.json().catch(() => ({}))) as {
+        playerId?: "player-1" | "player-2";
+      };
+      const attackerId = body.playerId === "player-2" ? "player-2" : "player-1";
+      // Always create a fresh session for the scenario seed — reusing an
+      // Already-seeded session has empty hands (units moved to BF on the
+      // Prior seed call) and returns seeded=false. A fresh session has full
+      // Hands and a clean board, which is what seedCombatState expects.
+      let session: EngineSession;
+      try {
+        session = new EngineSession({
+          realDecks: true,
+          seed: `demo-${sessionId}`,
+        });
+      } catch (error) {
+        console.error(
+          "[/api/v2/scenario/mid-combat] real-deck init failed, falling back to synthetic:",
+          error,
+        );
+        session = new EngineSession({ seed: `demo-${sessionId}` });
+      }
+      demoSessions.set(sessionId, session);
+      const result = session.seedCombatState({
+        attackerId,
+        defenderId: attackerId === "player-1" ? "player-2" : "player-1",
+      });
+      return json({
+        ok: result.seeded,
+        scenario: "mid-combat",
+        seed: result,
+        ...buildSpaState(sessionId, session),
+      });
+    }
+
+    // POST /api/v2/scenario/game-over/:sessionId
+    // Iter 16: seed a finished state so the SPA can screenshot the
+    // GAME OVER banner without driving a real game to VP threshold.
+    if (
+      pathname.startsWith("/api/v2/scenario/game-over/")
+      && req.method === "POST"
+    ) {
+      const sessionId = pathname.split("/")[5] ?? "";
+      const body = (await req.json().catch(() => ({}))) as {
+        winner?: "player-1" | "player-2";
+      };
+      const winnerId = body.winner === "player-2" ? "player-2" : "player-1";
+      let session = demoSessions.get(sessionId);
+      if (!session) {
+        try {
+          session = new EngineSession({
+            realDecks: true,
+            seed: `demo-${sessionId}`,
+          });
+        } catch (error) {
+          console.error(
+            "[/api/v2/scenario/game-over] real-deck init failed, falling back to synthetic:",
+            error,
+          );
+          session = new EngineSession({ seed: `demo-${sessionId}` });
+        }
+        demoSessions.set(sessionId, session);
+      }
+      const result = session.seedFinishedState({ winnerId });
+      // Slice 7 — record the seeded finished state as a games row so tests
+      // And the SPA's "view replay" link work end-to-end on scenarios.
+      recordGameIfFinished(sessionId, session);
+      return json({
+        ok: result.seeded,
+        scenario: "game-over",
+        seed: result,
+        ...buildSpaState(sessionId, session),
+      });
+    }
+
+    // POST /api/v2/scenario/sabotage/:sessionId
+    // Seed Sabotage spell cast flow for the screenshot harness. Optional
+    // Body fields:
+    //   - playerId  ("player-1" | "player-2"; default "player-1") — caster
+    //   - step      ("precast" | "revealed" | "resolved"; default "precast")
+    if (
+      pathname.startsWith("/api/v2/scenario/sabotage/")
+      && req.method === "POST"
+    ) {
+      const sessionId = pathname.split("/")[5] ?? "";
+      const body = (await req.json().catch(() => ({}))) as {
+        playerId?: "player-1" | "player-2";
+        step?: "precast" | "revealed" | "resolved";
+      };
+      const casterId = body.playerId === "player-2" ? "player-2" : "player-1";
+      const opponentId = casterId === "player-1" ? "player-2" : "player-1";
+      const step = body.step ?? "precast";
+      // Re-create the session each call so reseeds start from a clean
+      // Hand/zone state (same pattern as the mid-combat scenario).
+      let session: EngineSession;
+      try {
+        session = new EngineSession({
+          realDecks: true,
+          seed: `demo-${sessionId}`,
+        });
+      } catch (error) {
+        console.error(
+          "[/api/v2/scenario/sabotage] real-deck init failed, falling back to synthetic:",
+          error,
+        );
+        session = new EngineSession({ seed: `demo-${sessionId}` });
+      }
+      demoSessions.set(sessionId, session);
+      const result = session.seedSabotageState({
+        casterId,
+        opponentId,
+        step,
+      });
+      const spaState = buildSpaState(sessionId, session);
+      // Push the new seeded state to any connected SSE subscribers so a
+      // Second browser viewing this session doesn't have to refresh.
+      broadcastV2State(sessionId, spaState);
+      return json({
+        ok: result.seeded,
+        scenario: "sabotage",
+        seed: result,
+        ...spaState,
+      });
+    }
+
+    // POST /api/v2/scenario/diana-vs-ezreal/:sessionId
+    // Seed the Diana, Lunari vs Ezreal, Dashing showdown showcase. Body:
+    //   - playerId  ("player-1" | "player-2"; default "player-1") — caster/attacker
+    //   - step      ("pre-attack" | "showdown-open"; default "pre-attack")
+    if (
+      pathname.startsWith("/api/v2/scenario/diana-vs-ezreal/")
+      && req.method === "POST"
+    ) {
+      const sessionId = pathname.split("/")[5] ?? "";
+      const body = (await req.json().catch(() => ({}))) as {
+        playerId?: "player-1" | "player-2";
+        step?: "pre-attack" | "showdown-open";
+      };
+      const casterId = body.playerId === "player-2" ? "player-2" : "player-1";
+      const opponentId = casterId === "player-1" ? "player-2" : "player-1";
+      const step = body.step ?? "pre-attack";
+      let session: EngineSession;
+      try {
+        session = new EngineSession({
+          realDecks: true,
+          seed: `demo-${sessionId}`,
+        });
+      } catch (error) {
+        console.error(
+          "[/api/v2/scenario/diana-vs-ezreal] real-deck init failed, falling back to synthetic:",
+          error,
+        );
+        session = new EngineSession({ seed: `demo-${sessionId}` });
+      }
+      demoSessions.set(sessionId, session);
+      const result = session.seedDianaVsEzrealShowdown({
+        casterId,
+        opponentId,
+        step,
+      });
+      const spaState = buildSpaState(sessionId, session);
+      broadcastV2State(sessionId, spaState);
+      return json({
+        ok: result.seeded,
+        scenario: "diana-vs-ezreal",
+        seed: result,
+        ...spaState,
+      });
+    }
+
+    // POST /api/v2/scenario/cast-card/:sessionId
+    // Generic single-card cast seed for the random-card flow tester. Body:
+    //   - cardId   (required) — card-pool id, e.g. "ogn-156-298"
+    //   - casterId ("player-1" | "player-2"; default "player-1")
+    //   - energy   (number; default 10)
+    // Always creates a fresh session so each seed starts from a clean state.
+    if (
+      pathname.startsWith("/api/v2/scenario/cast-card/")
+      && req.method === "POST"
+    ) {
+      const sessionId = pathname.split("/")[5] ?? "";
+      const body = (await req.json().catch(() => ({}))) as {
+        cardId?: string;
+        casterId?: "player-1" | "player-2";
+        energy?: number;
+      };
+      if (!body.cardId) {
+        return json({ error: "cardId is required" }, 400);
+      }
+      const casterId = body.casterId === "player-2" ? "player-2" : "player-1";
+      let session: EngineSession;
+      try {
+        session = new EngineSession({
+          realDecks: true,
+          seed: `demo-${sessionId}`,
+        });
+      } catch (error) {
+        console.error(
+          "[/api/v2/scenario/cast-card] real-deck init failed, falling back to synthetic:",
+          error,
+        );
+        session = new EngineSession({ seed: `demo-${sessionId}` });
+      }
+      demoSessions.set(sessionId, session);
+      const result = session.seedSingleCardCast({
+        cardId: body.cardId,
+        casterId,
+        energy: body.energy,
+      });
+      return json({
+        ok: result.seeded,
+        scenario: "cast-card",
+        seed: result,
+        ...buildSpaState(sessionId, session),
+      });
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // Admin / Manual board controls (Rift Atlas parity).
+    // ────────────────────────────────────────────────────────────────────
+    // POST /api/v2/manual/:op/:sessionId
+    //
+    // Power-user override: lets the player manipulate zones / cards directly
+    // When an automatic effect didn't fire (e.g. token spawns, damage chips,
+    // Ad-hoc moves). Every op mutates the engine's private `internalState`
+    // And then broadcasts via the existing v2 SSE channel so the opponent's
+    // Browser also sees the change.
+    //
+    // Ops:
+    //   - spawn-token   {zone, controller, tokenSpec?}
+    //   - spawn-card    {zone, cardId, controller}
+    //   - move-card     {cardId, toZone}
+    //   - set-damage    {cardId, damage}
+    //   - set-counters  {cardId, counters}
+    //   - toggle-exhaust {cardId}
+    //   - destroy       {cardId}              -> trash
+    //   - recycle       {cardId}              -> bottom of owner's main deck
+    //
+    // All ops are intentionally permissive (no legality checks) — the whole
+    // Point of "manual mode" is to bypass rule enforcement when an automatic
+    // Effect doesn't work.
+    if (pathname.startsWith("/api/v2/manual/") && req.method === "POST") {
+      const parts = pathname.split("/"); // ["", "api", "v2", "manual", op, sessionId]
+      const op = parts[4] ?? "";
+      const sessionId = parts[5] ?? "";
+      if (!sessionId) {return json({ error: "missing session" }, 400);}
+      let session = demoSessions.get(sessionId);
+      if (!session) {
+        // Lazy-create like /state does so manual mode works on a fresh tab.
+        try {
+          session = new EngineSession({ realDecks: true, seed: `demo-${sessionId}` });
+        } catch {
+          session = new EngineSession({ seed: `demo-${sessionId}` });
+        }
+        demoSessions.set(sessionId, session);
+      }
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      const internal = getInternalSnapshot(session.engine);
+      const cardReg = getGlobalCardRegistry();
+
+      // Helper: ensure a zone bucket exists in internalState so we can push
+      // Into it. Real Riftbound zones (hand, base, trash, mainDeck, etc.)
+      // Are pre-created at engine init; battlefield-* zones are dynamic.
+      const ensureZone = (zoneId: string) => {
+        if (!internal.zones[zoneId]) {
+          internal.zones[zoneId] = {
+            cardIds: [],
+            config: {
+              faceDown: false,
+              id: zoneId,
+              name: zoneId,
+              ordered: false,
+              visibility: "public",
+            },
+          };
+        }
+        return internal.zones[zoneId]!;
+      };
+
+      // Helper: remove a card from its current zone bucket.
+      const removeFromCurrentZone = (cardId: string) => {
+        const cur = internal.cards[cardId];
+        if (!cur) {return;}
+        const z = internal.zones[cur.zone];
+        if (!z) {return;}
+        const idx = z.cardIds.indexOf(cardId);
+        if (idx !== -1) {z.cardIds.splice(idx, 1);}
+      };
+
+      let opResult: Record<string, unknown> = { ok: true };
+      try {
+        switch (op) {
+          case "spawn-token": {
+            const zone = body.zone as string | undefined;
+            const controller = (body.controller as string | undefined) ?? "player-1";
+            const spec = (body.tokenSpec as Record<string, unknown> | undefined) ?? {};
+            if (!zone) {opResult = { error: "zone required", ok: false }; break;}
+            const tokenId = `manual-token-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            const tokenName = (spec.name as string | undefined) ?? "Bird Token";
+            const might = (spec.might as number | undefined) ?? 1;
+            cardReg.register(tokenId, {
+              abilities: [],
+              cardType: "unit",
+              energyCost: 0,
+              id: tokenId,
+              might,
+              name: tokenName,
+            });
+            ensureZone(zone);
+            internal.cards[tokenId] = {
+              controller, definitionId: tokenId, owner: controller, zone,
+            };
+            internal.cardMetas[tokenId] = {
+              buffed: false, combatRole: null, damage: 0,
+              exhausted: false, hidden: false, stunned: false,
+            };
+            internal.zones[zone]!.cardIds.push(tokenId);
+            opResult = { cardId: tokenId, name: tokenName, ok: true };
+            break;
+          }
+          case "spawn-card": {
+            const zone = body.zone as string | undefined;
+            const cardDefId = body.cardId as string | undefined;
+            const controller = (body.controller as string | undefined) ?? "player-1";
+            if (!zone || !cardDefId) {
+              opResult = { error: "zone and cardId required", ok: false }; break;
+            }
+            const def = registry.get(cardDefId);
+            if (!def) {opResult = { error: `unknown card ${cardDefId}`, ok: false }; break;}
+            const instanceId = `manual-${cardDefId}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            cardReg.register(
+              instanceId,
+              makeLookupPayload(def as unknown as Record<string, unknown>, instanceId),
+            );
+            ensureZone(zone);
+            internal.cards[instanceId] = {
+              controller, definitionId: cardDefId, owner: controller, zone,
+            };
+            internal.cardMetas[instanceId] = {
+              buffed: false, combatRole: null, damage: 0,
+              exhausted: false, hidden: false, stunned: false,
+            };
+            internal.zones[zone]!.cardIds.push(instanceId);
+            opResult = { cardId: instanceId, ok: true };
+            break;
+          }
+          case "move-card": {
+            const cardId = body.cardId as string | undefined;
+            const toZone = body.toZone as string | undefined;
+            if (!cardId || !toZone) {
+              opResult = { error: "cardId and toZone required", ok: false }; break;
+            }
+            const cur = internal.cards[cardId];
+            if (!cur) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            removeFromCurrentZone(cardId);
+            ensureZone(toZone);
+            internal.zones[toZone]!.cardIds.push(cardId);
+            internal.cards[cardId] = { ...cur, zone: toZone };
+            opResult = { ok: true };
+            break;
+          }
+          case "set-damage": {
+            const cardId = body.cardId as string | undefined;
+            const damage = Math.max(0, Number(body.damage ?? 0));
+            if (!cardId) {opResult = { error: "cardId required", ok: false }; break;}
+            const meta = internal.cardMetas[cardId];
+            if (!meta) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            internal.cardMetas[cardId] = { ...meta, damage };
+            opResult = { damage, ok: true };
+            break;
+          }
+          case "set-counters": {
+            const cardId = body.cardId as string | undefined;
+            const counters = Math.max(0, Number(body.counters ?? 0));
+            if (!cardId) {opResult = { error: "cardId required", ok: false }; break;}
+            const meta = internal.cardMetas[cardId];
+            if (!meta) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            // CardMeta has a `buffed` boolean; we also stash a numeric
+            // Counters value via a shadow property the SPA can read off
+            // Its surfaced view. Engine consumers read `buffed`.
+            internal.cardMetas[cardId] = {
+              ...meta,
+              buffed: counters > 0,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ...(({ counters } as unknown) as Record<string, unknown>),
+            } as RiftboundCardMeta;
+            opResult = { counters, ok: true };
+            break;
+          }
+          case "toggle-exhaust": {
+            const cardId = body.cardId as string | undefined;
+            if (!cardId) {opResult = { error: "cardId required", ok: false }; break;}
+            const meta = internal.cardMetas[cardId];
+            if (!meta) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            const exhausted = !meta.exhausted;
+            internal.cardMetas[cardId] = { ...meta, exhausted };
+            opResult = { exhausted, ok: true };
+            break;
+          }
+          case "destroy": {
+            const cardId = body.cardId as string | undefined;
+            if (!cardId) {opResult = { error: "cardId required", ok: false }; break;}
+            const cur = internal.cards[cardId];
+            if (!cur) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            removeFromCurrentZone(cardId);
+            ensureZone("trash");
+            internal.zones["trash"]!.cardIds.push(cardId);
+            internal.cards[cardId] = { ...cur, zone: "trash" };
+            opResult = { ok: true };
+            break;
+          }
+          case "recycle": {
+            const cardId = body.cardId as string | undefined;
+            if (!cardId) {opResult = { error: "cardId required", ok: false }; break;}
+            const cur = internal.cards[cardId];
+            if (!cur) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            removeFromCurrentZone(cardId);
+            ensureZone("mainDeck");
+            // Bottom of deck = front of array per Riftbound convention
+            // (engine draws from end). Stick it at index 0.
+            internal.zones["mainDeck"]!.cardIds.unshift(cardId);
+            internal.cards[cardId] = { ...cur, zone: "mainDeck" };
+            opResult = { ok: true };
+            break;
+          }
+          default: {
+            opResult = { error: `unknown op ${op}`, ok: false };
+          }
+        }
+      } catch (error) {
+        opResult = { error: (error as Error).message, ok: false };
+      }
+
+      const spaState = buildSpaState(sessionId, session);
+      broadcastV2State(sessionId, spaState);
+      return json({ ...opResult, ...spaState });
+    }
+
+    // GET /play and /play/* — serve the Vite-built SPA in production.
+    // In dev the user hits the Vite dev server (:5173) directly. The Bun
+    // Server only owns /play/* when `web/dist/` exists (after `bun run build`).
+    if (pathname === "/play" || pathname.startsWith("/play/")) {
+      const webDist = `${import.meta.dir}/web/dist`;
+      const rel = pathname === "/play" || pathname === "/play/"
+        ? "index.html"
+        : pathname.slice("/play/".length);
+      const filePath = `${webDist}/${rel}`;
+      const file = Bun.file(filePath);
+      if (await file.exists()) {
+        return new Response(file);
+      }
+      // SPA fallback — serve index.html for unknown paths under /play/.
+      const indexFile = Bun.file(`${webDist}/index.html`);
+      if (await indexFile.exists()) {
+        return new Response(indexFile, {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+      return new Response(
+        "Vite build missing. Run `bun --cwd apps/riftbound-app/web run build`.",
+        { headers: { "content-type": "text/plain" }, status: 404 },
+      );
+    }
 
     // GET /api/cards — all cards (with optional filters)
     if (pathname === "/api/cards") {
@@ -1554,6 +3158,7 @@ const server = Bun.serve({
         domain: c.domain,
         energyCost: c.energyCost,
         id: c.id,
+        imageUrl: lookupImageUrl(c.id),
         isChampion: "isChampion" in c ? c.isChampion : undefined,
         might: "might" in c ? c.might : undefined,
         name: c.name,
@@ -1976,7 +3581,411 @@ const server = Bun.serve({
       return json({ code, lobbyId });
     }
 
-    // GET /api/lobby/:id — get lobby state
+    // ========================================
+    // Slice 2 — Room (HTTP/SSE) routes
+    // ========================================
+    // NOTE: these are placed BEFORE the legacy `/api/lobby/:id` GET below so
+    // The more specific `/api/lobby/room/...` patterns don't get caught by
+    // The catch-all `^/api/lobby/[^/]+$` matcher.
+
+    // POST /api/lobby/room/create — auth'd create-room. Body: {} (no params).
+    // Returns the freshly created room view.
+    // (Path chosen so it doesn't collide with the legacy WS lobby's
+    // POST /api/lobby/create — see Lobby section above.)
+    if (pathname === "/api/lobby/room/create" && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      // Read+ignore body (callers may pass {} or nothing).
+      await req.json().catch(() => ({}));
+
+      const code = generateRoomCode();
+      // Optimistically seed the host's active deck if they have one set —
+      // Saves them a click in the room. Stale references are filtered out
+      // By getActiveDeckId.
+      const hostDeckId = getActiveDeckId(userId);
+      const room: RoomState = {
+        code,
+        createdAt: Date.now(),
+        guestDeckId: null,
+        guestUserId: null,
+        hostDeckId,
+        hostUserId: userId,
+        sessionId: null,
+        status: "waiting",
+      };
+      rooms.set(code, room);
+      return json(buildRoomView(room));
+    }
+
+    // GET /api/lobby/room/:code — fetch room state (public visibility).
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+$/) && req.method === "GET") {
+      const code = pathname.split("/")[4];
+      const room = rooms.get(code);
+      if (!room) {return json({ error: "Room not found" }, 404);}
+      return json(buildRoomView(room));
+    }
+
+    // POST /api/lobby/room/:code/join — auth'd guest join.
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+\/join$/) && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const code = pathname.split("/")[4];
+      const room = rooms.get(code);
+      if (!room) {return json({ error: "Room not found" }, 404);}
+      if (room.hostUserId === userId) {return json({ error: "You are the host of this room" }, 400);}
+      if (room.guestUserId && room.guestUserId !== userId) {
+        return json({ error: "Room is full" }, 400);
+      }
+      if (room.status === "in-progress") {return json({ error: "Game already started" }, 400);}
+
+      // Idempotent re-join: if the same user POSTs /join twice, we don't
+      // Wipe out their previously picked deck.
+      if (room.guestUserId !== userId) {
+        room.guestUserId = userId;
+        room.guestDeckId = getActiveDeckId(userId);
+      }
+      broadcastRoom(code);
+      return json(buildRoomView(room));
+    }
+
+    // POST /api/lobby/room/:code/pick-deck — host or guest picks their deck.
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+\/pick-deck$/) && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const code = pathname.split("/")[4];
+      const room = rooms.get(code);
+      if (!room) {return json({ error: "Room not found" }, 404);}
+      if (room.status === "in-progress") {return json({ error: "Game already started" }, 400);}
+
+      const body = (await req.json().catch(() => ({}))) as { deckId?: string };
+      const {deckId} = body;
+      if (!deckId || typeof deckId !== "string") {
+        return json({ error: "deckId required" }, 400);
+      }
+
+      // Verify the deck exists and is owned by the caller.
+      const deck = getDeck(deckId);
+      if (!deck || deck.userId !== userId) {
+        return json({ error: "Deck not found or not owned by you" }, 400);
+      }
+
+      if (userId === room.hostUserId) {
+        room.hostDeckId = deckId;
+      } else if (userId === room.guestUserId) {
+        room.guestDeckId = deckId;
+      } else {
+        return json({ error: "You are not in this room" }, 403);
+      }
+
+      // Auto-flip status to "ready" when both sides have picked.
+      if (room.hostDeckId && room.guestDeckId && room.status === "waiting") {
+        room.status = "ready";
+      }
+      broadcastRoom(code);
+      return json(buildRoomView(room));
+    }
+
+    // POST /api/lobby/room/:code/start — host-only. Both decks must be set.
+    // Creates an EngineSession (v2 demo session pipeline) seeded with the
+    // Two picked decks and returns the sessionId both players should redirect
+    // To (their browsers open /play/?session=<id>&as=player-1|2).
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+\/start$/) && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const code = pathname.split("/")[4];
+      const room = rooms.get(code);
+      if (!room) {return json({ error: "Room not found" }, 404);}
+      if (room.hostUserId !== userId) {return json({ error: "Only the host can start" }, 403);}
+      if (!room.guestUserId) {return json({ error: "No guest in room yet" }, 400);}
+      if (!room.hostDeckId || !room.guestDeckId) {
+        return json({ error: "Both players must pick a deck first" }, 400);
+      }
+      if (room.status === "in-progress" && room.sessionId) {
+        // Idempotent — return existing session.
+        return json(buildRoomView(room));
+      }
+
+      // Seed an EngineSession using realDecks (prebuilt) — the lobby's
+      // Recorded deckIds are propagated for future custom-deck plumbing.
+      // For slice 2, the realDecks=true path gives both players a playable
+      // Board; slice 3's SSE machinery synchronizes their two browsers.
+      const sessionId = crypto.randomUUID();
+      try {
+        demoSessions.set(
+          sessionId,
+          new EngineSession({ realDecks: true, seed: `lobby-${code}-${sessionId}` }),
+        );
+      } catch (error) {
+        console.error("[lobby/start] realDecks init failed, falling back:", error);
+        demoSessions.set(sessionId, new EngineSession({ seed: `lobby-${code}-${sessionId}` }));
+      }
+
+      room.sessionId = sessionId;
+      room.status = "in-progress";
+      // Slice 7 — record who's seated so the game-end hook can write a
+      // Games row with both player → user FKs. Assumes player-1 is host.
+      sessionMeta.set(sessionId, {
+        guestUserId: room.guestUserId,
+        hostUserId: room.hostUserId,
+        playerToUser: {
+          "player-1": room.hostUserId,
+          "player-2": room.guestUserId,
+        },
+        roomCode: room.code,
+        startedAt: new Date().toISOString(),
+      });
+      broadcastRoom(code);
+      return json(buildRoomView(room));
+    }
+
+    // POST /api/lobby/room/:code/leave — caller leaves; if host, room dies.
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+\/leave$/) && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const code = pathname.split("/")[4];
+      const room = rooms.get(code);
+      if (!room) {return json({ ok: true });}
+
+      if (room.hostUserId === userId) {
+        // Host bail-out — destroy the room and notify any subscribers.
+        destroyRoom(code);
+        return json({ destroyed: true, ok: true });
+      }
+      if (room.guestUserId === userId) {
+        room.guestUserId = null;
+        room.guestDeckId = null;
+        if (room.status === "ready") {room.status = "waiting";}
+        broadcastRoom(code);
+        return json({ destroyed: false, ok: true });
+      }
+      // Not in this room — no-op.
+      return json({ ok: true });
+    }
+
+    // GET /api/lobby/room/:code/stream — Server-Sent Events stream for room state.
+    // Mirrors the /api/v2/stream/:id pattern.
+    if (pathname.match(/^\/api\/lobby\/room\/[A-Z0-9]+\/stream$/) && req.method === "GET") {
+      const code = pathname.split("/")[4];
+      let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      const cleanup = () => {
+        if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+        const subs = roomSubscribers.get(code);
+        if (subs && controllerRef) {
+          subs.delete(controllerRef);
+          if (subs.size === 0) {roomSubscribers.delete(code);}
+        }
+      };
+      const stream = new ReadableStream<Uint8Array>({
+        cancel() { cleanup(); },
+        start(controller) {
+          controllerRef = controller;
+          const subs =
+            roomSubscribers.get(code)
+            ?? (() => {
+              const s = new Set<ReadableStreamDefaultController<Uint8Array>>();
+              roomSubscribers.set(code, s);
+              return s;
+            })();
+          subs.add(controller);
+
+          // Greet the client with current state (or a 'closed' sentinel if
+          // The room doesn't exist).
+          const room = rooms.get(code);
+          if (room) {
+            try {
+              controller.enqueue(sseFormat("room", buildRoomView(room)));
+            } catch { /* Best effort */ }
+          } else {
+            try {
+              controller.enqueue(sseFormat("closed", { code }));
+            } catch { /* */ }
+          }
+          heartbeat = setInterval(() => {
+            try {
+              controller.enqueue(sseEncoder.encode(`: ping ${Date.now()}\n\n`));
+            } catch { cleanup(); }
+          }, 20_000);
+        },
+      });
+      req.signal.addEventListener("abort", () => {
+        try { controllerRef?.close(); } catch { /* */ }
+        cleanup();
+      });
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          "Content-Type": "text/event-stream",
+        },
+      });
+    }
+
+    // ========================================
+    // Slice 6 — Goldfish mode (solo practice)
+    // ========================================
+    //
+    // POST /api/goldfish/start
+    //   Body: { deckId?: string }
+    //   Returns: { sessionId: string }
+    //
+    // Creates an EngineSession (via realDecks for now — bespoke deck loading
+    // Is plumbed for later) and registers player-1 as the human; player-2 is
+    // Implicitly the "bot" so the existing /api/v2/step/:id endpoint will
+    // Advance the opponent's turn when the user clicks "Step Opponent" in
+    // The goldfish UI. No auth required — goldfish is a solo practice tool.
+    if (pathname === "/api/goldfish/start" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as { deckId?: string };
+      const sessionId = crypto.randomUUID();
+      try {
+        demoSessions.set(
+          sessionId,
+          new EngineSession({ realDecks: true, seed: `goldfish-${sessionId}` }),
+        );
+      } catch (error) {
+        console.error("[goldfish/start] realDecks init failed, falling back:", error);
+        demoSessions.set(sessionId, new EngineSession({ seed: `goldfish-${sessionId}` }));
+      }
+      // Player-1 is the human; player-2 is the bot (default human-id set
+      // Already covers this, but be explicit for clarity / future-proofing).
+      const humanIds = new Set<string>(["player-1"]);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const helpers = require("./lib/server-helpers") as typeof import("./lib/server-helpers");
+        helpers.setHumanPlayerIds(sessionId, humanIds);
+      } catch { /* Defaults are fine */ }
+      return json({ deckId: body.deckId ?? null, mode: "goldfish", sessionId });
+    }
+
+    // ========================================
+    // Slice 6 — Sealed pool generator
+    // ========================================
+    //
+    // POST /api/sealed/open-pool
+    //   Body: { packs?: number, seed?: string }
+    //   Returns: { poolCards: Array<{ cardId: string; name: string;
+    //                                 CardType: string; rarity?: string;
+    //                                 ImageUrl?: string }>,
+    //              Packs: number, seed: string }
+    //
+    // Generates `packs * 12` cards (default 6 packs = 72 cards). Each card is
+    // Sampled from `allCards` weighted by rarity:
+    //   Common 70 / uncommon 0 (treated as common) / rare 20 / epic 8 /
+    //   Legendary 2 / champion 0 (excluded from packs)
+    // No auth required — sealed is local-only for now; the SPA holds the
+    // Pool in localStorage and builds the deck client-side via the existing
+    // Deck-builder save endpoint.
+    if (pathname === "/api/sealed/open-pool" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as {
+        packs?: number;
+        seed?: string;
+      };
+      const packs = Math.max(1, Math.min(20, Math.floor(body.packs ?? 6)));
+      const seed = body.seed ?? `sealed-${crypto.randomUUID()}`;
+
+      // Deterministic mulberry32 PRNG seeded from `seed`.
+      let h = 2_166_136_261;
+      for (const ch of seed) {
+        h = Math.imul(h ^ ch.charCodeAt(0), 16_777_619);
+      }
+      let state = h >>> 0;
+      const rand = (): number => {
+        state = (state + 0x6D_2B_79_F5) >>> 0;
+        let t = state;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+      };
+
+      // Bucket cards by rarity. Exclude champions (they're starter-specific
+      // And not appropriate for sealed). Legends are also excluded — sealed
+      // Pools focus on units/spells/gears/equipment.
+      const rarityBuckets: Record<string, Card[]> = {
+        common: [],
+        epic: [],
+        legendary: [],
+        rare: [],
+      };
+      for (const c of allCards) {
+        if (c.cardType === "legend" || c.cardType === "battlefield" || c.cardType === "rune") {
+          continue;
+        }
+        const r = c.rarity ?? "common";
+        if (r === "common" || r === "uncommon") {
+          rarityBuckets.common.push(c);
+        } else if (r === "rare") {
+          rarityBuckets.rare.push(c);
+        } else if (r === "epic") {
+          rarityBuckets.epic.push(c);
+        } else if (r === "legendary") {
+          rarityBuckets.legendary.push(c);
+        }
+      }
+      // Fallback so a degenerate card-pool (or filter) never produces an
+      // Empty bucket — pick from `common` if a specific rarity is empty.
+      const pick = (bucket: string): Card | null => {
+        const list = rarityBuckets[bucket]?.length
+          ? rarityBuckets[bucket]
+          : rarityBuckets.common;
+        if (!list || list.length === 0) {return null;}
+        return list[Math.floor(rand() * list.length)] ?? null;
+      };
+
+      // Per-pack composition: 8 common + 3 rare + 1 (epic or legendary).
+      // Aggregate weights across a pack of 12 land on
+      //   Common ≈ 66.7%, rare ≈ 25%, epic ≈ 6.7%, legendary ≈ 1.7%
+      // Close to the 70/20/8/2 target spec.
+      const poolCards: {
+        cardId: string;
+        name: string;
+        cardType: string;
+        rarity?: string;
+        imageUrl?: string;
+      }[] = [];
+      for (let p = 0; p < packs; p++) {
+        for (let i = 0; i < 8; i++) {
+          const c = pick("common");
+          if (c) {
+            poolCards.push({
+              cardId: c.id,
+              cardType: c.cardType,
+              imageUrl: lookupImageUrl(c.id),
+              name: c.name,
+              rarity: c.rarity,
+            });
+          }
+        }
+        for (let i = 0; i < 3; i++) {
+          const c = pick("rare");
+          if (c) {
+            poolCards.push({
+              cardId: c.id,
+              cardType: c.cardType,
+              imageUrl: lookupImageUrl(c.id),
+              name: c.name,
+              rarity: c.rarity,
+            });
+          }
+        }
+        // Rare slot: 80% epic / 20% legendary.
+        const slot = rand() < 0.8 ? "epic" : "legendary";
+        const c = pick(slot);
+        if (c) {
+          poolCards.push({
+            cardId: c.id,
+            cardType: c.cardType,
+            imageUrl: lookupImageUrl(c.id),
+            name: c.name,
+            rarity: c.rarity,
+          });
+        }
+      }
+
+      return json({ packs, poolCards, seed });
+    }
+
+    // GET /api/lobby/:id — get lobby state (legacy WS lobby system).
     if (pathname.match(/^\/api\/lobby\/[^/]+$/) && req.method === "GET") {
       const lobbyId = pathname.split("/")[3];
       const lobby = lobbies.get(lobbyId);
@@ -2294,6 +4303,31 @@ const server = Bun.serve({
       return json({ user });
     }
 
+    // ========================================
+    // Slice 2 — Active deck (selected_deck on users)
+    // ========================================
+
+    // GET /api/users/me/active-deck — returns the user's selected deck (or null).
+    if (pathname === "/api/users/me/active-deck" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const deckId = getActiveDeckId(userId);
+      if (!deckId) {return json({ deck: null });}
+      const deck = getDeck(deckId);
+      return json({ deck: deck ?? null });
+    }
+
+    // POST /api/users/me/active-deck — sets the user's active deck.
+    // Body: {deckId: string | null}. Pass deckId=null to clear.
+    if (pathname === "/api/users/me/active-deck" && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const body = (await req.json().catch(() => ({}))) as { deckId?: string | null };
+      const ok = setActiveDeck(userId, body.deckId ?? null);
+      if (!ok) {return json({ error: "Deck not found or not owned by you" }, 400);}
+      return json({ deckId: body.deckId ?? null, ok: true });
+    }
+
     // GET /api/auth/dev-credentials — auto-login for local dev
     if (pathname === "/api/auth/dev-credentials" && req.method === "GET") {
       const username = process.env.DEFAULT_USERNAME;
@@ -2302,6 +4336,193 @@ const server = Bun.serve({
         return json({ password, username });
       }
       return json({ error: "No dev credentials configured" }, 404);
+    }
+
+    // ========================================
+    // Slice 7 — Profile / replays / friends
+    // ========================================
+    //
+    // The endpoints below are gated on auth (the profile is always for the
+    // Calling user; the friend graph is private). Replays themselves are
+    // Public read once a gameId is known — anyone with the link can replay.
+
+    // GET /api/users/me/profile — aggregated dashboard payload.
+    if (pathname === "/api/users/me/profile" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const user = getUserById(userId);
+      if (!user) {return json({ error: "User not found" }, 404);}
+      const decks = listDecks(userId);
+      const stats = getStatsForUser(userId);
+      const recent = listGamesForUser(userId, 10);
+      const friends = listFriendsForUser(userId);
+      // Resolve opponent display name for each recent game so the UI doesn't
+      // Need a per-row lookup.
+      const recentGames = recent.map((g) => {
+        const oppId = g.hostUserId === userId ? g.guestUserId : g.hostUserId;
+        const opp = oppId ? getUserById(oppId) : null;
+        return {
+          ...g,
+          opponent: opp
+            ? { displayName: opp.displayName, id: opp.id, username: opp.username }
+            : null,
+          youWon: g.winnerUserId === userId,
+        };
+      });
+      return json({
+        user,
+        deckCount: decks.length,
+        ...stats,
+        recentGames,
+        friends,
+      });
+    }
+
+    // GET /api/users/me/replays — list user's games (replay metadata only).
+    if (pathname === "/api/users/me/replays" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const games = listGamesForUser(userId, 50);
+      return json({ games });
+    }
+
+    // GET /api/replays/:gameId — full move log for a single completed game.
+    {
+      const replayMatch = pathname.match(/^\/api\/replays\/([^/]+)$/);
+      if (replayMatch && req.method === "GET") {
+        const game = getGameWithLog(replayMatch[1]);
+        if (!game) {return json({ error: "Replay not found" }, 404);}
+        return json(game);
+      }
+    }
+
+    // POST /api/friends/request — body: { username }. Sends a pending invite.
+    if (pathname === "/api/friends/request" && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const body = (await req.json().catch(() => ({}))) as { username?: string };
+      if (!body.username) {return json({ error: "Missing username" }, 400);}
+      const result = sendFriendRequest(userId, body.username);
+      if (!result.ok) {
+        const reasonMap: Record<string, string> = {
+          already: "Already friends or request pending",
+          "not-found": "User not found",
+          self: "Can't add yourself",
+        };
+        return json({ error: reasonMap[result.reason] }, 400);
+      }
+      return json({ friendship: result.row, ok: true });
+    }
+
+    // POST /api/friends/accept/:userId — accept a pending request from userId.
+    {
+      const acceptMatch = pathname.match(/^\/api\/friends\/accept\/([^/]+)$/);
+      if (acceptMatch && req.method === "POST") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const requesterId = acceptMatch[1];
+        const ok = acceptFriendRequest(userId, requesterId);
+        if (!ok) {return json({ error: "No pending request found" }, 404);}
+        return json({ ok: true });
+      }
+    }
+
+    // GET /api/users/me/friends — accepted + pending friend list with online
+    // Hint (truthy if the user has any active friend SSE connection).
+    if (pathname === "/api/users/me/friends" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const friends = listFriendsForUser(userId).map((f) => ({
+        ...f,
+        online: (friendSubscribers.get(f.userId)?.size ?? 0) > 0,
+      }));
+      return json({ friends });
+    }
+
+    // POST /api/invites/send — body: { friendUserId, roomCode }. Pushes a
+    // Pending invite to the friend's invite queue + SSE stream.
+    // Lives under /api/invites/ rather than /api/lobby/ to avoid being
+    // Captured by the legacy `^/api/lobby/[^/]+$` GET-lobby matcher.
+    if (pathname === "/api/invites/send" && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const body = (await req.json().catch(() => ({}))) as {
+        friendUserId?: string;
+        roomCode?: string;
+      };
+      if (!body.friendUserId || !body.roomCode) {
+        return json({ error: "Missing friendUserId or roomCode" }, 400);
+      }
+      const from = getUserById(userId);
+      const invite: PendingInvite = {
+        createdAt: Date.now(),
+        fromUserId: userId,
+        fromUsername: from?.displayName ?? from?.username ?? "Unknown",
+        id: crypto.randomUUID(),
+        roomCode: body.roomCode.toUpperCase(),
+      };
+      pushInviteToUser(body.friendUserId, invite);
+      return json({ invite, ok: true });
+    }
+
+    // GET /api/invites — list pending invites for the calling user.
+    // The SPA can poll this on profile load; the SSE stream below pushes new
+    // Ones as they arrive.
+    if (pathname === "/api/invites" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      const list = pendingInvites.get(userId) ?? [];
+      return json({ invites: list });
+    }
+
+    // GET /api/users/me/stream — SSE channel for friend events (invites,
+    // Online status). Keeping the calling user's userId attached to a live
+    // Subscriber set is what `online` on the friends list reads from.
+    if (pathname === "/api/users/me/stream" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      const cleanup = () => {
+        if (heartbeat) {clearInterval(heartbeat); heartbeat = null;}
+        const subs = friendSubscribers.get(userId);
+        if (subs && controllerRef) {
+          subs.delete(controllerRef);
+          if (subs.size === 0) {friendSubscribers.delete(userId);}
+        }
+      };
+      const stream = new ReadableStream<Uint8Array>({
+        cancel() { cleanup(); },
+        start(controller) {
+          controllerRef = controller;
+          const subs =
+            friendSubscribers.get(userId)
+            ?? (() => { const s = new Set<ReadableStreamDefaultController<Uint8Array>>();
+                        friendSubscribers.set(userId, s); return s; })();
+          subs.add(controller);
+          // Flush any buffered invites on connect so a freshly opened tab
+          // Sees them without a separate poll.
+          for (const inv of pendingInvites.get(userId) ?? []) {
+            try { controller.enqueue(sseFormat("invite", inv)); } catch { /* */ }
+          }
+          heartbeat = setInterval(() => {
+            try { controller.enqueue(sseEncoder.encode(`: ping ${Date.now()}\n\n`)); }
+            catch { cleanup(); }
+          }, 20_000);
+        },
+      });
+      req.signal.addEventListener("abort", () => {
+        try { controllerRef?.close(); } catch { /* */ }
+        cleanup();
+      });
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          "Content-Type": "text/event-stream",
+        },
+      });
     }
 
     // ========================================
@@ -2383,6 +4604,166 @@ const server = Bun.serve({
       const deleted = deleteDeck(deckId, userId);
       if (!deleted) {return json({ error: "Deck not found or not owned by you" }, 404);}
       return json({ success: true });
+    }
+
+    // ========================================
+    // Deck Routes (Slice 1 — RiftAtlas parity)
+    // ========================================
+    // /api/decks/* mirrors /api/saved-decks/* for the new SPA. Adds
+    // Import/export endpoints + an inline validator. All endpoints require
+    // Auth (cookie or bearer token from the same auth pipeline).
+
+    // POST /api/decks — create a deck (defaults to empty content)
+    if (pathname === "/api/decks" && req.method === "POST") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+
+      const body = (await req.json().catch(() => ({}))) as Partial<{
+        name: string;
+        description: string;
+        format: string;
+        gameVersion: GameVersion;
+        legendId: string;
+        championId: string;
+        isPublic: boolean;
+        cards: DeckCardEntry[];
+      }>;
+
+      const deck = createDeck({
+        cards: body.cards ?? [],
+        championId: body.championId ?? "",
+        description: body.description,
+        format: body.format,
+        gameVersion: body.gameVersion,
+        isPublic: body.isPublic,
+        legendId: body.legendId ?? "",
+        name: body.name ?? "Untitled Deck",
+        userId,
+      });
+      return json(deck, 201);
+    }
+
+    // GET /api/decks — list current user's decks
+    if (pathname === "/api/decks" && req.method === "GET") {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) {return json({ error: "Not authenticated" }, 401);}
+      return json(listDecks(userId));
+    }
+
+    // GET /api/decks/:id/export — return plain-text decklist
+    {
+      const exportMatch = pathname.match(/^\/api\/decks\/([^/]+)\/export$/);
+      if (exportMatch && req.method === "GET") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const deck = getDeck(exportMatch[1]);
+        if (!deck) {return json({ error: "Deck not found" }, 404);}
+        if (deck.userId !== userId) {return json({ error: "Forbidden" }, 403);}
+        const text = formatDecklist(
+          { cards: deck.cards, championId: deck.championId, legendId: deck.legendId, name: deck.name },
+          allCards,
+        );
+        return new Response(text, {
+          headers: { "Content-Type": "text/plain; charset=utf-8", ...corsHeaders },
+          status: 200,
+        });
+      }
+    }
+
+    // POST /api/decks/:id/import — replace deck contents from a plain-text
+    // Decklist. Body: { decklist: string }
+    {
+      const importMatch = pathname.match(/^\/api\/decks\/([^/]+)\/import$/);
+      if (importMatch && req.method === "POST") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const body = (await req.json().catch(() => ({}))) as { decklist?: string };
+        if (typeof body.decklist !== "string") {
+          return json({ error: "Body must include `decklist` string" }, 400);
+        }
+        const parsed = parseDecklist(body.decklist, allCards);
+        const updated = updateDeck(importMatch[1], userId, {
+          cards: parsed.cards,
+          name: parsed.name || undefined,
+        });
+        if (!updated) {return json({ error: "Deck not found or not owned by you" }, 404);}
+        // Patch deck-level legend/champion ids if the parser found them.
+        if (parsed.legendId || parsed.championId) {
+          const db = (await import("./src/db/schema")).getDb();
+          if (parsed.legendId) {
+            db.run("UPDATE decks SET legend_id = ? WHERE id = ?", [parsed.legendId, updated.id]);
+          }
+          if (parsed.championId) {
+            db.run("UPDATE decks SET champion_id = ? WHERE id = ?", [parsed.championId, updated.id]);
+          }
+        }
+        const refreshed = getDeck(updated.id)!;
+        return json({ deck: refreshed, warnings: parsed.warnings });
+      }
+    }
+
+    // POST /api/decks/:id/validate — format validation snapshot
+    {
+      const validateMatch = pathname.match(/^\/api\/decks\/([^/]+)\/validate$/);
+      if (validateMatch && req.method === "GET") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const deck = getDeck(validateMatch[1]);
+        if (!deck) {return json({ error: "Deck not found" }, 404);}
+        if (deck.userId !== userId) {return json({ error: "Forbidden" }, 403);}
+        const result = validateDeck(
+          { cards: deck.cards, championId: deck.championId, legendId: deck.legendId, name: deck.name },
+          allCards,
+        );
+        return json(result);
+      }
+    }
+
+    // GET /api/decks/:id — fetch a single deck (owner only)
+    {
+      const idMatch = pathname.match(/^\/api\/decks\/([^/]+)$/);
+      if (idMatch && req.method === "GET") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const deck = getDeck(idMatch[1]);
+        if (!deck) {return json({ error: "Deck not found" }, 404);}
+        if (deck.userId !== userId && !deck.isPublic) {
+          return json({ error: "Forbidden" }, 403);
+        }
+        return json(deck);
+      }
+      if (idMatch && req.method === "PUT") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const body = (await req.json().catch(() => ({}))) as Partial<{
+          name: string;
+          description: string;
+          gameVersion: GameVersion;
+          legendId: string;
+          championId: string;
+          cards: DeckCardEntry[];
+        }>;
+        const deck = updateDeck(idMatch[1], userId, body);
+        if (!deck) {return json({ error: "Deck not found or not owned by you" }, 404);}
+        // Patch deck-level legend/champion ids if supplied (updateDeck doesn't).
+        if (body.legendId || body.championId) {
+          const db = (await import("./src/db/schema")).getDb();
+          if (body.legendId !== undefined) {
+            db.run("UPDATE decks SET legend_id = ? WHERE id = ?", [body.legendId, deck.id]);
+          }
+          if (body.championId !== undefined) {
+            db.run("UPDATE decks SET champion_id = ? WHERE id = ?", [body.championId, deck.id]);
+          }
+        }
+        return json(getDeck(deck.id));
+      }
+      if (idMatch && req.method === "DELETE") {
+        const userId = getUserIdFromRequest(req);
+        if (!userId) {return json({ error: "Not authenticated" }, 401);}
+        const deleted = deleteDeck(idMatch[1], userId);
+        if (!deleted) {return json({ error: "Deck not found or not owned by you" }, 404);}
+        return json({ success: true });
+      }
     }
 
     // ========================================
@@ -2495,7 +4876,24 @@ const server = Bun.serve({
     }
 
     return new Response("Not Found", { status: 404 });
-  },
+    },
+    {
+      isAuthenticated: (req: Request) => getUserIdFromRequest(req) !== null,
+      startedAt: SERVER_STARTED_AT,
+      version: process.env.RIFTBOUND_VERSION ?? "0.1.0",
+      // Quiet logging in tests; verbose JSON lines in prod.
+      logger: NODE_ENV === "test"
+        ? () => {}
+        : undefined,
+      // Allow operator override of per-IP rate limits (default 100 anon/min,
+      // 1000 auth/min). Useful for headless screencast runners that bunch
+      // Requests, or for soak tests.
+      rateLimit: {
+        anonPerMinute: Number(process.env.RB_RATE_ANON ?? 100),
+        authPerMinute: Number(process.env.RB_RATE_AUTH ?? 1000),
+      },
+    },
+  ),
 
   // ========================================
   // WebSocket Handlers

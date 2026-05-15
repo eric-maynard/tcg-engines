@@ -1,0 +1,12 @@
+{
+  "kind": "out-of-engine-scope",
+  "questionText": "Rek'Sai, Breacher revived using spectral matron does it still need to pay accelerate cost or will it accelerate itself because of its own effect",
+  "question": "when Rek'Sai, Breacher is played from the trash via Spectral Matron, does it still cost the Accelerate cost to enter ready, or does its own ability auto-accelerate it?",
+  "whatsUnsupported": "cost-payment timing / [Accelerate] as an optional additional cost and Spectral-Matron-style 'play this from the trash, ignore its base cost' effects — the engine has a cost system and an `additionalCosts` bridge field, but the bridge doesn't model the revive-from-trash play or the Accelerate optional-cost choice during the play process",
+  "rulesAnswer": {
+    "verdict": "You still have to pay the Accelerate cost ([1] Energy + 1 Power) if you want it to enter ready. Rek'Sai, Breacher's ability ('friendly units played from anywhere other than a player's hand have [Accelerate]') just GRANTS the keyword — it doesn't auto-pay it. [Accelerate] is an optional additional cost; you pay it (or not) during the 'pay costs' step of playing the card. Spectral Matron lets you play Rek'Sai from your trash and waives its base energy/power cost, but it does NOT waive optional additional costs. So: pay the Accelerate cost → enters ready; don't → enters exhausted.",
+    "reasoning": "Rek'Sai, Breacher gives units played from non-hand zones the [Accelerate] keyword. [Accelerate] (rule 805.1.a / 805.2) is an OPTIONAL ADDITIONAL cost: when playing a unit with it, you may pay [1] Energy + 1 Power (matching its domain, or any if domainless) as an additional cost during the play process; if you pay, it enters ready instead of exhausted. It is not an effect that 'happens' on its own. Spectral Matron's 'play a unit from your trash' sets/ignores that unit's BASE cost, but additional costs (rule 357.1) are separate from the base cost and are not affected (FAQ #5335 — effects that zero a card's base cost don't zero optional additional costs). Timing: the Accelerate cost must be paid as part of playing the card (rule 805.2) — you cannot pay it after the unit is already on the board. So Rek'Sai, Breacher revived by Spectral Matron: it has [Accelerate] (it's from the trash, not hand); you choose during the play whether to pay [1] + 1 Power to have it enter ready.",
+    "cites": ["805.1.a", "805.2", "357.1", "FAQ-5335"],
+    "confidence": "medium"
+  }
+}

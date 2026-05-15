@@ -1,0 +1,9 @@
+{
+  "kind": "rules-demo",
+  "demoTopic": "tank",
+  "questionText": "How exactly is the damage distributed between the defender and attacker on a battlefield, do both attack with their full strength, and can you decide how the damage is distributed?",
+  "question": "How is combat damage distributed, and how does Tank affect it?",
+  "assumptions": [
+    "RiftJudge p1117 — abstract question about combat damage distribution. The bridge auto-builds a minimal Tank showdown and runs it: both sides deal their full Might simultaneously (rule 460.2.a/b); the assigner picks the order but must give lethal to one unit before the next and must give lethal to [Tank] units first (rule 460.2.c)."
+  ]
+}

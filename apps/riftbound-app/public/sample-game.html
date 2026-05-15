@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Riftbound sample game — seed &quot;b14-v&quot; (30 moves, 31 turns)</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 1rem; color: #222; background: #fafafa; }
+  h1 { margin-top: 0; }
+  .game-view { background: white; padding: 1rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 1rem; }
+  .turn-header h2 { margin: 0 0 .25rem 0; }
+  .phase-strip { display: flex; gap: .5rem; margin: .25rem 0; flex-wrap: wrap; }
+  .phase { padding: .15rem .4rem; border-radius: 3px; background: #eee; font-size: 12px; }
+  .phase-active { background: #ffd; font-weight: 600; }
+  .players { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+  .player { padding: .75rem; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+  .player-active { border-color: #4a90e2; box-shadow: 0 0 0 2px #4a90e220; }
+  .player-stats, .player-power { list-style: none; padding: 0; margin: 0; }
+  .player-stats li { display: inline-block; margin-right: 1rem; }
+  .battlefields { margin-top: 1rem; }
+  .bf { border: 1px solid #ddd; padding: .5rem; margin: .25rem 0; border-radius: 3px; }
+  .bf-units { margin: .25rem 0; padding-left: 1.2rem; }
+  .bf-empty { color: #888; font-style: italic; margin: 0; }
+  .winner { background: #cfc; padding: .5rem; border-radius: 4px; margin-bottom: 1rem; font-size: 1.1rem; }
+  .trail { font-family: ui-monospace, monospace; font-size: 12px; max-height: 24rem; overflow: auto; background: #fff; padding: .5rem 1.5rem; border: 1px solid #ddd; border-radius: 4px; }
+  .step-fail { color: #b00; }
+  .seq { color: #888; }
+  .err { color: #b00; }
+  code { background: #f4f4f4; padding: 0 .2rem; border-radius: 2px; }
+</style>
+</head>
+<body>
+<h1>Riftbound sample game — seed &quot;b14-v&quot; (30 moves, 31 turns)</h1>
+
+<section class="game-view" data-game-id="9b9c8d31-6052-4d1b-95fd-43cbf3e35806">
+  
+  <header class="turn-header">
+    <h2>Turn 31 — Awaken</h2>
+    <div class="phase-strip"><span class="phase phase-active">Awaken</span><span class="phase ">Beginning</span><span class="phase ">Channel</span><span class="phase ">Draw</span><span class="phase ">Main</span><span class="phase ">Ending</span><span class="phase ">Cleanup</span></div>
+    <p>Active: <strong>player-1</strong> · Status: <code>playing</code></p>
+  </header>
+  <div class="players">
+<div class="player player-active">
+  <h3>player-1 <small>(active)</small></h3>
+  <ul class="player-stats">
+    <li><strong>VP:</strong> 0 / 8</li>
+    <li><strong>XP:</strong> 0</li>
+    <li><strong>Hand:</strong> 10</li>
+    <li><strong>Deck:</strong> 30</li>
+    <li><strong>Rune deck:</strong> 0</li>
+    <li><strong>Trash:</strong> 0</li>
+    <li><strong>Energy:</strong> 0</li>
+  </ul>
+  
+</div>
+<div class="player">
+  <h3>player-2 </h3>
+  <ul class="player-stats">
+    <li><strong>VP:</strong> 0 / 8</li>
+    <li><strong>XP:</strong> 0</li>
+    <li><strong>Hand:</strong> 9</li>
+    <li><strong>Deck:</strong> 31</li>
+    <li><strong>Rune deck:</strong> 2</li>
+    <li><strong>Trash:</strong> 0</li>
+    <li><strong>Energy:</strong> 0</li>
+  </ul>
+  
+</div></div>
+  <div class="battlefields"><h3>Battlefields</h3>
+<div class="bf">
+  <h4>bf-1 <small>— controlled by uncontrolled</small></h4>
+  <p class="bf-empty">no units</p>
+</div>
+<div class="bf">
+  <h4>bf-2 <small>— controlled by uncontrolled</small></h4>
+  <p class="bf-empty">no units</p>
+</div></div>
+</section>
+<h2>Move trail (30)</h2><ol class="trail"><li class="step step-ok"><span class="seq">#1</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#2</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#3</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#4</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#5</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#6</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#7</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#8</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#9</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#10</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#11</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#12</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#13</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#14</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#15</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#16</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#17</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#18</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#19</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#20</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#21</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#22</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#23</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#24</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#25</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#26</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#27</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#28</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li><li class="step step-ok"><span class="seq">#29</span> <strong>player-1</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-1&quot;}</code></li><li class="step step-ok"><span class="seq">#30</span> <strong>player-2</strong> endTurn <code>{&quot;playerId&quot;:&quot;player-2&quot;}</code></li></ol>
+</body>
+</html>

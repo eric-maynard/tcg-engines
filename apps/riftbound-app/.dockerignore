@@ -1,0 +1,55 @@
+# Build artifacts + dev-only files we don't want in the image.
+# Note: the Dockerfile builds from the monorepo root, so paths here are
+# repo-relative.
+
+# Version control
+.git
+.gitignore
+.github
+
+# Node / bun runtime caches
+**/node_modules
+**/.turbo
+**/.cache
+**/.next
+**/dist
+
+# Test + coverage output
+**/coverage
+**/__tests__/__snapshots__
+**/test-results
+**/playwright-report
+
+# Editor / OS noise
+.vscode
+.idea
+.DS_Store
+**/*.log
+**/*.tmp
+**/tmp
+
+# Local environment files (must be passed in via `docker run -e ...` or
+# compose `env_file`).
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+
+# Large local-only assets (card images live in `downloads/`).
+downloads
+
+# Riftbound-app specific
+apps/riftbound-app/logs
+apps/riftbound-app/data/*.db
+apps/riftbound-app/data/*.db-*
+apps/riftbound-app/scripts/tmp
+apps/riftbound-app/web/dist
+apps/riftbound-app/__tests__/__snapshots__
+
+# Other apps we don't need in the riftbound-app image.
+apps/auth-service
+apps/content-mgmt
+
+# Misc
+*.bak
+*.swp

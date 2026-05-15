@@ -36,6 +36,6 @@ export const undyingLegion: UnitCard = {
   name: "Undying Legion",
   rarity: "rare",
   rulesText:
-    "[Legion][&gt;] You may play me from your trash for [3][fury]. (Get the effect if you've played another card this turn.)",
+    "[Legion][>] You may play me from your trash for [3][fury]. (Get the effect if you've played another card this turn.)",
   setId: "UNL",
 };

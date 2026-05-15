@@ -19,7 +19,8 @@ import {
   spendXp,
 } from "../operations/xp-operations";
 import { evaluateWhileLevel, evaluateXpGainedThisTurn } from "../abilities/xp-conditions";
-import type { XpGameEvent } from "../abilities/game-events";
+import type { GameEvent } from "../abilities/game-events";
+type XpGameEvent = Extract<GameEvent, { type: "gain-xp" }>;
 
 /**
  * Helper to create a test game state with two players

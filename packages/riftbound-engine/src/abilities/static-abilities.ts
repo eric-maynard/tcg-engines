@@ -18,7 +18,7 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
-import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { computeEffectiveMight, getGlobalCardRegistry } from "../operations/card-lookup";
 import type { GrantedKeyword, RiftboundCardMeta, RiftboundGameState } from "../types";
 
 const MIGHTY_THRESHOLD = 5;
@@ -114,15 +114,23 @@ export function evaluateCondition(
     }
 
     case "while-mighty": {
-      const registry = getGlobalCardRegistry();
-      const def = registry.get(source.id);
-      const meta = ctx.cards.getCardMeta(source.id as CoreCardId) as
-        | Partial<RiftboundCardMeta>
-        | undefined;
-      const baseMight = def?.might ?? 0;
-      const buffBonus = meta?.buffed ? 1 : 0;
-      const mightMod = meta?.mightModifier ?? 0;
-      return baseMight + buffBonus + mightMod >= MIGHTY_THRESHOLD;
+      // Rule 708 — "A Unit 'is Mighty' as long as its Might is 5 or greater."
+      // Rule 710 — "Units on the board are evaluated according to their
+      // Current Might." Current Might includes EVERY contribution: base,
+      // [+1] buff, runtime mightModifier, in-combat combatMightModifier,
+      // Static aura bonuses, AND attached-equipment Might Bonus. Previously
+      // This short-form only summed base + buffed + mightModifier, which
+      // Wrongly evaluated `while-mighty` as false for units that were Mighty
+      // Only via a static aura, in-combat Shield/Assault, or equipped gear.
+      // Route through the single source of truth (`computeEffectiveMight`)
+      // So this matches the rule-520 death check and effect-executor's
+      // `getEffectiveMight`.
+      const eff = computeEffectiveMight(source.id, (id) =>
+        ctx.cards.getCardMeta(id as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined,
+      );
+      return eff >= MIGHTY_THRESHOLD;
     }
 
     case "while-buffed": {
@@ -154,12 +162,30 @@ export function evaluateCondition(
     }
 
     case "while-alone": {
+      // Rule 741.1: "A unit is alone when there are no other friendly units
+      // At the same location." Rule 740.1: friendly = SHARES A CONTROLLER
+      // (not the same owner). After Hostile Takeover, a controlled unit is
+      // Friendly to its new controller for purposes of "alone" — so the
+      // Sole friendly unit at the battlefield, even if half of them are
+      // Stolen, is one alone-side. Previously this read owner only, which
+      // Gave the wrong answer immediately after a take-control.
       if (!source.zone.startsWith("battlefield")) {
         return false;
       }
       const cardsAtZone = ctx.zones.getCardsInZone(source.zone as CoreZoneId);
+      const cardsBag = ctx.cards as {
+        getCardController?: (id: CoreCardId) => string | undefined;
+        getCardOwner: (id: CoreCardId) => string | undefined;
+      };
+      const controllerOf = (id: CoreCardId): string =>
+        (cardsBag.getCardController?.(id) ?? cardsBag.getCardOwner(id) ?? "") as string;
+      // Use the SOURCE's current controller. `source.owner` is filled in by
+      // `getAllBoardCards` from `getCardOwner` — for the source unit itself,
+      // We want its CONTROLLER for the friendly check (the unit's controller
+      // Is the "you" in "I am alone").
+      const sourceController = controllerOf(source.id as CoreCardId);
       const friendlyCount = cardsAtZone.filter(
-        (id) => ctx.cards.getCardOwner(id) === source.owner,
+        (id) => controllerOf(id) === sourceController,
       ).length;
       return friendlyCount === 1;
     }
@@ -254,6 +280,21 @@ export function evaluateCondition(
       return (player?.turnsTaken ?? 0) >= threshold;
     }
 
+    case "custom": {
+      // Best-effort interpretation of a free-text condition the parser
+      // Couldn't fully structure. Currently recognizes "moved twice this
+      // Turn" (Kayn, Unleashed). Unrecognized text → false (we never apply a
+      // Restriction without a positive match).
+      const text = String(condition.text ?? "").toLowerCase();
+      if (/moved\s+twice\s+this\s+turn/.test(text)) {
+        const meta = ctx.cards.getCardMeta(source.id as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        return (meta?.movedThisTurnCount ?? 0) >= 2;
+      }
+      return false;
+    }
+
     default: {
       // Unknown condition — default to true (apply the effect)
       return true;
@@ -341,12 +382,49 @@ function applyStaticEffect(
   const effectType = effect.type as string;
 
   if (effectType === "modify-might") {
-    const amount = (effect.amount as number) ?? 0;
+    const rawAmount = (effect.amount as number) ?? 0;
+    // Rule 472.3.b (snapshotting) — a static modify-might aura with a
+    // "to a minimum of N" rider must clamp its contribution so the target's
+    // Post-application Might floor equals the snapshotted minimum. For static
+    // Auras the snapshot recurs every recalc pass (the bonus is stripped and
+    // Rebuilt), which is the rule-correct behavior — the floor is recomputed
+    // When the aura would apply (e.g. Leona Zealot's "Stunned enemy units
+    // Here have -8 [Might], to a minimum of 1 [Might]" on a 3-Might unit
+    // Contributes -2, not -8).
+    const minimumBound =
+      typeof (effect as { minimum?: number }).minimum === "number"
+        ? ((effect as { minimum: number }).minimum)
+        : undefined;
+    const registry = getGlobalCardRegistry();
     for (const targetId of targetIds) {
       const meta = ctx.cards.getCardMeta(targetId as CoreCardId) as
         | Partial<RiftboundCardMeta>
         | undefined;
       const current = meta?.staticMightBonus ?? 0;
+      let amount = rawAmount;
+      if (minimumBound !== undefined && rawAmount < 0) {
+        // Compute target's current effective Might (everything except *this*
+        // Aura's pending contribution — `current` already holds prior auras
+        // Applied this pass and any non-static modifiers).
+        const def = registry.get(targetId);
+        const baseMight = def?.might ?? 0;
+        if (baseMight > 0) {
+          const buffBonus = meta?.buffed ? 1 : 0;
+          const mightMod = meta?.mightModifier ?? 0;
+          const combatMightMod = meta?.combatMightModifier ?? 0;
+          let equipBonus = 0;
+          for (const equipId of meta?.equippedWith ?? []) {
+            equipBonus += registry.getMightBonus(equipId);
+          }
+          const effective = baseMight + buffBonus + mightMod + combatMightMod + current + equipBonus;
+          if (effective + rawAmount < minimumBound) {
+            amount = minimumBound - effective;
+            if (amount > 0) {
+              amount = 0;
+            }
+          }
+        }
+      }
       ctx.cards.updateCardMeta(
         targetId as CoreCardId,
         {
@@ -407,6 +485,18 @@ function applyStaticEffect(
         );
       }
     }
+  } else if (effectType === "restriction") {
+    // A static restriction effect, e.g. Kayn, Unleashed:
+    //   { restriction: "no-damage", type: "restriction" }  → rule 460.2.c.9
+    const restriction = effect.restriction as string | undefined;
+    if (restriction === "no-damage") {
+      for (const targetId of targetIds) {
+        ctx.cards.updateCardMeta(
+          targetId as CoreCardId,
+          { cannotTakeDamage: true } as Partial<RiftboundCardMeta>,
+        );
+      }
+    }
   }
 }
 
@@ -461,6 +551,27 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
         changed = true;
       }
     }
+
+    // Clear `cannotTakeDamage` ONLY for cards that own a static "no-damage"
+    // Restriction ability — it'll be re-set below if the condition still
+    // Holds. Cards flagged via other means (a one-shot effect, combat) keep
+    // Their flag; this recalc only governs *static* sources of it.
+    if (meta.cannotTakeDamage === true) {
+      const hasStaticNoDamage = (registry.getAbilities(card.id) ?? []).some((ab) => {
+        if (ab.type !== "static") {
+          return false;
+        }
+        const eff = ab.effect as Record<string, unknown> | undefined;
+        return eff?.type === "restriction" && eff?.restriction === "no-damage";
+      });
+      if (hasStaticNoDamage) {
+        ctx.cards.updateCardMeta(
+          card.id as CoreCardId,
+          { cannotTakeDamage: false } as Partial<RiftboundCardMeta>,
+        );
+        changed = true;
+      }
+    }
   }
 
   // Step 2 + 3: Apply static abilities in layered order to handle
@@ -475,11 +586,28 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   // That are commutative (e.g., two +1 Might auras) the order does not
   // Matter, so the observable result is unchanged for those cases.
 
-  const PASS_1_EFFECTS = new Set(["grant-keyword", "grant-keywords"]);
+  const PASS_1_EFFECTS = new Set(["grant-keyword", "grant-keywords", "restriction"]);
   const PASS_2_EFFECTS = new Set(["modify-might"]);
 
   const applyPass = (allowedEffects: Set<string>): void => {
     for (const card of boardCards) {
+      // Rule 718.2 / 721.2 / 723 — "While [Attached], the card's printed
+      // Rules Text is Inactive" and "Inactive Abilities do not trigger, do
+      // Not apply, and cannot be activated." An attached card (e.g.
+      // Equipment that's been Equipped to a unit) is still physically on
+      // The board, but its OWN printed static abilities must not fire from
+      // The card's location — its Effect Text is appended to the Top-Most
+      // Card (rule 718.3) via a separate Might-Bonus / appended-ability
+      // Path. Filter here so a static like "Your units have +1 [M]" on an
+      // Unequipped Trinket only applies once attached behaviour is wired
+      // Through the Top-Most card.
+      const cardMeta = ctx.cards.getCardMeta(card.id as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      if (cardMeta?.attachedTo) {
+        continue;
+      }
+
       const abilities = registry.getAbilities(card.id) ?? [];
 
       for (const ability of abilities) {

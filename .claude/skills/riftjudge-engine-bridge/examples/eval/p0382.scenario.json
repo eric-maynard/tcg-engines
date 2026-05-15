@@ -1,0 +1,15 @@
+{
+  "questionText": "if a 4 might unit is hit by bellows breath and then targeted by a spell that resumes might by 3 or more, does the unit die?",
+  "question": "does the unit die?",
+  "premise": {
+    "turnPlayer": "opp",
+    "units": [
+      { "id": "u", "side": "me", "might": 4, "name": "(my 4-Might unit)" }
+    ],
+    "notes": "Bellows Breath modeled as 1 damage marked on the unit. The 'reduce Might by 3+' spell modeled as modifyMight -3. After both, the unit has 1 damage marked and 1 effective Might -> lethal -> dies. Bellows Breath's 'up to 3 units / same location' targeting and any keywords are not modeled; this isolates the damage-vs-reduced-Might death check."
+  },
+  "actions": [
+    { "kind": "addDamage", "target": "u", "amount": 1, "source": "Bellows Breath" },
+    { "kind": "modifyMight", "target": "u", "delta": -3, "source": "Might-reduction spell" }
+  ]
+}

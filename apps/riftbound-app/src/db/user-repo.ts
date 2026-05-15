@@ -53,3 +53,43 @@ export function getUserById(userId: string): User | null {
   ).get(userId) as User | null;
   return row ?? null;
 }
+
+/**
+ * Active-deck helpers — added in schema v4.
+ *
+ * `selected_deck` is the deck the user wants to use by default when
+ * creating/joining matchmaking lobbies. We don't FK-cascade it (so deleting
+ * a deck doesn't crash the user row) — instead the setter validates that the
+ * deck exists + is owned by the caller, and the getter returns null if the
+ * underlying deck has since been deleted.
+ */
+export function getActiveDeckId(userId: string): string | null {
+  const db = getDb();
+  const row = db.query(
+    "SELECT selected_deck as selectedDeck FROM users WHERE id = ?",
+  ).get(userId) as { selectedDeck: string | null } | null;
+  if (!row?.selectedDeck) {return null;}
+
+  // Verify the deck still exists and is owned by this user. Stale references
+  // (deck was deleted) return null so callers can prompt the user to pick again.
+  const ownership = db.query(
+    "SELECT user_id as userId FROM decks WHERE id = ?",
+  ).get(row.selectedDeck) as { userId: string } | null;
+  if (!ownership || ownership.userId !== userId) {return null;}
+
+  return row.selectedDeck;
+}
+
+export function setActiveDeck(userId: string, deckId: string | null): boolean {
+  const db = getDb();
+
+  if (deckId !== null) {
+    const ownership = db.query(
+      "SELECT user_id as userId FROM decks WHERE id = ?",
+    ).get(deckId) as { userId: string } | null;
+    if (!ownership || ownership.userId !== userId) {return false;}
+  }
+
+  db.run("UPDATE users SET selected_deck = ?, updated_at = datetime('now') WHERE id = ?", [deckId, userId]);
+  return true;
+}

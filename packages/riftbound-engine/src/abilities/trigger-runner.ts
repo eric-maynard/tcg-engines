@@ -11,6 +11,7 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import { addToChain } from "../chain/chain-state";
+import { dispatchEvent, dispatchUnitDied } from "../events/dispatcher";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { EffectContext, ExecutableEffect } from "./effect-executor";
@@ -60,8 +61,12 @@ export interface TriggerRunnerContext {
 
 /**
  * Convert card definition abilities to TriggerableAbility format.
+ *
+ * Exported so the event-bus listener registry can reuse the exact same
+ * mapping (parsed-ability → triggerable listener) without duplicating the
+ * Deathknell / Legion synthesis logic.
  */
-function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
+export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
   const registry = getGlobalCardRegistry();
   const abilities = registry.getAbilities(cardId);
   if (!abilities) {
@@ -81,43 +86,207 @@ function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
         },
         type: "triggered",
       });
+      continue;
+    }
+
+    // Rule 813 (Deathknell): "[Deathknell] — [text]" is an *intrinsic
+    // Triggered ability* meaning "When I die, get the effect." The parser
+    // Emits it as `{ type: "keyword", keyword: "Deathknell", effect, condition? }`.
+    // Synthesize the real triggered ability so it fires through the normal
+    // Trigger machinery when this card dies.
+    if (a.type === "keyword" && a.keyword === "Deathknell" && a.effect) {
+      result.push({
+        condition: (a as { condition?: unknown }).condition,
+        effect: a.effect,
+        // Deathknell triggers are mandatory (not "may") unless the carried
+        // Text says otherwise; default to non-optional.
+        optional: a.optional,
+        trigger: { event: "die", on: "self" },
+        type: "triggered",
+      });
+      continue;
+    }
+
+    // Rule 812 (Legion): "[Legion][>] [Text]" / "[Legion] — [Text]" is a
+    // Dependent Keyword — short for "If you've played another card this turn,
+    // This card gains [Text]." When the carried text is itself a *triggered*
+    // Ability (e.g. "When you play me, buff me"), the parser emits
+    // `{ type: "keyword", keyword: "Legion", effect, trigger:{event,on} }`.
+    // Synthesize the real triggered ability gated on the Legion condition so
+    // It fires through the normal trigger machinery. Legion abilities whose
+    // Carried text is a static/passive modifier (e.g. "I cost [2] less")
+    // Carry no `trigger` — those are handled elsewhere (cost calc) and are
+    // Not synthesized here.
+    if (a.type === "keyword" && a.keyword === "Legion" && a.effect) {
+      const trig = (a as { trigger?: { event: string; on?: string } }).trigger;
+      if (trig?.event) {
+        const existingCond = (a as { condition?: unknown }).condition;
+        result.push({
+          // A Legion ability is always gated on the Legion condition (the
+          // Keyword *is* the condition). Use the parser-supplied condition
+          // If present, else the implicit `{ type: "legion" }`.
+          condition: existingCond ?? { type: "legion" },
+          effect: a.effect,
+          optional: a.optional,
+          trigger: { event: trig.event, on: trig.on },
+          type: "triggered",
+        });
+      }
+      continue;
     }
   }
   return result;
 }
 
 /**
- * Evaluate whether a triggered ability's `condition` holds against the
- * current game state. Returns `true` if there is no condition or the
- * condition is satisfied.
+ * Optional auxiliary context for condition evaluation that needs to query
+ * data not present in `RiftboundGameState` directly — e.g. the meta of the
+ * source card (for `while-mighty`/`while-buffed`) or the source card's
+ * battlefield (for `while-at-battlefield` / `while-alone`).
+ *
+ * The condition evaluator falls back to the permissive `true` for any
+ * shape whose required ctx field is missing — so callers may omit the ctx
+ * when they don't have it (e.g. older chain-resolution paths), and the
+ * evaluator will simply not gate on those shapes there. Newer call sites
+ * pass the ctx so the gating is tight.
+ */
+export interface AbilityConditionContext {
+  readonly sourceCardId?: string;
+  readonly getCardMeta?: (cardId: string) => Partial<RiftboundCardMeta> | undefined;
+  readonly getCardZone?: (cardId: string) => string | undefined;
+}
+
+/**
+ * Evaluate whether a triggered (or activated) ability's `condition` holds
+ * against the current game state. Returns `true` if there is no condition or
+ * the condition is satisfied.
+ *
+ * This is the single shared ability-condition evaluator used at BOTH:
+ *   - **emit time** — `fireTriggers` filters matched triggers by their
+ *     `ability.condition` before queueing/resolving them; and
+ *   - **resolution time** — when a queued triggered ability would resolve off
+ *     the chain, the chain-resolution path re-runs this against the *current*
+ *     state ("intervening if" rule): if it no longer holds, the ability does
+ *     nothing (its effect is skipped, like a countered item).
  *
  * Currently supports:
  *   - `{ type: "legion" }` — Rule 724, "you played another card this turn"
+ *   - `{ type: "while-level", threshold | level }` — controller's XP is at or
+ *     above the given threshold.
+ *   - `{ type: "score-within", points }` — controller's victory points are
+ *     within `points` of the (modified) victory score.
+ *   - `{ type: "opponent-score-within", points }` — any opponent is within
+ *     `points` of the (modified) victory score.
+ *   - `{ type: "while-buffed" }` — source card has its `buffed` flag set
+ *     (requires `ctx.getCardMeta` + `ctx.sourceCardId`).
+ *   - `{ type: "while-mighty" }` — source card has a positive Might modifier
+ *     (proxy for "is currently boosted"; requires ctx).
+ *   - `{ type: "control-battlefield" }` — controller holds at least one
+ *     battlefield in `state.battlefields`.
  *
  * Unknown condition shapes are permissive (return `true`) so the engine
  * does not silently drop triggers with as-yet-unsupported condition
  * structures.
  */
-function evaluateTriggerCondition(
+export function evaluateAbilityCondition(
   condition: unknown,
   state: RiftboundGameState,
   controllerId: string,
+  ctx?: AbilityConditionContext,
 ): boolean {
   if (!condition || typeof condition !== "object") {
     return true;
   }
-  const c = condition as { type?: string };
+  const c = condition as {
+    type?: string;
+    threshold?: number;
+    level?: number;
+    points?: number;
+  };
   if (c.type === "legion") {
     return evaluateLegionCondition(state, controllerId);
   }
+  if (c.type === "while-level") {
+    const threshold = c.threshold ?? c.level ?? 0;
+    const xp = state.players?.[controllerId]?.xp ?? 0;
+    return xp >= threshold;
+  }
+  if (c.type === "score-within") {
+    const points = c.points ?? c.threshold ?? 0;
+    const player = state.players?.[controllerId];
+    if (!player) {
+      return true;
+    }
+    const victoryScore =
+      (state.victoryScore ?? 0) + (player.victoryScoreModifier ?? 0);
+    return victoryScore - (player.victoryPoints ?? 0) <= points;
+  }
+  if (c.type === "opponent-score-within") {
+    const points = c.points ?? c.threshold ?? 0;
+    for (const [pid, pdata] of Object.entries(state.players ?? {})) {
+      if (pid === controllerId) {
+        continue;
+      }
+      const victoryScore =
+        (state.victoryScore ?? 0) + ((pdata as { victoryScoreModifier?: number }).victoryScoreModifier ?? 0);
+      if (
+        victoryScore - ((pdata as { victoryPoints?: number }).victoryPoints ?? 0) <=
+        points
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if (c.type === "control-battlefield") {
+    for (const bf of Object.values(state.battlefields ?? {})) {
+      if (bf && bf.controller === controllerId) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if (c.type === "while-buffed") {
+    if (!ctx?.getCardMeta || !ctx.sourceCardId) {
+      return true;
+    }
+    const meta = ctx.getCardMeta(ctx.sourceCardId);
+    return Boolean(meta?.buffed);
+  }
+  if (c.type === "while-mighty") {
+    if (!ctx?.getCardMeta || !ctx.sourceCardId) {
+      return true;
+    }
+    const meta = ctx.getCardMeta(ctx.sourceCardId);
+    const bonus =
+      (meta?.mightModifier ?? 0) +
+      (meta?.staticMightBonus ?? 0) +
+      (meta?.combatMightModifier ?? 0);
+    return bonus > 0;
+  }
   return true;
+}
+
+/** Internal alias — kept so existing call sites read unchanged. */
+function evaluateTriggerCondition(
+  condition: unknown,
+  state: RiftboundGameState,
+  controllerId: string,
+  ctx?: AbilityConditionContext,
+): boolean {
+  return evaluateAbilityCondition(condition, state, controllerId, ctx);
 }
 
 /**
  * Build the list of cards on the board with their abilities.
  * Scans base, battlefield, and legendZone zones, looks up abilities from the card definition registry.
+ *
+ * Exported as the backbone of the event-bus listener registry: this *is*
+ * the "every live card object + the set of `{eventType → triggered ability}`
+ * it subscribes to" enumeration, derived purely from state (no separate
+ * mutable registry to keep in sync). See `events/listener-registry.ts`.
  */
-function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
+export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
   const boardCards: CardWithAbilities[] = [];
 
   // Get cards from all players' bases and legend zones
@@ -179,6 +348,22 @@ function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
   // Once the card has been played (moved out of championZone into play).
   // Legends in legendZone, by contrast, DO have their triggers active.
   // So we intentionally skip scanning championZone here.
+
+  // Rule 813 (Deathknell) / "when I die" self-triggers: a unit that just died
+  // Is already in the trash by the time the `die` event fires. Include trash
+  // Cards so their self-die triggers can still resolve. `findMatchingTriggers`
+  // Limits trash cards to self-scoped `die` triggers only — they never fire
+  // Board-presence triggers from the graveyard.
+  const trashCards = ctx.zones.getCardsInZone("trash" as CoreZoneId);
+  for (const cardId of trashCards) {
+    const owner = ctx.cards.getCardOwner(cardId) ?? "";
+    boardCards.push({
+      abilities: toTriggerableAbilities(cardId as string),
+      id: cardId as string,
+      owner,
+      zone: "trash",
+    });
+  }
 
   return boardCards;
 }
@@ -255,9 +440,21 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
   // Rule 724 (Legion) and other conditional triggers: filter matches by
   // Their ability.condition before executing. Conditions are evaluated
   // Against the controller of the card (owner, since abilities cannot
-  // Change controller separately today).
+  // Change controller separately today). Pass an `AbilityConditionContext`
+  // With `sourceCardId`/`getCardMeta`/`getCardZone` so source-relative
+  // Shapes (`while-mighty`, `while-buffed`) can be evaluated.
+  const getMeta = ctx.cards.getCardMeta as
+    | ((cardId: string) => Partial<RiftboundCardMeta> | undefined)
+    | undefined;
+  const getZone = ctx.zones.getCardZone as
+    | ((cardId: string) => string | undefined)
+    | undefined;
   const filtered = allMatches.filter((match) =>
-    evaluateTriggerCondition(match.ability.condition, ctx.draft, match.cardOwner),
+    evaluateTriggerCondition(match.ability.condition, ctx.draft, match.cardOwner, {
+      getCardMeta: getMeta,
+      getCardZone: getZone,
+      sourceCardId: match.cardId,
+    }),
   );
 
   // Rule 585: Order simultaneous triggers by (1) turn player first
@@ -288,8 +485,15 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
         ctx.draft.interaction,
         {
           cardId: match.cardId,
+          // Carry the ability's condition onto the chain so the resolution
+          // Path can re-check it ("intervening if" rule) before executing.
+          ...(match.ability.condition != null ? { condition: match.ability.condition } : {}),
           controller: match.cardOwner,
           effect,
+          // Core Rules 2026-03-30: a "may" triggered ability is optional to
+          // Place on the chain. We add it by default and flag it so a UI /
+          // `declineTrigger` move can opt out before resolution.
+          ...(match.ability.optional ? { optional: true } : {}),
           triggered: true,
           type: "ability",
         },
@@ -317,7 +521,9 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
       },
       createCardInZone: ctx.createCardInZone,
       draft: ctx.draft,
-      fireTriggers: (innerEvent) => fireTriggers(innerEvent, ctx),
+      // Inner events raised while a triggered ability's effect resolves
+      // (e.g. become-mighty) go back through the event-bus chokepoint.
+      fireTriggers: (innerEvent) => dispatchEvent(ctx, innerEvent),
       playerId: match.cardOwner,
       sourceCardId: match.cardId,
       zones: {
@@ -335,4 +541,36 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
   }
 
   return matches.length;
+}
+
+/**
+ * Fire `die` triggers for a batch of units that have just been killed.
+ *
+ * **Thin shim — delegates to the event bus.** The real "a unit died"
+ * emission point is `events/dispatcher.ts#dispatchUnitDied`; this wrapper
+ * is kept because `fireDieTriggers` is referenced widely (tests, legacy
+ * call sites). New code should call `dispatchUnitDied` directly.
+ *
+ * Rules context (handled inside `dispatchEvent`/`fireTriggers`):
+ *  - 540.x / 813 (Deathknell): "when I die" / Deathknell triggered abilities
+ *    fire when their unit dies, even though the card has already moved to the
+ *    trash. `getBoardCards` includes trash cards and `findMatchingTriggers`
+ *    restricts trashed cards to self-scoped `die` triggers, so the dying
+ *    unit's own Deathknell resolves.
+ *  - "when ANOTHER unit dies" / enemy-/friendly-units `die` triggers fire from
+ *    board cards as normal.
+ *  - Rule 585: multiple deaths in a single batch fire in turn order.
+ *
+ * Owner is resolved via `ctx.cards.getCardOwner`; if a caller already knows
+ * the owner it may pass an explicit `{ cardId, owner }` pair.
+ *
+ * @param killed - Cards that died: card ids, or `{ cardId, owner }` pairs.
+ * @param ctx - Trigger runner / dispatch context.
+ * @returns Total number of triggers that fired across all deaths.
+ */
+export function fireDieTriggers(
+  killed: readonly (string | { cardId: string; owner?: string })[],
+  ctx: TriggerRunnerContext,
+): number {
+  return dispatchUnitDied(ctx, killed);
 }

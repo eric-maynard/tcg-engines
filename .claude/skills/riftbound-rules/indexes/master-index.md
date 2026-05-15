@@ -1,6 +1,9 @@
 # Riftbound TCG - Master Rules Index
 
-**Version:** Core Rules - Effective June 2, 2025
+**Current version:** Core Rules — **2026-03-30 ("Unleashed" / Set 3)**. Full text in `references/*_Riftbound_Core_Rules_2026_03_30.md` (5 files, by page range). Mirrored & section-split in `riftbound-rules/version-2026-03-30/`; see its `CHANGELOG-from-2025-06-02.md` for what changed.
+**Prior version:** Core Rules — Effective June 2, 2025 (`references/*_2025_06_02.md`, `riftbound-rules/version-2025-06-02/`).
+
+> The by-section / by-topic index pages below were authored against 2025-06-02. They remain broadly accurate, but for Unleashed-era specifics (XP/Hunt/Level, Ambush, Dependent Keywords, `[>]` symbol, Predict/Prevent/Replace/Create, Responsibility, Linking, Backline, Unique, Deflect, Quick-Draw, Repeat, Weaponmaster, HOT FEPR, showdown↔combat unification, "main phase", "ending phase") consult the 2026-03-30 references and changelog directly.
 
 ## Quick Navigation
 

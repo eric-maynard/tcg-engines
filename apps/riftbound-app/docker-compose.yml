@@ -1,0 +1,76 @@
+# Riftbound App — Slice 8 local production stack
+#
+# Brings up the riftbound-app server backed by its own SQLite DB. The
+# database file is mounted as a named volume so it survives container
+# restarts (and `docker compose down`).
+#
+# Build + run from the monorepo root:
+#   docker compose -f apps/riftbound-app/docker-compose.yml up --build
+#
+# Optional: bring up the auth-service too once it's unblocked (see
+# `apps/riftbound-app/README.md` for the known-blockers section). Right
+# now auth lives inside riftbound-app's SQLite, so the auth-service
+# container is commented out.
+
+services:
+  riftbound-app:
+    build:
+      # Build from the repo root so the Dockerfile can COPY workspace
+      # packages.
+      context: ../..
+      dockerfile: apps/riftbound-app/Dockerfile
+    image: riftbound-app:local
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=sqlite://./data/riftbound.db
+      - COOKIE_SECRET=${COOKIE_SECRET:-dev-cookie-secret-change-me-in-prod}
+      - SESSION_TIMEOUT=${SESSION_TIMEOUT:-86400}
+      - RIFTBOUND_VERSION=${RIFTBOUND_VERSION:-0.1.0}
+    volumes:
+      # Persist the SQLite DB across container restarts.
+      - riftbound-data:/app/apps/riftbound-app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------
+  # Optional auth-service. Uncomment when the typebox / Postgres / Discord
+  # blockers documented in apps/riftbound-app/README.md are resolved.
+  # ---------------------------------------------------------------------
+  # auth-service:
+  #   build:
+  #     context: ../..
+  #     dockerfile: apps/auth-service/Dockerfile
+  #   ports:
+  #     - "3001:3001"
+  #   environment:
+  #     - AUTH_PORT=3001
+  #     - AUTH_DATABASE_URL=postgresql://postgres:postgres@postgres-auth:5432/tcg_auth
+  #     - AUTH_SECRET=${AUTH_SECRET:-dev-auth-secret-32-characters-minimum-0000}
+  #     - AUTH_DISCORD_CLIENT_ID=${AUTH_DISCORD_CLIENT_ID:-}
+  #     - AUTH_DISCORD_CLIENT_SECRET=${AUTH_DISCORD_CLIENT_SECRET:-}
+  #   depends_on:
+  #     - postgres-auth
+  #   restart: unless-stopped
+  #
+  # postgres-auth:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     - POSTGRES_DB=tcg_auth
+  #     - POSTGRES_USER=postgres
+  #     - POSTGRES_PASSWORD=postgres
+  #   volumes:
+  #     - postgres-auth-data:/var/lib/postgresql/data
+
+volumes:
+  riftbound-data:
+    name: riftbound-app-data
+  # postgres-auth-data:
+  #   name: riftbound-auth-data

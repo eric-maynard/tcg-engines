@@ -31,11 +31,38 @@ export { DeckBuilder } from "./deckbuilder";
 // Card registry export
 export { getGlobalCardRegistry } from "./operations/card-lookup";
 
+// Event bus — unified typed-event dispatcher + per-card listener registry
+export {
+  dispatchEvent,
+  dispatchUnitDied,
+  buildListenerRegistry,
+} from "./events";
+export type {
+  GameEvent,
+  GameEventType,
+  GameEventRecord,
+  EventLog,
+  DispatchContext,
+  CardListener,
+  ListenerRegistry,
+} from "./events";
+
 // Game definition export
 export { riftboundDefinition } from "./game-definition/definition";
 
 // Move exports
 export { riftboundMoves } from "./game-definition/moves";
+
+// Turn-flow exports — phase order/labels live in the engine so clients never
+// Hard-code the turn structure.
+export {
+  PHASE_ORDER,
+  PHASE_LABELS,
+  TURN_PHASE_STRIP,
+  getNextPhase,
+  isMainPhase,
+  isSetupPhase,
+} from "./game-definition/flow/turn-flow";
 
 // Type exports
 export * from "./types";

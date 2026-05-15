@@ -1,0 +1,31 @@
+{
+  "questionText": "Can I use Sacrifice on a unit that got targeted by a Tactical Retreat earlier and get full value from it?",
+  "question": "does my unit survive / does Sacrifice still resolve for full value?",
+  "premise": {
+    "turnPlayer": "me",
+    "units": [
+      { "id": "myUnit", "side": "me", "might": 5, "name": "(my 5-Might unit, under Tactical Retreat's protection)" }
+    ],
+    "notes": "RiftJudge (FAQ #9425): yes, full value. A friendly Mighty unit already has Tactical Retreat's replacement on it ('the next time it would die this turn, heal it, exhaust it, and recall it to your base instead'). You play Sacrifice (UNL-173: 'As an additional cost, kill a friendly Mighty unit. Draw 2 cards, channel a rune.') choosing that unit for the kill cost. The Tactical Retreat replacement intercedes — instead of being trashed, the unit is healed/exhausted/recalled to base. Per rule 357.2.a a cost whose kill was replaced is STILL considered paid, so Sacrifice resolves: draw 2 (the channel rune is cosmetic, not modeled). The pre-existing Tactical Retreat protection is modeled via a `replaceDeath` primitive applied first; the kill cost is in `additionalCosts` (paid in the play-time pre-pass)."
+  },
+  "actions": [
+    {
+      "kind": "replaceDeath",
+      "target": "myUnit",
+      "scope": "next",
+      "mode": "recall",
+      "source": "Tactical Retreat (cast earlier this turn: 'the next time this unit would die this turn, heal/exhaust/recall it to base instead')"
+    },
+    {
+      "kind": "playSpell",
+      "name": "Sacrifice",
+      "side": "me",
+      "additionalCosts": [
+        { "kind": "killUnit", "target": "myUnit", "source": "Sacrifice (additional cost: kill a friendly Mighty unit)" }
+      ],
+      "effects": [
+        { "kind": "draw", "side": "me", "count": 2, "source": "Sacrifice" }
+      ]
+    }
+  ]
+}

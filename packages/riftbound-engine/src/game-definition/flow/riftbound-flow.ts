@@ -23,18 +23,111 @@ import type {
   ZoneId as CoreZoneId,
   FlowDefinition,
 } from "@tcg/core";
-import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
+import type { GameEvent } from "../../abilities/game-events";
+import { getActiveShowdown } from "../../chain";
+import { cleanupAndFireDeaths } from "../../cleanup";
+import { dispatchEvent, dispatchUnitDied } from "../../events/dispatcher";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { getHuntValue } from "../../operations/hunt-keyword";
+import { dequeueExtraTurn, seatOrderSuccessor } from "../../operations/turn-queue";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
-import { hasPlayerWon } from "../win-conditions/victory";
+import { hasPlayerWonStrict } from "../win-conditions/victory";
 import { canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
+
+/**
+ * `hold` events emitted by the flow phase hooks flow through the unified
+ * event-bus chokepoint (`events/dispatcher.ts#dispatchEvent`). The old
+ * `fireTriggers` call site took `(event, ctx)`; `dispatchEvent` is
+ * `(ctx, event)` — this thin adapter preserves the call-site shape while
+ * routing the emission through the bus.
+ */
+function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
+  return dispatchEvent(ctx, event);
+}
+
+/**
+ * Build a `counters` operation bag for use inside a flow phase hook.
+ *
+ * Flow hook contexts carry `state`/`zones`/`cards` but **not** a `counters`
+ * bag. The core counter system stores per-card counters in the reserved
+ * `__counters` field on each card's meta — so we synthesise a counters bag
+ * that reads/writes that field via `getCardMeta`/`updateCardMeta`. This is
+ * the same field `performCleanup` reads for damage counters, so a flow-fired
+ * `die`/Deathknell effect ("deal N damage") that writes through this bag is
+ * picked up by the cleanup pass exactly as a move-fired one would be.
+ */
+function buildFlowCounters(context: {
+  cards: {
+    getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
+    updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
+  };
+}) {
+  interface CountersBag { __counters?: Record<string, number> }
+  const update =
+    context.cards.updateCardMeta ?? (() => {});
+  const readCounters = (cardId: CoreCardId): Record<string, number> => {
+    const meta = context.cards.getCardMeta(cardId) as CountersBag | undefined;
+    return { ...meta?.__counters };
+  };
+  const writeCounters = (cardId: CoreCardId, bag: Record<string, number>): void => {
+    update(cardId, { __counters: bag } as unknown as Partial<RiftboundCardMeta>);
+  };
+  return {
+    addCounter: (cardId: CoreCardId, counter: string, amount: number): void => {
+      const bag = readCounters(cardId);
+      bag[counter] = (bag[counter] ?? 0) + amount;
+      writeCounters(cardId, bag);
+    },
+    clearCounter: (cardId: CoreCardId, counter: string): void => {
+      const bag = readCounters(cardId);
+      if (bag[counter] !== undefined) {
+        delete bag[counter];
+        writeCounters(cardId, bag);
+      }
+    },
+    getCounter: (cardId: CoreCardId, counter: string): number => {
+      const meta = context.cards.getCardMeta(cardId) as CountersBag | undefined;
+      return meta?.__counters?.[counter] ?? 0;
+    },
+    removeCounter: (cardId: CoreCardId, counter: string, amount: number): void => {
+      const bag = readCounters(cardId);
+      const next = (bag[counter] ?? 0) - amount;
+      if (next <= 0) {
+        delete bag[counter];
+      } else {
+        bag[counter] = next;
+      }
+      writeCounters(cardId, bag);
+    },
+    setFlag: (cardId: CoreCardId, flag: string, value: boolean): void => {
+      // Write to `meta.__flags[flag]` to match the core counters bag
+      // (`operations-impl.ts#setFlag` → `__flags[flag] = value`). Before
+      // This fix `buildFlowCounters.setFlag` was writing to `meta[flag]`
+      // Directly — a different storage from `counters.getFlag` reads — so
+      // A flow-driven `setFlag("exhausted", false)` would NOT clear an
+      // Exhausted flag set by `playUnit` / `standardMove` (both go through
+      // The core counters bag's `__flags`). Surfaced by the random monkey:
+      // 30 seeds × 41 turns produced 0 standardMoves / 0 conquers because
+      // No unit ever became ready again after entry-exhaust.
+      interface FlagsBag { __flags?: Record<string, boolean> }
+      const meta = context.cards.getCardMeta(cardId) as
+        | (Partial<RiftboundCardMeta> & FlagsBag)
+        | undefined;
+      const flags = { ...meta?.__flags };
+      flags[flag] = value;
+      update(cardId, { __flags: flags } as unknown as Partial<RiftboundCardMeta>);
+    },
+  };
+}
 
 /**
  * Build a TriggerRunnerContext from a flow phase context.
  *
- * Flow hooks receive FlowContext (state, zones, cards) but NOT counters.
- * We provide no-op counter stubs so triggers can execute their effects.
+ * Flow hooks receive FlowContext (state, zones, cards) but NOT a counters
+ * bag; we synthesise one via `buildFlowCounters` so triggers' counter-writing
+ * effects (e.g. a Deathknell's "deal N damage") actually land — and are then
+ * picked up by `runFlowCleanup`'s state-based checks.
  */
 function buildFlowTriggerContext(context: {
   state: RiftboundGameState;
@@ -55,7 +148,6 @@ function buildFlowTriggerContext(context: {
     updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
   };
 }): TriggerRunnerContext {
-  const noop = () => {};
   return {
     cards: {
       getCardMeta: context.cards.getCardMeta as TriggerRunnerContext["cards"]["getCardMeta"],
@@ -64,10 +156,7 @@ function buildFlowTriggerContext(context: {
       updateCardMeta: context.cards
         .updateCardMeta as TriggerRunnerContext["cards"]["updateCardMeta"],
     },
-    counters: {
-      addCounter: noop as TriggerRunnerContext["counters"]["addCounter"],
-      setFlag: noop as TriggerRunnerContext["counters"]["setFlag"],
-    },
+    counters: buildFlowCounters(context) as unknown as TriggerRunnerContext["counters"],
     draft: context.state,
     zones: {
       drawCards: context.zones.drawCards as TriggerRunnerContext["zones"]["drawCards"],
@@ -76,6 +165,99 @@ function buildFlowTriggerContext(context: {
       moveCard: context.zones.moveCard,
     },
   };
+}
+
+/**
+ * Emit a `phaseBegan` engine-bus event through the dispatcher when a flow
+ * phase starts. No card text subscribes to this today, but the event log /
+ * future listeners see every phase transition — and it keeps the flow hooks
+ * funnelling through the one chokepoint like the rest of the engine.
+ *
+ * Defensive: some unit tests drive flow hooks with stripped `context` mocks
+ * that lack a full `zones`/`cards` bag — guarded so it's a silent no-op then.
+ */
+function emitPhaseBegan(
+  // Biome-ignore lint/suspicious/noExplicitAny: structural flow-context pass-through
+  context: any,
+  phase: string,
+): void {
+  if (!context?.state || !context?.zones || !context?.cards) {
+    return;
+  }
+  try {
+    const playerId =
+      typeof context.getCurrentPlayer === "function" ? context.getCurrentPlayer() : undefined;
+    dispatchEvent(buildFlowTriggerContext(context), {
+      ...(playerId ? { playerId } : {}),
+      phase,
+      type: "phaseBegan",
+    });
+  } catch {
+    // Stripped mock contexts may make `buildFlowTriggerContext` throw; ignore.
+  }
+}
+
+/**
+ * Emit a `phaseEnded` engine-bus event through the dispatcher when a flow
+ * phase finishes (its `onEnd` hook). Symmetric to {@link emitPhaseBegan};
+ * same defensive guarding for stripped test contexts.
+ */
+function emitPhaseEnded(
+  // Biome-ignore lint/suspicious/noExplicitAny: structural flow-context pass-through
+  context: any,
+  phase: string,
+): void {
+  if (!context?.state || !context?.zones || !context?.cards) {
+    return;
+  }
+  try {
+    const playerId =
+      typeof context.getCurrentPlayer === "function" ? context.getCurrentPlayer() : undefined;
+    dispatchEvent(buildFlowTriggerContext(context), {
+      ...(playerId ? { playerId } : {}),
+      phase,
+      type: "phaseEnded",
+    });
+  } catch {
+    // Stripped mock contexts may make `buildFlowTriggerContext` throw; ignore.
+  }
+}
+
+/**
+ * Run state-based checks (rules 518-526) + fire `die`/Deathknell triggers
+ * (rule 540.x / 813) from inside a flow phase hook.
+ *
+ * The engine-wide post-move cleanup hook (`withPostMoveCleanup`) only fires
+ * after *moves* — it does not see deaths caused by a phase-transition hook
+ * (e.g. a "hold" triggered ability dealing lethal damage during scoring, or
+ * the Cleanup phase running end-of-turn state-based checks). This helper
+ * closes that gap; the synthesised `counters` bag is backed by each card's
+ * reserved `__counters` meta field (see `buildFlowCounters`).
+ */
+function runFlowCleanup(context: {
+  state: RiftboundGameState;
+  zones: {
+    moveCard: (params: { cardId: CoreCardId; targetZoneId: CoreZoneId }) => void;
+    getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
+  };
+  cards: {
+    getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
+    getCardOwner?: (cardId: CoreCardId) => string | undefined;
+    updateCardMeta: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
+  };
+}): void {
+  cleanupAndFireDeaths(context.state, {
+    cards: {
+      getCardMeta: context.cards.getCardMeta,
+      getCardOwner: context.cards.getCardOwner ?? (() => undefined),
+      updateCardMeta: context.cards.updateCardMeta,
+    },
+    counters: buildFlowCounters(context),
+    zones: {
+      getCardsInZone: context.zones.getCardsInZone,
+      moveCard: context.zones.moveCard,
+    },
+  });
 }
 
 /**
@@ -142,9 +324,35 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
       turn: {
         initialPhase: "awaken",
 
+        // Rule 510 / 734: the turn player rotates in seat order at the end of
+        // Each turn. The core flow manager bumps the turn *number* but does
+        // Not rotate `currentPlayer`, so we do it here in `turn.onEnd` (which
+        // Runs before the next turn's `onBegin`). If an additional turn is
+        // Queued, `turn.onBegin` below overrides this with the extra-turn
+        // Owner (rule 734: additional turns are inserted, they do not change
+        // The underlying seat-order rotation).
+        onEnd: (context) => {
+          const endingPlayer = context.getCurrentPlayer();
+          const successor = seatOrderSuccessor(context.state, endingPlayer);
+          if (successor !== endingPlayer) {
+            context.setCurrentPlayer?.(successor);
+          }
+        },
+
         onBegin: (context) => {
+          // Rule 734 (Additional Turns): if a player was told to take an
+          // Additional turn, it is inserted directly after the current turn.
+          // Dequeue it here and make that player the turn player for this
+          // Turn instead of the normal seat-order successor (which `turn.onEnd`
+          // Already set via `setCurrentPlayer`).
+          const extraTurnPlayer = dequeueExtraTurn(context.state);
+          let currentPlayer = context.getCurrentPlayer();
+          if (extraTurnPlayer) {
+            currentPlayer = extraTurnPlayer as typeof currentPlayer;
+            context.setCurrentPlayer?.(extraTurnPlayer);
+          }
+
           // Update turn tracking in game state
-          const currentPlayer = context.getCurrentPlayer();
           const turnNumber = context.getTurnNumber();
           context.state.turn = {
             activePlayer: currentPlayer,
@@ -187,35 +395,87 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 ...context.state.turn,
                 phase: "awaken",
               };
+              emitPhaseBegan(context, "awaken");
 
-              // Ready ALL game objects controlled by the turn player (rule 515.1)
+              // Rule 415.3.a / 515.1 — "A player Readies all non-spell Game
+              // Objects they CONTROL during the Ready Step of the Beginning
+              // Phase on their turn." Sweep every board zone unfiltered and
+              // Pick CONTROLLER-matching cards (post-take-control an enemy
+              // Unit Readies on the new controller's turn, not the original
+              // Owner's — rule 187 / 323.6 / 415.3.a). Falls back to owner
+              // When the controller getter isn't wired (test stubs).
               const playerId = context.getCurrentPlayer();
-
-              // Collect cards from base
-              const baseCards = context.zones.getCardsInZone(
-                "base" as CoreZoneId,
-                playerId as CorePlayerId,
-              );
-
-              // Collect cards from all battlefields
-              const bfCards: CoreCardId[] = [];
+              const ctrlCards = context.cards as {
+                getCardController?: (id: CoreCardId) => string | undefined;
+                getCardOwner?: (id: CoreCardId) => string | undefined;
+              };
+              const readyCandidates: CoreCardId[] = [];
+              readyCandidates.push(...context.zones.getCardsInZone("base" as CoreZoneId));
               for (const bfId of Object.keys(context.state.battlefields)) {
-                const cards = context.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
-                for (const cardId of cards) {
-                  const owner = context.cards.getCardOwner?.(cardId);
-                  if (owner === playerId) {
-                    bfCards.push(cardId);
-                  }
-                }
+                readyCandidates.push(
+                  ...context.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId),
+                );
               }
-
-              // Ready all exhausted cards
-              for (const cardId of [...baseCards, ...bfCards]) {
-                const meta = context.cards.getCardMeta(cardId);
+              // Both `meta.exhausted` (used by some legacy paths /
+              // Setup default-state writes) AND `meta.__flags.exhausted`
+              // (the canonical core-counters flag — written by
+              // `counters.setFlag("exhausted", true)` in `playUnit`,
+              // `standardMove`, `exhaust` effect, etc.) need to be
+              // Cleared. Until this fix the awaken phase only cleared the
+              // Former, so units played by `playUnit` (which sets the flag
+              // Via the counter API) stayed exhausted forever and
+              // `standardMove`'s legality check (which reads
+              // `counters.getFlag("exhausted")`) never offered them as
+              // Legal-move candidates. Surfaced by the random-monkey: 30
+              // Seeds × 41 turns produced 0 standardMoves / 0 conquers /
+              // 0 contestBattlefields.
+              const flowCounters = buildFlowCounters(context);
+              for (const cardId of readyCandidates) {
+                const controller =
+                  ctrlCards.getCardController?.(cardId) ?? ctrlCards.getCardOwner?.(cardId);
+                if (controller !== playerId) {
+                  continue;
+                }
+                const meta = context.cards.getCardMeta(cardId) as
+                  | (Partial<RiftboundCardMeta> & { __flags?: { exhausted?: boolean } })
+                  | undefined;
                 if (meta?.exhausted) {
                   context.cards.updateCardMeta(cardId, { exhausted: false });
                 }
+                if (meta?.__flags?.exhausted) {
+                  flowCounters.setFlag(cardId, "exhausted", false);
+                }
               }
+
+              // Reset per-unit "moved this turn" counters for ALL board cards
+              // (every player's). A new turn means no unit has moved yet this
+              // Turn (rule 616-619); abilities like Kayn, Unleashed read this.
+              const allBoardCards: CoreCardId[] = [];
+              for (const pid of Object.keys(context.state.players)) {
+                for (const cardId of context.zones.getCardsInZone(
+                  "base" as CoreZoneId,
+                  pid as CorePlayerId,
+                )) {
+                  allBoardCards.push(cardId);
+                }
+              }
+              for (const bfId of Object.keys(context.state.battlefields)) {
+                for (const cardId of context.zones.getCardsInZone(
+                  `battlefield-${bfId}` as CoreZoneId,
+                )) {
+                  allBoardCards.push(cardId);
+                }
+              }
+              for (const cardId of allBoardCards) {
+                const meta = context.cards.getCardMeta(cardId);
+                if (meta?.movedThisTurnCount) {
+                  context.cards.updateCardMeta(cardId, { movedThisTurnCount: 0 });
+                }
+              }
+            },
+
+            onEnd: (context) => {
+              emitPhaseEnded(context, "awaken");
             },
 
             order: 1,
@@ -237,6 +497,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 ...context.state.turn,
                 phase: "beginning",
               };
+              emitPhaseBegan(context, "beginning");
 
               // Kill Temporary permanents before scoring (rule 728.1.b)
               const turnPlayerId = context.getCurrentPlayer();
@@ -259,6 +520,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               }
 
               const tempRegistry = getGlobalCardRegistry();
+              // Capture (cardId, owner) of each Temporary permanent trashed
+              // Here so its `die`/Deathknell triggers (rule 813) fire — a
+              // Temporary permanent leaving the Board is "dying".
+              const trashedTemps: { cardId: string; owner: string }[] = [];
               for (const cardId of tempKillCards) {
                 const owner = context.cards.getCardOwner?.(cardId);
                 if (owner !== turnPlayerId) {
@@ -275,7 +540,14 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                     cardId,
                     targetZoneId: "trash" as CoreZoneId,
                   });
+                  trashedTemps.push({ cardId: cardId as string, owner: owner ?? turnPlayerId });
                 }
+              }
+              if (trashedTemps.length > 0) {
+                // A Temporary permanent leaving the Board "dies" (rule
+                // 728.1.b → 813) — emit through the single `unitDied`
+                // Event-bus point so its Deathknell fires.
+                dispatchUnitDied(buildFlowTriggerContext(context), trashedTemps);
               }
 
               // Scoring step (rule 515.2.b): Holding
@@ -303,6 +575,50 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                     }
                     context.state.scoredThisTurn[playerId].push(bfId);
 
+                    // Hunt keyword (rule 823): [Hunt N] units the player
+                    // Controls here grant N XP "when I conquer or hold".
+                    if (scoringAllowed) {
+                      const heldUnitIds = context.zones.getCardsInZone(
+                        `battlefield-${bfId}` as CoreZoneId,
+                      );
+                      let huntXp = 0;
+                      // Rule 823 + 187 / 323.6 — Hunt XP accrues for units
+                      // The SCORING PLAYER controls at this battlefield (a
+                      // Post-`take-control` unit at my held bf grants its
+                      // [Hunt] XP to me, not to its owner). Was reading
+                      // Owner; fixed to controller.
+                      const huntCards = context.cards as {
+                        getCardController?: (id: CoreCardId) => string | undefined;
+                        getCardOwner?: (id: CoreCardId) => string | undefined;
+                      };
+                      for (const cardId of heldUnitIds) {
+                        const controller =
+                          huntCards.getCardController?.(cardId) ??
+                          huntCards.getCardOwner?.(cardId);
+                        if (controller !== undefined && controller !== playerId) {
+                          continue;
+                        }
+                        huntXp += getHuntValue(
+                          cardId as string,
+                          context.cards.getCardMeta(cardId) as {
+                            grantedKeywords?: { keyword: string; value?: number }[];
+                          },
+                        );
+                      }
+                      if (huntXp > 0) {
+                        const holdingPlayer = context.state.players[playerId];
+                        if (holdingPlayer) {
+                          holdingPlayer.xp += huntXp;
+                        }
+                        if (context.state.xpGainedThisTurn[playerId] !== undefined) {
+                          context.state.xpGainedThisTurn[playerId] =
+                            (context.state.xpGainedThisTurn[playerId] ?? 0) + huntXp;
+                        } else {
+                          context.state.xpGainedThisTurn[playerId] = huntXp;
+                        }
+                      }
+                    }
+
                     // Emit "hold" event so triggered abilities fire (e.g. Altar to Unity)
                     if (scoringAllowed) {
                       fireTriggers({ battlefieldId: bfId, playerId, type: "hold" }, triggerCtx);
@@ -310,6 +626,35 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   }
                 }
               }
+
+              // State-based checks for deaths caused inside this hook —
+              // Temporary permanents trashed above (rule 728.1.b), or units
+              // Killed by a "hold" triggered ability during scoring — plus
+              // Their `die`/Deathknell triggers (rule 540.x / 813).
+              runFlowCleanup(context);
+
+              // Phase B batch 14 finding X-2 (monkey-rescan): the Hold
+              // Scoring step above increments `victoryPoints` directly
+              // Without checking the win condition, so games where a
+              // Player accumulates VP via Hold (not Conquer) never end.
+              // Burn-Out scoring (line 748) checks `hasPlayerWonStrict`;
+              // Conquer paths in combat.ts do too. The Hold path was the
+              // Only VP-grant site missing the check. Mirror the same gate
+              // Here so Hold-only wins finish the game.
+              for (const pid of Object.keys(context.state.players)) {
+                if (
+                  context.state.status !== "finished" &&
+                  hasPlayerWonStrict(context.state, pid)
+                ) {
+                  context.state.status = "finished";
+                  context.state.winner = pid;
+                  break;
+                }
+              }
+            },
+
+            onEnd: (context) => {
+              emitPhaseEnded(context, "beginning");
             },
 
             order: 2,
@@ -330,6 +675,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 ...context.state.turn,
                 phase: "channel",
               };
+              emitPhaseBegan(context, "channel");
 
               // Channel 2 runes (rule 515.3.b)
               // Rule 644.7: second player channels extra rune on first turn
@@ -366,6 +712,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               }
             },
 
+            onEnd: (context) => {
+              emitPhaseEnded(context, "channel");
+            },
+
             order: 3,
           },
 
@@ -385,6 +735,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 ...context.state.turn,
                 phase: "draw",
               };
+              emitPhaseBegan(context, "draw");
 
               const playerId = context.getCurrentPlayer();
 
@@ -413,7 +764,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                     const opponent = context.state.players[opponentId];
                     if (opponent) {
                       opponent.victoryPoints += 1;
-                      if (hasPlayerWon(context.state, opponentId)) {
+                      if (hasPlayerWonStrict(context.state, opponentId)) {
                         context.state.status = "finished";
                         context.state.winner = opponentId;
                       }
@@ -432,6 +783,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             },
 
             onEnd: (context) => {
+              emitPhaseEnded(context, "draw");
               // Rune pool empties at end of draw phase (rule 515.4.d)
               const playerId = context.getCurrentPlayer();
               const pool = context.state.runePools[playerId];
@@ -458,6 +810,11 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 ...context.state.turn,
                 phase: "main",
               };
+              emitPhaseBegan(context, "main");
+            },
+
+            onEnd: (context) => {
+              emitPhaseEnded(context, "main");
             },
 
             order: 5,
@@ -479,6 +836,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 ...context.state.turn,
                 phase: "ending",
               };
+              emitPhaseBegan(context, "ending");
 
               // Collect all board cards for cleanup
               const allBoardCards: CoreCardId[] = [];
@@ -545,6 +903,48 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               if (context.state.consumedNextReplacements) {
                 context.state.consumedNextReplacements = {};
               }
+
+              // Rule 187.4 / 323.6 — temporary control granted by an effect
+              // (Hostile Takeover, "take control of … until end of turn")
+              // Reverts to the original controller in the Ending step. We
+              // Walk `pendingControlReverts` and restore each entry tagged
+              // `expires:"end-of-turn"`. Entries tagged
+              // `expires:"until-leaves"` are left in place; they're cleared
+              // By the per-move cleanup hook when the card actually leaves
+              // The board.
+              const stateWithReverts = context.state as typeof context.state & {
+                pendingControlReverts?: {
+                  cardId: string;
+                  originalController: string;
+                  expires: "end-of-turn" | "until-leaves";
+                }[];
+              };
+              const reverts = stateWithReverts.pendingControlReverts ?? [];
+              if (reverts.length > 0) {
+                const remaining: typeof reverts = [];
+                for (const r of reverts) {
+                  if (r.expires === "end-of-turn") {
+                    if (typeof context.cards.setCardController === "function") {
+                      context.cards.setCardController(
+                        r.cardId as CoreCardId,
+                        r.originalController as CorePlayerId,
+                      );
+                    }
+                    // Hostile Takeover: "Lose control of that unit AND
+                    // Recall it at end of turn." The recall (move-to-base)
+                    // Is encoded as a separate sequence step on the spell's
+                    // Effect text and runs at resolution; here we only
+                    // Revert control.
+                  } else {
+                    remaining.push(r);
+                  }
+                }
+                stateWithReverts.pendingControlReverts = remaining;
+              }
+            },
+
+            onEnd: (context) => {
+              emitPhaseEnded(context, "ending");
             },
 
             order: 6,
@@ -568,10 +968,54 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 ...context.state.turn,
                 phase: "cleanup",
               };
+              emitPhaseBegan(context, "cleanup");
 
-              // State-based checks are run by the engine after each move
-              // Via performFullCleanup. The cleanup phase signals that
-              // End-of-turn cleanup is complete and the turn can transition.
+              // Run end-of-turn state-based checks (rules 518-526) for real,
+              // Here, instead of relying solely on the post-move hook: a unit
+              // That became lethal as a side effect of an Ending-phase hook
+              // (turn-scoped Might buff expiry, etc.) must be reaped and fire
+              // Its `die`/Deathknell triggers before the turn transitions.
+              runFlowCleanup(context);
+
+              // Rule 323.6 / 187.4.c — "If the turn is in an Open State,
+              // Battlefields with no Units occupying them and no Showdown or
+              // Combat ongoing become Uncontrolled." The end-of-turn Cleanup
+              // Is the canonical Open-State cleanup; resolve it here. (We
+              // Deliberately do NOT run this inside the per-move
+              // `performCleanup` state-based-checks loop — that is not a
+              // Cleanup-phase context, and the engine elsewhere relies on
+              // Control persisting through combat/showdown resolution.)
+              {
+                const {interaction} = context.state;
+                const sd = interaction ? getActiveShowdown(interaction) : null;
+                const showdownBfId =
+                  sd && sd.active ? (sd.battlefieldId as string | undefined) : undefined;
+                for (const bfId of Object.keys(context.state.battlefields)) {
+                  const bf = context.state.battlefields[bfId];
+                  if (!bf || !bf.controller) {
+                    continue;
+                  }
+                  // A Showdown/Combat is ongoing here if the bf is Contested
+                  // (a combat is staged) or it is the active Showdown's bf.
+                  if (bf.contested || showdownBfId === bfId) {
+                    continue;
+                  }
+                  const unitsHere = context.zones.getCardsInZone(
+                    `battlefield-${bfId}` as CoreZoneId,
+                  );
+                  const hasUnit = unitsHere.some((cardId) => {
+                    const def = getGlobalCardRegistry().get(cardId as string);
+                    return def?.cardType === "unit";
+                  });
+                  if (!hasUnit) {
+                    bf.controller = null;
+                  }
+                }
+              }
+            },
+
+            onEnd: (context) => {
+              emitPhaseEnded(context, "cleanup");
             },
           },
         },

@@ -1564,7 +1564,7 @@ function resolveGrantTarget(rawTargetStr: string): AnyTarget {
         result.location = "battlefield";
       }
     }
-    return result as AnyTarget;
+    return result as unknown as AnyTarget;
   }
 
   // Handle "another friendly unit", "all enemy units here", etc.
@@ -1735,7 +1735,7 @@ function parseGrantKeywordEffect(text: string): GrantKeywordEffect | undefined {
       value?: number;
     } = {
       keyword,
-      target: result as AnyTarget,
+      target: result as unknown as AnyTarget,
       type: "grant-keyword",
     };
     if (valueStr) {
@@ -1799,16 +1799,24 @@ function parseFightEffect(text: string): FightEffect | undefined {
  * Try to parse a prevent-damage effect
  */
 function parsePreventDamageEffect(text: string): PreventDamageEffect | undefined {
-  const match = text.match(/^Prevent (all|the next)\s*(?:(\w+(?:\s+and\s+\w+)?)\s+)?damage/i);
+  const match = text.match(
+    /^Prevent (all|the next)(?:\s+(\d+))?\s*(?:(\w+(?:\s+and\s+\w+)?)\s+)?damage/i,
+  );
   if (!match) {
     return undefined;
   }
-  const effect: { type: "prevent-damage"; amount?: "all"; duration?: "turn" | "next" } = {
+  // Rule 437.1.b.1.a — "Prevent the next X [...] damage": X is the Prevent
+  // Value (defaults to 1 when omitted); "all" → an infinite Prevent Value.
+  const amount: number | "all" =
+    match[1].toLowerCase() === "all"
+      ? "all"
+      : (match[2] !== undefined
+        ? Number.parseInt(match[2], 10)
+        : 1);
+  const effect: { type: "prevent-damage"; amount: number | "all"; duration?: "turn" | "next" } = {
+    amount,
     type: "prevent-damage",
   };
-  if (match[1].toLowerCase() === "all") {
-    effect.amount = "all";
-  }
   effect.duration = text.toLowerCase().includes("this turn") ? "turn" : "next";
   return effect as PreventDamageEffect;
 }
@@ -2059,7 +2067,7 @@ function parseDiscardEffect(text: string): Effect | undefined {
       player: "each",
       then: { amount: drawAmount, player: "each", type: "draw" } as DrawEffect,
       type: "discard",
-    } as Effect;
+    } as unknown as Effect;
   }
 
   // Handle "They discard N" / "that player discards N" (opponent-targeted)
@@ -2648,13 +2656,20 @@ function parseEffects(text: string): Effect | undefined {
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
     if (options.length >= 2) {
-      const parsedOptions: { effect: Effect }[] = [];
+      const parsedOptions: { effect: Effect; label?: string }[] = [];
       for (const opt of options) {
+        // Preserve the raw human-readable option text as `label` so the
+        // SPA's ChoiceModePicker can render a meaningful button (otherwise
+        // The engine falls back to "Option 1" / "Option 2").
+        const label = opt.trim().replace(/\.$/, "");
         const eff = parseEffect(opt.trim());
         if (eff) {
-          parsedOptions.push({ effect: eff });
+          parsedOptions.push({ effect: eff, label });
         } else {
-          parsedOptions.push({ effect: { text: opt.trim(), type: "raw" } as unknown as Effect });
+          parsedOptions.push({
+            effect: { text: opt.trim(), type: "raw" } as unknown as Effect,
+            label,
+          });
         }
       }
       if (parsedOptions.length >= 2) {
@@ -5235,7 +5250,16 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
     if (startsWithKeyword) {
       // For [Action]/[Reaction], accept if no raw effects AND no [Repeat] keyword
       // ([Repeat] needs special spell+repeat parsing that the single path misses)
-      if (/^\[(Action|Reaction)\]/.test(trimmed) && !hasRawEffect && !/\[Repeat\]/.test(trimmed)) {
+      // AND no standalone effect keyword ([Legion]/[Deathknell]/[Vision]) on a
+      // Later line — those (e.g. Noxian Guillotine's "[Legion] — Kill it now
+      // Instead.") are dropped by the single-spell parse and need multi-split.
+      const hasTrailingEffectKeyword = /\n\s*\[(?:Legion|Deathknell|Vision)\]/i.test(trimmed);
+      if (
+        /^\[(Action|Reaction)\]/.test(trimmed) &&
+        !hasRawEffect &&
+        !/\[Repeat\]/.test(trimmed) &&
+        !hasTrailingEffectKeyword
+      ) {
         return singleResult;
       }
       // For other keywords, always try multi-ability to preserve keywords

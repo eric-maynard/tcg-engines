@@ -337,3 +337,84 @@ async function hostSandbox() {
     if (el) el.style.display = "none";
   }
 })();
+
+// Editorial lobby preview: when the user picks a deck in the start-screen
+// deck selector, populate the left "Deck" card with a quick summary.
+// This is preview-only; the actual deck-selection that gates Start Game
+// still happens inside #lobbyRoom > #deckSelect once a lobby is created.
+window.__lsdSyncDeckPreview = async function (deckId) {
+  const host = document.getElementById("lsdDeckPreview");
+  if (!host) return;
+  if (!deckId) {
+    host.innerHTML = `
+      <div class="lsd-empty">
+        <div class="lsd-empty-title">No deck loaded</div>
+        <div class="lsd-empty-hint">Pick a deck on the right to preview champions, sideboard, battlefields, and runes here.</div>
+      </div>`;
+    return;
+  }
+  if (deckId === "default") {
+    host.innerHTML = `
+      <div class="lsd-deck-card">
+        <div class="lsdc-art" title="Fury/Chaos Starter"></div>
+        <div class="lsdc-body">
+          <div class="lsdc-section"><div class="ls-h">Legend</div><div class="ls-v">Goldfish Starter</div></div>
+          <div class="lsdc-section"><div class="ls-h">Champion</div><div class="ls-v">Default Champion</div></div>
+          <div class="lsdc-section"><div class="ls-h">Sideboard</div><div class="ls-v">0 cards</div></div>
+          <div class="lsdc-section"><div class="ls-h">Battlefields</div><div class="ls-v">3</div></div>
+          <div class="lsdc-section"><div class="ls-h">Runes</div><div class="ls-v">12</div></div>
+          <div class="lsdc-section"><div class="ls-h">Domains</div><div class="ls-v">Fury / Chaos</div></div>
+        </div>
+      </div>`;
+    return;
+  }
+  // Saved decks: fetch a quick summary
+  try {
+    const deck = await api(`/api/decks/${encodeURIComponent(deckId)}`).catch(() => null);
+    if (!deck) {
+      host.innerHTML = `<div class="lsd-empty"><div class="lsd-empty-title">Deck unavailable</div></div>`;
+      return;
+    }
+    const sections = deck.sections || {};
+    const summary = (key, fallback) => {
+      const cards = sections[key] || [];
+      const count = cards.reduce((n, c) => n + (c.count || 1), 0);
+      return count || fallback || 0;
+    };
+    host.innerHTML = `
+      <div class="lsd-deck-card">
+        <div class="lsdc-art"></div>
+        <div class="lsdc-body">
+          <div class="lsdc-section"><div class="ls-h">Name</div><div class="ls-v">${(deck.name || "Untitled").slice(0,28)}</div></div>
+          <div class="lsdc-section"><div class="ls-h">Champion</div><div class="ls-v">${summary("champion", "—")}</div></div>
+          <div class="lsdc-section"><div class="ls-h">Main</div><div class="ls-v">${summary("main", "—")}</div></div>
+          <div class="lsdc-section"><div class="ls-h">Battlefields</div><div class="ls-v">${summary("battlefield", "—")}</div></div>
+          <div class="lsdc-section"><div class="ls-h">Runes</div><div class="ls-v">${summary("rune", "—")}</div></div>
+          <div class="lsdc-section"><div class="ls-h">Sideboard</div><div class="ls-v">${summary("sideboard", 0)}</div></div>
+        </div>
+      </div>`;
+  } catch (err) {
+    host.innerHTML = `<div class="lsd-empty"><div class="lsd-empty-title">Preview error</div></div>`;
+  }
+};
+
+// Populate the editorial-lobby deck preview selector with the user's saved
+// decks (the in-room `#deckSelect` is populated separately, only after a lobby
+// is created). Best-effort; failures leave the bootstrap options intact.
+(async function __lsdPopulateLobbyDeckSelect() {
+  const select = document.getElementById("deckSelect-lobby");
+  if (!select) return;
+  const addGroup = (label, decks) => {
+    if (!Array.isArray(decks) || !decks.length) return;
+    const g = document.createElement("optgroup");
+    g.label = label;
+    for (const d of decks) {
+      const o = document.createElement("option");
+      o.value = d.id; o.textContent = d.name || d.id;
+      g.appendChild(o);
+    }
+    select.appendChild(g);
+  };
+  try { addGroup("Your Saved Decks", await api("/api/saved-decks").catch(() => [])); } catch { /* ignore */ }
+  try { addGroup("Public Decks", await api("/api/saved-decks/public").catch(() => [])); } catch { /* ignore */ }
+})();

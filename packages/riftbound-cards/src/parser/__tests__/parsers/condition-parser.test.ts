@@ -90,7 +90,7 @@ describe("Condition Parser: extended", () => {
       expect(result?.condition).toEqual({
         amount: 3,
         type: "excess-damage-assigned",
-      });
+      } as unknown as NonNullable<typeof result>["condition"]);
     });
 
     it("parses 'if you paid the additional cost, draw 1.'", () => {
@@ -115,7 +115,7 @@ describe("Condition Parser: extended", () => {
           type: "card",
         },
         type: "has-at-most",
-      });
+      } as unknown as NonNullable<typeof result>["condition"]);
       expect(result?.effectText).toBe("draw 1");
     });
 

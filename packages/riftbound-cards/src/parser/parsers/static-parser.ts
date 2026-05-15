@@ -9,6 +9,63 @@ import type { AnyTarget, Condition, Effect, StaticAbility, Target } from "@tcg/r
 import { parseConditionFromText } from "./condition-parser";
 
 // ============================================================================
+// Cost / Symbol Normalization Helpers
+// ============================================================================
+
+/**
+ * Symbol-encoded energy token. The text pipeline encodes `[N]` (energy cost
+ * `N`) as `:rb_energy_N:`. When the cost-reduction parser captures a "minimum"
+ * field as a string, the raw token leaks into the JSON output unless we
+ * normalize it back to a number. Pattern: a single `:rb_energy_<N>:` (no
+ * surrounding text) → numeric `<N>`. We DO NOT touch multi-resource tokens
+ * (e.g. `:rb_energy_1::rb_rune_order:` — Atakhan's mixed cost) — those stay
+ * as strings because they encode a structured cost, not a numeric minimum.
+ *
+ * Exported for cross-parser reuse (effect-keyword-parser also stores
+ * reduction strings).
+ */
+export function normalizeEnergyMinimum(value: string | number | undefined):
+  | number
+  | string
+  | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "number") {
+    return value;
+  }
+  const trimmed = value.trim();
+  const match = /^:rb_energy_(\d+):$/.exec(trimmed);
+  if (match) {
+    return Number.parseInt(match[1]!, 10);
+  }
+  return value;
+}
+
+/**
+ * Some cost-reduction scopes embed a trailing "to a minimum of N" clause
+ * (e.g. Slugger: "for each card you've played this turn, to a minimum of
+ * :rb_energy_1:"). Pull the numeric minimum out and return the scope with
+ * the clause stripped. The engine can then read `effect.minimum` directly
+ * instead of regex-ing the scope string at play time.
+ */
+export function extractMinimumFromScope(scope: string): {
+  scope: string;
+  minimum: number | undefined;
+} {
+  const m = /^(.+?),?\s*to a minimum of\s+(.+?)\s*$/i.exec(scope.trim());
+  if (!m) {
+    return { minimum: undefined, scope };
+  }
+  const normalized = normalizeEnergyMinimum(m[2]);
+  if (typeof normalized !== "number") {
+    // Couldn't normalize — leave scope intact so we don't lose information.
+    return { minimum: undefined, scope };
+  }
+  return { minimum: normalized, scope: m[1].replace(/,\s*$/, "").trim() };
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -782,11 +839,13 @@ function parseStaticAbilityInner(
   // Inside [Level N] gated static abilities.
   const selfCostScopeMatch = cleanText.match(/^I cost\s+(.+?)\s+less\s+(.+?)\.?$/i);
   if (selfCostScopeMatch) {
+    const { scope: cleanScope, minimum } = extractMinimumFromScope(selfCostScopeMatch[2]);
     return {
       ability: {
         effect: {
-          reduction: selfCostScopeMatch[1],
-          scope: selfCostScopeMatch[2],
+          reduction: normalizeEnergyMinimum(selfCostScopeMatch[1]),
+          scope: cleanScope,
+          ...(minimum !== undefined ? { minimum } : {}),
           target: "self" as AnyTarget,
           type: "cost-reduction",
         } as unknown as Effect,
@@ -801,7 +860,48 @@ function parseStaticAbilityInner(
     return {
       ability: {
         effect: {
-          reduction: selfCostBareMatch[1],
+          reduction: normalizeEnergyMinimum(selfCostBareMatch[1]),
+          target: "self" as AnyTarget,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+  // Spell-card phrasing of the self cost reduction: "This costs COST less" /
+  // "This spell costs COST less" / "This costs COST less instead." — used by
+  // [Level N][>] gated cost reductions on spells (e.g. Concentrate, UNL).
+  // Treated identically to the "I cost COST less" unit phrasing.
+  const thisCostScopeMatch = cleanText.match(
+    /^This(?:\s+spell)?\s+costs?\s+(.+?)\s+less\s+(?!instead\b)(.+?)\.?$/i,
+  );
+  if (thisCostScopeMatch) {
+    const { scope: cleanScope, minimum } = extractMinimumFromScope(thisCostScopeMatch[2]);
+    return {
+      ability: {
+        effect: {
+          reduction: normalizeEnergyMinimum(thisCostScopeMatch[1]),
+          scope: cleanScope,
+          ...(minimum !== undefined ? { minimum } : {}),
+          target: "self" as AnyTarget,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+  const thisCostBareMatch = cleanText.match(
+    /^This(?:\s+spell)?\s+costs?\s+(.+?)\s+less(?:\s+instead)?\.?$/i,
+  );
+  if (thisCostBareMatch) {
+    return {
+      ability: {
+        effect: {
+          reduction: normalizeEnergyMinimum(thisCostBareMatch[1]),
           target: "self" as AnyTarget,
           type: "cost-reduction",
         } as unknown as Effect,
@@ -818,7 +918,7 @@ function parseStaticAbilityInner(
     return {
       ability: {
         effect: {
-          by: spellCostMatch[1],
+          by: normalizeEnergyMinimum(spellCostMatch[1]),
           target: "self" as AnyTarget,
           type: "cost-reduction",
         } as unknown as Effect,
@@ -837,12 +937,19 @@ function parseStaticAbilityInner(
     const conditionResult = parseConditionFromText(whileSpellCostReduceMatch[1] + ",");
     const condition = conditionResult?.condition;
     if (condition) {
+      // Normalize `:rb_energy_N:` symbol tokens to numeric N so the engine
+      // Can clamp on `minimum` and read `by` as a numeric reduction. Rule
+      // 472.3.b's "to a minimum of N" snapshot semantics require the engine
+      // To compare against a numeric floor; leaving the raw symbol forces
+      // Every consumer to re-parse the token. (S's gap, batch 14.)
+      const byNorm = normalizeEnergyMinimum(whileSpellCostReduceMatch[2]);
+      const minNorm = normalizeEnergyMinimum(whileSpellCostReduceMatch[3]);
       return {
         ability: {
           condition,
           effect: {
-            by: whileSpellCostReduceMatch[2],
-            ...(whileSpellCostReduceMatch[3] ? { minimum: whileSpellCostReduceMatch[3] } : {}),
+            by: byNorm,
+            ...(minNorm !== undefined ? { minimum: minNorm } : {}),
             target: { controller: "friendly", type: "spell" } as Target,
             type: "cost-reduction",
           } as unknown as Effect,
@@ -866,7 +973,7 @@ function parseStaticAbilityInner(
         ability: {
           condition,
           effect: {
-            reduction: whileCostMatch[3],
+            reduction: normalizeEnergyMinimum(whileCostMatch[3]),
             target: whileCostMatch[2],
             type: "cost-reduction",
           } as unknown as Effect,
@@ -888,7 +995,7 @@ function parseStaticAbilityInner(
       ability: {
         ...(condition ? { condition } : {}),
         effect: {
-          reduction: ifCostMatch[2],
+          reduction: normalizeEnergyMinimum(ifCostMatch[2]),
           target: "self" as AnyTarget,
           type: "cost-reduction",
         } as unknown as Effect,

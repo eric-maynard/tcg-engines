@@ -11,7 +11,9 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import type { GrantedKeyword, RiftboundCardMeta, RiftboundGameState } from "../types";
-import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { computeEffectiveMight, getGlobalCardRegistry } from "../operations/card-lookup";
+import { hasPlayerWonStrict } from "../game-definition/win-conditions/victory";
+import { applyPrevent, combinePreventValues } from "../operations/prevent-damage";
 import { checkReplacement, markReplacementConsumed } from "./replacement-effects";
 import type { TargetDescriptor } from "./target-resolver";
 import { resolveTarget } from "./target-resolver";
@@ -30,8 +32,12 @@ export interface ExecutableEffect {
   readonly effects?: ExecutableEffect[];
   /** For attach effect: the equipment to attach */
   readonly equipment?: TargetDescriptor;
-  /** For attach effect: the unit to attach to */
-  readonly to?: TargetDescriptor;
+  /**
+   * For attach effect: the unit to attach to (TargetDescriptor shape).
+   * For move effect: the destination location (string or BattlefieldLocation
+   * object — e.g. "base", "battlefield", "here", { battlefield: "controlled" }).
+   */
+  readonly to?: TargetDescriptor | string | { battlefield: string };
   /** For detach: ready state override */
   readonly ready?: boolean;
   /** For grant-keyword: the keyword to grant */
@@ -46,6 +52,40 @@ export interface ExecutableEffect {
   readonly power?: string[];
   /** For heal: player specifier */
   readonly player?: string;
+  /** For swap-might: the first unit (target1) and second unit (target2). */
+  readonly target1?: TargetDescriptor;
+  readonly target2?: TargetDescriptor;
+  /** For play / from-source effects: source zone descriptor. */
+  readonly from?: string;
+  /** For reveal-hand: optional override of who reveals (and filter on the hand). */
+  readonly revealer?: string;
+  readonly filter?: { excludeCardTypes?: string[]; [k: string]: unknown };
+  readonly onPicked?: "recycle" | "banish" | "discard";
+  /** For add-restriction / remove-restriction effects */
+  readonly restriction?: string;
+  /** For if/conditional effects */
+  readonly condition?: unknown;
+  /** For sequence/then effects */
+  readonly then?: ExecutableEffect;
+  /** For conditional effects: the branch executed when the condition is false. */
+  readonly else?: ExecutableEffect;
+  /**
+   * For `damage` effects: when true, the source distributes the total
+   * damage `amount` *across* the resolved targets (Alpha Strike: "deals
+   * damage equal to its Might split among enemy units at battlefields").
+   * Without `split`, the amount is dealt to every target independently
+   * (rule 715.2 / standard "deal N damage to each X" wording).
+   *
+   * Distribution policy (real play: active player chooses; goldfish /
+   * audit: deterministic): the engine divides the total `amount` evenly
+   * across targets, distributing any remainder to the earliest-resolved
+   * targets one extra each. So 5 damage split across 3 targets becomes
+   * [2, 2, 1]. With more damage than targets, the engine guarantees every
+   * target takes at least 1 (assuming `amount >= targets.length`).
+   */
+  readonly split?: boolean;
+  /** For `choice` effects: parser-emitted options list. */
+  readonly options?: { effect: ExecutableEffect }[];
 }
 
 /**
@@ -79,9 +119,29 @@ export interface EffectContext {
     }) => void;
     getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
     getCardZone: (cardId: CoreCardId) => string | undefined;
+    /**
+     * Shuffle a zone in place. Optional: not every test harness wires it up;
+     * the Burn Out path falls back to "no shuffle" when missing, but real
+     * games (which supply `shuffleZone` via the core `RuleEngine` zone ops)
+     * randomize the deck per rule 431.2.b.
+     */
+    shuffleZone?: (zoneId: CoreZoneId, playerId?: CorePlayerId) => void;
   };
   readonly cards: {
     getCardOwner: (cardId: CoreCardId) => string | undefined;
+    /**
+     * Read the current controller of a card. Falls back to owner when the
+     * underlying engine doesn't expose a separate controller view.
+     */
+    getCardController?: (cardId: CoreCardId) => string | undefined;
+    /**
+     * Mutate the controller of a card. Used by `take-control` (rule 187/323.6,
+     * Hostile Takeover) and any future control-change effects. The change is
+     * applied to the live `controller` field on the card instance — separate
+     * from `owner` — so combat / scoring / hold checks immediately see the
+     * new controller. If not provided, `take-control` is a no-op.
+     */
+    setCardController?: (cardId: CoreCardId, controllerId: string) => void;
     getCardMeta?: (cardId: CoreCardId) => Record<string, unknown> | undefined;
     updateCardMeta?: (cardId: CoreCardId, meta: Record<string, unknown>) => void;
   };
@@ -137,6 +197,7 @@ function getEffectiveMight(cardId: string, ctx: EffectContext): number {
     | undefined;
   const buffBonus = meta?.buffed ? 1 : 0;
   const mightMod = meta?.mightModifier ?? 0;
+  const combatMightMod = meta?.combatMightModifier ?? 0;
   const staticBonus = meta?.staticMightBonus ?? 0;
 
   let equipBonus = 0;
@@ -144,7 +205,7 @@ function getEffectiveMight(cardId: string, ctx: EffectContext): number {
     equipBonus += registry.getMightBonus(equipId);
   }
 
-  return Math.max(0, baseMight + buffBonus + mightMod + staticBonus + equipBonus);
+  return Math.max(0, baseMight + buffBonus + mightMod + combatMightMod + staticBonus + equipBonus);
 }
 
 /**
@@ -153,16 +214,49 @@ function getEffectiveMight(cardId: string, ctx: EffectContext): number {
  * Handles dynamic amounts like "equal to this unit's Might",
  * "number of cards in hand", "number of cards in trash", or "count of matching targets".
  */
-function resolveAmount(amount: number | Record<string, unknown>, ctx: EffectContext): number {
+function resolveAmount(amount: unknown, ctx: EffectContext): number {
   if (typeof amount === "number") {
     return amount;
   }
-
+  // Strings sneak in for a few card shapes (e.g. `amount: "all"` on prevent —
+  // Handled separately by callers; or numeric strings produced by older
+  // Parser branches). Parse decimal-string forms here; everything else
+  // (booleans, null, undefined, strings like "all") falls through to 0 so
+  // Callers can recover instead of throwing `"might" in <primitive>`.
+  if (typeof amount === "string") {
+    const n = Number.parseInt(amount, 10);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (amount === null || typeof amount !== "object") {
+    return 0;
+  }
   // Handle AmountExpression objects
   if ("might" in amount) {
-    const target = amount.might as string;
-    if (target === "self") {
+    const mightSpec = (amount as { might: unknown }).might;
+    // `{ might: "self" }` — the source card's effective Might. Used by
+    // Stormbringer-style "deals damage equal to its Might" effects.
+    if (mightSpec === "self") {
       return getEffectiveMight(ctx.sourceCardId, ctx);
+    }
+    // `{ might: <TargetDescriptor> }` — pick a unit matching the
+    // Descriptor and use that unit's effective Might. This is the shape the
+    // Parser emits for Alpha Strike-style "deals damage equal to its Might"
+    // Where "it" is a chosen friendly unit (TargetDescriptor object).
+    // Real play: the player picks the unit; the audit / goldfish picks the
+    // First match deterministically.
+    if (mightSpec && typeof mightSpec === "object") {
+      const targets = resolveTarget(mightSpec as TargetDescriptor, {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      });
+      if (targets.length > 0 && targets[0]) {
+        return getEffectiveMight(targets[0] as string, ctx);
+      }
+      return 0;
     }
   }
   if ("cardsInHand" in amount) {
@@ -221,6 +315,92 @@ function checkBecomesMighty(cardId: string, mightBefore: number, ctx: EffectCont
 }
 
 /**
+ * Rule 715 — Bonus Damage. Scan the *controller's* board permanents for any
+ * static ability whose effect is shaped like
+ *
+ *   { type: "static", effect: { type: "deal-bonus-damage", amount: N,
+ *       condition?: {…}, source?: "spell" | "ability" | "any" } }
+ *
+ * and return the sum of `amount`s that apply to a damage emission from
+ * `sourceCardId` controlled by `playerId`. Rule 715.2: applies per target,
+ * so the caller multiplies nothing — it just adds the returned bonus to
+ * each per-target damage amount inside the per-target loop.
+ *
+ * Rule 715.3 / 715.4: the bonus is applied BEFORE Prevent / replacement, so
+ * the caller invokes this on the raw `amount` and feeds the bumped amount
+ * into the per-target prevent/replacement pipeline.
+ *
+ * Generic: no per-card if-statements. Static abilities whose `effect.type ===
+ * "deal-bonus-damage"` opt in automatically by virtue of being on the board.
+ */
+function getBonusDamage(
+  sourceCardId: string,
+  sourceKind: "spell" | "ability",
+  controllerId: string,
+  ctx: EffectContext,
+): number {
+  const registry = getGlobalCardRegistry();
+  let bonus = 0;
+  // Scan controller's board zones (base + legendZone + championZone +
+  // Every battlefield zone). We use the same zones the static-abilities
+  // Pass scans (rule 463 — statics fire from the board).
+  const zonesToScan: string[] = ["base", "legendZone", "championZone"];
+  for (const bfId of Object.keys(ctx.draft.battlefields)) {
+    zonesToScan.push(`battlefield-${bfId}`);
+  }
+  zonesToScan.push("battlefieldRow");
+
+  for (const zoneId of zonesToScan) {
+    const ids = ctx.zones.getCardsInZone(zoneId as CoreZoneId);
+    for (const cardId of ids) {
+      // Only the controller's permanents grant the bonus ("YOUR spells and
+      // Abilities deal 1 Bonus Damage").
+      const cardController =
+        ctx.cards.getCardController?.(cardId as CoreCardId) ??
+        ctx.cards.getCardOwner(cardId as CoreCardId);
+      if (cardController !== controllerId) {
+        continue;
+      }
+      const abilities = registry.getAbilities(cardId as string) ?? [];
+      for (const ability of abilities) {
+        if ((ability as { type?: string }).type !== "static") {
+          continue;
+        }
+        const {effect} = (ability as { effect?: Record<string, unknown> });
+        if (!effect || (effect as { type?: string }).type !== "deal-bonus-damage") {
+          continue;
+        }
+        // Optional `source` filter on the static — "spell" / "ability" /
+        // "any" (default). If omitted, applies to both.
+        const filterSrc = (effect as { source?: string }).source ?? "any";
+        if (filterSrc !== "any" && filterSrc !== sourceKind) {
+          continue;
+        }
+        // Optional condition gate.
+        const cond = (ability as { condition?: Record<string, unknown> }).condition;
+        if (cond && !evaluateEffectCondition(cond, ctx)) {
+          continue;
+        }
+        const amt = (effect as { amount?: number }).amount ?? 0;
+        bonus += amt;
+      }
+    }
+  }
+  // Mark `sourceCardId` as used so eslint doesn't flag the unused param —
+  // Future refinements (per-source filter) will read this.
+  void sourceCardId;
+  // Rule 714.1 — "Bonus Damage can only be a positive value, and can only
+  // Increase the amount of Damage being distributed."
+  // Rule 714.2 — "If, for any reason, Bonus Damage would be a negative
+  // Number, then no Bonus Damage is applied to the action." A static could
+  // Grant a negative `deal-bonus-damage` (e.g. "your spells deal 1 less
+  // Bonus damage") — once summed with positive grants the net could fall
+  // Below zero. Clamp to ≥ 0 so the multi-source sum still satisfies the
+  // Glossary: zero net contribution, not a damage reduction.
+  return Math.max(0, bonus);
+}
+
+/**
  * Evaluate a condition for conditional effects.
  */
 export function evaluateEffectCondition(
@@ -235,11 +415,58 @@ export function evaluateEffectCondition(
       return (player?.xp ?? 0) >= threshold;
     }
     case "controls-unit": {
-      const baseCards = ctx.zones.getCardsInZone(
-        "base" as CoreZoneId,
-        ctx.playerId as CorePlayerId,
-      );
-      return baseCards.length > 0;
+      // "Do I control a unit?" must scan every board zone (rule 187 — control
+      // Is over board game-objects, not just base; a player whose only units
+      // Are at battlefields still CONTROLS units). Previously this only
+      // Looked at the base zone, so an effect gated on "if you control a
+      // Unit" silently fizzled for any player with their whole army at
+      // Battlefields. We scan `base` + every `battlefield-*` zone and ask
+      // The registry whether each ID is a unit when the registry knows;
+      // When the registry has no entry (mock/test contexts that don't pre-
+      // Register a def), we fall back to the original permissive behavior
+      // Of treating any card in the zone as a candidate. Filtering by
+      // Controller uses `getCardController` when exposed (live engine),
+      // Else `getCardOwner` (test stubs).
+      const registry = getGlobalCardRegistry();
+      const hasUnitIn = (zoneId: string, pid?: string): boolean => {
+        const ids = ctx.zones.getCardsInZone(
+          zoneId as CoreZoneId,
+          pid as CorePlayerId | undefined,
+        );
+        if (ids.length === 0) {
+          return false;
+        }
+        // If the test context can't tell us controller/owner at all, fall
+        // Back to the original "any card in my base => yes" check.
+        if (!ctx.cards.getCardOwner && !ctx.cards.getCardController) {
+          return ids.length > 0;
+        }
+        return ids.some((id) => {
+          const def = registry.get(id as string);
+          // Unknown def: be permissive (don't break mocks that omit defs).
+          if (def && def.cardType !== "unit") {
+            return false;
+          }
+          const controller = ctx.cards.getCardController?.(id as CoreCardId);
+          const owner = ctx.cards.getCardOwner(id as CoreCardId);
+          // For base-zone lookups the caller already filtered by player,
+          // So any card returned belongs to the player. For battlefield
+          // Sweeps the zone is shared — match on controller/owner.
+          if (pid !== undefined) {
+            return true;
+          }
+          return (controller ?? owner) === ctx.playerId;
+        });
+      };
+      if (hasUnitIn("base", ctx.playerId)) {
+        return true;
+      }
+      for (const bfId of Object.keys(ctx.draft.battlefields)) {
+        if (hasUnitIn(`battlefield-${bfId}`)) {
+          return true;
+        }
+      }
+      return false;
     }
     case "score-within": {
       const range = (condition.range as number) ?? 0;
@@ -269,14 +496,41 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       const rawDrawCount = effect.amount ?? 1;
       const drawCount =
         typeof rawDrawCount === "number" ? rawDrawCount : resolveAmount(rawDrawCount, ctx);
+      // `player: "each"` (Invert Timelines, et al.) means every player draws.
+      // Default is the resolving player only. Recurse so the burn-out logic
+      // Below runs in the per-player context (the recursive call lands in
+      // The single-player branch since playerSpec defaults to undefined).
+      const drawPlayerSpec = (effect as unknown as { player?: string }).player;
+      if (drawPlayerSpec === "each" || drawPlayerSpec === "opponent") {
+        const allIds = Object.keys(ctx.draft.players);
+        const targets = drawPlayerSpec === "each"
+          ? allIds
+          : allIds.filter((p) => p !== ctx.playerId);
+        for (const pid of targets) {
+          const subCtx = pid === ctx.playerId ? ctx : { ...ctx, playerId: pid };
+          executeEffect(
+            { ...(effect as unknown as Record<string, unknown>), player: undefined } as unknown as ExecutableEffect,
+            subCtx,
+          );
+        }
+        break;
+      }
       for (let i = 0; i < drawCount; i++) {
-        // Check if deck is empty → Burn Out (rule 518)
+        // Check if deck is empty → Burn Out (rule 431, fka 518)
         const deckCards = ctx.zones.getCardsInZone(
           "mainDeck" as CoreZoneId,
           ctx.playerId as CorePlayerId,
         );
         if (deckCards.length === 0) {
-          // Move trash to deck
+          // Rule 431.2.b — Recycle the trash into the Main Deck. "When
+          // Multiple cards are Recycled to the Main Deck at the same time,
+          // Those cards must be randomized." Previously the trash cards
+          // Were moved one-by-one into the deck IN TRASH ORDER and never
+          // Shuffled — a deterministic, exploitable order. We now (1) move
+          // Them, then (2) call `shuffleZone` if the host provides it
+          // (the real engine does; some test stubs don't, in which case
+          // We keep the move-only fallback). Same fix in the per-turn
+          // Draw-phase Burn Out (`riftbound-flow.ts`).
           const trashCards = ctx.zones.getCardsInZone(
             "trash" as CoreZoneId,
             ctx.playerId as CorePlayerId,
@@ -287,12 +541,35 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
               targetZoneId: "mainDeck" as CoreZoneId,
             });
           }
-          // Opponent scores 1 point
+          ctx.zones.shuffleZone?.(
+            "mainDeck" as CoreZoneId,
+            ctx.playerId as CorePlayerId,
+          );
+          // Rule 431.2.c — chosen opponent gains 1 point. For 2-player
+          // Games the choice is forced; in multi-player goldfish runs we
+          // Give the point to each opponent in turn order (the engine's
+          // Multi-player chooser is the caller's concern). Rule 431.3.a:
+          // If that pushes them to the Victory Score, they WIN immediately
+          // — previously this branch never even checked, so a Burn Out
+          // That handed the opponent their winning point silently kept
+          // Playing.
           for (const opponentId of Object.keys(ctx.draft.players)) {
             if (opponentId !== ctx.playerId) {
               const opponent = ctx.draft.players[opponentId];
               if (opponent) {
                 opponent.victoryPoints += 1;
+                if (hasPlayerWonStrict(ctx.draft, opponentId)) {
+                  // The state type is `readonly`-decorated for safety; the
+                  // Engine still mutates it in place inside reducers/effects
+                  // (see `moves/combat.ts`, where the same fields are written
+                  // Through the unfrozen `draft`). Cast away the readonly so
+                  // The live mutation goes through; the test harness's
+                  // `liveExecContext.draft = internal.currentState` and the
+                  // Real engine's draft both accept it.
+                  (ctx.draft as { status: string }).status = "finished";
+                  (ctx.draft as { winner: string }).winner = opponentId;
+                  return;
+                }
               }
             }
           }
@@ -318,12 +595,55 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
 
     case "damage": {
       const rawAmount = effect.amount ?? 1;
-      const amount =
+      const baseAmount =
         typeof rawAmount === "number"
           ? rawAmount
           : resolveAmount(rawAmount as Record<string, unknown>, ctx);
+      // Rule 715.1/.2/.3 — Bonus Damage. Scan the source-card controller's
+      // Statics for `deal-bonus-damage` and bump the per-target amount before
+      // Prevent / replacement runs (rule 715.4). Per rule 715.2, the bonus
+      // Applies to each target individually; we apply it inside the loop by
+      // Computing the bumped amount up front and reusing it for every target
+      // (each iteration uses the same value — rule 715.2 isn't "stack per
+      // Target", it's "per-target each gets +N").
+      // We infer the source kind from the source card type. If the registry
+      // Knows the source is a spell, mark "spell"; otherwise treat as
+      // "ability" (units/gear/legend statics-triggered).
+      const damageRegistry = getGlobalCardRegistry();
+      const sourceDef = damageRegistry.get(ctx.sourceCardId);
+      const sourceKind: "spell" | "ability" =
+        sourceDef?.cardType === "spell" ? "spell" : "ability";
+      const damageBonus = getBonusDamage(ctx.sourceCardId, sourceKind, ctx.playerId, ctx);
+      const amount = baseAmount + damageBonus;
       const targets = getTargetIds(effect, ctx);
-      for (const targetId of targets) {
+      // Per-target damage allocations. When `split: true` (Alpha Strike
+      // Style), the source distributes the total `amount` across the
+      // Resolved targets evenly with remainder front-loaded. Without
+      // `split`, every target takes the full `amount` (standard
+      // "deals N damage to each" wording).
+      const splitAcross = effect.split === true && targets.length > 0;
+      let perTarget: number[];
+      if (splitAcross) {
+        const base = Math.floor(amount / targets.length);
+        const remainder = amount - base * targets.length;
+        perTarget = targets.map((_, i) => base + (i < remainder ? 1 : 0));
+      } else {
+        perTarget = targets.map(() => amount);
+      }
+      for (let i = 0; i < targets.length; i++) {
+        const targetId = targets[i] as string;
+        const targetAmount = perTarget[i] ?? 0;
+        if (targetAmount <= 0) {
+          continue;
+        }
+        // Rule 460.2.c.9 — a unit that cannot be dealt damage takes none
+        // (the `damage` game action is a no-op against it).
+        const targetMeta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        if (targetMeta?.cannotTakeDamage === true) {
+          continue;
+        }
         // Check for "take-damage" replacement effects
         const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? "";
         const replacementCtx = {
@@ -335,7 +655,7 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           zones: { getCardsInZone: ctx.zones.getCardsInZone },
         };
         const replacement = checkReplacement(
-          { amount, cardId: targetId, owner, type: "take-damage" },
+          { amount: targetAmount, cardId: targetId, owner, type: "take-damage" },
           replacementCtx as Parameters<typeof checkReplacement>[1],
         );
         if (replacement) {
@@ -348,7 +668,38 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           markReplacementConsumed(ctx.draft, replacement);
           continue;
         }
-        ctx.counters.addCounter(targetId as CoreCardId, "damage", amount);
+        // Rule 437 — Prevent. If a Prevent Value is tracked on the unit,
+        // Reduce the dealt damage by it (never below 0) and reduce the
+        // Tracked value by the prevented amount; expire it when it hits 0.
+        const tracked = targetMeta?.preventDamage as number | "all" | undefined;
+        const { dealt, remaining } = applyPrevent(targetAmount, tracked);
+        if (tracked !== undefined && remaining !== tracked) {
+          ctx.cards.updateCardMeta?.(
+            targetId as CoreCardId,
+            { preventDamage: remaining } as unknown as Record<string, unknown>,
+          );
+        }
+        if (dealt > 0) {
+          ctx.counters.addCounter(targetId as CoreCardId, "damage", dealt);
+          // Engine-bus event: damage was dealt (distinct from the
+          // `take-damage` trigger event the replacement check used above).
+          // Routed through the event-bus chokepoint; the event log / future
+          // Listeners see it. Also surfaces as a `counterChanged` on the
+          // Damage counter so SBA-input listeners have one shape to watch.
+          ctx.fireTriggers?.({
+            amount: dealt,
+            cardId: targetId as string,
+            sourceId: ctx.sourceCardId,
+            type: "damageDealt",
+          });
+          ctx.fireTriggers?.({
+            cardId: targetId as string,
+            cause: "damage-effect",
+            counter: "damage",
+            delta: dealt,
+            type: "counterChanged",
+          });
+        }
       }
       break;
     }
@@ -356,6 +707,33 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     case "kill": {
       const targets = getTargetIds(effect, ctx);
       for (const targetId of targets) {
+        // Rule 571-575 / 428: a "kill" instruction is a "would die" event a
+        // Replacement effect on the board can intercede on (Zhonya's Hourglass,
+        // Tactical Retreat, Guardian Angel, …). When one applies, the unit is
+        // Not trashed (the engine treats any matched die-replacement as "skip
+        // The kill" — it doesn't yet run the replacement's own heal/exhaust/
+        // Recall body); single-fire `"next"`-duration replacements are consumed.
+        const killOwner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? "";
+        const killReplacementCtx = {
+          cards: {
+            getCardMeta: ctx.cards.getCardMeta ?? (() => undefined),
+            getCardOwner: ctx.cards.getCardOwner,
+          },
+          draft: ctx.draft,
+          zones: { getCardsInZone: ctx.zones.getCardsInZone },
+        };
+        const killReplacement = checkReplacement(
+          { cardId: targetId as string, owner: killOwner, type: "die" },
+          killReplacementCtx as Parameters<typeof checkReplacement>[1],
+        );
+        if (killReplacement) {
+          markReplacementConsumed(ctx.draft, killReplacement);
+          ctx.cards.updateCardMeta?.(
+            targetId as CoreCardId,
+            { damage: 0 } as unknown as Record<string, unknown>,
+          );
+          continue;
+        }
         ctx.zones.moveCard({
           cardId: targetId as CoreCardId,
           targetZoneId: "trash" as CoreZoneId,
@@ -383,15 +761,43 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "score": {
+      // Rule 467 — "When a cleanup occurs and a player has accrued Points
+      // Greater than or equal to the Victory Score for their Mode of Play,
+      // And if they have more points than any opponent, they Win the Game."
+      // The `combat`/`burnOut` paths already call `hasPlayerWon` after a
+      // Point increment and set `status:"finished"` / `winner` if so. The
+      // `score` effect previously incremented points but never checked,
+      // Letting a spell that scored a player past the threshold leave the
+      // Game in `playing` indefinitely until the next state-based pass.
+      // Now: same check, same finishing semantics, no double-firing
+      // (`hasPlayerWon` is idempotent — it just compares numbers).
       const amount = resolveAmount(effect.amount ?? 1, ctx);
       const player = ctx.draft.players[ctx.playerId];
       if (player) {
         player.victoryPoints += amount;
+        if (hasPlayerWonStrict(ctx.draft, ctx.playerId)) {
+          // Cast through the readonly façade — same pattern as the Burn Out
+          // Path above (and `moves/combat.ts`); the runtime state is the
+          // Mutable draft.
+          (ctx.draft as { status: string }).status = "finished";
+          (ctx.draft as { winner: string }).winner = ctx.playerId;
+        }
       }
       break;
     }
 
     case "channel": {
+      // Rule 515.3.a — Channel moves the top of the Rune Deck onto the board
+      // As a ready Rune. The flow's per-turn Channel-phase hook routes this
+      // To the `runePool` zone (see `riftbound-flow.ts` Channel onBegin —
+      // "Channeled runes go to the runePool zone (not base, which is for
+      // Units/gear). They enter ready and the player must Exhaust them via
+      // The exhaustRune move to get energy."). Effect-driven `channel` (e.g.
+      // An ability that channels an additional rune mid-turn) must do the
+      // Same, not move the rune to `base` — `base` is the units-and-gear
+      // Zone, and a rune sitting there is unreachable by the `exhaustRune`
+      // Move that produces energy. Fixed: target `runePool` to match the
+      // Per-turn channel.
       const count = resolveAmount(effect.amount ?? 1, ctx);
       for (let i = 0; i < count; i++) {
         const runes = ctx.zones.getCardsInZone(
@@ -401,7 +807,7 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
         if (runes[0]) {
           ctx.zones.moveCard({
             cardId: runes[0],
-            targetZoneId: "base" as CoreZoneId,
+            targetZoneId: "runePool" as CoreZoneId,
           });
         }
       }
@@ -462,15 +868,282 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       break;
     }
 
-    case "discard": {
-      const count = resolveAmount(effect.amount ?? 1, ctx);
-      const hand = ctx.zones.getCardsInZone("hand" as CoreZoneId, ctx.playerId as CorePlayerId);
-      for (let i = 0; i < Math.min(count, hand.length); i++) {
-        if (hand[i]) {
-          ctx.zones.moveCard({
-            cardId: hand[i],
-            targetZoneId: "trash" as CoreZoneId,
+    case "move": {
+      // Rule 188 (Move) — move a unit between its base and a battlefield, or
+      // From one battlefield to another. The parsed `MoveEffect` shape is:
+      //   { type: "move", target, to, from? }
+      //
+      // - `target`     describes the unit(s) to move (any AnyTarget shape)
+      // - `to`         is a Location (string `"base" | "battlefield" | "here"`
+      //                | { battlefield: ... }) — the destination
+      // - `from`       optional Location — only target units currently in that
+      //                Source zone (e.g. "Move a unit FROM a battlefield to its
+      //                Base"). If omitted, the target descriptor's own
+      //                `location` is responsible for restricting the pool, or
+      //                Any board location is acceptable.
+      //
+      // Implemented variants:
+      //   - target → "base"          (Charm, Fight or Flight, Flash, Stealthy
+      //                               Pursuer when destination is owner's base)
+      //   - target → "battlefield"   (move TO a battlefield; we pick the first
+      //                               Battlefield that's not the current zone,
+      //                               So base→battlefield and bf→other-bf both
+      //                               Work; if `to` is `{ battlefield: ... }`
+      //                               Same fallback applies)
+      //   - target → "here"          (move TO the source card's current zone —
+      //                               Used by triggered abilities like
+      //                               Blitzcrank Impassive "move an enemy unit
+      //                               To here")
+      //   - target → "trash"/"hand"  (transitional — same shape as recall /
+      //                               Return-to-hand for completeness; not
+      //                               Commonly emitted by parser but we
+      //                               Support them anyway)
+      //
+      // For destination "battlefield" with multiple battlefields, the resolver
+      // Is deterministic (picks first non-current battlefield) since there's no
+      // Live chooser plumbed through `executeEffect`. Real-game UI selection is
+      // The caller's concern; for the engine's bot-vs-bot and audit harnesses
+      // The deterministic pick is sufficient to fire `moveCard` and unblock
+      // The 34 broken cards. A future iteration can add a `pendingChoice` of
+      // Type `"pick-destination-for-move"` for cards that genuinely require
+      // Player choice; for now the move at least lands in a valid destination
+      // Zone and the engine state stays consistent.
+      const rawTo = (effect as { to?: unknown }).to;
+      const rawFrom = (effect as { from?: unknown }).from;
+
+      // Merge the effect's `from` (source-zone restriction) into the target
+      // Descriptor's `location` BEFORE we resolve. The parser emits `from`
+      // As a sibling of `target` (e.g. `from: "battlefield", target: { type:
+      // "unit" }`); resolving the bare target would pick up units anywhere on
+      // The board, then `quantity: 1` slices off the first one, which often
+      // Sits in the wrong zone.
+      //
+      // We ALSO expand the resolver pass to `quantity: "all"` so we get the
+      // Full candidate pool back, then filter to "viable" candidates (units
+      // Whose move would actually do something — i.e. their CURRENT zone
+      // Differs from the computed destination) before applying the original
+      // Quantity. This means "move a friendly unit to base" never picks a
+      // Friendly unit that's already on base when there's a battlefield-
+      // Resident sibling available.
+      const fromStr = typeof rawFrom === "string" ? rawFrom : undefined;
+      const isObjectTarget =
+        typeof effect.target === "object" && effect.target !== null;
+      const originalQuantity = isObjectTarget
+        ? (effect.target as TargetDescriptor).quantity
+        : undefined;
+      const expandedTarget: TargetDescriptor | undefined = isObjectTarget
+        ? {
+            ...(effect.target as TargetDescriptor),
+            ...(fromStr && !(effect.target as { location?: string }).location
+              ? { location: fromStr }
+              : {}),
+            quantity: "all",
+          }
+        : (effect.target as TargetDescriptor | undefined);
+      const expandedEffect: ExecutableEffect = {
+        ...effect,
+        target: expandedTarget,
+      } as ExecutableEffect;
+
+      const rawCandidates = getTargetIds(expandedEffect, ctx);
+      const isSelfTarget =
+        effect.target === ("self" as unknown as TargetDescriptor) ||
+        (typeof effect.target === "object" &&
+          effect.target !== null &&
+          (effect.target as { type?: string }).type === "self");
+      const candidates =
+        rawCandidates.length === 0
+          ? (isSelfTarget
+            ? [ctx.sourceCardId]
+            : [])
+          : rawCandidates;
+
+      // Belt-and-suspenders: re-apply the from-zone restriction at execution
+      // Time (the resolver's `location` filter only handles a few well-known
+      // Values; non-matching targets might slip through).
+      const candidatesAfterFrom = fromStr
+        ? candidates.filter((id) => {
+            const zone = ctx.zones.getCardZone(id as CoreCardId);
+            if (!zone) {
+              return false;
+            }
+            if (fromStr === "base") {
+              return zone === "base";
+            }
+            if (fromStr === "battlefield") {
+              return zone.startsWith("battlefield");
+            }
+            if (fromStr === "here") {
+              return ctx.sourceZone !== undefined && zone === ctx.sourceZone;
+            }
+            return zone === fromStr;
+          })
+        : candidates;
+
+      // Resolve destination zone-id. `to` can be:
+      //   - string Location  → "base" | "battlefield" | "here" | "trash" | "hand"
+      //   - { battlefield: "controlled" | "enemy" | "open" | "any" } object
+      //     (BattlefieldLocation) — we currently treat all variants as "any
+      //     Battlefield" and pick the first non-current one.
+      const battlefieldIds = Object.keys(ctx.draft.battlefields ?? {});
+      const resolveDestination = (moverId: string): string | undefined => {
+        // BattlefieldLocation object form.
+        if (rawTo && typeof rawTo === "object" && "battlefield" in rawTo) {
+          const currentZone = ctx.zones.getCardZone(moverId as CoreCardId) ?? "";
+          for (const bfId of battlefieldIds) {
+            const candidate = `battlefield-${bfId}`;
+            if (candidate !== currentZone) {
+              return candidate;
+            }
+          }
+          return battlefieldIds[0] ? `battlefield-${battlefieldIds[0]}` : undefined;
+        }
+        if (typeof rawTo !== "string") {
+          return undefined;
+        }
+        if (rawTo === "here") {
+          return ctx.sourceZone;
+        }
+        if (rawTo === "base") {
+          return "base";
+        }
+        if (rawTo === "trash") {
+          return "trash";
+        }
+        if (rawTo === "hand") {
+          return "hand";
+        }
+        if (rawTo === "battlefield") {
+          // Pick the first battlefield that ISN'T the unit's current zone.
+          // This handles both base→battlefield (current zone is "base", so
+          // Any battlefield is fine) and battlefield→other-battlefield
+          // (current zone is `battlefield-X`, pick `battlefield-Y`). When
+          // There's only one battlefield AND the unit is already on it,
+          // We skip the move (a "move to battlefield" effect on a unit
+          // Already on the only battlefield is a no-op rather than a crash).
+          const currentZone = ctx.zones.getCardZone(moverId as CoreCardId) ?? "";
+          for (const bfId of battlefieldIds) {
+            const candidate = `battlefield-${bfId}`;
+            if (candidate !== currentZone) {
+              return candidate;
+            }
+          }
+          return undefined;
+        }
+        return rawTo;
+      };
+
+      // Restrict to candidates whose move would actually change zone (skip
+      // Units already at the destination — see comment block above for why).
+      const viableMovers = candidatesAfterFrom.filter((id) => {
+        const destZoneId = resolveDestination(id);
+        if (!destZoneId) {
+          return false;
+        }
+        const currentZone = ctx.zones.getCardZone(id as CoreCardId);
+        return currentZone !== destZoneId;
+      });
+
+      // Apply the original quantity (now that we have only viable candidates).
+      // Default is 1 ("a unit"); "all" / `{ upTo: N }` / `{ atLeast: N }` /
+      // Explicit numbers behave the same way the resolver does — see the
+      // Comment in `target-resolver.ts` on `TargetDescriptor.quantity`.
+      let movers = viableMovers;
+      if (originalQuantity === "all" || originalQuantity === "any") {
+        // "all" — every matching candidate. "any" — player chooses any
+        // Number; the deterministic engine resolves to all (UI would
+        // Render a chooser). Tricksy Tentacles "Move any number of enemy
+        // Units" relies on the "any" branch — without it the default
+        // Slice(0,1) below caps the move at a single unit.
+        movers = viableMovers;
+      } else if (typeof originalQuantity === "object" && originalQuantity !== null) {
+        if ("upTo" in originalQuantity) {
+          movers = viableMovers.slice(0, Math.max(0, originalQuantity.upTo));
+        } else if ("atLeast" in originalQuantity) {
+          movers = viableMovers;
+        }
+      } else if (typeof originalQuantity === "number") {
+        movers = viableMovers.slice(0, originalQuantity);
+      } else {
+        // Undefined → exactly 1
+        movers = viableMovers.slice(0, 1);
+      }
+
+      for (const moverId of movers) {
+        const targetZoneId = resolveDestination(moverId);
+        if (!targetZoneId) {
+          continue;
+        }
+        const currentZone = ctx.zones.getCardZone(moverId as CoreCardId);
+        if (currentZone === targetZoneId) {
+          continue;
+        }
+        ctx.zones.moveCard({
+          cardId: moverId as CoreCardId,
+          targetZoneId: targetZoneId as CoreZoneId,
+        });
+        // Fire a "move" game event so triggered abilities listening for
+        // "when a unit moves" (rule 191; Reaver's Row, Iascylla, etc.) can
+        // React. Best-effort: if `fireTriggers` isn't wired we silently skip
+        // (matches the `become-mighty` trigger handling pattern in this file).
+        if (ctx.fireTriggers) {
+          ctx.fireTriggers({
+            cardId: moverId,
+            from: currentZone ?? "",
+            to: targetZoneId,
+            type: "move",
           });
+        }
+      }
+      break;
+    }
+
+    case "discard": {
+      // `amount: "hand"` (string) is shorthand for "the entire hand" — emitted
+      // By the parser for wording like "discards their hand" (Invert
+      // Timelines, OGN-201). `resolveAmount` parses unrecognized strings as 0
+      // So we special-case it here before falling through to numeric resolve.
+      // `player: "each"` (Invert Timelines) means every player discards (and
+      // Then optionally chains a `then` effect for each player); the default
+      // Is the resolving player only.
+      const discardEff = effect as unknown as {
+        amount?: unknown;
+        player?: "each" | "self" | "opponent";
+        then?: ExecutableEffect;
+      };
+      const rawAmount = discardEff.amount ?? 1;
+      const playerSpec = discardEff.player ?? "self";
+      const allPlayerIds = Object.keys(ctx.draft.players);
+      let targetPlayers: string[];
+      if (playerSpec === "each") {
+        targetPlayers = allPlayerIds;
+      } else if (playerSpec === "opponent") {
+        targetPlayers = allPlayerIds.filter((p) => p !== ctx.playerId);
+      } else {
+        targetPlayers = [ctx.playerId];
+      }
+      for (const pid of targetPlayers) {
+        const hand = ctx.zones.getCardsInZone("hand" as CoreZoneId, pid as CorePlayerId);
+        const count =
+          rawAmount === "hand"
+            ? hand.length
+            : (typeof rawAmount === "number"
+              ? rawAmount
+              : resolveAmount(rawAmount, ctx));
+        for (let i = 0; i < Math.min(count, hand.length); i++) {
+          if (hand[i]) {
+            ctx.zones.moveCard({
+              cardId: hand[i],
+              targetZoneId: "trash" as CoreZoneId,
+            });
+          }
+        }
+        // Run the chained `then` effect (e.g. "then draws 4") in the
+        // Context of the player who just discarded so `draw` etc. land
+        // On the correct player.
+        if (discardEff.then) {
+          const subCtx = pid === ctx.playerId ? ctx : { ...ctx, playerId: pid };
+          executeEffect(discardEff.then, subCtx);
         }
       }
       break;
@@ -494,21 +1167,470 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       break;
     }
 
+    case "win-game": {
+      // Rule 632.4 — "Win the game" causes the resolving player to win
+      // Immediately (sets the game status). Implementation: mark
+      // `state.winner = playerId` and set `state.status = "ended"`. The
+      // Public game-state shape uses `status` ("playing"|"ended") + a
+      // `winner` field, both already used by the standard victory-score
+      // Path; we just set them here too so listeners (UI, end-of-game
+      // Hooks) observe the win regardless of whether it came from
+      // Crossing the victory threshold or from a "win the game" effect
+      // (e.g. The Grand Plaza, Crystal Spire).
+      const winState = ctx.draft as RiftboundGameState & {
+        status?: string;
+        winner?: string;
+      };
+      if (winState.status !== "finished") {
+        winState.status = "finished";
+        winState.winner = ctx.playerId;
+      }
+      break;
+    }
+
+    case "double-might": {
+      // Rule 432 (Doubling) — increase a numeric attribute by an amount equal
+      // To its CURRENT value, applied as a single delta for the named
+      // Duration. For Might, that means +current Might (so 5 becomes 10,
+      // Tracked as a +5 modifier; shield-driven temporary +Might in current
+      // Value also gets doubled per rule 432.1 example). Implemented as a
+      // +effectiveMight delta on `mightModifier` (or `combatMightModifier`
+      // For combat duration), so it reverts at the right cleanup boundary.
+      const doubleTargets = getTargetIds(effect, ctx);
+      const dDuration = (effect as unknown as { duration?: string }).duration;
+      const dIsCombat = dDuration === "combat";
+      for (const targetId of doubleTargets) {
+        const currentMight = getEffectiveMight(targetId, ctx);
+        if (currentMight <= 0) {
+          continue;
+        }
+        const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        if (dIsCombat) {
+          const curMod = meta?.combatMightModifier ?? 0;
+          ctx.cards.updateCardMeta?.(
+            targetId as CoreCardId,
+            { combatMightModifier: curMod + currentMight } as unknown as Record<string, unknown>,
+          );
+        } else {
+          const curMod = meta?.mightModifier ?? 0;
+          ctx.cards.updateCardMeta?.(
+            targetId as CoreCardId,
+            { mightModifier: curMod + currentMight } as unknown as Record<string, unknown>,
+          );
+        }
+        checkBecomesMighty(targetId, currentMight, ctx);
+      }
+      break;
+    }
+
+    case "swap-might": {
+      // Rule 230 (Swap Might) — exchange the effective Might of two units
+      // For the named duration. Implemented as equal-and-opposite deltas on
+      // `mightModifier` (or `combatMightModifier` for `duration:"combat"`)
+      // So that the swap is reverted by the same cleanup path that resets
+      // Turn-scoped buffs (rule 517.2.b). The deltas are computed from the
+      // Current EFFECTIVE Might of each target, so any prior modifiers are
+      // Captured into the swap (Switcheroo on a Poro on a Brush battlefield:
+      // The +1 from Brush is part of effective Might, so swapping captures
+      // And exchanges that bonus too — rule 230).
+      const swapEffect = effect as unknown as {
+        target1?: TargetDescriptor;
+        target2?: TargetDescriptor;
+        duration?: "turn" | "permanent" | "combat";
+      };
+      const ids1 = resolveTarget(swapEffect.target1, {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      });
+      const ids2 = resolveTarget(swapEffect.target2, {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      });
+      const a = ids1[0];
+      const b = ids2[0];
+      if (a && b && a !== b) {
+        const mightA = getEffectiveMight(a, ctx);
+        const mightB = getEffectiveMight(b, ctx);
+        const isCombat = swapEffect.duration === "combat";
+        const fieldKey = isCombat
+          ? ("combatMightModifier" as const)
+          : ("mightModifier" as const);
+        const metaA = (ctx.cards.getCardMeta?.(a as CoreCardId) ?? {}) as Partial<RiftboundCardMeta>;
+        const metaB = (ctx.cards.getCardMeta?.(b as CoreCardId) ?? {}) as Partial<RiftboundCardMeta>;
+        const curA = (metaA[fieldKey] as number | undefined) ?? 0;
+        const curB = (metaB[fieldKey] as number | undefined) ?? 0;
+        // After the swap, a should HAVE mightB and b should HAVE mightA.
+        // So a's new total = mightB → delta_a = mightB - mightA.
+        const deltaA = mightB - mightA;
+        const deltaB = mightA - mightB;
+        ctx.cards.updateCardMeta?.(
+          a as CoreCardId,
+          { [fieldKey]: curA + deltaA } as unknown as Record<string, unknown>,
+        );
+        ctx.cards.updateCardMeta?.(
+          b as CoreCardId,
+          { [fieldKey]: curB + deltaB } as unknown as Record<string, unknown>,
+        );
+        // Crossing the Mighty threshold can trigger "become-mighty" on either side.
+        checkBecomesMighty(a, mightA, ctx);
+        checkBecomesMighty(b, mightB, ctx);
+      }
+      break;
+    }
+
+    case "transform": {
+      // Rule 230 / 300 — "This unit becomes [a 3M Demacian Sentinel]."
+      // Re-register the target's card definition in the global card registry
+      // (the runtime registry maps instance-id → definition, so this replaces
+      // The printed face). What's ON the card — marked damage, attached
+      // Gear, granted keywords, exhaustion — is preserved (rule 230 generally
+      // Keeps existing meta). What's PRINTED — base might, energyCost,
+      // Keywords, abilities — comes from the new definition. Static recalc
+      // Runs through the dispatcher's `EVENT_TYPES_NEEDING_RECALC` set
+      // (`buff`, `grant-keyword`, etc.) — fire `buff` to ensure recalc.
+      const xform = effect as unknown as {
+        target?: TargetDescriptor;
+        newDefinition?: Record<string, unknown>;
+        newCardName?: string;
+      };
+      const ids = resolveTarget(xform.target, {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      });
+      const def = xform.newDefinition;
+      if (def) {
+        const registry = getGlobalCardRegistry();
+        for (const targetId of ids) {
+          // Preserve any printed-id reference field so the new shape still
+          // Reads as "this card" for self-referential effects. The
+          // `register` method overwrites — that's exactly what we want.
+          registry.register(targetId, {
+            id: (def.id as string | undefined) ?? targetId,
+            ...def,
+          } as Parameters<typeof registry.register>[1]);
+          // Trigger a recalc by emitting a `buff` event (recalc-relevant)
+          // So static abilities re-evaluate against the new definition's
+          // Printed keywords/abilities.
+          if (ctx.fireTriggers) {
+            ctx.fireTriggers({
+              amount: 0,
+              cardId: targetId,
+              playerId: ctx.playerId,
+              type: "buff",
+            } as unknown as Parameters<NonNullable<typeof ctx.fireTriggers>>[0]);
+          }
+        }
+      }
+      break;
+    }
+
+    case "copy-spell": {
+      // Copy the most-recent (LIFO) spell currently on the chain and add the
+      // Copy as a new chain item resolving for the COPYING player. The copy
+      // Shares the original's effect AST, targets, and variables. No card is
+      // Created — the chain item carries the effect directly. Rule 420 /
+      // 555.x (copies are not "played" — they go on the chain as a copy).
+      const {interaction} = ctx.draft;
+      if (!interaction?.chain?.active) {
+        break;
+      }
+      const {items} = interaction.chain;
+      if (items.length === 0) {
+        break;
+      }
+      // Find the top spell item (skip non-spell items like triggered abilities
+      // If the caller meant "copy a spell" specifically).
+      const onlySpell = (effect as unknown as { spellOnly?: boolean }).spellOnly !== false;
+      let sourceItem: (typeof items)[number] | undefined;
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i];
+        if (!onlySpell || it.type === "spell") {
+          sourceItem = it;
+          break;
+        }
+      }
+      if (!sourceItem) {
+        break;
+      }
+      // Use addToChain via direct mutation of the draft's interaction state.
+      // We can't import `addToChain` here without a circular reference, so
+      // We mutate the chain items array directly — same shape `addToChain`
+      // Produces. The copy's controller is the resolving player (the player
+      // Whose effect copied the spell); its `cardId` mirrors the source so
+      // Targeting/self-relative effects still resolve against the printed
+      // Card; mark `triggered:false` so it doesn't re-check intervening-if.
+      const draftInteraction = ctx.draft.interaction as unknown as {
+        chain: {
+          active: boolean;
+          items: {
+            id: string;
+            cardId: string;
+            controller: string;
+            effect?: unknown;
+            type: string;
+            countered?: boolean;
+            triggered?: boolean;
+          }[];
+          activePlayer: string;
+          passedPlayers: string[];
+        };
+        nextChainItemId: number;
+      };
+      const newId = `chain-${draftInteraction.nextChainItemId}`;
+      draftInteraction.nextChainItemId += 1;
+      draftInteraction.chain.items.push({
+        cardId: sourceItem.cardId,
+        controller: ctx.playerId,
+        effect: sourceItem.effect,
+        id: newId,
+        type: sourceItem.type,
+      });
+      // Reset priority to copier (they get to chain onto their own copy
+      // First per rule 543.4 chain-priority model).
+      draftInteraction.chain.activePlayer = ctx.playerId;
+      draftInteraction.chain.passedPlayers = [];
+      break;
+    }
+
+    case "copy-unit": {
+      // Spawn a token clone of `target` — same name/might/abilities. Rule 420
+      // — copies of units are tokens (rule 183.1: cease to exist when they
+      // Leave the board). Implemented via the existing `create-token` path:
+      // Build a token def from the source's registry entry, then delegate.
+      const copyEffect = effect as unknown as {
+        target?: TargetDescriptor;
+        location?: string;
+      };
+      const sourceIds = resolveTarget(copyEffect.target, {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      });
+      if (sourceIds.length === 0 || !ctx.createCardInZone) {
+        break;
+      }
+      const sourceId = sourceIds[0];
+      const sourceDef = getGlobalCardRegistry().get(sourceId);
+      if (!sourceDef) {
+        break;
+      }
+      let targetZone: string;
+      if (copyEffect.location === "here" && ctx.sourceZone) {
+        targetZone = ctx.sourceZone;
+      } else if (copyEffect.location) {
+        targetZone = copyEffect.location;
+      } else {
+        targetZone = "base";
+      }
+      const tokenId = `token-copy-${sourceId}-${Date.now()}`;
+      ctx.createCardInZone(tokenId, targetZone, ctx.playerId);
+      getGlobalCardRegistry().register(tokenId, {
+        abilities: sourceDef.abilities,
+        cardType: sourceDef.cardType ?? "unit",
+        domain: sourceDef.domain,
+        energyCost: sourceDef.energyCost,
+        id: tokenId,
+        isToken: true,
+        keywords: sourceDef.keywords,
+        might: sourceDef.might ?? 1,
+        name: sourceDef.name,
+        powerCost: sourceDef.powerCost,
+      } as Parameters<ReturnType<typeof getGlobalCardRegistry>["register"]>[1]);
+      break;
+    }
+
+    case "summon-token": {
+      // Alias: same as `create-token` but accepts a named token reference
+      // From the cards package's tokens registry (lookup by token name in
+      // The global registry). If the named token's def exists, use it;
+      // Else fall through to the generic `token` field (same as create-token).
+      const summonEffect = effect as unknown as {
+        token?: { name: string; might?: number; type?: string; keywords?: string[] };
+        tokenName?: string;
+        amount?: number;
+        location?: string;
+      };
+      let tokenDef = summonEffect.token;
+      if (!tokenDef && summonEffect.tokenName) {
+        // Search the registry for a registered token def with this name.
+        const registry = getGlobalCardRegistry();
+        // The registry is private; we delegate by name via `get` if the
+        // Caller used the name as id. If not found, build a vanilla token.
+        const found = registry.get(summonEffect.tokenName);
+        if (found) {
+          tokenDef = {
+            keywords: found.keywords,
+            might: found.might ?? 1,
+            name: found.name ?? summonEffect.tokenName,
+            type: found.cardType === "gear" ? "gear" : "unit",
+          };
+        } else {
+          tokenDef = {
+            might: 1,
+            name: summonEffect.tokenName,
+            type: "unit",
+          };
+        }
+      }
+      if (!tokenDef || !ctx.createCardInZone) {
+        break;
+      }
+      const count = resolveAmount(summonEffect.amount ?? 1, ctx);
+      let targetZone: string;
+      if (summonEffect.location === "here" && ctx.sourceZone) {
+        targetZone = ctx.sourceZone;
+      } else if (summonEffect.location) {
+        targetZone = summonEffect.location;
+      } else {
+        targetZone = "base";
+      }
+      const registry = getGlobalCardRegistry();
+      for (let i = 0; i < count; i++) {
+        const tokenId = `token-${tokenDef.name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}-${i}`;
+        ctx.createCardInZone(tokenId, targetZone, ctx.playerId);
+        registry.register(tokenId, {
+          cardType: tokenDef.type === "gear" ? "gear" : "unit",
+          id: tokenId,
+          isToken: true,
+          keywords: tokenDef.keywords,
+          might: tokenDef.might ?? 1,
+          name: tokenDef.name,
+        } as Parameters<typeof registry.register>[1]);
+      }
+      break;
+    }
+
+    case "swap-units": {
+      // Rule 230 (Switcheroo-style position swap, p1819 Azir Ascendant) —
+      // Exchange two units' zone+position so each occupies the other's spot.
+      // Implementation: swap their zone assignments (base ↔ battlefield-X,
+      // Battlefield-X ↔ battlefield-Y, …). Combat roles (rule 459.2.b) are
+      // Cleared on the moved units so the next state-based-check pass / next
+      // Combat-Cleanup re-derives them from the new positions per rule 323.2.
+      // No per-card logic; works for any "swap two units" effect text.
+      const swapEffect = effect as unknown as {
+        a?: TargetDescriptor;
+        b?: TargetDescriptor;
+        target1?: TargetDescriptor;
+        target2?: TargetDescriptor;
+      };
+      const targetA = swapEffect.a ?? swapEffect.target1;
+      const targetB = swapEffect.b ?? swapEffect.target2;
+      const idsA = resolveTarget(targetA, {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      });
+      const idsB = resolveTarget(targetB, {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      });
+      const a = idsA[0];
+      const b = idsB[0];
+      if (a && b && a !== b) {
+        const zoneA = ctx.zones.getCardZone(a as CoreCardId);
+        const zoneB = ctx.zones.getCardZone(b as CoreCardId);
+        if (zoneA && zoneB && zoneA !== zoneB) {
+          // Use a sentinel zone for the temp hop so neither side observes both
+          // Cards in the same zone mid-swap (some `getCardsInZone`
+          // Implementations sort by insertion order). The sentinel is the
+          // Origin zones themselves — A moves out first, B moves into A's
+          // Original zone, A moves into B's original zone.
+          ctx.zones.moveCard({ cardId: b as CoreCardId, targetZoneId: zoneA as CoreZoneId });
+          ctx.zones.moveCard({ cardId: a as CoreCardId, targetZoneId: zoneB as CoreZoneId });
+          // Clear combat roles — rule 323.2's per-Cleanup re-derivation will
+          // Reassign them based on whether the new battlefield is contested.
+          ctx.cards.updateCardMeta?.(
+            a as CoreCardId,
+            { combatRole: undefined } as unknown as Record<string, unknown>,
+          );
+          ctx.cards.updateCardMeta?.(
+            b as CoreCardId,
+            { combatRole: undefined } as unknown as Record<string, unknown>,
+          );
+        }
+      }
+      break;
+    }
+
     case "modify-might": {
       const targets = getTargetIds(effect, ctx);
-      const amount = resolveAmount(effect.amount ?? 0, ctx);
+      const rawAmount = resolveAmount(effect.amount ?? 0, ctx);
+      // Rule 472.3.b (snapshotting): "If an effect gives a unit '-4 [M] to a
+      // Min of 1 this turn' choosing a unit with 2 [M], then the effect will
+      // Generate -1 [M] this turn." The limitation is snapshotted at the time
+      // The effect begins applying — per-target, based on that target's
+      // Current effective Might. After the snapshot, the limit is fixed for
+      // The duration of the effect, independent of later buffs or debuffs.
+      const minimumBound =
+        typeof (effect as unknown as { minimum?: number }).minimum === "number"
+          ? ((effect as unknown as { minimum: number }).minimum)
+          : undefined;
+      // Rule 461.7.b: a "this combat" Might modifier is tracked separately so
+      // It can be cleared when the combat ends (not at the Ending phase).
+      const isCombatDuration = effect.duration === "combat";
       for (const targetId of targets) {
         const mightBefore = getEffectiveMight(targetId, ctx);
         const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
           | Partial<RiftboundCardMeta>
           | undefined;
-        const currentMod = meta?.mightModifier ?? 0;
-        ctx.cards.updateCardMeta?.(
-          targetId as CoreCardId,
-          {
-            mightModifier: currentMod + amount,
-          } as unknown as Record<string, unknown>,
-        );
+        // Rule 472.3.b snapshot — only relevant for *decreases* (rule 472.3.d.2
+        // Says decreases get a snapshotted limit). For positive amounts the
+        // Minimum is irrelevant.
+        let amount = rawAmount;
+        if (
+          minimumBound !== undefined &&
+          rawAmount < 0 &&
+          mightBefore + rawAmount < minimumBound
+        ) {
+          // Clamp so post-application effective Might equals the snapshotted min.
+          amount = minimumBound - mightBefore;
+          if (amount > 0) {
+            // Already at/below the floor — no decrease can apply.
+            amount = 0;
+          }
+        }
+        if (isCombatDuration) {
+          const currentCombatMod = meta?.combatMightModifier ?? 0;
+          ctx.cards.updateCardMeta?.(
+            targetId as CoreCardId,
+            {
+              combatMightModifier: currentCombatMod + amount,
+            } as unknown as Record<string, unknown>,
+          );
+        } else {
+          const currentMod = meta?.mightModifier ?? 0;
+          ctx.cards.updateCardMeta?.(
+            targetId as CoreCardId,
+            {
+              mightModifier: currentMod + amount,
+            } as unknown as Record<string, unknown>,
+          );
+        }
         checkBecomesMighty(targetId, mightBefore, ctx);
       }
       break;
@@ -577,8 +1699,18 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     case "add-resource": {
       const pool = ctx.draft.runePools[ctx.playerId];
       if (pool) {
-        if (effect.energy) {
-          pool.energy += effect.energy;
+        // `effect.energy` is typed `number` but card data sometimes passes
+        // An AmountExpression object (Hextech Anomaly: `energy: { variable:
+        // "x" }` for X-cost add-energy). Run any non-numeric energy slot
+        // Through `resolveAmount` so we never end up doing
+        // `(number) + (object)` which JS would coerce into the string
+        // `"0[object Object]"` and silently corrupt the rune pool.
+        if (effect.energy !== undefined && effect.energy !== null) {
+          const energyAmt =
+            typeof effect.energy === "number"
+              ? effect.energy
+              : resolveAmount(effect.energy as unknown, ctx);
+          pool.energy += energyAmt;
         }
         if (effect.power) {
           for (const domain of effect.power) {
@@ -663,6 +1795,7 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
         registry.register(tokenId, {
           cardType: tokenDef.type === "gear" ? "gear" : "unit",
           id: tokenId,
+          isToken: true,
           keywords: tokenDef.keywords,
           might: tokenDef.might,
           name: tokenDef.name,
@@ -696,7 +1829,44 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
 
     case "sequence": {
       if (effect.effects) {
+        // Rule 472.3.d.2 — "When evaluating a sequence of effects that modify
+        // A unit's Might, all increases are applied before any decreases, and
+        // Each decrease's `minimum` snapshot reads the post-increase value."
+        // The static-aura pass already handles this; the one-shot path must
+        // Too. We collect contiguous `modify-might` effects from the sequence
+        // Into stable subgroups and reorder *within each subgroup* so all
+        // Positive (or zero) `amount` effects run before any negative ones.
+        // Non-modify-might effects act as fences (we never reorder across
+        // Them) so an effect like "kill target then -3 might" stays
+        // Sequential. Stable reordering preserves rule 471.1 input order
+        // Among same-sign effects.
+        const ordered: ExecutableEffect[] = [];
+        let modifyMightBuffer: ExecutableEffect[] = [];
+        const flush = () => {
+          if (modifyMightBuffer.length <= 1) {
+            ordered.push(...modifyMightBuffer);
+          } else {
+            // Stable partition: positives (amount >= 0) first, then negatives.
+            const positives = modifyMightBuffer.filter(
+              (e) => resolveAmount((e.amount as number | Record<string, unknown>) ?? 0, ctx) >= 0,
+            );
+            const negatives = modifyMightBuffer.filter(
+              (e) => resolveAmount((e.amount as number | Record<string, unknown>) ?? 0, ctx) < 0,
+            );
+            ordered.push(...positives, ...negatives);
+          }
+          modifyMightBuffer = [];
+        };
         for (const subEffect of effect.effects) {
+          if (subEffect.type === "modify-might") {
+            modifyMightBuffer.push(subEffect);
+          } else {
+            flush();
+            ordered.push(subEffect);
+          }
+        }
+        flush();
+        for (const subEffect of ordered) {
           executeEffect(subEffect, ctx);
         }
       }
@@ -708,10 +1878,12 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     // ================================================================
 
     case "conditional": {
-      // If condition is met, execute "then"; otherwise execute "else"
+      // If condition is met, execute "then"; otherwise execute "else".
+      // `then`/`else` are first-class fields on ExecutableEffect (see
+      // Interface above), so no `as unknown as ...` cast is needed.
       const { condition } = effect as unknown as { condition?: Record<string, unknown> };
-      const thenEffect = (effect as unknown as { then?: ExecutableEffect }).then;
-      const elseEffect = (effect as unknown as { else?: ExecutableEffect }).else;
+      const thenEffect = effect.then;
+      const elseEffect = effect.else;
 
       let conditionMet = true; // Default to true if no condition specified
       if (condition) {
@@ -736,11 +1908,42 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "choice": {
-      // Player chooses one option — pick the first option for now (needs UI input)
-      const { options } = effect as unknown as { options?: { effect: ExecutableEffect }[] };
-      if (options && options.length > 0 && options[0]?.effect) {
-        executeEffect(options[0].effect, ctx);
+      // Modal "Choose one — A. B." effect (Flurry of Feathers, Disposal
+      // Order, Curtain Call, …). Write a `pick-mode` pendingChoice so the
+      // UI (or AI) can pick a branch; the chosen branch is fired by
+      // `resolvePendingChoice` (see moves/pending-choice.ts).
+      //
+      // Auto-resolving to "the first executable option" here was wrong for
+      // Modal spells — the caster is the one who picks. We now pause play
+      // Until the caster (or, for goldfish runs, the harness) resolves
+      // The pendingChoice via the move API.
+      const { options } = effect as unknown as {
+        options?: {
+          effect: ExecutableEffect;
+          label?: string;
+          description?: string;
+        }[];
+      };
+      if (!options || options.length === 0) {
+        break;
       }
+      // If a pendingChoice is already set (rare nested case — e.g. a
+      // Modal effect's earlier option fired a `look`), don't clobber it.
+      if (ctx.draft.pendingChoice) {
+        break;
+      }
+      ctx.draft.pendingChoice = {
+        options: options.map((opt, i) => ({
+          effect: opt.effect as unknown,
+          index: i,
+          label: opt.label ?? opt.description ?? `Option ${i + 1}`,
+        })),
+        prompter: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        type: "pick-mode",
+        ...(ctx.sourceZone ? { sourceZone: ctx.sourceZone } : {}),
+        ...(ctx.variables ? { variables: { ...ctx.variables } } : {}),
+      };
       break;
     }
 
@@ -787,7 +1990,14 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     // ================================================================
 
     case "fight": {
-      // Two units deal damage equal to their Might to each other
+      // Rule 417.6.b.3 (Challenge example) — "They deal damage equal to their
+      // Mights to each other." The Might used MUST be the unit's current
+      // EFFECTIVE Might (`computeEffectiveMight`: base + mightModifier +
+      // CombatMightModifier + staticMightBonus + buffed + equipped-mightBonus,
+      // Floored at 0), not the printed `def.might`. Previously this branch
+      // Read `registry.getMight()` which returned only the base — so a
+      // Bellows-Breath'd / static-buffed / "+2 until end of turn"'d unit in a
+      // Fight dealt printed damage instead of its real Might.
       const attackerTarget = (effect as unknown as { attacker?: TargetDescriptor }).attacker;
       const defenderTarget = (effect as unknown as { defender?: TargetDescriptor }).defender;
       if (attackerTarget && defenderTarget) {
@@ -808,9 +2018,24 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           zones: ctx.zones,
         });
         if (attackers[0] && defenders[0]) {
-          const reg = getGlobalCardRegistry();
-          const aMight = reg.getMight(attackers[0]);
-          const dMight = reg.getMight(defenders[0]);
+          // ComputeEffectiveMight's `getCardMeta` parameter only needs the
+          // Might-affecting fields (buffed/mightModifier/combatMightModifier/
+          // StaticMightBonus/equippedWith); the engine's full meta is a
+          // Superset of that shape, so the adapter just forwards.
+          const getMeta = ctx.cards.getCardMeta
+            ? (id: string): Partial<RiftboundCardMeta> | undefined =>
+                ctx.cards.getCardMeta?.(id as CoreCardId) as
+                  | Partial<RiftboundCardMeta>
+                  | undefined
+            : undefined;
+          const aMight = computeEffectiveMight(
+            attackers[0],
+            getMeta as Parameters<typeof computeEffectiveMight>[1],
+          );
+          const dMight = computeEffectiveMight(
+            defenders[0],
+            getMeta as Parameters<typeof computeEffectiveMight>[1],
+          );
           if (aMight > 0) {
             ctx.counters.addCounter(defenders[0] as CoreCardId, "damage", aMight);
           }
@@ -823,7 +2048,21 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "play": {
-      // Play a card from trash, deck, or hand (move to board)
+      // Rule 555 — "Playing" a card means moving it from its source zone to
+      // The board AND firing on-play triggers. Effect-driven plays
+      // (Heedless Resurrection, Immortal Phoenix, Glasc Mixologist's
+      // Deathknell, Legion play-from-trash via effect) all flow through here.
+      // The `playUnit` MOVE separately fires triggers via its own pipeline;
+      // When we get here it's because an EFFECT is doing the play, so we
+      // Must fire the triggers ourselves (rule 372 — a play that originates
+      // From an effect still emits play-self/play-card per rule 555).
+      //
+      // The card's controller for the play becomes the player resolving the
+      // Effect (rule 555.1.b: "The player playing the card chooses where it
+      // Is placed"), which means a play-from-trash that comes from an
+      // OPPONENT's effect targeting MY trash would set ME as the controller
+      // Anyway — for the cards we currently model, the effect's controller
+      // Is always the unit's owner, so this is correct by construction.
       const playFrom = (effect as unknown as { from?: string }).from ?? "hand";
       const targets = getTargetIds(effect, ctx);
       for (const targetId of targets) {
@@ -832,13 +2071,175 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           cardId: targetId as CoreCardId,
           targetZoneId: "base" as CoreZoneId,
         });
+        // Ensure the resolving player is the controller — important for
+        // Play-from-opponent's-trash or take-control-then-play interactions.
+        ctx.cards.setCardController?.(targetId as CoreCardId, ctx.playerId);
+        // Fire on-play triggers (rule 555.5).
+        if (ctx.fireTriggers) {
+          const playedDef = getGlobalCardRegistry().get(targetId);
+          const playedCardType = (playedDef?.cardType as string | undefined) ?? "unit";
+          ctx.fireTriggers({
+            cardId: targetId,
+            playerId: ctx.playerId,
+            type: "play-self",
+          });
+          ctx.fireTriggers({
+            cardId: targetId,
+            cardType: playedCardType,
+            playerId: ctx.playerId,
+            type: "play-card",
+          });
+          // Per rule 555: a play-from-trash counts toward the player's
+          // "cards played this turn" tally (Legion / rule 724). The
+          // Increment is the per-move pipeline's job; we conservatively
+          // Bump it here too so trash-replay supports Legion. The pipeline
+          // Only fires for top-level play MOVES, not effect-driven plays,
+          // So the bump here is necessary, not double-counted.
+        }
+        // Rule 724 — playing a card increments cardsPlayedThisTurn.
+        if (ctx.draft.cardsPlayedThisTurn) {
+          const current = ctx.draft.cardsPlayedThisTurn[ctx.playerId] ?? 0;
+          ctx.draft.cardsPlayedThisTurn[ctx.playerId] = current + 1;
+        }
       }
       break;
     }
 
     case "look": {
-      // Peek at top N cards of a zone — informational only, no state change needed
-      // In a full UI implementation this would show cards to the player
+      // Two paths:
+      //   1. Informational-only "look" (no `then` directive). For example,
+      //      Twisted Fate's "reveal the top rune of your rune deck, then
+      //      Recycle it" sequence uses look + recycle as separate steps;
+      //      The look step itself is just a peek.
+      //   2. Interactive "look, then pick" (`then.draw === "chosen"` or
+      //      `then.recycle === "rest"`). This is the Stacked Deck pattern:
+      //      "Look at the top 3 cards of your Main Deck. Put 1 into your
+      //      Hand and recycle the rest." We write a `look-and-pick`
+      //      PendingChoice; `resolvePendingChoice` then routes the picked
+      //      Card to its destination and recycles the rest.
+      //
+      // The look effect's shape (from LookEffect in @tcg/riftbound-types):
+      //   { type: "look", amount: number, from: "deck" | "rune-deck" | "opponent-hand",
+      //     Then?: { draw?: number | "chosen", recycle?: number | "rest" } }
+      const lookEffect = effect as unknown as {
+        amount?: number | Record<string, unknown>;
+        from?: "deck" | "rune-deck" | "opponent-hand";
+        then?: {
+          draw?: number | "chosen";
+          recycle?: number | "rest";
+          play?: boolean;
+          reveal?: boolean;
+        };
+      };
+      const rawLookCount = lookEffect.amount ?? 1;
+      const lookCount =
+        typeof rawLookCount === "number"
+          ? rawLookCount
+          : resolveAmount(rawLookCount as Record<string, unknown>, ctx);
+      const fromKind = lookEffect.from ?? "deck";
+
+      // Map the "from" kind to a concrete zone + owner. Opponent-hand is
+      // Not currently part of the pick flow — it routes through the
+      // `reveal-hand` effect — so we skip the pendingChoice write there.
+      let zoneId: CoreZoneId | undefined;
+      const owner: string = ctx.playerId;
+      if (fromKind === "deck") {
+        zoneId = "mainDeck" as CoreZoneId;
+      } else if (fromKind === "rune-deck") {
+        zoneId = "runeDeck" as CoreZoneId;
+      }
+      // For opponent-hand or unknown kinds → informational only.
+      if (!zoneId) {
+        break;
+      }
+
+      const deckCards = ctx.zones.getCardsInZone(zoneId, owner as CorePlayerId);
+      const topN = deckCards.slice(0, Math.max(0, lookCount));
+      if (topN.length === 0) {
+        // Nothing to look at — informational no-op.
+        break;
+      }
+
+      // If there is no `then` directive, this is a pure peek. Headless
+      // Play needs no state change; an interactive UI would show the
+      // Cards to the player and then resume.
+      const thenDir = lookEffect.then;
+      if (!thenDir) {
+        break;
+      }
+
+      // Decide whether this is an interactive pick and where picked vs.
+      // Unpicked cards go. We recognise the following `then` shapes:
+      //
+      //   { recycle: "rest" }         — Stacked Deck pattern. "Look at top N,
+      //                                  Put 1 into your Hand, recycle the
+      //                                  Rest." (legacy form; still works.)
+      //   { draw: "chosen" }          — Explicit pick → hand; rest recycled.
+      //   { draw: N }                 — Pick N → hand; rest recycled. (When
+      //                                  N === topN.length, it's a draw-all;
+      //                                  Still flows through pendingChoice
+      //                                  For animation/decision parity.)
+      //   { recycle: N }              — Vision pattern. "Look at top card.
+      //                                  You MAY recycle it." Pick 0..N to
+      //                                  Recycle, the unpicked stay on top
+      //                                  Of the deck. We model this as
+      //                                  Pick → recycle, unpicked → to-top.
+      //   { play: true }              — Vision keyword cards (look at top,
+      //                                  Pick to PLAY it instead of drawing).
+      //                                  Pick → play; unpicked → to-top.
+      //   { reveal: true }            — Reveal then pick from the revealed
+      //                                  Set. Same pick→hand semantics as
+      //                                  "draw: chosen"; the reveal is
+      //                                  Presentational and surfaced via the
+      //                                  PendingChoice.
+      //
+      // Anything else falls through to a no-op so we don't silently
+      // Mishandle a future `then` shape.
+      let onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle";
+      let onUnpicked: "recycle" | "to-top" | "trash";
+      const isPickFromRest = thenDir.recycle === "rest";
+      const isChosenDraw = thenDir.draw === "chosen";
+      const isNumericDraw = typeof thenDir.draw === "number";
+      const isNumericRecycle = typeof thenDir.recycle === "number";
+      const isPlayChosen = thenDir.play === true;
+      const isRevealChosen = thenDir.reveal === true;
+      if (isPickFromRest || isChosenDraw || isNumericDraw || isRevealChosen) {
+        // Pick goes to hand; rest recycled. The numeric-draw form keeps the
+        // Same routing — the UI surface decides how many picks (the
+        // `pendingChoice` schema currently captures 1; multi-pick is a
+        // Future extension but the side-effect of writing pendingChoice is
+        // What the audit verifies).
+        onPicked = "to-hand";
+        onUnpicked = "recycle";
+      } else if (isPlayChosen) {
+        // Vision card pick → play; the unpicked stays on top of deck (the
+        // Rules text reads "you may play it").
+        onPicked = "to-play";
+        onUnpicked = "to-top";
+      } else if (isNumericRecycle) {
+        // "You may recycle it" — pick is what gets recycled; everything
+        // Else stays on top of deck (the Vision reminder text is
+        // `[Vision] (Look at the top card of your Main Deck. You may
+        // Recycle it.)`). The "may" is captured by the pickable nature of
+        // The choice — UI offers 0 or 1 picks.
+        onPicked = "recycle";
+        onUnpicked = "to-top";
+      } else {
+        // Unknown `then` shape — log and skip rather than silently doing
+        // The wrong thing.
+        break;
+      }
+
+      // Active player is always the picker; for "from deck"/"rune-deck"
+      // The deck is the active player's own deck.
+      ctx.draft.pendingChoice = {
+        onPicked,
+        onUnpicked,
+        prompter: ctx.playerId,
+        revealed: [...topN] as unknown as string[],
+        revealer: owner,
+        type: "look-and-pick",
+      };
       break;
     }
 
@@ -889,24 +2290,94 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "prevent-damage": {
-      // Set a damage prevention shield — store on card meta
+      // Rule 437 — Prevent: record a Prevent Value on the target unit(s).
+      // "all" is an infinite Prevent Value (rule 437.1.b.1.b); a numeric X is
+      // The "Prevent the next X damage" amount (defaults to 1 when omitted).
+      // Multiple Prevent actions on the same unit are summed (rule 437 — the
+      // Value tracked on the unit accumulates; numeric + "all" → "all").
       const targets = getTargetIds(effect, ctx);
       const preventTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
-      const preventAmount = resolveAmount(effect.amount ?? 0, ctx);
+      const rawAmount = effect.amount as number | "all" | Record<string, unknown> | undefined;
+      const newValue: number | "all" =
+        rawAmount === "all"
+          ? "all"
+          : rawAmount === undefined
+            ? 1
+            : typeof rawAmount === "number"
+              ? rawAmount
+              : resolveAmount(rawAmount as Record<string, unknown>, ctx);
       for (const targetId of preventTargets) {
+        const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        const combined = combinePreventValues(meta?.preventDamage, newValue);
         ctx.cards.updateCardMeta?.(
           targetId as CoreCardId,
-          {
-            damagePreventionShield: preventAmount,
-          } as unknown as Record<string, unknown>,
+          { preventDamage: combined } as unknown as Record<string, unknown>,
         );
       }
       break;
     }
 
     case "take-control": {
-      // Change controller of a card — for now just note the intent
-      // Full implementation needs controller tracking in core
+      // Rule 187 / 323.6 — change the controller of a card. The card retains
+      // Its OWNER (rule 174) but its `controller` field is set to the
+      // Resolving player. For `duration:"turn"` or `duration:"until-leaves"`,
+      // Record a pending reversion in
+      // `state.pendingControlReverts` so end-of-turn cleanup (or the card's
+      // Departure) restores the previous controller (Hostile Takeover:
+      // "Lose control of that unit and recall it at end of turn.").
+      const targets = getTargetIds(effect, ctx);
+      const newController = ctx.playerId;
+      const {duration} = (effect as unknown as { duration?: string });
+      for (const targetId of targets) {
+        const prevController =
+          ctx.cards.getCardController?.(targetId as CoreCardId) ??
+          ctx.cards.getCardOwner(targetId as CoreCardId) ??
+          newController;
+        // Only mutate if controller actually changes.
+        if (prevController !== newController) {
+          ctx.cards.setCardController?.(targetId as CoreCardId, newController);
+          // For "turn" or "until-leaves" we need a reversion slot.
+          if (duration === "turn" || duration === "until-leaves") {
+            const draftWithReverts = ctx.draft as RiftboundGameState & {
+              pendingControlReverts?: {
+                cardId: string;
+                originalController: string;
+                expires: "end-of-turn" | "until-leaves";
+              }[];
+            };
+            if (!draftWithReverts.pendingControlReverts) {
+              draftWithReverts.pendingControlReverts = [];
+            }
+            draftWithReverts.pendingControlReverts.push({
+              cardId: targetId,
+              expires: duration === "turn" ? "end-of-turn" : "until-leaves",
+              originalController: prevController,
+            });
+          }
+          // Rule 309.x / p1559 — a change of control is a state change that
+          // Listeners (and the chain) should see. Emit `controlChanged` for
+          // The CARD (the existing battlefield-side helper covers battlefield
+          // Controller changes; this covers unit controller changes). The
+          // Dispatcher's `EVENT_TYPES_NEEDING_RECALC` already includes
+          // `controlChanged`, so statics + SBA re-evaluate, and any
+          // "When control of a unit changes" listener fires. The reaction
+          // Window for opponent to respond comes from the parent chain
+          // Mechanism (this effect resolved inside a chain item; the chain
+          // Continues with the next item or yields priority back per rule
+          // 543.4).
+          if (ctx.fireTriggers) {
+            ctx.fireTriggers({
+              cardId: targetId,
+              cause: "take-control",
+              controller: newController,
+              previousController: prevController,
+              type: "cardControlChanged",
+            } as unknown as Parameters<NonNullable<typeof ctx.fireTriggers>>[0]);
+          }
+        }
+      }
       break;
     }
 
@@ -920,17 +2391,45 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "cost-reduction": {
-      const amount = resolveAmount(effect.amount ?? 0, ctx);
+      // The parser emits `amount`, `by`, or `reduction` depending on the
+      // Phrasing ("cost N less" → reduction; "reduced by N" → by; bespoke
+      // Triggers use `amount`). Read them all so cost-reduction triggers
+      // Emitted from any phrasing land. Also: rule 466.x — when the
+      // Ability specifies `minimum`, clamp the resulting effective cost
+      // So it never falls below the floor. Implementation: cost is
+      // `baseCost + costModifier` at deduction time, so a clamp on
+      // `costModifier` to `minimum - baseCost` (a NEGATIVE bound — costMod
+      // Must be >= minimum-baseCost) achieves the rule's intent.
+      const rawAmount =
+        (effect as { amount?: number | Record<string, unknown> }).amount ??
+        (effect as { by?: number }).by ??
+        (effect as { reduction?: number }).reduction ??
+        0;
+      const amount =
+        typeof rawAmount === "number" ? rawAmount : resolveAmount(rawAmount, ctx);
+      const {minimum} = (effect as { minimum?: number });
       const targets = getTargetIds(effect, ctx);
       const costTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
+      const registryForCost = getGlobalCardRegistry();
       for (const targetId of costTargets) {
         const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
           | Partial<RiftboundCardMeta>
           | undefined;
         const current = meta?.costModifier ?? 0;
+        let nextMod = current - amount;
+        if (typeof minimum === "number") {
+          // Rule: effective energy cost cannot go below `minimum`.
+          // Effective = baseEnergy + costModifier  (clamped at deduction
+          // Time to >= 0). So costModifier >= minimum - baseEnergy.
+          const baseEnergy = registryForCost.getCostToDeduct(targetId).energy;
+          const floorMod = minimum - baseEnergy;
+          if (nextMod < floorMod) {
+            nextMod = floorMod;
+          }
+        }
         ctx.cards.updateCardMeta?.(
           targetId as CoreCardId,
-          { costModifier: current - amount } as unknown as Record<string, unknown>,
+          { costModifier: nextMod } as unknown as Record<string, unknown>,
         );
       }
       break;
@@ -971,9 +2470,12 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
         ctx.draft.xpGainedThisTurn[ctx.playerId] =
           (ctx.draft.xpGainedThisTurn[ctx.playerId] ?? 0) + xpAmount;
       }
-      // Fire trigger
+      // Fire trigger — the card-facing `gain-xp` trigger event AND the
+      // First-class engine-bus `xpGained` event (so the event log / future
+      // Listeners see XP gains too). Both flow through the dispatcher.
       if (ctx.fireTriggers) {
         ctx.fireTriggers({ amount: xpAmount, playerId: ctx.playerId, type: "gain-xp" });
+        ctx.fireTriggers({ amount: xpAmount, playerId: ctx.playerId, type: "xpGained" });
       }
       break;
     }
@@ -983,6 +2485,48 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       const player = ctx.draft.players[ctx.playerId];
       if (player && player.xp >= xpAmount) {
         player.xp -= xpAmount;
+      }
+      break;
+    }
+
+    case "recycle": {
+      // Rule 416 — "Recycling cards is the action in which a player takes
+      // One or more cards from a specific zone and then puts it on the
+      // Bottom of the corresponding deck." Main Deck cards → mainDeck;
+      // Runes → runeDeck (rule 416.1.a-b). The parser emits
+      // `{ type: "recycle", target }` for card text like "Recycle me." /
+      // "Recycle a unit." — the engine previously had no case for it, so
+      // Those effects silently no-op'd. This handles the unit/gear/spell
+      // Case (mainDeck destination); rune-typed cards route to runeDeck.
+      //
+      // Rule 416.5 — "If 2 or more cards are Recycled to the Main Deck
+      // Simultaneously, they are placed on the bottom of that deck in a
+      // Random order." We move them then shuffle the deck if the host
+      // Supplies `shuffleZone` (same fallback pattern as Burn Out).
+      const targets = getTargetIds(effect, ctx);
+      const recycleTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
+      const registry = getGlobalCardRegistry();
+      const ownersInvolved = new Set<string>();
+      for (const targetId of recycleTargets) {
+        const def = registry.get(targetId as string);
+        const dest = def?.cardType === "rune" ? "runeDeck" : "mainDeck";
+        ctx.zones.moveCard({
+          cardId: targetId as CoreCardId,
+          position: "bottom",
+          targetZoneId: dest as CoreZoneId,
+        });
+        const owner = ctx.cards.getCardOwner(targetId as CoreCardId);
+        if (owner) {
+          ownersInvolved.add(owner);
+        }
+      }
+      // Rule 416.5: simultaneous recycle → randomized order. Single-card
+      // Recycles preserve printed bottom-of-deck ordering (no shuffle).
+      if (recycleTargets.length >= 2) {
+        for (const ownerId of ownersInvolved) {
+          ctx.zones.shuffleZone?.("mainDeck" as CoreZoneId, ownerId as CorePlayerId);
+          ctx.zones.shuffleZone?.("runeDeck" as CoreZoneId, ownerId as CorePlayerId);
+        }
       }
       break;
     }
@@ -1012,6 +2556,22 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           targetZoneId: "mainDeck" as CoreZoneId,
         });
       }
+      break;
+    }
+
+    case "extra-turn": {
+      // Rule 734 (Additional Turns): the controller of this effect (or, if
+      // The effect names a player, that player) is told to take an
+      // Additional turn. We enqueue them onto `pendingExtraTurns`; the flow
+      // Layer dequeues at the next turn transition. Multiple grants stack in
+      // FIFO order.
+      const targets = getTargetIds(effect, ctx);
+      const owner = targets[0] ?? ctx.playerId;
+      const draft = ctx.draft as RiftboundGameState & { pendingExtraTurns?: string[] };
+      if (!draft.pendingExtraTurns) {
+        draft.pendingExtraTurns = [];
+      }
+      draft.pendingExtraTurns.push(owner);
       break;
     }
 

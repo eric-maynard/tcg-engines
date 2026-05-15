@@ -449,16 +449,21 @@ export function parsePreventDamageEffect(text: string): PreventDamageEffect | un
   }
 
   const amountType = match[1]; // "all" or "the next"
-  const amount = amountType.toLowerCase() === "all" ? "all" : undefined;
+  // Rule 437.1.b.1.a — "the next X [...] damage": X is the Prevent Value
+  // (defaults to 1 when omitted). "all" → an infinite Prevent Value.
+  const amount: number | "all" =
+    amountType.toLowerCase() === "all"
+      ? "all"
+      : (match[2] !== undefined
+        ? Number.parseInt(match[2], 10)
+        : 1);
   const duration = text.toLowerCase().includes("this turn") ? "turn" : "next";
 
   const effect: PreventDamageEffect = {
     type: "prevent-damage",
   };
 
-  if (amount === "all") {
-    (effect as { amount: "all" }).amount = amount;
-  }
+  (effect as { amount: number | "all" }).amount = amount;
 
   if (duration) {
     (effect as { duration: "turn" | "next" }).duration = duration;

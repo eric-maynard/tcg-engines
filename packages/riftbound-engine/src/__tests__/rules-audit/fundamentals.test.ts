@@ -719,7 +719,7 @@ describe("Deck construction invariants via DeckBuilder / validateDeck", () => {
       cardType: "unit",
       meta: {
         grantedKeywords: [
-          { duration: "this-turn", keyword: "Assault", value: 2 },
+          { duration: "this-turn" as never, keyword: "Assault", value: 2 },
         ],
       },
       might: 2,
@@ -728,7 +728,7 @@ describe("Deck construction invariants via DeckBuilder / validateDeck", () => {
     });
     const granted = getCardMeta(engine, "u")?.grantedKeywords;
     expect(granted).toBeDefined();
-    expect(granted?.[0]?.duration).toBe("this-turn");
+    expect(granted?.[0]?.duration as string).toBe("this-turn");
   });
 
   // Rule 170-178: Tokens. The engine doesn't materialize a distinct

@@ -61,7 +61,7 @@ export interface ReturnToHandEffect {
  */
 export interface PlayEffect {
   readonly type: "play";
-  readonly target: Target;
+  readonly target: AnyTarget;
   readonly from?: "hand" | "trash" | "deck";
   readonly ignoreCost?: boolean | "energy" | "power";
   readonly reduceCost?: Cost;

@@ -65,6 +65,15 @@ export interface CardDefinitionLookup {
    * Used by The Zero Drive.
    */
   readonly tracksExiledCards?: boolean;
+  /**
+   * Token marker (rule 176 / 182). A token is created by a spell or ability
+   * during play; it is not a card. Rule 183.1: if a token is put into any
+   * Non-Board Zone besides the Chain, it ceases to exist immediately after
+   * moving. The cleanup pipeline reads `isToken` off the registry definition
+   * and reaps token instances from trash / banishment / hand / mainDeck
+   * after every state-maintenance pass.
+   */
+  readonly isToken?: boolean;
   readonly abilities?: readonly {
     readonly type: string;
     readonly trigger?: { readonly event: string; readonly on?: string };
@@ -152,6 +161,44 @@ export class CardDefinitionRegistry {
    */
   getAbilities(cardId: string): CardDefinitionLookup["abilities"] {
     return this.definitions.get(cardId)?.abilities ?? [];
+  }
+
+  /**
+   * Get the numeric value attached to a keyword on this card, if any.
+   *
+   * Some keywords are "valued" — e.g. `[Hunt N]`, `[Assault N]`,
+   * `[Deflect N]`, `[Shield N]`, `[Level N]`. The value is carried on a
+   * `{ type: "keyword", keyword, value }` ability entry. Multiple
+   * instances of the same valued keyword stack additively (rule 802 —
+   * keyword instances are independent).
+   *
+   * Returns `undefined` when the card has no instance of the keyword;
+   * returns the summed value (an undecorated keyword counts as 1) when at
+   * least one instance is present. Callers that only want the
+   * "has-keyword" boolean should use `hasKeyword`.
+   *
+   * @param cardId - Card instance id
+   * @param keyword - Keyword name (case-sensitive, e.g. "Hunt")
+   */
+  getKeywordValue(cardId: string, keyword: string): number | undefined {
+    const def = this.definitions.get(cardId);
+    if (!def) {
+      return undefined;
+    }
+    let total = 0;
+    let found = false;
+    for (const ability of def.abilities ?? []) {
+      if (ability.type === "keyword" && ability.keyword === keyword) {
+        found = true;
+        total += ability.value ?? 1;
+      }
+    }
+    // A keyword may also appear only on the bare `keywords` list with no
+    // Valued ability entry (e.g. `keywords: ["Hunt"]`). Treat that as 1.
+    if (!found && def.keywords?.includes(keyword)) {
+      return 1;
+    }
+    return found ? total : undefined;
   }
 
   /**
@@ -285,4 +332,52 @@ export function setGlobalCardRegistry(registry: CardDefinitionRegistry): void {
 
 export function clearGlobalCardRegistry(): void {
   _globalRegistry = null;
+}
+
+/**
+ * Minimal shape of the per-card runtime metadata fields that affect Might.
+ * Kept loose to avoid importing the full `RiftboundCardMeta` type here.
+ */
+interface MightAffectingMeta {
+  buffed?: boolean;
+  mightModifier?: number;
+  combatMightModifier?: number;
+  staticMightBonus?: number;
+  equippedWith?: readonly string[];
+}
+
+/**
+ * Compute a unit's *effective* Might (rule 140.x): base Might from the card
+ * definition plus every modifier currently in effect — the `[+1]` buff
+ * counter, runtime `mightModifier` deltas, `staticMightBonus` from static
+ * abilities, and the Might bonus of any attached equipment.
+ *
+ * Returns 0 for non-units (base Might 0). Never returns a negative value
+ * (rule 141: Might can't be reduced below 0).
+ *
+ * This is the single source of truth for the rule-520 death check and other
+ * Might-sensitive code paths — don't re-derive Might inline.
+ */
+export function computeEffectiveMight(
+  cardId: string,
+  getCardMeta?: (cardId: string) => MightAffectingMeta | undefined,
+  registry: CardDefinitionRegistry = getGlobalCardRegistry(),
+): number {
+  const baseMight = registry.getMight(cardId);
+  if (baseMight === 0) {
+    return 0;
+  }
+  const meta = getCardMeta?.(cardId);
+  const buffBonus = meta?.buffed ? 1 : 0;
+  const mightMod = meta?.mightModifier ?? 0;
+  const combatMightMod = meta?.combatMightModifier ?? 0;
+  const staticBonus = meta?.staticMightBonus ?? 0;
+  let equipBonus = 0;
+  for (const equipId of meta?.equippedWith ?? []) {
+    equipBonus += registry.getMightBonus(equipId);
+  }
+  return Math.max(
+    0,
+    baseMight + buffBonus + mightMod + combatMightMod + staticBonus + equipBonus,
+  );
 }

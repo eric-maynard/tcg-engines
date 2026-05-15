@@ -1,0 +1,16 @@
+{
+  "kind": "out-of-engine-scope",
+  "questionText": "Does Flash save units from dying to Elder Dragon's effect / Bellows Breath?",
+  "question": "can moving a targeted unit with Flash dodge a 'damage units at this battlefield' effect?",
+  "whatsUnsupported": "unit movement / relocation (Flash), location-restricted targeting ('units at this battlefield'), and targeting-relationship re-checks at resolution — the engine has no movement primitive",
+  "rulesAnswer": {
+    "verdict": "Yes — if you Flash the targeted units to your base in response, then when Bellows Breath / Elder Dragon's ability resolves they're no longer at the location the effect specified, so they don't take the damage.",
+    "reasoning": "Both Bellows Breath ('choose up to 3 units at the same location') and Elder Dragon's play ability ('an enemy unit at each location') lock onto units at a specific battlefield. Flash is a Reaction that moves friendly units to your base, so you can play it after the spell/ability is announced but before it resolves. On resolution the effect re-checks its targets against its location requirement; units that are now in your base no longer satisfy 'at this battlefield', so the effect simply doesn't apply to them (it 'misses' them — like mistargeting, rule 355.6). Since no damage is dealt, Elder Dragon's passive ('any damage is lethal') never gets a chance to apply to those units either. (If instead a unit were moved to a non-board zone like hand/deck, the targeting relationship is severed entirely.)",
+    "cites": ["355.6 (mistargeting)", "440 (movement)", "800 keyword: Reaction timing"],
+    "confidence": "medium",
+    "assumptions": [
+      "Flash's text is 'move one or more friendly units to your base' at Reaction speed — exact card text not pulled from riftbound-cards.",
+      "Bellows Breath / Elder Dragon target wording taken from the bot's description."
+    ]
+  }
+}

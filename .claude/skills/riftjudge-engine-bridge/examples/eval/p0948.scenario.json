@@ -1,0 +1,33 @@
+{
+  "questionText": "i used sacrifice in a 5 might unit, my oppenent used stupefy, how it will resolve?",
+  "question": "does my unit die / does Sacrifice still go through?",
+  "premise": {
+    "turnPlayer": "me",
+    "units": [
+      { "id": "myUnit", "side": "me", "might": 5, "name": "(my 5-Might unit)" }
+    ],
+    "notes": "Real Sacrifice (UNL-173) reads 'As an additional cost, kill a friendly Mighty unit. Draw 2 cards, channel a rune.' Per rule 357 / RiftJudge FAQ #9906, additional costs are paid as the spell is PLAYED — before it goes on the chain, and before the opponent gets priority to react. So the 5-Might unit is killed to pay the cost first; only then can the opponent play Stupefy as a Reaction, by which point the unit is in the trash and is no longer a legal Stupefy target. Sacrifice itself does NOT fizzle. Modeled via `additionalCosts` (paid in the pre-pass at play time) — the Channel rune is cosmetic and not modeled."
+  },
+  "actions": [
+    {
+      "kind": "playSpell",
+      "name": "Stupefy",
+      "side": "opp",
+      "effects": [
+        { "kind": "modifyMight", "target": "myUnit", "delta": -1, "source": "Stupefy" },
+        { "kind": "draw", "side": "opp", "count": 1, "source": "Stupefy" }
+      ]
+    },
+    {
+      "kind": "playSpell",
+      "name": "Sacrifice",
+      "side": "me",
+      "additionalCosts": [
+        { "kind": "killUnit", "target": "myUnit", "source": "Sacrifice (additional cost: kill a friendly Mighty unit)" }
+      ],
+      "effects": [
+        { "kind": "draw", "side": "me", "count": 2, "source": "Sacrifice" }
+      ]
+    }
+  ]
+}

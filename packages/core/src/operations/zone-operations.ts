@@ -1,4 +1,5 @@
 import type { CardId, PlayerId, ZoneId } from "../types";
+import type { CardZoneConfig } from "../zones/zone";
 
 /**
  * Zone Operations Interface
@@ -248,4 +249,34 @@ export interface ZoneOperations {
     controllerId?: PlayerId;
     position?: "top" | "bottom" | number;
   }): void;
+
+  /**
+   * Create a new zone in the internal state if it does not already exist
+   *
+   * Low-level utility for games whose zone topology is partly dynamic — for
+   * example, Riftbound's per-battlefield zones (`battlefield-<id>` and
+   * `facedown-<id>`) are created during setup when battlefields are placed
+   * in play, and their IDs are not known when the static `zones` config is
+   * declared.
+   *
+   * If a zone with the same `id` already exists, this operation is a no-op
+   * (idempotent — safe to call repeatedly from setup reducers).
+   *
+   * @param config - The zone configuration to register
+   *
+   * Optional for backward-compatibility with existing test stubs; the
+   * production RuleEngine always provides an implementation.
+   *
+   * @example
+   * ```typescript
+   * zones.createZone?.({
+   *   id: "battlefield-bf-1" as ZoneId,
+   *   name: "Battlefield bf-1",
+   *   visibility: "public",
+   *   ordered: false,
+   *   faceDown: false,
+   * });
+   * ```
+   */
+  createZone?(config: CardZoneConfig): void;
 }

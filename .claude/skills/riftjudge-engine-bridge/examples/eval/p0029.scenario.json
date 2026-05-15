@@ -1,0 +1,9 @@
+{
+  "kind": "rules-demo",
+  "demoTopic": "on-play",
+  "questionText": "when play trigger can i respone with react",
+  "question": "When a play trigger fires, can I respond with a reaction?",
+  "assumptions": [
+    "RiftJudge p0029 — abstract question about on-play triggers and reactability. The bridge's rules-demo on-play topic explains: play-triggers go on the chain (rule 322.1 / 555), so the opponent CAN respond with a Reaction before the triggered ability resolves; only the resolution of that trigger may be interrupted, the fact of the play already happened."
+  ]
+}

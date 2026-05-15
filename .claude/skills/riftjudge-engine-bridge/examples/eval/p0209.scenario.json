@@ -1,0 +1,17 @@
+{
+  "questionText": "with two 4 might units, if I reveal back off, does the opponent die",
+  "question": "does the opponent's unit die in the combat?",
+  "premise": {
+    "turnPlayer": "me",
+    "units": [
+      { "id": "a1", "side": "me", "might": 4, "name": "(my attacker 1)", "location": "bf" },
+      { "id": "a2", "side": "me", "might": 4, "name": "(my attacker 2)", "location": "bf" },
+      { "id": "d", "side": "opp", "might": 5, "name": "(their lone defender)", "location": "bf" }
+    ],
+    "battlefields": [{ "id": "bf", "controller": "opp" }],
+    "notes": "The asker only says 'two 4-Might units' and 'Back Off' — no defender Might given. The bot's answer is conditional: 8 total attacking Might kills the defender iff 8 >= defender Might. Modeled here with a 5-Might lone defender (so 8 >= 5 -> dies). Back Off (a Stun spell) is NOT modeled — Stun is out of the primitive vocab; this isolates the combat-math claim '8 total Might assigns lethal to one 5-Might unit'. If the asker's real defender had > 8 Might, it would survive."
+  },
+  "actions": [
+    { "kind": "resolveCombat", "battlefield": "bf", "attacker": "me" }
+  ]
+}

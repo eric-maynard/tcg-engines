@@ -1,0 +1,12 @@
+{
+  "kind": "rules-question",
+  "questionText": "does Baron enter baron pit readied?",
+  "question": "does Baron Nashor enter the battlefield readied or exhausted?",
+  "rulesAnswer": {
+    "verdict": "No — Baron Nashor enters the battlefield exhausted, like every unit, unless a card effect says otherwise (it doesn't).",
+    "reasoning": "Rule 143.4: units enter the Board exhausted. Rule 359.2.c reiterates that when a unit card is played it enters the Board exhausted at the chosen Location. The only ways a unit enters ready are an explicit card effect or a keyword that changes the entering state — e.g. Accelerate (rule 805.6: it does not enter exhausted), or a token told to enter ready (rule 181.1). Baron Nashor's card text contains no such clause, and 'Baron Pit' (the battlefield) doesn't grant it either, so Baron enters exhausted. Consequence: it can't take a Standard Move or use exhaust-cost abilities until it's readied during its controller's next Awaken phase (rule 232 / 234 — Awaken readies your exhausted permanents).",
+    "cites": ["143.4", "359.2.c", "805.6", "181.1"],
+    "confidence": "high",
+    "assumptions": ["Baron Nashor's printed text was not pulled from @tcg/riftbound-cards; the answer assumes it has no 'enters ready' / Accelerate-style clause, which matches the bot's reading."]
+  }
+}

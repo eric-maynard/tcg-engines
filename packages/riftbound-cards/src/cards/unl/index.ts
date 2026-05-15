@@ -1,5 +1,5 @@
 // Unleashed card definitions
-// 225 cards
+// 231 cards
 
 export { arenaKingpin } from "./arena-kingpin";
 export { baronPit } from "./baron-pit";
@@ -226,3 +226,9 @@ export { theAcademy } from "./the-academy";
 export { trappingGrounds } from "./trapping-grounds";
 export { valleyOfIdols } from "./valley-of-idols";
 export { vaultsOfHelia } from "./vaults-of-helia";
+export { poutyPoro } from "./pouty-poro";
+export { lonelyPoro } from "./lonely-poro";
+export { plunderingPoro } from "./plundering-poro";
+export { veteranPoro } from "./veteran-poro";
+export { mysticPoro } from "./mystic-poro";
+export { daringPoro } from "./daring-poro";

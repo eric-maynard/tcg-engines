@@ -478,8 +478,15 @@ describe("Replacement cleanup: consumedNextReplacements clears at end of turn", 
   });
 
   it("the ending phase 'onEnd' hook clears consumedNextReplacements (rule 517)", () => {
-    // Start in the ending phase so we exercise the end-of-turn hook directly.
-    const engine = createMinimalGameState({ currentPlayer: P1, phase: "ending" });
+    // Start in main and drive THROUGH ending so the ending.onBegin hook
+    // (which actually owns the clearing logic) fires. Previously this test
+    // Started at `phase: "ending"` and advanced to "awaken" — that wrap-around
+    // Accidentally fired ending.onBegin only because the test helper's
+    // CurrentPhase had drifted to "awaken" and walked through "ending" on its
+    // Way back. Post-batch-15 (core engine↔FlowManager back-sync fix) the
+    // Helper sets currentPhase to the override directly, so we must start
+    // Earlier than the hook we want to exercise.
+    const engine = createMinimalGameState({ currentPlayer: P1, phase: "main" });
     createCard(engine, "tactical-retreat", {
       abilities: [preventFriendlyDeath("next")],
       cardType: "spell",

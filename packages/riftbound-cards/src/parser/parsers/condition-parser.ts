@@ -257,7 +257,7 @@ function parseHasCountPhrase(text: string): Condition | undefined {
         controller: "friendly",
         location: "trigger-battlefield",
         type: subjType,
-      } as Target,
+      } as unknown as Target,
       type: "has-at-least",
     } as unknown as Condition;
   }
@@ -556,7 +556,7 @@ export function parseConditionFromText(text: string): ConditionParseResult | und
   const ifSpentPowerMatch = IF_SPENT_POWER_PATTERN.exec(text);
   if (ifSpentPowerMatch) {
     return {
-      condition: { type: "spent-power" },
+      condition: { type: "spent-power" } as unknown as Condition,
       remainingText: text.slice(ifSpentPowerMatch[0].length),
       startIndex: 0,
     };
@@ -566,7 +566,7 @@ export function parseConditionFromText(text: string): ConditionParseResult | und
   const ifEnemyDiedMatch = IF_ENEMY_DIED_PATTERN.exec(text);
   if (ifEnemyDiedMatch) {
     return {
-      condition: { event: "enemy-died", type: "this-turn" },
+      condition: { event: "enemy-died", type: "this-turn" } as unknown as Condition,
       remainingText: text.slice(ifEnemyDiedMatch[0].length),
       startIndex: 0,
     };

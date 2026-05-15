@@ -150,6 +150,26 @@ export interface EffectKeywordAbility {
   readonly keyword: EffectKeyword;
   readonly effect: Effect;
   readonly condition?: Condition;
+  /**
+   * For effect keywords whose carried text is a *triggered* ability rather
+   * than a static modifier, the trigger that fires it. Example: a Legion
+   * ability "[Legion] — When you play me, buff me." carries
+   * `trigger: { event: "play-self", on: "self" }`. When absent, the keyword
+   * is interpreted per its keyword-specific semantics (e.g. Deathknell ⇒
+   * implicit `{ event: "die", on: "self" }`).
+   */
+  readonly trigger?: {
+    readonly event: string;
+    readonly on?: string;
+  };
+  /**
+   * When `true`, the carried effect *replaces* the host spell/ability's
+   * printed effect rather than adding to it (the carried text ended in
+   * "instead"). Rule 812 dependent-keyword form, e.g. Noxian Guillotine's
+   * "[Legion] — Kill it now instead." When the Legion condition holds the
+   * engine resolves this effect in place of the spell's printed effect.
+   */
+  readonly replacesSpellEffect?: boolean;
 }
 
 /**

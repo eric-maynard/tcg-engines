@@ -303,16 +303,18 @@ export const FIGHT_PATTERN = /deal damage equal to their Mights to each other\.?
 // ============================================================================
 
 /**
- * Pattern to match prevent damage effects: "Prevent all/the next damage."
+ * Pattern to match prevent damage effects: "Prevent all/the next [N] damage."
  *
  * Captures:
  * - Group 1: Amount ("all", "the next")
- * - Group 2: Damage type ("spell and ability", "combat", etc.) - optional
+ * - Group 2: Prevent Value N (digits) — only present for "the next N" — optional
+ * - Group 3: Damage type ("spell and ability", "combat", etc.) - optional
  *
- * @example "Prevent all spell and ability damage this turn." -> ["all", "spell and ability"]
+ * @example "Prevent all spell and ability damage this turn." -> ["all", undefined, "spell and ability"]
+ * @example "Prevent the next 3 damage that would be dealt to TARGET this turn." -> ["the next", "3", undefined]
  */
 export const PREVENT_DAMAGE_PATTERN =
-  /^Prevent (all|the next)\s*(?:(\w+(?:\s+and\s+\w+)?)\s+)?damage/i;
+  /^Prevent (all|the next)(?:\s+(\d+))?\s*(?:(\w+(?:\s+and\s+\w+)?)\s+)?damage/i;
 
 // ============================================================================
 // Gain Control of Spell Effect Patterns

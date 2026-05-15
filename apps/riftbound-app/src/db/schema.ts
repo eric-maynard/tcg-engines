@@ -100,4 +100,59 @@ function runMigrations(db: Database): void {
     db.run("INSERT INTO schema_version (version) VALUES (3)");
     console.log("Database migrated to version 3");
   }
+
+  if (version < 4) {
+    // Selected_deck — the user's currently-active deck for matchmaking.
+    // Nullable; we don't use REFERENCES decks(id) here so that deleting a
+    // Deck doesn't blow up users' rows. The endpoint validates the FK.
+    db.run("ALTER TABLE users ADD COLUMN selected_deck TEXT");
+    db.run("INSERT INTO schema_version (version) VALUES (4)");
+    console.log("Database migrated to version 4");
+  }
+
+  if (version < 5) {
+    // Slice 7 — completed games + replays. One row per finished game; the
+    // Move_log JSON is the engine's full trail (each entry has seq, playerId,
+    // MoveId, params, success, label) which the replay viewer walks step by
+    // Step. winner_user_id is nullable for draws/aborts.
+    db.run(`CREATE TABLE games (
+      id TEXT PRIMARY KEY,
+      host_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      guest_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      winner_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      session_id TEXT,
+      room_code TEXT,
+      move_count INTEGER NOT NULL DEFAULT 0,
+      move_log TEXT NOT NULL DEFAULT '[]',
+      result TEXT NOT NULL DEFAULT 'win',
+      started_at TEXT NOT NULL DEFAULT (datetime('now')),
+      ended_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+    db.run("CREATE INDEX idx_games_host ON games(host_user_id)");
+    db.run("CREATE INDEX idx_games_guest ON games(guest_user_id)");
+    db.run("CREATE INDEX idx_games_session ON games(session_id)");
+
+    db.run("INSERT INTO schema_version (version) VALUES (5)");
+    console.log("Database migrated to version 5");
+  }
+
+  if (version < 6) {
+    // Slice 7 — friendships. Status is `pending` (requester sent invite, not
+    // Yet accepted) or `accepted`. Bidirectional friendship is encoded as the
+    // Pair (requester_id, addressee_id); the read query checks either column.
+    db.run(`CREATE TABLE friendships (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      requester_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      addressee_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'blocked')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+    db.run("CREATE INDEX idx_friendships_req ON friendships(requester_id)");
+    db.run("CREATE INDEX idx_friendships_addr ON friendships(addressee_id)");
+    db.run("CREATE UNIQUE INDEX idx_friendships_pair ON friendships(requester_id, addressee_id)");
+
+    db.run("INSERT INTO schema_version (version) VALUES (6)");
+    console.log("Database migrated to version 6");
+  }
 }

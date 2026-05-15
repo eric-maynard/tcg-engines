@@ -88,6 +88,14 @@ export interface RiftboundCardMeta {
   /** Temporary Might modifier from effects (added to base Might; reset per duration) */
   mightModifier?: number;
 
+  /**
+   * "This combat"-duration Might modifier (rule 461.7.b). Accumulated by
+   * `modify-might` effects with `duration: "combat"` and zeroed when the
+   * combat ends (in `resolveFullCombat`). Folded into effective Might
+   * alongside `mightModifier`/`staticMightBonus`.
+   */
+  combatMightModifier?: number;
+
   /** Might bonus from static/passive abilities (recalculated each pass) */
   staticMightBonus?: number;
 
@@ -96,6 +104,55 @@ export interface RiftboundCardMeta {
 
   /** Active restrictions on this card */
   restrictions?: string[];
+
+  /**
+   * Number of times *this individual unit* has moved (a discretionary
+   * battlefield-to-battlefield move, rule 616-619) during the current turn.
+   * Reset to 0 at the start of every turn (Awaken phase). Used by abilities
+   * gated on a unit's own move count this turn, e.g. Kayn, Unleashed
+   * ("If I have moved twice this turn, I don't take damage.").
+   */
+  movedThisTurnCount?: number;
+
+  /**
+   * Rule 460.2.c.9 — "If a unit cannot be dealt damage, then no amount of
+   * damage can be considered lethal." When set, this unit never accumulates
+   * marked damage (the `damage` game action is a no-op against it) and is
+   * exempt from mandatory lethal-damage assignment in combat. Set by abilities
+   * like Kayn, Unleashed ("If I have moved twice this turn, I don't take
+   * damage."), and cleared when the condition no longer holds.
+   */
+  cannotTakeDamage?: boolean;
+
+  /**
+   * Rule 460.2.c.2 — abilities/effects may influence the order in which
+   * combat damage is assigned. A *lower* number means this unit must be
+   * assigned (lethal) combat damage *before* units with a higher number.
+   * Tank ≈ −1 ("first"), Backline ≈ +1 ("last"); an explicit value here
+   * overrides those keyword-derived defaults during combat damage
+   * distribution.
+   */
+  damageAssignmentPriority?: number;
+
+  /**
+   * Rule 437 — Prevent. The Prevent Value currently tracked on this Unit:
+   * the next damage that would be dealt to it is reduced by this much (never
+   * below 0), then the tracked value is reduced by the prevented amount; once
+   * it reaches 0 the Prevent effect expires (rule 437.2/.3). `"all"` means an
+   * infinite Prevent Value (rule 437.1.b.1.b) — it stays `"all"` and no
+   * damage is ever considered lethal against the unit (rule 437.5.b).
+   * Multiple Prevent actions on a unit are summed here (numeric + `"all"`
+   * resolves to `"all"`).
+   */
+  preventDamage?: number | "all";
+
+  /**
+   * Rule 712 — Barrier consumed flag. Set to `true` after the Barrier keyword
+   * on this unit has absorbed its first combat hit. Checked during combat unit
+   * assembly so the unit no longer benefits from `hasBarrier` on subsequent hits.
+   * Cleared when the unit leaves play (dies or is recalled).
+   */
+  barrierConsumed?: boolean;
 
   /**
    * Card instance ID whose abilities/text are copied onto this card while
@@ -276,12 +333,38 @@ export interface SetupState {
 /**
  * A pending player decision that blocks all other moves until resolved.
  *
- * Used for effects like Sabotage/Mindsplitter/Ashe Focused that require
- * an opponent to reveal their hand so the active player can pick a card
- * from it. While a pending choice exists, only `resolvePendingChoice` is
- * a legal move.
+ * Two variants are supported today:
+ *
+ *  - `"reveal-and-pick"` — opponent reveals their hand and the active
+ *    player picks a card from it (Sabotage / Mindsplitter / Ashe Focused).
+ *    The picked card is moved per `onPicked` ("recycle" / "banish" /
+ *    "discard"); other revealed cards stay in the opponent's hand.
+ *
+ *  - `"look-and-pick"` — the active player peeks at the top N cards of
+ *    their own deck and picks 1 (Stacked Deck — "Look at the top 3 cards
+ *    of your Main Deck. Put 1 into your hand and recycle the rest."). The
+ *    picked card goes to the destination in `onPicked` (default
+ *    `"to-hand"`); the un-picked remainder is handled by `onUnpicked`
+ *    (default `"recycle"`).
+ *
+ *  - `"pick-mode"` — modal/choose-one effect (Flurry of Feathers —
+ *    "Choose one — Counter a spell. Play four Bird tokens."). The caster
+ *    picks an option index; the engine then fires that branch's effect.
+ *    Used for any `type:"choice"` effect with an `options[]` array.
+ *
+ * While a pending choice exists, only `resolvePendingChoice` is a legal
+ * move.
  */
-export interface PendingChoice {
+export type PendingChoice =
+  | RevealAndPickChoice
+  | LookAndPickChoice
+  | PickModeChoice;
+
+/**
+ * Reveal-hand + pick variant. Backward-compatible with the original
+ * `PendingChoice` shape used by Sabotage et al.
+ */
+export interface RevealAndPickChoice {
   /** The kind of choice that is pending. */
   readonly type: "reveal-and-pick";
 
@@ -308,6 +391,99 @@ export interface PendingChoice {
    * sends it to the owner's trash.
    */
   readonly onPicked: "recycle" | "banish" | "discard";
+}
+
+/**
+ * Look-at-top-of-deck + pick variant. Used by Stacked Deck ("Look at the
+ * top 3 cards of your Main Deck. Put 1 into your hand and recycle the
+ * rest.") and the same family of effects.
+ *
+ * The revealed snapshot is the top N cards of the prompter's main deck.
+ * On resolution, the picked card is moved per `onPicked`, and the
+ * remaining cards are handled per `onUnpicked`.
+ */
+export interface LookAndPickChoice {
+  /** The kind of choice that is pending. */
+  readonly type: "look-and-pick";
+
+  /** Player who triggered the choice and picks the card. */
+  readonly prompter: PlayerId;
+
+  /** The deck owner (whose top N cards were revealed). Usually === prompter. */
+  readonly revealer: PlayerId;
+
+  /** Snapshot of the top N card IDs of the revealer's main deck. */
+  readonly revealed: CardId[];
+
+  /**
+   * What to do with the PICKED card. Defaults to `"to-hand"` (Stacked Deck
+   * pattern). `"recycle"` puts the picked card on the bottom of the
+   * revealer's main deck (rare — most look-then-pick effects move the
+   * pick to a useful zone).
+   */
+  readonly onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle";
+
+  /**
+   * What to do with the cards that were NOT picked. Defaults to
+   * `"recycle"` (Stacked Deck pattern — bottom of deck). `"to-top"`
+   * preserves printed order on top of deck. `"trash"` mills the rest.
+   */
+  readonly onUnpicked: "recycle" | "to-top" | "trash";
+}
+
+/**
+ * Pick-mode variant — caster chooses one of N modes (Flurry of Feathers
+ * "Choose one — Counter a spell. Play 4 Bird tokens.").
+ *
+ * Stored on the game state when a `type:"choice"` effect with `options[]`
+ * resolves. The caster picks an `index` (0..options.length-1) via
+ * `resolvePendingChoice`, after which the engine fires that option's
+ * `effect` through `executeEffect` and clears the pendingChoice.
+ *
+ * Source-card context (`sourceCardId`, `sourceZone`) is captured at the
+ * moment the choice is offered so the chosen branch resolves with the
+ * original source/cast context (e.g. so "Counter a spell" knows what to
+ * counter — it walks the chain — rather than treating the resolution as
+ * a free-standing effect).
+ */
+export interface PickModeChoice {
+  /** Discriminator. */
+  readonly type: "pick-mode";
+
+  /** The picker (active player / caster). */
+  readonly prompter: PlayerId;
+
+  /**
+   * Source card that produced this choice. Forwarded as `sourceCardId`
+   * when the chosen branch is executed.
+   */
+  readonly sourceCardId: CardId;
+
+  /**
+   * Zone the source card was in when the choice was offered.
+   * Forwarded as `sourceZone` when the chosen branch is executed.
+   */
+  readonly sourceZone?: string;
+
+  /**
+   * Variables (e.g. X-cost values) captured at the time the choice was
+   * offered. Forwarded into the resolution context so the chosen branch
+   * resolves with the same numeric bindings.
+   */
+  readonly variables?: Record<string, number>;
+
+  /**
+   * The modes the player is choosing between. `index` is the canonical
+   * key the resolution move uses; `label` is human-readable. `effect` is
+   * the opaque `ExecutableEffect` payload to fire when the option is
+   * picked (typed as `unknown` here to avoid an import cycle with
+   * `effect-executor.ts`).
+   */
+  readonly options: readonly {
+    readonly index: number;
+    readonly label: string;
+    readonly effect: unknown;
+  }[];
 }
 
 /**
@@ -350,6 +526,52 @@ export interface RiftboundGameState {
    * path always initializes it.
    */
   readonly cardsPlayedThisTurn?: Record<string, number>;
+
+  /**
+   * Queue of additional turns (rule 734). When an effect grants a player an
+   * additional turn, that player's id is appended here; the queue is FIFO.
+   * As each turn ends, the flow layer dequeues the front entry (if any) and
+   * makes that player the turn player for the next turn instead of advancing
+   * normally in seat order. Turn *order* is otherwise unaffected — once the
+   * additional turn finishes its entry is removed and normal rotation
+   * resumes. Optional for backward-compatibility with literal test states.
+   *
+   * Rule 734: "An additional turn is owned by the player who was told to take
+   * it and is inserted directly after the current turn in the repeating turn
+   * queue." Multiple additional turns granted in sequence are taken in the
+   * order they were granted.
+   */
+  pendingExtraTurns?: PlayerId[];
+
+  /**
+   * Pending controller-revert records — rule 187.4 / 323.6.
+   *
+   * Each entry tracks a card whose controller was changed by a `take-control`
+   * effect with a non-permanent duration. The end-of-turn Ending-phase hook
+   * processes `expires:"end-of-turn"` entries (Hostile Takeover's "Lose
+   * control of that unit and recall it at end of turn."), and the per-move
+   * post-cleanup pass processes `expires:"until-leaves"` entries when the
+   * card has left the board (trash/banishment/hand/deck).
+   *
+   * Restores `controller` to `originalController`; owner is never changed
+   * (rule 174 — owner is sticky for the duration of the game).
+   */
+  pendingControlReverts?: {
+    cardId: CardId;
+    originalController: PlayerId;
+    expires: "end-of-turn" | "until-leaves";
+  }[];
+
+  /**
+   * Recent-deaths log — units that died during the CURRENT dispatch cascade,
+   * captured by `dispatchUnitDied` (rule 813 Deathknell). Cleared when the
+   * cascade settles (no recursive dispatch follows). Used by the target
+   * resolver's `"just-died-trash"` mode so a Deathknell trigger that wants
+   * to "play me/it from your trash" can target the dying card itself even
+   * though it's already been moved to trash by the time the trigger fires.
+   * Each entry includes the owner so per-controller filters work correctly.
+   */
+  recentDeaths?: { cardId: CardId; owner: PlayerId }[];
 
   /** Turn state */
   readonly turn: TurnState;

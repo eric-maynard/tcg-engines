@@ -223,6 +223,55 @@ const validateCopyLimit = (mainDeck: Card[]): DeckValidationError[] => {
   return errors;
 };
 
+/** Maximum copies of a card with the [Unique] keyword (rule 825 — Unleashed) */
+const MAX_UNIQUE_COPIES = 1;
+
+/**
+ * Detect whether a card has the [Unique] keyword.
+ *
+ * Unique is encoded in a card's rules text as the `[Unique]` token
+ * (see SFD cards Shurelya's Requiem / Forgefire Cape / Rabadon's Deathcrown,
+ * and rule 825 added in the Unleashed core-rules update). The token is
+ * matched case-insensitively and tolerates an optional surrounding
+ * whitespace, e.g. "[Unique]" at the start of a rules-text line.
+ */
+const hasUniqueKeyword = (card: Card): boolean => {
+  const text = card.rulesText ?? "";
+  return /\[\s*unique\s*\]/i.test(text);
+};
+
+/**
+ * Validate the [Unique] deck-construction restriction (rule 825, Unleashed).
+ *
+ * A deck can contain only one card of a given name if that card has [Unique].
+ * (Signature + Unique cards still count toward the 3-Signature limit but are
+ * limited to one of each named Unique card — that interaction is enforced by
+ * this check combined with {@link validateSignatureLimit}.)
+ */
+const validateUniqueLimit = (mainDeck: Card[]): DeckValidationError[] => {
+  const errors: DeckValidationError[] = [];
+  const uniqueNameCounts = new Map<string, number>();
+
+  for (const card of mainDeck) {
+    if (!hasUniqueKeyword(card)) {
+      continue;
+    }
+    const count = (uniqueNameCounts.get(card.name) ?? INITIAL_COUNT) + COUNT_INCREMENT;
+    uniqueNameCounts.set(card.name, count);
+  }
+
+  for (const [name, count] of uniqueNameCounts) {
+    if (count > MAX_UNIQUE_COPIES) {
+      errors.push({
+        code: "TOO_MANY_UNIQUE_COPIES",
+        message: `Card "${name}" has [Unique] but appears ${count} times; a deck may contain only ${MAX_UNIQUE_COPIES} card with that name (rule 825)`,
+      });
+    }
+  }
+
+  return errors;
+};
+
 /**
  * Validate chosen champion matches legend's champion tag (rule 103.2.a.2)
  */
@@ -393,6 +442,7 @@ const collectMainDeckErrors = (
 ): DeckValidationError[] => [
   ...validateMainDeckSize(config.mainDeck),
   ...validateCopyLimit(config.mainDeck),
+  ...validateUniqueLimit(config.mainDeck),
   ...validateChosenChampion(config.chosenChampion, config.legend),
   ...validateMainDeckDomainIdentity(config.mainDeck, legendDomains),
   ...validateSignatureLimit(config.mainDeck, config.legend),

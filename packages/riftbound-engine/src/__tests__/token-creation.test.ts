@@ -25,12 +25,13 @@ function createMockState(overrides?: Partial<RiftboundGameState>): RiftboundGame
     battlefields: { "bf-1": { contested: false, controller: "p1", id: "bf-1" } },
     conqueredThisTurn: { p1: [], p2: [] },
     gameId: "test",
-    players: { p1: { id: "p1", victoryPoints: 0 }, p2: { id: "p2", victoryPoints: 0 } },
+    players: { p1: { id: "p1", victoryPoints: 0, xp: 0, turnsTaken: 0 }, p2: { id: "p2", victoryPoints: 0, xp: 0, turnsTaken: 0 } },
     runePools: { p1: { energy: 0, power: {} }, p2: { energy: 0, power: {} } },
     scoredThisTurn: { p1: [], p2: [] },
     status: "playing",
     turn: { activePlayer: "p1", number: 1, phase: "main" },
     victoryScore: 8,
+    xpGainedThisTurn: { p1: 0, p2: 0 },
     ...overrides,
   };
 }

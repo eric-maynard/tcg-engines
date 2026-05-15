@@ -1,0 +1,47 @@
+{
+  "kind": "engine-scenario",
+  "questionText": "With two 4-Might units attacking, does the opponent's unit die?",
+  "question": "does the opponent's lone defender die in the combat?",
+  "assumptions": [
+    "The asker gives no defender Might and no battlefield control, so the answer is conditional on the defender's Might. Two 4-Might attackers assign 8 total Might as damage; any single defender dies iff its Might <= 8.",
+    "Assumed the opponent has exactly one defender at the contested battlefield and no other modifiers."
+  ],
+  "variants": [
+    {
+      "label": "their defender has <= 8 Might (e.g. a 5-Might unit)",
+      "scenario": {
+        "kind": "engine-scenario",
+        "questionText": "(variant) two 4-Might attackers vs a 5-Might lone defender",
+        "question": "does the opponent's lone defender die in the combat?",
+        "premise": {
+          "turnPlayer": "me",
+          "units": [
+            { "id": "a1", "side": "me", "might": 4, "name": "(attacker 1)", "location": "bf" },
+            { "id": "a2", "side": "me", "might": 4, "name": "(attacker 2)", "location": "bf" },
+            { "id": "d", "side": "opp", "might": 5, "name": "(their defender)", "location": "bf" }
+          ],
+          "battlefields": [{ "id": "bf", "controller": "opp" }]
+        },
+        "actions": [{ "kind": "resolveCombat", "battlefield": "bf", "attacker": "me" }]
+      }
+    },
+    {
+      "label": "their defender has > 8 Might (e.g. a 9-Might unit)",
+      "scenario": {
+        "kind": "engine-scenario",
+        "questionText": "(variant) two 4-Might attackers vs a 9-Might lone defender",
+        "question": "does the opponent's lone defender die in the combat?",
+        "premise": {
+          "turnPlayer": "me",
+          "units": [
+            { "id": "a1", "side": "me", "might": 4, "name": "(attacker 1)", "location": "bf" },
+            { "id": "a2", "side": "me", "might": 4, "name": "(attacker 2)", "location": "bf" },
+            { "id": "d", "side": "opp", "might": 9, "name": "(their defender)", "location": "bf" }
+          ],
+          "battlefields": [{ "id": "bf", "controller": "opp" }]
+        },
+        "actions": [{ "kind": "resolveCombat", "battlefield": "bf", "attacker": "me" }]
+      }
+    }
+  ]
+}

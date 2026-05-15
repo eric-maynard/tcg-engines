@@ -35,7 +35,10 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
   const playerIds = players.map((p) => p.id as PlayerId);
 
   // Initialize player states
-  const playerStates: Record<PlayerId, { id: PlayerId; victoryPoints: number; xp: number }> = {};
+  const playerStates: Record<
+    PlayerId,
+    { id: PlayerId; victoryPoints: number; xp: number; turnsTaken: number }
+  > = {};
   const runePools: Record<PlayerId, { energy: number; power: Record<string, number> }> = {};
   const conqueredThisTurn: Record<PlayerId, string[]> = {};
   const scoredThisTurn: Record<PlayerId, string[]> = {};
@@ -46,6 +49,7 @@ export function createInitialState(players: { id: string }[]): RiftboundGameStat
   for (const playerId of playerIds) {
     playerStates[playerId] = {
       id: playerId,
+      turnsTaken: 0,
       victoryPoints: 0,
       xp: 0,
     };

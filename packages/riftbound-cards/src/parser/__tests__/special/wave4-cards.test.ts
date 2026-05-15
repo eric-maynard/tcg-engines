@@ -319,7 +319,7 @@ describe("Wave 4 Agent B — Bucket 5: XP / Level / Ambush", () => {
     const abs = expectClean(
       "You may spend 3 XP as an additional cost to play me. If you do, I cost [3] less.",
     );
-    const ab = abs[0] as {
+    const ab = abs[0] as unknown as {
       effect: {
         additionalCost: { xp: number };
         optional: boolean;

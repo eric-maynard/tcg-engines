@@ -1,0 +1,25 @@
+{
+  "questionText": "I have a 5-Might unit attacking an open battlefield; opponent reacts with Stupefy to drop it to 4. Their lone defender is a 3-Might unit. Who wins the combat?",
+  "question": "Who wins the combat — and does my unit survive?",
+  "premise": {
+    "turnPlayer": "me",
+    "units": [
+      { "id": "atk", "side": "me", "might": 5, "name": "(my attacker)", "location": "bf" },
+      { "id": "def", "side": "opp", "might": 3, "name": "(their defender)", "location": "bf" }
+    ],
+    "battlefields": [{ "id": "bf", "controller": null }],
+    "notes": "Stupefy (OGN-095) is a real Reaction spell: -1 Might this turn, min 1. Modeled here as its modifyMight effect."
+  },
+  "actions": [
+    {
+      "kind": "playSpell",
+      "name": "Stupefy",
+      "side": "opp",
+      "effects": [
+        { "kind": "modifyMight", "target": "atk", "delta": -1, "source": "Stupefy" },
+        { "kind": "draw", "side": "opp", "count": 1, "source": "Stupefy" }
+      ]
+    },
+    { "kind": "resolveCombat", "battlefield": "bf", "attacker": "me" }
+  ]
+}

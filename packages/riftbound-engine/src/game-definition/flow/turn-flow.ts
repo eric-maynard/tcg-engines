@@ -27,6 +27,32 @@ export const PHASE_ORDER: readonly GamePhase[] = [
 ] as const;
 
 /**
+ * Human-readable label for each turn phase.
+ *
+ * Lives in the engine (not the UI) so every renderer/client agrees on phase
+ * naming. UIs must consume this instead of maintaining a parallel map.
+ */
+export const PHASE_LABELS: Readonly<Record<GamePhase, string>> = {
+  awaken: "Awaken",
+  beginning: "Beginning",
+  channel: "Channel",
+  cleanup: "Cleanup",
+  draw: "Draw",
+  ending: "Ending",
+  main: "Main",
+  setup: "Setup",
+} as const;
+
+/**
+ * Ordered list of repeating turn phases with their display labels.
+ *
+ * `setup` is intentionally excluded — it is a one-time pregame phase, not part
+ * of the repeating turn cycle. Clients render this directly as the phase strip.
+ */
+export const TURN_PHASE_STRIP: readonly { readonly id: GamePhase; readonly label: string }[] =
+  PHASE_ORDER.map((id) => ({ id, label: PHASE_LABELS[id] }));
+
+/**
  * Get the next phase in the turn sequence
  *
  * @param currentPhase - The current phase

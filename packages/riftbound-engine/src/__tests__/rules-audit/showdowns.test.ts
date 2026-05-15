@@ -341,16 +341,18 @@ describe("Rule 551: Showdowns may or may not begin with an Initial Chain", () =>
   it("Rule 551.1.a: focus player's triggered abilities sort before other players' triggers", () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { orderTriggers } = require("../../abilities/trigger-runner") as typeof import("../../abilities/trigger-runner");
-    const matches = [
+    const matches: import("../../abilities/trigger-matcher").MatchedTrigger[] = [
       {
         ability: { effect: {}, trigger: { event: "attack" }, type: "triggered" } as never,
         cardId: "p2-defender",
         cardOwner: P2,
+        event: { type: "attack" } as never,
       },
       {
         ability: { effect: {}, trigger: { event: "attack" }, type: "triggered" } as never,
         cardId: "p1-attacker",
         cardOwner: P1,
+        event: { type: "attack" } as never,
       },
     ];
     // P1 is the focus player (attacker who applied contested) — their

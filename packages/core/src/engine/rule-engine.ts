@@ -633,6 +633,51 @@ export class RuleEngine<
         // Check automatic endIf transitions after move execution
         // This enables automatic phase/segment/turn transitions based on endIf conditions
         this.flowManager.checkEndConditions();
+
+        // Back-sync flow-manager gameState into engine.currentState.
+        //
+        // Originally surfaced by the random-monkey harness as finding O-1
+        // (`monkey-rescan-b11/end-turn-flow-drift.test.ts`): the engine
+        // Forward-syncs the post-move draft into the flow manager via
+        // `syncState`, then `nextPhase` / `nextTurn` / `checkEndConditions`
+        // Run flow-definition `onBegin` / `onEnd` hooks. Those hooks mutate
+        // The flow manager's internal `gameState` via Immer `produce` (e.g.
+        // Riftbound's turn.onEnd rotates `state.turn.activePlayer`, gundam's
+        // Resource step refreshes resources). Without this back-sync those
+        // Mutations are invisible to `engine.getState()` callers, so every
+        // Game has had to mirror flow-hook logic into the move reducer's
+        // Draft.
+        //
+        // We re-run the back-sync through `produce` so flow-induced
+        // Mutations show up in the move's `patches` / `inversePatches` —
+        // Network-sync consumers and undo/redo paths rely on every state
+        // Change being captured in the patch stream.
+        const flowState = this.flowManager.getGameState() as TState;
+        if (flowState !== this.currentState) {
+          const flowPatches: Patch[] = [];
+          const flowInversePatches: Patch[] = [];
+          this.currentState = produce(
+            this.currentState,
+            (draft) => {
+              // Shallow-replace top-level fields with the flow-manager view.
+              // Per-key assignment lets Immer capture granular patches rather
+              // Than one giant "replace whole state" entry.
+              Object.assign(
+                draft as Record<string, unknown>,
+                flowState as Record<string, unknown>,
+              );
+            },
+            (p, ip) => {
+              flowPatches.push(...p);
+              flowInversePatches.push(...ip);
+            },
+          );
+          if (flowPatches.length > 0) {
+            patches = [...patches, ...flowPatches];
+            // Inverse patches must apply in reverse order to undo correctly.
+            inversePatches = [...flowInversePatches, ...inversePatches];
+          }
+        }
       }
 
       // Log successful completion (DEBUG level)

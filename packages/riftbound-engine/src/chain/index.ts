@@ -8,6 +8,7 @@ export {
   createInteractionState,
   endShowdown,
   getActiveShowdown,
+  getPriorityHolder,
   getTurnState,
   isLegalTiming,
   isShowdownEnded,

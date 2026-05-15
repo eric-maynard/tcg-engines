@@ -23,12 +23,13 @@ function createMockState(overrides?: Partial<RiftboundGameState>): RiftboundGame
     battlefields: {},
     conqueredThisTurn: { p1: [], p2: [] },
     gameId: "test",
-    players: { p1: { id: "p1", victoryPoints: 0 }, p2: { id: "p2", victoryPoints: 0 } },
+    players: { p1: { id: "p1", victoryPoints: 0, xp: 0, turnsTaken: 0 }, p2: { id: "p2", victoryPoints: 0, xp: 0, turnsTaken: 0 } },
     runePools: { p1: { energy: 0, power: {} }, p2: { energy: 0, power: {} } },
     scoredThisTurn: { p1: [], p2: [] },
     status: "playing",
     turn: { activePlayer: "p1", number: 1, phase: "main" },
     victoryScore: 8,
+    xpGainedThisTurn: { p1: 0, p2: 0 },
     ...overrides,
   };
 }
@@ -275,13 +276,15 @@ describe("State-Based Checks: Stale Combat Roles (rule 521)", () => {
     clearGlobalCardRegistry();
   });
 
-  test("combat role preserved for units at a battlefield", () => {
+  test("combat role preserved for units at a battlefield with an ongoing combat", () => {
     const registry = new CardDefinitionRegistry();
     registry.register("unit-1", { cardType: "unit", id: "unit-1", might: 3, name: "Unit" });
+    registry.register("unit-2", { cardType: "unit", id: "unit-2", might: 3, name: "Unit2" });
     setGlobalCardRegistry(registry);
 
     const draft = createMockState({
-      battlefields: { "bf-1": { contested: true, controller: "p1", id: "bf-1" } },
+      // A staged combat: Contested applied by p1, opposing units present.
+      battlefields: { "bf-1": { contested: true, contestedBy: "p1", controller: "p1", id: "bf-1" } },
     });
 
     const cardData = {
@@ -290,13 +293,21 @@ describe("State-Based Checks: Stale Combat Roles (rule 521)", () => {
         owner: "p1",
         zone: "battlefield-bf-1",
       },
+      // Defender keeps the combat actually staged (rule 323.10).
+      "unit-2": {
+        meta: { combatRole: "defender" as const, damage: 0 },
+        owner: "p2",
+        zone: "battlefield-bf-1",
+      },
     };
     const ctx = createMockContext(draft, cardData);
 
     performCleanup(ctx);
 
-    // Should NOT be cleared — unit is at a battlefield
+    // Should NOT be cleared — units are at a battlefield with an ongoing combat,
+    // And their roles match their controllers' designations (rule 323.2).
     expect(cardData["unit-1"].meta.combatRole).toBe("attacker");
+    expect(cardData["unit-2"].meta.combatRole).toBe("defender");
 
     clearGlobalCardRegistry();
   });

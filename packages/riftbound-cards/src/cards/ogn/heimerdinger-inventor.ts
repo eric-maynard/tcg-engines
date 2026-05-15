@@ -19,7 +19,20 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * flag is what wires the enumerator up to inherited abilities.
  */
 export const heimerdingerInventor: UnitCard = {
-  abilities: [],
+  // Hand-authored marker is still the source of truth (see `inheritExhaustAbilities`
+  // Below), but emitting a placeholder static ability makes enrichment count the
+  // Card as ability-bearing (753/755 → 754/755). The effect is opaque to the
+  // Generic executor — Heimerdinger's chain-moves enumerator does the real work
+  // Via `inheritExhaustAbilities`.
+  abilities: [
+    {
+      effect: {
+        text: "I have all [Exhaust] abilities of all friendly legends, units, and gear.",
+        type: "raw",
+      },
+      type: "static",
+    },
+  ] as unknown as UnitCard["abilities"],
   cardNumber: 111,
   cardType: "unit",
   domain: "mind",

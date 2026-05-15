@@ -1,0 +1,14 @@
+{
+  "questionText": "does eclipse kill a unit that has 4 or less might",
+  "question": "does the unit die?",
+  "premise": {
+    "turnPlayer": "me",
+    "units": [
+      { "id": "u", "side": "opp", "might": 4, "name": "(target 4-Might unit)" }
+    ],
+    "notes": "Eclipse = [Reaction], 'give a unit -4 Might this turn'. Modeled as modifyMight -4 on a 4-Might unit (the worst case of '4 or less'). The unit has no damage marked, so even at 0 effective Might it should not die by a state-based check (death requires nonzero marked damage >= current Might, rule 143.2.a; 0 Might alone is not lethal, rule 143.2.b)."
+  },
+  "actions": [
+    { "kind": "modifyMight", "target": "u", "delta": -4, "source": "Eclipse" }
+  ]
+}

@@ -1,0 +1,1120 @@
+/* ====================================================================
+ * riftatlas-port.css — Pixel-parity port of play.riftatlas.com layout
+ *
+ * Captured 2026-05-15 from a live riftatlas single-player goldfish room.
+ * Token names & most class names mirror RiftAtlas's bundled Tailwind v4
+ * arbitrary-value classes (e.g. `--rune-play-width`, `gb-board`, etc.)
+ * with an `rb-` prefix on the application-side classes to avoid clashes
+ * with our existing `.board / .seat / .battlefield-band` rules.
+ *
+ * Reference assets at:
+ *   /tmp/riftatlas-rendered-3.html      (gameplay state, 240KB)
+ *   /tmp/riftatlas-css-2.beautified.css (bundled Tailwind, ~8K lines)
+ *   /tmp/riftatlas-layout-map.json      (zone rects + tokens)
+ *   /tmp/riftatlas-play-state-3.png     (target screenshot)
+ *
+ * Layout in words (parity ref):
+ *   - Outer .rb-board is a 2-col CSS grid: [1fr] [chain-lane-width]
+ *   - Inside main area, two "player bands" (top = opponent, bottom = self)
+ *     each 40% tall (--player-band-size). They are <section> elements
+ *     positioned absolute top:0 and bottom:0 within the board.
+ *   - Between the two bands sits the BATTLEFIELD STRIP — a 2-up grid
+ *     with two huge battlefield slots that span the middle 20% of the
+ *     board height (battlefield-inset = 40% - 3.2rem each side).
+ *   - Each player band is a 5-col inner grid:
+ *       [runePlayWidth][center 1.5fr][actionsCol][laneMain][laneSide]
+ *     Hand sits inset within the center column (--hand-left-inset/right).
+ *   - Identity rails (score tracks 0-8) hug the far edges:
+ *       player: bottom-left ; opponent: top-right.
+ * ==================================================================== */
+
+.rb-board {
+  /* tokens */
+  --rb-card-width: 5.2rem;
+  --rb-card-height: 7.243rem;
+  --rb-card-radius-main: 0.3rem;
+  --rb-card-radius-tight: 0.24rem;
+
+  /* derived widths */
+  --rb-rune-play-width: calc(var(--rb-card-width) * 5.45);            /* ~28.34rem */
+  --rb-player-action-column-width: max(calc(var(--rb-card-width) * 1.15385), 7.05rem);
+  --rb-player-lane-column-width: calc(var(--rb-card-width) * 1.15385); /* ~6.0rem */
+  --rb-chain-lane-width: 248px;
+
+  /* vertical structure */
+  --rb-player-band-size: 40%;                                          /* each half = 40% of board height */
+  --rb-battlefield-overlap: 3.2rem;
+  --rb-battlefield-inset: calc(var(--rb-player-band-size) - var(--rb-battlefield-overlap));
+
+  /* lane geometry within a band */
+  --rb-battlefield-side-gap: calc(var(--rb-card-width) * 1.22);
+  --rb-lane-left-x: calc(var(--rb-card-width) * 1.175);
+
+  /* hand insets — leave room for deck pile on left + legend/champion/pile on right */
+  --rb-hand-left-inset: calc(var(--rb-lane-left-x) + (var(--rb-card-width) * 2.34));
+  --rb-hand-right-inset: calc(var(--rb-card-width) * 3.65385);
+
+  /* identity rail (score track) sizing */
+  --rb-track-node-size: clamp(2.48rem, 2.36cqw, 3.58rem);
+  --rb-identity-totem-width: clamp(2.4rem, 2.4cqw, 3.4rem);
+  --rb-identity-track-gap: 0.18rem;
+  --rb-identity-rail-pad: 0.32rem;
+  --rb-identity-rail-width: calc(
+    var(--rb-identity-totem-width) + var(--rb-track-node-size)
+      + var(--rb-identity-track-gap) + var(--rb-identity-rail-pad) * 2
+  );
+  --rb-track-edge-inset: calc(
+    (var(--rb-battlefield-side-gap) - var(--rb-track-node-size)) / 2
+  );
+
+  /* colors (verbatim from gb-board root) */
+  --rb-bg-0: #0e2049;
+  --rb-bg-1: #0b1a3d;
+  --rb-bg-2: #07132f;
+  --rb-panel: #152857;
+  --rb-panel-soft: #10224b;
+  --rb-line: rgba(214, 226, 255, 0.30);
+  --rb-line-strong: rgba(233, 241, 255, 0.50);
+  --rb-sep: rgba(192, 211, 255, 0.24);
+  --rb-text-main: #eef4ff;
+  --rb-text-soft: #ccdbf7;
+  --rb-text-dim: #94a9d3;
+  --rb-accent-green: #78ddb7;
+  --rb-accent-orange: #ffbb6e;
+  --rb-play-area-bg: rgba(214, 226, 255, 0.05);
+  --rb-play-lane-bg: rgba(226, 236, 255, 0.06);
+
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--rb-chain-lane-width);
+  gap: 0;
+  padding: 0;
+  border-radius: 1rem;
+  border: 1px solid rgba(134, 168, 246, 0.42);
+  background:
+    repeating-linear-gradient(90deg, transparent 0, transparent 1px, rgba(182, 203, 255, 0.012) 1px, rgba(182, 203, 255, 0.012) 2px),
+    repeating-linear-gradient(0deg, transparent 0, transparent 1px, rgba(182, 203, 255, 0.012) 1px, rgba(182, 203, 255, 0.012) 2px),
+    repeating-linear-gradient(-18deg, rgba(8, 20, 50, 0.03) 0, rgba(8, 20, 50, 0.03) 2px, transparent 2px, transparent 10px),
+    radial-gradient(ellipse 140% 120% at 50% 50%,
+      rgba(30, 55, 110, 0.22) 0%,
+      rgba(18, 38, 85, 0.35) 35%,
+      var(--rb-bg-1) 55%,
+      var(--rb-bg-2) 75%,
+      var(--rb-bg-0) 100%);
+  box-shadow:
+    inset 0 -1px 0 rgba(6, 12, 27, 0.4),
+    0 12px 26px rgba(3, 8, 20, 0.5);
+  isolation: isolate;
+  overflow: visible;
+  container-type: inline-size;
+  user-select: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* MAIN AREA (col 1 of outer grid)                                    */
+/* ------------------------------------------------------------------ */
+
+/* .rb-board-main is the main board area (col 1 of outer grid). It's a
+ * positioned ancestor so all the absolutely-positioned bands, strip,
+ * identity rails, and pile slots inside resolve against it. */
+.rb-board-main,
+.board-main.rb-board-main {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  border-radius: 0.5rem;
+  overflow: visible;
+  display: block;
+}
+
+/* The battlefield strip — sandwiched between top/bottom bands, takes the
+ * middle vertical strip of height (--rb-battlefield-overlap * 2) ≈ 6.4rem
+ * actually: top is at (player-band-size - 3.2rem) and bottom matches.   */
+.rb-battlefield-strip {
+  position: absolute;
+  left: var(--rb-battlefield-side-gap);
+  right: var(--rb-battlefield-side-gap);
+  top: calc(var(--rb-battlefield-inset) - 0.36rem);
+  bottom: calc(var(--rb-battlefield-inset) - 0.36rem);
+  z-index: 7;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.2rem;
+  pointer-events: none;
+}
+
+.rb-battlefield-slot {
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+  border-radius: 0.12rem;
+  border: 1px solid rgba(221, 232, 255, 0.3);
+  background: rgba(214, 226, 255, 0.04);
+  padding: 0.16rem;
+  pointer-events: auto;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--rb-text-soft);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.rb-battlefield-slot::after {
+  content: '';
+  position: absolute;
+  inset: 0.12rem;
+  pointer-events: none;
+  opacity: 0.58;
+  background:
+    linear-gradient(180deg, rgba(214, 226, 255, 0.04), rgba(214, 226, 255, 0.02));
+}
+
+/* ------------------------------------------------------------------ */
+/* PLAYER BANDS — top (opponent) and bottom (self)                    */
+/* ------------------------------------------------------------------ */
+
+.rb-player-band {
+  position: absolute;
+  left: 0;
+  right: 1.5rem; /* board-right-safety-gutter */
+  height: var(--rb-player-band-size);
+  padding: 0.22rem 0;
+  display: grid;
+  /* Riftatlas 5-col × 3-row band:
+   *   row 1: leftLanes leftLanes . legend champion
+   *   row 2: runeDeck . deckHand main trash
+   *   row 3: hand hand hand hand hand   ← full-width hand fan
+   * We map our 5 grid-areas to the riftatlas layout where:
+   *   - leftLanes (col 1-2 row 1) hosts runes + base zone
+   *   - actions (col 3 row 2) hosts END TURN button
+   *   - rightMain (col 4 row 1) = legend slot
+   *   - rightSide (col 5 row 1) = champion slot
+   *   - deckSlot (col 4 row 2) = deck pile, trashSlot (col 5 row 2) = trash pile
+   *   - hand (full-width row 3) = hand fan
+   */
+  grid-template-columns:
+    minmax(0, var(--rb-rune-play-width))
+    minmax(0, 1fr)
+    var(--rb-player-action-column-width)
+    var(--rb-player-lane-column-width)
+    var(--rb-player-lane-column-width);
+  grid-template-rows:
+    minmax(0, 1fr)
+    auto
+    calc(var(--rb-card-height) + 0.4rem);
+  gap: 0;
+  grid-template-areas:
+    "leftLanes leftLanes . rightMain rightSide"
+    ". . actions deckSlot trashSlot"
+    "hand hand hand hand hand";
+}
+
+.rb-player-band--opponent {
+  top: 0;
+  /* No scaleY flip — content reads normally. Inside the opponent band
+   * the visual order from top→bottom is: hand at top edge, then base/runes
+   * row hugging the bottom of the band (closest to the battlefield strip).
+   * Achieved via align-self:end on .rb-rune-lane / .rb-front-lane. */
+}
+
+.rb-player-band--self {
+  bottom: 0;
+}
+
+/* Grid-area mappings */
+.rb-band-left-lanes  { grid-area: leftLanes; }
+.rb-band-hand        { grid-area: hand; }
+.rb-band-actions     { grid-area: actions; }
+.rb-band-right-main  { grid-area: rightMain; }
+.rb-band-right-side  { grid-area: rightSide; }
+.rb-band-deck-slot   { grid-area: deckSlot; }
+.rb-band-trash-slot  { grid-area: trashSlot; }
+
+/* Left lanes = rune row + battlefield-attachment row (2-col inner) */
+.rb-band-left-lanes {
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns:
+    minmax(calc(var(--rb-card-width) * 1.95), var(--rb-rune-play-width))
+    minmax(calc(var(--rb-card-width) * 2.4), 1fr);
+  gap: 0.16rem;
+}
+
+/* The rune row (left column of left-lanes) */
+.rb-rune-lane {
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: var(--rb-rune-play-width);
+  padding: 0.2rem 0.22rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+  position: relative;
+  align-self: end; /* hug the band's hand row, so it sits near the bottom edge */
+  pointer-events: auto;
+}
+
+/* The battlefield-attachment lane (right column of left-lanes) */
+.rb-front-lane {
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  padding: 0.2rem 0.22rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 0.16rem;
+  position: relative;
+  align-self: end;
+  pointer-events: auto;
+}
+
+/* Hand — riftatlas spans the full width of the band as row 3 of the
+ * 3-row grid, with the fan centered. Cards overlap slightly to fan. */
+.rb-band-hand {
+  min-height: 0;
+  position: relative;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 9;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  /* hug the bottom of the band so the hand sits at very bottom of board */
+  padding: 0 0 0.22rem;
+}
+
+.rb-band-hand > * {
+  pointer-events: auto;
+}
+
+/* Actions column — END TURN button + small per-turn affordances */
+.rb-band-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.4rem;
+  gap: 0.4rem;
+  position: relative;
+}
+
+/* Deck pile slot (col 4 row 2) and trash pile slot (col 5 row 2) */
+.rb-band-deck-slot,
+.rb-band-trash-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+.rb-band-deck-slot .deck-pile,
+.rb-band-trash-slot .deck-pile,
+.rb-band-deck-slot .trash-pile-button .deck-pile,
+.rb-band-trash-slot .trash-pile-button .deck-pile {
+  width: var(--rb-card-width);
+  height: var(--rb-card-height);
+  min-width: var(--rb-card-width);
+  min-height: var(--rb-card-height);
+  position: relative;
+}
+
+.rb-band-deck-slot .deck-pile-stack,
+.rb-band-trash-slot .deck-pile-stack {
+  width: var(--rb-card-width);
+  height: var(--rb-card-height);
+  position: relative;
+  display: block;
+}
+
+.rb-band-deck-slot .deck-pile-card,
+.rb-band-trash-slot .deck-pile-card {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: var(--rb-card-radius-main) !important;
+  left: 0 !important;
+  top: 0 !important;
+}
+
+/* Stack offsets keep the visual stagger but at card-scale */
+.rb-band-deck-slot .deck-pile-card-back,
+.rb-band-trash-slot .deck-pile-card-back {
+  left: 8px !important;
+  top: 8px !important;
+  opacity: 0.5;
+}
+.rb-band-deck-slot .deck-pile-card-mid,
+.rb-band-trash-slot .deck-pile-card-mid {
+  left: 4px !important;
+  top: 4px !important;
+  opacity: 0.78;
+}
+.rb-band-deck-slot .deck-pile-glyph,
+.rb-band-trash-slot .deck-pile-glyph {
+  font-size: 2.1rem;
+}
+
+/* Count badge floats top-right corner of the pile (riftatlas style) */
+.rb-band-deck-slot .deck-pile-count,
+.rb-band-trash-slot .deck-pile-count {
+  position: absolute;
+  top: -0.3rem;
+  left: -0.3rem;
+  background: #f5f7ff;
+  color: #0b1a3d;
+  font-weight: 700;
+  border-radius: 0.5rem;
+  padding: 0.1rem 0.42rem;
+  font-size: 0.78rem;
+  z-index: 3;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.rb-band-deck-slot .deck-pile-label,
+.rb-band-trash-slot .deck-pile-label {
+  display: none;
+}
+
+/* END TURN button styled like riftatlas (large pill in band-actions) */
+.rb-end-turn-button {
+  width: 100%;
+  min-height: 2.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.36rem;
+  border: 1px solid rgba(180, 200, 240, 0.45);
+  background: linear-gradient(180deg, #2a3d6a 0%, #182a55 100%);
+  color: var(--rb-text-main);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: background 120ms ease, transform 80ms ease;
+}
+
+.rb-end-turn-button:hover:not(:disabled) {
+  background: linear-gradient(180deg, #36507f 0%, #1e3266 100%);
+  transform: translateY(-1px);
+}
+
+.rb-end-turn-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.rb-end-turn-button-shortcut {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  color: var(--rb-text-dim);
+  margin-top: 0.18rem;
+  text-transform: none;
+}
+
+/* Right slots: Legend + Champion live here (single card slot each) */
+.rb-band-right-main,
+.rb-band-right-side {
+  position: relative;
+  width: 100%;
+  max-width: var(--rb-card-width);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  align-self: center;
+}
+
+/* Card-slot frame inside a right-main/right-side cell */
+.rb-card-slot {
+  position: relative;
+  width: var(--rb-card-width);
+  height: var(--rb-card-height);
+  border-radius: var(--rb-card-radius-main);
+  border: 1px solid rgba(167, 195, 226, 0.28);
+  background: rgba(7, 19, 47, 0.45);
+  display: grid;
+  place-items: center;
+  color: var(--rb-text-dim);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  overflow: hidden;
+}
+.rb-card-slot[data-empty="true"] {
+  background: rgba(7, 19, 47, 0.25);
+  border-style: dashed;
+}
+.rb-card-slot-label {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  color: var(--rb-text-dim);
+}
+
+/* ------------------------------------------------------------------ */
+/* IDENTITY RAILS — vertical score tracks 0..8                        */
+/* ------------------------------------------------------------------ */
+
+.rb-identity-rail {
+  position: absolute;
+  width: var(--rb-identity-rail-width);
+  display: grid;
+  grid-auto-rows: calc(var(--rb-track-node-size) * 1.18);
+  place-items: center;
+  gap: 0;
+  padding: var(--rb-identity-rail-pad);
+  border: none;
+  background: transparent;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.rb-identity-rail--player {
+  left: 0;
+  bottom: 0.62rem;
+}
+
+.rb-identity-rail--opponent {
+  right: 0;
+  top: 0.62rem;
+}
+
+.rb-track-node {
+  position: relative;
+  width: var(--rb-track-node-size);
+  height: var(--rb-track-node-size);
+  border-radius: 28%;
+  border: 1px solid rgba(220, 229, 247, 0.34);
+  background: linear-gradient(148deg, rgba(48, 65, 92, 0.92), rgba(26, 38, 60, 0.94));
+  color: var(--rb-text-soft);
+  display: grid;
+  place-items: center;
+  font-size: 0.92rem;
+  font-weight: 600;
+  font-family: var(--rb-font-heading, "Cardo", "Segoe UI", serif);
+  pointer-events: auto;
+}
+
+.rb-track-node[data-current="true"] {
+  border-color: var(--rb-accent-green);
+  background: linear-gradient(148deg, rgba(30, 90, 70, 0.92), rgba(15, 60, 50, 0.95));
+  color: var(--rb-accent-green);
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(120, 221, 183, 0.35);
+}
+
+.rb-track-node[data-victory="true"] {
+  /* "8" cell — the win box, gets a special copper frame */
+  border-color: rgba(255, 187, 110, 0.6);
+  background: linear-gradient(148deg, rgba(112, 64, 28, 0.92), rgba(72, 40, 20, 0.94));
+  color: var(--rb-accent-orange);
+}
+
+/* ------------------------------------------------------------------ */
+/* SIDEBAR (chain lane) — outer-grid column 2                          */
+/* ------------------------------------------------------------------ */
+
+.rb-sidebar {
+  position: relative;
+  z-index: 20;
+  height: 100%;
+  min-height: 0;
+  overflow: visible;
+  background: transparent;
+  padding: 0.18rem;
+  display: grid;
+  gap: 0.14rem;
+  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.rb-sidebar-section {
+  min-height: 0;
+  display: grid;
+  gap: 0.12rem;
+  padding: 0 0.02rem;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.rb-sidebar-section--bottom {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.08rem;
+}
+
+.rb-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rb-text-dim);
+  border-bottom: 1px solid var(--rb-sep);
+}
+
+.rb-sidebar-body {
+  overflow-y: auto;
+  padding: 0.32rem 0.4rem;
+  color: var(--rb-text-soft);
+  font-size: 0.78rem;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Adapter hooks — bridge our existing component classes into rb-*    */
+/* ------------------------------------------------------------------ */
+
+/* When the .play-page is in rb-mode, the .board element itself acts as
+ * the rb-board outer grid. The .rb-board class on the same element
+ * provides the 2-col grid; we only need to relax the old style overrides. */
+.play-page[data-board-style="riftatlas"] .board {
+  overflow: visible;
+  max-width: unset;
+}
+
+.play-page[data-board-style="riftatlas"] .board-main {
+  /* .board-main = col 1 of the .board.rb-board grid. Restore normal
+   * block layout (was previously a flex column) and position so absolute
+   * children (bands, strip, identity rails) anchor here.
+   *
+   * Note: styles.css line 4940 sets `.board-main { height: auto !important;
+   * min-height: auto !important; align-self: start !important; }` to
+   * collapse the old empty-table look. We have to fight that with our
+   * own !important here so the band-bottom/top anchors resolve. */
+  display: block !important;
+  position: relative !important;
+  height: 100% !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible;
+  gap: 0;
+  align-self: stretch !important;
+}
+
+.play-page[data-board-style="riftatlas"] .board-side {
+  position: static;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  background: rgba(8, 14, 32, 0.62);
+  border-left: 1px solid rgba(110, 140, 190, 0.22);
+  padding: 0.4rem 0.5rem;
+  overflow-y: auto;
+  /* this is column 2 of the .board grid */
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* Hide the old seat decoration when in riftatlas mode */
+.play-page[data-board-style="riftatlas"] .seat-active {
+  background: transparent;
+  border: 1px solid rgba(212, 175, 60, 0.32);
+  box-shadow: none;
+  animation: none;
+}
+
+/* Replace the old wide battlefield-band with the rb-battlefield-strip slots */
+.play-page[data-board-style="riftatlas"] .battlefield-band {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 0.2rem;
+  height: 100%;
+  width: 100%;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+/* Compress our PlayerPanel inside the rb-band-hand area so it doesn't blow
+ * up the hand zone with stat rows. The stats line is moved into the
+ * identity-rail / actions column visually; for the port we just shrink the
+ * .player header. */
+.rb-band-hand .player {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.rb-band-hand .player-header,
+.rb-band-hand .player-resources,
+.rb-band-hand .player-stats-compact {
+  /* These belong in the band-actions column visually, not the hand row. */
+  display: none;
+}
+
+.rb-band-hand .hand {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 0;
+}
+
+/* Resize hand-chips to riftatlas card dimensions (~83×116px) and overlap
+ * them slightly so 5+ cards fan within the band width (~454px). */
+.rb-band-hand .hand .hand-chip,
+.rb-band-hand .hand .card-overlay-wrapper {
+  width: var(--rb-card-width);
+  min-width: var(--rb-card-width);
+  height: var(--rb-card-height);
+  min-height: var(--rb-card-height);
+  flex-shrink: 0;
+}
+
+.rb-band-hand .hand .hand-chip + .hand-chip,
+.rb-band-hand .hand .card-overlay-wrapper + .card-overlay-wrapper {
+  margin-left: -1.3rem; /* fan overlap (~-20px at 16px root) */
+}
+
+.rb-band-hand .hand .hand-chip:hover,
+.rb-band-hand .hand .card-overlay-wrapper:hover {
+  z-index: 12;
+}
+
+/* Legend/champion zone (our existing LegendChampionZone) — collapse to a
+ * pair of card slots, place each into the appropriate grid area. */
+.play-page[data-board-style="riftatlas"] .legend-champion-zone {
+  display: contents;
+}
+
+.play-page[data-board-style="riftatlas"] .legend-champion-slot {
+  width: var(--rb-card-width);
+  height: var(--rb-card-height);
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/* Base zone gets parked above the rune-lane on the player's side, scoped to
+ * the rb-front-lane container. */
+.rb-front-lane .base-zone {
+  background: transparent;
+  border: 1px dashed rgba(167, 195, 226, 0.28);
+  border-radius: 0.24rem;
+  padding: 0.18rem 0.22rem;
+  margin: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.rb-front-lane .base-zone-header {
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  color: var(--rb-text-dim);
+}
+
+.rb-front-lane .base-zone-units {
+  display: flex;
+  flex-direction: row;
+  gap: 0.16rem;
+  flex-wrap: wrap;
+}
+
+/* Rune pool inside rune-lane */
+.rb-rune-lane .rune-pool {
+  background: transparent;
+  border: 1px dashed rgba(167, 195, 226, 0.18);
+  border-radius: 0.18rem;
+  padding: 0.18rem 0.2rem;
+  display: flex;
+  flex-direction: row;
+  gap: 0.18rem;
+  margin: 0;
+  min-height: calc(var(--rb-card-width) * 0.6);
+}
+
+/* Deck pile — riftatlas places this at left edge of the player band,
+ * inside the band-actions column for self, or via a dedicated slot.
+ * Our DeckPile component drops into the band-left-rail. */
+.rb-deck-pile-slot {
+  position: absolute;
+  left: var(--rb-battlefield-side-gap);
+  bottom: 0.22rem;
+  width: var(--rb-card-width);
+  height: var(--rb-card-height);
+  display: grid;
+  place-items: center;
+  z-index: 8;
+  pointer-events: auto;
+}
+
+.rb-deck-pile-slot--opponent {
+  left: auto;
+  right: var(--rb-battlefield-side-gap);
+  top: 0.22rem;
+  bottom: auto;
+}
+
+.rb-trash-slot {
+  position: absolute;
+  right: calc(var(--rb-battlefield-side-gap) + var(--rb-card-width) + 0.4rem);
+  bottom: 0.22rem;
+  width: var(--rb-card-width);
+  height: var(--rb-card-height);
+  display: grid;
+  place-items: center;
+  z-index: 8;
+  pointer-events: auto;
+}
+
+/* Turn / phase strip — riftatlas hides phase-strip entirely; turn info
+ * lives in the sidebar's TurnBanner.  We keep the elements in the DOM
+ * (tests query phase-strip by data-testid) but visually collapse them. */
+.play-page[data-board-style="riftatlas"] .turn-header {
+  display: none;
+}
+
+.play-page[data-board-style="riftatlas"] .phase-strip {
+  display: none;
+}
+
+/* Riftatlas mode docks END TURN inside band-actions; hide the floating
+ * .controls sidebar. Buttons stay in the DOM (tests query them via
+ * data-testid which works on display:none elements) so existing tests
+ * still pass. */
+.play-page[data-board-style="riftatlas"] .controls {
+  display: none;
+}
+
+/* Make .board fill remaining vertical space (still a grid via .rb-board) */
+.play-page[data-board-style="riftatlas"] .board.rb-board {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  padding: 6px;
+  max-width: unset;
+  overflow: visible;
+  /* Override `.board { align-items: start !important; }` from styles.css
+   * line 4946 — grid items must STRETCH to fill the row so the inner
+   * `.board-main` can be 100% tall (and its 40%-tall player bands resolve). */
+  align-items: stretch !important;
+}
+
+/* Cancel the old seat-opponent height cap (200px) — we want the full
+ * band to fill 40% of the rb-board height. */
+.play-page[data-board-style="riftatlas"] .seat-opponent {
+  max-height: none;
+  border-bottom: none;
+  flex-shrink: 1;
+  padding: 0;
+  overflow: visible;
+}
+
+.play-page[data-board-style="riftatlas"] .seat-self {
+  border-top: none;
+  flex: 1 1 auto;
+  overflow: visible;
+  padding: 0;
+}
+
+/* Remove the wide max-width constraint so the rb-board can breathe. */
+.play-page[data-board-style="riftatlas"] {
+  max-width: none;
+}
+
+/* The rb-board needs a minimum height to fit the bands + battlefield. */
+.rb-board {
+  min-height: 600px;
+}
+
+/* Constrain the BattlefieldList inside the rb-battlefield-strip slot so
+ * the multi-BF tile grid renders inside the available 365×266 box. */
+.rb-battlefield-strip .battlefield-band {
+  display: flex;
+  flex-direction: row;
+  gap: 0.3rem;
+  width: 100%;
+  height: 100%;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  min-height: 0;
+}
+
+/* PlayerPanel inside band-hand: kill the old stacked grid and let only the
+ * hand-row breathe through. The stats/header are moved up out of band-hand
+ * by `display:none` overrides. */
+.rb-band-hand .player .hand {
+  width: 100%;
+  max-width: 100%;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+/* Opponent band — content should hug the bottom of the band so the hand
+ * sits NEAR the top of the visible board (since band itself is at top). */
+.rb-player-band--opponent .rb-band-hand {
+  align-items: flex-start;
+  padding: 0.22rem 0 0;
+}
+
+.rb-player-band--opponent .rb-rune-lane,
+.rb-player-band--opponent .rb-front-lane {
+  align-self: start;
+}
+
+/* Hide the small Sign-in / nav clutter from a side context if it bleeds in */
+.rb-board .player {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* D1 — Hide top nav in riftatlas play mode + floating exit link       */
+/* ------------------------------------------------------------------ */
+
+/* When the play page is the active route, the riftatlas board fills the
+ * viewport — no top chrome. The TopNav is omitted from the play route at
+ * the App.tsx render layer, but we also force-hide any stray instance
+ * here as a defense-in-depth (e.g. dev tools auto-mount). */
+.play-page[data-board-style="riftatlas"] ~ .app-top-nav,
+body:has(.play-page[data-board-style="riftatlas"]) .app-top-nav {
+  display: none;
+}
+
+/* Small floating "Exit to Lobby" affordance, top-left of viewport. */
+.rb-exit-room {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 90;
+  background: rgba(20, 22, 30, 0.7);
+  color: #c0c4cc;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+.rb-exit-room:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* ------------------------------------------------------------------ */
+/* D2 — Hide zone text labels (BASE / LEGEND / CHAMPION / RUNES)       */
+/* ------------------------------------------------------------------ */
+
+/* Riftatlas relies on visual recognition for zones — no text headers. */
+.play-page[data-board-style="riftatlas"] .base-zone-header,
+.play-page[data-board-style="riftatlas"] .base-zone-label,
+.play-page[data-board-style="riftatlas"] .base-zone-count,
+.play-page[data-board-style="riftatlas"] .rune-pool-label,
+.play-page[data-board-style="riftatlas"] .lc-slot-tag,
+.play-page[data-board-style="riftatlas"] .lc-slot-placeholder,
+.play-page[data-board-style="riftatlas"] .lc-slot-name {
+  display: none !important;
+}
+
+/* When empty, BaseZone renders "(empty)" — suppress it too. */
+.play-page[data-board-style="riftatlas"] .base-zone-empty {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* D3 — Reskin score tracks: thin grey uniform badges                   */
+/* ------------------------------------------------------------------ */
+
+/* Smaller, uniform-size, neutral-grey rounded squares. Single-digit
+ * font, current node = subtle green, victory cell stays copper. */
+.play-page[data-board-style="riftatlas"] .rb-track-node {
+  width: clamp(2.0rem, 1.7cqw, 2.6rem);
+  height: clamp(2.0rem, 1.7cqw, 2.6rem);
+  border-radius: 0.6rem;
+  border: 1px solid rgba(165, 180, 215, 0.22);
+  background: rgba(20, 32, 60, 0.55);
+  color: rgba(196, 210, 240, 0.62);
+  font-size: 0.78rem;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+/* Reduce row height to match the uniform node size. */
+.play-page[data-board-style="riftatlas"] .rb-identity-rail {
+  grid-auto-rows: clamp(2.4rem, 2.1cqw, 3.05rem);
+  width: clamp(2.8rem, 2.4cqw, 3.6rem);
+  padding: 0.18rem;
+}
+
+/* Current-position node — subtle green outline + tinted bg. */
+.play-page[data-board-style="riftatlas"] .rb-track-node[data-current="true"] {
+  border-color: rgba(120, 221, 183, 0.55);
+  background: rgba(30, 70, 60, 0.65);
+  color: var(--rb-accent-green);
+  font-weight: 600;
+  box-shadow: 0 0 6px rgba(120, 221, 183, 0.25);
+}
+
+/* Victory cell (8) — copper accent ONLY when not current; subtle. */
+.play-page[data-board-style="riftatlas"] .rb-track-node[data-victory="true"]:not([data-current="true"]) {
+  border-color: rgba(255, 187, 110, 0.34);
+  background: rgba(60, 38, 18, 0.55);
+  color: rgba(255, 187, 110, 0.78);
+}
+
+/* Side labels — "Tester" rotated 90° between player rail and playmat,
+ * "Goldfish" mirror on opponent side. Renders as a CSS-only psuedo
+ * element on the rail using the data-name attribute we'll set in TS. */
+.play-page[data-board-style="riftatlas"] .rb-identity-rail::after {
+  content: attr(data-name);
+  position: absolute;
+  top: 50%;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.34em;
+  color: var(--rb-text-dim);
+  text-transform: uppercase;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.play-page[data-board-style="riftatlas"] .rb-identity-rail--player::after {
+  left: calc(100% + 0.12rem);
+}
+.play-page[data-board-style="riftatlas"] .rb-identity-rail--opponent::after {
+  right: calc(100% + 0.12rem);
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* ------------------------------------------------------------------ */
+/* D4 — Hide empty Legend/Champion slots (no rectangle when empty)     */
+/* ------------------------------------------------------------------ */
+
+.play-page[data-board-style="riftatlas"] .lc-slot[data-empty="true"] {
+  display: none !important;
+}
+
+/* And hide the corresponding band cells if both children are empty. */
+.play-page[data-board-style="riftatlas"] .lc-zone:has(.lc-slot[data-empty="true"]:only-child) {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* D5 — Smoother BF borders                                            */
+/* ------------------------------------------------------------------ */
+
+/* Soften the hard 2-3px solid borders to riftatlas' 1px translucent
+ * border. The BF art should blend into the playmat, not look boxed in. */
+.play-page[data-board-style="riftatlas"] .bf-tile {
+  border: 1px solid rgba(221, 232, 255, 0.22) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(214, 226, 255, 0.04),
+    0 1px 4px rgba(0, 0, 0, 0.18) !important;
+  border-radius: 0.18rem !important;
+}
+
+.play-page[data-board-style="riftatlas"] .bf-tile.bf-tile-active,
+.play-page[data-board-style="riftatlas"] .bf-tile[data-active="true"] {
+  border-color: rgba(255, 222, 164, 0.42) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 222, 164, 0.16),
+    0 1px 6px rgba(0, 0, 0, 0.24) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* D6 — Better-centered hand                                           */
+/* ------------------------------------------------------------------ */
+
+/* Make sure rb-band-hand spans full width of the player band and the
+ * fan is centered horizontally. */
+.rb-band-hand {
+  grid-column: 1 / -1;
+  justify-content: center !important;
+}
+
+.rb-band-hand .player,
+.rb-band-hand .player .hand {
+  width: 100%;
+  justify-content: center !important;
+}
+
+/* BF tile title — riftatlas keeps the BF name as a small overlay at the
+ * top-left of the tile (small uppercase label, ellipsis ok).  Our title
+ * was overflowing as a horizontal banner.  Re-anchor it inside the tile. */
+.play-page[data-board-style="riftatlas"] .bf-tile {
+  position: relative;
+}
+
+.play-page[data-board-style="riftatlas"] .bf-tile-center {
+  position: relative;
+  overflow: hidden;
+}
+
+.play-page[data-board-style="riftatlas"] .bf .bf-tile-center .bf-header,
+.play-page[data-board-style="riftatlas"] .bf-tile-center > .bf-header {
+  position: absolute !important;
+  top: 0.36rem !important;
+  left: 0.42rem !important;
+  right: 0.42rem !important;
+  display: flex !important;
+  align-items: center;
+  gap: 0.24rem;
+  z-index: 4;
+  background: linear-gradient(180deg,
+    rgba(8, 14, 30, 0.7) 0%,
+    rgba(8, 14, 30, 0.4) 80%,
+    rgba(8, 14, 30, 0) 100%);
+  padding: 0.18rem 0.34rem !important;
+  border-radius: 0.18rem;
+  max-width: calc(100% - 0.84rem) !important;
+  flex-wrap: nowrap !important;
+}
+
+.play-page[data-board-style="riftatlas"] .bf .bf-tile-center .bf-title,
+.play-page[data-board-style="riftatlas"] .bf-tile-center .bf-title {
+  font-size: 0.62rem !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rb-text-main);
+  font-weight: 600;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  flex: 1 1 auto;
+}
