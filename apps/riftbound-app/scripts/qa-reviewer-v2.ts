@@ -741,9 +741,9 @@ async function probeStructural(
       }
       return {
         category: it.category,
-        name: it.entry.name,
         description: it.entry.description,
         matchedSelector: matched,
+        name: it.entry.name,
       };
     }), entries as unknown as { category: StructuralProbeResult["category"]; entry: FixtureEntry }[]);
 }
@@ -906,6 +906,7 @@ Audit each phase that appears in the trail (Awaken, Beginning, Channel, Draw, Ma
 - Showdown should display attacker/defender comparison + a priority prompt
 - Cleanup should remove dead units
 - Runes should be VISIBLE as individual clickable chips with domain color (body=red, mind=blue, chaos=purple, calm=green, fury=orange, order=yellow), exhausted ones rotated 90°. A count-only pill is a CORE_ACTION_MISSING defect — the player cannot tap a count.
+- Choice ("Choose one — A. B.") spells (Flurry of Feathers, Disposal Order, Curtain Call, Party Favors): if the trail shows a 'choice' effect resolving (or a 'pick-mode' pendingChoice), the frames MUST show a ChoiceModePicker modal (data-testid="choice-modal", with one [data-testid^="choice-option-"] button per option) BEFORE the engine resolves. Auto-resolving to the first option silently is a CORE_ACTION_MISSING defect — the caster never got to pick. Flag it if you see the spell resolve without the modal appearing first.
 
 For EVERY defect, categorize:
 - "CORE_ACTION_MISSING": something the player needs to DO that the UI doesn't expose (tap a rune, declare attackers, play a card, choose a target, pass priority, end turn, etc.). Missing visible affordance for a required game action ALWAYS counts as core-action-missing — even if the underlying engine state is correct.

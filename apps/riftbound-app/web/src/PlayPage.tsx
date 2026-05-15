@@ -28,6 +28,16 @@ import { MoveLog, buildCardNameMap } from "./components/MoveLog";
 import { TurnBanner } from "./components/TurnBanner";
 import { ShowdownBreadcrumb } from "./components/ShowdownBreadcrumb";
 import { RunePool } from "./components/RunePool";
+import { ContextMenu, type MenuItem } from "./components/ContextMenu";
+import {
+  destroyCard as manualDestroy,
+  moveCard as manualMoveCard,
+  recycleCard as manualRecycle,
+  setCounters as manualSetCounters,
+  setDamage as manualSetDamage,
+  spawnToken as manualSpawnToken,
+  toggleExhaust as manualToggleExhaust,
+} from "./lib/manual-api";
 
 interface PlayPageProps {
   readonly sessionId: string;
@@ -45,6 +55,15 @@ interface PlayPageProps {
    * The original 2P-aware behavior (disabled controls + waiting banner).
    */
   readonly mode?: "default" | "goldfish";
+  /**
+   * Admin / manual mode. When true, the play page intercepts right-clicks
+   * on zones and unit/card elements and opens a {@link ContextMenu} with
+   * direct manipulation actions (spawn token, move card, set damage, etc.)
+   * instead of the default ping pulse. Defaults to false — manual mode is
+   * a power-user override and must be explicitly enabled via the top-nav
+   * "Manual" button.
+   */
+  readonly manualMode?: boolean;
 }
 
 /**
@@ -173,7 +192,7 @@ const PHASE_ROLE: Readonly<Record<string, string>> = {
   main: "play cards",
 };
 
-export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "default" }: PlayPageProps) {
+export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "default", manualMode = false }: PlayPageProps) {
   const [view, setView] = useState<GameView | null>(null);
   const [trail, setTrail] = useState<readonly TrailStep[]>([]);
   const [hand, setHand] = useState<Record<string, readonly HandCard[]>>({});

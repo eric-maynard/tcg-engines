@@ -496,6 +496,25 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       const rawDrawCount = effect.amount ?? 1;
       const drawCount =
         typeof rawDrawCount === "number" ? rawDrawCount : resolveAmount(rawDrawCount, ctx);
+      // `player: "each"` (Invert Timelines, et al.) means every player draws.
+      // Default is the resolving player only. Recurse so the burn-out logic
+      // Below runs in the per-player context (the recursive call lands in
+      // The single-player branch since playerSpec defaults to undefined).
+      const drawPlayerSpec = (effect as unknown as { player?: string }).player;
+      if (drawPlayerSpec === "each" || drawPlayerSpec === "opponent") {
+        const allIds = Object.keys(ctx.draft.players);
+        const targets = drawPlayerSpec === "each"
+          ? allIds
+          : allIds.filter((p) => p !== ctx.playerId);
+        for (const pid of targets) {
+          const subCtx = pid === ctx.playerId ? ctx : { ...ctx, playerId: pid };
+          executeEffect(
+            { ...(effect as unknown as Record<string, unknown>), player: undefined } as unknown as ExecutableEffect,
+            subCtx,
+          );
+        }
+        break;
+      }
       for (let i = 0; i < drawCount; i++) {
         // Check if deck is empty → Burn Out (rule 431, fka 518)
         const deckCards = ctx.zones.getCardsInZone(
@@ -1080,14 +1099,51 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "discard": {
-      const count = resolveAmount(effect.amount ?? 1, ctx);
-      const hand = ctx.zones.getCardsInZone("hand" as CoreZoneId, ctx.playerId as CorePlayerId);
-      for (let i = 0; i < Math.min(count, hand.length); i++) {
-        if (hand[i]) {
-          ctx.zones.moveCard({
-            cardId: hand[i],
-            targetZoneId: "trash" as CoreZoneId,
-          });
+      // `amount: "hand"` (string) is shorthand for "the entire hand" — emitted
+      // By the parser for wording like "discards their hand" (Invert
+      // Timelines, OGN-201). `resolveAmount` parses unrecognized strings as 0
+      // So we special-case it here before falling through to numeric resolve.
+      // `player: "each"` (Invert Timelines) means every player discards (and
+      // Then optionally chains a `then` effect for each player); the default
+      // Is the resolving player only.
+      const discardEff = effect as unknown as {
+        amount?: unknown;
+        player?: "each" | "self" | "opponent";
+        then?: ExecutableEffect;
+      };
+      const rawAmount = discardEff.amount ?? 1;
+      const playerSpec = discardEff.player ?? "self";
+      const allPlayerIds = Object.keys(ctx.draft.players);
+      let targetPlayers: string[];
+      if (playerSpec === "each") {
+        targetPlayers = allPlayerIds;
+      } else if (playerSpec === "opponent") {
+        targetPlayers = allPlayerIds.filter((p) => p !== ctx.playerId);
+      } else {
+        targetPlayers = [ctx.playerId];
+      }
+      for (const pid of targetPlayers) {
+        const hand = ctx.zones.getCardsInZone("hand" as CoreZoneId, pid as CorePlayerId);
+        const count =
+          rawAmount === "hand"
+            ? hand.length
+            : (typeof rawAmount === "number"
+              ? rawAmount
+              : resolveAmount(rawAmount, ctx));
+        for (let i = 0; i < Math.min(count, hand.length); i++) {
+          if (hand[i]) {
+            ctx.zones.moveCard({
+              cardId: hand[i],
+              targetZoneId: "trash" as CoreZoneId,
+            });
+          }
+        }
+        // Run the chained `then` effect (e.g. "then draws 4") in the
+        // Context of the player who just discarded so `draw` etc. land
+        // On the correct player.
+        if (discardEff.then) {
+          const subCtx = pid === ctx.playerId ? ctx : { ...ctx, playerId: pid };
+          executeEffect(discardEff.then, subCtx);
         }
       }
       break;

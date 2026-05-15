@@ -2656,13 +2656,20 @@ function parseEffects(text: string): Effect | undefined {
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
     if (options.length >= 2) {
-      const parsedOptions: { effect: Effect }[] = [];
+      const parsedOptions: { effect: Effect; label?: string }[] = [];
       for (const opt of options) {
+        // Preserve the raw human-readable option text as `label` so the
+        // SPA's ChoiceModePicker can render a meaningful button (otherwise
+        // The engine falls back to "Option 1" / "Option 2").
+        const label = opt.trim().replace(/\.$/, "");
         const eff = parseEffect(opt.trim());
         if (eff) {
-          parsedOptions.push({ effect: eff });
+          parsedOptions.push({ effect: eff, label });
         } else {
-          parsedOptions.push({ effect: { text: opt.trim(), type: "raw" } as unknown as Effect });
+          parsedOptions.push({
+            effect: { text: opt.trim(), type: "raw" } as unknown as Effect,
+            label,
+          });
         }
       }
       if (parsedOptions.length >= 2) {

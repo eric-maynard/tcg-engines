@@ -166,6 +166,67 @@ interface BuildArgs {
    * Elsewhere.
    */
   sourceCardZone?: string;
+  /**
+   * Per-card adaptive seeding (see `analyzeRequirements`). When provided,
+   * `ctx.variables` is extended with each named entry mapped to 3 so
+   * `amount: { variable: "<name>" }` expressions (Sivir, Ambitious's
+   * `excess-damage`; X-cost spells; Resolve-checks) resolve to a non-zero
+   * Number instead of dropping to 0 and looking like a broken handler.
+   */
+  extraVariables?: Record<string, number>;
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive requirement analysis — walk an effect tree before running and
+// Collect: (a) named `amount.variable` references the engine will read from
+// `ctx.variables`, (b) `player: "each"` so the audit knows to expect both
+// Players' side-effects, (c) dual-target effects whose two target descriptors
+// Filter to the SAME candidate pool (swap-might / swap-units) — the
+// Deterministic resolver returns the same first candidate for both, so the
+// Handler's `a !== b` guard drops the swap. The audit pre-resolves each
+// Descriptor independently and rewrites the effect to direct `cardId`
+// References pointing at TWO DIFFERENT cards so the handler actually fires.
+// ---------------------------------------------------------------------------
+
+interface AuditRequirements {
+  /** Named variables referenced via `{ variable: "<name>" }` AmountExpressions. */
+  variables: string[];
+  /** True if any sub-effect uses `player: "each"`. */
+  hasEachPlayer: boolean;
+  /** True if any sub-effect has both `target1` and `target2` (swap-style). */
+  hasDualTarget: boolean;
+}
+
+function analyzeRequirements(effect: unknown): AuditRequirements {
+  const req: AuditRequirements = {
+    hasDualTarget: false,
+    hasEachPlayer: false,
+    variables: [],
+  };
+  const visited = new Set<unknown>();
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== "object") {return;}
+    if (visited.has(node)) {return;}
+    visited.add(node);
+    const obj = node as Record<string, unknown>;
+    // Detect named-variable amount expressions anywhere in the tree.
+    const amt = obj.amount;
+    if (amt && typeof amt === "object" && "variable" in amt) {
+      const name = (amt as { variable: string }).variable;
+      if (name && !req.variables.includes(name)) {req.variables.push(name);}
+    }
+    if (obj.player === "each") {req.hasEachPlayer = true;}
+    if ("target1" in obj && "target2" in obj) {req.hasDualTarget = true;}
+    // Recurse into the standard wrapper / sub-effect slots.
+    for (const k of ["effect", "then", "else", "replacement"]) {
+      visit(obj[k]);
+    }
+    if (Array.isArray(obj.effects)) {
+      for (const sub of obj.effects) {visit(sub);}
+    }
+  };
+  visit(effect);
+  return req;
 }
 
 function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; zoneOf: Map<string, string> } {
@@ -196,9 +257,14 @@ function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; 
   // Might to a fixed positive value.
   addCard(cardId, sourceCardZone, { cardType: args.cardType, id: cardId, might: 3, name: "source" });
 
-  // Friendly units on base + a battlefield so unit-target effects resolve.
+  // Friendly units on base + TWO battlefields so unit-target effects resolve
+  // And dual-target swap effects (swap-might / swap-units) have two distinct
+  // Candidates available in the friendly pool. Yone Blademaster style
+  // `target: { controller: enemy, location: base }` similarly needs an enemy
+  // Unit physically on base — see `dummy-enemy-unit-base` below.
   addCard("dummy-friendly-unit-base", "base", { cardType: "unit", id: "dummy-friendly-unit-base", might: 3, name: "dummy-friendly" });
   addCard("dummy-friendly-unit-bf", "battlefield-bf-1", { cardType: "unit", id: "dummy-friendly-unit-bf", might: 3, name: "dummy-friendly-bf" });
+  addCard("dummy-friendly-unit-bf2", "battlefield-bf-2", { cardType: "unit", id: "dummy-friendly-unit-bf2", might: 4, name: "dummy-friendly-bf2" });
   // Enemy unit on the same battlefield so enemy-controller targets work.
   addCard("dummy-enemy-unit-bf", "battlefield-bf-1", { cardType: "unit", id: "dummy-enemy-unit-bf", might: 3, name: "dummy-enemy" });
   // Enemy unit on a SECOND battlefield so "move to here" effects that
@@ -208,6 +274,12 @@ function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; 
   // (bf-1), and the move handler's "skip if already at destination"
   // Filter drops it — masking the move handler as broken.
   addCard("dummy-enemy-unit-bf2", "battlefield-bf-2", { cardType: "unit", id: "dummy-enemy-unit-bf2", might: 3, name: "dummy-enemy-bf2" });
+  // Enemy unit physically on BASE — Yone Blademaster ("deal damage to an
+  // Enemy unit in a base") and similar "in a base" wording filter on
+  // `location: "base"`, which excludes any enemy that's only on the
+  // Battlefield. Without this dummy the damage handler resolves zero
+  // Targets and looks like a broken handler.
+  addCard("dummy-enemy-unit-base", "base", { cardType: "unit", id: "dummy-enemy-unit-base", might: 3, name: "dummy-enemy-base" });
   // Friendly gear / equipment so gear-target effects resolve.
   addCard("dummy-friendly-gear", "base", { cardType: "gear", id: "dummy-friendly-gear", might: 0, name: "dummy-gear" });
   // Cards in hand so `discard` works.
@@ -216,9 +288,16 @@ function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; 
   // Opponent hand cards so `reveal-hand` works.
   addCard("dummy-opp-hand-1", "hand", { cardType: "spell", id: "dummy-opp-hand-1", name: "opp-h1" });
   addCard("dummy-opp-hand-2", "hand", { cardType: "unit", id: "dummy-opp-hand-2", name: "opp-h2" });
-  // Cards in mainDeck so look/draw/predict/recycle work.
+  // Cards in mainDeck so look/draw/predict/recycle work. Both players get
+  // A non-empty deck so `player: "opponent"` / `player: "each"` draw and
+  // Look effects don't burn out into a no-op (e.g. The Dreaming Tree's
+  // "opponent draws 1" — without an opponent deck the draw handler hits
+  // The rule-431 burn-out path and never invokes `drawCards`).
   for (let i = 0; i < 5; i++) {
     addCard(`dummy-deck-${i}`, "mainDeck", { cardType: "spell", id: `dummy-deck-${i}`, name: `deck-${i}` });
+  }
+  for (let i = 0; i < 5; i++) {
+    addCard(`dummy-opp-deck-${i}`, "mainDeck", { cardType: "spell", id: `dummy-opp-deck-${i}`, name: `opp-deck-${i}` });
   }
   // Runes in runeDeck so channel works.
   for (let i = 0; i < 3; i++) {
@@ -232,14 +311,17 @@ function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; 
   ownerOf.set(cardId, PLAYER);
   ownerOf.set("dummy-friendly-unit-base", PLAYER);
   ownerOf.set("dummy-friendly-unit-bf", PLAYER);
+  ownerOf.set("dummy-friendly-unit-bf2", PLAYER);
   ownerOf.set("dummy-enemy-unit-bf", OPP);
   ownerOf.set("dummy-enemy-unit-bf2", OPP);
+  ownerOf.set("dummy-enemy-unit-base", OPP);
   ownerOf.set("dummy-friendly-gear", PLAYER);
   ownerOf.set("dummy-hand-1", PLAYER);
   ownerOf.set("dummy-hand-2", PLAYER);
   ownerOf.set("dummy-opp-hand-1", OPP);
   ownerOf.set("dummy-opp-hand-2", OPP);
   for (let i = 0; i < 5; i++) {ownerOf.set(`dummy-deck-${i}`, PLAYER);}
+  for (let i = 0; i < 5; i++) {ownerOf.set(`dummy-opp-deck-${i}`, OPP);}
   for (let i = 0; i < 3; i++) {ownerOf.set(`dummy-rune-${i}`, PLAYER);}
   ownerOf.set("dummy-trash-1", PLAYER);
 
@@ -330,7 +412,9 @@ function buildContext(args: BuildArgs): { ctx: EffectContext; rec: RecordedCtx; 
     sourceZone,
     // Bind common AmountExpression variables so X-cost-style effects
     // (Bullet Time: `{ variable: "x" }`) resolve to a non-zero amount.
-    variables: { x: 3 },
+    // `extraVariables` is populated per-card from `analyzeRequirements`
+    // (e.g. Sivir Ambitious's `excess-damage`, future combat-counter refs).
+    variables: { x: 3, ...args.extraVariables },
     zones: {
       drawCards: ({ count, from, playerId, to }) => {
         rec.drawCalls.push({ count, from: from as string, playerId: playerId as string, to: to as string });
@@ -768,15 +852,63 @@ for (const card of allCards) {
       continue;
     }
 
+    // Per-card adaptive seeding: walk this ability's effect tree once and
+    // Collect (a) named variables to bind into `ctx.variables`, (b) whether
+    // It uses dual-target / each-player so we can patch the effect AST
+    // Before handing it to `executeEffect`.
+    const requirements = analyzeRequirements(info.primary);
+    const extraVariables: Record<string, number> = {};
+    for (const v of requirements.variables) {
+      extraVariables[v] = 3;
+    }
+
+    // For dual-target effects (swap-might, swap-units), the deterministic
+    // Resolver returns the SAME first candidate for `target1` and `target2`
+    // When both descriptors share a controller/type filter. Real play has the
+    // Player pick two distinct units; the audit fakes that by pre-resolving
+    // Each descriptor and rewriting the effect to direct `cardId`
+    // References pointing at two different cards. We do this only when both
+    // Descriptors are objects (so they support the rewrite) and we have two
+    // Distinct matching candidates in the friendly/enemy pool.
+    let effectToRun: ExecutableEffect = info.primary;
+    if (requirements.hasDualTarget) {
+      const dual = info.primary as unknown as {
+        target1?: { controller?: string; type?: string };
+        target2?: { controller?: string; type?: string };
+      };
+      // Build a candidate map from the dummy units we know we placed in
+      // BuildContext. We don't need to call resolveTarget here — we just
+      // Pick two distinct unit IDs satisfying each descriptor's
+      // Controller filter (most dual-target effects use unit-typed targets).
+      const friendlyUnitIds = ["dummy-friendly-unit-base", "dummy-friendly-unit-bf", "dummy-friendly-unit-bf2"];
+      const enemyUnitIds = ["dummy-enemy-unit-base", "dummy-enemy-unit-bf", "dummy-enemy-unit-bf2"];
+      const pickFor = (desc: { controller?: string; type?: string } | undefined, taken: Set<string>): string | undefined => {
+        const pool = desc?.controller === "enemy" ? enemyUnitIds : friendlyUnitIds;
+        return pool.find((id) => !taken.has(id));
+      };
+      const taken = new Set<string>();
+      const a = pickFor(dual.target1, taken);
+      if (a) {taken.add(a);}
+      const b = pickFor(dual.target2, taken);
+      if (a && b && a !== b) {
+        effectToRun = {
+          ...(info.primary as Record<string, unknown>),
+          target1: { cardId: a, type: "specific-card" },
+          target2: { cardId: b, type: "specific-card" },
+        } as unknown as ExecutableEffect;
+      }
+    }
+
     let runRes: { ok: boolean; expected: string; actual: string; root?: string };
     try {
       const { ctx, rec } = buildContext({
         cardId: card.id as string,
         cardType: card.cardType as string,
+        extraVariables,
         sourceCardZone,
         sourceZone,
       });
-      executeEffect(info.primary, ctx);
+      executeEffect(effectToRun, ctx);
       runRes = classify(info.primary, rec, ctx);
     } catch (error) {
       const err = error as Error;

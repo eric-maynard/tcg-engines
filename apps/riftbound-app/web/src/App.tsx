@@ -112,6 +112,27 @@ function navigate(path: string): void {
 
 export function App() {
   const [route, setRoute] = useState<Route | null>(null);
+  /**
+   * Admin "Manual" mode — when ON, the play page surfaces right-click
+   * context menus on zones / units / cards so the player can directly
+   * spawn tokens, move cards, set damage/counters, exhaust, destroy, or
+   * recycle. Defaults to OFF because manual mode bypasses rule
+   * enforcement. Persisted in localStorage so a toggle survives reloads.
+   */
+  const [manualMode, setManualMode] = useState<boolean>(() => {
+    try {
+      return globalThis.localStorage?.getItem("rb-manual-mode") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const toggleManual = useCallback(() => {
+    setManualMode((prev) => {
+      const next = !prev;
+      try { globalThis.localStorage?.setItem("rb-manual-mode", next ? "true" : "false"); } catch { /* Noop */ }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const update = () => setRoute(readRoute());
@@ -145,12 +166,14 @@ export function App() {
   if (!route) {return <div>Booting session…</div>;}
 
   const navProps = {
+    manualMode,
     onDecks: goDeckList,
     onGoldfish: goGoldfish,
     onLobby: goLobby,
     onPlay: goPlay,
     onProfile: goProfile,
     onSealed: goSealed,
+    onToggleManual: toggleManual,
   };
 
   if (route.kind === "deck-list") {
@@ -246,6 +269,7 @@ export function App() {
         sessionId={route.sessionId}
         localPlayerId={route.localPlayerId}
         mode={route.mode}
+        manualMode={manualMode}
       />
     </>
   );
@@ -259,6 +283,8 @@ function TopNav({
   onSealed,
   onProfile,
   current,
+  manualMode,
+  onToggleManual,
 }: {
   onPlay: () => void;
   onDecks: () => void;
@@ -267,6 +293,8 @@ function TopNav({
   onSealed: () => void;
   onProfile: () => void;
   current: "play" | "decks" | "lobby" | "goldfish" | "sealed" | "profile";
+  manualMode: boolean;
+  onToggleManual: () => void;
 }) {
   return (
     <nav className="app-top-nav" data-testid="app-top-nav">
@@ -317,6 +345,21 @@ function TopNav({
         aria-current={current === "profile" ? "page" : undefined}
       >
         Profile
+      </button>
+      <button
+        type="button"
+        onClick={onToggleManual}
+        data-testid="nav-manual"
+        data-manual-on={manualMode ? "true" : "false"}
+        className={manualMode ? "manual-on" : ""}
+        aria-pressed={manualMode ? "true" : "false"}
+        title={
+          manualMode
+            ? "Manual mode ON — right-click zones / cards for direct controls. Click to disable."
+            : "Enable manual mode — right-click zones / cards to spawn tokens, move units, set damage, etc."
+        }
+      >
+        Manual{manualMode ? " ●" : ""}
       </button>
     </nav>
   );

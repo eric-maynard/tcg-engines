@@ -141,6 +141,15 @@
       "name": "controller_distinction",
       "selectors": [".bf-mini-chip[data-controller]", ".base-zone-unit[data-controller]"],
       "description": "units carry a visual cue indicating which player controls them"
+    },
+    {
+      "name": "choice_modal",
+      "selectors": ["[data-testid='choice-modal']", ".choice-modal", "[data-variant='pick-mode']"],
+      "description": "When a modal 'Choose one — A. B.' spell (Flurry of Feathers / Disposal Order / Curtain Call) resolves, a ChoiceModePicker MUST appear with one big button per option BEFORE the engine resolves. Auto-resolving to the first option is a defect.",
+      "applies_when": "view.pendingChoice?.type === 'pick-mode'",
+      "required_children": [
+        "[data-testid^='choice-option-']"
+      ]
     }
   ]
 }

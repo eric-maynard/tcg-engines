@@ -2829,6 +2829,227 @@ const server = Bun.serve({
       });
     }
 
+    // ────────────────────────────────────────────────────────────────────
+    // Admin / Manual board controls (Rift Atlas parity).
+    // ────────────────────────────────────────────────────────────────────
+    // POST /api/v2/manual/:op/:sessionId
+    //
+    // Power-user override: lets the player manipulate zones / cards directly
+    // When an automatic effect didn't fire (e.g. token spawns, damage chips,
+    // Ad-hoc moves). Every op mutates the engine's private `internalState`
+    // And then broadcasts via the existing v2 SSE channel so the opponent's
+    // Browser also sees the change.
+    //
+    // Ops:
+    //   - spawn-token   {zone, controller, tokenSpec?}
+    //   - spawn-card    {zone, cardId, controller}
+    //   - move-card     {cardId, toZone}
+    //   - set-damage    {cardId, damage}
+    //   - set-counters  {cardId, counters}
+    //   - toggle-exhaust {cardId}
+    //   - destroy       {cardId}              -> trash
+    //   - recycle       {cardId}              -> bottom of owner's main deck
+    //
+    // All ops are intentionally permissive (no legality checks) — the whole
+    // Point of "manual mode" is to bypass rule enforcement when an automatic
+    // Effect doesn't work.
+    if (pathname.startsWith("/api/v2/manual/") && req.method === "POST") {
+      const parts = pathname.split("/"); // ["", "api", "v2", "manual", op, sessionId]
+      const op = parts[4] ?? "";
+      const sessionId = parts[5] ?? "";
+      if (!sessionId) {return json({ error: "missing session" }, 400);}
+      let session = demoSessions.get(sessionId);
+      if (!session) {
+        // Lazy-create like /state does so manual mode works on a fresh tab.
+        try {
+          session = new EngineSession({ realDecks: true, seed: `demo-${sessionId}` });
+        } catch {
+          session = new EngineSession({ seed: `demo-${sessionId}` });
+        }
+        demoSessions.set(sessionId, session);
+      }
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      const internal = getInternalSnapshot(session.engine);
+      const cardReg = getGlobalCardRegistry();
+
+      // Helper: ensure a zone bucket exists in internalState so we can push
+      // Into it. Real Riftbound zones (hand, base, trash, mainDeck, etc.)
+      // Are pre-created at engine init; battlefield-* zones are dynamic.
+      const ensureZone = (zoneId: string) => {
+        if (!internal.zones[zoneId]) {
+          internal.zones[zoneId] = {
+            cardIds: [],
+            config: {
+              faceDown: false,
+              id: zoneId,
+              name: zoneId,
+              ordered: false,
+              visibility: "public",
+            },
+          };
+        }
+        return internal.zones[zoneId]!;
+      };
+
+      // Helper: remove a card from its current zone bucket.
+      const removeFromCurrentZone = (cardId: string) => {
+        const cur = internal.cards[cardId];
+        if (!cur) {return;}
+        const z = internal.zones[cur.zone];
+        if (!z) {return;}
+        const idx = z.cardIds.indexOf(cardId);
+        if (idx !== -1) {z.cardIds.splice(idx, 1);}
+      };
+
+      let opResult: Record<string, unknown> = { ok: true };
+      try {
+        switch (op) {
+          case "spawn-token": {
+            const zone = body.zone as string | undefined;
+            const controller = (body.controller as string | undefined) ?? "player-1";
+            const spec = (body.tokenSpec as Record<string, unknown> | undefined) ?? {};
+            if (!zone) {opResult = { error: "zone required", ok: false }; break;}
+            const tokenId = `manual-token-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            const tokenName = (spec.name as string | undefined) ?? "Bird Token";
+            const might = (spec.might as number | undefined) ?? 1;
+            cardReg.register(tokenId, {
+              abilities: [],
+              cardType: "unit",
+              energyCost: 0,
+              id: tokenId,
+              might,
+              name: tokenName,
+            });
+            ensureZone(zone);
+            internal.cards[tokenId] = {
+              controller, definitionId: tokenId, owner: controller, zone,
+            };
+            internal.cardMetas[tokenId] = {
+              buffed: false, combatRole: null, damage: 0,
+              exhausted: false, hidden: false, stunned: false,
+            };
+            internal.zones[zone]!.cardIds.push(tokenId);
+            opResult = { cardId: tokenId, name: tokenName, ok: true };
+            break;
+          }
+          case "spawn-card": {
+            const zone = body.zone as string | undefined;
+            const cardDefId = body.cardId as string | undefined;
+            const controller = (body.controller as string | undefined) ?? "player-1";
+            if (!zone || !cardDefId) {
+              opResult = { error: "zone and cardId required", ok: false }; break;
+            }
+            const def = registry.get(cardDefId);
+            if (!def) {opResult = { error: `unknown card ${cardDefId}`, ok: false }; break;}
+            const instanceId = `manual-${cardDefId}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            cardReg.register(
+              instanceId,
+              makeLookupPayload(def as unknown as Record<string, unknown>, instanceId),
+            );
+            ensureZone(zone);
+            internal.cards[instanceId] = {
+              controller, definitionId: cardDefId, owner: controller, zone,
+            };
+            internal.cardMetas[instanceId] = {
+              buffed: false, combatRole: null, damage: 0,
+              exhausted: false, hidden: false, stunned: false,
+            };
+            internal.zones[zone]!.cardIds.push(instanceId);
+            opResult = { cardId: instanceId, ok: true };
+            break;
+          }
+          case "move-card": {
+            const cardId = body.cardId as string | undefined;
+            const toZone = body.toZone as string | undefined;
+            if (!cardId || !toZone) {
+              opResult = { error: "cardId and toZone required", ok: false }; break;
+            }
+            const cur = internal.cards[cardId];
+            if (!cur) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            removeFromCurrentZone(cardId);
+            ensureZone(toZone);
+            internal.zones[toZone]!.cardIds.push(cardId);
+            internal.cards[cardId] = { ...cur, zone: toZone };
+            opResult = { ok: true };
+            break;
+          }
+          case "set-damage": {
+            const cardId = body.cardId as string | undefined;
+            const damage = Math.max(0, Number(body.damage ?? 0));
+            if (!cardId) {opResult = { error: "cardId required", ok: false }; break;}
+            const meta = internal.cardMetas[cardId];
+            if (!meta) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            internal.cardMetas[cardId] = { ...meta, damage };
+            opResult = { damage, ok: true };
+            break;
+          }
+          case "set-counters": {
+            const cardId = body.cardId as string | undefined;
+            const counters = Math.max(0, Number(body.counters ?? 0));
+            if (!cardId) {opResult = { error: "cardId required", ok: false }; break;}
+            const meta = internal.cardMetas[cardId];
+            if (!meta) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            // CardMeta has a `buffed` boolean; we also stash a numeric
+            // Counters value via a shadow property the SPA can read off
+            // Its surfaced view. Engine consumers read `buffed`.
+            internal.cardMetas[cardId] = {
+              ...meta,
+              buffed: counters > 0,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ...(({ counters } as unknown) as Record<string, unknown>),
+            } as RiftboundCardMeta;
+            opResult = { counters, ok: true };
+            break;
+          }
+          case "toggle-exhaust": {
+            const cardId = body.cardId as string | undefined;
+            if (!cardId) {opResult = { error: "cardId required", ok: false }; break;}
+            const meta = internal.cardMetas[cardId];
+            if (!meta) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            const exhausted = !meta.exhausted;
+            internal.cardMetas[cardId] = { ...meta, exhausted };
+            opResult = { exhausted, ok: true };
+            break;
+          }
+          case "destroy": {
+            const cardId = body.cardId as string | undefined;
+            if (!cardId) {opResult = { error: "cardId required", ok: false }; break;}
+            const cur = internal.cards[cardId];
+            if (!cur) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            removeFromCurrentZone(cardId);
+            ensureZone("trash");
+            internal.zones["trash"]!.cardIds.push(cardId);
+            internal.cards[cardId] = { ...cur, zone: "trash" };
+            opResult = { ok: true };
+            break;
+          }
+          case "recycle": {
+            const cardId = body.cardId as string | undefined;
+            if (!cardId) {opResult = { error: "cardId required", ok: false }; break;}
+            const cur = internal.cards[cardId];
+            if (!cur) {opResult = { error: `unknown card ${cardId}`, ok: false }; break;}
+            removeFromCurrentZone(cardId);
+            ensureZone("mainDeck");
+            // Bottom of deck = front of array per Riftbound convention
+            // (engine draws from end). Stick it at index 0.
+            internal.zones["mainDeck"]!.cardIds.unshift(cardId);
+            internal.cards[cardId] = { ...cur, zone: "mainDeck" };
+            opResult = { ok: true };
+            break;
+          }
+          default: {
+            opResult = { error: `unknown op ${op}`, ok: false };
+          }
+        }
+      } catch (error) {
+        opResult = { error: (error as Error).message, ok: false };
+      }
+
+      const spaState = buildSpaState(sessionId, session);
+      broadcastV2State(sessionId, spaState);
+      return json({ ...opResult, ...spaState });
+    }
+
     // GET /play and /play/* — serve the Vite-built SPA in production.
     // In dev the user hits the Vite dev server (:5173) directly. The Bun
     // Server only owns /play/* when `web/dist/` exists (after `bun run build`).

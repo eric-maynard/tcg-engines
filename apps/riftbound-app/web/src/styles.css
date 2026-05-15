@@ -7016,3 +7016,186 @@ button {
 .phase-strip .phase.phase-transition-pulse {
   animation: phase-transition-pulse 1s ease-out;
 }
+
+/* ============================================================
+ * ChoiceModePicker modal — Flurry of Feathers et al.
+ *
+ * Renders a centered "Choose one — A. B." modal with big buttons
+ * one per option label. Reuses the `target-picker`/`target-picker-
+ * backdrop`/`target-picker-modal` shell selectors and adds its own
+ * `choice-modal-*` class hooks. The shell rules below double as a
+ * minimal target-picker base so the modal centers and the
+ * backdrop dims the board (the existing TargetPicker / LookPicker
+ * inherit the same styling).
+ * ============================================================ */
+
+.target-picker {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.target-picker-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(2px);
+}
+
+.target-picker-modal {
+  position: relative;
+  background: #1f2130;
+  border: 1px solid #3e4366;
+  border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
+  padding: 18px 20px;
+  min-width: 360px;
+  max-width: 560px;
+  color: #e6e6ec;
+}
+
+.target-picker-modal h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.choice-modal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.choice-modal-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: linear-gradient(180deg, #2a2f4a 0%, #1f2335 100%);
+  border: 1px solid #4a527a;
+  color: #f0f0f6;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 14px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 80ms ease, transform 80ms ease, background 80ms ease;
+}
+
+.choice-modal-option:hover,
+.choice-modal-option:focus-visible {
+  border-color: #ffd574;
+  outline: none;
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, #2f3656 0%, #232843 100%);
+}
+
+.choice-modal-option:active {
+  transform: translateY(0);
+  background: #1a1e30;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Manual mode (admin / power-user override)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+.app-top-nav button.manual-on,
+.app-top-nav button[data-manual-on="true"] {
+  background: linear-gradient(180deg, #f8b500 0%, #d99400 100%);
+  color: #1a1e30;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(255, 213, 116, 0.55);
+}
+
+.play-page[data-manual-mode="true"] {
+  /* Subtle dashed gold outline so the player always knows manual mode is on. */
+  outline: 2px dashed rgba(255, 213, 116, 0.4);
+  outline-offset: -4px;
+}
+
+.play-page[data-manual-mode="true"] [data-card-id],
+.play-page[data-manual-mode="true"] [data-zone-id] {
+  cursor: context-menu;
+}
+
+/* Context menu */
+.rb-context-menu {
+  background: #20253d;
+  border: 1px solid #3a4163;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  padding: 4px 0;
+  min-width: 180px;
+  font-size: 13px;
+  color: #e4e8f5;
+  user-select: none;
+}
+
+.rb-context-menu-item {
+  position: relative;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.rb-context-menu-item:hover:not(.disabled),
+.rb-context-menu-item:focus:not(.disabled) {
+  background: linear-gradient(180deg, #2f3656 0%, #232843 100%);
+}
+
+.rb-context-menu-item.disabled {
+  color: #6b7090;
+  cursor: not-allowed;
+}
+
+.rb-context-menu-icon {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+}
+
+.rb-context-menu-label {
+  flex: 1;
+}
+
+.rb-context-menu-arrow {
+  opacity: 0.7;
+  font-size: 14px;
+}
+
+.rb-context-menu-separator {
+  height: 1px;
+  background: #3a4163;
+  margin: 4px 0;
+}
+
+.rb-context-menu-item.has-submenu .rb-context-menu-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  min-width: 180px;
+  background: #20253d;
+  border: 1px solid #3a4163;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  padding: 4px 0;
+}
+
+.rb-context-menu-item.has-submenu:hover > .rb-context-menu-submenu,
+.rb-context-menu-item.has-submenu:focus-within > .rb-context-menu-submenu {
+  display: block;
+}
