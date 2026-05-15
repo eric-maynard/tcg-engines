@@ -2782,6 +2782,51 @@ const server = Bun.serve({
       });
     }
 
+    // POST /api/v2/scenario/diana-vs-ezreal/:sessionId
+    // Seed the Diana, Lunari vs Ezreal, Dashing showdown showcase. Body:
+    //   - playerId  ("player-1" | "player-2"; default "player-1") — caster/attacker
+    //   - step      ("pre-attack" | "showdown-open"; default "pre-attack")
+    if (
+      pathname.startsWith("/api/v2/scenario/diana-vs-ezreal/")
+      && req.method === "POST"
+    ) {
+      const sessionId = pathname.split("/")[5] ?? "";
+      const body = (await req.json().catch(() => ({}))) as {
+        playerId?: "player-1" | "player-2";
+        step?: "pre-attack" | "showdown-open";
+      };
+      const casterId = body.playerId === "player-2" ? "player-2" : "player-1";
+      const opponentId = casterId === "player-1" ? "player-2" : "player-1";
+      const step = body.step ?? "pre-attack";
+      let session: EngineSession;
+      try {
+        session = new EngineSession({
+          realDecks: true,
+          seed: `demo-${sessionId}`,
+        });
+      } catch (error) {
+        console.error(
+          "[/api/v2/scenario/diana-vs-ezreal] real-deck init failed, falling back to synthetic:",
+          error,
+        );
+        session = new EngineSession({ seed: `demo-${sessionId}` });
+      }
+      demoSessions.set(sessionId, session);
+      const result = session.seedDianaVsEzrealShowdown({
+        casterId,
+        opponentId,
+        step,
+      });
+      const spaState = buildSpaState(sessionId, session);
+      broadcastV2State(sessionId, spaState);
+      return json({
+        ok: result.seeded,
+        scenario: "diana-vs-ezreal",
+        seed: result,
+        ...spaState,
+      });
+    }
+
     // POST /api/v2/scenario/cast-card/:sessionId
     // Generic single-card cast seed for the random-card flow tester. Body:
     //   - cardId   (required) — card-pool id, e.g. "ogn-156-298"

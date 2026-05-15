@@ -2011,6 +2011,214 @@ export class EngineSession {
   }
 
   /**
+   * Diana, Lunari vs Ezreal, Dashing showdown demo seed.
+   *
+   * Sets the board to:
+   *   - Diana, Lunari (`unl-079-219`, 3 might, mind/blue) on `casterId`'s
+   *     side of battlefield-bf-1.
+   *   - Ezreal, Dashing (`sfd-082-221`, 3 might, mind/blue) on
+   *     `opponentId`'s side of the same battlefield.
+   *
+   * Two seed steps:
+   *   - `pre-attack` (default): both units on the battlefield, NO showdown
+   *     active yet. The bf is uncontested. This mirrors the state right
+   *     before `casterId` (turn player) declares the attack.
+   *   - `showdown-open`: same board, plus the bf is contested + a
+   *     combat showdown is open at bf-1 with focus = attacker. This is
+   *     the state right after attack is declared. From here the headless
+   *     driver passes focus (both sides) to drive `resolveFullCombat`,
+   *     which fires attack/defend events → Diana + Ezreal triggers go
+   *     onto the chain (APNAP order) → chain resolves.
+   *
+   * Generic mutation pattern matches `seedSabotageState` / `seedCombatState`.
+   * No per-card logic in `executeMove` paths — once seeded, the normal
+   * engine machinery runs the showdown.
+   *
+   * Returns instance ids of the placed units so the headless driver can
+   * target them by data-testid in the SPA.
+   */
+  seedDianaVsEzrealShowdown(opts: {
+    casterId?: string;
+    opponentId?: string;
+    battlefieldId?: string;
+    step?: "pre-attack" | "showdown-open";
+  } = {}): {
+    seeded: boolean;
+    dianaCardId?: string;
+    ezrealCardId?: string;
+    battlefieldId?: string;
+    step: "pre-attack" | "showdown-open";
+  } {
+    const casterId = opts.casterId ?? this.playerIds[0];
+    const opponentId = opts.opponentId ?? this.playerIds[1];
+    const step = opts.step ?? "pre-attack";
+
+    let cardsModule: RiftboundCardsModule | null;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      cardsModule = require("@tcg/riftbound-cards") as RiftboundCardsModule;
+    } catch {
+      cardsModule = null;
+    }
+    if (!cardsModule) {return { seeded: false, step };}
+    const cardRegistry = cardsModule.getCardRegistry();
+    const dianaDef = cardRegistry.get("unl-079-219");
+    const ezrealDef = cardRegistry.get("sfd-082-221");
+    if (!dianaDef || !ezrealDef) {return { seeded: false, step };}
+
+    const state0 = this.engine.getState();
+    const bfIds = Object.keys(state0.battlefields ?? {});
+    const battlefieldId = opts.battlefieldId ?? bfIds[0];
+    if (!battlefieldId) {return { seeded: false, step };}
+    const bfZoneId = `battlefield-${battlefieldId}`;
+
+    const internal = getInternalSnapshot(this.engine);
+    const bfZone = internal.zones?.[bfZoneId];
+    if (!bfZone) {return { seeded: false, step };}
+    const handZone = internal.zones?.["hand"];
+
+    const cardReg = getGlobalCardRegistry();
+    const dianaId = `diana-demo-${casterId}`;
+    const ezrealId = `ezreal-demo-${opponentId}`;
+
+    const mkPayload = (
+      def: { name: string; cardType: string } & Record<string, unknown>,
+      instanceId: string,
+    ) => ({
+      abilities: def.abilities as Parameters<
+        ReturnType<typeof getGlobalCardRegistry>["register"]
+      >[1]["abilities"],
+      cardType: def.cardType as string,
+      domain: def.domain as string | string[] | undefined,
+      energyCost: def.energyCost as number | undefined,
+      id: instanceId,
+      keywords: def.keywords as string[] | undefined,
+      might: def.might as number | undefined,
+      name: def.name,
+      powerCost: def.powerCost as string[] | undefined,
+      timing: def.timing as string | undefined,
+    });
+    cardReg.register(
+      dianaId,
+      mkPayload(
+        dianaDef as unknown as { name: string; cardType: string } & Record<string, unknown>,
+        dianaId,
+      ),
+    );
+    cardReg.register(
+      ezrealId,
+      mkPayload(
+        ezrealDef as unknown as { name: string; cardType: string } & Record<string, unknown>,
+        ezrealId,
+      ),
+    );
+
+    // Place each unit on the battlefield. Strip them from hand if they
+    // Happen to have ended up there (real-deck random placement).
+    const placeOnBf = (cardId: string, defId: string, owner: string) => {
+      if (handZone) {
+        const idx = handZone.cardIds.indexOf(cardId);
+        if (idx !== -1) {handZone.cardIds.splice(idx, 1);}
+      }
+      if (!bfZone.cardIds.includes(cardId)) {bfZone.cardIds.push(cardId);}
+      internal.cards = internal.cards ?? {};
+      internal.cards[cardId] = {
+        controller: owner,
+        definitionId: defId,
+        owner,
+        zone: bfZoneId,
+      };
+      internal.cardMetas = internal.cardMetas ?? {};
+      internal.cardMetas[cardId] = {
+        buffed: false,
+        combatRole: null,
+        damage: 0,
+        exhausted: false,
+        hidden: false,
+        stunned: false,
+      };
+    };
+    placeOnBf(dianaId, "unl-079-219", casterId);
+    placeOnBf(ezrealId, "sfd-082-221", opponentId);
+
+    // Give the caster a stash of energy / power so any "pay 1" optional
+    // Trigger (Diana's "you may pay 1 to Predict") is affordable. Spread
+    // 3 of every domain in case the engine consults a different cost-domain
+    // Lookup for `cost.energy = 1`.
+    const state = this.engine.getState();
+    const casterPool = state.runePools[casterId] ?? { energy: 0, power: {} };
+    const allDomains = ["body", "mind", "calm", "chaos", "fury", "order"];
+    const powerSpread: Record<string, number> = { ...casterPool.power };
+    for (const d of allDomains) {
+      powerSpread[d] = Math.max(powerSpread[d] ?? 0, 3);
+    }
+    const nextRunePools = {
+      ...state.runePools,
+      [casterId]: {
+        ...casterPool,
+        energy: Math.max(casterPool.energy, 5),
+        power: powerSpread,
+      },
+    };
+    let nextState: RiftboundGameState = {
+      ...state,
+      runePools: nextRunePools,
+    };
+
+    if (step === "showdown-open") {
+      // Tag combat roles so the SPA's CombatPanel populates attackers/
+      // Defenders. Without these, `buildCombatView` returns empty lists
+      // (it filters on `cardMetas[id].combatRole`).
+      const metas = internal.cardMetas!;
+      metas[dianaId] = { ...metas[dianaId]!, combatRole: "attacker" };
+      metas[ezrealId] = { ...metas[ezrealId]!, combatRole: "defender" };
+
+      // Mark the bf contested by the caster, and start a combat showdown
+      // At that bf with focus = caster. Mirrors the post-`contestBattlefield`
+      // State.
+      nextState = {
+        ...nextState,
+        battlefields: {
+          ...nextState.battlefields,
+          [battlefieldId]: {
+            ...nextState.battlefields[battlefieldId],
+            contested: true,
+            contestedBy: casterId as PlayerId,
+          },
+        },
+        interaction: {
+          chain: nextState.interaction?.chain ?? null,
+          nextChainItemId: nextState.interaction?.nextChainItemId ?? 1,
+          showdownStack: [
+            ...(nextState.interaction?.showdownStack ?? []),
+            {
+              active: true,
+              attackingPlayer: casterId,
+              battlefieldId,
+              defendingPlayer: opponentId,
+              focusPlayer: casterId,
+              isCombatShowdown: true,
+              passedPlayers: [],
+              relevantPlayers: [casterId, opponentId],
+            },
+          ],
+        },
+      };
+    }
+
+    (this.engine as unknown as { currentState: RiftboundGameState }).currentState =
+      nextState;
+
+    return {
+      battlefieldId,
+      dianaCardId: dianaId,
+      ezrealCardId: ezrealId,
+      seeded: true,
+      step,
+    };
+  }
+
+  /**
    * Iter 16: directly seed a finished/game-over state for the SPA's
    * game-over screenshot scenario. Same justification as `seedCombatState`
    * — driving a real bot-vs-bot game to a winning VP threshold is slow and
