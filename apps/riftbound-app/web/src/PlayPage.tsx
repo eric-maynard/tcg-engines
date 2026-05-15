@@ -1043,6 +1043,202 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
     [triggerPing],
   );
 
+  // ────────────────────────────────────────────────────────────────────
+  // Manual mode (admin / power-user override). Right-click intercept that
+  // Opens a ContextMenu on zones / cards when `manualMode === true`.
+  // ────────────────────────────────────────────────────────────────────
+  const [contextMenu, setContextMenu] = useState<{
+    position: { x: number; y: number };
+    items: readonly MenuItem[];
+  } | null>(null);
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const applyManualResponse = useCallback(
+    (r: { ok?: boolean; error?: string } & Partial<MoveResponse>, action: string) => {
+      if (r.error) {showToast(`Manual ${action} failed: ${r.error}`); return;}
+      applyState(r as MoveResponse);
+      showToast(`Manual: ${action}`);
+    },
+    [applyState, showToast],
+  );
+
+  /**
+   * Build the right-click menu for a card target. `cardId` is the
+   * canonical instance id (matches `data-card-id`). Includes a Move To
+   * submenu listing the common zone destinations.
+   */
+  const buildCardMenu = useCallback(
+    (cardId: string): MenuItem[] => {
+      const zoneTargets = [
+        { label: "Base", zone: "base" },
+        { label: "Hand", zone: "hand" },
+        { label: "Trash", zone: "trash" },
+        { label: "Main Deck", zone: "mainDeck" },
+        { label: "Banishment", zone: "banishment" },
+      ];
+      // Battlefield destinations — pulled from the live view so we offer
+      // Every active BF zone (battlefield-<id>) the engine knows about.
+      const bfTargets = (view?.battlefields ?? []).map((bf) => ({
+        label: `Battlefield: ${bf.name ?? bf.id}`,
+        zone: `battlefield-${bf.id}`,
+      }));
+      return [
+        {
+          icon: "↪",
+          label: "Move to…",
+          submenu: [...zoneTargets, ...bfTargets].map((t) => ({
+            label: t.label,
+            onClick: () => {
+              void manualMoveCard(sessionId, { cardId, toZone: t.zone })
+                .then((r) => applyManualResponse(r, `move to ${t.label}`));
+            },
+          })),
+        },
+        {
+          icon: "↻",
+          label: "Exhaust / Ready",
+          onClick: () => {
+            void manualToggleExhaust(sessionId, { cardId })
+              .then((r) => applyManualResponse(r, "toggle exhaust"));
+          },
+        },
+        {
+          icon: "🩸",
+          label: "Set damage…",
+          onClick: () => {
+            const cur = window.prompt("Damage counters (0-N)", "0");
+            if (cur === null) {return;}
+            const damage = Math.max(0, parseInt(cur, 10) || 0);
+            void manualSetDamage(sessionId, { cardId, damage })
+              .then((r) => applyManualResponse(r, `set damage ${damage}`));
+          },
+        },
+        {
+          icon: "+",
+          label: "Add +1 counter",
+          onClick: () => {
+            const cur = view?.battlefields
+              .flatMap((bf) => bf.units)
+              .find((u) => u.id === cardId)?.counters ?? 0;
+            void manualSetCounters(sessionId, { cardId, counters: cur + 1 })
+              .then((r) => applyManualResponse(r, "add counter"));
+          },
+        },
+        {
+          icon: "-",
+          label: "Remove -1 counter",
+          onClick: () => {
+            const cur = view?.battlefields
+              .flatMap((bf) => bf.units)
+              .find((u) => u.id === cardId)?.counters ?? 0;
+            void manualSetCounters(sessionId, { cardId, counters: Math.max(0, cur - 1) })
+              .then((r) => applyManualResponse(r, "remove counter"));
+          },
+        },
+        { label: "", separator: true },
+        {
+          icon: "💀",
+          label: "Destroy",
+          onClick: () => {
+            void manualDestroy(sessionId, { cardId })
+              .then((r) => applyManualResponse(r, "destroy"));
+          },
+        },
+        {
+          icon: "♻",
+          label: "Recycle (bottom of deck)",
+          onClick: () => {
+            void manualRecycle(sessionId, { cardId })
+              .then((r) => applyManualResponse(r, "recycle"));
+          },
+        },
+      ];
+    },
+    [sessionId, view, applyManualResponse],
+  );
+
+  /**
+   * Build the right-click menu for a zone target. `zoneId` is the raw zone
+   * id from the `data-zone-id` attribute (e.g. "hand", "base", "trash",
+   * "battlefield-<id>"). When a zone is right-clicked we offer to spawn a
+   * generic 1-might Bird Token there or to dispatch a token under a
+   * specific controller.
+   */
+  const buildZoneMenu = useCallback(
+    (zoneId: string): MenuItem[] => {
+      const controllers = view?.players.map((p) => p.id) ?? ["player-1", "player-2"];
+      return [
+        {
+          icon: "🐦",
+          label: "Spawn Bird Token (1 might)",
+          submenu: controllers.map((controller) => ({
+            label: `Controller: ${controller}`,
+            onClick: () => {
+              void manualSpawnToken(sessionId, {
+                zone: zoneId,
+                controller,
+                tokenSpec: { name: "Bird Token", might: 1 },
+              }).then((r) => applyManualResponse(r, `spawn token (${controller})`));
+            },
+          })),
+        },
+        {
+          icon: "✨",
+          label: "Spawn Custom Token…",
+          onClick: () => {
+            const name = window.prompt("Token name", "Spirit Token");
+            if (name === null) {return;}
+            const mightStr = window.prompt("Token might", "1");
+            if (mightStr === null) {return;}
+            const might = Math.max(0, parseInt(mightStr, 10) || 0);
+            const controller = window.prompt(
+              "Controller (player-1 or player-2)",
+              localPlayerId,
+            );
+            if (controller === null) {return;}
+            void manualSpawnToken(sessionId, {
+              zone: zoneId,
+              controller,
+              tokenSpec: { name, might },
+            }).then((r) => applyManualResponse(r, `spawn ${name}`));
+          },
+        },
+      ];
+    },
+    [sessionId, view, localPlayerId, applyManualResponse],
+  );
+
+  /**
+   * Right-click handler used in place of {@link handleBoardPing} when
+   * manual mode is on. Walks the DOM up from the event target, finds the
+   * nearest `data-card-id` or `data-zone-id`, and opens the appropriate
+   * context menu anchored to the cursor.
+   */
+  const handleBoardManualContext = useCallback(
+    (ev: React.MouseEvent<HTMLDivElement>) => {
+      let el: HTMLElement | null = ev.target as HTMLElement | null;
+      let targetType: "card" | "zone" | null = null;
+      let targetId: string | null = null;
+      while (el && el !== ev.currentTarget) {
+        const cardId = el.getAttribute("data-card-id");
+        if (cardId) {targetType = "card"; targetId = cardId; break;}
+        const zoneId = el.getAttribute("data-zone-id");
+        if (zoneId) {targetType = "zone"; targetId = zoneId; break;}
+        el = el.parentElement;
+      }
+      if (!targetType || !targetId) {return;}
+      ev.preventDefault();
+      const items =
+        targetType === "card" ? buildCardMenu(targetId) : buildZoneMenu(targetId);
+      setContextMenu({
+        items,
+        position: { x: ev.clientX, y: ev.clientY },
+      });
+    },
+    [buildCardMenu, buildZoneMenu],
+  );
+
   /**
    * Slice 4 (undo/rewind): rewind the local player's last move. Server
    * Enforces the same gates `undoState.canUndoBy[localPlayerId]`
@@ -1160,6 +1356,7 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
       data-testid="play-page"
       data-rewinding={rewindPulse ? "true" : "false"}
       data-phase={currentPhaseId}
+      data-manual-mode={manualMode ? "true" : "false"}
     >
       <header className="turn-header">
         {/* Defect 4 (D-no-turn-indicator): top-of-page badge announcing whose
@@ -1396,11 +1593,23 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
       <div
         className="board"
         data-testid="board"
-        onContextMenu={handleBoardPing}
+        onContextMenu={(ev) => {
+          // Manual-mode override: when the admin "Manual" toggle is ON, open
+          // A context menu with direct manipulation actions (spawn token,
+          // Move card, set damage, etc.) instead of the default ping pulse.
+          if (manualMode) {
+            handleBoardManualContext(ev);
+            return;
+          }
+          handleBoardPing(ev);
+        }}
         onAuxClick={(ev) => {
           // Some browsers/devices route middle/right-clicks via auxclick too;
           // Reuse the same delegated handler so the affordance is symmetric.
-          if (ev.button === 2) {handleBoardPing(ev);}
+          if (ev.button === 2) {
+            if (manualMode) {handleBoardManualContext(ev); return;}
+            handleBoardPing(ev);
+          }
         }}
         onClick={(ev) => {
           // Shift-click alt-ping for trackpad / no-right-click devices.
@@ -1743,6 +1952,13 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
           cardInHandTarget={targetPicker.cardInHandTarget}
           cardInDeckTarget={targetPicker.cardInDeckTarget}
           runeTarget={targetPicker.runeTarget}
+        />
+      ) : null}
+      {contextMenu ? (
+        <ContextMenu
+          position={contextMenu.position}
+          items={contextMenu.items}
+          onClose={closeContextMenu}
         />
       ) : null}
     </div>
