@@ -29,6 +29,7 @@ import { MoveLog, buildCardNameMap } from "./components/MoveLog";
 import { TurnBanner } from "./components/TurnBanner";
 import { ShowdownBreadcrumb } from "./components/ShowdownBreadcrumb";
 import { RunePool } from "./components/RunePool";
+import { DeckPile } from "./components/DeckPile";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import {
   destroyCard as manualDestroy,
@@ -1495,30 +1496,10 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
               : "Waiting for opponent…"}
           </div>
         ) : null}
-        <button
-          type="button"
-          data-testid="end-turn"
-          // QA Reviewer v2 iter-8 — Defect 3 (D-endturn-inactive-player):
-          // Hide the END TURN button when it's the opponent's turn. The
-          // Button stays in the DOM (and `disabled`) so existing tests
-          // That query it by data-testid still find it, but CSS keyed on
-          // Aria-hidden="true" visually removes it. The player can no
-          // Longer "see" a disabled End Turn affordance during the opp's
-          // Channel/Draw — eliminating the source of "why can't I end my
-          // Turn" confusion.
-          aria-hidden={!isOurTurn ? "true" : undefined}
-          disabled={busy || isGameOver || !actionsLegal.endTurn || !isOurTurn}
-          title={
-            !isOurTurn
-              ? "Waiting for opponent…"
-              : (!actionsLegal.endTurn
-                ? "endTurn not legal right now"
-                : undefined)
-          }
-          onClick={() => void runMove("endTurn", {}, active)}
-        >
-          End Turn
-        </button>
+        {/* End Turn button lives inside .rb-band-actions of the self band
+         * for riftatlas-parity placement (see below). Rendered there as the
+         * sole `data-testid="end-turn"` so testing-library's getByTestId
+         * stays unambiguous. */}
         {undoVisible && (
           <button
             type="button"
@@ -1725,6 +1706,25 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
                   />
                 </div>
                 <div className="rb-band-right-side rb-band-readable" />
+                {/* Deck + Trash piles — col 4/5 row 2 of the band grid. */}
+                <div className="rb-band-deck-slot rb-band-readable">
+                  <DeckPile
+                    size={opponent.deckSize ?? 0}
+                    label="deck"
+                    variant="deck"
+                    testId={`rb-deck-pile-${opponent.id}`}
+                    zoneId={`${opponent.id}-deck`}
+                  />
+                </div>
+                <div className="rb-band-trash-slot rb-band-readable">
+                  <DeckPile
+                    size={opponent.trashSize ?? 0}
+                    label="trash"
+                    variant="trash"
+                    testId={`rb-trash-pile-${opponent.id}`}
+                    zoneId={`${opponent.id}-trash`}
+                  />
+                </div>
               </section>
             ) : null}
 
@@ -1795,7 +1795,30 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
                   cardsInTrash={trashCardsFor(us.id)}
                 />
               </div>
-              <div className="rb-band-actions" />
+              <div className="rb-band-actions">
+                {/* End Turn — riftatlas docks this inside the self band's
+                 * actions column (col 3 row 2 of the player band grid). */}
+                <button
+                  type="button"
+                  data-testid="end-turn"
+                  className="rb-end-turn-button"
+                  aria-hidden={!isOurTurn ? "true" : undefined}
+                  disabled={busy || isGameOver || !actionsLegal.endTurn || !isOurTurn}
+                  title={
+                    !isOurTurn
+                      ? "Waiting for opponent…"
+                      : (!actionsLegal.endTurn
+                        ? "endTurn not legal right now"
+                        : undefined)
+                  }
+                  onClick={() => void runMove("endTurn", {}, active)}
+                >
+                  <span>End Turn</span>
+                  <span className="rb-end-turn-button-shortcut" aria-hidden="true">
+                    ↵
+                  </span>
+                </button>
+              </div>
               <div className="rb-band-right-main">
                 <LegendChampionZone
                   playerId={us.id}
@@ -1805,6 +1828,25 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
                 />
               </div>
               <div className="rb-band-right-side" />
+              {/* Deck + Trash piles — col 4/5 row 2 of the band grid. */}
+              <div className="rb-band-deck-slot">
+                <DeckPile
+                  size={us.deckSize ?? 0}
+                  label="deck"
+                  variant="deck"
+                  testId={`rb-deck-pile-${us.id}`}
+                  zoneId={`${us.id}-deck`}
+                />
+              </div>
+              <div className="rb-band-trash-slot">
+                <DeckPile
+                  size={us.trashSize ?? 0}
+                  label="trash"
+                  variant="trash"
+                  testId={`rb-trash-pile-${us.id}`}
+                  zoneId={`${us.id}-trash`}
+                />
+              </div>
             </section>
 
         </div>
