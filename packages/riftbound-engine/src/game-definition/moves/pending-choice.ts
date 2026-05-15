@@ -214,6 +214,30 @@ export const pendingChoiceMoves: Partial<
         // Build the EffectContext from the reducer's `context` so the
         // Option's effect resolves with the same zone/card/counter ops the
         // Engine normally provides during effect resolution.
+        //
+        // Note: `createCardInZone` is a top-level field on `EffectContext`
+        // But lives under `context.zones.createCardInZone` in the core
+        // MoveContext (and uses a different signature — single-object vs.
+        // 3-arg positional). We bridge it explicitly so options whose
+        // Effect is `create-token` actually mint tokens.
+        const zonesAny = context.zones as unknown as {
+          createCardInZone?: (params: {
+            cardId: CoreCardId;
+            zoneId: CoreZoneId;
+            ownerId: CorePlayerId;
+            cardDefinition?: unknown;
+          }) => void;
+        };
+        const createCardInZone = zonesAny.createCardInZone
+          ? (cardId: string, zoneId: string, ownerId: string): void => {
+              zonesAny.createCardInZone!({
+                cardId: cardId as CoreCardId,
+                ownerId: ownerId as CorePlayerId,
+                zoneId: zoneId as CoreZoneId,
+              });
+            }
+          : undefined;
+
         const effectCtx: EffectContext = {
           cards: {
             getCardController: context.cards.getCardController as
@@ -234,6 +258,7 @@ export const pendingChoiceMoves: Partial<
             removeCounter: context.counters.removeCounter,
             setFlag: context.counters.setFlag,
           },
+          ...(createCardInZone ? { createCardInZone } : {}),
           draft,
           fireTriggers: (event) =>
             dispatchEvent(

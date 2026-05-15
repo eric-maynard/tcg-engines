@@ -307,6 +307,19 @@ export interface GameView {
           readonly imageUrl?: string;
           readonly cardType?: string;
         }[];
+      }
+    | {
+        // Modal "Choose one — A. B." spell (Flurry of Feathers et al.).
+        // Caster picks an option index; the engine then fires that
+        // Branch's effect through `resolvePendingChoice`.
+        readonly type: "pick-mode";
+        readonly prompter: string;
+        readonly sourceCardId: string;
+        readonly sourceCardName?: string;
+        readonly options: readonly {
+          readonly index: number;
+          readonly label: string;
+        }[];
       };
   /**
    * Chain (spell stack) view. Present when `state.interaction.chain` exists
@@ -2364,6 +2377,17 @@ function buildView(engine: RiftboundEngine): GameView {
             revealed: string[];
             onPicked: "to-hand" | "to-trash" | "to-play" | "banish" | "recycle";
             onUnpicked: "recycle" | "to-top" | "trash";
+          }
+        | {
+            type: "pick-mode";
+            prompter: string;
+            sourceCardId: string;
+            sourceZone?: string;
+            options: readonly {
+              index: number;
+              label: string;
+              effect: unknown;
+            }[];
           };
     }
   ).pendingChoice;
@@ -2391,8 +2415,36 @@ function buildView(engine: RiftboundEngine): GameView {
           cardType?: string;
         }[];
       }
+    | {
+        type: "pick-mode";
+        prompter: string;
+        sourceCardId: string;
+        sourceCardName?: string;
+        options: { index: number; label: string }[];
+      }
     | undefined;
-  if (pc?.type === "look-and-pick") {
+  if (pc?.type === "pick-mode") {
+    // Don't surface `effect` (the opaque ExecutableEffect payload) to
+    // The SPA — the client only needs `index` and `label` to render the
+    // Modal; the chosen index is round-tripped via `resolvePendingChoice`
+    // And the engine's stored `effect` fires server-side.
+    let sourceCardName: string | undefined;
+    try {
+      const sourceCard = internal.cards?.[pc.sourceCardId];
+      const definitionId = sourceCard?.definitionId ?? pc.sourceCardId;
+      const def = getCardDefinition(pc.sourceCardId, definitionId);
+      sourceCardName = def.name;
+    } catch {
+      sourceCardName = undefined;
+    }
+    pendingChoice = {
+      options: pc.options.map((o) => ({ index: o.index, label: o.label })),
+      prompter: pc.prompter,
+      sourceCardId: pc.sourceCardId,
+      type: "pick-mode" as const,
+      ...(sourceCardName ? { sourceCardName } : {}),
+    };
+  } else if (pc?.type === "look-and-pick") {
     const revealedCards: {
       id: string;
       definitionId: string;

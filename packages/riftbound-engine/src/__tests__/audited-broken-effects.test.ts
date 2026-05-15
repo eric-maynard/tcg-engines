@@ -9,29 +9,31 @@
  *     deals damage equal to its Might split among enemy units at
  *     battlefields. Then for each unit this kills, do this: Gain 1 XP.`
  *
- * Root causes:
+ * Root causes & fixes covered here:
  *
- *   1. The `choice` effect handler hard-picked `options[0]` regardless of
- *      whether that option could actually do anything. Flurry's first
- *      option is `counter`, which is a no-op when the chain has no items
- *      below the counter to target — so the choice silently did nothing.
- *      Fix: the handler now skips options whose primary effect has a hard
- *      prerequisite the current context cannot satisfy and falls through
- *      to the next option.
- *
- *   2. `resolveAmount` only understood `{ might: "self" }` — when the
+ *   1. `resolveAmount` only understood `{ might: "self" }` — when the
  *      parser emits `{ might: <TargetDescriptor> }` (Alpha Strike's "deals
  *      damage equal to its Might" where "it" is the chosen friendly
  *      unit), the resolver fell through to 0 and the damage handler
  *      added no counters. Fix: when `might` is a TargetDescriptor, the
- *      resolver picks the first matching unit and returns its effective
+ *      resolver resolves the target and uses the first match's effective
  *      Might.
  *
- *   3. The `damage` handler ignored the parser-emitted `split: true`
+ *   2. The `damage` handler ignored the parser-emitted `split: true`
  *      flag — Alpha Strike's "split among enemy units" was treated as
  *      "deal that much to each", which is incorrect in real play. Fix:
  *      when `split: true`, the engine partitions the total damage across
  *      the resolved targets evenly with remainder front-loaded.
+ *
+ *   3. The `choice` effect handler used to auto-resolve to the first
+ *      option, which silently no-op'd when the head option had no
+ *      executable target (Flurry's `counter` with an empty chain). The
+ *      handler now writes a `pick-mode` pendingChoice and pauses play
+ *      so the caster (or, in goldfish runs, the harness) picks an option
+ *      via `resolvePendingChoice`. The pick-mode wiring is implemented
+ *      elsewhere in the engine; these tests pin the contract that
+ *      `executeEffect` on a `choice` produces an observable state change
+ *      (a pendingChoice) for both Flurry-style modal spells.
  */
 
 import { describe, expect, it } from "bun:test";
@@ -60,12 +62,12 @@ interface Recorded {
 
 function buildCtx(args: {
   sourceCardId: string;
-  /** Optional pre-existing chain items so a `counter` option has a target. */
-  chainItems?: { id: string; countered?: boolean }[];
   /** Additional enemy units on battlefield-bf-1 (default: 0). */
   enemiesAtBattlefield?: number;
+  /** Override the friendly unit's printed Might (default: 4). */
+  friendlyMight?: number;
 }): { ctx: EffectContext; rec: Recorded } {
-  const { sourceCardId, chainItems = [], enemiesAtBattlefield = 0 } = args;
+  const { sourceCardId, enemiesAtBattlefield = 0, friendlyMight = 4 } = args;
 
   const zoneOf = new Map<string, string>();
   const zoneCards = new Map<string, string[]>();
@@ -83,19 +85,21 @@ function buildCtx(args: {
     registry.register(id, def);
   };
 
-  // Source spell.
+  // Source spell. Spells have no Might (the `might: 0` here means it
+  // Will never satisfy a `type: "unit"` target filter), keeping the source
+  // Distinct from any friendly unit picked via the `might:` target
+  // Expression.
   place(sourceCardId, "battlefield-bf-1", PLAYER, {
     cardType: "spell",
     id: sourceCardId,
     might: 0,
     name: "source",
   });
-  // The friendly unit Alpha Strike picks ("Choose a friendly unit"); Might 4
-  // So we can verify split-damage allocation.
+  // The friendly unit Alpha Strike picks ("Choose a friendly unit").
   place("friendly-bf", "battlefield-bf-1", PLAYER, {
     cardType: "unit",
     id: "friendly-bf",
-    might: 4,
+    might: friendlyMight,
     name: "friendly-bf",
   });
   // Enemy units on the same battlefield row.
@@ -115,15 +119,12 @@ function buildCtx(args: {
     gameId: "audited-broken-effects-test",
     interaction: {
       chain: {
-        active: chainItems.length > 0,
+        active: false,
         activePlayer: PLAYER,
-        items: chainItems.map((c) => ({
-          countered: c.countered ?? false,
-          id: c.id,
-        })),
+        items: [],
         passedPlayers: [],
       },
-      nextChainItemId: chainItems.length + 1,
+      nextChainItemId: 1,
     },
     players: {
       [PLAYER]: { id: PLAYER, turnsTaken: 1, victoryPoints: 0, xp: 0 },
@@ -206,14 +207,16 @@ function buildCtx(args: {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Flurry of Feathers (unl-044-219) — `choice` wrapper must produce a
-//    Side-effect even when the head option (`counter`) has no chain item to
-//    Target. The parser emits a 2-option choice:
+// 1. Flurry of Feathers (unl-044-219) — modal `choice` must write a
+//    `pick-mode` pendingChoice so the caster can pick a branch. This
+//    Replaces the old auto-pick-first behavior that silently no-op'd
+//    When the head option had no executable target (e.g. `counter` on an
+//    Empty chain). The parser emits a 2-option choice:
 //      [{ effect: { type: "counter" } },
 //       { effect: { type: "create-token", amount: 4, token: {...} } }]
 // ---------------------------------------------------------------------------
 
-describe("Flurry of Feathers (unl-044-219) — choice fallthrough", () => {
+describe("Flurry of Feathers (unl-044-219) — choice writes pendingChoice", () => {
   const flurryEffect: ExecutableEffect = {
     options: [
       { effect: { type: "counter" } },
@@ -228,49 +231,56 @@ describe("Flurry of Feathers (unl-044-219) — choice fallthrough", () => {
     type: "choice",
   } as unknown as ExecutableEffect;
 
-  it("falls through to create-token when no chain item is available to counter", () => {
-    const { ctx, rec } = buildCtx({ sourceCardId: "flurry-1" });
+  it("writes a pick-mode pendingChoice listing all options", () => {
+    const { ctx } = buildCtx({ sourceCardId: "flurry-1" });
 
     executeEffect(flurryEffect, ctx);
 
-    // No chain item → counter is a no-op → engine falls through to the
-    // Second option and creates the four Bird tokens.
-    expect(rec.createCalls).toHaveLength(4);
-    for (const c of rec.createCalls) {
-      expect(c.cardId).toContain("token-bird");
-      expect(c.ownerId).toBe(PLAYER);
-    }
+    expect(ctx.draft.pendingChoice).toBeDefined();
+    expect(ctx.draft.pendingChoice?.type).toBe("pick-mode");
+    expect(ctx.draft.pendingChoice?.prompter).toBe(PLAYER);
+
+    // The pendingChoice carries both options so the resolver can fire
+    // Whichever branch the caster picks.
+    const pc = ctx.draft.pendingChoice as {
+      options: { index: number; effect: { type: string } }[];
+    };
+    expect(pc.options).toHaveLength(2);
+    expect(pc.options[0]?.index).toBe(0);
+    expect(pc.options[1]?.index).toBe(1);
+    expect(pc.options[0]?.effect.type).toBe("counter");
+    expect(pc.options[1]?.effect.type).toBe("create-token");
   });
 
-  it("picks counter when the chain has an uncountered item", () => {
-    const { ctx } = buildCtx({
-      chainItems: [{ id: "chain-1" }],
-      sourceCardId: "flurry-2",
-    });
+  it("captures source context so the chosen branch resolves correctly", () => {
+    const { ctx } = buildCtx({ sourceCardId: "flurry-2" });
 
     executeEffect(flurryEffect, ctx);
 
-    // The (only) chain item is marked countered; no tokens were created
-    // Because the engine accepted the first option as executable.
-    const item = ctx.draft.interaction!.chain.items[0] as { countered?: boolean };
-    expect(item.countered).toBe(true);
+    expect(ctx.draft.pendingChoice).toBeDefined();
+    const pc = ctx.draft.pendingChoice as {
+      sourceCardId: string;
+      sourceZone?: string;
+    };
+    expect(pc.sourceCardId).toBe("flurry-2");
+    expect(pc.sourceZone).toBe("battlefield-bf-1");
   });
 
-  it("falls through when every chain item is already countered", () => {
-    const { ctx, rec } = buildCtx({
-      chainItems: [{ countered: true, id: "chain-1" }],
-      sourceCardId: "flurry-3",
-    });
+  it("does not produce a token directly — the create-token branch waits for resolution", () => {
+    const { ctx, rec } = buildCtx({ sourceCardId: "flurry-3" });
 
     executeEffect(flurryEffect, ctx);
 
-    // All chain items already countered → counter has no work → tokens.
-    expect(rec.createCalls).toHaveLength(4);
+    // The choice handler pauses play; it does NOT auto-fire the
+    // Create-token branch. createCalls stays empty until the caster
+    // Resolves the pendingChoice via the move API.
+    expect(rec.createCalls).toHaveLength(0);
+    expect(ctx.draft.pendingChoice).toBeDefined();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. Alpha Strike (unl-192-219) — sequence must apply `damage` then run
+// 2. Alpha Strike (unl-192-219) — sequence applies `damage` then runs
 //    `for-each` xp gain. The damage uses `{ amount: { might: <target> },
 //    Split: true, target: { controller: "enemy", location: "battlefield",
 //    Quantity: "all", type: "unit" } }`.
@@ -306,8 +316,8 @@ describe("Alpha Strike (unl-192-219) — split damage + xp for-each", () => {
   } as unknown as ExecutableEffect;
 
   it("deals split damage to enemy units equal to the friendly unit's Might", () => {
-    // Friendly unit has Might 4 (set in `buildCtx`). With 2 enemies the
-    // 4 damage splits 2 / 2.
+    // Friendly unit has Might 4 (default in `buildCtx`). With 2 enemies
+    // The 4 damage splits 2 / 2.
     const { ctx, rec } = buildCtx({
       enemiesAtBattlefield: 2,
       sourceCardId: "alpha-1",
@@ -340,12 +350,25 @@ describe("Alpha Strike (unl-192-219) — split damage + xp for-each", () => {
     expect(damageAdds.reduce((s, a) => s + a.amount, 0)).toBe(4);
   });
 
+  it("scales with the friendly unit's Might (5 damage across 2 enemies → [3, 2])", () => {
+    const { ctx, rec } = buildCtx({
+      enemiesAtBattlefield: 2,
+      friendlyMight: 5,
+      sourceCardId: "alpha-3",
+    });
+
+    executeEffect(alphaEffect, ctx);
+
+    const damageAdds = rec.counterAdds.filter((c) => c.counter === "damage");
+    expect(damageAdds.map((a) => a.amount)).toEqual([3, 2]);
+  });
+
   it("grants XP for each iteration of the for-each (engine fires per matched target)", () => {
     // With 2 enemy units (both "damaged" by the preceding split), the
-    // For-each runs the gain-xp effect once per target.
+    // For-each runs the gain-xp effect once per target. xp should be > 0.
     const { ctx } = buildCtx({
       enemiesAtBattlefield: 2,
-      sourceCardId: "alpha-3",
+      sourceCardId: "alpha-4",
     });
 
     executeEffect(alphaEffect, ctx);
@@ -357,7 +380,7 @@ describe("Alpha Strike (unl-192-219) — split damage + xp for-each", () => {
   it("does no damage when there are no enemy units to target", () => {
     const { ctx, rec } = buildCtx({
       enemiesAtBattlefield: 0,
-      sourceCardId: "alpha-4",
+      sourceCardId: "alpha-5",
     });
 
     executeEffect(alphaEffect, ctx);
@@ -368,10 +391,11 @@ describe("Alpha Strike (unl-192-219) — split damage + xp for-each", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. resolveAmount — direct coverage for `{ might: <TargetDescriptor> }`.
+// 3. `resolveAmount` direct coverage for `{ might: <TargetDescriptor> }`.
 //    Damage handler tests cover the integration; this asserts the
-//    Resolver isn't accidentally re-broken by future changes by exercising
-//    The same path through a 1-effect damage.
+//    Resolver isn't accidentally re-broken by future changes by
+//    Exercising the same path through a 1-target damage with no
+//    `split` flag.
 // ---------------------------------------------------------------------------
 
 describe("resolveAmount: { might: TargetDescriptor }", () => {
@@ -395,7 +419,7 @@ describe("resolveAmount: { might: TargetDescriptor }", () => {
     executeEffect(damageOnly, ctx);
 
     const damageAdds = rec.counterAdds.filter((c) => c.counter === "damage");
-    // Friendly Might is 4, only 1 enemy, no split flag — full amount.
+    // Friendly Might is 4, only 1 enemy, no split flag → full amount.
     expect(damageAdds).toHaveLength(1);
     expect(damageAdds[0]?.amount).toBe(4);
   });

@@ -20,6 +20,7 @@ import { BattlefieldList } from "./components/BattlefieldList";
 import { BattlefieldPicker } from "./components/BattlefieldPicker";
 import { TargetPicker } from "./components/TargetPicker";
 import { LookPicker } from "./components/LookPicker";
+import { ChoiceModePicker } from "./components/ChoiceModePicker";
 import { BaseZone } from "./components/BaseZone";
 import { CombatPanel } from "./components/CombatPanel";
 import { ChainPanel } from "./components/ChainPanel";
@@ -892,6 +893,27 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
   );
 
   /**
+   * Resolve a `pick-mode` pendingChoice (modal "Choose one — A. B."
+   * spells) by submitting `resolvePendingChoice` with the chosen option
+   * INDEX. The engine fires the corresponding branch's effect and
+   * clears the pendingChoice so play resumes. Separate from
+   * `resolvePendingChoice` above to keep the param shape obvious at the
+   * call site (card-pick vs index-pick).
+   */
+  const resolvePendingChoiceMode = useCallback(
+    (pickedOptionIndex: number) => {
+      const pc = view?.pendingChoice;
+      if (!pc || pc.type !== "pick-mode") {return;}
+      void runMove(
+        "resolvePendingChoice",
+        { pickedOptionIndex, playerId: pc.prompter },
+        pc.prompter,
+      );
+    },
+    [view?.pendingChoice, runMove],
+  );
+
+  /**
    * Iter-RunePoolUI: tap (exhaust) a friendly rune in the local player's
    * rune pool. POSTs the engine's `exhaustRune` move (server.ts case
    * "exhaustRune"). The view refreshes via the standard applyState path
@@ -1666,6 +1688,20 @@ export function PlayPage({ sessionId, localPlayerId = "player-1", mode = "defaul
           }
           onPickedDest={view.pendingChoice.onPicked}
           onPick={resolvePendingChoice}
+        />
+      ) : null}
+
+      {/* Pick-mode pendingChoice modal (Flurry of Feathers, Disposal
+       * Order, Curtain Call, …). Renders "Choose one — A. B." as a
+       * big-button modal; clicking one dispatches `resolvePendingChoice`
+       * with the chosen option's `index`, after which the engine fires
+       * that branch's effect. Only the prompter (caster) sees it. */}
+      {view.pendingChoice?.type === "pick-mode" &&
+      view.pendingChoice.prompter === us.id ? (
+        <ChoiceModePicker
+          cardLabel={view.pendingChoice.sourceCardName}
+          options={view.pendingChoice.options}
+          onConfirm={resolvePendingChoiceMode}
         />
       ) : null}
 

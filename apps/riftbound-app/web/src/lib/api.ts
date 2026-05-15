@@ -263,6 +263,22 @@ export interface GameView {
           readonly imageUrl?: string;
           readonly cardType?: string;
         }[];
+      }
+    | {
+        // Modal "Choose one — A. B." spell (Flurry of Feathers — "Counter
+        // A spell. Play four Bird tokens.") — caster picks an option
+        // Index; the engine then fires that branch's effect through
+        // `resolvePendingChoice`. The SPA renders a ChoiceModePicker
+        // Modal with one big button per `options[].label`.
+        readonly type: "pick-mode";
+        readonly prompter: string;
+        readonly sourceCardId: string;
+        /** Optional source-card name for the modal header (best-effort). */
+        readonly sourceCardName?: string;
+        readonly options: readonly {
+          readonly index: number;
+          readonly label: string;
+        }[];
       };
 }
 
