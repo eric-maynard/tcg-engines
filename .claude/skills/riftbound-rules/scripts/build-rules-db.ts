@@ -19,7 +19,7 @@ type Rule = {
   xref: string[];
 };
 
-// Section boundaries for the 2026-03-30 (Unleashed) renumbering.
+// Section boundaries for the 2026-07-24 (Vendetta) numbering.
 const SECTIONS: Array<[number, number, number, string]> = [
   [0, 99, 1, "Golden & Silver Rules"],
   [100, 299, 2, "Game Concepts / Cards & Types"],
@@ -27,9 +27,9 @@ const SECTIONS: Array<[number, number, number, string]> = [
   [325, 348, 4, "Chains & Showdowns"],
   [349, 359, 5, "Playing Cards"],
   [360, 406, 6, "Abilities"],
-  [407, 439, 7, "Game Actions"],
-  [440, 453, 8, "Movement"],
-  [454, 467, 9, "Combat & Scoring"],
+  [407, 444, 7, "Game Actions"],
+  [445, 458, 8, "Movement & Recalls"],
+  [459, 467, 9, "Combat & Scoring"],
   [468, 648, 10, "Layers & Modes of Play"],
   [649, 799, 11, "Additional Rules"],
   [800, 899, 12, "Keywords"],
