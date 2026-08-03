@@ -405,12 +405,23 @@ export const combatMoves: Partial<
         }
         draft.conqueredThisTurn[attackingPlayer].push(battlefieldId);
 
+        // Rule 631: a player may only Score once per battlefield per turn.
+        // Record scoredThisTurn here so scorePoint/conquerBattlefield can't
+        // award a second point for the same battlefield later this turn.
+        const alreadyScored =
+          draft.scoredThisTurn[attackingPlayer]?.includes(battlefieldId) ?? false;
+        if (!draft.scoredThisTurn[attackingPlayer]) {
+          draft.scoredThisTurn[attackingPlayer] = [];
+        }
+
         // Award 1 VP for conquering (rule 630.1)
         // Blocked if a battlefield ability (e.g. Forgotten Monument) prevents
         // This player from scoring here right now.
-        const scoringAllowed = canPlayerScoreAtBattlefield(draft, attackingPlayer, battlefieldId);
+        const scoringAllowed =
+          !alreadyScored && canPlayerScoreAtBattlefield(draft, attackingPlayer, battlefieldId);
         const player = draft.players[attackingPlayer];
         if (player && scoringAllowed) {
+          draft.scoredThisTurn[attackingPlayer].push(battlefieldId);
           player.victoryPoints += 1;
 
           // Check for victory
