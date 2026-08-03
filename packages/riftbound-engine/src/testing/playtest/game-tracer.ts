@@ -35,16 +35,17 @@ const N_GAMES = parseInt(arg("--games", "5"), 10);
 const MAX_TURNS = parseInt(arg("--max-turns", "30"), 10);
 const OUT = arg("--out", "/tmp/playtest-traces");
 const SEED_BASE = arg("--seed", "trace");
+const DECK_STRATEGY = arg("--deck-strategy", "cheap") as "cheap" | "random";
 
 mkdirSync(OUT, { recursive: true });
 
-const DOMAIN_PAIRS: [string, string][] = [
-  ["fury", "chaos"],
-  ["mind", "order"],
-  ["body", "calm"],
-  ["fury", "body"],
-  ["mind", "chaos"],
-];
+const DOMAINS = ["fury", "calm", "mind", "body", "chaos", "order"];
+const DOMAIN_PAIRS: [string, string][] = [];
+for (let i = 0; i < DOMAINS.length; i++) {
+  for (let j = i + 1; j < DOMAINS.length; j++) {
+    DOMAIN_PAIRS.push([DOMAINS[i], DOMAINS[j]]);
+  }
+}
 
 function mulberry32(seed: string) {
   let a = 0;
@@ -58,7 +59,7 @@ function mulberry32(seed: string) {
   };
 }
 
-function compact(s: RiftboundGameState) {
+function compact(s: RiftboundGameState, engine?: Engine) {
   return {
     turn: s.turn,
     status: s.status,
@@ -71,7 +72,11 @@ function compact(s: RiftboundGameState) {
     battlefields: Object.fromEntries(
       Object.entries(s.battlefields).map(([id, bf]: [string, any]) => [
         id,
-        { controller: bf.controller, contested: bf.contested, units: bf.units?.length ?? 0 },
+        {
+          controller: bf.controller,
+          contested: bf.contested,
+          units: engine ? getZoneCards(engine, `battlefield-${id}`) : [],
+        },
       ])
     ),
   };
@@ -119,8 +124,8 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
   const rand = mulberry32(seed);
   const [d1a, d1b] = DOMAIN_PAIRS[gameIdx % DOMAIN_PAIRS.length];
   const [d2a, d2b] = DOMAIN_PAIRS[(gameIdx + 1) % DOMAIN_PAIRS.length];
-  const deck1 = buildDefaultDeck(allCards, d1a, d1b);
-  const deck2 = buildDefaultDeck(allCards, d2a, d2b);
+  const deck1 = buildDefaultDeck(allCards, d1a, d1b, DECK_STRATEGY, `${seed}-p1`);
+  const deck2 = buildDefaultDeck(allCards, d2a, d2b, DECK_STRATEGY, `${seed}-p2`);
   const { engine, instanceIds } = createPlayableGame(allCards, deck1, deck2, seed);
 
   const traceFile = join(OUT, `game-${seed}.jsonl`);
@@ -179,7 +184,7 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
           id,
           def: definitionIdOf(engine, id),
         })),
-        state: compact(engine.getState()),
+        state: compact(engine.getState(), engine),
       }) + "\n"
     );
 
@@ -191,7 +196,7 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
     } else if (++consecFail > 5) {
       appendFileSync(
         traceFile,
-        JSON.stringify({ seq: seq++, deadlock: true, active, state: compact(s), interaction: (s as any).interaction }) +
+        JSON.stringify({ seq: seq++, deadlock: true, active, state: compact(s, engine) }) +
           "\n"
       );
       break;
@@ -209,7 +214,7 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
     deck2,
     instanceIds,
     steps: seq,
-    finalState: compact(engine.getState()),
+    finalState: compact(engine.getState(), engine),
   };
 }
 

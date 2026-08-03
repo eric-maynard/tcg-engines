@@ -720,6 +720,11 @@ export const chainMoves: Partial<
   passShowdownFocus: {
     condition: (state, context) => {
       const interaction = state.interaction ?? createInteractionState();
+      // Rule 509.1: focus cannot pass while a chain is active on top of the
+      // showdown — the chain must fully resolve first.
+      if (interaction.chain?.active) {
+        return false;
+      }
       const activeShowdown = getActiveShowdown(interaction);
       if (!activeShowdown?.active) {
         return false;
@@ -728,6 +733,9 @@ export const chainMoves: Partial<
     },
     enumerator: (state, context) => {
       const interaction = state.interaction ?? createInteractionState();
+      if (interaction.chain?.active) {
+        return [];
+      }
       const activeShowdown = getActiveShowdown(interaction);
       if (!activeShowdown?.active) {
         return [];
@@ -761,6 +769,16 @@ export const chainMoves: Partial<
       if (state.status !== "playing") {
         return false;
       }
+      // Rule 548: Starting a Showdown is a Discretionary Action, legal only
+      // in a Neutral Open state (no chain, no showdown). Also blocks nested
+      // showdowns — a second showdown cannot stack while one is already open.
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return false;
+      }
+      if (getActiveShowdown(interaction)?.active) {
+        return false;
+      }
       const bf = state.battlefields[context.params.battlefieldId];
       if (!bf) {
         return false;
@@ -773,6 +791,13 @@ export const chainMoves: Partial<
     },
     enumerator: (state, context) => {
       if (state.status !== "playing") {
+        return [];
+      }
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return [];
+      }
+      if (getActiveShowdown(interaction)?.active) {
         return [];
       }
       // Rule 548: Only contested battlefields can have showdowns

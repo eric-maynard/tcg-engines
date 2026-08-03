@@ -108,12 +108,15 @@ function registerCard(
 
 /**
  * Build a legal-ish 2-domain starter deck from a real card pool.
- * Sorts by energyCost so early draws are affordable.
+ * `strategy: "cheap"` sorts by energyCost (affordable early); `"random"` shuffles
+ * with `seed` so higher-cost cards are exercised too.
  */
 export function buildDefaultDeck(
   allCards: CardDef[],
   domain1 = "fury",
-  domain2 = "chaos"
+  domain2 = "chaos",
+  strategy: "cheap" | "random" = "cheap",
+  seed = ""
 ): DeckConfig {
   const inDomain = (c: CardDef) =>
     c.domain &&
@@ -121,10 +124,20 @@ export function buildDefaultDeck(
       ? c.domain.some((d) => d === domain1 || d === domain2)
       : c.domain === domain1 || c.domain === domain2);
 
-  const byType = (t: string) =>
-    allCards
-      .filter((c) => c.cardType === t && inDomain(c))
-      .sort((a, b) => (a.energyCost ?? 99) - (b.energyCost ?? 99));
+  let salt = 0;
+  for (const c of seed) salt = (salt * 31 + c.charCodeAt(0)) | 0;
+  const order =
+    strategy === "cheap"
+      ? (a: CardDef, b: CardDef) => (a.energyCost ?? 99) - (b.energyCost ?? 99)
+      : (a: CardDef, b: CardDef) => {
+          const h = (s: string) => {
+            let x = salt;
+            for (const ch of s) x = (x * 33 + ch.charCodeAt(0)) | 0;
+            return x >>> 0;
+          };
+          return h(a.id) - h(b.id);
+        };
+  const byType = (t: string) => allCards.filter((c) => c.cardType === t && inDomain(c)).sort(order);
 
   const units = byType("unit").filter((c) => !c.isChampion);
   const spells = byType("spell");
@@ -328,7 +341,10 @@ export function advanceTurn(engine: Engine, players: readonly string[]): string 
 
   // Rule 517.2.c: empty rune pools at end of turn
   for (const pid of players) {
-    engine.executeMove("emptyRunePool", { params: { playerId: pid }, playerId: pid as PlayerId });
+    engine.executeMove("emptyRunePool", {
+      params: { directed: true, playerId: pid },
+      playerId: pid as PlayerId,
+    });
   }
 
   const turnNo = (s.turn as { number?: number }).number ?? 1;

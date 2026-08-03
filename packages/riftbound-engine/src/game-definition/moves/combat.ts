@@ -14,7 +14,7 @@ import type {
 import type { CombatUnit } from "../../combat";
 import { resolveCombat } from "../../combat";
 import { fireTriggers } from "../../abilities/trigger-runner";
-import { getActiveShowdown } from "../../chain";
+import { createInteractionState, getActiveShowdown, getTurnState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type {
   GrantedKeyword,
@@ -44,6 +44,12 @@ export const combatMoves: Partial<
         return false;
       }
       if (state.turn.activePlayer !== context.params.playerId) {
+        return false;
+      }
+      // Rule 140.1.b/c + 516.2.b: Contest is a Discretionary Action,
+      // legal only in a Neutral Open state (no chain, no showdown).
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
         return false;
       }
 
@@ -76,6 +82,10 @@ export const combatMoves: Partial<
         return [];
       }
       if (state.turn.activePlayer !== (context.playerId as string)) {
+        return [];
+      }
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
         return [];
       }
 
@@ -218,11 +228,21 @@ export const combatMoves: Partial<
       if (state.status !== "playing") {
         return false;
       }
+      // Rule 140.1.b/c + 589.1.a: Resolving combat is a Discretionary Action,
+      // legal only in a Neutral Open state (no chain, no showdown).
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return false;
+      }
       const bf = state.battlefields[context.params.battlefieldId];
       return bf?.contested === true;
     },
     enumerator: (state) => {
       if (state.status !== "playing") {
+        return [];
+      }
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
         return [];
       }
       const results: { battlefieldId: string }[] = [];
@@ -459,6 +479,12 @@ export const combatMoves: Partial<
       if (state.turn.activePlayer !== context.params.playerId) {
         return false;
       }
+      // Rule 140.1.b/c + 589.1.a: Conquer is a Discretionary Action,
+      // legal only in a Neutral Open state (no chain, no showdown).
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return false;
+      }
 
       // Rule 548.2: Cannot conquer while a showdown is active at this battlefield
       if (state.interaction) {
@@ -501,6 +527,10 @@ export const combatMoves: Partial<
         return [];
       }
       if (state.turn.activePlayer !== (context.playerId as string)) {
+        return [];
+      }
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
         return [];
       }
 
@@ -614,6 +644,12 @@ export const combatMoves: Partial<
       if (state.turn.activePlayer !== context.params.playerId) {
         return false;
       }
+      // Rule 140.1.b/c + 589.1.a: Scoring is a Discretionary Action,
+      // legal only in a Neutral Open state (no chain, no showdown).
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return false;
+      }
 
       const { playerId, battlefieldId } = context.params;
 
@@ -640,6 +676,10 @@ export const combatMoves: Partial<
         return [];
       }
       if (state.turn.activePlayer !== (context.playerId as string)) {
+        return [];
+      }
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
         return [];
       }
 

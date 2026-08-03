@@ -61,8 +61,24 @@ for (const f of readdirSync(DIR).filter((f) => f.startsWith("game-") && f.endsWi
   }
 }
 
+let getAllCards: (() => any[]) | undefined;
+try {
+  ({ getAllCards } = await import("../../../../riftbound-cards/src/data/all-cards"));
+} catch {}
+const cardById = new Map((getAllCards?.() ?? []).map((c: any) => [c.id, c]));
+
 const drawnButNeverPlayable = [...defEverInHand].filter((d) => !defEverPlayable.has(d));
 const neverDrawn = [...defInDeck].filter((d) => !defEverInHand.has(d));
+
+// Triage: high-cost cards are usually variance (tracer never saved enough energy).
+// Reaction-only spells need a Closed state. What's left is suspicious.
+const suspicious = drawnButNeverPlayable.filter((id) => {
+  const c = cardById.get(id);
+  if (!c) return true;
+  if ((c.energyCost ?? 0) >= 5) return false;
+  if (c.timing === "reaction") return false;
+  return true;
+});
 
 const report = {
   summary: {
@@ -71,10 +87,15 @@ const report = {
     everPlayable: defEverPlayable.size,
     everPlayed: defEverPlayed.size,
     drawnButNeverPlayable: drawnButNeverPlayable.length,
+    suspicious: suspicious.length,
     neverDrawn: neverDrawn.length,
     moveFailed: moveFailed.length,
     enumErrors: enumErrors.length,
   },
+  suspicious: suspicious.map((id) => {
+    const c = cardById.get(id);
+    return { id, name: c?.name, type: c?.cardType, cost: c?.energyCost, timing: c?.timing };
+  }),
   drawnButNeverPlayable,
   neverDrawn,
   moveFailed: moveFailed.slice(0, 50),
@@ -83,7 +104,7 @@ const report = {
 
 writeFileSync(join(DIR, "coverage.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.summary, null, 2));
-if (drawnButNeverPlayable.length) {
-  console.log("\ndrawn-but-never-playable (likely bugs):");
-  console.log(drawnButNeverPlayable.slice(0, 30).join("\n"));
+if (suspicious.length) {
+  console.log("\nsuspicious (cheap, non-reaction, drawn but never playable):");
+  for (const s of report.suspicious) console.log(`  ${s.id}  ${s.name}  ${s.type} cost=${s.cost}`);
 }

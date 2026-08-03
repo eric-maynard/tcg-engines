@@ -10,7 +10,7 @@ import type {
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
 } from "@tcg/core";
-import { createInteractionState, startShowdown as startShowdownState } from "../../chain";
+import { createInteractionState, getTurnState, startShowdown as startShowdownState } from "../../chain";
 import type {
   GrantedKeyword,
   RiftboundCardMeta,
@@ -143,6 +143,12 @@ export const movementMoves: Partial<
       if (state.turn.phase !== "main") {
         return false;
       }
+      // Rule 140.1.b/c + 589.1.a: Standard Move is a Discretionary Action,
+      // legal only in a Neutral Open state (no chain, no showdown).
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return false;
+      }
 
       const { unitIds, playerId } = context.params;
       for (const unitId of unitIds) {
@@ -189,6 +195,10 @@ export const movementMoves: Partial<
         return [];
       }
       if (state.turn.phase !== "main") {
+        return [];
+      }
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
         return [];
       }
 

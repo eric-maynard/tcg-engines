@@ -1256,7 +1256,7 @@ function finalizeEndTurn(session: GameSession, nextPlayer: string): void {
   // Rule 517.2.c: Empty rune pools for all players at end of previous turn
   for (const pid of session.players) {
     session.engine.executeMove("emptyRunePool", {
-      params: { playerId: pid },
+      params: { directed: true, playerId: pid },
       playerId: pid as PlayerId,
     });
   }

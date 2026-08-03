@@ -148,8 +148,8 @@ export interface RiftboundMoves {
   /** Ready all game objects (Awaken phase) */
   readyAll: { playerId: PlayerId };
 
-  /** Clear rune pool resources */
-  emptyRunePool: { playerId: PlayerId };
+  /** Clear rune pool resources. Flow-driven; callers must pass `directed: true`. */
+  emptyRunePool: { playerId: PlayerId; directed?: boolean };
 
   // ============================================
   // Card Play Moves

@@ -329,6 +329,12 @@ export const cardPlayMoves: Partial<
         if (state.turn.phase !== "main") {
           return false;
         }
+        // Rule 140.1.b/c + 508.1.a: Playing a Unit is a Discretionary Action,
+        // legal only in a Neutral Open state (no chain, no showdown).
+        const interaction = state.interaction ?? createInteractionState();
+        if (getTurnState(interaction) !== "neutral-open") {
+          return false;
+        }
       }
 
       if (
@@ -356,6 +362,10 @@ export const cardPlayMoves: Partial<
         return [];
       }
       if (state.turn.phase !== "main") {
+        return [];
+      }
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
         return [];
       }
 
@@ -439,6 +449,12 @@ export const cardPlayMoves: Partial<
       if (state.turn.phase !== "main") {
         return false;
       }
+      // Rule 140.1.b/c + 508.1.a: Playing Gear is a Discretionary Action,
+      // legal only in a Neutral Open state (no chain, no showdown).
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return false;
+      }
 
       const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
       if (zone !== "hand") {
@@ -476,6 +492,10 @@ export const cardPlayMoves: Partial<
         return [];
       }
       if (state.turn.phase !== "main") {
+        return [];
+      }
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
         return [];
       }
 

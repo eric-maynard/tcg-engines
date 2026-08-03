@@ -634,8 +634,8 @@ describe("Rule 548.2 integration: Conquer is gated on showdown completion", () =
 // Multiple battlefields: showdown opens only at the targeted bf
 // ===========================================================================
 
-describe("Showdown scope: a showdown only applies to the battlefield it opened at", () => {
-  it("showdown at bf-1 does not block conquer at an unrelated bf-2", () => {
+describe("Rule 553: Showdown state is turn-wide, not per-battlefield", () => {
+  it("showdown at bf-1 blocks conquer at an unrelated bf-2 (only spell/ability/invite/pass are legal)", () => {
     const engine = createMinimalGameState({ currentPlayer: P1, phase: "main" });
     createBattlefield(engine, "bf-1", { controller: null });
     createBattlefield(engine, "bf-2", { controller: null });
@@ -659,12 +659,14 @@ describe("Showdown scope: a showdown only applies to the battlefield it opened a
       unitIds: ["u1"],
     });
 
-    // Conquer at bf-2 (unrelated) should still be legal
+    // Rule 553: during a Showdown the player with Focus may only play a
+    // legally-timed spell, activate an ability, invite, or pass. Conquer at
+    // bf-2 is a discretionary action and is illegal until the showdown ends.
     const conquerBf2 = applyMove(engine, "conquerBattlefield", {
       battlefieldId: "bf-2",
       playerId: P1,
     });
-    expect(conquerBf2.success).toBe(true);
+    expect(conquerBf2.success).toBe(false);
   });
 });
 

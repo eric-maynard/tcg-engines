@@ -199,8 +199,11 @@ export const turnMoves: Partial<
    * This happens at the end of Draw Phase and end of turn.
    */
   emptyRunePool: {
+    // Rule 160 / 517.2.c: every player's Rune Pool empties, not only the
+    // active player's. Flow-driven only — callers must pass `directed: true`
+    // (matching channelRunes) so a client can't empty an opponent's pool.
     condition: (state, context) =>
-      state.status === "playing" && state.turn.activePlayer === context.params.playerId,
+      state.status === "playing" && context.params.directed === true,
     reducer: (draft, context) => {
       const { playerId } = context.params;
 
