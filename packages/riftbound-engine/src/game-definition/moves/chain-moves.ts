@@ -833,11 +833,12 @@ export const chainMoves: Partial<
 
       const bf = draft.battlefields[battlefieldId];
       const isCombat = bf?.contested ?? false;
-      // Rule 550.1: for a combat showdown the Attacking and Defending players
-      // are Relevant. The attacker is contestedBy; the defender is the
-      // battlefield's current controller. Rule 550.2: non-combat → all players.
+      // Rule 464.2.c (Vendetta): Attacker = player who applied Contested;
+      // Defender = the player who did NOT apply Contested (bf.controller when
+      // set, otherwise the other player). Rule 550.2: non-combat → all players.
       const attacker = bf?.contestedBy ?? playerId;
-      const defender = bf?.controller ?? undefined;
+      const defender =
+        bf?.controller ?? playerIds.find((p) => p !== attacker) ?? undefined;
       const relevantPlayers =
         isCombat && defender ? [...new Set([attacker, defender])] : playerIds;
 

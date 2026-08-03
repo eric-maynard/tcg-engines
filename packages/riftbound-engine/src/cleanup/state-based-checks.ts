@@ -293,16 +293,29 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
   }
 
-  // Step 6: Mark combat as pending (rule 524)
+  // Step 6: Battlefield control + combat staging (rules 323.6, 323.13)
   for (const [bfId, bf] of Object.entries(ctx.draft.battlefields)) {
     const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
     const unitsAtBf = ctx.zones.getCardsInZone(bfZoneId);
+
+    // Rule 323.6: a player loses control of a Battlefield they control if
+    // they no longer have a Unit at that Battlefield.
+    if (bf.controller) {
+      const controllerHasUnit = unitsAtBf.some(
+        (id) =>
+          ctx.cards.getCardOwner(id) === bf.controller &&
+          registry.getCardType(id as string) === "unit",
+      );
+      if (!controllerHasUnit) {
+        bf.controller = null;
+        stateChanged = true;
+      }
+    }
 
     if (unitsAtBf.length < 2) {
       continue;
     }
 
-    // Check if units belong to 2+ different players
     const owners = new Set<string>();
     for (const unitId of unitsAtBf) {
       const owner = ctx.cards.getCardOwner(unitId) ?? "";

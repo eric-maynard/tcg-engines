@@ -123,17 +123,66 @@ function triggerMatchesEvent(
         return false;
       }
     }
-  } else if (on === "any-unit") {
-    // Match any unit subject — no additional filter required.
+  } else if (on === "any-unit" || on === "any" || on === "any-player") {
+    // Match any subject — no additional filter required.
   } else if (on === "enemy-units") {
-    // Trigger fires when an enemy unit is the subject.
-    if (event.type === "become-mighty" || event.type === "die") {
-      if (event.owner === card.owner) {
+    if ("owner" in event && event.owner === card.owner) {
+      return false;
+    }
+  } else if (on === "controller" || on === "controller-or-allies") {
+    // Player-scoped event must be for this card's controller.
+    if ("playerId" in event && event.playerId !== card.owner) {
+      return false;
+    }
+  } else if (on === "opponent") {
+    if ("playerId" in event && event.playerId === card.owner) {
+      return false;
+    }
+  } else if (typeof on === "object" && on !== null) {
+    // Object-shape descriptor: {controller?, cardType?/type?, location?, excludeSelf?, tag?, filter?}.
+    // Rule 383.4.d: match only when the event subject satisfies every field.
+    const desc = on as {
+      controller?: "friendly" | "enemy" | "any";
+      cardType?: string;
+      type?: string;
+      location?: "here" | "battlefield";
+      excludeSelf?: boolean;
+      tag?: string;
+      filter?: string;
+    };
+    const subjectOwner = "owner" in event ? event.owner : "playerId" in event ? event.playerId : undefined;
+    if (desc.controller === "friendly" && subjectOwner !== undefined && subjectOwner !== card.owner) {
+      return false;
+    }
+    if (desc.controller === "enemy" && subjectOwner !== undefined && subjectOwner === card.owner) {
+      return false;
+    }
+    if (desc.excludeSelf && "cardId" in event && event.cardId === card.id) {
+      return false;
+    }
+    if (desc.location === "here") {
+      const evLoc =
+        "battlefieldId" in event
+          ? event.battlefieldId
+          : "to" in event
+            ? String(event.to).replace(/^battlefield-/, "")
+            : undefined;
+      const cardLoc = card.zone?.replace(/^battlefield-/, "");
+      if (evLoc !== cardLoc && evLoc !== card.id) {
         return false;
       }
     }
+    // cardType/type/tag/filter require registry lookups on the subject card;
+    // absent that context here, be conservative when the subject owner is
+    // unknown (previously this fell through to match-all — rule 383.4.d bug).
+    if (subjectOwner === undefined && desc.controller && desc.controller !== "any") {
+      return false;
+    }
+  } else {
+    // Unknown `on` shape — do NOT match-all (previous behavior caused triggers
+    // to fire for every event regardless of subject, rule 383.4.d).
+    return false;
   }
-  // For other "on" values or events — simplified: match all
 
   return true;
 }
