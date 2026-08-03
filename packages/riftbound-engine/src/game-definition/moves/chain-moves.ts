@@ -1023,27 +1023,8 @@ export const chainMoves: Partial<
       }
       return true;
     },
-    enumerator: (state, context) => {
-      if (state.status !== "playing") {
-        return [];
-      }
-      const chain = state.interaction?.chain;
-      if (!chain?.active) {
-        return [];
-      }
-      const inviter = context.playerId as string;
-      if (!chain.relevantPlayers.includes(inviter)) {
-        return [];
-      }
-      const results: { playerId: string; targetChainItemId: string }[] = [];
-      for (const item of chain.items) {
-        if (item.countered) {
-          continue;
-        }
-        results.push({ playerId: inviter, targetChainItemId: item.id });
-      }
-      return results;
-    },
+    // Rule 601: Counter is a card effect, not a player Discretionary Action.
+    // No enumerator — this move exists for sandbox/effect-executor use only.
     reducer: (draft, context) => {
       const chain = draft.interaction?.chain;
       if (!chain) {

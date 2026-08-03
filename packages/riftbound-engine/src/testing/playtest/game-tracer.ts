@@ -82,7 +82,7 @@ function compact(s: RiftboundGameState, engine?: Engine) {
   };
 }
 
-const NEVER_PICK = new Set(["concede", "removePlayer", "invitePlayer"]);
+const NEVER_PICK = new Set(["concede", "removePlayer", "invitePlayer", "counterSpell"]);
 
 /** Light bias so games get resources first and then play cards, without being deterministic. */
 const WEIGHT: Record<string, number> = {
