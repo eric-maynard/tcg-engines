@@ -303,28 +303,30 @@ export const combatMoves: Partial<
 
         const currentDamage = meta?.damage ?? 0;
 
-        // Collect keywords from definition and granted keywords
+        // Collect keywords from every source: the flat keywords[] array, the
+        // abilities[{type:"keyword"}] entries (where card data actually stores
+        // them — see hasKeyword fix), and runtime-granted keywords.
         const defKeywords = def?.keywords ?? [];
+        const abilityKeywords: string[] = [];
         const grantedKeywords: GrantedKeyword[] = meta?.grantedKeywords ?? [];
-        const allKeywords = [...defKeywords, ...grantedKeywords.map((gk) => gk.keyword)];
-
-        // Build keywordValues from granted keywords with numeric values
         const keywordValues: Record<string, number> = {};
-        for (const gk of grantedKeywords) {
-          if (gk.value !== undefined) {
-            keywordValues[gk.keyword] = (keywordValues[gk.keyword] ?? 0) + gk.value;
+
+        for (const ability of def?.abilities ?? []) {
+          if (ability.type === "keyword" && ability.keyword) {
+            abilityKeywords.push(ability.keyword);
+            keywordValues[ability.keyword] =
+              (keywordValues[ability.keyword] ?? 0) + (ability.value ?? 1);
           }
+        }
+        for (const gk of grantedKeywords) {
+          keywordValues[gk.keyword] = (keywordValues[gk.keyword] ?? 0) + (gk.value ?? 1);
         }
 
-        // Also parse keyword values from definition keywords (e.g., "Assault" with value in abilities)
-        if (def?.abilities) {
-          for (const ability of def.abilities) {
-            if (ability.type === "keyword" && ability.keyword && ability.value !== undefined) {
-              keywordValues[ability.keyword] =
-                (keywordValues[ability.keyword] ?? 0) + ability.value;
-            }
-          }
-        }
+        const allKeywords = [
+          ...defKeywords,
+          ...abilityKeywords,
+          ...grantedKeywords.map((gk) => gk.keyword),
+        ];
 
         const unit: CombatUnit = {
           baseMight,
