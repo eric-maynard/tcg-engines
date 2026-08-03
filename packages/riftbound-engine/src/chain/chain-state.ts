@@ -220,13 +220,19 @@ export function addToChain(
     ];
   }
 
+  // Rule 537.1: the player that created the chain becomes first Active Player.
+  // Rule 541.2: triggered abilities added to the chain do NOT affect Active
+  // Player order — preserve the existing activePlayer when a trigger queues.
+  const activePlayer =
+    item.triggered && state.chain?.active ? state.chain.activePlayer : item.controller;
+
   return {
     ...state,
     chain: {
       active: true,
       items: [...existingItems, chainItem],
       relevantPlayers,
-      activePlayer: item.controller,
+      activePlayer,
       passedPlayers: [], // Reset passes when new item added
       turnOrder,
     },
