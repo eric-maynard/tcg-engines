@@ -12,7 +12,14 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PlayerId } from "@tcg/core";
 import type { RiftboundGameState } from "../../types";
-import { advanceTurn, buildDefaultDeck, createPlayableGame, type Engine } from "./game-setup";
+import {
+  advanceTurn,
+  buildDefaultDeck,
+  createPlayableGame,
+  definitionIdOf,
+  getZoneCards,
+  type Engine,
+} from "./game-setup";
 
 let getAllCards: (() => any[]) | undefined;
 try {
@@ -55,6 +62,8 @@ function compact(s: RiftboundGameState) {
   return {
     turn: s.turn,
     status: s.status,
+    pendingChoice: (s as any).pendingChoice,
+    interaction: (s as any).interaction,
     vp: Object.fromEntries(
       Object.entries(s.players).map(([id, p]: [string, any]) => [id, p?.victoryPoints ?? 0])
     ),
@@ -68,10 +77,37 @@ function compact(s: RiftboundGameState) {
   };
 }
 
-const NEVER_PICK = new Set(["concede", "removePlayer"]);
+const NEVER_PICK = new Set(["concede", "removePlayer", "invitePlayer"]);
 
-/** Who should act next: chain priority holder > showdown focus holder > turn player. */
+/** Light bias so games get resources first and then play cards, without being deterministic. */
+const WEIGHT: Record<string, number> = {
+  exhaustRune: 8,
+  playUnit: 5,
+  playSpell: 4,
+  playGear: 4,
+  standardMove: 4,
+  passChainPriority: 3,
+  passShowdownFocus: 3,
+  activateAbility: 2,
+  recycleRune: 1,
+  counterSpell: 1,
+};
+
+function pickWeighted(moves: any[], rand: () => number) {
+  const w = moves.map((m) => WEIGHT[m.moveId] ?? 2);
+  const total = w.reduce((a, b) => a + b, 0);
+  let r = rand() * total;
+  for (let i = 0; i < moves.length; i++) {
+    r -= w[i];
+    if (r <= 0) return moves[i];
+  }
+  return moves[moves.length - 1];
+}
+
+/** Who should act next: pendingChoice prompter > chain priority holder > showdown focus holder > turn player. */
 function actingPlayer(s: RiftboundGameState): string {
+  const pc: any = (s as any).pendingChoice;
+  if (pc?.prompter) return pc.prompter;
   const ia: any = (s as any).interaction;
   if (ia?.chain?.active && ia.chain.activePlayer) return ia.chain.activePlayer;
   const sd = ia?.showdownStack?.[ia.showdownStack.length - 1];
@@ -107,15 +143,20 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
     const pickable = available.filter((m) => !NEVER_PICK.has(m.moveId));
     const nonEnd = pickable.filter((m) => m.moveId !== "endTurn");
     const pool = nonEnd.length > 0 && rand() < 0.85 ? nonEnd : pickable;
-    let chosen = pool[Math.floor(rand() * pool.length)];
+    let chosen = pool.length ? pickWeighted(pool, rand) : undefined;
     if (!chosen) {
-      // Nothing pickable for the priority holder — try the pass move for the current interaction.
+      // Nothing pickable — try the appropriate escape hatch for the current state.
+      const pc: any = (s as any).pendingChoice;
       const ia: any = (s as any).interaction;
-      chosen = ia?.chain?.active
-        ? { moveId: "passChainPriority", params: { playerId: active } }
-        : ia?.showdownStack?.length
-          ? { moveId: "passFocus", params: { playerId: active } }
-          : { moveId: "endTurn", params: { playerId: active } };
+      chosen = pc
+        ? // Engine gap: pendingChoice with no valid picks (e.g. empty revealed hand)
+          // has no escape hatch. Record it as a deadlock finding.
+          { moveId: "resolvePendingChoice", params: { playerId: active, pickedCardId: pc.revealed?.[0] } }
+        : ia?.chain?.active
+          ? { moveId: "passChainPriority", params: { playerId: active } }
+          : ia?.showdownStack?.length
+            ? { moveId: "passShowdownFocus", params: { playerId: active } }
+            : { moveId: "endTurn", params: { playerId: active } };
     }
     const result = engine.executeMove(chosen.moveId, {
       params: (chosen.params ?? {}) as any,
@@ -134,6 +175,10 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
         success: (result as any)?.success ?? true,
         error: (result as any)?.error,
         enumErr,
+        hand: getZoneCards(engine, "hand", active).map((id) => ({
+          id,
+          def: definitionIdOf(engine, id),
+        })),
         state: compact(engine.getState()),
       }) + "\n"
     );

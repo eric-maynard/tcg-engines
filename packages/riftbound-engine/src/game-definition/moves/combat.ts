@@ -244,6 +244,10 @@ export const combatMoves: Partial<
 
       const attackingPlayer = battlefield.contestedBy;
       if (!attackingPlayer) {
+        // Rule 627.4: Resolution Step always clears Contested even when no
+        // damage step occurred — otherwise startShowdown re-enumerates forever.
+        battlefield.contested = false;
+        battlefield.contestedBy = undefined;
         return;
       }
 
@@ -252,6 +256,8 @@ export const combatMoves: Partial<
       const unitIds = zones.getCardsInZone(battlefieldZoneId);
 
       if (unitIds.length === 0) {
+        battlefield.contested = false;
+        battlefield.contestedBy = undefined;
         return;
       }
 
@@ -314,8 +320,12 @@ export const combatMoves: Partial<
         }
       }
 
-      // If either side is empty, skip combat resolution
+      // If either side is empty, skip the Combat Damage Step (rule 626.1.a.1)
+      // but still perform the Resolution Step: clear Contested (rule 627.4).
+      // Leaving contested=true here re-triggers startShowdown → infinite loop.
       if (attackerUnits.length === 0 || defenderUnits.length === 0) {
+        battlefield.contested = false;
+        battlefield.contestedBy = undefined;
         return;
       }
 

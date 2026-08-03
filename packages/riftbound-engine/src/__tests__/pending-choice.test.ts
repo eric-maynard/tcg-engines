@@ -138,6 +138,27 @@ describe("reveal-hand effect", () => {
     expect(draft.pendingChoice?.onPicked).toBe("recycle");
   });
 
+  it("does NOT create a pendingChoice when the filter excludes every revealed card", () => {
+    const { ctx, draft } = buildMockCtx({
+      cardTypes: { "u1": "unit", "u2": "unit", "u3": "unit" },
+      opponentHand: ["u1", "u2", "u3"],
+    });
+
+    const effect: ExecutableEffect = {
+      filter: { excludeCardTypes: ["unit"] },
+      onPicked: "recycle",
+      target: { type: "player", which: "opponent" } as unknown as ExecutableEffect["target"],
+      type: "reveal-hand",
+    };
+
+    executeEffect(effect, ctx);
+
+    // No valid picks → effect fizzles; leaving pendingChoice set would deadlock
+    // the game (resolvePendingChoice enumerates nothing and every other move is
+    // blocked by the pendingChoice check).
+    expect(draft.pendingChoice).toBeUndefined();
+  });
+
   it("stores the excludeCardTypes filter", () => {
     const { ctx, draft } = buildMockCtx({
       cardTypes: { "card-a": "spell", "card-b": "unit" },

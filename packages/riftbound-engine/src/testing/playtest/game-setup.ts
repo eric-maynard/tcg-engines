@@ -47,6 +47,21 @@ function getInternal(engine: Engine): Internal {
   return (engine as unknown as { internalState: Internal }).internalState;
 }
 
+/** Read a per-player zone's card ids from the engine's internal state. */
+export function getZoneCards(engine: Engine, zone: string, playerId?: string): string[] {
+  const zs = getInternal(engine).zones;
+  const z = zs[zone];
+  if (!z) return [];
+  if (!playerId) return [...z.cardIds];
+  const cards = getInternal(engine).cards;
+  return z.cardIds.filter((id) => cards[id]?.owner === playerId);
+}
+
+/** Map an instance id back to its definition id. */
+export function definitionIdOf(engine: Engine, instanceId: string): string | undefined {
+  return getInternal(engine).cards[instanceId]?.definitionId;
+}
+
 function makeLookupPayload(
   def: CardDef,
   cardId: string,

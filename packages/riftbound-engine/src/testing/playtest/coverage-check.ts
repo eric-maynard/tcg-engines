@@ -4,10 +4,13 @@
  *
  *   bun coverage-check.ts /tmp/playtest-traces
  *
- * Reports:
- *   - never-playable: card in deck, seen in hand-zone params, never in a play* available move
- *   - move-failed:    engine enumerated a move as valid, then rejected it
- *   - enum-error:     enumerateMoves threw
+ * Reports (by card *definition* id, aggregated across all instances/games):
+ *   - drawn-but-never-playable: card reached a hand but was never enumerated
+ *     as a play* move — likely an engine/cost/registry bug.
+ *   - never-drawn: card in a deck but never reached hand — variance, not a bug
+ *     unless it persists at high game counts.
+ *   - move-failed: engine enumerated a move as valid then rejected it.
+ *   - enum-errors: enumerateMoves threw.
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,28 +18,42 @@ import { join } from "node:path";
 const DIR = process.argv[2] ?? "/tmp/playtest-traces";
 const decks = JSON.parse(readFileSync(join(DIR, "decks.json"), "utf8"));
 
-const deckCards = new Set<string>(decks.allDeckCards ?? []);
-const everPlayable = new Set<string>();
-const everChosen = new Set<string>();
+const PLAY_MOVES = new Set(["playUnit", "playSpell", "playGear", "playCard", "playFromChampionZone"]);
+
+const defInDeck = new Set<string>();
+const defEverInHand = new Set<string>();
+const defEverPlayable = new Set<string>();
+const defEverPlayed = new Set<string>();
+
+for (const g of decks.games ?? []) {
+  for (const d of [g.deck1, g.deck2]) {
+    for (const id of d?.mainDeckCardIds ?? []) defInDeck.add(id);
+  }
+}
+
+// Instance ids: player-1-main-0-<defId>, player-2-rune-5-<defId>, player-1-champion-<defId>, …
+const INST_RE = /^player-\d+-(?:main|rune|champion|legend|bf)-?\d*-/;
+const instToDef = (id: string) => id.replace(INST_RE, "") || id;
+
 const moveFailed: any[] = [];
 const enumErrors: any[] = [];
-
-const PLAY_MOVES = new Set(["playUnit", "playSpell", "playGear", "playCard"]);
 
 for (const f of readdirSync(DIR).filter((f) => f.startsWith("game-") && f.endsWith(".jsonl"))) {
   for (const line of readFileSync(join(DIR, f), "utf8").split("\n")) {
     if (!line) continue;
     const ev = JSON.parse(line);
+    if (ev.deadlock) continue;
+    if (ev.enumErr) enumErrors.push({ file: f, seq: ev.seq, err: ev.enumErr });
+    for (const h of ev.hand ?? []) if (h.def) defEverInHand.add(h.def);
     for (const m of ev.available ?? []) {
-      if (m._enumErr) enumErrors.push({ file: f, seq: ev.seq, err: m._enumErr });
       if (PLAY_MOVES.has(m.moveId)) {
         const cid = m.params?.cardId ?? m.params?.card ?? m.params?.id;
-        if (cid) everPlayable.add(String(cid));
+        if (cid) defEverPlayable.add(instToDef(String(cid)));
       }
     }
-    if (PLAY_MOVES.has(ev.chosen?.moveId)) {
+    if (PLAY_MOVES.has(ev.chosen?.moveId) && ev.success) {
       const cid = ev.chosen.params?.cardId ?? ev.chosen.params?.card;
-      if (cid) everChosen.add(String(cid));
+      if (cid) defEverPlayed.add(instToDef(String(cid)));
     }
     if (ev.success === false) {
       moveFailed.push({ file: f, seq: ev.seq, move: ev.chosen, error: ev.error });
@@ -44,20 +61,29 @@ for (const f of readdirSync(DIR).filter((f) => f.startsWith("game-") && f.endsWi
   }
 }
 
-const neverPlayable = [...deckCards].filter((c) => !everPlayable.has(c));
+const drawnButNeverPlayable = [...defEverInHand].filter((d) => !defEverPlayable.has(d));
+const neverDrawn = [...defInDeck].filter((d) => !defEverInHand.has(d));
 
 const report = {
-  deckCardCount: deckCards.size,
-  everPlayable: everPlayable.size,
-  everChosen: everChosen.size,
-  neverPlayable,
+  summary: {
+    defsInDecks: defInDeck.size,
+    everInHand: defEverInHand.size,
+    everPlayable: defEverPlayable.size,
+    everPlayed: defEverPlayed.size,
+    drawnButNeverPlayable: drawnButNeverPlayable.length,
+    neverDrawn: neverDrawn.length,
+    moveFailed: moveFailed.length,
+    enumErrors: enumErrors.length,
+  },
+  drawnButNeverPlayable,
+  neverDrawn,
   moveFailed: moveFailed.slice(0, 50),
-  moveFailedCount: moveFailed.length,
   enumErrors: enumErrors.slice(0, 20),
 };
 
 writeFileSync(join(DIR, "coverage.json"), JSON.stringify(report, null, 2));
-console.log(
-  `deck cards: ${deckCards.size}  ever-playable: ${everPlayable.size}  never-playable: ${neverPlayable.length}  move-failed: ${moveFailed.length}`
-);
-if (neverPlayable.length) console.log("never-playable:", neverPlayable.slice(0, 20));
+console.log(JSON.stringify(report.summary, null, 2));
+if (drawnButNeverPlayable.length) {
+  console.log("\ndrawn-but-never-playable (likely bugs):");
+  console.log(drawnButNeverPlayable.slice(0, 30).join("\n"));
+}

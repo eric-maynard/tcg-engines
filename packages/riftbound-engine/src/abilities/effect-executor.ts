@@ -153,9 +153,19 @@ function getEffectiveMight(cardId: string, ctx: EffectContext): number {
  * Handles dynamic amounts like "equal to this unit's Might",
  * "number of cards in hand", "number of cards in trash", or "count of matching targets".
  */
-function resolveAmount(amount: number | Record<string, unknown>, ctx: EffectContext): number {
+function resolveAmount(
+  amount: number | string | Record<string, unknown> | undefined | null,
+  ctx: EffectContext,
+): number {
   if (typeof amount === "number") {
     return amount;
+  }
+  if (amount == null) {
+    return 0;
+  }
+  if (typeof amount === "string") {
+    // Card parser emits amount:"all" for heal-all / prevent-all-damage effects.
+    return amount === "all" ? Number.MAX_SAFE_INTEGER : 0;
   }
 
   // Handle AmountExpression objects
@@ -872,8 +882,16 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       const onPicked = ((effect as unknown as { onPicked?: "recycle" | "banish" | "discard" })
         .onPicked ?? "recycle") as "recycle" | "banish" | "discard";
 
-      // If the revealer has no cards in hand, there's nothing to pick — skip.
-      if (revealed.length === 0) {
+      // If the revealer has no cards in hand, or every revealed card is
+      // excluded by the filter, there is no valid pick — skip so play can
+      // continue (otherwise pendingChoice deadlocks the game).
+      const revealRegistry = getGlobalCardRegistry();
+      const excluded = filter?.excludeCardTypes ?? [];
+      const validPicks = revealed.filter((id) => {
+        const t = revealRegistry.get(id)?.cardType;
+        return !t || !excluded.includes(t);
+      });
+      if (validPicks.length === 0) {
         break;
       }
 
