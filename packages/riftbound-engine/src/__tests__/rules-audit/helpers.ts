@@ -404,6 +404,8 @@ export interface CreateBattlefieldParams {
   controller: PlayerId | null;
   contested?: boolean;
   contestedBy?: PlayerId;
+  /** Rule 625.1: mandatory Showdown Step must complete before resolveFullCombat. */
+  showdownComplete?: boolean;
   abilities?: CardDefinitionLookup["abilities"];
   /** Place the battlefield card in the battlefieldRow zone. Default true. */
   placeInRow?: boolean;
@@ -429,6 +431,7 @@ export function createBattlefield(
     contestedBy: params.contestedBy,
     controller: params.controller,
     id: battlefieldId,
+    showdownComplete: params.showdownComplete,
   };
   (internal as { currentState: RiftboundGameState }).currentState = newState as RiftboundGameState;
 

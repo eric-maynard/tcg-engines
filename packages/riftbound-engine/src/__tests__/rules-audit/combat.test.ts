@@ -69,7 +69,7 @@ describe("Rule 604.1.a.2: Passive Kill triggers when a unit has Lethal damage", 
 describe("Rule 604.2: Killed permanents go from their origin to trash", () => {
   it("resolveFullCombat move puts killed units in trash", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "a1", {
       cardType: "unit",
       might: 2,
@@ -166,7 +166,7 @@ describe("Rule 622: Pending Combat exists when opposing units are at a battlefie
 describe("Rule 622.2: If a pending combat stops being pending, it is not resolved", () => {
   it("resolveFullCombat is a no-op if one side has no units at the battlefield", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "a1", {
       cardType: "unit",
       might: 3,
@@ -263,7 +263,7 @@ describe("Rule 625.1.b.2: Defending units with Shield have Might modulated at co
 describe("Rule 625.1.a: Attacker is the player who applied Contested status", () => {
   it("resolveFullCombat uses battlefield.contestedBy to determine attacker side", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P2, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P2, controller: null });
     // P2 is the attacker despite being "player 2"
     createCard(engine, "p1-big", {
       cardType: "unit",
@@ -295,7 +295,7 @@ describe("Rule 625.1.a: Attacker is the player who applied Contested status", ()
 describe("Rule 626.1.a.1: If one side has no units, no combat occurs (fall through)", () => {
   it("resolveFullCombat with only attackers: skipped, no damage, no kills", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "a1", {
       cardType: "unit",
       might: 3,
@@ -315,7 +315,7 @@ describe("Rule 626.1.a.1: If one side has no units, no combat occurs (fall throu
 
   it("resolveFullCombat with only defenders: skipped, defender stays alive", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "d1", {
       cardType: "unit",
       might: 3,
@@ -548,7 +548,7 @@ describe("Rule 626.1.d.4: Multiple same-priority units may be ordered by the ass
 describe("Rule 627.1: Killed units are removed from the battlefield", () => {
   it("dead defenders are moved to trash during resolveFullCombat", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "attacker", {
       cardType: "unit",
       might: 5,
@@ -598,7 +598,7 @@ describe("Rule 627.2: If both sides still have units, attackers are recalled", (
 
   it("resolveFullCombat recalls surviving attackers to base when defender wins", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     // Attacker: two small 1-might units
     createCard(engine, "atk-small-a", {
       cardType: "unit",
@@ -650,7 +650,7 @@ describe("Rule 627.2: If both sides still have units, attackers are recalled", (
 describe("Rule 627.3: Battlefield is conquered when defenders are wiped and attackers survive", () => {
   it("attacker survives + defenders wiped → attacker becomes controller", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "big-atk", {
       cardType: "unit",
       might: 10,
@@ -685,7 +685,7 @@ describe("Rule 627.3: Battlefield is conquered when defenders are wiped and atta
 describe("Rule 627.3.a: Conquer causes exchange of battlefield control → Conquer trigger", () => {
   it("conquerThisTurn list is updated when attacker wins", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "atk", {
       cardType: "unit",
       might: 5,
@@ -712,7 +712,7 @@ describe("Rule 627.3.a: Conquer causes exchange of battlefield control → Conqu
 describe("Rule 627.4: Contested status is cleared from the battlefield after combat", () => {
   it("bf.contested is false after resolveFullCombat", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "a1", {
       cardType: "unit",
       might: 2,
@@ -812,7 +812,7 @@ describe("Rule 626.1.d.2 corollary: Excess damage does not 'carry over' to other
 describe("End-to-end: resolveFullCombat applies damage, kills, outcome, cleans up", () => {
   it("attacker conquers: all defenders trashed, attacker survives on bf, VP awarded", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "hero", {
       cardType: "unit",
       might: 7,
@@ -837,7 +837,7 @@ describe("End-to-end: resolveFullCombat applies damage, kills, outcome, cleans u
 
   it("defender wins: attacker trashed/recalled, battlefield remains uncontrolled", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-1", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-1", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "weak-atk", {
       cardType: "unit",
       might: 1,
@@ -875,8 +875,8 @@ describe("Multi-player and chain-integration combat rules", () => {
   // Of which is individually resolvable by the turn player.
   it("Rule 622.1: multiple contested battlefields are each enumerated as a resolvable combat", () => {
     const engine = createMinimalGameState({ phase: "main" });
-    createBattlefield(engine, "bf-a", { contested: true, contestedBy: P1, controller: null });
-    createBattlefield(engine, "bf-b", { contested: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-a", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
+    createBattlefield(engine, "bf-b", { contested: true, showdownComplete: true, contestedBy: P1, controller: null });
     createCard(engine, "atk-a", {
       cardType: "unit",
       might: 3,

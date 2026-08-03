@@ -125,6 +125,7 @@ export const combatMoves: Partial<
       if (battlefield) {
         battlefield.contested = true;
         battlefield.contestedBy = playerId;
+        battlefield.showdownComplete = false;
       }
     },
   },
@@ -228,14 +229,15 @@ export const combatMoves: Partial<
       if (state.status !== "playing") {
         return false;
       }
-      // Rule 140.1.b/c + 589.1.a: Resolving combat is a Discretionary Action,
-      // legal only in a Neutral Open state (no chain, no showdown).
       const interaction = state.interaction ?? createInteractionState();
       if (getTurnState(interaction) !== "neutral-open") {
         return false;
       }
       const bf = state.battlefields[context.params.battlefieldId];
-      return bf?.contested === true;
+      // Rule 625.1 / 516.4.f: the Combat Damage Step (626) follows the
+      // mandatory Showdown Step (625). resolveFullCombat may not run until
+      // that showdown has completed.
+      return bf?.contested === true && bf.showdownComplete === true;
     },
     enumerator: (state) => {
       if (state.status !== "playing") {
@@ -247,7 +249,7 @@ export const combatMoves: Partial<
       }
       const results: { battlefieldId: string }[] = [];
       for (const [bfId, bf] of Object.entries(state.battlefields || {})) {
-        if (bf.contested) {
+        if (bf.contested && bf.showdownComplete) {
           results.push({ battlefieldId: bfId });
         }
       }

@@ -1048,6 +1048,7 @@ describe("Assault + Tank combo (real resolveFullCombat move)", () => {
       contested: true,
       contestedBy: P1,
       controller: null,
+      showdownComplete: true,
     });
     createCard(engine, "a1", {
       cardType: "unit",

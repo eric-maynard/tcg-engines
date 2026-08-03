@@ -759,10 +759,18 @@ export const chainMoves: Partial<
         return;
       }
 
+      const before = getActiveShowdown(draft.interaction);
       draft.interaction = passFocusState(draft.interaction);
 
-      // If showdown ended (all passed), clean up
+      // If showdown ended (all passed), clean up and mark the battlefield's
+      // showdown as complete so resolveFullCombat becomes legal (rule 625.1).
       if (isShowdownEnded(draft.interaction)) {
+        if (before?.battlefieldId) {
+          const bf = draft.battlefields[before.battlefieldId];
+          if (bf) {
+            bf.showdownComplete = true;
+          }
+        }
         draft.interaction = endShowdownState(draft.interaction);
       }
     },

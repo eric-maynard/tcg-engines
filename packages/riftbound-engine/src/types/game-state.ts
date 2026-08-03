@@ -191,6 +191,14 @@ export interface BattlefieldState {
   contestedBy?: PlayerId;
 
   /**
+   * Set when the mandatory Combat Showdown at this battlefield has completed
+   * (all Relevant Players passed). Rule 625.1 / 516.4.f: the Showdown is a
+   * required sub-phase of Combat — `resolveFullCombat` may not run until it
+   * has. Cleared whenever `contested` becomes true.
+   */
+  showdownComplete?: boolean;
+
+  /**
    * Bonus to the number of cards a player may hide at this battlefield.
    *
    * Default hidden-capacity is 1 per player. Battlefields like Bandle Tree

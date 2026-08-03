@@ -313,7 +313,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-1";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: null, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: null, id: bfId },
       },
     });
 
@@ -352,7 +352,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-conquer";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: P2, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: P2, id: bfId },
       },
     });
 
@@ -390,7 +390,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-defend";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: P2, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: P2, id: bfId },
       },
     });
 
@@ -542,7 +542,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-defend-recall";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: P2, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: P2, id: bfId },
       },
     });
 
@@ -567,7 +567,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-tie";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: null, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: null, id: bfId },
       },
     });
 
@@ -602,7 +602,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-assault";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: null, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: null, id: bfId },
       },
     });
 
@@ -631,7 +631,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-assault-win";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: P2, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: P2, id: bfId },
       },
     });
 
@@ -656,7 +656,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-shield";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: null, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: null, id: bfId },
       },
     });
 
@@ -688,7 +688,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-no-attacker";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, controller: null, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, controller: null, id: bfId },
       },
     });
 
@@ -714,7 +714,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-gear";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: null, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: null, id: bfId },
       },
     });
 
@@ -744,7 +744,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-predamage";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: null, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: null, id: bfId },
       },
     });
 
@@ -766,7 +766,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-roles";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: null, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: null, id: bfId },
       },
     });
 
@@ -787,7 +787,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-victory";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: P2, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: P2, id: bfId },
       },
     });
     // Set P1 at 7 VP, one more for victory (threshold is 8)
@@ -821,7 +821,7 @@ describe("resolveFullCombat", () => {
     const bfId = "bf-granted";
     const draft = createMockState({
       battlefields: {
-        [bfId]: { contested: true, contestedBy: P1, controller: null, id: bfId },
+        [bfId]: { contested: true, showdownComplete: true, contestedBy: P1, controller: null, id: bfId },
       },
     });
 
@@ -943,9 +943,9 @@ describe("resolveFullCombat enumerator and condition", () => {
   test("enumerator returns contested battlefields", () => {
     const state = createMockState({
       battlefields: {
-        "bf-1": { contested: true, contestedBy: P1, controller: P2, id: "bf-1" },
+        "bf-1": { contested: true, showdownComplete: true, contestedBy: P1, controller: P2, id: "bf-1" },
         "bf-2": { contested: false, controller: P1, id: "bf-2" },
-        "bf-3": { contested: true, contestedBy: P2, controller: P1, id: "bf-3" },
+        "bf-3": { contested: true, showdownComplete: true, contestedBy: P2, controller: P1, id: "bf-3" },
       },
     });
 
@@ -985,7 +985,7 @@ describe("resolveFullCombat enumerator and condition", () => {
   test("condition returns true for contested battlefield", () => {
     const state = createMockState({
       battlefields: {
-        "bf-1": { contested: true, contestedBy: P1, controller: P2, id: "bf-1" },
+        "bf-1": { contested: true, showdownComplete: true, contestedBy: P1, controller: P2, id: "bf-1" },
       },
     });
 
@@ -1011,7 +1011,7 @@ describe("resolveFullCombat enumerator and condition", () => {
   test("condition returns false when game is not playing", () => {
     const state = createMockState({
       battlefields: {
-        "bf-1": { contested: true, contestedBy: P1, controller: P2, id: "bf-1" },
+        "bf-1": { contested: true, showdownComplete: true, contestedBy: P1, controller: P2, id: "bf-1" },
       },
       status: "finished" as never,
     });

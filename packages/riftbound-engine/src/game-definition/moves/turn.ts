@@ -61,6 +61,14 @@ export const turnMoves: Partial<
       if (turnState !== "neutral-open") {
         return false;
       }
+      // Rule 621 / 505: Combat occurs when Cleanup finds a contested
+      // battlefield with opposing units — the Action Phase cannot end
+      // while combat is pending.
+      for (const bf of Object.values(state.battlefields ?? {})) {
+        if (bf.contested) {
+          return false;
+        }
+      }
       return true;
     },
     enumerator: (state, context) => {
@@ -78,6 +86,11 @@ export const turnMoves: Partial<
       const turnState = getTurnState(interaction);
       if (turnState !== "neutral-open") {
         return [];
+      }
+      for (const bf of Object.values(state.battlefields ?? {})) {
+        if (bf.contested) {
+          return [];
+        }
       }
       return [{ playerId: context.playerId as string }];
     },
