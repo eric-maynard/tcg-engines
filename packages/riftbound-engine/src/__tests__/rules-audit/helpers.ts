@@ -689,8 +689,36 @@ export function fireTrigger(engine: AuditEngine, event: GameEvent): number {
         }
       },
     },
+    // Rule 583.3 sends triggers to the chain in real play. This helper unit-
+    // tests trigger matching + effect execution in isolation, so bypass the
+    // chain and execute inline. The on-chain path is covered by the tracer
+    // and by drainChain-based tests.
+    resolveInline: true,
   };
   return engineFireTriggers(event, ctx);
+}
+
+/**
+ * Drain the chain by having every relevant player pass priority until the
+ * chain is empty. Use after `applyMove` when a move fires a trigger onto the
+ * chain (rule 583.3) and the test wants to observe the trigger's effect.
+ */
+export function drainChain(engine: AuditEngine): void {
+  let guard = 50;
+  while (guard-- > 0) {
+    const s = engine.getState();
+    const chain = s.interaction?.chain;
+    if (!chain?.active) {
+      return;
+    }
+    const r = engine.executeMove("passChainPriority", {
+      params: { playerId: chain.activePlayer },
+      playerId: chain.activePlayer as CorePlayerId,
+    });
+    if (!r.success) {
+      return;
+    }
+  }
 }
 
 /**

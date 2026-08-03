@@ -33,6 +33,7 @@ import {
   applyMove,
   createBattlefield,
   createMinimalGameState,
+  drainChain,
   getCardMeta,
   getCardsInZone,
   getState,
@@ -418,6 +419,8 @@ describe("Rule 632.2.a: Conquer abilities trigger when a battlefield is Conquere
       playerId: P1,
     });
     expect(result.success).toBe(true);
+    // Rule 583.3: the trigger is now on the chain — resolve it.
+    drainChain(engine);
 
     // Post: the on-conquer trigger fired and bumped the battlefield card's
     // MightModifier by 7, proving the conquer event was emitted by scorePoint.
@@ -451,6 +454,8 @@ describe("Rule 632.2.b: Hold abilities trigger when a battlefield is Held", () =
       playerId: P1,
     });
     expect(result.success).toBe(true);
+    // Rule 583.3: the trigger is now on the chain — resolve it.
+    drainChain(engine);
 
     expect(getCardMeta(engine, "bf-1")?.mightModifier).toBe(5);
   });

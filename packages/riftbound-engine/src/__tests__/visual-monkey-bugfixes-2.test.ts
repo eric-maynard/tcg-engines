@@ -414,8 +414,10 @@ describe("Fix 2: Showdown starts when units move to uncontrolled battlefield", (
       },
     });
 
-    // No showdown should be started (player already controls bf-1)
-    expect(state.interaction).toBeUndefined();
+    // No showdown should be started (player already controls bf-1).
+    // Rule 583.3 now initializes state.interaction to queue triggers, so
+    // assert on the showdown stack rather than interaction being undefined.
+    expect(state.interaction?.showdownStack ?? []).toHaveLength(0);
   });
 
   test("conquerBattlefield is blocked while showdown is active at that battlefield", () => {

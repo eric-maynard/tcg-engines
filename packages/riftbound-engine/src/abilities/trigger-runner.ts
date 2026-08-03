@@ -10,7 +10,7 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
-import { addToChain } from "../chain/chain-state";
+import { addToChain, createInteractionState } from "../chain/chain-state";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { EffectContext, ExecutableEffect } from "./effect-executor";
@@ -56,6 +56,13 @@ export interface TriggerRunnerContext {
    * Used for token creation (rule 170-178).
    */
   readonly createCardInZone?: (cardId: string, zoneId: string, ownerId: string) => void;
+  /**
+   * Escape hatch: when true, execute matched triggers immediately instead of
+   * placing them on the chain. Rule 583.3 says triggers go on the chain, so
+   * this should only be set by callers that run outside the priority loop
+   * (flow-phase hooks). Default false.
+   */
+  readonly resolveInline?: boolean;
 }
 
 /**
@@ -267,25 +274,32 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
   const turnOrder = Object.keys(ctx.draft.players ?? {});
   const matches = orderTriggers(filtered, turnPlayer, turnOrder);
 
-  // Rule 541: When a triggered ability fires during an active chain, the
-  // Triggered ability is added to the chain as a new item (it does not
-  // Resolve immediately). When no chain is active, triggers resolve inline.
-  const chainActive = ctx.draft.interaction?.chain?.active === true;
+  // Rule 583.3: a Triggered Ability behaves like an Activated Ability and is
+  // placed on the Chain — always, whether or not a chain already exists.
+  // Rule 541.1: pushed in the computed order so the last-pushed is top-of-stack.
+  // The effect executes only when the chain resolves via passChainPriority.
+  //
+  // The `ctx.resolveInline` escape hatch preserves the old behavior for
+  // callers that cannot open a chain (e.g. flow-phase hooks that run outside
+  // the priority loop). Default is false — triggers go on the chain.
+  const resolveInline = ctx.resolveInline === true;
 
-  if (chainActive) {
-    // Add each trigger onto the chain in the order computed above so that
-    // The most-recently-pushed trigger is the new top-of-stack (rule 541.1).
-    // Pushes cascade: the trigger-effect executes only when the chain
-    // Resolves via `passChainPriority` / `resolveChain`.
+  if (matches.length === 0) {
+    return 0;
+  }
+
+  if (!resolveInline) {
+    if (!ctx.draft.interaction) {
+      (ctx.draft as RiftboundGameState & {
+        interaction: NonNullable<RiftboundGameState["interaction"]>;
+      }).interaction = createInteractionState();
+    }
     for (const match of matches) {
-      if (!ctx.draft.interaction) {
-        break;
-      }
       const effect = match.ability.effect as unknown;
       (ctx.draft as RiftboundGameState & {
         interaction: NonNullable<RiftboundGameState["interaction"]>;
       }).interaction = addToChain(
-        ctx.draft.interaction,
+        ctx.draft.interaction!,
         {
           cardId: match.cardId,
           controller: match.cardOwner,

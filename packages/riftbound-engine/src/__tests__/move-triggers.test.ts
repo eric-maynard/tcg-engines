@@ -186,7 +186,7 @@ describe("Move triggered abilities fire on standardMove", () => {
     });
 
     const state = createMockState();
-    const { context, flagStore } = createMockContext({
+    const { context } = createMockContext({
       "mover-unit": { owner: P1, zone: "base" },
     });
 
@@ -203,8 +203,12 @@ describe("Move triggered abilities fire on standardMove", () => {
       } as unknown as Parameters<typeof reducer>[1],
     );
 
-    // The move trigger fired and executed its stun effect on self
-    expect(flagStore.get("mover-unit")?.stunned).toBe(true);
+    // Rule 583.3: the move trigger is placed on the chain (not resolved
+    // inline). Assert the chain now holds the mover's triggered ability.
+    const items = state.interaction?.chain?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect(items[0]?.cardId).toBe("mover-unit");
+    expect(items[0]?.triggered).toBe(true);
   });
 
   test("gankingMove fires move trigger for battlefield-to-battlefield movement", () => {
@@ -225,7 +229,7 @@ describe("Move triggered abilities fire on standardMove", () => {
     });
 
     const state = createMockState();
-    const { context, flagStore } = createMockContext({
+    const { context } = createMockContext({
       "ganker-unit": { owner: P1, zone: "battlefield-bf-1" },
     });
 
@@ -242,7 +246,11 @@ describe("Move triggered abilities fire on standardMove", () => {
       } as unknown as Parameters<typeof reducer>[1],
     );
 
-    expect(flagStore.get("ganker-unit")?.stunned).toBe(true);
+    // Rule 583.3: trigger is queued on the chain, not resolved inline.
+    const items = state.interaction?.chain?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect(items[0]?.cardId).toBe("ganker-unit");
+    expect(items[0]?.triggered).toBe(true);
   });
 
   test("non-moving units do not get their move trigger fired", () => {
@@ -278,7 +286,7 @@ describe("Move triggered abilities fire on standardMove", () => {
     });
 
     const state = createMockState();
-    const { context, flagStore } = createMockContext({
+    const { context } = createMockContext({
       bystander: { owner: P1, zone: "base" },
       "mover-unit": { owner: P1, zone: "base" },
     });
@@ -296,8 +304,10 @@ describe("Move triggered abilities fire on standardMove", () => {
       } as unknown as Parameters<typeof reducer>[1],
     );
 
-    // Only the card that actually moved should have its move trigger fire
-    expect(flagStore.get("mover-unit")?.stunned).toBe(true);
-    expect(flagStore.get("bystander")?.stunned).toBeUndefined();
+    // Rule 583.3: only the moving card's trigger is placed on the chain.
+    const items = state.interaction?.chain?.items ?? [];
+    const cardIds = items.map((i) => i.cardId);
+    expect(cardIds).toContain("mover-unit");
+    expect(cardIds).not.toContain("bystander");
   });
 });
