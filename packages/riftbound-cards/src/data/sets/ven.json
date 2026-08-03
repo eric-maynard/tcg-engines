@@ -1,0 +1,4928 @@
+{
+  "cards": [
+    {
+      "id": "ven-001-166",
+      "name": "Baccai Sandspinner",
+      "collectorNumber": 1,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "common",
+      "energy": 6,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [5]. This ability costs [3] less if you control 4 or fewer runes. (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have [Deflect] and [Assault 2]. (Opponents must pay [rainbow] to choose me with a spell or ability. +2 [Might] while I'm an attacker.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/d8abab7f0df7c8ec9fff8c8dfa71c732e1ce2e6a-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-r01",
+      "name": "Fury Rune",
+      "collectorNumber": 1,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "rune",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "common",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[NO TEXT]",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f95ed6ba0c4d4d357c45bf5bdb1a8e540af1f85f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-sp1-006",
+      "name": "Kai'Sa, Survivor",
+      "collectorNumber": 1,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "epic",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Kai'Sa"
+      ],
+      "isChampion": true,
+      "rulesText": "[Accelerate]\nWhen I conquer, draw 1.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a14d1be8f014a331f60885013d81a1a8f5c8c076-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-002-166",
+      "name": "Blade Twirler",
+      "collectorNumber": 2,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "common",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "The first time I move each turn, choose a player. They [Burn 1]. (They put the top card of their Main Deck into their trash.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/b222082d5d38630c4d2542ed24c0442881e3de18-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-r02",
+      "name": "Calm Rune",
+      "collectorNumber": 2,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "rune",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "common",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[NO TEXT]",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/9b70aa1b334728a3e8beeea0c9154a2d0f79b1eb-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-sp2-006",
+      "name": "Sona, Harmonious",
+      "collectorNumber": 2,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "epic",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Sona"
+      ],
+      "isChampion": true,
+      "rulesText": "At the end of your turn, if I'm at a battlefield, ready up to 4 friendly runes.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2cc800fbd0011dd084426445ebb1c2831420063d-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": "Changed to conditional 'up to 4' runes when at battlefield"
+    },
+    {
+      "id": "ven-sp3-006",
+      "name": "Ahri, Inquisitive",
+      "collectorNumber": 3,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "epic",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Ahri"
+      ],
+      "isChampion": true,
+      "rulesText": "When I attack or defend, give an enemy unit here -2 [Might] this turn, to a minimum of 1 [Might].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/e8d1993018d8317494cbaab4e4dd738c2e80740d-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-003-166",
+      "name": "Brittle Steel",
+      "collectorNumber": 3,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Kill a gear.\n[Flow] [4][fury] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2264ab788558ec69b1b6ed3e03ce69a3f63bdbb7-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-r03",
+      "name": "Mind Rune",
+      "collectorNumber": 3,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "rune",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "common",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[NO TEXT]",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/33df1c56c6e76f9cb783c19161f16fcdbdc20f98-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-r04",
+      "name": "Body Rune",
+      "collectorNumber": 4,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "rune",
+      "domains": [
+        "body"
+      ],
+      "rarity": "common",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[NO TEXT]",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3313c73c5b31daa482073bfefbf4d2255a89d7d0-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-004-166",
+      "name": "Dune Surfer",
+      "collectorNumber": 4,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "You ignore [Tank] while assigning combat damage here.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/acab9ec71d58f1e109cd8879c0fef0bdeb866432-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-t04",
+      "name": "Recruit (NX)",
+      "collectorNumber": 4,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "common",
+      "energy": null,
+      "might": 1,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/08b9ccf225fc2ae9eb9b5668e5361b09789210ee-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-sp4-006",
+      "name": "Sett, Brawler",
+      "collectorNumber": 4,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "epic",
+      "energy": 5,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Sett"
+      ],
+      "isChampion": true,
+      "rulesText": "When you play me or when I conquer, buff me.\nSpend my buff: Give me +4 [Might] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/075f83adf06b41c42c78addd11cfc73fbdb8aabb-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-r05",
+      "name": "Chaos Rune",
+      "collectorNumber": 5,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "rune",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "common",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[NO TEXT]",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3861fc566891a70c21cf3d3075adec716deb7080-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-sp5-006",
+      "name": "Ezreal, Prodigy",
+      "collectorNumber": 5,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "epic",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Ezreal"
+      ],
+      "isChampion": true,
+      "rulesText": "When you play me, discard 1, then draw 2.\nOptional additional costs you pay cost [1] or [rainbow] less.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/fd4beecca19d4e84ead0852acce83d4c34ac1b4c-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-005-166",
+      "name": "Forsaken Baccai",
+      "collectorNumber": 5,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "If you control fewer runes than an opponent at the start of your Beginning Phase, give me +1 [Might] this turn.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/33d3e7840280e2780687057f08f30312a56d230f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-sp6-006",
+      "name": "Lux, Crownguard",
+      "collectorNumber": 6,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "epic",
+      "energy": 4,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Lux"
+      ],
+      "isChampion": true,
+      "rulesText": "[Exhaust]: [Reaction] — [Add] [2]. Spend this Energy only to play spells.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/b9778ec229e052268ea66213ca2dbf60612b2862-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-006-166",
+      "name": "Oasis Raider",
+      "collectorNumber": 6,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "common",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "If you control fewer runes than an opponent at the start of your Beginning Phase, give me +2 [Might] and [Ganking] this turn. (I can move from battlefield to battlefield.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/d44355b9b129054e63b6f2c8de30518fe87b6295-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-r06",
+      "name": "Order Rune",
+      "collectorNumber": 6,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "rune",
+      "domains": [
+        "order"
+      ],
+      "rarity": "common",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[NO TEXT]",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/71e7d71ebadb81ccad7ca4cb8b3fb85d2f5fd4bf-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-007-166",
+      "name": "Punching Poro",
+      "collectorNumber": 7,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] — Discard 1 (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +1 [Might].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/03b9a8e704e0f09b686d89d4c2d79f100f212b0f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-008-166",
+      "name": "Ruthless Strike",
+      "collectorNumber": 8,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nAs an additional cost to play this, you may discard 1.\nDeal 3 to a unit at a battlefield. If you paid the additional cost, deal 5 to it instead.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/90293ef9407950d171f5fdd040da289a0f6da487-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-009-166",
+      "name": "Baccai Reaper",
+      "collectorNumber": 9,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When I attack, you may pay [fury] to give me [Assault 2] this turn. (+2 [Might] while I'm an attacker.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/14c473be38b3ec40503f44555db9a4168a45bfb4-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-010-166",
+      "name": "Consuming Curse",
+      "collectorNumber": 10,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "uncommon",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nDeal 2 to a unit at a battlefield. This deals 1 Bonus Damage for each card with this name in your trash.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/4254a96c88275f09c2c41653d46702125bc24d9f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-011-166",
+      "name": "Pendulum Blade",
+      "collectorNumber": 11,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": null,
+      "mightBonus": 1,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Equip] [fury] ([fury]: Attach this to a unit you control.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/857a5cee28f403454b1825dd112c07e9ac06b8a4-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-012-166",
+      "name": "Perfect Execution",
+      "collectorNumber": 12,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Ready a unit and give it [Assault 3] this turn. (+3 [Might] while it's an attacker.)\n[Flow] [3][fury] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/cb13c46f8c3872678b87f68891d9f4a416ba8080-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-013-166",
+      "name": "Shadow Assassin",
+      "collectorNumber": 13,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "uncommon",
+      "energy": 5,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "I enter ready if you have a card with my name in your trash.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/d5c1aed33b6aa109ff2baea8b3e0c146af750dcc-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-014-166",
+      "name": "Shadow Fiend",
+      "collectorNumber": 14,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "uncommon",
+      "energy": 2,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [2][fury] ([2][fury]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have [Assault 3]. (+3 [Might] while I'm an attacker.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3bbeed15ac517c2e39c039e376553ce7e1c65f0c-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-015-166",
+      "name": "Decree of Rage",
+      "collectorNumber": 15,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "rare",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nThis can't be countered.\nDeal 4 to an enemy Calm ([calm]) unit.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/320d9f52a4f22fa3405bb9da82c4d02451d7c133-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-016-166",
+      "name": "Eclipse Dragon",
+      "collectorNumber": 16,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "rare",
+      "energy": 8,
+      "might": 8,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Accelerate] (You may pay [1][fury] as an additional cost to have me enter ready.)\nWhen I move, if you control 4 or fewer runes, draw 1.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/6b7ea97973ced0e0631554ff07c726fe0a257a3c-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-017-166",
+      "name": "Morgana, Vindictive",
+      "collectorNumber": 17,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "rare",
+      "energy": 5,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Morgana"
+      ],
+      "isChampion": true,
+      "rulesText": "[Ambush] (You may play me as a [Reaction] to a battlefield where you have units.)\nWhen you play me, deal damage to a unit equal to the damage marked on it.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/04f3ff3a25b08c9af33090e7a533396583f5e433-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-018-166",
+      "name": "Rage Amplifier",
+      "collectorNumber": 18,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "rare",
+      "energy": 4,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [6][fury] ([6][fury]: Empower this. Use only if not Empowered.)\nYour units have +1 [Might]. If I'm [Empowered], they have +2 [Might] instead.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/83a7cd497dd42f535f8f0adc72c3c4324f9aec14-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-019-166",
+      "name": "Renekton, Rage Fueled",
+      "collectorNumber": 19,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "rare",
+      "energy": 6,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Renekton"
+      ],
+      "isChampion": true,
+      "rulesText": "[Accelerate] (You may pay [1][fury] as an additional cost to have me enter ready.)\nWhen I attack, if you control 4 or fewer runes, deal 2 to all enemy units here.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2f6eb3e8328048ad52617c8639ecbe2c287efa36-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-020-166",
+      "name": "Twilight Reveler",
+      "collectorNumber": 20,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "rare",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When I attack, ready another friendly unit.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/c9b3acfc3f996d784d1b5f98ab87ba4d1c6136ce-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-021-166",
+      "name": "Akali, Deadly Weapon",
+      "collectorNumber": 21,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "epic",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Akali"
+      ],
+      "isChampion": true,
+      "rulesText": "[Empower] [2][fury] ([2][fury]: Empower me. Use only if not Empowered.)\nWhen I move, you may deal 1 to a unit at a battlefield I moved to or from. If I'm [Empowered], deal 2 instead.\n[Empowered][&gt;] I have +1 [Might].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/564e5f35ae39b6604290e83f39ffb61c2b2b9175-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-022-166",
+      "name": "Endless Riches",
+      "collectorNumber": 22,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "epic",
+      "energy": 5,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play this, banish your hand and trash, then [Burn 7].\nSkip your Draw Phase.\nYou may play cards from your trash.\nIf a card would go to your trash from anywhere other than your Main Deck, banish it instead.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/e2c33bf55162086acd458775a5db3d976f137b61-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-023a-166",
+      "name": "Zed, From the Shadows",
+      "collectorNumber": 23,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "epic",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Zed"
+      ],
+      "isChampion": true,
+      "rulesText": "You may discard 1 as an additional cost to play me.\nWhen you play me, if you paid the additional cost, play a 0 [Might] Shadow Clone unit token.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/dcf031bd69c4880c33d68f73dde8e391a6059be7-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-024-166",
+      "name": "Affectionate Poro",
+      "collectorNumber": 24,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When a combat that I was in ends, if I haven't been dealt damage this turn, draw 1.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/aa5fdc995322af38f540629fcf695f1080a14afb-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-025-166",
+      "name": "Esteemed Hierophant",
+      "collectorNumber": 25,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "common",
+      "energy": 5,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "While you control 7 or more runes, prevent all damage that enemy spells and abilities would deal to me.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/b47621d2b8efcee4d17de40b16c61fa06e404a2a-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-026-166",
+      "name": "Field Musicians",
+      "collectorNumber": 26,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "common",
+      "energy": 4,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play me, give a unit +3 [Might] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/e880946b6c99023d9fb1e9aa7d23a0c673b0f6ac-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-027-166",
+      "name": "Hand Hammer",
+      "collectorNumber": 27,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": null,
+      "mightBonus": 1,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Equip] [calm] ([calm]: Attach this to a unit you control.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/524fedb9116db0eb62380c03e0853c342c53daeb-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-028-166",
+      "name": "Mournful Witness",
+      "collectorNumber": 28,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When a combat that I was in ends, empower me. (I become Empowered if I'm not already.)\n[Empowered][&gt;] I have +2 [Might].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2f31651fc37a3e8bc562d0a361c509c0998d82c8-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-029-166",
+      "name": "Ol' Poro",
+      "collectorNumber": 29,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "I can't be played on your first, second, or third turns.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/267fdc483ff8c740779f23eb8f965105feb030cd-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-030-166",
+      "name": "Serene Ascetic",
+      "collectorNumber": 30,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have [Deflect] and [Shield 3]. (Opponents must pay [rainbow] to choose me with a spell or ability.+3 [Might] while I'm a defender.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7acc2f9fcdec5d2649e4a50dc3c96aeb31b87916-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-031-166",
+      "name": "Twilight Shroud",
+      "collectorNumber": 31,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "common",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Give a friendly unit +1 [Might] this turn. It can't be chosen by enemy spells and abilities this turn.\n[Flow] [2] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0bd93298503d6b1b2f6faf7e97ab494e6e26db76-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-032-166",
+      "name": "Frostcoat Mother",
+      "collectorNumber": 32,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [12]. This ability costs [1] less for each rune you control. (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +3 [Might].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/38e2b4f12346a1af420f875c0a5f922c56c4140f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-033-166",
+      "name": "Pakaa Protector",
+      "collectorNumber": 33,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "uncommon",
+      "energy": 5,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When I move, reveal the top card of your Main Deck. If it's a unit, draw it. Otherwise, put it in your trash and give me +2 [Might] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/ab3be32adadb72831c07750d8defc7918fd32d96-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-034-166",
+      "name": "Resonating Strike",
+      "collectorNumber": 34,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "uncommon",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Reaction] (Play on your turn or in showdowns.)\nChoose a battlefield you control and a unit you control at a different location. Move that unit to that battlefield and give it +2 [Might] this turn.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/1a625de128019d65d41dd0af4f8d189d5de530a5-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-035-166",
+      "name": "Sanction",
+      "collectorNumber": 35,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose one —Empower a unit. Disempower it at end of turn.Disempower a unit that's [Empowered]. Empower it at end of turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/daef24792dddefd0971b34d01bd60bc3b11adcca-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-036-166",
+      "name": "Sandstone Chimera",
+      "collectorNumber": 36,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "uncommon",
+      "energy": 7,
+      "might": 8,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "While I'm at a battlefield, players only channel 1 rune at the start of their Channel Phase.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7a483e91e2bbb81bc8f66697bd610427b080b45c-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-037-166",
+      "name": "Tomb-Raider Barbara",
+      "collectorNumber": 37,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "uncommon",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play me, if you control 7 or more runes, choose an enemy gear. If it's [Empowered], disempower it. Otherwise, kill it.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/31d0c16ecaa0bd8522d13d6dd5d940be8111f118-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-038-166",
+      "name": "Akali, Silent",
+      "collectorNumber": 38,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "rare",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Akali"
+      ],
+      "isChampion": true,
+      "rulesText": "I can't be chosen by enemy spells and abilities unless I'm in combat.\nWhen I move to a battlefield, give me +2 [Might] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f1a4d73853194a3dde02c51b083d197af89d2bda-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-039-166",
+      "name": "Crumbling Sands",
+      "collectorNumber": 39,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "rare",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nCounter a spell if an opponent has played another spell this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0d7491bdb2e9d18f64a5b53a16623b26a7cac6a1-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-040-166",
+      "name": "Decree of Focus",
+      "collectorNumber": 40,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "rare",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a friendly unit that's in combat with an enemy Fury ([fury]) unit or that's being chosen by an enemy Fury spell. Give it +4 [Might] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3f9a1b209cfd6097bac6fa9aec57531e300ef511-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-041-166",
+      "name": "Riven, Shattered",
+      "collectorNumber": 41,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "rare",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Riven"
+      ],
+      "isChampion": true,
+      "rulesText": "[Weaponmaster] (When you play me, you may [Equip] one of your Equipment to me for [rainbow] less, even if it's already attached.)\nWhen I attack, choose an enemy unit here. Deal 2 to it for each Equipment attached to me.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/8c16a53ee243e468f3c337de4354668665f3b386-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-042a-166",
+      "name": "Shen, Scourge of Shadows",
+      "collectorNumber": 42,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "rare",
+      "energy": 5,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Shen"
+      ],
+      "isChampion": true,
+      "rulesText": "When I hold, if there is exactly one other unit you control here, draw 1.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a4bac7b94b87fbb3227ecdccd9e2aa1231b655c8-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-043-166",
+      "name": "Steel Paws",
+      "collectorNumber": 43,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "rare",
+      "energy": 1,
+      "might": 0,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Deflect] (Opponents must pay [rainbow] to choose me with a spell or ability.)\n[Empower] [7] ([7]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +7 [Might].",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/79d9b6583ed8e7d5a1486f1c15b66b19fb7f69a5-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-044-166",
+      "name": "Astral Heron",
+      "collectorNumber": 44,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "epic",
+      "energy": 7,
+      "might": 7,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play your first card each turn, if I'm at a battlefield, your next card costs [2][rainbow][rainbow] less.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/b1ce87efc9a1a7e2438c53e034a7f92caaa67ed6-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-045-166",
+      "name": "Helm of Suppression",
+      "collectorNumber": 45,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "epic",
+      "energy": 4,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [4][calm] ([4][calm]: Empower this. Use only if not Empowered.)\nOpponents' spells cost [1] more. If this is [Empowered], they cost [1][rainbow] more instead.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/ecfe67bbdc04f5c16a845ccc7a1b8d534195ca70-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-046a-166",
+      "name": "Nasus, Ascended",
+      "collectorNumber": 46,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "epic",
+      "energy": 8,
+      "might": 8,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Nasus"
+      ],
+      "isChampion": true,
+      "rulesText": "[Deflect 2]\n[Empower] [8]\n[Empowered][&gt;] When I conquer, you score 1 point.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/014103b536a1c5aa2397f0952323375ac9b73d60-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-047-166",
+      "name": "Apprentice Mage",
+      "collectorNumber": 47,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [2] ([2]: Empower me. Use only if not Empowered.)\nWhen I become [Empowered], [Predict 2]. (Look at the top 2 cards of your Main Deck. Recycle any of them and put the rest back in any order.)\n[Empowered][&gt;] I have +1 [Might].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/6e650b9680864a949299cbe2ef7d06d1d22c7d18-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-048-166",
+      "name": "Cloud Drake",
+      "collectorNumber": 48,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "common",
+      "energy": 6,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play me, draw 1.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/cb0dbff1058e8c59fa041dd242aa9b43d92eae14-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-049-166",
+      "name": "Dredge Up",
+      "collectorNumber": 49,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Draw 1.\n[Flow] [2] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/cf561c8a0f8debde66b66d3e74ce861d0ce388ae-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-050-166",
+      "name": "Grumpy Rockbear",
+      "collectorNumber": 50,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "common",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [12]. This ability costs [1] less for each rune you control. (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have [Deflect] and [Shield 3]. (Opponents must pay [rainbow] to choose me with a spell or ability.+3 [Might] while I'm a defender.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2f7f3759c59746486a5f91b8452302fa59eddde6-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-051-166",
+      "name": "Iterative Design",
+      "collectorNumber": 51,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "common",
+      "energy": 4,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Play a 3 [Might] Mech unit token.\n[Flow] [2][mind] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/8d85a05075f95b63832ed7aa15620041eacb49d3-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-052-166",
+      "name": "Mesmerize",
+      "collectorNumber": 52,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "common",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose one —Return a friendly unit to its owner's hand.Give an enemy unit -2 [Might] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/854ceafc3f20c7e2d38c83170cb73232116f3d58-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-053-166",
+      "name": "Otterpus",
+      "collectorNumber": 53,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "uncommon",
+      "energy": 2,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "If a player would score 1 point from conquering or holding during their first or second turn, they draw 1 instead.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/62f77b80a6d8f28a92c039595baf5943c4e055f0-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-054-166",
+      "name": "Questionable Tome",
+      "collectorNumber": 54,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] —  [Exhaust] (Pay the cost: Empower me. Use only if not Empowered.)\nDisempower this, [1], [Exhaust]: Draw 1.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/07bb606d7cbcb218496b78a4fef354abb99875dc-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-055-166",
+      "name": "Applied Researchers",
+      "collectorNumber": 55,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "uncommon",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] Your spells cost [1][rainbow] less, to a minimum of [1].",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/67a5f67bad4d4201b14760206a34c838d7a1e4dc-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-056-166",
+      "name": "Clairvoyance",
+      "collectorNumber": 56,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "uncommon",
+      "energy": 7,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\n[Predict 5]. (Look at the top 5 cards of your Main Deck. Recycle any of them and put the rest back in any order.)\nDraw 2.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f43cb85d4939cc6ea1ed67b1c6526eef912cf9a6-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-057-166",
+      "name": "Covert Informant",
+      "collectorNumber": 57,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] When I move, draw 1.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/ff33454bf980a5c884b63e524c6580408e9b94e3-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-058-166",
+      "name": "Patched Porobot",
+      "collectorNumber": 58,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "(I enter exhausted.)\nWhen you play me, if you control 3 or more other gear, draw 1.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7667d7e0c902782c38221e9326d1bb98181ec17f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-059-166",
+      "name": "Shock Blast",
+      "collectorNumber": 59,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nThis costs [2] less if you control something that's [Empowered].\nDeal 4 to a unit at a battlefield.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a8b976725e4722dcbf327cde9f92625cb516150e-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-060-166",
+      "name": "Sky Cruiser",
+      "collectorNumber": 60,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "uncommon",
+      "energy": 4,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Discard a gear, [1], [Exhaust]: Deal 4 to a unit at a battlefield.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/4a99fbe995f6d5d71c1c46e1c38f64a9f9d7c3e9-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-061-166",
+      "name": "Decree of Insight",
+      "collectorNumber": 61,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "rare",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nIgnore [Deflect] while paying this spell's cost.\nGive an enemy Body ([body]) unit -5 [Might] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/da019355562b207814be6aec55bccf415bd416df-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-062-166",
+      "name": "Hextech Formula",
+      "collectorNumber": 62,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "rare",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "This enters exhausted.\n[Exhaust]: Empower another gear. (It becomes Empowered if it's not already.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/95f4ee0625dda4213847e6649465397be03c8bd1-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-063-166",
+      "name": "Nasus, Guardian of Knowledge",
+      "collectorNumber": 63,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "rare",
+      "energy": 5,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Nasus"
+      ],
+      "isChampion": true,
+      "rulesText": "Once each turn, when an enemy unit here dies, channel 1 rune exhausted.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/aa96dbb8b4d72db7e47a72ce652ad542f55bf31d-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-064-166",
+      "name": "Plaza Guardian",
+      "collectorNumber": 64,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "rare",
+      "energy": 10,
+      "might": 8,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "I cost [1] less for each gear you control.\n[Deflect] (Opponents must pay [rainbow] to choose me with a spell or ability.)",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3fc86ed4d23604dbb3c7de211eb6a9c36bd9176d-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-066-166",
+      "name": "Temporal Breach",
+      "collectorNumber": 66,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "rare",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nBanish a unit, then its owner plays it to the same location, ignoring its cost.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7c670dc3d997c52b90d67043989b53c67a72f4c4-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-067-166",
+      "name": "Bottled Constellation",
+      "collectorNumber": 67,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "epic",
+      "energy": 10,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "At the start of your Main Phase, you may kill 3 other friendly units and/or gear to score 1 point.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2068b7c202cab7f877c331a7bad0531d6a8f0d73-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-068a-166",
+      "name": "Jayce, Brilliant Inventor",
+      "collectorNumber": 68,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "epic",
+      "energy": 6,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Jayce"
+      ],
+      "isChampion": true,
+      "rulesText": "When you play me or the first time you play a non-token gear each turn, you may ready something besides me that's exhausted.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/77439053c7f0cb76ff470d7ecaa57871448b1faf-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-069-166",
+      "name": "Mel, Newly Awakened",
+      "collectorNumber": 69,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "epic",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Mel"
+      ],
+      "isChampion": true,
+      "rulesText": "When you play me, draw 1.\n[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] Your spells and abilities can't be countered. If a spell or ability you control would give -[Might] to a unit it chooses, it gives an additional -1 [Might].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7d794234d8efef9ad647046d1e2cd3736441899f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-070-166",
+      "name": "Brutal Hunter",
+      "collectorNumber": 70,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [3] ([3]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +2 [Might] and [Ganking]. (I can move from battlefield to battlefield.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/54122304a3bb1f989faf124cb74fd7d41b029681-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-071-166",
+      "name": "Fretful Feline",
+      "collectorNumber": 71,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "common",
+      "energy": 6,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When I become ready, give me +2 [Might] this turn.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/24370c9e33705b393c40f426e221ae851a65dd05-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-072-166",
+      "name": "Guttural Roar",
+      "collectorNumber": 72,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "body"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nGive a unit +2 [Might] this turn. If it's [Empowered], give it +4 [Might] this turn instead.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/891f0f85b039b16593865c74b90b0640a312e59b-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-073-166",
+      "name": "Jagged Cutlass",
+      "collectorNumber": 73,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "body"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": null,
+      "mightBonus": 2,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Equip [body] ([body]: Attach this to a unit you control.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/22aae23e1ac1797beb50f3f735becfe65b51ee02-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-074-166",
+      "name": "Legion Marauder",
+      "collectorNumber": 74,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] — [1] or [body] (Pay either cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +1 [Might].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/15ec9e813e58c9ba96f37e78f09faaaa184ecdad-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-075-166",
+      "name": "Platewyrm Egg",
+      "collectorNumber": 75,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "body"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "This enters exhausted.\n[Empower] — [1], [Exhaust] (Pay the cost: Empower this. Use only if not Empowered.)\n[Reaction][&gt;] [Exhaust]: [Add] [1]. If this is [Empowered], [Add] [2] instead.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f6a3940440a38e34fe306947d663018dd2df7ca8-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-076-166",
+      "name": "Repair Specialist",
+      "collectorNumber": 76,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "I have [Assault] equal to the number of gear you control. (+1 [Might] while I'm an attacker for each instance of Assault.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/b1ef578e372e64afbce717384fb8a3b7fd841fc8-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-077-166",
+      "name": "Tools of Empire",
+      "collectorNumber": 77,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "body"
+      ],
+      "rarity": "common",
+      "energy": 4,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [2] ([2]: Empower this. Use only if not Empowered.)\n[Exhaust]: Give a unit +2 [Might] this turn. If this is [Empowered], give that unit +4 [Might] this turn instead.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/c4f511ca650143e3f5267e272513e4dcf9cba04f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-078-166",
+      "name": "Baccai Witherclaw",
+      "collectorNumber": 78,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "uncommon",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [1][rainbow][rainbow] ([1][rainbow][rainbow]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +2 [Might].\n[Empowered][&gt;][&gt;&gt;][Deathknell][&gt;] Channel 2 runes exhausted. (When I die while Empowered, get the effect.)",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/fa41ae964411e63643025f7d8914627849ff57a8-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-079-166",
+      "name": "Dame the Despoiler",
+      "collectorNumber": 79,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "uncommon",
+      "energy": 5,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [5][body] ([5][body]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] When I attack or defend, choose a unit here. Increase my Might to its Might this turn, then give me +1 [Might] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7c45dc79e72efc8ddf8c5b20d83474e23dc66e5e-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-080-166",
+      "name": "Noxian Demolitionist",
+      "collectorNumber": 80,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "uncommon",
+      "energy": 2,
+      "might": 1,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When I conquer, you may kill a gear with Energy cost no more than my Might.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a8c9a1b0eefc89106aa154ce3958c82d86e70940-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-081-166",
+      "name": "Onslaught",
+      "collectorNumber": 81,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "body"
+      ],
+      "rarity": "uncommon",
+      "energy": 4,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Give a unit +6 [Might] this turn.\n[Flow] [4] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/6a1ef90c64e07b3f561e34c8d43ff5f64db925d8-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-082-166",
+      "name": "Profiteer",
+      "collectorNumber": 82,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "uncommon",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play me, you may disempower something you control to empower a legend, unit, or gear.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/27955854d3f04ed95e87152f066f99671af2f9f1-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-083-166",
+      "name": "Rampage",
+      "collectorNumber": 83,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "body"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "As you play this, you may pay [body] as an additional cost.\nChoose a friendly unit and an enemy unit. If you paid the additional cost, give the friendly unit +2 [Might] this turn. They deal damage equal to their Mights to each other.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3c85ae2c6bd5b2644651564fad0f86ad19c5709a-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-084-166",
+      "name": "Ambessa, The Wolf",
+      "collectorNumber": 84,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "rare",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Ambessa"
+      ],
+      "isChampion": true,
+      "rulesText": "[Empower] [3][body] ([3][body]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +3 [Might] and can't be dealt damage unless I'm in combat.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3907dc56d3a639e62f5222eaa0fd589c7a582da6-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-085-166",
+      "name": "Decree of Strength",
+      "collectorNumber": 85,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "body"
+      ],
+      "rarity": "rare",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Choose an opponent. They reveal their hand and you choose a Mind ([mind]) card from it. They recycle that card.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/12106889f9f76914421f38e8958a248462637a22-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-087-166",
+      "name": "Hextech Disc",
+      "collectorNumber": 87,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "body"
+      ],
+      "rarity": "rare",
+      "energy": 4,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] — [Exhaust] (Pay the cost: Empower this. Use only if not Empowered.)\nDisempower this, [1], [Exhaust]: Play a 3 [Might] Mech unit token to your base.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/36acfeb7da10f1254e962b7bacda3e6ea559fe53-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-088-166",
+      "name": "Jayce, Hammer in Hand",
+      "collectorNumber": 88,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "rare",
+      "energy": 4,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Jayce"
+      ],
+      "isChampion": true,
+      "rulesText": "When I become ready, choose one to give me this turn —[Assault 2] (+2 [Might] while I'm an attacker.)[Deflect 2] (Opponents must pay [rainbow][rainbow] to choose me with a spell or ability.)[Ganking] (I can move from battlefield to battlefield.)",
+      "abilities": [
+        null,
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2dcecc0aab2b62e48388177cc27d220fd70b8a78-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-089-166",
+      "name": "Wild Claw",
+      "collectorNumber": 89,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "body"
+      ],
+      "rarity": "rare",
+      "energy": 7,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Look at the top 5 cards of your Main Deck. You may banish a unit or gear from among them and play it, reducing its Energy cost by [5]. Recycle the rest. Then you may do this: Empower it. (It becomes Empowered if it's not already.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a58871b08a51efb8ce33f399fe4d168fd25b596a-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-090-166",
+      "name": "Cataclysmic Duel",
+      "collectorNumber": 90,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "body"
+      ],
+      "rarity": "epic",
+      "energy": 8,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Each player chooses a unit they control. Kill the rest.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/1fb5fcd8ca8be36b5aba234040b7428aab682576-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-091-166",
+      "name": "Corrupted Dragon",
+      "collectorNumber": 91,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "epic",
+      "energy": 10,
+      "might": 10,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "If your score is not within 3 points of the Victory Score, I enter ready.\nWhen I attack, you may move any number of enemy units here each with 5 [Might] or less to their base.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/6000c549047967e619d47bdbd2f265e5bb8b5b19-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-093-166",
+      "name": "Kinkou Lifeblade",
+      "collectorNumber": 93,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "common",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [2] ([2]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +1 [Might] and [Ganking]. (I can move from battlefield to battlefield.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/18e925b4291231a2045e60d062bd174950316c1d-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-094-166",
+      "name": "Mask Mother",
+      "collectorNumber": 94,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you discard me, you may pay [1] to give a friendly unit +2 [Might] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/21cf578371a75f6e2661d44f4d7389d8732c133e-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-095-166",
+      "name": "Shadow Order Disciple",
+      "collectorNumber": 95,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When I move, you may [Burn 1] to give me +1 [Might] this turn. (To Burn 1, put the top card of your Main Deck into your trash.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f85fb8b46a29360f9850826df11202ff8221fec8-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-096-166",
+      "name": "Shadowblade Lurker",
+      "collectorNumber": 96,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "common",
+      "energy": 5,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "I cost [2] less for each card with my name in your trash.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2874318b39f1dd9d1bf2ed21203795688b788413-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-097-166",
+      "name": "Spiderling",
+      "collectorNumber": 97,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 1,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nI have +1 [Might] for each other unit you control here with my name.\nYour deck can have any number of cards named Spiderling.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/fadf12e6e52eb5c70c65b479438f999f49d825fc-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-098-166",
+      "name": "Stargazer",
+      "collectorNumber": 98,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "common",
+      "energy": 5,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Spells with [Flow] you play from your trash cost [2] less, to a minimum of [1].",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/72ef8764cb3909940f0ca4bd8b31cdceed241af0-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-099-166",
+      "name": "Tornado Warrior",
+      "collectorNumber": 99,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me from face down, you may empower something here. Disempower it at end of turn.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f9b2ffecc997670713bffd3168e5578b5fb7a014-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-100-166",
+      "name": "Up from the Deep",
+      "collectorNumber": 100,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Play two 1 [Might] Tentacle unit tokens from Bilgewater.\n[Flow] [3] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/245942e8b2bf073d5d6d57074474ec273557f4df-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-101-166",
+      "name": "Gust Monk",
+      "collectorNumber": 101,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "uncommon",
+      "energy": 2,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "You may pay [1] as an additional cost to play me.\nWhen you play me, if you paid the additional cost, banish a card from any trash to give a unit [Assault 2] this turn. (+2 [Might] while it's an attacker.)",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/93a194c0c1f055c0b3bc3c0717cbe488749fed92-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-102-166",
+      "name": "Ravenbloom Prefect",
+      "collectorNumber": 102,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When an opponent plays a gear, you may banish me to banish it.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/57ecb26880ea084ea16b785c9a563ff298ee6a42-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-103-166",
+      "name": "Shadows of the Past",
+      "collectorNumber": 103,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Return up to 2 units from trashes to their owners' hands.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/25e2130938a893833fcb8e29287adbd230c3b67f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-104-166",
+      "name": "Tail-Cloaked Matriarch",
+      "collectorNumber": 104,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "uncommon",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [2][chaos] ([2][chaos]: Empower me. Use only if not Empowered.)\nWhen I become [Empowered], you may choose a unit in your trash with Energy cost no more than [3] and Power cost no more than [rainbow]. Play it to your base, ignoring its cost.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/91a04e2131245c81c2eac486e63925592b0e253a-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-105-166",
+      "name": "Twilight Step",
+      "collectorNumber": 105,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "uncommon",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Move a unit with 3 [Might] or less.\n[Flow] [4][chaos] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/1c5c10009a9fb2605df5db1ff12647a47ac07d98-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-106-166",
+      "name": "Wind and Ghosts",
+      "collectorNumber": 106,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nChoose a unit at a battlefield. If it has 3 [Might] or less, banish it. Otherwise, return it to its owner's hand.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/ef118660422af84f6183d375b68ce1872acb1e2e-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-107-166",
+      "name": "Decree of Discord",
+      "collectorNumber": 107,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "rare",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Return any number of enemy Order ([order]) units with total Might 5 or less to their owners' hands.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/b0e82842acddb99c47af6793dab48164caf498c2-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-108-166",
+      "name": "Forgotten Relic",
+      "collectorNumber": 108,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "rare",
+      "energy": 5,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play this or at the start of your Beginning Phase, [Burn 1]. When you burn a unit this way, do this: Give a friendly unit +[Might] equal to the burned card's Might this turn. (To Burn 1, put the top card of your Main Deck into your trash.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/e249b3c2a7f652dfb7549604f600792df11835b4-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-110a-166",
+      "name": "Mel, Defiant Soul",
+      "collectorNumber": 110,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "rare",
+      "energy": 5,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Mel"
+      ],
+      "isChampion": true,
+      "rulesText": "[Empower] — Discard a spell\nWhen I become [Empowered], banish an enemy unit at a battlefield with 3 [Might] or less.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0495d07746d71cdd1aeae8f7fd5a0b78da0817fb-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-111-166",
+      "name": "Minah Swiftfoot",
+      "collectorNumber": 111,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "rare",
+      "energy": 6,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When I move to a battlefield, choose one —Each player discards 1.Each player draws 1.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/30b6e4a44bcadaa53168bd4ac043fbf2136f5eb3-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-112a-166",
+      "name": "Zed, Without a Sound",
+      "collectorNumber": 112,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "rare",
+      "energy": 5,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Zed"
+      ],
+      "isChampion": true,
+      "rulesText": "When I conquer, play a 0 [Might] Shadow Clone unit token to your base.\n[Action][&gt;] [1][chaos]: Move me and a Shadow Clone you control to each other's locations.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a9828930a4b5ab7aa98d8199f00e1fde59fd20e3-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-113-166",
+      "name": "Kennen, Storm of Shuriken",
+      "collectorNumber": 113,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "epic",
+      "energy": 3,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Kennen"
+      ],
+      "isChampion": true,
+      "rulesText": "When you play me, [Burn 2]. (Put the top 2 cards of your Main Deck into your trash.)\nWhen I conquer, give a spell in your trash [Flow] equal to its cost this turn. (You may play it from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2f27c99f3df2940940dddd65105e5e42bbeeab3d-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-114-166",
+      "name": "Kharox",
+      "collectorNumber": 114,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "epic",
+      "energy": 6,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [6][chaos][chaos] ([6][chaos][chaos]: Empower me. Use only if not Empowered.)\nWhen I become [Empowered], choose an opponent. They [Burn 3]. Then you may do this: Choose a unit in their trash and play it, ignoring its cost. (To Burn 3, they put the top 3 cards of their Main Deck into their trash.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2453848e7069e994498c828d72c33df6905f38e5-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-115-166",
+      "name": "Ocean Drake",
+      "collectorNumber": 115,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "epic",
+      "energy": 8,
+      "might": 7,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "You may play me to an open battlefield.\nWhen you play me, you may return a non-Dragon unit to its owner's hand.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/bd93cc3c9165204cd3e830fc2022384bad7517be-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-116-166",
+      "name": "Dragon Form",
+      "collectorNumber": 116,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "order"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Choose a unit. Its base Might becomes 5 this turn.\n[Flow] [3] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/ded9b54d93d7c3ade8a1d65c8ac66a13d1246329-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-117-166",
+      "name": "Disciple of Shen",
+      "collectorNumber": 117,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": 1,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nI have [Shield 3] while I'm at a battlefield with exactly one other unit you control. (+3 [Might] while I'm a defender.)",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/de5b6316d65297e67a97d12d7c70974f7d3ce7d6-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-118-166",
+      "name": "Horns of the Dragon",
+      "collectorNumber": 118,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "common",
+      "energy": 6,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Tank] (I must be assigned combat damage first.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a7b3cb9f4175e71bc8fb60e69c55a0ea3f26fe8f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-119-166",
+      "name": "Keeper of Law",
+      "collectorNumber": 119,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "common",
+      "energy": 5,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "I cost [2][order] less if you control a battlefield with exactly two units there.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/42b965736c715293da57ec23472684506f49ba7f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-120-166",
+      "name": "Masa, Crashing Thunder",
+      "collectorNumber": 120,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "common",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Masa"
+      ],
+      "isChampion": true,
+      "rulesText": "You may pay [order] as an additional cost to play me.\nWhen you play me, if you paid the additional cost, [Stun] an enemy unit at a battlefield. (It doesn't deal combat damage this turn.)",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/c02046374935d38a8e4bb28a8192dfc46e2596a0-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-121-166",
+      "name": "Reluctant Leader",
+      "collectorNumber": 121,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "common",
+      "energy": 4,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play another unit, give me +2 [Might] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/d70352ba57ae548c405614ec6ba2bb17d7a19a44-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-122-166",
+      "name": "Solari Sunhawk",
+      "collectorNumber": 122,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [2] ([2]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +1 [Might] and [Deflect 2]. (Opponents must pay [rainbow][rainbow] to choose me with a spell or ability.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/1aaf389ca46bd9122233aadcfd23fee8f9cdfdc9-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-123-166",
+      "name": "Soulspinner",
+      "collectorNumber": 123,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "common",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Ambush] (You may play me as a [Reaction] to a battlefield where you have units.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/9a23a1f2c83751c2a715049be32c2482ea10454d-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-124-166",
+      "name": "Escaped Grayback",
+      "collectorNumber": 124,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "uncommon",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] — Kill a friendly unit (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +2 [Might].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/253d782f8f6d4056eebecf9617e6858fdb2e712d-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-125-166",
+      "name": "Hungry Wolf",
+      "collectorNumber": 125,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "uncommon",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[order]: Ready me and give me +1 [Might] this turn. Use only if you've chosen an enemy unit this turn and only once each turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/464b4e2edfd526a3b72a80ab05bc9630b7057c22-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-126-166",
+      "name": "Ki Barrier",
+      "collectorNumber": 126,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "order"
+      ],
+      "rarity": "uncommon",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a unit. Prevent the next 7 damage that would be dealt to it this turn. (Opponents can assign it extra combat damage to kill it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/10fa1b5646489adb8ae70ff41a63ff856d8f20d1-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-127-166",
+      "name": "Lacerate",
+      "collectorNumber": 127,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "order"
+      ],
+      "rarity": "common",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Choose a unit. If it's [Empowered], disempower it. Then kill it if it has 3 [Might] or less.\n[Flow] [4][order][order] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f21bbd09545d949f095756281e5506128eb4809d-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-128-166",
+      "name": "Noxian Emissary",
+      "collectorNumber": 128,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "uncommon",
+      "energy": 2,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [1][order] ([1][order]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;][&gt;&gt;][Deathknell][&gt;] Play two 1 [Might] Recruit unit tokens to your base. (When I die while Empowered, get the effect.)",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0720c25776670ef32dcc504b14378890991798be-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-129-166",
+      "name": "Sacred Protector",
+      "collectorNumber": 129,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "uncommon",
+      "energy": 4,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "I don't deal combat damage unless I'm at a battlefield with exactly one other unit you control.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a93887af1128d19cdec798611ffdd29900ac5d85-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-130-166",
+      "name": "Aurok General",
+      "collectorNumber": 130,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "rare",
+      "energy": 5,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [3][order] ([3][order]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] Your units that are [Empowered] have +2 [Might] (including me).",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2324531e93383ce0d7efbe67cbf7ee226127dea2-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-131-166",
+      "name": "Decree of Unity",
+      "collectorNumber": 131,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "order"
+      ],
+      "rarity": "rare",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Kill an enemy Chaos ([chaos]) unit or gear.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/220161ac48f1307e4d74c372d549fea18829a86b-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-132-166",
+      "name": "Fallen Feline",
+      "collectorNumber": 132,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "rare",
+      "energy": 2,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play me, name a spell.\nWhile I'm at a battlefield, opponents can't play spells with that name.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/e5d46c6d56dc14670b5e25547eeb1ee3ceca5a80-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-133-166",
+      "name": "Glowstone",
+      "collectorNumber": 133,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "order"
+      ],
+      "rarity": "rare",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [rainbow][rainbow] ([rainbow][rainbow]: Empower me. Use only if not Empowered.)\nDisempower this, [Exhaust]: Choose a player. They gain control of this and recall it. (Send it to their base.)\nAt the end of your turn, kill this and deal 5 to all units you control.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/6426e9c2b168f0dde5430d5bc57108a0cc2bcebb-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-134-166",
+      "name": "Kayle, Justified",
+      "collectorNumber": 134,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "rare",
+      "energy": 3,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Kayle"
+      ],
+      "isChampion": true,
+      "rulesText": "[Empower] [3] ([3]: Empower me.)\nI can be [Empowered] up to three times.\nI have +2 [Might] for each time I'm [Empowered].\nWhile I'm [Empowered] three times, I have [Deflect 3] and [Ganking].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/8ae883f96bb3a5e20d8002ec49cace430aaf2b88-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-135-166",
+      "name": "Kennen, Keeper of Balance",
+      "collectorNumber": 135,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "rare",
+      "energy": 3,
+      "might": 2,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Kennen"
+      ],
+      "isChampion": true,
+      "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nWhen you play me or I attack, you may pay [2] to [Stun] a unit. (It doesn't deal combat damage this turn.)\nWhile there's a stunned enemy unit here, I have +2 [Might].",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/446ff54c091b07627f826952f45ee40e9976d040-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-136-166",
+      "name": "Ambessa, Respected and Feared",
+      "collectorNumber": 136,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "epic",
+      "energy": 5,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Ambessa"
+      ],
+      "isChampion": true,
+      "rulesText": "[Empower] [1][order][order] ([1][order][order]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have [Assault 2]. (+2 [Might] while I'm an attacker.)\n[Empowered][&gt;] When I attack, kill an enemy unit here with less Might than me.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/687c273217cd94067be9625a7f85b61d108a6293-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-137-166",
+      "name": "Shady Spectacles",
+      "collectorNumber": 137,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "gear",
+      "domains": [
+        "order"
+      ],
+      "rarity": "epic",
+      "energy": 4,
+      "might": null,
+      "mightBonus": 0,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Equip] [1][order] ([1][order]: Attach this to a unit you control.)\nAs this is attached to a unit, choose another friendly unit. The equipped unit becomes a copy of that unit for as long as this is attached to it.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/e49461109a4116c22af9206719f53fb73aee36d0-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-138-166",
+      "name": "Shen, Leader of the Kinkou Order",
+      "collectorNumber": 138,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "epic",
+      "energy": 6,
+      "might": 7,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Shen"
+      ],
+      "isChampion": true,
+      "rulesText": "[Shield] (+1 [Might] while I'm a defender.)\nWhen I hold, if there is exactly one other unit you control here, you score 1 point.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/b227d9f9abc6f165beffba4eaf3b5819cf06eab4-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-139-166",
+      "name": "Rogue Assassin",
+      "collectorNumber": 139,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "legend",
+      "domains": [
+        "fury",
+        "calm"
+      ],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [3][rainbow] ([3][rainbow]: Empower this. Use only if not Empowered.)\n[Action][&gt;] [Exhaust]: If it's your turn, move a friendly unit in a showdown to base and if I'm [Empowered], ready it.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0d53b477ed43fb9bbed84858443a606b2b51a2b5-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-140-166",
+      "name": "Shuriken Flip",
+      "collectorNumber": 140,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "fury",
+        "calm"
+      ],
+      "rarity": "epic",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Deal 2 to up to one enemy unit at a battlefield, then move a friendly unit.\n[Flow] [3][rainbow] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/bac1ecff92d022e99a3696ad00d020530a1a09e7-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-141-166",
+      "name": "Butcher of the Sands",
+      "collectorNumber": 141,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "legend",
+      "domains": [
+        "fury",
+        "body"
+      ],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction][&gt;] [rainbow][rainbow], [Exhaust]: [Add] [2]. Spend this Energy only to play units or activated abilities of units.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7620595b36b40a0c3d05c4c5469b016d1c18c6f2-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-142-166",
+      "name": "Dominus",
+      "collectorNumber": 142,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "fury",
+        "body"
+      ],
+      "rarity": "epic",
+      "energy": 4,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action] (Play on your turn or in showdowns.)\nThis turn, double a unit's Might and give it &quot;[rainbow][rainbow]: Ready me.&quot;",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0d5ccc8bb0b70473add784a3f4c71e1e8635e2ce-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-144-166",
+      "name": "Death Mark",
+      "collectorNumber": 144,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "fury",
+        "chaos"
+      ],
+      "rarity": "epic",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Burn 3]. (Put the top 3 cards of your Main Deck into your trash.)\nPlay a 0 [Might] Shadow Clone unit token. (It has &quot;When I attack, you may banish a unit from your trash. If you do, give me [Assault 4] this turn.&quot;)\n[Flow] [1][rainbow][rainbow] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/87ccfb8d1c19f402bb37ffa392011ee2f0880aa9-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-146-166",
+      "name": "Siphoning Strike",
+      "collectorNumber": 146,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "calm",
+        "mind"
+      ],
+      "rarity": "epic",
+      "energy": 4,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Deal 4 to a unit at a battlefield. If you control 7 or more runes, deal 7 to it instead. When it dies this turn, channel 1 rune exhausted.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/8b28e4a0681eee9b19c29770a5f167e1e68c78cf-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-148-166",
+      "name": "Shadow Dash",
+      "collectorNumber": 148,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "calm",
+        "order"
+      ],
+      "rarity": "epic",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Move an enemy unit to a battlefield where you have units. If you have exactly two units there, they each get +1 [Might] this turn.\n[Flow] [5][rainbow][rainbow] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/c95a4862c3af5f3ec1cee1f1ae7291c8724df7a1-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-150-166",
+      "name": "Acceleration Gate",
+      "collectorNumber": 150,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "mind",
+        "body"
+      ],
+      "rarity": "epic",
+      "energy": 3,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Ready up to 4 units, gear, and/or runes.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/31b71a16ee85cf30124fdaa2c575e709a4c83771-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-152-166",
+      "name": "Rebuttal",
+      "collectorNumber": 152,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "mind",
+        "chaos"
+      ],
+      "rarity": "epic",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a spell with Energy cost no more than [4].  You may pay [rainbow]. If you do, gain control of it and you may make new choices for it. Otherwise, counter it.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2df67fe2ba17f0796ff1f9c03b85d2db48fe954b-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-153-166",
+      "name": "Matriarch of War",
+      "collectorNumber": 153,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "legend",
+      "domains": [
+        "body",
+        "order"
+      ],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you empower something else, empower me. (I become Empowered if I'm not already.)\nDisempower me, [rainbow], [Exhaust]: Ready a unit.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/49e81916d7ae72b24de845223e1798652d26e789-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-154-166",
+      "name": "Public Execution",
+      "collectorNumber": 154,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "body",
+        "order"
+      ],
+      "rarity": "epic",
+      "energy": 2,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Choose a friendly unit. Kill an enemy unit with less Might than it.\n[Flow] [5][rainbow][rainbow] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/c8348e2aef6bad5a38d4f71b1b1c277598670286-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-156-166",
+      "name": "Lightning Rush",
+      "collectorNumber": 156,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "spell",
+      "domains": [
+        "order",
+        "chaos"
+      ],
+      "rarity": "epic",
+      "energy": 1,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Look at the top 3 cards of your Main Deck. You may choose a card from among them and draw it. Put the rest into your trash.\n[Flow] [2][rainbow] (You may play this from your trash for its Flow cost. Then banish it.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/22375e0d2d1a49cb0eb7e31aebf3e73a2e0bba55-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-157-166",
+      "name": "Dragon Roost",
+      "collectorNumber": 157,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "battlefield",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "uncommon",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Any player may pay [rainbow][rainbow] as an additional cost to play a Dragon. If they do, they play it to this battlefield.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/94558ee0292d92126829036d32495cbf702e5391-1039x744.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-158-166",
+      "name": "Heisho, Shell of the World",
+      "collectorNumber": 158,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "battlefield",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "uncommon",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Players ignore [Deflect] while paying for spells and abilities choosing something here.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/075d4b78c065a96845ac978c86af3a3349cb5501-1039x744.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-159-166",
+      "name": "Kinkou Temple",
+      "collectorNumber": 159,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "battlefield",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "uncommon",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Units here with [Tank] have +1 [Might].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/afef083faa1f3813e5744a552c9873c798bedfd5-1039x744.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-160-166",
+      "name": "Mystic Vortex",
+      "collectorNumber": 160,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "battlefield",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "uncommon",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "During showdowns here, cards with [Reaction] cost [rainbow] more to play. (Hidden cards have [Reaction].)",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/55f6fec944c489010464cb554c4661d94518fa75-1039x744.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-161-166",
+      "name": "Piltovan Forge",
+      "collectorNumber": 161,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "battlefield",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "uncommon",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "While you control this battlefield, the first friendly gear activated ability played each turn costs [1] less.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0cc432b51e80d1734529ef323e601e62e202c2b1-1039x744.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-162-166",
+      "name": "Protective Sands",
+      "collectorNumber": 162,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "battlefield",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "uncommon",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you conquer here, if you control 4 or fewer runes, you may pay [1] to draw 1.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a994ae712cdefcbdaf263fbb6ab0723d0f678e99-1039x744.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-163-166",
+      "name": "Risen Altar",
+      "collectorNumber": 163,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "battlefield",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "uncommon",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] costs of your units here cost [1] or [rainbow] less.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/47402ed9d5eebb9e38176315bdaf1a556845eef7-1039x744.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-164-166",
+      "name": "Sandswept Tomb",
+      "collectorNumber": 164,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "battlefield",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "uncommon",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "Each spell that chooses one or more units here that are friendly to it costs [rainbow] less.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/d77c607878d6815e02796f8bfa8a5696ad5f1a7d-1039x744.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-165-166",
+      "name": "Shadow Temple",
+      "collectorNumber": 165,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "battlefield",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "uncommon",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you hold here, [Burn 3]. (Put the top 3 cards of your Main Deck into your trash.)",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/635a3a0b724a2cfc11938ecbc1d8abddd89d3436-1039x744.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-166-166",
+      "name": "Threshold of the Gray",
+      "collectorNumber": 166,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "battlefield",
+      "domains": [
+        "colorless"
+      ],
+      "rarity": "uncommon",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When combat starts here, the attacker and defender each [Add] [1].",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/5521aac82f036f1070326c743a9f653955d67bb9-1039x744.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-167-166",
+      "name": "Vi, Destructive",
+      "collectorNumber": 167,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "rare",
+      "energy": 2,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Vi"
+      ],
+      "isChampion": true,
+      "rulesText": "[Ganking]\nRecycle 1 from your trash: Give me +1 [Might] this turn.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/dff596efc7413bfdd9cc8e667c46bd4228447de5-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-168-166",
+      "name": "Jinx, Demolitionist",
+      "collectorNumber": 168,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "rare",
+      "energy": 3,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Jinx"
+      ],
+      "isChampion": true,
+      "rulesText": "[Accelerate]\n[Assault 2]\nWhen you play me, discard 2.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3a7304f3c9897967812940838e978e54e251e545-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-172-166",
+      "name": "Draven, Showboat",
+      "collectorNumber": 172,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "fury"
+      ],
+      "rarity": "rare",
+      "energy": 5,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Draven"
+      ],
+      "isChampion": true,
+      "rulesText": "My Might is increased by your points.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/ff8f818d7f59b549af9067e9956f25aec706587c-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-173-166",
+      "name": "Swain, Visionary",
+      "collectorNumber": 173,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "rare",
+      "energy": 6,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Swain"
+      ],
+      "isChampion": true,
+      "rulesText": "[Vision]\nWhen I conquer, if you've played a non-token unit, a non-token gear, and a spell this turn, you score 1 point.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7f068252d62ab4eea8a779825d84c2c078bbd722-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-174-166",
+      "name": "Irelia, Fervent",
+      "collectorNumber": 174,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "calm"
+      ],
+      "rarity": "epic",
+      "energy": 5,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Irelia"
+      ],
+      "isChampion": true,
+      "rulesText": "[Deflect]\nWhen you choose or ready me, give me +1 [Might] this turn.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/45d83debda443f1bf88e1cf7123eb8b844143124-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-175-166",
+      "name": "Jayce, Man of Progress",
+      "collectorNumber": 175,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "rare",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Jayce"
+      ],
+      "isChampion": true,
+      "rulesText": "When you play me, you may kill a friendly gear. If you do, you may play a gear with Energy cost no more than [7] from hand this turn, ignoring its Energy cost.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/be6d6a608c5bee9d2012e24d9e6f6f1d1977a37a-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-176-166",
+      "name": "Viktor, Innovator",
+      "collectorNumber": 176,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "mind"
+      ],
+      "rarity": "rare",
+      "energy": 4,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Viktor"
+      ],
+      "isChampion": true,
+      "rulesText": "When you play a card on an opponent's turn, play a 1 [Might] Recruit unit token to your base.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0416b4a447494acac41413a4511bb59ce983b4ec-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-177-166",
+      "name": "Renekton, Brute",
+      "collectorNumber": 177,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "epic",
+      "energy": 5,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Renekton"
+      ],
+      "isChampion": true,
+      "rulesText": "[1]: Give me +1 [Might] this turn.\nWhen my Might becomes 10 or more, empower me.\n[Empowered][&gt;] I have [Ganking] and [Deflect].",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/49ebe990f1d3631e3c18fc37323c49f49bf159fa-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-179-166",
+      "name": "Rengar, Trophy Hunter",
+      "collectorNumber": 179,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "epic",
+      "energy": 5,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Rengar"
+      ],
+      "isChampion": true,
+      "rulesText": "[Ambush]\nI can be played to a battlefield where there are enemy units.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/1f16f5b1f980106057606a2faa3cce64fa4850e7-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": "Reworded to use '[Ambush]' keyword"
+    },
+    {
+      "id": "ven-180-166",
+      "name": "Kha'Zix, Evolving Hunter",
+      "collectorNumber": 180,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "epic",
+      "energy": 5,
+      "might": 5,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Kha'Zix"
+      ],
+      "isChampion": true,
+      "rulesText": "[Hunt]\nWhen I attack, you may spend 3 XP to deal damage equal to my Might to an enemy unit here.",
+      "abilities": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/4875b0eb5705f9723118f0895dd702373826bdbc-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-181-166",
+      "name": "Gangplank, Naval",
+      "collectorNumber": 181,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "body"
+      ],
+      "rarity": "rare",
+      "energy": 6,
+      "might": 6,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Gangplank"
+      ],
+      "isChampion": true,
+      "rulesText": "[Empower] [body][body]\n[Empowered][&gt;] If a spell or ability that chooses me would stun me, give me -[Might], or return me to hand, give me +3 [Might] instead.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/9d9fd99b083fb7104d533ca0eccb43a47c2cc74a-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-182-166",
+      "name": "Illaoi, Prophet of the Great Kraken",
+      "collectorNumber": 182,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "rare",
+      "energy": 6,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Illaoi"
+      ],
+      "isChampion": true,
+      "rulesText": "When you play me or when I score, play a [1] [Might] Tentacle unit token from Bilgewater.\nI have +1 [Might] for each token unit you control.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a50aadbfd6f435433a80b12da9826fa0a6bd8172-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-183-166",
+      "name": "Diana, No Longer Human",
+      "collectorNumber": 183,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "chaos"
+      ],
+      "rarity": "epic",
+      "energy": 4,
+      "might": 3,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Diana"
+      ],
+      "isChampion": true,
+      "rulesText": "[Ambush]\nWhen you play a spell, give me +2 [Might] this turn.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/d5a7071e4f1af712c9bf5342ba70fbb2e359483f-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-184-166",
+      "name": "Leona, Determined",
+      "collectorNumber": 184,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "unit",
+      "domains": [
+        "order"
+      ],
+      "rarity": "rare",
+      "energy": 4,
+      "might": 4,
+      "mightBonus": null,
+      "power": null,
+      "tags": [
+        "Leona"
+      ],
+      "isChampion": true,
+      "rulesText": "[Shield]\nWhen I attack, stun an enemy unit here.",
+      "abilities": [
+        null,
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/92ac39878346a886129b6d339ab3d9e6c722a7eb-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-191-166",
+      "name": "Master of Shadows",
+      "collectorNumber": 191,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "legend",
+      "domains": [
+        "fury",
+        "chaos"
+      ],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you banish a card you own, empower me.\n[Action][&gt;] Disempower me, [Exhaust]: Discard 1, then draw 1.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/75b7ba57a83af496b26d9fe7e8521f9a851bf464-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-192-166",
+      "name": "Curator of the Sands",
+      "collectorNumber": 192,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "legend",
+      "domains": [
+        "calm",
+        "mind"
+      ],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play a unit, gear, or activated ability with Energy cost [7] or more, you may exhaust me to ready up to 2 runes.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/1790b30538781eb2a55b5baee00fff9ed08794aa-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-193-166",
+      "name": "Eye of Twilight",
+      "collectorNumber": 193,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "legend",
+      "domains": [
+        "calm",
+        "order"
+      ],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Action][&gt;] [Exhaust]: Give a friendly unit [Tank] this turn.",
+      "abilities": [
+        null
+      ],
+      "parseSuccess": true,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/8c234c7efc30a24dc50c4b76517857bff6e1f906-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-194-166",
+      "name": "Defender of Tomorrow",
+      "collectorNumber": 194,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "legend",
+      "domains": [
+        "mind",
+        "body"
+      ],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "[Empower] [2][rainbow][rainbow]\n[1], [Exhaust]: Ready a gear.\n[Empowered][&gt;] [1], [Exhaust]: Ready 2 gear.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f527eb9b02ce62d808ec82e12ac28af5a6bd75fb-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-195-166",
+      "name": "Soul's Reflection",
+      "collectorNumber": 195,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "legend",
+      "domains": [
+        "mind",
+        "chaos"
+      ],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you empower something else, empower me.\nDisempower me, [Exhaust]: Give a unit at a battlefield -2 [Might] this turn.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f56cf2a3755318e1dc6afd01736f2a4d759cd4a1-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    },
+    {
+      "id": "ven-197-166",
+      "name": "Heart of the Tempest",
+      "collectorNumber": 197,
+      "set": "VEN",
+      "setName": "Vendetta",
+      "cardType": "legend",
+      "domains": [
+        "order",
+        "chaos"
+      ],
+      "rarity": "rare",
+      "energy": null,
+      "might": null,
+      "mightBonus": null,
+      "power": null,
+      "tags": [],
+      "isChampion": false,
+      "rulesText": "When you play a card from anywhere other than your hand, empower me.\n[Action][&gt;] Disempower me, [Exhaust]: Give a unit [Assault 2] this turn.",
+      "abilities": [],
+      "parseSuccess": false,
+      "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f208ffb2ee76827cd4c608bcc8e1bcb9380bfa31-744x1039.png?accountingTag=RB",
+      "illustrator": null,
+      "errata": null
+    }
+  ],
+  "set": {
+    "id": "VEN",
+    "name": "Vendetta",
+    "cardCount": 189,
+    "parsedCount": 123,
+    "errataCount": 2
+  }
+}

@@ -49,6 +49,7 @@ const SET_NAMES: Record<string, string> = {
   OGS: "Origins Showcase",
   SFD: "Spiritforged",
   UNL: "Unleashed",
+  VEN: "Vendetta",
 };
 
 const OUTPUT_DIR = path.join(import.meta.dir, "../../riftbound-cards/src/data/sets");

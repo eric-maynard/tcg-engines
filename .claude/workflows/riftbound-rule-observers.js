@@ -9,15 +9,19 @@ export const meta = {
 }
 
 const REPO = '/root/src/tcg/tcg-engines'
-const TRACES = Array.from({length: 12}, (_, i) => `${REPO}/do_not_commit/wf-traces/game-wf-${i}.jsonl`)
+const N_TRACES = args?.traces ?? 12
+const TRACE_PREFIX = args?.tracePrefix ?? 'wf'
+const TRACES = Array.from({length: N_TRACES}, (_, i) => `${REPO}/do_not_commit/wf-traces/game-${TRACE_PREFIX}-${i}.jsonl`)
 
+// 2026-03-30 (Unleashed) numbering — see DIGEST.md.
 const SECTIONS = [
-  {n: 5, name: 'Turn Structure', rules: '500-526', focus: 'phase transitions, priority/focus, turn advancement, rune-pool timing (515.4.d, 517.2.c)'},
-  {n: 6, name: 'Chains & Showdowns', rules: '527-563', focus: 'LIFO chain resolution, priority passing, showdown open/close, relevant players, focus passing'},
-  {n: 7, name: 'Abilities', rules: '564-585', focus: 'triggered abilities go on chain, activated ability legality, replacement effects'},
-  {n: 8, name: 'Game Actions', rules: '586-619', focus: 'move exhausts units, recycle destination, exhaust/ready state, discretionary vs directed'},
-  {n: 9, name: 'Combat & Scoring', rules: '620-633', focus: 'attacker-first damage, contested clearing, conquer/hold once per bf per turn, final-point rule'},
-  {n: 11, name: 'Keywords', rules: '712-729', focus: 'Hidden/Tank/Assault/Deathknell/etc firing correctly'},
+  {n: 3, name: 'Turn Structure', rules: '300-324', focus: 'phase transitions, priority/focus, turn advancement, rune-pool timing, cleanup'},
+  {n: 4, name: 'Chains & Showdowns', rules: '325-348', focus: 'LIFO chain resolution, priority passing, showdown open/close, relevant players, focus passing'},
+  {n: 6, name: 'Abilities', rules: '360-406', focus: 'triggered abilities go on chain, activated ability legality, replacement effects, reflexive/delayed triggers'},
+  {n: 7, name: 'Game Actions', rules: '407-439', focus: 'move exhausts units, recycle destination, exhaust/ready state, discretionary vs directed, predict/prevent/create'},
+  {n: 8, name: 'Movement', rules: '440-453', focus: 'standard move, ganking, recalls'},
+  {n: 9, name: 'Combat & Scoring', rules: '454-467', focus: 'mandatory showdown step, attacker-first damage, contested clearing, conquer/hold once per bf'},
+  {n: 12, name: 'Keywords', rules: '800-826', focus: 'Hidden/Tank/Assault/Deathknell + Equip/Quick-Draw/Repeat/Ambush/Hunt/Backline firing correctly'},
 ]
 
 const FINDINGS_SCHEMA = {
@@ -52,7 +56,8 @@ const VERDICT_SCHEMA = {
   required: ['verdict','notes'],
 }
 
-const ALREADY_FIXED = new Set(['140.1.b','140.1.c','508','508.1.a','509.1','548','553','589.1.a','627.4','160','517.2.c'])
+// Traces are generated on post-fix code; observers should report anything they see.
+const ALREADY_FIXED = new Set(args?.skipRules ?? [])
 
 phase('Observe')
 const jobs = []
@@ -78,7 +83,7 @@ Scan the trace for violations of §${sec.n} rules ONLY. Focus: ${sec.focus}.
 
 For each finding: ruleId (like "515.4.d"), severity, violation (what the rule says vs what happened), evidence (seq numbers + specific state values), trace filename.
 
-SKIP anything already fixed on this branch (rules 140.1.b/c, 508, 509.1, 548, 553, 589.1.a, 627.4, 160, 517.2.c — neutral-open guards, contested clearing, all-player pool empty).
+Use the 2026-03-30 (Unleashed) rule numbering — see DIGEST.md for the section map.
 
 Return ≤6 findings. If nothing, return {findings:[]}.`,
     {label: `obs §${sec.n} ${trace.split('/').pop()}`, phase: 'Observe', schema: FINDINGS_SCHEMA}
