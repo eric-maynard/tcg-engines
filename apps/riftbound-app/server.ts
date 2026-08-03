@@ -26,6 +26,31 @@ import { type LogEntry, actorName, makeLogEntry } from "./src/narrator";
 const STANDARD_SETS = new Set(["OGN", "OGS", "SFD"]);
 const PREVIEW_SETS = new Set(["OGN", "OGS", "SFD", "UNL"]);
 
+/**
+ * Moves the server drives on behalf of the flow (channel/draw/ready/etc).
+ * A client that sends one of these can act on the opponent or grant itself
+ * resources — the engine's `directed:true` param is client-suppliable and is
+ * NOT an authorization boundary. Reject these in the ws "move" handler.
+ */
+const SERVER_ONLY_MOVES = new Set([
+  "channelRunes",
+  "emptyRunePool",
+  "readyAll",
+  "drawCard",
+  "advancePhase",
+  "clearDamage",
+  "initializeMainDeck",
+  "initializeRuneDeck",
+  "shuffleDecks",
+  "drawInitialHand",
+  "placeBattlefields",
+  "placeLegend",
+  "placeChampion",
+  "transitionToPlay",
+  "scorePoint",
+  "removePlayer",
+]);
+
 const PORT = 3000;
 const STATIC_DIR = path.join(import.meta.dir, "public");
 const IMAGES_DIR = path.join(import.meta.dir, "../../downloads/card-images");
@@ -2047,6 +2072,10 @@ const server = Bun.serve({
 
       const body = (await req.json()) as { moveId: string; playerId: string; params: Record<string, unknown> };
 
+      if (SERVER_ONLY_MOVES.has(body.moveId)) {
+        return json({ error: `Move '${body.moveId}' is server-driven only` }, 403);
+      }
+
       // Capture previous phase for phase change detection
       const prevPhase = session.engine.getState().turn.phase;
 
@@ -2801,6 +2830,14 @@ const server = Bun.serve({
         const { moveId, params, requestId } = msg;
         if (!moveId || !params) {
           ws.send(JSON.stringify({ error: "Missing moveId or params", requestId, type: "error" }));
+          return;
+        }
+        // System-driven moves are never legal from a client message. The
+        // engine's `directed:true` param on channelRunes/emptyRunePool is
+        // client-suppliable, so it is not an authorization boundary — this
+        // denylist is.
+        if (SERVER_ONLY_MOVES.has(moveId as string)) {
+          ws.send(JSON.stringify({ error: `Move '${moveId}' is server-driven only`, requestId, type: "error" }));
           return;
         }
 
