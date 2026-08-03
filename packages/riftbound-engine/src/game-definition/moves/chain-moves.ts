@@ -698,6 +698,15 @@ export const chainMoves: Partial<
         }
       }
 
+      // Rule 605.2: activated abilities that Add resources resolve immediately
+      // and cannot be reacted to — do not open a chain for them.
+      const effectType = (ability.effect as { type?: string } | undefined)?.type;
+      if (effectType === "add-resource" || effectType === "add") {
+        const effectCtx = buildEffectContext(draft, playerId, cardId, context);
+        executeEffect(ability.effect as ExecutableEffect, effectCtx);
+        return;
+      }
+
       // Add ability to chain. The chain item's `cardId` is the host so that
       // Effect execution's `sourceCardId` (used for self-targeting and
       // Location-relative targets) resolves to the host.
