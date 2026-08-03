@@ -471,14 +471,24 @@ export const combatMoves: Partial<
           });
         }
       }
-      // For "tie": both sides destroyed, no control change, no recalls needed
-
       // Clear combat roles for all remaining units at this battlefield
       const remainingUnits = zones.getCardsInZone(battlefieldZoneId);
       for (const unitId of remainingUnits) {
         cards.updateCardMeta(unitId, {
           combatRole: null,
         } as Partial<RiftboundCardMeta>);
+      }
+
+      // Rule 466.5.b (Vendetta): if there are no Units remaining here
+      // controlled by any player, the Battlefield becomes Uncontrolled.
+      // Without this a mutual-kill leaves the previous controller set and
+      // grants illegal Hold scores on an empty battlefield.
+      const anyUnitRemaining = remainingUnits.some((id) => {
+        const registry = getGlobalCardRegistry();
+        return registry.getCardType(id as string) === "unit";
+      });
+      if (!anyUnitRemaining) {
+        battlefield.controller = null;
       }
 
       // Clear contested status

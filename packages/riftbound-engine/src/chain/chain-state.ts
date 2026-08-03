@@ -220,11 +220,15 @@ export function addToChain(
     ];
   }
 
-  // Rule 537.1: the player that created the chain becomes first Active Player.
-  // Rule 541.2: triggered abilities added to the chain do NOT affect Active
-  // Player order — preserve the existing activePlayer when a trigger queues.
+  // Rule 337.4 / 340.4 (Vendetta): after all pending Chain Items are
+  // finalized, the controller of the newest (topmost) item on the Chain gains
+  // Priority. When a triggered item is queued the newest item is that trigger,
+  // so its controller gets Priority — unless a non-triggered item already
+  // opened the chain (a player played a spell/ability), in which case that
+  // player keeps Priority per rule 337.4 until they pass.
+  const chainOpenedByPlay = state.chain?.items.some((i) => !i.triggered) ?? false;
   const activePlayer =
-    item.triggered && state.chain?.active ? state.chain.activePlayer : item.controller;
+    item.triggered && chainOpenedByPlay ? state.chain!.activePlayer : item.controller;
 
   return {
     ...state,

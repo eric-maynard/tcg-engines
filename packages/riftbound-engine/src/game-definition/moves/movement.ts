@@ -304,7 +304,16 @@ export const movementMoves: Partial<
           return owner !== undefined && (owner as string) !== playerId;
         });
 
-        if (!hasOpponentUnit && allUnits.length > 0) {
+        if (hasOpponentUnit) {
+          // Rule 450 (Vendetta): the destination *becomes* Contested when it
+          // is an Uncontested Battlefield not controlled by the mover — a
+          // mandatory consequence of the Move, not a discretionary action.
+          if (!bf.contested) {
+            bf.contested = true;
+            bf.contestedBy = playerId;
+            bf.showdownComplete = false;
+          }
+        } else if (allUnits.length > 0) {
           // Start a non-combat showdown before conquer can proceed
           const playerIds = Object.keys(draft.players);
           const opponent = playerIds.find((p) => p !== playerId) ?? playerId;
