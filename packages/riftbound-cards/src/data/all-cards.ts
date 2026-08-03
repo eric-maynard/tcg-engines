@@ -791,11 +791,43 @@ export function getRawCards(): Card[] {
 }
 
 /**
+ * Adapt a set-JSON card (from generate-set-json.ts output) into the Card shape
+ * used by the typed .ts definitions. Lets sets without hand-authored .ts files
+ * (currently VEN) flow into getAllCards() and the engine's card registry.
+ */
+function adaptJsonCard(c: Record<string, unknown>): Card {
+  const domains = c.domains as string[] | undefined;
+  return {
+    abilities: ((c.abilities as unknown[]) ?? []).filter(Boolean),
+    cardNumber: c.collectorNumber,
+    cardType: c.cardType,
+    domain: domains?.length === 1 ? domains[0] : domains,
+    energyCost: c.energy ?? c.energyCost,
+    id: c.id,
+    isChampion: c.isChampion,
+    keywords: c.keywords,
+    might: c.might,
+    mightBonus: c.mightBonus ?? undefined,
+    name: c.name,
+    powerCost: c.power ?? c.powerCost,
+    rarity: c.rarity,
+    rulesText: c.rulesText,
+    setId: c.set,
+    tags: c.tags,
+    timing: c.timing,
+  } as unknown as Card;
+}
+
+import venJson from "./sets/ven.json";
+const JSON_SETS = [venJson] as { cards: Record<string, unknown>[] }[];
+
+/**
  * Get all cards with parsed abilities attached.
  */
 export function getAllCards(): Card[] {
   if (!_cachedCards) {
-    _cachedCards = enrichCards(getRawCards());
+    const jsonCards = JSON_SETS.flatMap((s) => s.cards.map(adaptJsonCard));
+    _cachedCards = enrichCards([...getRawCards(), ...jsonCards]);
   }
   return _cachedCards;
 }

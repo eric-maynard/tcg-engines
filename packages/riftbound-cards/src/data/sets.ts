@@ -13,4 +13,5 @@ export const SETS: Record<string, SetInfo> = {
   OGS: { cardCount: 24, id: "OGS", name: "Origins Showcase" },
   SFD: { cardCount: 222, id: "SFD", name: "Spiritforged" },
   UNL: { cardCount: 225, id: "UNL", name: "Unleashed" },
+  VEN: { cardCount: 189, id: "VEN", name: "Vendetta" },
 };

@@ -68,7 +68,7 @@ export interface TriggerRunnerContext {
 /**
  * Convert card definition abilities to TriggerableAbility format.
  */
-function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
+export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
   const registry = getGlobalCardRegistry();
   const abilities = registry.getAbilities(cardId);
   if (!abilities) {
@@ -124,7 +124,7 @@ function evaluateTriggerCondition(
  * Build the list of cards on the board with their abilities.
  * Scans base, battlefield, and legendZone zones, looks up abilities from the card definition registry.
  */
-function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
+export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
   const boardCards: CardWithAbilities[] = [];
 
   // Get cards from all players' bases and legend zones
