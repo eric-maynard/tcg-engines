@@ -1,6 +1,6 @@
 # Riftbound Rules Digest
 
-> **Version**: `rules-db.json` is built from **Unleashed (2026-03-30)** — 2080 rules, 000-826. The engine's inline rule-number comments still cite the **June 2025** numbering (e.g. old 583.3 → new 382.x, old 627.4 → new 461.x); the behaviors are correct, only the citations are stale. Vendetta (2026-07-24) is one version newer and adds Empower/Flow/Burn/Skip — see `UNLEASHED-NOTES.md`.
+> **Version**: `rules-db.json` is built from **Vendetta (2026-07-24)** — 2367 rules, 000-829. Adds keywords Empower (827), Empowered (828), Flow (829) and game actions Burn (440), Empower (441), Disempower (442), Skip (443). The engine's inline rule-number comments still cite the **June 2025** numbering (e.g. old 583.3 → new 382.x, old 627.4 → new 461.x); the behaviors are correct, only the citations are stale.
 
 Compact overview for engine work. **For any specific rule, use the lookup CLI — do not read the reference chunks:**
 
