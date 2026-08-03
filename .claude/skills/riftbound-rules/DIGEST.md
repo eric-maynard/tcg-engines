@@ -1,6 +1,8 @@
 # Riftbound Rules Digest
 
-Compact overview for engine work. **For any specific rule, use the lookup CLI — do not read the 172 KB reference chunks:**
+> **Version**: `rules-db.json` is built from **Unleashed (2026-03-30)** — 2080 rules, 000-826. The engine's inline rule-number comments still cite the **June 2025** numbering (e.g. old 583.3 → new 382.x, old 627.4 → new 461.x); the behaviors are correct, only the citations are stale. Vendetta (2026-07-24) is one version newer and adds Empower/Flow/Burn/Skip — see `UNLEASHED-NOTES.md`.
+
+Compact overview for engine work. **For any specific rule, use the lookup CLI — do not read the reference chunks:**
 
 ```bash
 bun .claude/skills/riftbound-rules/scripts/rule.ts <id>          # e.g. 515.4.d, or 626 for the whole 626.* subtree
@@ -9,21 +11,22 @@ bun .claude/skills/riftbound-rules/scripts/rule.ts --section <n> # whole section
 bun .claude/skills/riftbound-rules/scripts/rule.ts --list        # section map
 ```
 
-## Section map (rule number → topic)
+## Section map (2026-03-30 numbering → topic)
 
 | § | Rules | Topic | Engine dir |
 |---|---|---|---|
-| 1 | 000–053 | Golden/Silver rules (card text > rules; card terminology) | — |
-| 2 | 100–123 | Game concepts, deck construction, setup | `deckbuilder/`, `modes/` |
-| 3 | 105–109 | Zones & spaces | `zones/` |
-| 4 | 124–183 | Cards, types, control, rune pools | `types/`, `game-definition/` |
-| 5 | 500–526 | Turn structure, priority, focus | `engine/`, `game-definition/flow` |
-| 6 | 527–563 | Chains & showdowns | `chain/` |
-| 7 | 564–585 | Abilities (passive/triggered/activated/replacement) | `abilities/` |
-| 8 | 586–619 | Game actions (draw/exhaust/play/move/recycle/…) | `operations/` |
-| 9 | 620–633 | Combat & scoring | `combat/` |
-| 10 | 634–711 | Layers, modes of play, buffers | `cleanup/`, `modes/` |
-| 11 | 712–729 | Keywords (Accelerate…Vision) | `keywords/` |
+| 1 | 000–056 | Golden/Silver rules | — |
+| 2 | 100–189 | Game concepts, cards & types, zones | `types/`, `zones/`, `deckbuilder/` |
+| 3 | 300–324 | Turn structure, priority, focus, cleanup | `engine/`, `game-definition/flow` |
+| 4 | 325–348 | Chains & showdowns | `chain/` |
+| 5 | 349–359 | Playing cards | `game-definition/moves/cards.ts` |
+| 6 | 360–406 | Abilities (passive/replacement/activated/triggered) | `abilities/` |
+| 7 | 407–439 | Game actions (draw/exhaust/play/move/…/predict/prevent/create) | `operations/` |
+| 8 | 440–453 | Movement & recalls | `game-definition/moves/movement.ts` |
+| 9 | 454–467 | Combat & scoring | `combat/` |
+| 10 | 468–484 | Layers, modes of play | `cleanup/`, `modes/` |
+| 11 | 649–742 | Conceding, buffs, XP, attachment, special terms | — |
+| 12 | 800–826 | Keywords (Accelerate…Vision + Equip/Quick-Draw/Repeat/Weaponmaster/Ambush/Hunt/Level/Unique/Backline) | `keywords/` |
 
 ## Turn phases (515–517)
 
