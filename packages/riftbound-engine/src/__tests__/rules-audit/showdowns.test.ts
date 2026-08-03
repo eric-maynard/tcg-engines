@@ -390,13 +390,11 @@ describe("Rule 552: When the last chain item resolves, Focus passes to the next 
     );
     expect(state.chain?.items).toHaveLength(1);
 
-    // Resolve the chain item — chain empties.
+    // Resolve the chain item — chain empties. Rule 346 (Vendetta; old 552):
+    // resolveTopItem itself passes Focus to the next Relevant Player.
     const { newState: afterResolve } = resolveTopItem(state);
     state = afterResolve;
     expect(state.chain?.items ?? []).toHaveLength(0);
-
-    // Rule 552: focus then passes to the next relevant player (P2).
-    state = passFocus(state);
     expect(getActiveShowdown(state)?.focusPlayer).toBe(P2);
   });
 });

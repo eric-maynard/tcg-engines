@@ -343,9 +343,16 @@ export const combatMoves: Partial<
       }
 
       // If either side is empty, skip the Combat Damage Step (rule 626.1.a.1)
-      // but still perform the Resolution Step: clear Contested (rule 627.4).
-      // Leaving contested=true here re-triggers startShowdown → infinite loop.
+      // but still perform the Resolution Step (rule 627): recall the
+      // attacker's cards (627.2 — attacker failed to Conquer) and clear
+      // Contested (627.4). Without the recall, non-combat cards remain on
+      // both sides and contestBattlefield re-enumerates forever.
       if (attackerUnits.length === 0 || defenderUnits.length === 0) {
+        for (const cardId of unitIds) {
+          if (cards.getCardOwner(cardId) === attackingPlayer) {
+            zones.moveCard({ cardId, targetZoneId: "base" as CoreZoneId });
+          }
+        }
         battlefield.contested = false;
         battlefield.contestedBy = undefined;
         return;

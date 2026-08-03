@@ -319,9 +319,21 @@ export function resolveTopItem(state: TurnInteractionState): {
   const resolved = items.pop()!;
 
   if (items.length === 0) {
-    // Chain is now empty
+    // Chain is now empty. Rule 346 (Vendetta; old 552): when the last item
+    // resolves during a Showdown, Focus passes to the next Relevant Player.
+    let showdownStack = state.showdownStack;
+    const sd = getActiveShowdown(state);
+    if (sd) {
+      const idx = sd.relevantPlayers.indexOf(sd.focusPlayer);
+      const nextFocus = sd.relevantPlayers[(idx + 1) % sd.relevantPlayers.length];
+      const top = showdownStack.length - 1;
+      showdownStack = [
+        ...showdownStack.slice(0, top),
+        { ...showdownStack[top], focusPlayer: nextFocus, passedPlayers: [] },
+      ];
+    }
     return {
-      newState: { ...state, chain: null },
+      newState: { ...state, chain: null, showdownStack },
       resolved,
     };
   }
