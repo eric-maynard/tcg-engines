@@ -684,7 +684,7 @@ describe("resolveFullCombat", () => {
     expect(draft.battlefields[bfId].controller).toBe(null);
   });
 
-  test("does nothing when contestedBy is not set", () => {
+  test("clears contested when contestedBy is not set (rule 627.4)", () => {
     const bfId = "bf-no-attacker";
     const draft = createMockState({
       battlefields: {
@@ -694,8 +694,10 @@ describe("resolveFullCombat", () => {
 
     executeResolveFullCombat(draft, bfId, {});
 
-    // ContestedBy is undefined, so combat should not resolve
-    expect(draft.battlefields[bfId].contested).toBe(true);
+    // Rule 626.1.a.1: no attackers → skip damage step. Rule 627.4: the
+    // Resolution Step still clears Contested; leaving it set would let
+    // startShowdown re-enumerate the same battlefield forever.
+    expect(draft.battlefields[bfId].contested).toBe(false);
   });
 
   test("skips non-unit cards (might <= 0) at battlefield", () => {
