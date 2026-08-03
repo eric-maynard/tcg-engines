@@ -302,6 +302,16 @@ export function createPlayableGame(
         visibility: "public",
       },
     };
+    internal.zones[`facedown-${bf}`] = {
+      cardIds: [],
+      config: {
+        faceDown: true,
+        id: `facedown-${bf}`,
+        name: `Facedown ${bf}`,
+        ordered: false,
+        visibility: "owner",
+      },
+    };
   }
 
   // Transition to playing (mirrors server.ts finalizePregame — applyPatches, not transitionToPlay)

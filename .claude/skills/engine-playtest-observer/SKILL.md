@@ -44,7 +44,15 @@ Mechanical scan across all traces:
 
 Output: `/tmp/playtest-traces/coverage.json`.
 
-### Phase 3 — Rule observers (agents, parallel)
+### Phase 3 — Rule observers (workflow, wide fan-out)
+
+For a full sweep, run the checked-in workflow:
+```
+Workflow({name: "riftbound-rule-observers"})
+```
+It fans out (6 rule sections × N traces) observers → dedupes by ruleId → adversarially verifies each unique finding → returns `{confirmed:[…], refuted:[…]}`. Traces must already be at `do_not_commit/wf-traces/game-wf-*.jsonl`.
+
+### Phase 3 (manual alternative) — Rule observers (agents, parallel)
 
 For each trace (or trace × rule-section), spawn an observer agent with:
 - `.claude/skills/riftbound-rules/DIGEST.md` (~4 KB)

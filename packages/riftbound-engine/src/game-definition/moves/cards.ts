@@ -823,33 +823,90 @@ export const cardPlayMoves: Partial<
       if (state.pendingChoice) {
         return false;
       }
+      // Rule 597.2: Hide is a Discretionary Action → Neutral Open only.
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return false;
+      }
 
       const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
       if (zone !== "hand") {
         return false;
       }
 
+      // Rule 723.1: only cards with the Hidden keyword may be Hidden.
+      const registry = getGlobalCardRegistry();
+      if (!registry.hasKeyword(context.params.cardId as string, "Hidden")) {
+        return false;
+      }
+
+      // Rule 597.1 / 723.1.b: must be a battlefield the player controls.
+      const bfId = context.params.battlefieldId;
+      const bf = state.battlefields[bfId];
+      if (!bf || bf.controller !== context.params.playerId) {
+        return false;
+      }
+
       // Enforce per-player hidden-card capacity at the target battlefield.
       // Default capacity is 1; battlefields like Bandle Tree bump
       // `hiddenCapacityBonus` to permit additional hidden cards.
-      const bfId = context.params.battlefieldId;
-      const bf = state.battlefields[bfId];
-      if (bf) {
-        const capacity = 1 + (bf.hiddenCapacityBonus ?? 0);
-        const facedownZoneId = getFacedownZoneId(bfId);
-        const hiddenCards = context.zones.getCardsInZone(facedownZoneId as CoreZoneId);
-        let ownedHidden = 0;
-        for (const hiddenId of hiddenCards) {
-          if (context.cards.getCardOwner(hiddenId) === context.params.playerId) {
-            ownedHidden++;
-          }
+      const capacity = 1 + (bf.hiddenCapacityBonus ?? 0);
+      const facedownZoneId = getFacedownZoneId(bfId);
+      const hiddenCards = context.zones.getCardsInZone(facedownZoneId as CoreZoneId);
+      let ownedHidden = 0;
+      for (const hiddenId of hiddenCards) {
+        if (context.cards.getCardOwner(hiddenId) === context.params.playerId) {
+          ownedHidden++;
         }
-        if (ownedHidden >= capacity) {
-          return false;
-        }
+      }
+      if (ownedHidden >= capacity) {
+        return false;
       }
 
       return true;
+    },
+    enumerator: (state, context) => {
+      if (state.status !== "playing" || state.pendingChoice) {
+        return [];
+      }
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return [];
+      }
+      const registry = getGlobalCardRegistry();
+      const hand = context.zones.getCardsInZone(
+        "hand" as CoreZoneId,
+        context.playerId as CorePlayerId,
+      );
+      const hiddenCards = hand.filter((id) => registry.hasKeyword(id as string, "Hidden"));
+      if (hiddenCards.length === 0) {
+        return [];
+      }
+      const results: { playerId: string; cardId: string; battlefieldId: string }[] = [];
+      for (const [bfId, bf] of Object.entries(state.battlefields)) {
+        if (bf.controller !== (context.playerId as string)) {
+          continue;
+        }
+        const capacity = 1 + (bf.hiddenCapacityBonus ?? 0);
+        const facedown = context.zones.getCardsInZone(getFacedownZoneId(bfId) as CoreZoneId);
+        let owned = 0;
+        for (const hid of facedown) {
+          if (context.cards.getCardOwner(hid) === (context.playerId as string)) {
+            owned++;
+          }
+        }
+        if (owned >= capacity) {
+          continue;
+        }
+        for (const cid of hiddenCards) {
+          results.push({
+            battlefieldId: bfId,
+            cardId: cid as string,
+            playerId: context.playerId as string,
+          });
+        }
+      }
+      return results;
     },
     reducer: (_draft, context) => {
       const { cardId, battlefieldId } = context.params;

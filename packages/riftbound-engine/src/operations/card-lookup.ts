@@ -112,11 +112,20 @@ export class CardDefinitionRegistry {
   }
 
   /**
-   * Check if a card has a specific keyword.
+   * Check if a card has a specific keyword. Cards may declare keywords either
+   * on the flat `keywords` array or as `abilities: [{type:"keyword", keyword:X}]`.
    */
   hasKeyword(cardId: string, keyword: string): boolean {
     const def = this.definitions.get(cardId);
-    return def?.keywords?.includes(keyword) ?? false;
+    if (!def) {
+      return false;
+    }
+    if (def.keywords?.includes(keyword)) {
+      return true;
+    }
+    return (def.abilities ?? []).some(
+      (a) => a.type === "keyword" && a.keyword === keyword,
+    );
   }
 
   /**
