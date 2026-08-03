@@ -208,6 +208,18 @@ export function addToChain(
   const relevantPlayers =
     state.chain?.relevantPlayers ?? activeShowdown?.relevantPlayers ?? turnOrder;
 
+  // Rule 553.4.a: the showdown ends when all Relevant Players pass *in
+  // sequence*. Taking an action (adding to the chain) breaks the sequence,
+  // so reset the active showdown's passedPlayers alongside the chain's.
+  let showdownStack = state.showdownStack;
+  if (activeShowdown) {
+    const top = showdownStack.length - 1;
+    showdownStack = [
+      ...showdownStack.slice(0, top),
+      { ...showdownStack[top], passedPlayers: [] },
+    ];
+  }
+
   return {
     ...state,
     chain: {
@@ -219,6 +231,7 @@ export function addToChain(
       turnOrder,
     },
     nextChainItemId: state.nextChainItemId + 1,
+    showdownStack,
   };
 }
 

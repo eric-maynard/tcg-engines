@@ -815,22 +815,24 @@ export const chainMoves: Partial<
       const playerIds = Object.keys(draft.players);
 
       const bf = draft.battlefields[battlefieldId];
-      const relevantPlayers = bf?.contested
-        ? [playerId, ...(bf.contestedBy && bf.contestedBy !== playerId ? [bf.contestedBy] : [])]
-        : playerIds;
-
-      const uniqueRelevant = [...new Set(relevantPlayers)];
-      const opponent = uniqueRelevant.find((p) => p !== playerId) ?? playerId;
+      const isCombat = bf?.contested ?? false;
+      // Rule 550.1: for a combat showdown the Attacking and Defending players
+      // are Relevant. The attacker is contestedBy; the defender is the
+      // battlefield's current controller. Rule 550.2: non-combat → all players.
+      const attacker = bf?.contestedBy ?? playerId;
+      const defender = bf?.controller ?? undefined;
+      const relevantPlayers =
+        isCombat && defender ? [...new Set([attacker, defender])] : playerIds;
 
       const interaction = draft.interaction ?? createInteractionState();
       draft.interaction = startShowdownState(
         interaction,
         battlefieldId,
         playerId,
-        uniqueRelevant,
-        bf?.contested ?? false,
-        playerId,
-        opponent,
+        relevantPlayers,
+        isCombat,
+        attacker,
+        defender,
       );
     },
   },
