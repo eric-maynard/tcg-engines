@@ -61,3 +61,4 @@ downloads/
 .mcp.json
 apps/riftbound-app/.mcp.json
 riftbound-rules-video-transcript.txt
+do_not_commit/
