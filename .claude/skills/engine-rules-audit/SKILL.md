@@ -29,31 +29,16 @@ Use this skill when:
 
 The skill runs in **four phases**, typically across 4-8 parallel agents.
 
-### Phase 1: Rule Indexing (1 agent, ~5 min)
+### Phase 1: Rule Indexing (script, seconds)
 
-An "indexer" agent reads all four rules reference files and produces a structured JSON list of every testable rule:
+The rule index is pre-built at `.claude/skills/riftbound-rules/rules-db.json` (1364 rules with `id`, `text`, `section`, `sectionName`, `xref`). **Do not read the four raw reference chunks.**
 
-```json
-{
-  "515.4.d": {
-    "section": "Turn Structure",
-    "subsection": "Draw Phase",
-    "text": "As the Draw Phase ends, each player's Rune Pool empties.",
-    "testable": true,
-    "testType": "state-transition",
-    "complexity": "simple",
-    "relatedRules": ["159", "160.1", "517.2.c"]
-  },
-  "159": {
-    "section": "Runes & Pools",
-    "text": "The Rune Pool is a conceptual collection of a player's available Energy and Power available to pay Costs.",
-    "testable": false,
-    "reason": "definitional, not behavioral"
-  }
-}
+```bash
+# Rebuild only if references/*.md changed:
+bun .claude/skills/riftbound-rules/scripts/build-rules-db.ts
 ```
 
-Not every rule is testable — definitional rules (what a zone is, what a keyword means) don't need tests. The indexer marks each rule as `testable: true/false` and categorizes by test type:
+An "indexer" agent then loads `rules-db.json` for its assigned section (via `bun .claude/skills/riftbound-rules/scripts/rule.ts --section <n>`) and classifies each rule as `testable: true/false` with a `testType`:
 
 - `state-transition` — rule describes what changes when X happens
 - `legality` — rule describes when a move is/isn't legal
@@ -61,7 +46,7 @@ Not every rule is testable — definitional rules (what a zone is, what a keywor
 - `effect-semantics` — rule describes how an effect resolves
 - `invariant` — rule describes a state that must always hold
 
-Output: `/tmp/rule-index.json` with ~300-500 testable rules.
+Definitional rules (headers, "X is the term for Y") are `testable: false`. Output: `/tmp/rule-index.json` with ~300–500 testable rules.
 
 ### Phase 2: Test Scaffold Generation (4-8 parallel agents, ~10 min each)
 
@@ -162,7 +147,7 @@ Reads `/tmp/rule-index.json`, the test files, and the failure report. Produces `
 
 The agent running this skill must know:
 - Engine API surface (reading game-state.ts, moves, flow definition)
-- Formal rules location: `.claude/skills/riftbound-rules/references/*.md`
+- **Rules digest + lookup CLI**: read `.claude/skills/riftbound-rules/DIGEST.md`, then use `bun .claude/skills/riftbound-rules/scripts/rule.ts <id>` for any specific rule (do not read `references/*.md` directly)
 - Test infrastructure: bun test, `@tcg/core/testing` helpers if available
 - **The rules primer** (see references/rules-primer.md) — same primer the visual monkey observer uses to avoid misinterpreting rule terms
 
