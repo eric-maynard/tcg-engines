@@ -1,24 +1,23 @@
 #!/usr/bin/env bun
 /**
- * Plays bot-vs-bot Riftbound games and emits JSONL traces for observer/coverage agents.
+ * Plays bot-vs-bot Riftbound games via createPlayableGame() and emits JSONL
+ * traces for observer/coverage agents.
  *
  *   bun game-tracer.ts --games 5 --max-turns 30 --out /tmp/playtest-traces
  *
- * Each trace line: {seq, turn, phase, player, available, chosen, success}
- * Also writes decks.json (cards used) and history-<seed>.json (RuleEngine replay history).
+ * Each trace line: {seq, turn, phase, player, available, chosen, success, state}
+ * Also writes decks.json and history-<seed>.json (RuleEngine replay history).
  */
-import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { RuleEngine, type PlayerId } from "@tcg/core";
-import { riftboundDefinition } from "../../game-definition/definition";
-import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import type { PlayerId } from "@tcg/core";
+import type { RiftboundGameState } from "../../types";
+import { advanceTurn, buildDefaultDeck, createPlayableGame, type Engine } from "./game-setup";
 
 let getAllCards: (() => any[]) | undefined;
 try {
   ({ getAllCards } = await import("../../../../riftbound-cards/src/data/all-cards"));
-} catch {
-  /* fall back to fake ids */
-}
+} catch {}
 
 const argv = process.argv.slice(2);
 const arg = (name: string, def: string) => {
@@ -32,47 +31,23 @@ const SEED_BASE = arg("--seed", "trace");
 
 mkdirSync(OUT, { recursive: true });
 
-const P1 = "player-1";
-const P2 = "player-2";
+const DOMAIN_PAIRS: [string, string][] = [
+  ["fury", "chaos"],
+  ["mind", "order"],
+  ["body", "calm"],
+  ["fury", "body"],
+  ["mind", "chaos"],
+];
 
 function mulberry32(seed: string) {
   let a = 0;
   for (const c of seed) a = (a * 31 + c.charCodeAt(0)) | 0;
   return () => {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-type Deck = { main: string[]; runes: string[]; battlefields: string[]; legend?: string };
-
-function buildDeck(tag: string): Deck {
-  if (getAllCards) {
-    const all = getAllCards();
-    const by = (t: string) => all.filter((c: any) => c.cardType === t);
-    const pick = <T>(xs: T[], n: number) => {
-      const out: T[] = [];
-      for (let i = 0; i < n; i++) out.push(xs[i % xs.length]);
-      return out;
-    };
-    const units = by("unit");
-    const spells = by("spell");
-    const runes = by("rune");
-    const bfs = by("battlefield");
-    if (units.length && runes.length && bfs.length) {
-      return {
-        main: [...pick(units, 30), ...pick(spells, 10)].map((c: any) => c.id),
-        runes: pick(runes, 12).map((c: any) => c.id),
-        battlefields: pick(bfs, 2).map((c: any) => c.id),
-      };
-    }
-  }
-  return {
-    main: Array.from({ length: 40 }, (_, i) => `${tag}-card-${i}`),
-    runes: Array.from({ length: 12 }, (_, i) => `${tag}-rune-${i}`),
-    battlefields: [`${tag}-bf-0`, `${tag}-bf-1`],
   };
 }
 
@@ -93,65 +68,55 @@ function compact(s: RiftboundGameState) {
   };
 }
 
-function setupGame(seed: string, d1: Deck, d2: Deck) {
-  const engine = new RuleEngine<RiftboundGameState, RiftboundMoves, unknown, RiftboundCardMeta>(
-    riftboundDefinition,
-    [
-      { id: P1, name: "Bot1" },
-      { id: P2, name: "Bot2" },
-    ],
-    { seed }
-  );
-  for (const [pid, d] of [[P1, d1], [P2, d2]] as const) {
-    engine.executeMove("initializeMainDeck", {
-      params: { cardIds: d.main, playerId: pid },
-      playerId: pid as PlayerId,
-    });
-    engine.executeMove("initializeRuneDeck", {
-      params: { runeIds: d.runes, playerId: pid },
-      playerId: pid as PlayerId,
-    });
-    engine.executeMove("drawInitialHand", {
-      params: { playerId: pid },
-      playerId: pid as PlayerId,
-    });
-  }
-  engine.executeMove("placeBattlefields", {
-    params: { battlefieldIds: [...d1.battlefields, ...d2.battlefields] },
-    playerId: P1 as PlayerId,
-  });
-  engine.executeMove("transitionToPlay", { params: {}, playerId: P1 as PlayerId });
-  return engine;
+const NEVER_PICK = new Set(["concede", "removePlayer"]);
+
+/** Who should act next: chain priority holder > showdown focus holder > turn player. */
+function actingPlayer(s: RiftboundGameState): string {
+  const ia: any = (s as any).interaction;
+  if (ia?.chain?.active && ia.chain.activePlayer) return ia.chain.activePlayer;
+  const sd = ia?.showdownStack?.[ia.showdownStack.length - 1];
+  if (sd?.active && sd.focusPlayer) return sd.focusPlayer;
+  return s.turn.activePlayer;
 }
 
-function playAndTrace(seed: string) {
+function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
   const rand = mulberry32(seed);
-  const d1 = buildDeck(P1);
-  const d2 = buildDeck(P2);
-  const engine = setupGame(seed, d1, d2);
+  const [d1a, d1b] = DOMAIN_PAIRS[gameIdx % DOMAIN_PAIRS.length];
+  const [d2a, d2b] = DOMAIN_PAIRS[(gameIdx + 1) % DOMAIN_PAIRS.length];
+  const deck1 = buildDefaultDeck(allCards, d1a, d1b);
+  const deck2 = buildDefaultDeck(allCards, d2a, d2b);
+  const { engine, instanceIds } = createPlayableGame(allCards, deck1, deck2, seed);
+
   const traceFile = join(OUT, `game-${seed}.jsonl`);
   writeFileSync(traceFile, "");
 
-  const NEVER_PICK = new Set(["concede", "removePlayer"]);
   let seq = 0;
-  let safety = MAX_TURNS * 40;
+  let safety = MAX_TURNS * 60;
+  let consecFail = 0;
   while (engine.getState().status === "playing" && safety-- > 0) {
     const s = engine.getState();
     if (((s.turn as any)?.number ?? 0) > MAX_TURNS) break;
-    const active = s.turn.activePlayer as PlayerId;
+    const active = actingPlayer(s) as PlayerId;
     let available: any[] = [];
+    let enumErr: string | undefined;
     try {
       available = engine.enumerateMoves(active, { validOnly: true }) as any[];
     } catch (e) {
-      available = [{ moveId: "endTurn", params: { playerId: active }, _enumErr: String(e) }];
+      enumErr = String(e);
     }
     const pickable = available.filter((m) => !NEVER_PICK.has(m.moveId));
     const nonEnd = pickable.filter((m) => m.moveId !== "endTurn");
     const pool = nonEnd.length > 0 && rand() < 0.85 ? nonEnd : pickable;
-    const chosen = pool[Math.floor(rand() * pool.length)] ?? {
-      moveId: "endTurn",
-      params: { playerId: active },
-    };
+    let chosen = pool[Math.floor(rand() * pool.length)];
+    if (!chosen) {
+      // Nothing pickable for the priority holder — try the pass move for the current interaction.
+      const ia: any = (s as any).interaction;
+      chosen = ia?.chain?.active
+        ? { moveId: "passChainPriority", params: { playerId: active } }
+        : ia?.showdownStack?.length
+          ? { moveId: "passFocus", params: { playerId: active } }
+          : { moveId: "endTurn", params: { playerId: active } };
+    }
     const result = engine.executeMove(chosen.moveId, {
       params: (chosen.params ?? {}) as any,
       playerId: active,
@@ -164,16 +129,27 @@ function playAndTrace(seed: string) {
         turn: (s.turn as any)?.number ?? null,
         phase: (s.turn as any)?.phase ?? null,
         player: active,
-        available: available.map((m: any) => ({ moveId: m.moveId, params: m.params, _enumErr: m._enumErr })),
+        available: available.map((m: any) => ({ moveId: m.moveId, params: m.params })),
         chosen: { moveId: chosen.moveId, params: chosen.params },
         success: (result as any)?.success ?? true,
         error: (result as any)?.error,
+        enumErr,
         state: compact(engine.getState()),
       }) + "\n"
     );
 
-    if (!(result as any)?.success && chosen.moveId !== "endTurn") {
-      engine.executeMove("endTurn", { params: { playerId: active }, playerId: active });
+    if ((result as any)?.success) {
+      consecFail = 0;
+      if (chosen.moveId === "endTurn") {
+        advanceTurn(engine, ["player-1", "player-2"]);
+      }
+    } else if (++consecFail > 5) {
+      appendFileSync(
+        traceFile,
+        JSON.stringify({ seq: seq++, deadlock: true, active, state: compact(s), interaction: (s as any).interaction }) +
+          "\n"
+      );
+      break;
     }
   }
 
@@ -181,17 +157,35 @@ function playAndTrace(seed: string) {
     join(OUT, `history-${seed}.json`),
     JSON.stringify((engine as any).getReplayHistory?.() ?? [], null, 0)
   );
-  return { seed, deck1: d1, deck2: d2, steps: seq, finalState: compact(engine.getState()) };
+  return {
+    seed,
+    domains: { p1: [d1a, d1b], p2: [d2a, d2b] },
+    deck1,
+    deck2,
+    instanceIds,
+    steps: seq,
+    finalState: compact(engine.getState()),
+  };
 }
 
-const summaries = [];
+if (!getAllCards) {
+  console.error("getAllCards() unavailable — cannot build real decks");
+  process.exit(1);
+}
+const allCards = getAllCards();
+console.log(`card pool: ${allCards.length} cards`);
+
+const summaries: any[] = [];
 for (let g = 0; g < N_GAMES; g++) {
   const seed = `${SEED_BASE}-${g}`;
   try {
-    summaries.push(playAndTrace(seed));
-    console.log(`game ${seed}: ${summaries[summaries.length - 1].steps} steps`);
+    const s = playAndTrace(seed, g, allCards);
+    summaries.push(s);
+    console.log(
+      `game ${seed}: ${s.steps} steps, final vp=${JSON.stringify(s.finalState.vp)} status=${s.finalState.status}`
+    );
   } catch (e) {
-    console.error(`game ${seed} crashed: ${e}`);
+    console.error(`game ${seed} crashed: ${(e as Error).stack ?? e}`);
     summaries.push({ seed, error: String(e) });
   }
 }
@@ -199,7 +193,17 @@ for (let g = 0; g < N_GAMES; g++) {
 writeFileSync(
   join(OUT, "decks.json"),
   JSON.stringify(
-    { games: summaries, allDeckCards: [...new Set(summaries.flatMap((s: any) => [...(s.deck1?.main ?? []), ...(s.deck2?.main ?? [])]))] },
+    {
+      games: summaries,
+      allDeckCards: [
+        ...new Set(
+          summaries.flatMap((s: any) => [
+            ...(s.instanceIds?.p1 ?? []),
+            ...(s.instanceIds?.p2 ?? []),
+          ])
+        ),
+      ],
+    },
     null,
     2
   )
