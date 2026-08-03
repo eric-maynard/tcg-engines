@@ -438,3 +438,28 @@ describe("Triggered Abilities on Chain (rule 541)", () => {
     expect(state.chain!.items[1].triggered).toBe(true);
   });
 });
+
+describe("Regression: chain/showdown priority ordering", () => {
+  test("Rule 541.2: triggered ability added to existing chain does NOT change activePlayer", () => {
+    let state = createInteractionState();
+    state = addToChain(state, { cardId: "s1", controller: P2, type: "spell" }, TURN_ORDER);
+    expect(state.chain!.activePlayer).toBe(P2);
+    state = addToChain(
+      state,
+      { cardId: "trig", controller: P1, triggered: true, type: "ability" },
+      TURN_ORDER,
+    );
+    // P1's trigger queued but P2 (chain creator) keeps priority.
+    expect(state.chain!.activePlayer).toBe(P2);
+  });
+
+  test("Rule 553.4.a: acting during a showdown resets its passedPlayers", () => {
+    let state = createInteractionState();
+    state = startShowdown(state, "bf-1", P1, [P1, P2], false);
+    state = passFocus(state);
+    expect(getActiveShowdown(state)!.passedPlayers).toEqual([P1]);
+    // P2 plays a spell instead of passing → sequence broken.
+    state = addToChain(state, { cardId: "s1", controller: P2, type: "spell" }, TURN_ORDER);
+    expect(getActiveShowdown(state)!.passedPlayers).toEqual([]);
+  });
+});
