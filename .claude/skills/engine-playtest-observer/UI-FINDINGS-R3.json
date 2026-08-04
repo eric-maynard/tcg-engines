@@ -1,0 +1,3195 @@
+{
+  "summary": "Visual/UX audit: agents look at Playwright screenshots and report usability findings.",
+  "agentCount": 56,
+  "logs": [
+    "56 reviews (14 screenshots × 4 lenses)"
+  ],
+  "result": {
+    "total": 166,
+    "unique": 166,
+    "findings": [
+      {
+        "severity": "high",
+        "area": "Battlefield location slots",
+        "issue": "Both location cards (Back-Alley Bar, Altar to Unity) overflow the left edge of their zone containers — the card art hangs ~30-40px outside the slot's left border instead of sitting inside it.",
+        "suggestion": "Fix card positioning so the location card is fully contained within (or centered in) its slot rectangle; likely a negative margin or absolute-position offset bug.",
+        "shot": "10-runes-tapped.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "high",
+        "area": "Hover card preview — positioning",
+        "issue": "The center hover preview (Overzealous Fan) sits directly on top of the hint/status bar above the hand. Only the fragment \"…tures for energy\" is visible on the right; the left ~70% of the message is fully obscured. If this bar is where the failed-play reason appears (screenshot is 'after play attempt', board is still empty, Energy 0), the user cannot read why the play didn't happen.",
+        "suggestion": "Anchor the hover preview above the battlefield row or offset it left/right of the hovered card so it never overlaps the hand hint bar; alternatively give the hint bar a higher z-index than the preview.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "high",
+        "area": "Hover preview vs. status bar",
+        "issue": "The Overzealous Fan hover tooltip sits directly on top of the center hint/status bar — only the fragment '…tures for energy' is visible on the right edge. After a play attempt, whatever feedback or instruction that bar contains (e.g. 'Recycle runes for energy') is unreadable.",
+        "suggestion": "Anchor the hover preview above the hand row so it never overlaps the status/hint bar, or auto-hide the hover preview when a status message is being shown.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "high",
+        "area": "Right sidebar — card inspector panel",
+        "issue": "The dedicated inspector box still reads \"HOVER A CARD\" while the user is actively hovering Back-Alley Bar. The hover preview renders inline on the battlefield instead of populating this panel, so the panel appears broken/dead and the board gets occluded for no gain.",
+        "suggestion": "Route battlefield hover into the sidebar inspector (or remove the placeholder panel) so there is one hover surface.",
+        "shot": "12-bf-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "high",
+        "area": "Right sidebar — hover preview panel",
+        "issue": "The dedicated hover-preview pane in the right sidebar still shows the empty-state placeholder text \"HOVER A CARD\" even though a card (Back-Alley Bar) is actively being hovered and the inline battlefield tooltip is showing. The two hover surfaces are out of sync.",
+        "suggestion": "Ensure the same hover event that spawns the inline tooltip also populates the sidebar preview component; likely a missed state subscription or the battlefield-slot hover handler isn't dispatching to the shared hover store.",
+        "shot": "12-bf-hover.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "high",
+        "area": "Right sidebar / Game Log",
+        "issue": "This is the 'log' screen, but the game log itself is not visible — the sidebar shows Turn/Actions/Hover-preview/Toggles, and a further section header is clipped at the very bottom behind the fixed 'dev / Goldfish' player switcher. The primary content of this view is below the fold or covered.",
+        "suggestion": "Surface the game log above the fold (or give it its own always-visible panel) and ensure the fixed player-switcher bar doesn't overlap the last sidebar section — add bottom padding equal to the switcher height.",
+        "shot": "15-log.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "high",
+        "area": "Right sidebar / game log",
+        "issue": "This is the 'log' screen, but the game log itself is not visible — the sidebar is fully consumed by Available Actions, the empty 'HOVER A CARD' placeholder (~230px tall), and the Toggles block; only a truncated section header stub is visible at the very bottom edge below 'XP Counter'. The log is pushed below the fold.",
+        "suggestion": "Collapse the hover-preview placeholder when nothing is hovered (or move it to an overlay) and/or make the Actions list collapsible so the log gets first-class vertical space; alternatively give the log its own always-visible panel rather than stacking it last in a scrolling sidebar.",
+        "shot": "15-log.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "high",
+        "area": "Header / top navigation",
+        "issue": "The nav links in the top-left corner (Home / Play / Builder / …) are rendered in near-black text on the near-black background — they are effectively invisible. A user on this screen has no discoverable way to navigate back to other parts of the app.",
+        "suggestion": "Raise the inactive nav-link foreground color to meet contrast against the dark header (e.g. a mid-grey), and keep the active 'Builder' pill visibly highlighted.",
+        "shot": "16-builder.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "16-builder.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Lobby — Goldfish helper text",
+        "issue": "The caption \"Practice against a passive opponent\" under the Goldfish button is rendered in very small, low-contrast gray on the near-black background and is barely legible.",
+        "suggestion": "Increase font size to match the \"Play against another player\" label and raise contrast (lighter gray or white at reduced opacity).",
+        "shot": "02-lobby.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "02-lobby.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Lobby — content alignment",
+        "issue": "The Host/Join/Goldfish button cluster sits noticeably right-of-center and below vertical center, with a faint empty divider line trailing off to its left — looks like a two-column flex layout whose left column collapsed, leaving the actionable controls pushed off-center in a mostly empty viewport.",
+        "suggestion": "Fix the container centering (or render the missing left-side content) so the primary actions sit at true viewport center.",
+        "shot": "02-lobby.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "02-lobby.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "lobby — overall canvas",
+        "issue": "~85% of the viewport is empty black dead space. The entire lobby is three buttons and two caption lines floating mid-screen with no page heading, container card, or deck-selection affordance to anchor them.",
+        "suggestion": "Wrap the mode choices in a titled card/panel (e.g. 'Start a Game') and consider surfacing deck selection or recent-game info here to make use of the space.",
+        "shot": "02-lobby.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "02-lobby.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "lobby — mode grouping labels",
+        "issue": "Label placement is inconsistent between the two groups: 'Play against another player' sits ABOVE Host/Join, but 'Practice against a passive opponent' sits BELOW Goldfish. The two sections read as one undifferentiated stack rather than two labeled zones.",
+        "suggestion": "Put both descriptor labels in the same position relative to their buttons (both above, or both as subtitles below a section heading) and add vertical spacing or a divider between the PvP and Goldfish groups.",
+        "shot": "02-lobby.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "02-lobby.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Typography / contrast",
+        "issue": "Secondary text is nearly unreadable against the dark background — the game-mode subtitles (\"Best of 1 — random battlefields\", \"Solo vs Goldfish — no opponent needed\"), the \"Choosing deck...\" status, the GAME MODE / SELECT DECK labels, and \"3 saved decks found\" all render in a very dark grey on near-black.",
+        "suggestion": "Raise these to at least WCAG AA contrast (e.g. slate-400 instead of slate-600) so the mode descriptions and helper hints are actually legible.",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Primary action affordance",
+        "issue": "There is no visible Start/Play button. The only cue for how to proceed is the small grey line \"Select your deck to continue\", so users must infer that the dropdown is the gating control and that a CTA will (presumably) appear after selection.",
+        "suggestion": "Render a disabled \"Start Game\" primary button below the deck selector that enables once a deck is chosen, so the next step is always visible.",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Opponent slot / deck selection",
+        "issue": "The Goldfish opponent tile shows only 'Solo Opponent' and there is no second deck selector — the player cannot see (or choose) what deck the Goldfish side will use, even though goldfish mode has them piloting both sides.",
+        "suggestion": "Surface the Goldfish deck: either a second 'Opponent deck' dropdown or display the auto-selected deck name on the Goldfish tile.",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Lobby panel vertical placement",
+        "issue": "The entire lobby form floats in a sea of empty black — ~260px of dead space above the 'Game Lobby' heading and ~260px below the Back link, with no card/panel border to anchor the content. The form occupies <30% of the viewport height and has no visual container.",
+        "suggestion": "Wrap the lobby controls in a bordered/elevated card so the cluster reads as a unit, or pull it up toward the top-third and use the freed space for deck preview art.",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Row-width alignment",
+        "issue": "The 'dev vs Goldfish' player-pill row ends at roughly the same x as the Match tile, but the GAME MODE row and SELECT DECK dropdown extend ~130px further right (to the edge of the Single Player tile). The right edges of the three stacked sections don't line up, so the vs-row looks truncated relative to everything below it.",
+        "suggestion": "Stretch the two player pills to fill the same total width as the game-mode row / deck dropdown so all sections share a common right edge.",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Game Lobby — helper/subtitle text",
+        "issue": "Secondary text is nearly unreadable: game-mode subtitles (\"Best of 1 — random battlefields\", \"Solo vs Goldfish — no opponent needed\"), \"3 saved decks found\", and \"Ready! Click Start Game\" render in a very dim grey (~#555-range) at ~10px on the dark navy background, well below comfortable contrast.",
+        "suggestion": "Bump helper-text color to at least slate-400 (#94a3b8) and subtitle font-size to 12px so users can actually read the mode descriptions before choosing.",
+        "shot": "04-deck-selected.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Game Lobby — Back link",
+        "issue": "\"Back\" is a tiny, low-contrast underlined text link jammed directly beneath the \"Ready! Click Start Game\" caption. It's a ~30×14px hit target, easy to miss entirely, and sits close enough to Start Game to invite misclicks.",
+        "suggestion": "Render Back as a proper secondary button (same height as Start Game) placed to the left of Start Game, or move it to the top of the panel as a ← Back affordance.",
+        "shot": "04-deck-selected.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Game Lobby — deck selection",
+        "issue": "Only one 'SELECT DECK' dropdown is shown even though this is goldfish mode where the player pilots both sides. The Goldfish opponent's deck is neither displayed nor selectable, so the player cannot see (or choose) what deck they will be playing against/as on the other side of the table.",
+        "suggestion": "Add a second deck selector (or a read-only 'Opponent deck: …' label) under the Goldfish tile so the player knows both decklists before Start Game.",
+        "shot": "04-deck-selected.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Game Lobby — viewport",
+        "issue": "The lobby content occupies only ~30% of the viewport, with a ~240px empty black band between the top nav and the 'Game Lobby' heading and another ~240px below 'Back'. The block is neither top-anchored nor vertically centered — it floats slightly below center in dead space.",
+        "suggestion": "Vertically center the lobby panel in the viewport, or top-anchor it with consistent page padding so the empty space is symmetric.",
+        "shot": "04-deck-selected.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "GAME MODE tile row",
+        "issue": "The three mode tiles have unequal heights: 'Single Player' is taller than 'Duel' and 'Match' because its subtitle wraps to two lines ('Solo vs Goldfish — no opponent needed'), leaving the row bottom edge ragged and the selected tile visually misaligned with its siblings.",
+        "suggestion": "Give all three tiles a fixed min-height (or align-items: stretch on the flex row) so they share a common baseline regardless of subtitle wrap.",
+        "shot": "04-deck-selected.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Turn-order modal — heading",
+        "issue": "The \"DETERMINING TURN ORDER\" label is rendered in very dark gray against the near-black backdrop and is barely legible; the modal's purpose text is the hardest thing on the screen to read.",
+        "suggestion": "Raise the heading's foreground color to at least the same gray as \"Choose who goes first:\" (or brighter) so the context is readable at a glance.",
+        "shot": "05a-turn-order.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "05a-turn-order.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Turn-order choice buttons",
+        "issue": "The 'I'll go first' / 'Opponent goes first' buttons give no indication of the mechanical trade-off (e.g., first player skips a draw, second player gets +1 card). The player is asked to make a strategic decision without the information needed to evaluate it.",
+        "suggestion": "Add a subtext line under each button (or a single hint below the pair) stating the first/second-player rule, e.g., 'Second player draws an extra card'.",
+        "shot": "05a-turn-order.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "05a-turn-order.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Turn order modal — vs separator",
+        "issue": "The \"vs\" label is baseline-aligned with the bottom edge of the D/G avatar tiles instead of being vertically centered between the two player blocks, so the versus row reads lopsided.",
+        "suggestion": "Vertically center \"vs\" against the avatar tiles (or against the full avatar+name+roll column) with flex align-items:center.",
+        "shot": "05a-turn-order.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "05a-turn-order.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Turn order modal — roll values",
+        "issue": "The numbers 20 and 12 sit unlabeled directly under the player names; in a card-game UI they read as life totals rather than die rolls. Nothing on screen labels this zone as a roll result.",
+        "suggestion": "Add a small \"rolled\" caption or a die icon adjacent to each number so the zone is self-labeling.",
+        "shot": "05a-turn-order.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "05a-turn-order.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Hover preview panel (left edge)",
+        "issue": "The enlarged card preview is pinned to the far-left edge of the viewport, ~300px away from the hovered card in the center row. There is no visual connector, so the user's eye has to jump across half the screen to find the readable version of the card they're pointing at.",
+        "suggestion": "Anchor the preview adjacent to the hovered card (e.g., float it just left/right of the cursor, or use a fixed right-side inspector) so source and preview are spatially linked.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Hover detail panel (left)",
+        "issue": "The readable text panel under the enlarged card shows only 'UNIT' as the type line, dropping the region/faction tag ('NOXUS') that is printed on the card itself. Players relying on the hover panel to read the card lose synergy-relevant info they need for the keep/mulligan decision.",
+        "suggestion": "Render the full type line in the hover panel, e.g. 'UNIT · NOXUS', and include any keyword bar text so the panel is a complete substitute for squinting at the card art.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Mulligan selection state",
+        "issue": "There is no visible 'N of 2 selected' indicator. The hovered card has a highlight glow that is visually indistinguishable from a 'marked to send back' state, and the confirm button label stays 'Keep Hand' regardless — the player cannot see how many cards (if any) are currently queued to be sent back.",
+        "suggestion": "Add a '0/2 selected' counter near the instruction line and change the button label to 'Send Back 1 · Draw 1' (etc.) once a card is marked, so selection state is always readable.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Hover preview placement",
+        "issue": "The large card preview is pinned to the far-left viewport edge, separated from the hovered card (leftmost in the row) by ~200px of empty black space. There is no connector or proximity linking the preview to its source card — it reads as a stray floating element rather than a detail panel for the highlighted card.",
+        "suggestion": "Anchor the preview adjacent to the card row (e.g., immediately left of the hand with a small gap, or as a popover near the hovered card), or add a fixed labeled 'Inspector' slot so its relationship to the hovered card is spatially obvious.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Vertical dead space",
+        "issue": "Roughly 180px of empty space sits between the top nav and the 'Opening Hand' title, and a similar band sits below the Rule 117 hint. The mulligan content occupies only the middle ~50% of the viewport height, leaving the cards rendered smaller than the available space would allow.",
+        "suggestion": "Pull the title block up and enlarge the hand cards to fill more vertical space, or move the hover preview into the currently-unused top/bottom band so the real estate is put to work.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Right sidebar — onboarding tooltip",
+        "issue": "The purple 'First game? Tap the i for controls and board tips.' popover is positioned directly over the turn-context help text beneath 'Turn 1 MAIN' — you can see truncated 'You…' / 'Con…' lines bleeding out from under it, so the very text a new player needs to read is covered by the tip telling them where to find help.",
+        "suggestion": "Anchor the popover below the (i) button or offset it left so it doesn't overlap the turn description copy; or auto-dismiss it once the sidebar text is rendered.",
+        "shot": "07-board.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Top-right header button",
+        "issue": "The button beside 'Turn 1 MAIN' renders only 'Lea…' with the circular (i) badge overlapping the rest of the label — the button text is truncated/covered, so users can't tell what it does before clicking.",
+        "suggestion": "Give the button enough width for its full label + icon, or move the (i) badge to the button's left with proper gap so it doesn't sit on top of the text.",
+        "shot": "07-board.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Bottom-left player identity row",
+        "issue": "The circular 'D' player-avatar badge overlaps the FURY rune card and the adjacent 'dev · VP 0/8' label — it covers part of a clickable rune and clips the player name.",
+        "suggestion": "Reserve horizontal space for the avatar so it sits to the left of the rune cards instead of z-stacking on top of them.",
+        "shot": "07-board.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Sidebar header (top-right, next to 'Turn 1 MAIN')",
+        "issue": "The circular (i) info button is rendered directly on top of an adjacent button — only the fragment 'Lea' of that button's label is visible behind the (i). Two interactive controls are colliding/overlapping.",
+        "suggestion": "Fix the flex/absolute positioning in the turn-panel header so the info button sits beside the Leave/Learn button rather than over it.",
+        "shot": "07-board.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Opponent resource row (top-right, next to 'G Goldfish')",
+        "issue": "Opponent's available rune pool is not displayed. The dev player shows 'Runes 2/2' plus Fury/Chaos rune icons in the resource bar, but Goldfish's identity chip only reads 'VP 0/8  Resources Energy 0' — no rune count and no rune-color icons. Opponent's ready resources are public information the player needs to evaluate threats/plays.",
+        "suggestion": "Add a 'Runes X/Y' pill and rune-color icons to the opponent identity chip, mirroring the bottom resource bar.",
+        "shot": "07-board.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Right sidebar header (top of Turn panel)",
+        "issue": "The purple 'First game? Tap the i for controls and board tips.' onboarding popover overlaps and hides the sidebar's context text (only 'You…' / 'Con…' fragments are visible beneath it) and the 'Lea…' button label. Player cannot read the turn/context info until they dismiss the tip.",
+        "suggestion": "Anchor the tooltip below the (i) button or offset it so it does not cover the 'Your turn / Controls' header text.",
+        "shot": "07-board.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Battlefield zones",
+        "issue": "The Back-Alley Bar and Altar to Unity location cards overhang the left border of their battlefield zone containers by ~30px — the card art sits partly outside the rounded zone box instead of nested inside its slot.",
+        "suggestion": "Align the location card inside the left slot of its zone container (or widen the zone so the card fits fully within the border).",
+        "shot": "07-board.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Bottom-left player status",
+        "issue": "The player avatar 'D' badge and the 'dev · VP 0/8 · Resources' strip overlap the FURY and CHAOS rune tokens — the avatar circle covers the bottom-left corner of the Fury rune and the strip sits on top of the token labels.",
+        "suggestion": "Move the player identity strip below the rune row (or reserve vertical space so runes and the status bar don't stack in the same y-range).",
+        "shot": "07-board.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Card hover preview",
+        "issue": "Hovering a card renders two large previews at once — a floating inspector on the left edge AND a docked preview in the right sidebar — both showing the identical Sneaky Deckhand image and rules text. The duplication eats board real-estate and forces the eye to bounce between two sources of the same information.",
+        "suggestion": "Show a single hover preview. Either keep only the right-sidebar inspector, or suppress the sidebar preview while the floating tooltip is visible.",
+        "shot": "08-hand-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Onboarding tooltip (top-right)",
+        "issue": "The 'First game? Tap the i for controls and board tips.' popover is anchored so it overlaps the Turn 1 panel header — the descriptive lines underneath are visibly clipped to 'You…' / 'Cor…', and a label/button just left of the (i) icon is truncated to 'Le…'. The tip is blocking the very controls it is telling the user to look at.",
+        "suggestion": "Reposition the coach-mark below the (i) icon (or offset it left) so it does not cover the Turn header text or adjacent controls; alternatively auto-dismiss it once the Turn panel receives focus.",
+        "shot": "08-hand-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Card hover preview",
+        "issue": "Hovering 'Sneaky Deckhand' renders two full-size preview panels simultaneously — one floating on the left (with name/cost/might caption) and a second identical enlarged card in the right sidebar below Rewind/Redo. Same card, same art, same text, shown twice at once.",
+        "suggestion": "Render a single hover preview. If the right-sidebar panel is a pinned inspector, suppress the left floating tooltip while it's active (or vice versa) so the same card isn't duplicated on both edges of the screen.",
+        "shot": "08-hand-hover.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Turn banner (top-right sidebar)",
+        "issue": "The 'First game? Tap the i…' onboarding tooltip is positioned directly over the Turn 1 header subtext — only fragments 'You…' and 'Cor…' are visible. Player cannot read the turn/phase guidance they need on turn 1.",
+        "suggestion": "Anchor the onboarding tooltip below the (i) button or offset it so it never overlaps the turn-banner copy; add collision-avoidance with the sidebar header.",
+        "shot": "08-hand-hover.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Top-right control cluster",
+        "issue": "The button to the left of the (i) icon is truncated to 'Lea' — player cannot tell whether it is 'Leave' (destructive: exit match) or 'Learn' (tutorial). Critical label information is hidden.",
+        "suggestion": "Give the button a min-width that fits its full label, or move the (i) icon so it doesn't clip the adjacent button text.",
+        "shot": "08-hand-hover.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Hover preview",
+        "issue": "The hovered card (Sneaky Deckhand) is rendered large twice simultaneously — once as a floating panel on the left edge and again in the right-sidebar preview slot. Two ~300px-wide copies of the same card consume roughly a quarter of the horizontal viewport for redundant information.",
+        "suggestion": "Pick one preview location. Either suppress the left floating tooltip when the sidebar inspector is visible, or drop the sidebar image and keep only the floating tooltip.",
+        "shot": "08-hand-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Onboarding tooltip / Turn panel",
+        "issue": "The 'First game? Tap the i for controls…' popover is positioned directly on top of the Turn 1 panel body, covering the text beneath it (only fragments 'You…' and 'Con…' are visible). It also partially clips the 'Learn' button label to its left.",
+        "suggestion": "Anchor the tip below the (i) button so it drops into the empty board area instead of stacking over the actions panel, or auto-dismiss it once gameplay starts.",
+        "shot": "08-hand-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Deck card actions",
+        "issue": "The only labeled action on each deck card is \"Delete\". There is no visible \"Edit\", \"Open\", or \"Play\" affordance — users must guess that clicking the card/title does something, while the one explicit control is destructive.",
+        "suggestion": "Add explicit \"Edit\" and/or \"Play\" buttons to each card so the primary action is discoverable, and de-emphasize Delete relative to them.",
+        "shot": "09-decks.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Delete link contrast",
+        "issue": "The \"Delete\" text is rendered in very dark grey on the near-black card background — it is barely legible and easy to miss entirely.",
+        "suggestion": "Raise the Delete link to a readable contrast (e.g., muted red or lighter grey that meets WCAG AA), or move it behind a kebab/overflow menu if intentionally de-emphasized.",
+        "shot": "09-decks.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Deck tile — metadata row",
+        "issue": "Deck card count is not shown anywhere on the tile. Player cannot tell whether a deck is complete (e.g. 40/40) or an unfinished draft without opening each one in the Builder.",
+        "suggestion": "Add a card-count indicator (e.g. \"40 / 40\" or \"38 cards\") next to the format badge, with a warning color when below the format minimum.",
+        "shot": "09-decks.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Deck tile — champion/cover line",
+        "issue": "The deck's identity card is rendered as a raw internal set ID (\"ogn-265-298\", \"ogn-257-298\") instead of a human-readable card name or thumbnail. The player needs to know which champion the deck is built around but is shown a database key.",
+        "suggestion": "Resolve the ID to the card's display name (and ideally a small art thumbnail) on the tile; keep the set code only as a tooltip if needed at all.",
+        "shot": "09-decks.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Decks grid — horizontal container",
+        "issue": "The deck grid is locked to a ~770px centered column, leaving ~340px of dead black space on each side of a 1456px viewport. Only ~53% of horizontal space is used even though the grid has room for wider or additional columns.",
+        "suggestion": "Let the grid expand toward the viewport edges (max-width closer to 1200–1280px) or increase card width so the row doesn't float in a sea of empty margin.",
+        "shot": "09-decks.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Deck card body",
+        "issue": "Cards are compact text-only stacks (~115px tall) while ~70% of the viewport below them is empty dead space. For a card game, deck tiles show no champion art, domain color swatch, or mana/card-count summary — the abundant space isn't put to work.",
+        "suggestion": "Add a cover-art strip or domain color bar and a card-count/curve summary to each tile so cards grow vertically and become scannable at a glance.",
+        "shot": "09-decks.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Sidebar header (top-right)",
+        "issue": "The button to the left of the (i) info icon is truncated — only \"Lea\" is visible. The full label (likely \"Leave\" or \"Learn\") is unreadable, so users can't tell what the control does.",
+        "suggestion": "Widen the header row or shrink the Turn/phase pill so the button label fits, or use an icon-only button with a tooltip.",
+        "shot": "10-runes-tapped.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Onboarding tooltip (top-right)",
+        "issue": "The \"First game? Tap the i for controls and board tips\" popover is positioned directly over the turn-context text beneath \"Turn 1 · MAIN\" — only fragments (\"You…\", \"Cor…\") peek out from behind it. The tip hides the very info a first-time player would want to read.",
+        "suggestion": "Anchor the popover below-right of the (i) button (over the empty hover-preview area) instead of over the sidebar header text.",
+        "shot": "10-runes-tapped.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Resource bar / Rune Actions panel",
+        "issue": "State did not update after tapping runes: resource bar still reads 'Runes 2/2' and 'Energy 0', and the sidebar still lists 'Exhaust Rune (2 available)' / 'Recycle Rune (2 available)'. For a post-tap state, energy should be >0 and available-rune counts should have decremented — the UI shows the pre-tap values.",
+        "suggestion": "Verify the tap-rune action actually mutates and re-renders the resource/energy counters and the Rune Actions availability counts.",
+        "shot": "10-runes-tapped.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Opponent stat pill (top-right of board, 'Goldfish · VP 0/8 · Resources Energy 0')",
+        "issue": "Opponent's rune count is not shown. Player's own resource bar shows 'Runes 2/2', but the Goldfish pill only exposes Energy — the opponent's available runes (public info in a TCG) is missing, so the player can't gauge what the opponent can pay for next turn.",
+        "suggestion": "Add a 'Runes x/y' segment to the opponent stat pill, mirroring the player's resource bar.",
+        "shot": "10-runes-tapped.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Opponent board row (top half)",
+        "issue": "There is no opponent rune-pool strip at all. The player side renders FURY/CHAOS rune chips beside the avatar; the Goldfish side shows only Legend/Champion and hand. Runes in play are a public zone the player needs to see, especially when piloting both sides in goldfish mode.",
+        "suggestion": "Render the opponent's channeled rune chips in the top row, mirrored from the player layout.",
+        "shot": "10-runes-tapped.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Top-right onboarding tooltip",
+        "issue": "The purple 'First game? Tap the ℹ…' popover overlaps the Turn 1 / MAIN header row and completely covers a button that is already truncated to 'Lea…', making both unreadable/unclickable.",
+        "suggestion": "Anchor the tooltip below the ℹ button with an arrow, or shift it left so it doesn't collide with the sidebar header and the adjacent button.",
+        "shot": "10-runes-tapped.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Bottom-left player identity block",
+        "issue": "The 'D' avatar circle overlaps the FURY rune tile, and the FURY/CHAOS/VP/Resources cluster is crammed against the bottom edge of a tall box that is otherwise empty dead space above it.",
+        "suggestion": "Vertically center the rune/VP cluster in its container (or shrink the container) and give the avatar badge its own non-overlapping position (e.g., left of the rune tiles).",
+        "shot": "10-runes-tapped.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Hover card preview — adjacent hand card",
+        "issue": "The preview popover completely covers the second hand card (art, name, text, and its HIDE button). The user can't compare the hovered card against its neighbor or click that neighbor's HIDE without first moving the mouse away.",
+        "suggestion": "Shift the preview so its bottom edge clears the hand row (e.g., open upward into the empty battlefield space), or collapse it to the right-sidebar inspector only since the same enlarged card already renders there.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Onboarding tooltip — top-right panel",
+        "issue": "The purple \"First game? Tap the i for controls and board tips.\" tooltip overlaps and hides the text directly beneath the Turn 1 header (only \"You…\" / \"Cor…\" stubs are visible) and clips a label immediately left of the (i) icon. The tip is covering the very panel content it's meant to introduce.",
+        "suggestion": "Reposition the tooltip to point at the (i) button from below-left (over the empty board area) instead of on top of the sidebar copy, or auto-dismiss it once the user interacts with the board.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Onboarding tip vs. turn header",
+        "issue": "The 'First game? Tap the i for controls…' callout overlaps the turn-context text under 'Turn 1 · MAIN' (only 'You…' / 'Cor…' fragments peek out) and clips the button immediately left of the (i) icon. The player can't read the turn summary or reach that control.",
+        "suggestion": "Position the onboarding tip below the header block (or as a pointer bubble anchored to the (i) button's bottom edge) so it doesn't mask the turn text or adjacent button.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Hover preview vs. board/hand",
+        "issue": "The hover tooltip also occludes the Altar to Unity location card (its rules text is hidden) and covers the cost pip on the 2nd hand card (Serrated Dirk). While previewing one card the player loses sight of the board state and adjacent hand costs they need to decide the play.",
+        "suggestion": "Since the right-side inspector panel already shows the full Overzealous Fan card, drop the floating on-board tooltip entirely, or shrink it and offset it so it never covers location slots or neighboring hand-card cost badges.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Board center / hint bar",
+        "issue": "The card hover preview (Overzealous Fan) is anchored so it overlaps the horizontal hint/instruction strip below the battlefield — only fragments '...R' (left) and '...tures for energy' (right) are visible. The player can't read the play-guidance text while hovering the very card they're deciding whether to play.",
+        "suggestion": "Clamp the hover popup so its bottom edge stops above the hint bar, or flip it to open upward when the source card is in the hand row.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Top-right turn header",
+        "issue": "The 'First game? Tap the i for controls and board tips' onboarding popover overlaps a button (only 'Le…' is visible behind it) and covers the turn-context text lines ('You…', 'Cor…') below 'Turn 1 · MAIN'.",
+        "suggestion": "Offset the popover below the (i) button with an arrow pointing up, or shift it left so it doesn't sit on top of the header controls it's describing.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Battlefield row — hover popover",
+        "issue": "The enlarged Back-Alley Bar preview overlaps and covers ~70% of the battlefield card immediately to its right (third slot), making that neighbor unreadable and unclickable while hovering.",
+        "suggestion": "Offset the popover above/below the row or shift it away from siblings so adjacent slots stay visible and clickable.",
+        "shot": "12-bf-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Top-right onboarding tip",
+        "issue": "The purple \"First game? Tap the ℹ for controls and board tips.\" callout is positioned on top of the Turn 1 header content — it obscures the text lines beneath it and clips what appears to be a \"Lea[rn]\" button beside the ℹ icon, hiding the very controls it references.",
+        "suggestion": "Anchor the tip below/right of the ℹ icon with an arrow, outside the header text/button hitbox.",
+        "shot": "12-bf-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Battlefield hover tooltip — ability text",
+        "issue": "The rules text renders as \"give it +1 this turn.\" with no stat name or icon after \"+1\". The printed card almost certainly has an inline stat glyph (e.g. Might/Power) that is being stripped when the ability is rendered as plain text, leaving an incomplete/ambiguous sentence.",
+        "suggestion": "Render inline stat icons in the tooltip body (icon font or <img> substitution), or fall back to a text token like \"+1 Might\" when icons can't be displayed.",
+        "shot": "12-bf-hover.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Battlefield hover popover",
+        "issue": "The Back-Alley Bar hover preview renders inline and overlaps/occludes the battlefield card in the slot immediately to its right — that card's art, name, and rules text are almost fully hidden while the hover is active.",
+        "suggestion": "Offset the hover popover vertically (above/below the row) or render it in the right-side inspector instead of on top of sibling battlefield slots.",
+        "shot": "12-bf-hover.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Right-panel card inspector",
+        "issue": "A card is actively being hovered (inline preview showing on the battlefield) but the dedicated right-side inspector still reads the placeholder 'HOVER A CARD' and is empty — the player is not getting the large readable card detail the panel is meant to provide.",
+        "suggestion": "Wire battlefield-card hover events to populate the right-panel inspector, same as hand-card hover.",
+        "shot": "12-bf-hover.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Battlefield hover preview",
+        "issue": "The enlarged 'Back-Alley Bar' hover popup is positioned in-place and overlaps/obscures the adjacent battlefield card to its right (third location card is ~50% covered), making it impossible to see neighboring slots while inspecting a card.",
+        "suggestion": "Offset the hover preview above/below the row, or shift it so it never occludes sibling battlefield slots.",
+        "shot": "12-bf-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Right sidebar — card inspector",
+        "issue": "The large 'HOVER A CARD' panel in the right sidebar is still empty placeholder dead-space even though a card IS currently being hovered. Either the panel isn't wired up, or there are two competing hover-preview surfaces (inline popup + sidebar) with one wasted.",
+        "suggestion": "Populate the sidebar inspector on hover and drop the inline overlap-prone popup, or remove the sidebar panel to reclaim vertical space.",
+        "shot": "12-bf-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Top-right onboarding tooltip",
+        "issue": "The purple 'First game? Tap the i for controls…' tooltip overlaps the Turn-panel header — it covers the 'Learn' button (only 'Lea' visible) and clips the two lines of text under 'Turn 1 MAIN'.",
+        "suggestion": "Anchor the tooltip below the (i) button with an arrow, or push the Turn-panel content down while the tip is open.",
+        "shot": "12-bf-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Right sidebar header / onboarding tooltip",
+        "issue": "The purple 'First game? Tap the i for controls and board tips.' tooltip is anchored on top of the sidebar header, covering the text beneath it — only fragments ('You…', 'Con…') are visible, so whatever status/instruction lives there is unreadable until the tip is dismissed.",
+        "suggestion": "Offset the onboarding popover to the left of the (i) icon (or above the panel) so it points at the icon without overlapping the sidebar body text.",
+        "shot": "14-turn3.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Top-right sidebar button row",
+        "issue": "The button to the left of the round (i) icon is clipped — only 'Le…' is rendered — so the user cannot tell what the control does (likely 'Leave'/'Learn').",
+        "suggestion": "Give the header button row enough width (or shrink the Turn/MAIN pill) so the full label renders; at minimum add a tooltip on the truncated button.",
+        "shot": "14-turn3.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Bottom-left player identity / rune tiles",
+        "issue": "The circular 'D' player-avatar badge overlaps the FURY rune tile, sitting on top of its icon and label. This both obscures the rune and creates a misclick target where tapping the rune may hit the avatar instead.",
+        "suggestion": "Move the avatar badge outside the rune tile bounds (e.g., dock it to the far-left edge of the footer or above the FURY/CHAOS row).",
+        "shot": "14-turn3.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Legend/Champion slots (both players)",
+        "issue": "Goldfish (top) and dev (bottom) render the exact same Legend and Champion cards — identical art, frame, and cost badge. Looks like the opponent's Legend/Champion slot is duplicating the active player's cards rather than showing Goldfish's own, unless a mirror deck is guaranteed in this fixture.",
+        "suggestion": "Verify the opponent Legend/Champion slots bind to the Goldfish player's deck data, not the local player's.",
+        "shot": "14-turn3.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Right sidebar / onboarding tip",
+        "issue": "The purple \"First game? Tap the i for controls and board tips\" popover overlaps and hides the text lines directly under the \"Turn 5 · MAIN\" header (lines beginning \"Your…\", \"Cor…\", and a truncated button \"Le…\"). Info the player needs is obscured until the tip is dismissed.",
+        "suggestion": "Anchor the tip to the (i) button with an arrow and offset it so it does not cover the turn-status text, or render it below AVAILABLE ACTIONS.",
+        "shot": "14-turn3.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Opponent (Goldfish) info strip",
+        "issue": "Goldfish's summary shows only \"VP 0/8 · Resources Energy 0\" — no rune count and no domain pips, whereas the active player has a \"Runes 2/2\" resource bar plus FURY/CHAOS domain badges. In goldfish mode you play both sides, so the opponent's available runes/domains are needed but missing.",
+        "suggestion": "Mirror the resource bar and domain badges for the top seat (e.g., \"Runes X/Y\" chip and domain pips next to the Goldfish avatar).",
+        "shot": "14-turn3.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Right sidebar — top",
+        "issue": "The purple 'First game? Tap the i…' onboarding tooltip is positioned on top of the sidebar header, covering the text row beneath 'Turn 5 MAIN' and clipping a button (only 'Le…' is visible behind it).",
+        "suggestion": "Anchor the tooltip below the (i) button with an arrow, or offset it left of the sidebar so it doesn't obscure the actions header content it's meant to introduce.",
+        "shot": "14-turn3.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Battlefield — location zones",
+        "issue": "Each location card (Back-Alley Bar, Altar to Unity) is rendered straddling the vertical divider between the two drop slots inside its zone — the card overlaps the slot boundary rather than sitting inside one slot, so the slot layout reads as broken.",
+        "suggestion": "Dock the location card into the left slot (or a dedicated header area) and keep the divider clear so the two unit slots remain visually distinct.",
+        "shot": "14-turn3.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Player board — row below Legend/Champion",
+        "issue": "There is a full-width empty strip between the player's Legend/Champion row and the Resources bar with only a small '+' button floating at the far right and no label. It reads as dead space; players can't tell what zone it is or what the '+' adds.",
+        "suggestion": "Add a zone label (e.g. 'Battlefield' / 'Units') and placeholder outlines, or collapse the row until it has content.",
+        "shot": "14-turn3.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Top-right onboarding tooltip",
+        "issue": "The purple 'First game? Tap the i for controls and board tips.' popover is positioned directly over sidebar text (only 'You…' / 'Con…' are visible behind it) and also overlaps/truncates the button beside the (i) icon to 'Le…'.",
+        "suggestion": "Anchor the tooltip below or to the left of the (i) button with an arrow, so it doesn't cover the sidebar copy or clip the adjacent 'Learn' button label.",
+        "shot": "15-log.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Bottom-left player identity",
+        "issue": "The circular 'D' player-avatar badge overlaps the FURY rune tile, covering part of its icon/label — the rune is a clickable resource and is partially obscured by a non-interactive decoration.",
+        "suggestion": "Move the avatar badge to the left of the rune row (or shrink it / dock it to the VP/Resources strip) so both rune tiles remain fully visible and clickable.",
+        "shot": "15-log.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Right panel — top",
+        "issue": "The purple 'First game? Tap the i…' onboarding tooltip overlaps and hides the turn-summary/log text beneath it (only fragments 'You…' / 'Con…' peek out), so the player cannot read the log entries the panel is meant to show.",
+        "suggestion": "Anchor the tooltip below/left of the ⓘ badge (or auto-dismiss on first hover) so it never covers the log text block.",
+        "shot": "15-log.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Right sidebar — bottom",
+        "issue": "On the 'log' screen the sidebar is filled by Actions + Toggles and cuts off just after 'XP Counter'; the game-log section itself is pushed below the viewport with no visible scroll affordance, so the player can't actually see the log.",
+        "suggestion": "Give the log its own scroll region pinned above the fold (or collapse Actions/Toggles) so log entries are always visible without scrolling the whole sidebar.",
+        "shot": "15-log.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Top-right onboarding tooltip",
+        "issue": "The purple 'First game? Tap the i for controls...' callout is positioned on top of the sidebar header, covering a button (only 'Le…' is visible) and the two lines of intro text beneath 'Turn 5 MAIN'.",
+        "suggestion": "Anchor the tooltip below or to the left of the (i) button with an arrow, outside the sidebar column, so it doesn't obscure the content it's introducing.",
+        "shot": "15-log.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Bottom-left player identity strip",
+        "issue": "The circular 'D' avatar badge overlaps the corner of the FURY rune tile, and the 'VP 0/8 · Resources Energy 0' label is squeezed against the bottom viewport edge with almost no padding — the whole player-identity row feels crammed under the rune tiles instead of aligned with them.",
+        "suggestion": "Move the avatar + name + VP/Resources into their own row above or beside the rune tiles (mirroring the opponent's 'Goldfish · VP · Resources' pill layout at top-right) so nothing overlaps.",
+        "shot": "15-log.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Legend grid — card ability text",
+        "issue": "The legend's rules/ability text is only shown as the tiny print baked into the card art, which is illegible at this tile size. The tile caption repeats only the name and domains, so comparing legends requires hovering every single card to read what it actually does.",
+        "suggestion": "Add a one-line ability summary under the name/domain pills in each tile, or increase tile size enough that the on-card text box is readable without hover.",
+        "shot": "16-builder.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "16-builder.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Builder — top navigation bar",
+        "issue": "The top-left nav tabs are rendered in near-black text on the near-black background, making the labels effectively invisible. Only a faint outline of the active tab is discernible; the other tab labels cannot be read at all.",
+        "suggestion": "Check the nav link color token — it appears to be resolving to the dark-theme background color instead of a foreground color. Labels should be light gray/white on this background.",
+        "shot": "16-builder.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "16-builder.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Legend card tile",
+        "issue": "Each legend name is rendered three times: on the card art itself, as a large semi-transparent overlay banner across the card's lower third, and again as a caption below the tile. The overlay banner sits directly on top of the card's printed rules-text box, occluding the ability text the user needs to compare legends.",
+        "suggestion": "Drop the overlay title banner — the caption + domain pills below the tile already label it, and removing the banner un-obscures the card's rules text.",
+        "shot": "16-builder.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "16-builder.png"
+        ]
+      },
+      {
+        "severity": "medium",
+        "area": "Top navigation bar",
+        "issue": "Nav tabs in the top-left corner are rendered dark-grey on near-black and are almost invisible; the entire top strip reads as empty dead space until you squint.",
+        "suggestion": "Raise nav link contrast or add a subtle top-bar background so the zone reads as navigation rather than unused space.",
+        "shot": "16-builder.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "16-builder.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Lobby — label/button grouping",
+        "issue": "Label placement is inconsistent: \"Play against another player\" appears above its Host/Join buttons, but the Goldfish description appears below its button. Scanning top-down, a user may read \"Goldfish\" as belonging to the multiplayer group above it rather than the caption beneath it.",
+        "suggestion": "Put both section labels above their buttons (or add visible spacing/divider between the multiplayer group and the Goldfish group).",
+        "shot": "02-lobby.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "02-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Lobby — center panel",
+        "issue": "A stray horizontal divider line renders only on the left side of the Host/Join button row (roughly from x≈490 to the left edge of the Host Game button) and abruptly stops — it has no right-side counterpart and doesn't align with any container edge, so it reads as a broken/clipped <hr> or leaked border artifact rather than an intentional separator.",
+        "suggestion": "Either remove the orphaned rule or make it a full-width separator between the multiplayer (Host/Join) and Goldfish sections.",
+        "shot": "02-lobby.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "02-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Lobby / pre-game",
+        "issue": "No deck indicator or selector is shown before Host/Join/Goldfish — the player cannot see which deck they are about to queue with, which is information they need before starting a match.",
+        "suggestion": "Surface the currently-selected deck (name + thumbnail) near the Host/Join/Goldfish buttons, or force a deck-pick step so the player can confirm what they're bringing.",
+        "shot": "02-lobby.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "02-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "lobby — Goldfish button",
+        "issue": "Goldfish button is visibly shorter and narrower than Host Game / Join Game and is left-aligned beneath them, leaving a ragged empty gap to its right. It reads as a disabled/tertiary control rather than a peer play mode.",
+        "suggestion": "Match Goldfish to the Host/Join button height and either span it full-width under the pair or center it.",
+        "shot": "02-lobby.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "02-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "lobby — stray separator",
+        "issue": "A faint horizontal rule fragment is visible immediately to the left of the Host Game button (roughly x≈490–610, at the button row's top edge). It doesn't extend under or past the buttons and isn't separating anything — looks like a leaked container border or clipped <hr>.",
+        "suggestion": "Remove the orphan rule, or if it's meant to divide the header label from the buttons, extend it to the full container width.",
+        "shot": "02-lobby.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "02-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Game-mode tile states",
+        "issue": "The unselected \"Duel\" and \"Match\" tiles use the same dark-fill treatment as the inert player pills above them, so it's unclear whether they are clickable alternatives or disabled in goldfish mode.",
+        "suggestion": "Give unselected-but-clickable tiles a distinct hover/border treatment, and if Duel/Match are actually disabled here, dim them and add a lock/tooltip explaining why.",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Back navigation",
+        "issue": "\"Back\" is a tiny underlined text link tucked directly under the instruction copy — small hit target, low visual weight, easy to miss as the exit path.",
+        "suggestion": "Promote it to a proper secondary button (or a ‹ Back button aligned with the Game Lobby heading) with a larger click area.",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Lobby — deck selector helper text",
+        "issue": "Typo in the saved-decks count line: reads \"3 saved decks faund\" instead of \"found\".",
+        "suggestion": "Fix the string literal: \"faund\" → \"found\".",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Top-right header",
+        "issue": "Full account email (dev@riftbound.local) is rendered in the persistent nav bar; this leaks PII any time the lobby/board is streamed or screenshotted.",
+        "suggestion": "Show display name or truncated identity in the header; move full email behind a profile menu.",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Game-mode tile text fit",
+        "issue": "The 'Single Player' tile subtitle ('Solo vs Goldfish — no opponent needed') wraps to two lines and sits flush against the tile's bottom border, while Duel and Match have single-line subtitles with comfortable padding — the selected tile looks cramped next to its siblings.",
+        "suggestion": "Either shorten the copy ('Solo — no opponent'), widen all three tiles equally, or increase tile height so two-line subtitles have the same breathing room.",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Back link / footer placement",
+        "issue": "The underlined 'Back' link sits ~16px directly under 'Select your deck to continue' with no divider or spacing break, so it visually reads as another line of the deck-selection helper text rather than a navigation control.",
+        "suggestion": "Add vertical separation (or move Back to the top-left of the panel next to the heading) so it's clearly distinct from the form's inline status text.",
+        "shot": "03-goldfish-lobby.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "03-goldfish-lobby.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Game Lobby — vertical placement",
+        "issue": "The lobby panel starts ~250px down the viewport with a large dead band above it, so the Start Game button and Back link sit in the lower half. On shorter windows the primary CTA will land near or below the fold even though the page is otherwise empty.",
+        "suggestion": "Vertically center the panel in the viewport (or top-align with reasonable padding) so the CTA stays above the fold.",
+        "shot": "04-deck-selected.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Game Lobby — primary CTA styling",
+        "issue": "\"Start Game\" uses the same muted slate fill/border as the unselected mode cards and nav pills, so nothing on the page signals it as the primary action — the eye has to hunt for what to click next.",
+        "suggestion": "Give Start Game an accent background (e.g., the same purple used for the selected \"Single Player\" / \"Play\" highlight) so the ready-state CTA is visually distinct from neutral controls.",
+        "shot": "04-deck-selected.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Game Lobby — deck selection",
+        "issue": "Selected deck is shown only as a name ('Fury/Chaos Starter Deck') with no card count, color/legend summary, or preview. Player cannot confirm the deck's contents or legality before committing to Start Game.",
+        "suggestion": "Show a compact deck summary (e.g., '40 cards · Fury/Chaos · Legal') next to the dropdown, and/or a hover/expand to preview the list.",
+        "shot": "04-deck-selected.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Game Lobby — game mode card",
+        "issue": "The 'Single Player' card subtitle omits battlefield info that the sibling modes expose ('random battlefields' / 'choose battlefields'). Player has no way to see which battlefield goldfish mode will use before starting.",
+        "suggestion": "Append the battlefield rule to the Single Player subtitle (e.g., 'Solo vs Goldfish — choose battlefield') or surface a battlefield picker.",
+        "shot": "04-deck-selected.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Lobby form container",
+        "issue": "There is no visible card/panel boundary around the lobby — the vs-row, GAME MODE, SELECT DECK, and Start Game sections sit directly on the page background separated only by tiny small-caps labels, so the form reads as loose elements floating in black rather than a bounded zone.",
+        "suggestion": "Wrap the lobby in a subtle bordered/elevated card so the form has a defined edge against the empty background.",
+        "shot": "04-deck-selected.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "CTA / footer row",
+        "issue": "'Start Game', the 'Ready! Click Start Game' helper text, and the 'Back' link are stacked with near-zero vertical gap in a narrow left column — 'Back' visually merges into the status text and is easy to miss, while the right half of that row is empty dead space.",
+        "suggestion": "Add spacing above 'Back' (or move it to the opposite side of 'Start Game' as a secondary action) so the CTA row uses the full available width and the two actions are distinguishable.",
+        "shot": "04-deck-selected.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "04-deck-selected.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Turn-order modal — action buttons",
+        "issue": "Both choice buttons are outline-only on a dark background: \"I'll go first\" is a thin green stroke and \"Opponent goes first\" is dark-gray-on-dark. Neither reads as an obvious primary CTA, and the secondary option's border/text contrast is weak.",
+        "suggestion": "Give the recommended/default option a solid fill (e.g. filled green) and lighten the secondary button's border+text so it clearly reads as clickable.",
+        "shot": "05a-turn-order.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "05a-turn-order.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Turn-order modal — exit affordance",
+        "issue": "There is no close/X or \"Back to menu\" control on the overlay. A user who entered goldfish mode by mistake has no visible way to abort without first committing to a turn-order choice.",
+        "suggestion": "Add a small close (×) or \"Cancel\" link in a corner of the modal that returns to the Play/deck-select screen.",
+        "shot": "05a-turn-order.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "05a-turn-order.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Modal overlay vs. player hand",
+        "issue": "Card silhouettes are faintly rendered in the bottom row (player's own hand) but the dark modal overlay dims them to unreadable. If the opening hand is already dealt at this step, the player cannot consult their own cards while deciding turn order — info they're entitled to is effectively hidden.",
+        "suggestion": "Either keep the player's hand fully visible/bright below the turn-order panel, or don't render hand cards at all until after the choice, so it's clear the hand hasn't been dealt yet.",
+        "shot": "05a-turn-order.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "05a-turn-order.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Turn order modal — container",
+        "issue": "The dialog content floats directly on the dimmed backdrop with no visible panel border/background — only a faint horizontal rule under the rolls. The dialog boundary is undefined, so the heading and buttons appear to hover in dead space rather than belong to one grouped surface.",
+        "suggestion": "Wrap the content in a bordered/rounded panel (subtle bg + 1px border) so the modal reads as a single contained unit over the dimmed board.",
+        "shot": "05a-turn-order.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "05a-turn-order.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Turn order modal — vertical rhythm",
+        "issue": "~200px of empty black sits above the \"DETERMINING TURN ORDER\" heading and another ~200px below the buttons; the actual content uses under a third of the viewport height, leaving large dead bands top and bottom.",
+        "suggestion": "Either shrink to a compact centered card (letting more of the board show through) or enlarge the roll visualization to fill the allocated space.",
+        "shot": "05a-turn-order.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "05a-turn-order.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Opening Hand subtitle copy",
+        "issue": "Instruction reads 'tap up to 2 cards to send back' but the interaction shown is mouse hover — mobile 'tap' language on a desktop/mouse surface can make users unsure whether a click toggles selection.",
+        "suggestion": "Use input-neutral or platform-appropriate wording, e.g. 'Click up to 2 cards to send back' or 'Select up to 2 cards…'.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Rule 117 helper text (below Keep Hand)",
+        "issue": "'Selected cards are recycled to the bottom of your deck… (Rule 117)' is rendered in a very muted grey on near-black — the one line that explains what mulligan actually does is the hardest text on the screen to read.",
+        "suggestion": "Bump contrast to at least WCAG AA (~#9aa vs current), or move the explanation into a higher-contrast info style.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Top navigation / account header",
+        "issue": "The 'Decks' / 'Builder' nav links and the account email + Logout in the top-right are almost invisible (extremely low-contrast grey on #0a0a12). A user wanting to back out of Play to the Builder can't easily see those targets.",
+        "suggestion": "Raise inactive nav link contrast, or if the mulligan is meant to be modal, add a visible scrim so it's clear the header is intentionally disabled.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Goldfish-mode opponent hand",
+        "issue": "This is sandbox mode where the user plays both seats, but only the 'You go first' seat's opening hand is shown. The second seat's opening hand is not visible or previewable here, so the user can't make an informed mulligan for seat 1 with knowledge of seat 2 (which full-info goldfish normally allows).",
+        "suggestion": "Show a collapsed/peekable strip of the opponent seat's dealt hand during mulligan in goldfish mode, or a 'View P2 hand' toggle.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Preview panel alignment",
+        "issue": "The hover preview panel's top edge starts ~90px lower than the top of the card row and extends well below it, so the left column appears to sag relative to the centered hand instead of sitting alongside it.",
+        "suggestion": "Vertically center the preview panel on the card row (or top-align it with the row) so the two zones read as one horizontal band.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Redundant instruction copy",
+        "issue": "Two near-identical instruction lines bracket the card row ('tap up to 2 cards to send back' above, 'Select 0-2 cards to send back, then confirm' below), spending vertical space on duplicate guidance.",
+        "suggestion": "Collapse to a single instruction line above the cards; keep only the Rule 117 fine print below the button.",
+        "shot": "06b-mulligan-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "06b-mulligan-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Right sidebar — Toggles / bottom",
+        "issue": "The Toggles list is clipped: below 'XP Counter' another section header is cut off by the fixed dev/Goldfish seat-switcher bar, with no visible scrollbar or fade to signal more content exists.",
+        "suggestion": "Add bottom padding equal to the seat-switcher height (or make the sidebar a scroll container with an overflow indicator) so the last toggle/section is fully reachable.",
+        "shot": "07-board.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Onboarding tooltip (purple 'First game? Tap the i…' callout)",
+        "issue": "The tooltip overlays sidebar body text rather than pushing it down — truncated fragments 'You' and 'Con' bleed out at its left edge, indicating real content is hidden underneath instead of reflowed.",
+        "suggestion": "Either render the callout as an in-flow banner that pushes the action list down, or anchor it so it doesn't cover the turn-summary text.",
+        "shot": "07-board.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Board zones (both players)",
+        "issue": "No discard/graveyard/trash zone is rendered for either player. Discard contents are normally public information in a TCG; there is nowhere on the board to inspect what has been played or milled.",
+        "suggestion": "Add a discard-pile slot next to each player's Main/Rune deck tiles (even if empty on Turn 1, the labeled slot should exist).",
+        "shot": "07-board.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Top-right onboarding tooltip",
+        "issue": "The purple 'First game? Tap the i…' tooltip is positioned over the Turn panel header — it obscures the 'Learn'/info button it points at and clips the two lines of text beneath 'Turn 1 MAIN' (only 'You…' / 'Con…' are visible).",
+        "suggestion": "Anchor the tooltip to the left of the (i) button with an arrow, outside the sidebar column, so it doesn't cover the content it's introducing.",
+        "shot": "07-board.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Player-side zone labeling",
+        "issue": "The empty bordered box between the player's LEGEND/CHAMPION row and the FURY/CHAOS runes has no label — every other zone (hand, battlefield slots, deck counts, runes) is labeled, so this reads as dead space rather than a drop target.",
+        "suggestion": "Add a dimmed zone label (e.g. 'BASE' or whatever the zone is) as placeholder text inside the empty container.",
+        "shot": "07-board.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "07-board.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Player identity / rune row (bottom-left)",
+        "issue": "The circular 'D' player-avatar badge is drawn on top of the FURY rune tile, covering part of a clickable resource, and the adjacent player-name label is clipped (only a fragment of 'dev' is visible). Users may mis-click the rune or not recognise which seat they control.",
+        "suggestion": "Move the avatar+name row below or to the left of the rune tiles (or shrink the badge) so the FURY/CHAOS runes remain fully visible and tappable and the player name renders in full.",
+        "shot": "08-hand-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Player rune zone (bottom-left)",
+        "issue": "The 'D' player-avatar badge overlaps the FURY rune card, covering part of the card face and its label text. Player's own rune identity — needed for the 'Recycle/Exhaust Rune' actions in the sidebar — is partially obscured.",
+        "suggestion": "Move the avatar badge to the left of the rune row (outside the card bounds) or shrink it so it sits in the card corner without covering art/label.",
+        "shot": "08-hand-hover.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Hover preview vs Legend/Champion slot",
+        "issue": "The bottom of the left-side hover panel (card text + Cost/Might line) runs right up against the LEGEND / CHAMPION zone header — there is essentially zero gutter, and the panel visually overlaps the top border of that zone.",
+        "suggestion": "Cap the hover panel's max-height or shift it upward so at least 12–16px of clearance remains above the Legend/Champion row.",
+        "shot": "08-hand-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Opponent identity chip",
+        "issue": "The 'G · Goldfish · VP 0/8 · Resources Energy 0' chip floats alone in dead space ~200px to the right of the opponent hand, with no enclosing frame or zone label tying it to the top board half.",
+        "suggestion": "Dock the opponent nameplate against the opponent hand (right edge) or give the whole opponent row a subtle bordered container so the chip reads as part of that zone.",
+        "shot": "08-hand-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "08-hand-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Card metadata text",
+        "issue": "Secondary metadata — the \"duel\" format label and the \"8/4/2026\" date — uses the same very-dark grey and is hard to read against the card background.",
+        "suggestion": "Bump secondary text to a lighter grey (e.g., slate-400 range) so it's readable without competing with the title.",
+        "shot": "09-decks.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Deck identifier line",
+        "issue": "\"ogn-265-298\" appears unlabeled beneath each deck name; it's unclear whether this is a set code, share code, or something clickable/copyable.",
+        "suggestion": "Prefix with a label (e.g., \"Legend:\" or \"Code:\") or render it as a copy-to-clipboard chip so its purpose and interactivity are clear.",
+        "shot": "09-decks.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Deck tile — status",
+        "issue": "No legality/playability indicator. All three decks look identical, so the player cannot distinguish a deck that is legal for 'duel' from one that would be rejected when they hit Play.",
+        "suggestion": "Show a small \"Valid\" / \"Invalid for duel\" badge (or disable/annotate the Play path) so the player knows before leaving this screen.",
+        "shot": "09-decks.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Deck card metadata row",
+        "issue": "The 'ogn-265-298' line under each title is an unlabeled bare string — it's unclear whether it's a deck code, set range, or legend card ID. The zone has no label or icon.",
+        "suggestion": "Prefix with a label or icon (e.g., 'Legend: OGN-265' or 'Code:') or move it into a tooltip if it's a share/import code.",
+        "shot": "09-decks.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Deck card footer",
+        "issue": "The card footer places the date (metadata) and 'Delete' (destructive action) on the same baseline with identical weight and no separator, so the row reads as one metadata zone. There's no visible primary action (Play/Edit) occupying the obvious action slot.",
+        "suggestion": "Split the footer into a left metadata cluster and a right action cluster; surface Play/Edit as the primary action and tuck Delete into an overflow menu.",
+        "shot": "09-decks.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "09-decks.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Player identity / rune row (bottom-left)",
+        "issue": "The circular \"D\" player-avatar badge overlaps the bottom-left corner of the FURY rune card. If runes are click-to-tap (the resource bar hints \"Tap runes for energy\"), the avatar sits on part of that click target.",
+        "suggestion": "Shift the avatar badge left/down so it clears the rune cards, or move the VP/Resources strip below the rune row instead of overlaying it.",
+        "shot": "10-runes-tapped.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Sidebar TOGGLES section",
+        "issue": "The description lines under each toggle (\"Pause client auto-advance at the start of each turn\", \"Automatically score at end of turn while holding a battlefield\", \"Show an XP counter for leveled formats\") render in very small, low-contrast grey on the dark background and are barely legible.",
+        "suggestion": "Bump the helper-text color up a contrast tier (e.g., the same grey used for ACTIONS/TURN ACTIONS section labels) or increase font size by 1–2px.",
+        "shot": "10-runes-tapped.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Top-right onboarding tooltip",
+        "issue": "The purple 'First game? Tap the i for controls…' popover overlaps and hides UI beneath it — the adjacent button label is clipped to 'Lea…' and two lines of panel text underneath are truncated to 'You…' / 'Cor…'.",
+        "suggestion": "Anchor the tooltip so it does not cover the Learn button or the turn-panel text, or add a backdrop/offset so no interactive labels are obscured.",
+        "shot": "10-runes-tapped.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Bottom-left player identity cluster",
+        "issue": "The circular 'D' player-avatar badge is rendered directly on top of the FURY rune icon, covering roughly half of it.",
+        "suggestion": "Offset the avatar badge or the rune-type icons so they do not collide.",
+        "shot": "10-runes-tapped.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Right sidebar header, under 'Turn 1 · MAIN'",
+        "issue": "The purple 'First game? Tap the i for controls and board tips.' onboarding popover overlaps and hides the two context lines beneath the turn header (only 'You…' / 'Con…' fragments are visible), so the player can't read the current turn/context summary.",
+        "suggestion": "Anchor the popover below the (i) icon with an upward caret so it floats over empty board space instead of covering sidebar text.",
+        "shot": "10-runes-tapped.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Right sidebar top-right, button beside the (i) badge",
+        "issue": "A control label is truncated to 'Lea…' behind the info badge — the player can't tell what the button does (Leave? Learn?).",
+        "suggestion": "Give the button min-width to fit its label, or move the (i) badge so it doesn't overlap the button text.",
+        "shot": "10-runes-tapped.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Player board row (Legend/Champion strip)",
+        "issue": "The player's Legend/Champion tiles float alone at far left with ~1000px of empty space to their right up to the tiny '+' button — the row has no zone label and reads as unused dead space.",
+        "suggestion": "Add a zone label (e.g., 'BOARD' or 'UNITS') and either center content or show placeholder drop targets so the strip reads as an intentional play area rather than a gap.",
+        "shot": "10-runes-tapped.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "10-runes-tapped.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Hover card preview — battlefield overlap",
+        "issue": "The preview also overlaps the left half of the Altar to Unity location card, hiding that slot's art/text while a hand card is hovered. Makes it harder to evaluate where to play the hovered unit.",
+        "suggestion": "Constrain the preview to the vertical dead space between the phase tracker and the location row, or shrink it ~15% so it fits without clipping battlefield slots.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Top-right header / onboarding popover",
+        "issue": "The 'First game? Tap the i…' popover overlaps the button immediately left of the (i) icon, leaving its label truncated to just 'Le' — the button text is visibly cut off.",
+        "suggestion": "Anchor the popover so it does not overlap sibling header controls, or add right padding/offset so the full button label ('Learn'?) remains visible.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Card preview / right inspector",
+        "issue": "The hovered card (Overzealous Fan) is rendered enlarged twice at the same time — once as the floating hover preview in the center and again in the right-sidebar inspector panel — a redundant duplicate of the same element.",
+        "suggestion": "Suppress the floating hover preview when the same card is already pinned in the inspector (or vice-versa) so only one enlarged instance is shown.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Opponent resource visibility (goldfish)",
+        "issue": "The player's own rune pool shows a FURY/CHAOS color breakdown (bottom-left), but the Goldfish opponent row only shows 'Resources Energy 0' with no rune-color pool. In goldfish mode you play both sides, so the opponent's rune-color breakdown is information you need but can't see.",
+        "suggestion": "Mirror the FURY/CHAOS rune-pool widget on the opponent side when in goldfish/sandbox mode.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Player board row (between Legend/Champion and hand)",
+        "issue": "A full-width empty dark strip sits between the player's Legend/Champion slots and the hand, with only a tiny '+' button floating at the far right edge. The zone has no label, so it reads as dead space rather than a drop target (bench/units row).",
+        "suggestion": "Add a faint zone label (e.g. 'UNITS' / 'BENCH') and/or a dashed drop-outline when empty so the space reads as intentional.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Bottom-left player identity cluster",
+        "issue": "The circular 'D' player avatar badge overlaps the red FURY resource pill, and the whole cluster (avatar, FURY/CHAOS pills, VP 0/8, Resources) is squeezed under an empty card-slot frame with no vertical breathing room.",
+        "suggestion": "Move the avatar to the left of the pills (not on top) and add a few px of gap between the empty slot frame above and the identity row.",
+        "shot": "11-after-play-attempt.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "11-after-play-attempt.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Right sidebar — TOGGLES descriptions",
+        "issue": "Helper copy under the toggles (\"Automatically score at end of turn while holding a battlefield\", \"Show an XP counter for leveled formats\") is rendered in very low-contrast gray on the dark background and is barely legible.",
+        "suggestion": "Raise the description text color to meet ~4.5:1 contrast.",
+        "shot": "12-bf-hover.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Bottom-left player panel (above FURY/CHAOS rune icons)",
+        "issue": "There is a bordered rectangle above the two rune-type tiles that renders completely empty — no art, no label, no placeholder text. It reads as a broken/unloaded image rather than an intentional empty zone.",
+        "suggestion": "If this is the player avatar/deck-back slot, verify the asset path; if it's an intentionally-empty zone, add a faint label (e.g. \"Discard\") so it doesn't look like a rendering failure.",
+        "shot": "12-bf-hover.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Onboarding tooltip (top-right)",
+        "issue": "The purple 'First game? Tap the i for controls and board tips.' callout is positioned over the Turn panel header and clips the context text beneath it (partial 'You…' / 'Cor…' visible behind the bubble), hiding turn/phase context the player needs.",
+        "suggestion": "Anchor the tooltip below the (i) button or add margin so it doesn't overlap the turn-summary text; or auto-dismiss it once the game reaches MAIN phase.",
+        "shot": "12-bf-hover.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Opponent identity strip",
+        "issue": "The local player (dev) shows FURY / CHAOS domain badges next to their avatar, but the opponent (Goldfish) strip shows only VP and Energy — no equivalent domain/rune-affinity badges. If domain is public information, it is asymmetrically missing on the opponent side.",
+        "suggestion": "Render the same domain badge chips next to the opponent avatar/identity strip.",
+        "shot": "12-bf-hover.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Player board row (below lower Legend/Champion)",
+        "issue": "The wide horizontal strip between the player's Legend/Champion cards and the Resources bar is an unlabeled empty zone with only a tiny floating '+' at far right — it reads as dead space with no indication of what belongs there.",
+        "suggestion": "Add a faint zone label (e.g. 'Units' / 'Your Board') and/or a ghosted drop-target outline so the empty state communicates purpose.",
+        "shot": "12-bf-hover.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "12-bf-hover.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Right sidebar TOGGLES section",
+        "issue": "The helper text under each toggle ('Pause client auto-advance at the start of each turn', 'Automatically score at end of turn while building…', 'Show an XP counter for leveled formats') is rendered in very small, low-contrast grey on the dark background — effectively unreadable at 1× zoom.",
+        "suggestion": "Bump the description text to at least 12px and raise contrast (e.g., slate-300 instead of slate-500), or move descriptions into a hover tooltip on the toggle label.",
+        "shot": "14-turn3.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Top-right onboarding tooltip",
+        "issue": "The 'First game? Tap the i for controls and board tips.' popover overlaps and obscures another control beneath it (a button with truncated 'Le…' label and two lines of clipped text are visible poking out from behind the tooltip). It is also still showing at Turn 5.",
+        "suggestion": "Reposition the tooltip so it does not cover the adjacent button, or auto-dismiss it after the first turn.",
+        "shot": "14-turn3.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Bottom-left dev identity panel",
+        "issue": "An empty rounded card frame sits above the FURY/CHAOS domain badges with no image, icon, or label — reads as a missing/unpopulated asset rather than an intentional empty slot.",
+        "suggestion": "Confirm whether this slot should show content (e.g., avatar or emblem); if intentionally empty, add a placeholder label so it doesn't look like a broken image.",
+        "shot": "14-turn3.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Resources bar / rune pool",
+        "issue": "The rune pool is shown only as an aggregate \"Runes 2/2\" chip; the actual rune card faces are not rendered anywhere. \"Recycle Rune (2 available)\" is an offered action, but the player cannot see which specific runes would be recycled.",
+        "suggestion": "Render the rune cards (or at least their names/domains) in a rune-pool row, or make the Runes chip expandable to reveal the individual runes.",
+        "shot": "14-turn3.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Bottom-left player identity",
+        "issue": "The circular 'D' player avatar badge overlaps the FURY domain tile, covering its bottom-left corner and part of its label.",
+        "suggestion": "Shift the avatar badge to sit left of the domain tiles (or below them) instead of overlapping the first tile.",
+        "shot": "14-turn3.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "14-turn3.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Toggles section (right sidebar)",
+        "issue": "Toggle helper text ('Pause client auto-advance at the start of each turn', 'Automatically score at end of turn…', 'Show an XP counter…') is rendered in very small, low-contrast gray on the dark background — difficult to read at normal viewing distance.",
+        "suggestion": "Increase font size to at least 12px and raise contrast (e.g., gray-300 instead of gray-500) for the toggle descriptions.",
+        "shot": "15-log.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Right sidebar header (next to ⓘ button)",
+        "issue": "A button/label immediately left of the ⓘ info icon is truncated — only \"Le…\" is visible, and the purple onboarding tooltip further covers it. The control's label text is not fully rendered.",
+        "suggestion": "Ensure the header button has enough width (or shrinks the tooltip anchor) so its full label renders; verify at this viewport width.",
+        "shot": "15-log.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Bottom-left player identity strip",
+        "issue": "The circular \"D\" avatar is rendered on top of the FURY domain badge and the player name label, leaving the name partially hidden and the badge clipped — overlapping elements rather than a clean layout.",
+        "suggestion": "Offset the avatar or add left padding to the domain/name row so avatar, domain badges, and name don't stack.",
+        "shot": "15-log.png",
+        "lens": "correctness",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Opponent (Goldfish) info bar",
+        "issue": "Opponent public resource state is incomplete: Goldfish shows only 'VP 0/8 · Energy 0' — no Rune count and no FURY/CHAOS rune wells, while the local player gets both a 'Runes 2/2' chip and rune-well icons. Player is missing public info they need to plan.",
+        "suggestion": "Mirror the rune-count chip and rune-well indicators on the opponent info bar.",
+        "shot": "15-log.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Opponent battlefield zone",
+        "issue": "There's a ~110px empty horizontal band between the opponent hand and the phase tracker with no zone label or drop outline, while the player side has clearly bordered/labeled location slots (Back-Alley Bar, Altar to Unity). The opponent board reads as dead space rather than an empty zone.",
+        "suggestion": "Render the opponent's location/battlefield slots as labeled empty outlines (same treatment as the player side) so the board is symmetric and the space reads as a zone, not a gap.",
+        "shot": "15-log.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "15-log.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Domain tag pills",
+        "issue": "The CHAOS pill (dark purple text on a dark desaturated-purple fill) has noticeably worse contrast than the sibling FURY/MIND/BODY/ORDER/CALM pills and is hard to read at a glance.",
+        "suggestion": "Lighten the CHAOS pill's text color (or darken its fill) so it matches the legibility of the other domain pills.",
+        "shot": "16-builder.png",
+        "lens": "usability",
+        "count": 1,
+        "shots": [
+          "16-builder.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Legend picker grid — card tiles",
+        "issue": "Legend rules text (the ability box at the bottom of each card) is rendered at ~6px and is unreadable at grid-tile size. The player NEEDS this text to choose a Legend since it defines the deck's core ability, but it's effectively hidden unless a hover-zoom exists on this screen.",
+        "suggestion": "Either surface the ability text as a caption under the domain tags, or ensure hover-to-zoom works on this picker (same large preview used in-game).",
+        "shot": "16-builder.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "16-builder.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Legend picker grid — title overlay banner",
+        "issue": "The injected epithet banner (e.g. 'Daughter of the Void', 'Hand of Noxus') is overlaid on the card face at the exact Y-position of the card's printed name row, covering the champion name printed on the card (KAI'SA, DARIUS, etc.). The tile caption also shows only the epithet, so the actual champion identity is obscured — a player scanning for 'Jinx' has to squint at the tiny gold LEGEND tag to find her.",
+        "suggestion": "Move the overlay banner a few px higher (over the art) or include the champion name in the tile caption (e.g. 'Jinx — Loose Cannon').",
+        "shot": "16-builder.png",
+        "lens": "info-leak",
+        "count": 1,
+        "shots": [
+          "16-builder.png"
+        ]
+      },
+      {
+        "severity": "low",
+        "area": "Legend grid container",
+        "issue": "The 5-column grid is capped at roughly 1000px inside a ~1440px viewport, leaving ~200px of dead margin on each side while card rules text is still too small to read comfortably.",
+        "suggestion": "Let the grid max-width grow on wide viewports (either larger cards or a 6th column) to use the available horizontal space.",
+        "shot": "16-builder.png",
+        "lens": "layout",
+        "count": 1,
+        "shots": [
+          "16-builder.png"
+        ]
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Review"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Dedupe"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "02-lobby.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a4442c7a78b5a5dcf",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858396211,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/02-lobby.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"lobby\" screen. The app is a card game like Magic Arena / Hearthsto…",
+      "lastProgressAt": 1785858452935,
+      "tokens": 73049,
+      "toolCalls": 2,
+      "durationMs": 56724,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Lobby — Goldfish helper text\",\"issue\":\"The caption \\\"Practice against a passive opponent\\\" under the Goldfish button is rendered in very small, low-contrast gray on the near-black background and is barely legible.\",\"suggestion\":\"Increase font size to match the \\\"Play against another player\\\" label and raise contrast (lighter gray or white at reduced opacit…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "02-lobby.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a176f2ea298aeb984",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858404748,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/02-lobby.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"lobby\" screen. The app is a card game like Magic Arena / H…",
+      "lastProgressAt": 1785858442417,
+      "tokens": 73055,
+      "toolCalls": 2,
+      "durationMs": 37669,
+      "resultPreview": "{\"findings\":[{\"severity\":\"low\",\"area\":\"Lobby — center panel\",\"issue\":\"A stray horizontal divider line renders only on the left side of the Host/Join button row (roughly from x≈490 to the left edge of the Host Game button) and abruptly stops — it has no right-side counterpart and doesn't align with any container edge, so it reads as a broken/clipped <hr> or leaked border artifact rather than an int…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "02-lobby.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a7903f5a9415af705",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858422187,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/02-lobby.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"lobby\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldf…",
+      "lastProgressAt": 1785858439454,
+      "tokens": 73030,
+      "toolCalls": 2,
+      "durationMs": 17267,
+      "resultPreview": "{\"findings\":[{\"severity\":\"low\",\"area\":\"Lobby / pre-game\",\"issue\":\"No deck indicator or selector is shown before Host/Join/Goldfish — the player cannot see which deck they are about to queue with, which is information they need before starting a match.\",\"suggestion\":\"Surface the currently-selected deck (name + thumbnail) near the Host/Join/Goldfish buttons, or force a deck-pick step so the player c…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "02-lobby.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a53a554ca9b72c539",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858410704,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/02-lobby.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"lobby\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — the opponent ha…",
+      "lastProgressAt": 1785858457030,
+      "tokens": 73026,
+      "toolCalls": 2,
+      "durationMs": 46326,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"lobby — overall canvas\",\"issue\":\"~85% of the viewport is empty black dead space. The entire lobby is three buttons and two caption lines floating mid-screen with no page heading, container card, or deck-selection affordance to anchor them.\",\"suggestion\":\"Wrap the mode choices in a titled card/panel (e.g. 'Start a Game') and consider surfacing deck selectio…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "03-goldfish-lobby.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a23dd4fae12e7c2e6",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858414037,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/03-goldfish-lobby.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"goldfish lobby\" screen. The app is a card game like Magic…",
+      "lastProgressAt": 1785858455197,
+      "tokens": 73065,
+      "toolCalls": 2,
+      "durationMs": 41160,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Typography / contrast\",\"issue\":\"Secondary text is nearly unreadable against the dark background — the game-mode subtitles (\\\"Best of 1 — random battlefields\\\", \\\"Solo vs Goldfish — no opponent needed\\\"), the \\\"Choosing deck...\\\" status, the GAME MODE / SELECT DECK labels, and \\\"3 saved decks found\\\" all render in a very dark grey on near-black.\",\"suggestio…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "03-goldfish-lobby.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "abcea7d6393dbb04f",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858438880,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/03-goldfish-lobby.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"goldfish lobby\" screen. The app is a card game li…",
+      "lastProgressAt": 1785858456050,
+      "tokens": 73076,
+      "toolCalls": 2,
+      "durationMs": 17170,
+      "resultPreview": "{\"findings\":[{\"severity\":\"low\",\"area\":\"Lobby — deck selector helper text\",\"issue\":\"Typo in the saved-decks count line: reads \\\"3 saved decks faund\\\" instead of \\\"found\\\".\",\"suggestion\":\"Fix the string literal: \\\"faund\\\" → \\\"found\\\".\"}]}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "03-goldfish-lobby.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a3459a8dca399aa47",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858401161,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/03-goldfish-lobby.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"goldfish lobby\" screen. The app is a card game like Magic Arena / Hearthston…",
+      "lastProgressAt": 1785858446589,
+      "tokens": 73055,
+      "toolCalls": 2,
+      "durationMs": 45428,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Opponent slot / deck selection\",\"issue\":\"The Goldfish opponent tile shows only 'Solo Opponent' and there is no second deck selector — the player cannot see (or choose) what deck the Goldfish side will use, even though goldfish mode has them piloting both sides.\",\"suggestion\":\"Surface the Goldfish deck: either a second 'Opponent deck' dropdown or display th…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "03-goldfish-lobby.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a155499161d911f2e",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858427188,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/03-goldfish-lobby.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"goldfish lobby\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode…",
+      "lastProgressAt": 1785858464173,
+      "tokens": 73043,
+      "toolCalls": 2,
+      "durationMs": 36985,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Lobby panel vertical placement\",\"issue\":\"The entire lobby form floats in a sea of empty black — ~260px of dead space above the 'Game Lobby' heading and ~260px below the Back link, with no card/panel border to anchor the content. The form occupies <30% of the viewport height and has no visual container.\",\"suggestion\":\"Wrap the lobby controls in a bordered/e…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "04-deck-selected.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a293f5adcce3a5a27",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858430434,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/04-deck-selected.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"deck selected\" screen. The app is a card game like Magic A…",
+      "lastProgressAt": 1785858462604,
+      "tokens": 73057,
+      "toolCalls": 2,
+      "durationMs": 32170,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Game Lobby — helper/subtitle text\",\"issue\":\"Secondary text is nearly unreadable: game-mode subtitles (\\\"Best of 1 — random battlefields\\\", \\\"Solo vs Goldfish — no opponent needed\\\"), \\\"3 saved decks found\\\", and \\\"Ready! Click Start Game\\\" render in a very dim grey (~#555-range) at ~10px on the dark navy background, well below comfortable contrast.\",\"sugge…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "04-deck-selected.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "af7ed4a6861cf8563",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858407749,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/04-deck-selected.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"deck selected\" screen. The app is a card game like…",
+      "lastProgressAt": 1785858449038,
+      "tokens": 73062,
+      "toolCalls": 2,
+      "durationMs": 41289,
+      "resultPreview": "{\"findings\":[]}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 11,
+      "label": "04-deck-selected.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a7c497125be760a77",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858446313,
+      "queuedAt": 1785858386139,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/04-deck-selected.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"deck selected\" screen. The app is a card game like Magic Arena / Hearthstone.…",
+      "lastProgressAt": 1785858470055,
+      "tokens": 73046,
+      "toolCalls": 2,
+      "durationMs": 23742,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Game Lobby — deck selection\",\"issue\":\"Only one 'SELECT DECK' dropdown is shown even though this is goldfish mode where the player pilots both sides. The Goldfish opponent's deck is neither displayed nor selectable, so the player cannot see (or choose) what deck they will be playing against/as on the other side of the table.\",\"suggestion\":\"Add a second deck…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 12,
+      "label": "04-deck-selected.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a269bff234f8e624f",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858425441,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/04-deck-selected.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"deck selected\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode —…",
+      "lastProgressAt": 1785858454162,
+      "tokens": 73023,
+      "toolCalls": 2,
+      "durationMs": 28721,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Game Lobby — viewport\",\"issue\":\"The lobby content occupies only ~30% of the viewport, with a ~240px empty black band between the top nav and the 'Game Lobby' heading and another ~240px below 'Back'. The block is neither top-anchored nor vertically centered — it floats slightly below center in dead space.\",\"suggestion\":\"Vertically center the lobby panel in …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 13,
+      "label": "05a-turn-order.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "aa9a3df2e56c441b7",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858443363,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/05a-turn-order.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"turn order\" screen. The app is a card game like Magic Arena …",
+      "lastProgressAt": 1785858470583,
+      "tokens": 73055,
+      "toolCalls": 2,
+      "durationMs": 27220,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Turn-order modal — heading\",\"issue\":\"The \\\"DETERMINING TURN ORDER\\\" label is rendered in very dark gray against the near-black backdrop and is barely legible; the modal's purpose text is the hardest thing on the screen to read.\",\"suggestion\":\"Raise the heading's foreground color to at least the same gray as \\\"Choose who goes first:\\\" (or brighter) so the c…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 14,
+      "label": "05a-turn-order.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a6d0b93e82acf8b1d",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858433676,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/05a-turn-order.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"turn order\" screen. The app is a card game like Magi…",
+      "lastProgressAt": 1785858451782,
+      "tokens": 73059,
+      "toolCalls": 2,
+      "durationMs": 18106,
+      "resultPreview": "{\"findings\":[]}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 15,
+      "label": "05a-turn-order.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a806563753aec9fe1",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858417027,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/05a-turn-order.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"turn order\" screen. The app is a card game like Magic Arena / Hearthstone. **Th…",
+      "lastProgressAt": 1785858458894,
+      "tokens": 73050,
+      "toolCalls": 2,
+      "durationMs": 41867,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Turn-order choice buttons\",\"issue\":\"The 'I'll go first' / 'Opponent goes first' buttons give no indication of the mechanical trade-off (e.g., first player skips a draw, second player gets +1 card). The player is asked to make a strategic decision without the information needed to evaluate it.\",\"suggestion\":\"Add a subtext line under each button (or a single…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 16,
+      "label": "05a-turn-order.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a5f55a63fa6fc75aa",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858436495,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/05a-turn-order.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"turn order\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — the …",
+      "lastProgressAt": 1785858459489,
+      "tokens": 73035,
+      "toolCalls": 2,
+      "durationMs": 22994,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Turn order modal — vs separator\",\"issue\":\"The \\\"vs\\\" label is baseline-aligned with the bottom edge of the D/G avatar tiles instead of being vertically centered between the two player blocks, so the versus row reads lopsided.\",\"suggestion\":\"Vertically center \\\"vs\\\" against the avatar tiles (or against the full avatar+name+roll column) with flex align-items…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 17,
+      "label": "06b-mulligan-hover.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "acb192484a5db7d63",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858442920,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/06b-mulligan-hover.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"mulligan hover\" screen. The app is a card game like Magi…",
+      "lastProgressAt": 1785858487204,
+      "tokens": 73066,
+      "toolCalls": 2,
+      "durationMs": 44284,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Hover preview panel (left edge)\",\"issue\":\"The enlarged card preview is pinned to the far-left edge of the viewport, ~300px away from the hovered card in the center row. There is no visual connector, so the user's eye has to jump across half the screen to find the readable version of the card they're pointing at.\",\"suggestion\":\"Anchor the preview adjacent t…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 18,
+      "label": "06b-mulligan-hover.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a0c485555e0c5be7b",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858450115,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/06b-mulligan-hover.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"mulligan hover\" screen. The app is a card game l…",
+      "lastProgressAt": 1785858480694,
+      "tokens": 73070,
+      "toolCalls": 2,
+      "durationMs": 30579,
+      "resultPreview": "{\"findings\":[]}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 19,
+      "label": "06b-mulligan-hover.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a475a97e0ccbedc87",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858450052,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/06b-mulligan-hover.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"mulligan hover\" screen. The app is a card game like Magic Arena / Hearthsto…",
+      "lastProgressAt": 1785858488806,
+      "tokens": 73058,
+      "toolCalls": 2,
+      "durationMs": 38754,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Hover detail panel (left)\",\"issue\":\"The readable text panel under the enlarged card shows only 'UNIT' as the type line, dropping the region/faction tag ('NOXUS') that is printed on the card itself. Players relying on the hover panel to read the card lose synergy-relevant info they need for the keep/mulligan decision.\",\"suggestion\":\"Render the full type lin…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 20,
+      "label": "06b-mulligan-hover.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "ab15f101f95d3bb61",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858452872,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/06b-mulligan-hover.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"mulligan hover\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mod…",
+      "lastProgressAt": 1785858482101,
+      "tokens": 73047,
+      "toolCalls": 2,
+      "durationMs": 29229,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Hover preview placement\",\"issue\":\"The large card preview is pinned to the far-left viewport edge, separated from the hovered card (leftmost in the row) by ~200px of empty black space. There is no connector or proximity linking the preview to its source card — it reads as a stray floating element rather than a detail panel for the highlighted card.\",\"sugges…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 21,
+      "label": "07-board.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a3e88839f9c4c1f0f",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858455822,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/07-board.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"board\" screen. The app is a card game like Magic Arena / Hearthsto…",
+      "lastProgressAt": 1785858486237,
+      "tokens": 73049,
+      "toolCalls": 2,
+      "durationMs": 30415,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Right sidebar — onboarding tooltip\",\"issue\":\"The purple 'First game? Tap the i for controls and board tips.' popover is positioned directly over the turn-context help text beneath 'Turn 1 MAIN' — you can see truncated 'You…' / 'Con…' lines bleeding out from under it, so the very text a new player needs to read is covered by the tip telling them where to fi…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 22,
+      "label": "07-board.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "aa75ff01414bc95c2",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858455306,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/07-board.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"board\" screen. The app is a card game like Magic Arena / H…",
+      "lastProgressAt": 1785858511299,
+      "tokens": 73055,
+      "toolCalls": 2,
+      "durationMs": 55993,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Sidebar header (top-right, next to 'Turn 1 MAIN')\",\"issue\":\"The circular (i) info button is rendered directly on top of an adjacent button — only the fragment 'Lea' of that button's label is visible behind the (i). Two interactive controls are colliding/overlapping.\",\"suggestion\":\"Fix the flex/absolute positioning in the turn-panel header so the info butto…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 23,
+      "label": "07-board.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "aa0c810022e2ecedc",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858457668,
+      "queuedAt": 1785858386140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/07-board.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"board\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldf…",
+      "lastProgressAt": 1785858496473,
+      "tokens": 73038,
+      "toolCalls": 2,
+      "durationMs": 38805,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Opponent resource row (top-right, next to 'G Goldfish')\",\"issue\":\"Opponent's available rune pool is not displayed. The dev player shows 'Runes 2/2' plus Fury/Chaos rune icons in the resource bar, but Goldfish's identity chip only reads 'VP 0/8  Resources Energy 0' — no rune count and no rune-color icons. Opponent's ready resources are public information th…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 24,
+      "label": "07-board.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "ac27491dc4b00cf8e",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858457979,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/07-board.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"board\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — the opponent ha…",
+      "lastProgressAt": 1785858485926,
+      "tokens": 73024,
+      "toolCalls": 2,
+      "durationMs": 27947,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Battlefield zones\",\"issue\":\"The Back-Alley Bar and Altar to Unity location cards overhang the left border of their battlefield zone containers by ~30px — the card art sits partly outside the rounded zone box instead of nested inside its slot.\",\"suggestion\":\"Align the location card inside the left slot of its zone container (or widen the zone so the card fi…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 25,
+      "label": "08-hand-hover.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a4a279312c49eea02",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858458994,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/08-hand-hover.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"hand hover\" screen. The app is a card game like Magic Arena /…",
+      "lastProgressAt": 1785858495764,
+      "tokens": 73062,
+      "toolCalls": 2,
+      "durationMs": 36770,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Card hover preview\",\"issue\":\"Hovering a card renders two large previews at once — a floating inspector on the left edge AND a docked preview in the right sidebar — both showing the identical Sneaky Deckhand image and rules text. The duplication eats board real-estate and forces the eye to bounce between two sources of the same information.\",\"suggestion\":\"S…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 26,
+      "label": "08-hand-hover.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "ad0630b3c23537595",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858459679,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/08-hand-hover.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"hand hover\" screen. The app is a card game like Magic…",
+      "lastProgressAt": 1785858497855,
+      "tokens": 73062,
+      "toolCalls": 2,
+      "durationMs": 38175,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Card hover preview\",\"issue\":\"Hovering 'Sneaky Deckhand' renders two full-size preview panels simultaneously — one floating on the left (with name/cost/might caption) and a second identical enlarged card in the right sidebar below Rewind/Redo. Same card, same art, same text, shown twice at once.\",\"suggestion\":\"Render a single hover preview. If the right-sid…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 27,
+      "label": "08-hand-hover.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a31492541597504eb",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858461426,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/08-hand-hover.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"hand hover\" screen. The app is a card game like Magic Arena / Hearthstone. **Thi…",
+      "lastProgressAt": 1785858505150,
+      "tokens": 73058,
+      "toolCalls": 2,
+      "durationMs": 43724,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Turn banner (top-right sidebar)\",\"issue\":\"The 'First game? Tap the i…' onboarding tooltip is positioned directly over the Turn 1 header subtext — only fragments 'You…' and 'Cor…' are visible. Player cannot read the turn/phase guidance they need on turn 1.\",\"suggestion\":\"Anchor the onboarding tooltip below the (i) button or offset it so it never overlaps th…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 28,
+      "label": "08-hand-hover.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "acddc9717e796bb2c",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858462634,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/08-hand-hover.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"hand hover\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — the o…",
+      "lastProgressAt": 1785858492912,
+      "tokens": 73046,
+      "toolCalls": 2,
+      "durationMs": 30277,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Hover preview\",\"issue\":\"The hovered card (Sneaky Deckhand) is rendered large twice simultaneously — once as a floating panel on the left edge and again in the right-sidebar preview slot. Two ~300px-wide copies of the same card consume roughly a quarter of the horizontal viewport for redundant information.\",\"suggestion\":\"Pick one preview location. Either su…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 29,
+      "label": "09-decks.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "aa71de0f52fbe0e76",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858465421,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/09-decks.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"decks\" screen. The app is a card game like Magic Arena / Hearthsto…",
+      "lastProgressAt": 1785858492347,
+      "tokens": 73051,
+      "toolCalls": 2,
+      "durationMs": 26925,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Deck card actions\",\"issue\":\"The only labeled action on each deck card is \\\"Delete\\\". There is no visible \\\"Edit\\\", \\\"Open\\\", or \\\"Play\\\" affordance — users must guess that clicking the card/title does something, while the one explicit control is destructive.\",\"suggestion\":\"Add explicit \\\"Edit\\\" and/or \\\"Play\\\" buttons to each card so the primary action is …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 30,
+      "label": "09-decks.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a4d0a183416d39bcc",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858468859,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/09-decks.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"decks\" screen. The app is a card game like Magic Arena / H…",
+      "lastProgressAt": 1785858483923,
+      "tokens": 73051,
+      "toolCalls": 2,
+      "durationMs": 15064,
+      "resultPreview": "{\"findings\":[]}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 31,
+      "label": "09-decks.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a3add5c51309ab1d4",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858472927,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/09-decks.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"decks\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldf…",
+      "lastProgressAt": 1785858493934,
+      "tokens": 73039,
+      "toolCalls": 2,
+      "durationMs": 21007,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Deck tile — metadata row\",\"issue\":\"Deck card count is not shown anywhere on the tile. Player cannot tell whether a deck is complete (e.g. 40/40) or an unfinished draft without opening each one in the Builder.\",\"suggestion\":\"Add a card-count indicator (e.g. \\\"40 / 40\\\" or \\\"38 cards\\\") next to the format badge, with a warning color when below the format min…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 32,
+      "label": "09-decks.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a6bad61154cf585c7",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858479039,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/09-decks.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"decks\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — the opponent ha…",
+      "lastProgressAt": 1785858506522,
+      "tokens": 73032,
+      "toolCalls": 2,
+      "durationMs": 27483,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Decks grid — horizontal container\",\"issue\":\"The deck grid is locked to a ~770px centered column, leaving ~340px of dead black space on each side of a 1456px viewport. Only ~53% of horizontal space is used even though the grid has room for wider or additional columns.\",\"suggestion\":\"Let the grid expand toward the viewport edges (max-width closer to 1200–128…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 33,
+      "label": "10-runes-tapped.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a81dda613f038cd3e",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858483261,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/10-runes-tapped.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"runes tapped\" screen. The app is a card game like Magic Are…",
+      "lastProgressAt": 1785858523884,
+      "tokens": 73065,
+      "toolCalls": 2,
+      "durationMs": 40622,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Sidebar header (top-right)\",\"issue\":\"The button to the left of the (i) info icon is truncated — only \\\"Lea\\\" is visible. The full label (likely \\\"Leave\\\" or \\\"Learn\\\") is unreadable, so users can't tell what the control does.\",\"suggestion\":\"Widen the header row or shrink the Turn/phase pill so the button label fits, or use an icon-only button with a toolti…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 34,
+      "label": "10-runes-tapped.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "ae78ac1929c71ff8a",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858484950,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/10-runes-tapped.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"runes tapped\" screen. The app is a card game like M…",
+      "lastProgressAt": 1785858520456,
+      "tokens": 73065,
+      "toolCalls": 2,
+      "durationMs": 35506,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Resource bar / Rune Actions panel\",\"issue\":\"State did not update after tapping runes: resource bar still reads 'Runes 2/2' and 'Energy 0', and the sidebar still lists 'Exhaust Rune (2 available)' / 'Recycle Rune (2 available)'. For a post-tap state, energy should be >0 and available-rune counts should have decremented — the UI shows the pre-tap values.\",\"s…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 35,
+      "label": "10-runes-tapped.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a80fd795583166d45",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858486537,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/10-runes-tapped.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"runes tapped\" screen. The app is a card game like Magic Arena / Hearthstone. *…",
+      "lastProgressAt": 1785858528086,
+      "tokens": 73041,
+      "toolCalls": 2,
+      "durationMs": 41549,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Opponent stat pill (top-right of board, 'Goldfish · VP 0/8 · Resources Energy 0')\",\"issue\":\"Opponent's rune count is not shown. Player's own resource bar shows 'Runes 2/2', but the Goldfish pill only exposes Energy — the opponent's available runes (public info in a TCG) is missing, so the player can't gauge what the opponent can pay for next turn.\",\"sugges…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 36,
+      "label": "10-runes-tapped.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a3ce1fbdefb670802",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858488412,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/10-runes-tapped.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"runes tapped\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — t…",
+      "lastProgressAt": 1785858513867,
+      "tokens": 73040,
+      "toolCalls": 2,
+      "durationMs": 25455,
+      "resultPreview": "{\"findings\":[{\"severity\":\"high\",\"area\":\"Battlefield location slots\",\"issue\":\"Both location cards (Back-Alley Bar, Altar to Unity) overflow the left edge of their zone containers — the card art hangs ~30-40px outside the slot's left border instead of sitting inside it.\",\"suggestion\":\"Fix card positioning so the location card is fully contained within (or centered in) its slot rectangle; likely a ne…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 37,
+      "label": "11-after-play-attempt.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "ac4e81e2a093db2f9",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858488324,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/11-after-play-attempt.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"after play attempt\" screen. The app is a card game li…",
+      "lastProgressAt": 1785858518067,
+      "tokens": 73074,
+      "toolCalls": 2,
+      "durationMs": 29743,
+      "resultPreview": "{\"findings\":[{\"severity\":\"high\",\"area\":\"Hover card preview — positioning\",\"issue\":\"The center hover preview (Overzealous Fan) sits directly on top of the hint/status bar above the hand. Only the fragment \\\"…tures for energy\\\" is visible on the right; the left ~70% of the message is fully obscured. If this bar is where the failed-play reason appears (screenshot is 'after play attempt', board is sti…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 38,
+      "label": "11-after-play-attempt.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "ab378ac3a0258dfdb",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858489680,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/11-after-play-attempt.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"after play attempt\" screen. The app is a card…",
+      "lastProgressAt": 1785858548966,
+      "tokens": 73068,
+      "toolCalls": 2,
+      "durationMs": 59286,
+      "resultPreview": "{\"findings\":[{\"severity\":\"low\",\"area\":\"Top-right header / onboarding popover\",\"issue\":\"The 'First game? Tap the i…' popover overlaps the button immediately left of the (i) icon, leaving its label truncated to just 'Le' — the button text is visibly cut off.\",\"suggestion\":\"Anchor the popover so it does not overlap sibling header controls, or add right padding/offset so the full button label ('Learn'…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 39,
+      "label": "11-after-play-attempt.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "aa6d99a1de4a207fc",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858491518,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/11-after-play-attempt.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"after play attempt\" screen. The app is a card game like Magic Arena / He…",
+      "lastProgressAt": 1785858528663,
+      "tokens": 73053,
+      "toolCalls": 2,
+      "durationMs": 37145,
+      "resultPreview": "{\"findings\":[{\"severity\":\"high\",\"area\":\"Hover preview vs. status bar\",\"issue\":\"The Overzealous Fan hover tooltip sits directly on top of the center hint/status bar — only the fragment '…tures for energy' is visible on the right edge. After a play attempt, whatever feedback or instruction that bar contains (e.g. 'Recycle runes for energy') is unreadable.\",\"suggestion\":\"Anchor the hover preview abov…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 40,
+      "label": "11-after-play-attempt.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a67de443125532816",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858494707,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/11-after-play-attempt.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"after play attempt\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sand…",
+      "lastProgressAt": 1785858520961,
+      "tokens": 73043,
+      "toolCalls": 2,
+      "durationMs": 26254,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Board center / hint bar\",\"issue\":\"The card hover preview (Overzealous Fan) is anchored so it overlaps the horizontal hint/instruction strip below the battlefield — only fragments '...R' (left) and '...tures for energy' (right) are visible. The player can't read the play-guidance text while hovering the very card they're deciding whether to play.\",\"suggesti…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 41,
+      "label": "12-bf-hover.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a3accb96cc29c8f84",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858495137,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/12-bf-hover.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"bf hover\" screen. The app is a card game like Magic Arena / Hea…",
+      "lastProgressAt": 1785858518794,
+      "tokens": 73055,
+      "toolCalls": 2,
+      "durationMs": 23657,
+      "resultPreview": "{\"findings\":[{\"severity\":\"high\",\"area\":\"Right sidebar — card inspector panel\",\"issue\":\"The dedicated inspector box still reads \\\"HOVER A CARD\\\" while the user is actively hovering Back-Alley Bar. The hover preview renders inline on the battlefield instead of populating this panel, so the panel appears broken/dead and the board gets occluded for no gain.\",\"suggestion\":\"Route battlefield hover into …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 42,
+      "label": "12-bf-hover.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a8b717bc35e6d6ead",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858496115,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/12-bf-hover.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"bf hover\" screen. The app is a card game like Magic Are…",
+      "lastProgressAt": 1785858530976,
+      "tokens": 73062,
+      "toolCalls": 2,
+      "durationMs": 34861,
+      "resultPreview": "{\"findings\":[{\"severity\":\"high\",\"area\":\"Right sidebar — hover preview panel\",\"issue\":\"The dedicated hover-preview pane in the right sidebar still shows the empty-state placeholder text \\\"HOVER A CARD\\\" even though a card (Back-Alley Bar) is actively being hovered and the inline battlefield tooltip is showing. The two hover surfaces are out of sync.\",\"suggestion\":\"Ensure the same hover event that s…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 43,
+      "label": "12-bf-hover.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a5bfa76a23279737b",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858498077,
+      "queuedAt": 1785858386141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/12-bf-hover.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"bf hover\" screen. The app is a card game like Magic Arena / Hearthstone. **This is…",
+      "lastProgressAt": 1785858531244,
+      "tokens": 73048,
+      "toolCalls": 2,
+      "durationMs": 33166,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Battlefield hover popover\",\"issue\":\"The Back-Alley Bar hover preview renders inline and overlaps/occludes the battlefield card in the slot immediately to its right — that card's art, name, and rules text are almost fully hidden while the hover is active.\",\"suggestion\":\"Offset the hover popover vertically (above/below the row) or render it in the right-side…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 44,
+      "label": "12-bf-hover.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a812b5da21a5391e7",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858498912,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/12-bf-hover.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"bf hover\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — the oppon…",
+      "lastProgressAt": 1785858524722,
+      "tokens": 73043,
+      "toolCalls": 2,
+      "durationMs": 25810,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Battlefield hover preview\",\"issue\":\"The enlarged 'Back-Alley Bar' hover popup is positioned in-place and overlaps/obscures the adjacent battlefield card to its right (third location card is ~50% covered), making it impossible to see neighboring slots while inspecting a card.\",\"suggestion\":\"Offset the hover preview above/below the row, or shift it so it nev…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 45,
+      "label": "14-turn3.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "ab991e1ca9ae4b532",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858500662,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/14-turn3.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"turn3\" screen. The app is a card game like Magic Arena / Hearthsto…",
+      "lastProgressAt": 1785858527010,
+      "tokens": 73061,
+      "toolCalls": 2,
+      "durationMs": 26348,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Right sidebar header / onboarding tooltip\",\"issue\":\"The purple 'First game? Tap the i for controls and board tips.' tooltip is anchored on top of the sidebar header, covering the text beneath it — only fragments ('You…', 'Con…') are visible, so whatever status/instruction lives there is unreadable until the tip is dismissed.\",\"suggestion\":\"Offset the onboa…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 46,
+      "label": "14-turn3.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a559ad701e6550d66",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858507903,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/14-turn3.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"turn3\" screen. The app is a card game like Magic Arena / H…",
+      "lastProgressAt": 1785858552223,
+      "tokens": 73063,
+      "toolCalls": 2,
+      "durationMs": 44320,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Legend/Champion slots (both players)\",\"issue\":\"Goldfish (top) and dev (bottom) render the exact same Legend and Champion cards — identical art, frame, and cost badge. Looks like the opponent's Legend/Champion slot is duplicating the active player's cards rather than showing Goldfish's own, unless a mirror deck is guaranteed in this fixture.\",\"suggestion\":\"…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 47,
+      "label": "14-turn3.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a716278df08b18b9e",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858508549,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/14-turn3.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"turn3\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldf…",
+      "lastProgressAt": 1785858550599,
+      "tokens": 73045,
+      "toolCalls": 2,
+      "durationMs": 42050,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Right sidebar / onboarding tip\",\"issue\":\"The purple \\\"First game? Tap the i for controls and board tips\\\" popover overlaps and hides the text lines directly under the \\\"Turn 5 · MAIN\\\" header (lines beginning \\\"Your…\\\", \\\"Cor…\\\", and a truncated button \\\"Le…\\\"). Info the player needs is obscured until the tip is dismissed.\",\"suggestion\":\"Anchor the tip to …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 48,
+      "label": "14-turn3.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a690a0b62f61c2ebe",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858514176,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/14-turn3.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"turn3\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — the opponent ha…",
+      "lastProgressAt": 1785858540860,
+      "tokens": 73018,
+      "toolCalls": 2,
+      "durationMs": 26683,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Right sidebar — top\",\"issue\":\"The purple 'First game? Tap the i…' onboarding tooltip is positioned on top of the sidebar header, covering the text row beneath 'Turn 5 MAIN' and clipping a button (only 'Le…' is visible behind it).\",\"suggestion\":\"Anchor the tooltip below the (i) button with an arrow, or offset it left of the sidebar so it doesn't obscure the…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 49,
+      "label": "15-log.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "ab596d31ed8f2eace",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858516474,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/15-log.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"log\" screen. The app is a card game like Magic Arena / Hearthstone. …",
+      "lastProgressAt": 1785858541508,
+      "tokens": 73032,
+      "toolCalls": 2,
+      "durationMs": 25034,
+      "resultPreview": "{\"findings\":[{\"severity\":\"high\",\"area\":\"Right sidebar / Game Log\",\"issue\":\"This is the 'log' screen, but the game log itself is not visible — the sidebar shows Turn/Actions/Hover-preview/Toggles, and a further section header is clipped at the very bottom behind the fixed 'dev / Goldfish' player switcher. The primary content of this view is below the fold or covered.\",\"suggestion\":\"Surface the game…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 50,
+      "label": "15-log.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a6d901238c0f071ea",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858520501,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/15-log.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"log\" screen. The app is a card game like Magic Arena / Heart…",
+      "lastProgressAt": 1785858582321,
+      "tokens": 73050,
+      "toolCalls": 2,
+      "durationMs": 61820,
+      "resultPreview": "{\"findings\":[{\"severity\":\"low\",\"area\":\"Right sidebar header (next to ⓘ button)\",\"issue\":\"A button/label immediately left of the ⓘ info icon is truncated — only \\\"Le…\\\" is visible, and the purple onboarding tooltip further covers it. The control's label text is not fully rendered.\",\"suggestion\":\"Ensure the header button has enough width (or shrinks the tooltip anchor) so its full label renders; ver…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 51,
+      "label": "15-log.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a0e6a3c4bbc7b2312",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858521324,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/15-log.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"log\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/…",
+      "lastProgressAt": 1785858552497,
+      "tokens": 73042,
+      "toolCalls": 2,
+      "durationMs": 31173,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Right panel — top\",\"issue\":\"The purple 'First game? Tap the i…' onboarding tooltip overlaps and hides the turn-summary/log text beneath it (only fragments 'You…' / 'Con…' peek out), so the player cannot read the log entries the panel is meant to show.\",\"suggestion\":\"Anchor the tooltip below/left of the ⓘ badge (or auto-dismiss on first hover) so it never c…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 52,
+      "label": "15-log.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a600ade14bbf6f2b9",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858523856,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/15-log.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"log\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — the opponent hand i…",
+      "lastProgressAt": 1785858554926,
+      "tokens": 73024,
+      "toolCalls": 2,
+      "durationMs": 31069,
+      "resultPreview": "{\"findings\":[{\"severity\":\"high\",\"area\":\"Right sidebar / game log\",\"issue\":\"This is the 'log' screen, but the game log itself is not visible — the sidebar is fully consumed by Available Actions, the empty 'HOVER A CARD' placeholder (~230px tall), and the Toggles block; only a truncated section header stub is visible at the very bottom edge below 'XP Counter'. The log is pushed below the fold.\",\"sug…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 53,
+      "label": "16-builder.png × usability",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a1b873e983ee7f0bf",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858523339,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/16-builder.png\n\nReview lens: **usability** — Does the UI hide, cover, or make hard-to-reach anything the user needs to click or read? Are tooltips/popovers positioned sensibly? Is text readable?\n\nThis is the \"builder\" screen. The app is a card game like Magic Arena / Heart…",
+      "lastProgressAt": 1785858548615,
+      "tokens": 73050,
+      "toolCalls": 2,
+      "durationMs": 25276,
+      "resultPreview": "{\"findings\":[{\"severity\":\"high\",\"area\":\"Header / top navigation\",\"issue\":\"The nav links in the top-left corner (Home / Play / Builder / …) are rendered in near-black text on the near-black background — they are effectively invisible. A user on this screen has no discoverable way to navigate back to other parts of the app.\",\"suggestion\":\"Raise the inactive nav-link foreground color to meet contrast…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 54,
+      "label": "16-builder.png × correctness",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a57a79c2430397f69",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858526063,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/16-builder.png\n\nReview lens: **correctness** — Is anything visually wrong: impossible values (e.g. d20 showing 21), duplicate elements that shouldn't be, missing icons/fonts (tofu boxes), broken images?\n\nThis is the \"builder\" screen. The app is a card game like Magic Arena…",
+      "lastProgressAt": 1785858553651,
+      "tokens": 73054,
+      "toolCalls": 2,
+      "durationMs": 27588,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Builder — top navigation bar\",\"issue\":\"The top-left nav tabs are rendered in near-black text on the near-black background, making the labels effectively invisible. Only a faint outline of the active tab is discernible; the other tab labels cannot be read at all.\",\"suggestion\":\"Check the nav link color token — it appears to be resolving to the dark-theme ba…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 55,
+      "label": "16-builder.png × info-leak",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "ab138e28eb461a361",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858526930,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/16-builder.png\n\nReview lens: **info-leak** — Can the player see anything they shouldn't (opponent hand faces, hidden cards, etc.)? Is anything the player NEEDS to see missing?\n\nThis is the \"builder\" screen. The app is a card game like Magic Arena / Hearthstone. **This is g…",
+      "lastProgressAt": 1785858558440,
+      "tokens": 73041,
+      "toolCalls": 2,
+      "durationMs": 31510,
+      "resultPreview": "{\"findings\":[{\"severity\":\"low\",\"area\":\"Legend picker grid — card tiles\",\"issue\":\"Legend rules text (the ability box at the bottom of each card) is rendered at ~6px and is unreadable at grid-tile size. The player NEEDS this text to choose a Legend since it defines the deck's core ability, but it's effectively hidden unless a hover-zoom exists on this screen.\",\"suggestion\":\"Either surface the abilit…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 56,
+      "label": "16-builder.png × layout",
+      "phaseIndex": 1,
+      "phaseTitle": "Review",
+      "agentId": "a1f9d1d012676fcba",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785858529646,
+      "queuedAt": 1785858386142,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are reviewing a screenshot of the Riftbound TCG web app for UX/visual issues.\n\nScreenshot: Read the image at /tmp/ui-shots/16-builder.png\n\nReview lens: **layout** — Is space used well? Are zones labeled? Is anything cramped, overlapping, or floating in dead space?\n\nThis is the \"builder\" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — the opponen…",
+      "lastProgressAt": 1785858554218,
+      "tokens": 73032,
+      "toolCalls": 2,
+      "durationMs": 24572,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"area\":\"Legend card tile\",\"issue\":\"Each legend name is rendered three times: on the card art itself, as a large semi-transparent overlay banner across the card's lower third, and again as a caption below the tile. The overlay banner sits directly on top of the card's printed rules-text box, occluding the ability text the user needs to compare legends.\",\"suggestion…"
+    }
+  ],
+  "totalTokens": 4090763,
+  "totalToolCalls": 112
+}
