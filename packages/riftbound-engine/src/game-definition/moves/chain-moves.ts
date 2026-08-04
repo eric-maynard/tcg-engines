@@ -321,6 +321,11 @@ function deductAbilityCost(
   draft: RiftboundGameState,
   playerId: string,
   cost: Record<string, unknown>,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  counters: {
+    getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined;
+    setFlag: (cardId: CoreCardId, flag: string, value: boolean) => void;
+  },
 ): void {
   const pool = draft.runePools[playerId];
   if (!pool) {
@@ -329,6 +334,27 @@ function deductAbilityCost(
 
   const energyCost = (cost.energy as number) ?? 0;
   if (energyCost > 0) {
+    // Rule 403.1.a + 404.1: the full [N] energy cost must be paid before an
+    // ability is finalized to the chain. Rule 357.1.a lets a player exhaust
+    // ready runes for energy during Pay Costs, and the condition/enumerator
+    // credit those runes toward affordability — so when banked energy is
+    // short, auto-exhaust ready runes here to actually cover the shortfall
+    // instead of clamping the deduction to zero.
+    let shortfall = energyCost - pool.energy;
+    if (shortfall > 0) {
+      const runes = zones.getCardsInZone("runePool" as CoreZoneId, playerId as CorePlayerId);
+      for (const runeId of runes) {
+        if (shortfall <= 0) {
+          break;
+        }
+        if (counters.getFlag(runeId, "exhausted")) {
+          continue;
+        }
+        counters.setFlag(runeId, "exhausted", true);
+        pool.energy += 1;
+        shortfall -= 1;
+      }
+    }
     pool.energy = Math.max(0, pool.energy - energyCost);
   }
 
@@ -730,7 +756,7 @@ export const chainMoves: Partial<
       // Pay cost
       if (ability.cost) {
         const cost = ability.cost as Record<string, unknown>;
-        deductAbilityCost(draft, playerId, cost);
+        deductAbilityCost(draft, playerId, cost, context.zones, context.counters);
 
         // Handle exhaust cost — always exhaust the host card, never the
         // Source (Heimerdinger exhausts himself for an inherited ability).
@@ -879,6 +905,11 @@ export const chainMoves: Partial<
       if (!bf.contested) {
         return false;
       }
+      // Rule 348.1/465.2: once the Combat Showdown has closed, the remaining
+      // combat steps are Outstanding — the same showdown cannot be reopened.
+      if (bf.showdownComplete) {
+        return false;
+      }
       return true;
     },
     enumerator: (state, context) => {
@@ -896,7 +927,7 @@ export const chainMoves: Partial<
       const results: { playerId: string; battlefieldId: string }[] = [];
       for (const bfId of Object.keys(state.battlefields ?? {})) {
         const bf = state.battlefields[bfId];
-        if (bf?.contested) {
+        if (bf?.contested && !bf.showdownComplete) {
           results.push({ battlefieldId: bfId, playerId: context.playerId as string });
         }
       }

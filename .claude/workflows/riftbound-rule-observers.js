@@ -9,9 +9,10 @@ export const meta = {
 }
 
 const REPO = '/root/src/tcg/tcg-engines'
-const N_TRACES = args?.traces ?? 12
-const TRACE_PREFIX = args?.tracePrefix ?? 'wf'
-const TRACES = Array.from({length: N_TRACES}, (_, i) => `${REPO}/do_not_commit/wf-traces/game-${TRACE_PREFIX}-${i}.jsonl`)
+const TRACES_DIR = args?.tracesDir ?? `${REPO}/do_not_commit/wf-traces`
+const TRACES = Array.isArray(args?.traces)
+  ? args.traces.map(t => `${TRACES_DIR}/${t}`)
+  : Array.from({length: args?.traces ?? 12}, (_, i) => `${TRACES_DIR}/game-${args?.tracePrefix ?? 'wf'}-${i}.jsonl`)
 
 // 2026-03-30 (Unleashed) numbering — see DIGEST.md.
 const SECTIONS = [
