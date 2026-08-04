@@ -548,6 +548,7 @@ describe("activateAbility enumerator", () => {
       counters: {
         addCounter: () => {},
         clearCounter: () => {},
+        getFlag: () => false,
         removeCounter: () => {},
         setFlag: () => {},
       },

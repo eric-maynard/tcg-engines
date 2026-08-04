@@ -588,7 +588,14 @@ function parseModifyMightEffect(text: string): ModifyMightEffect | SequenceEffec
   const tribalMatch = targetStr.match(/^your\s+(.+)$/i);
   if (tribalMatch) {
     const tribeName = tribalMatch[1].trim();
-    target = { controller: "friendly", filter: { tag: tribeName }, type: "unit" } as AnyTarget;
+    // Rule 419.2.a / 355.10.d: "your <Tribe>s" is a criteria-based mass selection,
+    // not a caster Choice — mark quantity:"all" so the play is legal with zero matches.
+    target = {
+      controller: "friendly",
+      filter: { tag: tribeName },
+      quantity: "all",
+      type: "unit",
+    } as AnyTarget;
   } else {
     // Extract leading quantity word (two, three, etc.) before passing to parseTarget
     const quantityMatch = targetStr.match(

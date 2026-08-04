@@ -182,7 +182,7 @@ function getRepeatEnergySurcharge(cardId: string, repeatCount: number): number {
  * affordability checks we therefore credit each ready rune in the player's
  * Rune Pool as +1 potential energy on top of the banked pool.
  */
-function getPotentialRuneEnergy(
+export function getPotentialRuneEnergy(
   zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
   counters: { getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined },
   playerId: string,

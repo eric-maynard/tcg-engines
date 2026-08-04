@@ -33,6 +33,7 @@ import { performCleanup } from "../../cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
+import { getPotentialRuneEnergy } from "./cards";
 
 /**
  * Build an EffectContext from a move reducer's context.
@@ -524,7 +525,14 @@ export const chainMoves: Partial<
         }
 
         const energyCost = (cost.energy as number) ?? 0;
-        if (pool.energy < energyCost) {
+        // Rule 357.1.a: ready runes may be exhausted for energy during Pay
+        // Costs, so count them toward affordability (parity with play* moves).
+        const potentialEnergy = getPotentialRuneEnergy(
+          context.zones,
+          context.counters as { getFlag: (c: CoreCardId, f: string) => boolean | undefined },
+          playerId,
+        );
+        if (pool.energy + potentialEnergy < energyCost) {
           return false;
         }
 
@@ -640,7 +648,14 @@ export const chainMoves: Partial<
               continue;
             }
             const energyCost = (cost.energy as number) ?? 0;
-            if (pool.energy < energyCost) {
+            // Rule 357.1.a: ready runes may be exhausted for energy during Pay
+            // Costs, so count them toward affordability (parity with play* moves).
+            const potentialEnergy = getPotentialRuneEnergy(
+              context.zones,
+              context.counters as { getFlag: (c: CoreCardId, f: string) => boolean | undefined },
+              playerId,
+            );
+            if (pool.energy + potentialEnergy < energyCost) {
               continue;
             }
             const powerCost = cost.power as string[] | undefined;
