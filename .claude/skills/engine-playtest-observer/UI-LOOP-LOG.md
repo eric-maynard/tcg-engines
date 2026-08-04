@@ -44,3 +44,28 @@ Driver: `ui-rules-drive.ts` — plays a real game via `executeMove()`, captures 
 
 **Fix path**: introduce an `outstandingTasks` queue on interaction state; when a task is queued, only that task's move enumerates. `combatPending[]` in state-based-checks.ts:334 already computes what's needed — it's just never consumed. See `HEADLESS-R5-RESULTS.json`.
 
+## Rules-via-UI loop v2 (wf_21bb1535-50a, fixed rule ids + DESIGN.md + pregame snaps)
+
+7 rounds, 1000-agent cap, 91M tok, 2.6h. **37 CONFIRMED / 19 auto-fixed.**
+
+| R | raw | CONFIRMED | fixed | notes |
+|---|---|---|---|---|
+| 1 | 12 | 8 | 4/6 | Herald of the Arcane 174.8/377.1; activateAbility 357.1.a; Danger Zone target-gate |
+| 2 | 18 | 6 | 4/6 | |
+| 3 | 10 | 4 | 2/4 | |
+| 4 | 9 | 1 | 1/1 | |
+| 5 | 23 | 8 | 4/6 | different deck → new cards |
+| 6 | 15 | 6 | 4/6 | pending-choice name-card type; hasKeyword abilities check |
+| 7 | 13 | 4 | 0 | (cap hit mid-fix) |
+
+## Headless observer R7 (wf_3eae9cb6-59e, fixed tracesDir)
+
+94 unique. Verifiers still cited stale `game-r2-*` (wf-traces/ dir existed → deleted). HEAD-current confirmed:
+- **355.8** (10×): `resolveTarget` ignores `target.filter` — fixed at b898e42 (matchesFilter for state/might/keyword/tag/name)
+- **448/144.4.b** (9×): standardMove can't do bf→base — fixed at b898e42
+- **348.1/344/465.2**: mandatory-task gap (partially fixed — startShowdown blocks re-open; activateAbility still legal alongside resolveFullCombat)
+
+## Session totals through 1a4816e
+
+~90 rules/engine bugs found + fixed across all loops. 1266/0 tests.
+
