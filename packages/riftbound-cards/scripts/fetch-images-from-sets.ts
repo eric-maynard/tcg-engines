@@ -12,6 +12,9 @@ import * as sets from "../src/data/sets/index";
 const ROOT = join(import.meta.dir, "../../..");
 const OUT = join(ROOT, "downloads/card-images");
 const CONC = 12;
+// Sanity CDN supports ?w= for resizing. Full-res is 744×1039 ≈ 800KB;
+// w=400 is ~120KB and plenty for on-board display + hover preview.
+const WIDTH = parseInt(process.env.IMAGE_WIDTH ?? "400", 10);
 
 type Card = { id: string; imageUrl?: string; set?: string };
 const cards: Card[] = [];
@@ -28,7 +31,7 @@ async function one(c: Card) {
   const dest = join(OUT, setDir, `${c.id}.png`);
   if (existsSync(dest) && statSync(dest).size > 1000) { skip++; return; }
   mkdirSync(dirname(dest), { recursive: true });
-  const url = c.imageUrl!.split("?")[0];
+  const url = `${c.imageUrl!.split("?")[0]}?w=${WIDTH}&fm=webp&q=80`;
   try {
     const r = await fetch(url);
     if (!r.ok) { fail++; return; }

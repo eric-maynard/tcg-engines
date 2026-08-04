@@ -397,21 +397,9 @@
     }
 
     .card-name {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 2px 4px;
-      font-size: 9px;
-      font-weight: 600;
-      color: #e0dced;
-      background: linear-gradient(transparent, rgba(10,8,20,0.85));
-      text-align: center;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      pointer-events: none;
-      z-index: 6;
+      /* Card image is authoritative — do not superimpose text on it. Kept as
+         a hidden element so JS that queries .card-name still works. */
+      display: none;
     }
 
     /* Card image fills the whole card — no text body, no stat badges */
@@ -1313,7 +1301,9 @@
       border: 2px solid #4a3f6a;
       border-radius: 8px;
       padding: 8px;
-      z-index: 1000;
+      /* Must sit above the pregame overlay (z-index 2500) so hover detail is
+         visible during mulligan. */
+      z-index: 10000;
       box-shadow: 0 8px 24px rgba(0,0,0,0.6);
       pointer-events: none;
     }
