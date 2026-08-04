@@ -126,14 +126,18 @@ function connectLobbyWs(onOpen) {
         // Close lobby WS before connecting game WS
         if (lobbyWs) { lobbyWs.close(1000); lobbyWs = null; }
 
-        // Brief pause to show "goes first" text, then dismiss and connect
-        setTimeout(() => {
+        const proceed = () => {
           _coinFlipShown = false;
           const overlay = document.getElementById("coinOverlay");
           if (overlay) overlay.classList.remove("visible");
           document.getElementById("startScreen").classList.add("hidden");
+          _soloAutoStart = false;
           connectWs();
-        }, 1500);
+        };
+        // Solo auto-start never showed the coin overlay, so there's nothing
+        // to linger on — connect immediately instead of waiting 1.5s on a
+        // blank screen.
+        if (_soloAutoStart) proceed(); else setTimeout(proceed, 1500);
       }
     }
   };
@@ -367,11 +371,15 @@ async function startSoloGame() {
   // sees _soloAutoStart and auto-sends choose_first when the coinFlip lands,
   // so no d20 overlay is shown — straight to mulligan.
   _soloAutoStart = true;
+  const status = document.getElementById("soloDeckStatus");
+  const btn = document.querySelector('#soloDeckPicker .start-btn');
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = "Starting…";
   connectLobbyWs(() => {
     lobbyWs.send(JSON.stringify({ deckId, type: "select_deck" }));
     lobbyWs.send(JSON.stringify({ type: "start_game" }));
   });
-  document.getElementById("soloDeckPicker").classList.add("hidden");
+  // Keep the picker visible with "Starting…" until proceed() hides #startScreen.
 }
 
 /** Solo (hot-seat) — creates a lobby with P2 auto-joined using default deck */

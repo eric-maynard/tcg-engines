@@ -2554,7 +2554,12 @@ const server = Bun.serve({
     // Serve other static files
     const staticPath = path.join(STATIC_DIR, pathname);
     if (fs.existsSync(staticPath) && !fs.statSync(staticPath).isDirectory()) {
-      return new Response(Bun.file(staticPath));
+      // JS/CSS/HTML must not be cached — they change frequently and stale
+      // copies leave players on a broken mix of old markup + new script.
+      const noCache = /\.(?:js|css|html)$/i.test(pathname);
+      return new Response(Bun.file(staticPath), noCache ? {
+        headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+      } : undefined);
     }
 
     return new Response("Not Found", { status: 404 });
