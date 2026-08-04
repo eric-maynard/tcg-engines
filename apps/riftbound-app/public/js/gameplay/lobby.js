@@ -35,7 +35,9 @@ async function hostLobby() {
 
   document.getElementById("lobbyMenu").classList.add("hidden");
   document.getElementById("lobbyRoom").classList.remove("hidden");
-  document.getElementById("lobbyCode").textContent = lobbyCode;
+  const codeEl = document.getElementById("lobbyCode");
+  codeEl.textContent = lobbyCode;
+  codeEl.style.display = "";
   await loadSavedDecks();
 
   connectLobbyWs();
@@ -324,7 +326,14 @@ async function hostSandbox() {
 
   document.getElementById("lobbyMenu").classList.add("hidden");
   document.getElementById("lobbyRoom").classList.remove("hidden");
-  document.getElementById("lobbyCode").textContent = lobbyCode;
+  // Sandbox lobbies never share a code — hide the code/share section now so it
+  // doesn't flash while loadSavedDecks() awaits and before the first WS update.
+  const codeEl = document.getElementById("lobbyCode");
+  if (codeEl) { codeEl.textContent = ""; codeEl.style.display = "none"; }
+  const copiedEl = document.getElementById("codeCopied");
+  if (copiedEl) copiedEl.style.display = "none";
+  const shareP = codeEl?.nextElementSibling?.nextElementSibling;
+  if (shareP) shareP.style.display = "none";
   await loadSavedDecks();
 
   connectLobbyWs();
