@@ -27,6 +27,23 @@ User played goldfish for 2 minutes and hit 8 issues the loops passed. Investigat
 | 7 zone animation | none | drivers use `.click()`/`executeMove()` — never drag; static PNGs can't show motion |
 | 8 channel 1/turn | rules-via-UI + headless | **stale rule numbers → auto-REFUTED**; game-setup.ts hardcodes 2; `compact()` drops runePool count. **Server was correct (2).** |
 
+## Traveling Merchant specifically (ogn-185-298 "When I move, discard 1, draw 1")
+
+- **UI trace**: TM was in `mainDeck` (p2) all 18 steps — never drawn. UI driver plays same scripted 3-turn game every round → same ~12 cards.
+- **Headless traces**: TM WAS moved (game-r2-10 seq 19). No trigger fired. `enrichCards()` DOES produce the ability; `getGlobalCardRegistry().getAbilities()` returns it. Bug is in the **fireTriggers → matcher** path (agent debugging).
+- **card-behavior observers**: 154 ran; ~15 flagged the identical bug class (rulesText w/o abilities) but only for the ~12 cards that reached hand/board in the trace. Zero grepped TM.
+- **Headless observer**: no rulesText↔abilities check exists in SECTIONS at all.
+- **coverage-check**: computed `unimplementedAbility` but only console.log'd it; never in the JSON report; never run on wf-traces.
+
+**The gap**: card-behavior CHECK works — it flagged 6 sibling cards. It says "for cards in hand/board". TM was never there. Same script every round = same 12 cards audited. 200+ cards structurally unreachable.
+
+**Fixes**:
+- [x] `abilities-coverage.test.ts` — static hard-gate, catches all 101 without traces
+- [ ] Add rulesText↔abilities check to headless SECTIONS
+- [ ] Randomize UI driver's deck per round (or shard card-behavior across the whole pool)
+- [ ] Put `unimplementedAbility` in `coverage.json` report (currently console-only)
+- [ ] Trigger-event assertion in tracer: on standardMove/playUnit/etc, if `rulesText matches /when i move/i` and chain didn't grow → flag
+
 ## Action items
 
 - [x] Add rotation to `.card--exhausted` (rule 143.4)
