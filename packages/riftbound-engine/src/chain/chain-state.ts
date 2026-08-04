@@ -39,6 +39,8 @@ export interface ChainItem {
   readonly controller: string;
   /** The effect to execute when this resolves */
   readonly effect?: unknown;
+  /** Targets chosen at play time (rule 355.8) — bound before resolution */
+  readonly targets?: readonly string[];
   /** Whether this is a triggered ability (auto-added, not player-initiated) */
   readonly triggered?: boolean;
   /** Whether this item was countered (skip execution on resolve) */

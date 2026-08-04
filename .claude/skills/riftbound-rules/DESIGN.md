@@ -13,6 +13,9 @@ Product decisions the visual observer agents must check FOR (not just "is it bro
 - Legend/Champion always visible for both players
 - Battlefield art fills its slot
 
+## Resource management
+- Playing a card requires `pool.energy >= cost` — ready runes are NOT auto-counted or auto-exhausted. The player must explicitly tap runes first.
+
 ## Interactions
 - Hover on any card → floating enlarged card image ONLY (no name/type/rules-text panel)
 - No fly-animation on zone change — cards appear at destination immediately

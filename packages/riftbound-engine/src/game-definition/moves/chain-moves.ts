@@ -112,7 +112,10 @@ function executeResolvedItem(
     const abilities = registry.getAbilities(resolved.cardId) ?? [];
     const spellAbility = abilities.find((a) => a.type === "spell");
     if (spellAbility?.effect) {
-      const effectCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+      const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+      const effectCtx: EffectContext = resolved.targets
+        ? { ...baseCtx, boundTargets: resolved.targets }
+        : baseCtx;
       executeEffect(spellAbility.effect as ExecutableEffect, effectCtx);
     }
     return;
@@ -125,7 +128,11 @@ function executeResolvedItem(
   const effect = effectRest as ExecutableEffect;
 
   const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
-  const effectCtx: EffectContext = _variables ? { ...baseCtx, variables: _variables } : baseCtx;
+  const effectCtx: EffectContext = {
+    ...baseCtx,
+    ...(_variables ? { variables: _variables } : {}),
+    ...(resolved.targets ? { boundTargets: resolved.targets } : {}),
+  };
   executeEffect(effect, effectCtx);
 
   // Rule 419.4.a: abilities that trigger on playing a card fire when that

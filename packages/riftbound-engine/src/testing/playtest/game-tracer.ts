@@ -180,10 +180,25 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
       playerId: active,
     });
 
+    // Hard invariant: a play* move must have deducted at least its cost.
+    // Catches the class where enumerator/condition credit resources the reducer
+    // never charges (e.g. potential-rune-energy widened enumerator only).
+    let costViolation: string | undefined;
+    if ((result as any)?.success && /^play(Unit|Spell|Gear|FromChampionZone)$/.test(chosen.moveId)) {
+      const before = s.runePools?.[active]?.energy ?? 0;
+      const after = engine.getState().runePools?.[active]?.energy ?? 0;
+      const def = allCards.find((c) => chosen.params?.cardId?.endsWith(c.id));
+      const cost = def?.energyCost ?? 0;
+      if (before - after < cost && cost > 0) {
+        costViolation = `${chosen.moveId} ${def?.id} cost=${cost} but energy ${before}→${after} (deducted ${before - after})`;
+      }
+    }
+
     appendFileSync(
       traceFile,
       JSON.stringify({
         seq: seq++,
+        costViolation,
         turn: (s.turn as any)?.number ?? null,
         phase: (s.turn as any)?.phase ?? null,
         player: active,

@@ -37,6 +37,7 @@ const instToDef = (id: string) => id.replace(INST_RE, "") || id;
 
 const moveFailed: any[] = [];
 const enumErrors: any[] = [];
+const costViolations: any[] = [];
 
 for (const f of readdirSync(DIR).filter((f) => f.startsWith("game-") && f.endsWith(".jsonl"))) {
   for (const line of readFileSync(join(DIR, f), "utf8").split("\n")) {
@@ -44,6 +45,7 @@ for (const f of readdirSync(DIR).filter((f) => f.startsWith("game-") && f.endsWi
     const ev = JSON.parse(line);
     if (ev.deadlock) continue;
     if (ev.enumErr) enumErrors.push({ file: f, seq: ev.seq, err: ev.enumErr });
+    if (ev.costViolation) costViolations.push({ file: f, seq: ev.seq, err: ev.costViolation });
     for (const h of ev.hand ?? []) if (h.def) defEverInHand.add(h.def);
     for (const m of ev.available ?? []) {
       if (PLAY_MOVES.has(m.moveId)) {
@@ -105,6 +107,7 @@ const report = {
     neverDrawn: neverDrawn.length,
     moveFailed: moveFailed.length,
     enumErrors: enumErrors.length,
+    costViolations: costViolations.length,
   },
   suspicious: suspicious.map((id) => {
     const c = cardById.get(id);
@@ -118,6 +121,10 @@ const report = {
 
 writeFileSync(join(DIR, "coverage.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.summary, null, 2));
+if (costViolations.length) {
+  console.log(`\n${costViolations.length} COST VIOLATIONS (played for less than energyCost):`);
+  for (const v of costViolations.slice(0, 15)) console.log(`  ${v.file} seq=${v.seq}: ${v.err}`);
+}
 if (unimplementedAbility.length) {
   console.log(`\n${unimplementedAbility.length} cards PLAYED with rulesText but NO abilities[] (effect never fires):`);
   for (const id of unimplementedAbility.slice(0, 20)) {

@@ -177,24 +177,17 @@ function getRepeatEnergySurcharge(cardId: string, repeatCount: number): number {
 }
 
 /**
- * Rule 357.1.a: during the Pay Costs step a player may activate [Reaction]
- * resource abilities (e.g. a rune's "[T]: Add [1]") to add Energy. For
- * affordability checks we therefore credit each ready rune in the player's
- * Rune Pool as +1 potential energy on top of the banked pool.
+ * Rule 357.1.a permits activating rune Add-abilities during Pay Costs, but by
+ * design the engine requires the player to exhaust runes explicitly first —
+ * crediting ready runes here made the enumerator offer plays the reducer then
+ * under-charged for. Returns 0; kept for existing callsites.
  */
 export function getPotentialRuneEnergy(
-  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
-  counters: { getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined },
-  playerId: string,
+  _zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  _counters: { getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined },
+  _playerId: string,
 ): number {
-  let potential = 0;
-  const runes = zones.getCardsInZone("runePool" as CoreZoneId, playerId as CorePlayerId);
-  for (const runeId of runes) {
-    if (!counters.getFlag(runeId, "exhausted")) {
-      potential += 1;
-    }
-  }
-  return potential;
+  return 0;
 }
 
 /**
@@ -798,27 +791,53 @@ export const cardPlayMoves: Partial<
         // Rule 355.8 / 419.2.a: gate on caster-chosen targets (including modal options).
         const abilities = registry.getAbilities(cardId as string) ?? [];
         const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
-        if (
-          !spellEffectHasLegalTargets(spellAbility?.effect as SpellEffectTargetShape | undefined, {
-            cards: {
-              getCardOwner: (c) => context.cards.getCardOwner(c),
-            },
-            draft: state,
-            playerId: context.playerId as string,
-            sourceCardId: cardId as string,
-            zones: {
-              getCardZone: (c) => context.zones.getCardZone(c),
-              getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
-            },
-          })
-        ) {
+        const spellEffect = spellAbility?.effect as SpellEffectTargetShape | undefined;
+        const resolverCtx = {
+          cards: {
+            getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
+            getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
+          },
+          draft: state,
+          playerId: context.playerId as string,
+          sourceCardId: cardId as string,
+          zones: {
+            getCardZone: (c: CoreCardId) => context.zones.getCardZone(c),
+            getCardsInZone: (z: CoreZoneId, p?: CorePlayerId) => context.zones.getCardsInZone(z, p),
+          },
+        };
+        if (!spellEffectHasLegalTargets(spellEffect, resolverCtx)) {
           continue;
         }
 
-        results.push({
-          cardId: cardId as string,
-          playerId: context.playerId as string,
-        });
+        // Rule 355.8: targets are chosen when the spell is PLAYED. For a
+        // single-card target descriptor, enumerate one legal Play per valid
+        // target so the caster picks. Programmatic selections (quantity:"all"),
+        // player/battlefield targets, and self are not caster-chosen.
+        const tgt = spellEffect?.target;
+        const isCardTarget =
+          tgt !== undefined &&
+          tgt.type !== "self" &&
+          tgt.type !== "player" &&
+          tgt.type !== "battlefield" &&
+          tgt.quantity !== "all";
+        if (isCardTarget) {
+          const validTargets = resolveTarget(
+            tgt as Parameters<typeof resolveTarget>[0],
+            resolverCtx,
+          );
+          for (const targetId of validTargets) {
+            results.push({
+              cardId: cardId as string,
+              playerId: context.playerId as string,
+              targets: [targetId as string],
+            });
+          }
+        } else {
+          results.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+          });
+        }
       }
       return results;
     },
@@ -868,7 +887,7 @@ export const cardPlayMoves: Partial<
       const turnOrder = Object.keys(draft.players);
       draft.interaction = addToChain(
         interaction,
-        { cardId, controller: playerId, effect: effectToStore, type: "spell" },
+        { cardId, controller: playerId, effect: effectToStore, targets, type: "spell" },
         turnOrder,
       );
 

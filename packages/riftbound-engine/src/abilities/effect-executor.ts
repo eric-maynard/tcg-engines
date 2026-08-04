@@ -66,6 +66,13 @@ export interface EffectContext {
    * read the chosen value during resolution.
    */
   readonly variables?: Record<string, number>;
+  /**
+   * Targets bound when the spell/ability was placed on the chain (rule 355.8).
+   * When present, {@link getTargetIds} returns these instead of re-resolving,
+   * so responses that change board state between play and resolution can't
+   * silently retarget the effect.
+   */
+  readonly boundTargets?: readonly string[];
   readonly zones: {
     moveCard: (params: {
       cardId: CoreCardId;
@@ -109,6 +116,9 @@ export interface EffectContext {
  * Resolve targets for an effect using the target resolver.
  */
 function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): string[] {
+  if (ctx.boundTargets) {
+    return [...ctx.boundTargets];
+  }
   return resolveTarget(effect.target, {
     cards: ctx.cards,
     draft: ctx.draft,
