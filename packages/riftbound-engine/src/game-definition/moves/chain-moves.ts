@@ -125,6 +125,31 @@ function executeResolvedItem(
   const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
   const effectCtx: EffectContext = _variables ? { ...baseCtx, variables: _variables } : baseCtx;
   executeEffect(effect, effectCtx);
+
+  // Rule 419.4.a: abilities that trigger on playing a card fire when that
+  // act is completed by resolution — not when the card is placed on the
+  // chain, and never if the card was countered (425.1.b).
+  if (resolved.type === "spell") {
+    const trigCtx = {
+      cards: context.cards,
+      counters: context.counters,
+      draft,
+      zones: context.zones,
+    };
+    fireTriggers(
+      { cardId: resolved.cardId, playerId: resolved.controller, type: "play-spell" },
+      trigCtx,
+    );
+    fireTriggers(
+      {
+        cardId: resolved.cardId,
+        cardType: "spell",
+        playerId: resolved.controller,
+        type: "play-card",
+      },
+      trigCtx,
+    );
+  }
 }
 
 /**

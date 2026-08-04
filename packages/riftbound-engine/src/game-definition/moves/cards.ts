@@ -786,17 +786,10 @@ export const cardPlayMoves: Partial<
         turnOrder,
       );
 
-      // Fire triggers BEFORE incrementing the Rule-724 counter (see
-      // Comment in playUnit). Legion on this spell must consult plays
-      // Made EARLIER in the turn.
-      fireTriggers(
-        { cardId, playerId, type: "play-spell" },
-        { cards: context.cards, counters: context.counters, draft, zones },
-      );
-      fireTriggers(
-        { cardId, cardType: "spell", playerId, type: "play-card" },
-        { cards: context.cards, counters: context.counters, draft, zones },
-      );
+      // Rule 419.4.a: play-spell / play-card triggers fire when the spell
+      // RESOLVES (not here) — see executeResolvedItem in chain-moves.ts.
+      // Firing here would trigger e.g. Abandoned Hall even on countered
+      // spells (425.1.b).
 
       // Rule 724 (Legion) tracker: count this spell play so subsequent
       // Cards can satisfy their Legion conditions.

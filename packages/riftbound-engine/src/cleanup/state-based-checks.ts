@@ -299,8 +299,14 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     const unitsAtBf = ctx.zones.getCardsInZone(bfZoneId);
 
     // Rule 323.6: a player loses control of a Battlefield they control if
-    // they no longer have a Unit at that Battlefield.
-    if (bf.controller) {
+    // they no longer have a Unit at that Battlefield — but only during an
+    // Open State (no chain, no showdown; rule 190.4.c). Pending items keep
+    // the chain closed so a unit banished-then-replayed by a spell keeps its
+    // battlefield controlled through the sequence.
+    const isOpenState =
+      !ctx.draft.interaction?.chain?.active &&
+      (ctx.draft.interaction?.showdownStack?.length ?? 0) === 0;
+    if (bf.controller && isOpenState) {
       const controllerHasUnit = unitsAtBf.some(
         (id) =>
           ctx.cards.getCardOwner(id) === bf.controller &&
