@@ -754,7 +754,7 @@ export const chainMoves: Partial<
       }
       return [{ playerId: context.playerId as string }];
     },
-    reducer: (draft) => {
+    reducer: (draft, context) => {
       if (!draft.interaction) {
         return;
       }
@@ -762,13 +762,38 @@ export const chainMoves: Partial<
       const before = getActiveShowdown(draft.interaction);
       draft.interaction = passFocusState(draft.interaction);
 
-      // If showdown ended (all passed), clean up and mark the battlefield's
-      // showdown as complete so resolveFullCombat becomes legal (rule 625.1).
+      // If showdown ended (all passed), clean up.
       if (isShowdownEnded(draft.interaction)) {
-        if (before?.battlefieldId) {
-          const bf = draft.battlefields[before.battlefieldId];
-          if (bf) {
+        const bf = before?.battlefieldId ? draft.battlefields[before.battlefieldId] : undefined;
+        if (bf) {
+          if (before?.isCombatShowdown) {
+            // Rule 348.1 → resolveFullCombat becomes legal (Combat Damage Step).
             bf.showdownComplete = true;
+          } else {
+            // Rule 348.2.a: Non-Combat Showdown close — if only one player's
+            // units remain and they don't already control it, they establish
+            // Control. 348.2.a.1: this is a Conquer if not yet scored.
+            const bfZone = `battlefield-${before!.battlefieldId}` as CoreZoneId;
+            const owners = new Set<string>();
+            for (const cid of context.zones.getCardsInZone(bfZone)) {
+              const o = context.cards.getCardOwner(cid);
+              if (o) owners.add(o as string);
+            }
+            if (owners.size === 1) {
+              const solo = [...owners][0];
+              if (bf.controller !== solo) {
+                bf.controller = solo;
+                if (!draft.conqueredThisTurn[solo]) draft.conqueredThisTurn[solo] = [];
+                draft.conqueredThisTurn[solo].push(before!.battlefieldId);
+                const scored = draft.scoredThisTurn[solo] ?? [];
+                if (!scored.includes(before!.battlefieldId)) {
+                  const p = draft.players[solo];
+                  if (p) p.victoryPoints += 1;
+                  if (!draft.scoredThisTurn[solo]) draft.scoredThisTurn[solo] = [];
+                  draft.scoredThisTurn[solo].push(before!.battlefieldId);
+                }
+              }
+            }
           }
         }
         draft.interaction = endShowdownState(draft.interaction);
