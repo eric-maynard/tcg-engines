@@ -483,13 +483,25 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
 
     case "discard": {
       const count = resolveAmount(effect.amount ?? 1, ctx);
-      const hand = ctx.zones.getCardsInZone("hand" as CoreZoneId, ctx.playerId as CorePlayerId);
-      for (let i = 0; i < Math.min(count, hand.length); i++) {
-        if (hand[i]) {
-          ctx.zones.moveCard({
-            cardId: hand[i],
-            targetZoneId: "trash" as CoreZoneId,
-          });
+      const hand = ctx.zones
+        .getCardsInZone("hand" as CoreZoneId, ctx.playerId as CorePlayerId)
+        .map((id) => id as string);
+      if (hand.length === 0) break;
+      // The discarding player chooses which card. Use pendingChoice so play
+      // pauses until they pick (goldfish auto-resolves via pickDefaultForChoice).
+      // count>1 falls back to auto-discard for now — extend PendingChoice with
+      // a `remaining` counter to support multi-pick properly.
+      if (count === 1) {
+        ctx.draft.pendingChoice = {
+          onPicked: "discard",
+          prompter: ctx.playerId,
+          revealed: hand,
+          revealer: ctx.playerId,
+          type: "reveal-and-pick",
+        };
+      } else {
+        for (let i = 0; i < Math.min(count, hand.length); i++) {
+          ctx.zones.moveCard({ cardId: hand[i] as CoreCardId, targetZoneId: "trash" as CoreZoneId });
         }
       }
       break;

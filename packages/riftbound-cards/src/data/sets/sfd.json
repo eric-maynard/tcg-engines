@@ -3086,6 +3086,7 @@
           "effect": {
             "amount": 1,
             "target": {
+              "quantity": { "upTo": 3 },
               "type": "unit"
             },
             "type": "damage"

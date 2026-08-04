@@ -80,6 +80,15 @@ const suspicious = drawnButNeverPlayable.filter((id) => {
   return true;
 });
 
+// Cards played whose rulesText should have produced an ability but didn't —
+// these silently do nothing when their trigger fires (Traveling Merchant class).
+const unimplementedAbility = [...defEverPlayed].filter((id) => {
+  const c = cardById.get(id);
+  if (!c || !c.rulesText?.trim()) return false;
+  if (/^\s*\[/.test(c.rulesText)) return false; // pure keyword text like [Tank]
+  return !c.abilities || c.abilities.length === 0;
+});
+
 const report = {
   summary: {
     defsInDecks: defInDeck.size,
@@ -88,6 +97,7 @@ const report = {
     everPlayed: defEverPlayed.size,
     drawnButNeverPlayable: drawnButNeverPlayable.length,
     suspicious: suspicious.length,
+    unimplementedAbility: unimplementedAbility.length,
     neverDrawn: neverDrawn.length,
     moveFailed: moveFailed.length,
     enumErrors: enumErrors.length,
@@ -104,6 +114,13 @@ const report = {
 
 writeFileSync(join(DIR, "coverage.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.summary, null, 2));
+if (unimplementedAbility.length) {
+  console.log(`\n${unimplementedAbility.length} cards PLAYED with rulesText but NO abilities[] (effect never fires):`);
+  for (const id of unimplementedAbility.slice(0, 20)) {
+    const c = cardById.get(id);
+    console.log(`  ${id}  ${c?.name}: "${(c?.rulesText || "").slice(0, 70)}"`);
+  }
+}
 if (suspicious.length) {
   console.log("\nsuspicious (cheap, non-reaction, drawn but never playable):");
   for (const s of report.suspicious) console.log(`  ${s.id}  ${s.name}  ${s.type} cost=${s.cost}`);

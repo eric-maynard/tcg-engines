@@ -236,7 +236,7 @@ function renderMulliganUI(pregame, state, container) {
       <div class="mulligan-actions" id="mulliganBtns">
         <button class="start-btn mulligan-btn-keep" onclick="confirmMulligan()">Keep Hand</button>
       </div>
-      <div class="pregame-info">Selected cards are recycled to the bottom of your deck and replaced with new draws (Rule 117)</div>
+      <div class="pregame-info">Selected cards go to the bottom of your deck and are replaced with new draws</div>
     `;
   }
 

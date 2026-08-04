@@ -1939,7 +1939,23 @@
       "isChampion": false,
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nIgnore [Deflect] while paying this spell's cost.\nGive an enemy Body ([body]) unit -5 [Might] this turn.",
       "abilities": [
-        null
+        {
+          "keyword": "Reaction",
+          "type": "keyword"
+        },
+        {
+          "effect": {
+            "amount": -5,
+            "duration": "turn",
+            "target": {
+              "controller": "enemy",
+              "type": "unit"
+            },
+            "type": "modify-might"
+          },
+          "timing": "reaction",
+          "type": "spell"
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/da019355562b207814be6aec55bccf415bd416df-744x1039.png?accountingTag=RB",

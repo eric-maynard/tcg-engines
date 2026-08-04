@@ -797,8 +797,14 @@ export function getRawCards(): Card[] {
  */
 function adaptJsonCard(c: Record<string, unknown>): Card {
   const domains = c.domains as string[] | undefined;
+  // Rule 355.8: a set-JSON `abilities: [null]` is a generator parse miss, not a
+  // hand-authored opt-out. Emitting [] here makes enrichCard() skip re-parsing
+  // rulesText, so a targeted spell reaches the engine with no target descriptor
+  // and is offered with zero legal targets. Leave the field undefined when no
+  // real ability survived so enrichCard() re-parses from rulesText.
+  const parsedAbilities = ((c.abilities as unknown[]) ?? []).filter(Boolean);
   return {
-    abilities: ((c.abilities as unknown[]) ?? []).filter(Boolean),
+    abilities: parsedAbilities.length > 0 ? parsedAbilities : undefined,
     cardNumber: c.collectorNumber,
     cardType: c.cardType,
     domain: domains?.length === 1 ? domains[0] : domains,

@@ -677,14 +677,27 @@ export const cardPlayMoves: Partial<
       const abilities = registry.getAbilities(context.params.cardId) ?? [];
       const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
       const effect = spellAbility?.effect as
-        | { target?: { type: string; quantity?: number | "all" }; player?: string }
+        | {
+            target?: {
+              type: string;
+              quantity?: number | "all" | "any" | { upTo?: number; atLeast?: number };
+            };
+            player?: string;
+          }
         | undefined;
       // Rule 355.10.d: quantity:"all" selects programmatically — those objects are
       // not caster-chosen targets, so 355.8's ≥1-valid-target gate does not apply.
+      // Rule 355.13 / 419.2.a: "up to N" / "any" permits choosing zero targets,
+      // so a spell with an upTo quantity is legal to play with no matches.
+      const qty = effect?.target?.quantity;
+      const zeroTargetsLegal =
+        qty === "any" ||
+        (typeof qty === "object" && qty.upTo !== undefined && qty.atLeast === undefined);
       if (
         effect?.target &&
         effect.target.type !== "self" &&
         effect.target.quantity !== "all" &&
+        !zeroTargetsLegal &&
         !effect.player
       ) {
         const resolved = resolveTarget(
@@ -766,14 +779,27 @@ export const cardPlayMoves: Partial<
         const abilities = registry.getAbilities(cardId as string) ?? [];
         const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
         const effect = spellAbility?.effect as
-          | { target?: { type: string; quantity?: number | "all" }; player?: string }
+          | {
+              target?: {
+                type: string;
+                quantity?: number | "all" | "any" | { upTo?: number; atLeast?: number };
+              };
+              player?: string;
+            }
           | undefined;
         // Rule 355.10.d: quantity:"all" is programmatic selection, not a caster
         // Choice — do not require ≥1 match to enumerate the play.
+        // Rule 355.13 / 419.2.a: "up to N" / "any" permits choosing zero targets,
+        // so a spell with an upTo quantity is legal to play with no matches.
+        const qty = effect?.target?.quantity;
+        const zeroTargetsLegal =
+          qty === "any" ||
+          (typeof qty === "object" && qty.upTo !== undefined && qty.atLeast === undefined);
         if (
           effect?.target &&
           effect.target.type !== "self" &&
           effect.target.quantity !== "all" &&
+          !zeroTargetsLegal &&
           !effect.player
         ) {
           const resolved = resolveTarget(
