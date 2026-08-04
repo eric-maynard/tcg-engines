@@ -15,13 +15,15 @@ const TRACES = Array.from({length: N_TRACES}, (_, i) => `${REPO}/do_not_commit/w
 
 // 2026-03-30 (Unleashed) numbering — see DIGEST.md.
 const SECTIONS = [
-  {n: 3, name: 'Turn Structure', rules: '300-324', focus: 'phase transitions, priority/focus, turn advancement, rune-pool timing, cleanup'},
+  {n: 2, name: 'Game Concepts', rules: '100-206', focus: 'units enter exhausted (143.4), rune types (164), zones (200-206), facedown state, priority'},
+  {n: 3, name: 'Turn Structure', rules: '300-324', focus: 'phase transitions, priority/focus, turn advancement, rune-pool timing, cleanup step 323.13 mandatory-combat'},
   {n: 4, name: 'Chains & Showdowns', rules: '325-348', focus: 'LIFO chain resolution, priority passing, showdown open/close, relevant players, focus passing'},
-  {n: 6, name: 'Abilities', rules: '360-406', focus: 'triggered abilities go on chain, activated ability legality, replacement effects, reflexive/delayed triggers'},
-  {n: 7, name: 'Game Actions', rules: '407-439', focus: 'move exhausts units, recycle destination, exhaust/ready state, discretionary vs directed, predict/prevent/create'},
-  {n: 8, name: 'Movement', rules: '440-453', focus: 'standard move, ganking, recalls'},
-  {n: 9, name: 'Combat & Scoring', rules: '454-467', focus: 'mandatory showdown step, attacker-first damage, contested clearing, conquer/hold once per bf'},
-  {n: 12, name: 'Keywords', rules: '800-826', focus: 'Hidden/Tank/Assault/Deathknell + Equip/Quick-Draw/Repeat/Ambush/Hunt/Backline firing correctly'},
+  {n: 5, name: 'Playing Cards', rules: '349-359', focus: 'play steps (349-359), pay-costs 357.1.a, target selection 355.x, unit finalizes exhausted 359.2.c'},
+  {n: 6, name: 'Abilities', rules: '360-406', focus: 'triggered abilities go on chain (383.3), activated ability legality, replacement effects, reflexive/delayed triggers'},
+  {n: 7, name: 'Game Actions', rules: '407-444', focus: 'move exhausts units, recycle destination, exhaust/ready state, discretionary vs directed, channel (430), create (439)'},
+  {n: 8, name: 'Movement', rules: '445-458', focus: 'standard move, ganking, recalls'},
+  {n: 9, name: 'Combat & Scoring', rules: '459-467', focus: 'mandatory showdown step (460), attacker-first damage (465), contested clearing, conquer/hold once per bf (466)'},
+  {n: 12, name: 'Keywords', rules: '800-829', focus: 'Hidden/Tank/Assault/Deathknell/Empower + Equip/Quick-Draw/Repeat/Ambush/Hunt/Backline firing correctly'},
 ]
 
 const FINDINGS_SCHEMA = {

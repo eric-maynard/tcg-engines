@@ -38,10 +38,15 @@ const readState = () => p.evaluate(() => {
       actionButtons: [...document.querySelectorAll('#actionsList .action-btn')].map(e=>e.textContent?.trim()).slice(0,20),
       handCount: document.querySelectorAll('#player-hand .card').length,
       baseCount: document.querySelectorAll('#player-base .card').length,
+      baseExhausted: document.querySelectorAll('#player-base .card.card--exhausted').length,
       runePoolCount: document.querySelectorAll('#player-runePool .card').length,
-      exhaustedRunes: document.querySelectorAll('#player-runePool .card.exhausted').length,
+      exhaustedRunes: document.querySelectorAll('#player-runePool .card.exhausted, #player-runePool .card.card--exhausted').length,
       energyDisplay: document.querySelector('.rb-value')?.textContent?.trim(),
+      resourceBarText: document.getElementById('resourceBar')?.textContent?.replace(/\s+/g,' ').trim(),
       bfUnits: Object.fromEntries([...document.querySelectorAll('[id^="bf-zone-"]')].map(z=>[z.id, z.querySelectorAll('.card').length])),
+      pregameVisible: document.getElementById("pregameOverlay")?.classList.contains("visible"),
+      peekVisible: document.getElementById("peekOverlay")?.classList.contains("visible"),
+      hoverPreviewShown: !!document.querySelector('.card-preview.visible'),
     },
   };
 });
@@ -80,10 +85,13 @@ await p.waitForTimeout(400);
 await p.selectOption('#soloDeckSelect', { index: 1 }).catch(()=>{});
 await p.click('#soloDeckPicker button:has-text("Play")');
 await p.waitForSelector('#pregameOverlay.visible, #player-hand .card', { timeout: 10000 }).catch(()=>{});
+await snap("pregame-0", "pregame first shown");
 for (let i=0;i<12;i++) {
   if (!(await p.$('#pregameOverlay.visible, #coinOverlay.visible'))) break;
   const keep = await p.$('.mulligan-btn-keep, button:has-text("Keep")');
-  if (keep) { await keep.click(); await p.waitForTimeout(1200); continue; }
+  if (keep) { await snap(`mulligan-${i}`, "mulligan visible"); await keep.click(); await p.waitForTimeout(1200); continue; }
+  const bfc = await p.$('.bf-choice:not(.selected)');
+  if (bfc) { await snap(`bf-select-${i}`, "battlefield selection"); await bfc.click(); await p.waitForTimeout(600); continue; }
   const btn = await p.$('#pregameOverlay button:not([disabled])');
   if (btn) { await btn.click(); await p.waitForTimeout(600); continue; }
   await p.waitForTimeout(400);

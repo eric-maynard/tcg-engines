@@ -58,6 +58,12 @@ export function getZoneCards(engine: Engine, zone: string, playerId?: string): s
 }
 
 /** Map an instance id back to its definition id. */
+export function getCardMeta(engine: Engine, instanceId: string): Record<string, unknown> | undefined {
+  const internal = getInternal(engine);
+  const meta = internal.cardMetas[instanceId] as (Record<string, unknown> & { __flags?: Record<string, boolean> }) | undefined;
+  return meta ? { ...meta, exhausted: meta.__flags?.exhausted ?? (meta as { exhausted?: boolean }).exhausted } : undefined;
+}
+
 export function definitionIdOf(engine: Engine, instanceId: string): string | undefined {
   return getInternal(engine).cards[instanceId]?.definitionId;
 }

@@ -10,11 +10,13 @@ const REPO = '/root/src/tcg/tcg-engines'
 const DIR = '/tmp/rules-shots'
 const MAX_ROUNDS = args?.rounds ?? 20
 const CHECKS = [
-  { key: 'resource', focus: 'Rules 515.3/592/594/160: exhaustRune adds energy? recycleRune adds power (NOT energy)? channel adds 2/turn? pools empty at end of turn?' },
-  { key: 'play-legality', focus: 'Rules 508/589: server availableMoves matches what SHOULD be legal given zones/energy/hand? UI action list matches server moves?' },
-  { key: 'turn-flow', focus: 'Rules 515-517: turn.number advances? Phases cycle? Hand +1/turn from draw? readyAll clears exhausted?' },
-  { key: 'card-behavior', focus: 'For cards in hand/board (see zones), do their abilities match rulesText? Triggers fire correctly? Effects don\'t hit wrong targets?' },
-  { key: 'zone-transitions', focus: 'Rules 596/319/450: playUnit → base? standardMove → battlefield + showdown? Cards leave source zone?' },
+  { key: 'resource', focus: 'Rules 315.3.b/430.4.a/413/414/160: exhaustRune adds energy? recycleRune adds power (NOT energy)? channel adds 2/turn? pools empty at end of turn?' },
+  { key: 'play-legality', focus: 'Rules 308/309/419/357.1.a: server availableMoves matches what SHOULD be legal given zones/energy/hand? UI action list matches server moves?' },
+  { key: 'turn-flow', focus: 'Rules 315-317: turn.number advances? Phases cycle? Hand +1/turn from draw? readyAll clears exhausted?' },
+  { key: 'entry-state', focus: 'Rule 143.4/178.1.a.1/359.2.c: units enter base with meta.exhausted=true AND ui shows .card--exhausted? Gear/tokens enter correct zone?' },
+  { key: 'card-behavior', focus: 'For cards in hand/board (see zones), do their abilities match rulesText? Triggers fire correctly (rule 383)? Effects don\'t hit wrong targets?' },
+  { key: 'zone-transitions', focus: 'Rules 445/319/450: playUnit → base? standardMove → battlefield + showdown? Cards leave source zone?' },
+  { key: 'ui-render', focus: 'Does the DOM (ui.*) reflect the state? runePoolCount == runePool zone size? baseCount matches? exhaustedRunes matches?' },
 ]
 const FINDINGS = { type:'object', properties:{findings:{type:'array',items:{type:'object',properties:{ruleId:{type:'string'},severity:{type:'string',enum:['high','medium','low']},step:{type:'string'},expected:{type:'string'},observed:{type:'string'},layer:{type:'string',enum:['server','ui','engine','card']}},required:['ruleId','severity','expected','observed','layer']}}},required:['findings']}
 const VERDICT = { type:'object', properties:{verdict:{type:'string',enum:['CONFIRMED','REFUTED']},reason:{type:'string'},file:{type:'string'},line:{type:'number'}}, required:['verdict','reason'] }
@@ -52,6 +54,7 @@ Card lookup: \`grep -rl "<def-id>" ${REPO}/packages/riftbound-cards/src/cards/\`
 **Focus**: ${j.c.key} — ${j.c.focus}
 
 Read \`${DIR}/trace.json\` (JSON array). Extract entries [${j.i-1}] (before) and [${j.i}] (after). Each has {step,action,result,state:{turn,runePools,battlefields,zones,interaction},moves,ui}.
+Also read ${REPO}/.claude/skills/riftbound-rules/DESIGN.md — the UI must match this design intent, not just be "not broken".
 
 Does step ${j.i}'s action + resulting state comply with the rules for THIS focus? Report ≤2 concrete violations (rule id, expected per rule, observed from trace, layer=server|engine|ui|card), or [] if compliant.`,
       { label:`R${R} ${j.c.key}@${j.i}`, phase:'Judge', schema:FINDINGS }

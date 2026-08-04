@@ -17,6 +17,7 @@ import {
   buildDefaultDeck,
   createPlayableGame,
   definitionIdOf,
+  getCardMeta,
   getZoneCards,
   type Engine,
 } from "./game-setup";
@@ -60,6 +61,8 @@ function mulberry32(seed: string) {
 }
 
 function compact(s: RiftboundGameState, engine?: Engine) {
+  const zoneCards = (z: string) =>
+    engine ? getZoneCards(engine, z).map((id) => ({ id, exhausted: getCardMeta(engine, id)?.exhausted })) : [];
   return {
     turn: s.turn,
     status: s.status,
@@ -69,13 +72,16 @@ function compact(s: RiftboundGameState, engine?: Engine) {
       Object.entries(s.players).map(([id, p]: [string, any]) => [id, p?.victoryPoints ?? 0])
     ),
     runePools: s.runePools,
+    // Rule 143.4 / 315.3.b need these visible in the trace.
+    base: zoneCards("base"),
+    runePoolZone: zoneCards("runePool"),
     battlefields: Object.fromEntries(
       Object.entries(s.battlefields).map(([id, bf]: [string, any]) => [
         id,
         {
           controller: bf.controller,
           contested: bf.contested,
-          units: engine ? getZoneCards(engine, `battlefield-${id}`) : [],
+          units: zoneCards(`battlefield-${id}`),
         },
       ])
     ),
