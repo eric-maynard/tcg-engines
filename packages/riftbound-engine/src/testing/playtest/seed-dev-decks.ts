@@ -63,8 +63,15 @@ function toSavedDeck(name: string, d: ReturnType<typeof buildDefaultDeck>) {
   };
 }
 
-for (const user of ["dev", "dev2"]) {
-  const token = await loginOrRegister(user, user);
+// login.html enforces client-side email format on the username field, so seed
+// email-shaped usernames. Passwords stay short for dev convenience.
+const ACCOUNTS: [string, string][] = [
+  ["dev@riftbound.local", "dev"],
+  ["dev2@riftbound.local", "dev2"],
+];
+
+for (const [user, password] of ACCOUNTS) {
+  const token = await loginOrRegister(user, password);
   console.log(`[seed] ${user}: token ${token.slice(0, 8)}…`);
   const existing: any[] = (await j(
     await fetch(`${BASE}/api/saved-decks`, { headers: { authorization: `Bearer ${token}` } })
