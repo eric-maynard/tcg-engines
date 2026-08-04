@@ -71,9 +71,73 @@ await shot("07-board");
 const hcard = await p.$("#player-hand .card, .hand-zone .card");
 if (hcard) { await hcard.hover(); await p.waitForTimeout(400); await shot("08-hand-hover"); }
 
+// Gameplay: click through a couple of turns. All interactions best-effort —
+// a broken selector should record a screenshot, not abort the drive.
+p.setDefaultTimeout(4000);
+const tryClick = async (sel: string) => {
+  try { await p.locator(sel).first().click({ timeout: 3000 }); await p.waitForTimeout(400); return true; }
+  catch { return false; }
+};
+const clickAction = (name: string) => tryClick(`.action-btn:has-text("${name}"), button:has-text("${name}")`);
+const tryHover = async (sel: string) => {
+  try { await p.locator(sel).first().hover({ timeout: 3000 }); await p.waitForTimeout(300); return true; }
+  catch { return false; }
+};
+
+// Dismiss any onboarding tip
+await tryClick('.tip-close, [aria-label="Close"], .onboarding-close');
+hidePreview: await p.mouse.move(5, 5);
+await p.waitForTimeout(200);
+
+// Tap runes for energy (via action list — direct click may need a different selector)
+await tryClick('.rune-stack .card:not(.card--exhausted)');
+await tryClick('.rune-stack .card:not(.card--exhausted)');
+if (!await p.$('.rune-stack .card.card--exhausted')) {
+  await clickAction("Exhaust Rune"); await clickAction("Exhaust Rune");
+}
+await shot("10-runes-tapped");
+
+// Hover a rune (rotated?)
+if (await tryHover('.rune-stack .card')) await shot("10b-rune-hover");
+
+// Try to play the first playable hand card
+if (await tryClick('#player-hand .card.playable, .hand-zone .card.playable')) {
+  await tryClick('#actionBarBtns button:not([disabled])');
+}
+await shot("11-after-play-attempt");
+
+// Hover a battlefield
+if (await tryHover('.bf-art')) await shot("12-bf-hover");
+
+// Hover legend
+if (await tryHover('.identity-cards .card, .legend-zone .card, [data-zone="legendZone"] .card')) await shot("13-legend-hover");
+
+// End turn twice
+for (let t = 0; t < 2; t++) {
+  await clickAction("End Turn");
+  await p.waitForTimeout(1000);
+  // Pass any showdown/chain prompts
+  for (let k = 0; k < 6; k++) {
+    if (!(await clickAction("Pass"))) break;
+    await p.waitForTimeout(400);
+  }
+}
+await shot("14-turn3");
+
+// Open the game log if there is one
+await tryClick('#gameLog, .game-log');
+await shot("15-log");
+
 // Check the decks page too
 await p.goto("http://localhost:3000/decks", { waitUntil: "networkidle" });
 await shot("09-decks");
+
+// Builder page
+try {
+  await p.goto("http://localhost:3000/builder", { waitUntil: "networkidle", timeout: 15000 });
+  await p.waitForTimeout(800);
+  await shot("16-builder");
+} catch {}
 
 await b.close();
 console.log("done → " + OUT);

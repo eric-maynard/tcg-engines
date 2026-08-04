@@ -9,8 +9,10 @@ export const meta = {
 
 const SHOTS_DIR = args?.shotsDir ?? '/tmp/ui-shots'
 const shots = args?.shots ?? [
-  '02-lobby.png', '03-goldfish-lobby.png', '04-deck-selected.png',
-  '05a-turn-order.png', '06b-mulligan-hover.png', '07-board.png', '08-hand-hover.png', '09-decks.png',
+  '02-lobby.png', '03-goldfish-lobby.png', '04-deck-selected.png', '05a-turn-order.png',
+  '06b-mulligan-hover.png', '07-board.png', '08-hand-hover.png', '09-decks.png',
+  '10-runes-tapped.png', '11-after-play-attempt.png', '12-bf-hover.png', '14-turn3.png',
+  '15-log.png', '16-builder.png',
 ]
 
 const LENSES = [
