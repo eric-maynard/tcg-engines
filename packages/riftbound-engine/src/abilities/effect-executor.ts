@@ -12,6 +12,7 @@ import type {
 } from "@tcg/core";
 import type { GrantedKeyword, RiftboundCardMeta, RiftboundGameState } from "../types";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { hasPlayerWon } from "../game-definition/win-conditions/victory";
 import { checkReplacement, markReplacementConsumed } from "./replacement-effects";
 import type { TargetDescriptor } from "./target-resolver";
 import { resolveTarget } from "./target-resolver";
@@ -303,6 +304,10 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
               const opponent = ctx.draft.players[opponentId];
               if (opponent) {
                 opponent.victoryPoints += 1;
+                if (hasPlayerWon(ctx.draft, opponentId)) {
+                  ctx.draft.status = "finished";
+                  ctx.draft.winner = opponentId;
+                }
               }
             }
           }
@@ -397,6 +402,10 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       const player = ctx.draft.players[ctx.playerId];
       if (player) {
         player.victoryPoints += amount;
+        if (hasPlayerWon(ctx.draft, ctx.playerId)) {
+          ctx.draft.status = "finished";
+          ctx.draft.winner = ctx.playerId;
+        }
       }
       break;
     }

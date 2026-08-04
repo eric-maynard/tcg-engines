@@ -32,6 +32,7 @@ import { fireTriggers } from "../../abilities/trigger-runner";
 import { performCleanup } from "../../cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
+import { hasPlayerWon } from "../win-conditions/victory";
 
 /**
  * Build an EffectContext from a move reducer's context.
@@ -816,6 +817,15 @@ export const chainMoves: Partial<
                   if (p) p.victoryPoints += 1;
                   if (!draft.scoredThisTurn[solo]) draft.scoredThisTurn[solo] = [];
                   draft.scoredThisTurn[solo].push(before!.battlefieldId);
+                  if (hasPlayerWon(draft, solo)) {
+                    draft.status = "finished";
+                    draft.winner = solo;
+                    context.endGame?.({
+                      metadata: { finalScore: p?.victoryPoints ?? 0, method: "conquer" },
+                      reason: "victory_points",
+                      winner: solo as CorePlayerId,
+                    });
+                  }
                 }
               }
             }
