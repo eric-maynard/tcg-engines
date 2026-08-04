@@ -20,7 +20,7 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
-import type { RiftboundGameState } from "../types";
+import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 
 /**
  * Simplified target descriptor (from parser output).
@@ -29,9 +29,12 @@ export interface TargetDescriptor {
   readonly type: string;
   readonly controller?: "friendly" | "enemy" | "any";
   readonly location?: string;
-  readonly filter?: Record<string, unknown>;
+  readonly filter?: TargetFilter | TargetFilter[];
   readonly quantity?: number | "all";
 }
+
+/** Single filter clause — string state literal or object predicate. */
+export type TargetFilter = string | Record<string, unknown>;
 
 /**
  * Context for resolving targets.
@@ -47,6 +50,7 @@ export interface TargetResolverContext {
   };
   readonly cards: {
     getCardOwner: (cardId: CoreCardId) => string | undefined;
+    getCardMeta?: (cardId: CoreCardId) => Record<string, unknown> | undefined;
   };
 }
 
@@ -125,6 +129,12 @@ export function resolveTarget(
     });
   }
 
+  // Rule 355.8: apply descriptor filters (state / might / keyword / tag).
+  if (target.filter !== undefined) {
+    const filters = Array.isArray(target.filter) ? target.filter : [target.filter];
+    filtered = filtered.filter((id) => filters.every((f) => matchesFilter(id, f, ctx)));
+  }
+
   // Exclude self (unless explicitly targeting self)
   if (target.type !== "self") {
     filtered = filtered.filter((id) => id !== ctx.sourceCardId);
@@ -167,4 +177,102 @@ function getBoardCardIds(ctx: TargetResolverContext): string[] {
   // Zone to the base before they become targetable.
 
   return ids;
+}
+
+const MIGHTY_THRESHOLD = 5;
+
+/**
+ * Evaluate a single target-descriptor filter against a card (rule 355.8).
+ * Unknown filter shapes pass through (return true) so newly-emitted parser
+ * filters degrade to the previous "match any" behaviour rather than silently
+ * emptying the target set.
+ */
+function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolverContext): boolean {
+  const registry = getGlobalCardRegistry();
+  const def = registry.get(cardId);
+  const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as Partial<RiftboundCardMeta> | undefined;
+
+  // Parser also emits `{ state: "attacking" }` — normalise to the string form.
+  const state =
+    typeof filter === "string"
+      ? filter
+      : typeof filter.state === "string"
+        ? (filter.state as string)
+        : undefined;
+
+  if (state !== undefined) {
+    switch (state) {
+      case "attacking":
+        return meta?.combatRole === "attacker";
+      case "defending":
+        return meta?.combatRole === "defender";
+      case "mighty":
+        return effectiveMight(def, meta) >= MIGHTY_THRESHOLD;
+      case "damaged":
+        return (meta?.damage ?? 0) > 0;
+      case "stunned":
+        return meta?.stunned === true;
+      case "buffed":
+        return meta?.buffed === true;
+      case "ready":
+        return meta?.exhausted !== true;
+      case "exhausted":
+        return meta?.exhausted === true;
+      case "equipped":
+        return (meta?.equippedWith?.length ?? 0) > 0;
+      case "attached":
+        return meta?.attachedTo !== undefined;
+      case "detached":
+        return meta?.attachedTo === undefined;
+      case "facedown":
+        return meta?.hidden === true;
+      default:
+        return true;
+    }
+  }
+
+  if (typeof filter !== "object") {
+    return true;
+  }
+
+  if ("might" in filter) {
+    return matchesComparison(effectiveMight(def, meta), filter.might);
+  }
+  if ("keyword" in filter && typeof filter.keyword === "string") {
+    if (registry.hasKeyword(cardId, filter.keyword)) {
+      return true;
+    }
+    return meta?.grantedKeywords?.some((gk) => gk.keyword === filter.keyword) ?? false;
+  }
+  if ("tag" in filter && typeof filter.tag === "string") {
+    const tags = (def as { tags?: string[] } | undefined)?.tags;
+    return tags?.includes(filter.tag) ?? false;
+  }
+  if ("name" in filter && typeof filter.name === "string") {
+    return def?.name === filter.name;
+  }
+
+  return true;
+}
+
+function effectiveMight(
+  def: { might?: number } | undefined,
+  meta: Partial<RiftboundCardMeta> | undefined,
+): number {
+  const base = def?.might ?? 0;
+  const buff = meta?.buffed ? 1 : 0;
+  return Math.max(0, base + buff + (meta?.mightModifier ?? 0) + (meta?.staticMightBonus ?? 0));
+}
+
+function matchesComparison(value: number, cmp: unknown): boolean {
+  if (typeof cmp !== "object" || cmp === null) {
+    return true;
+  }
+  const c = cmp as { eq?: number; lt?: number; lte?: number; gt?: number; gte?: number };
+  if (c.eq !== undefined && value !== c.eq) return false;
+  if (c.lt !== undefined && !(value < c.lt)) return false;
+  if (c.lte !== undefined && !(value <= c.lte)) return false;
+  if (c.gt !== undefined && !(value > c.gt)) return false;
+  if (c.gte !== undefined && !(value >= c.gte)) return false;
+  return true;
 }

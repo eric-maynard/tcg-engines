@@ -150,10 +150,16 @@ export const movementMoves: Partial<
         return false;
       }
 
-      const { unitIds, playerId } = context.params;
+      const { unitIds, playerId, destination } = context.params;
+      const toBase = destination === "base";
       for (const unitId of unitIds) {
-        const zone = context.zones.getCardZone(unitId as CoreCardId);
-        if (zone !== "base") {
+        const zone = context.zones.getCardZone(unitId as CoreCardId) as string | undefined;
+        // Rule 144.4.b: base → battlefield, or battlefield → base.
+        if (toBase) {
+          if (!zone?.startsWith("battlefield-")) {
+            return false;
+          }
+        } else if (zone !== "base") {
           return false;
         }
 
@@ -256,6 +262,40 @@ export const movementMoves: Partial<
           });
         }
       }
+
+      // Rule 144.4.b: battlefield → base. Enumerate ready owned units already
+      // on any battlefield and offer them (and their subsets) moving to base.
+      const readyBfUnits: string[] = [];
+      for (const bfId of Object.keys(state.battlefields || {})) {
+        const bfCards = context.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
+        for (const cardId of bfCards) {
+          const owner = context.cards.getCardOwner(cardId);
+          if ((owner as string) !== (context.playerId as string)) {
+            continue;
+          }
+          const def = registry.get(cardId as string);
+          if (def?.cardType !== "unit") {
+            continue;
+          }
+          if (context.counters.getFlag(cardId, "exhausted")) {
+            continue;
+          }
+          readyBfUnits.push(cardId as string);
+        }
+      }
+      for (let mask = 1; mask < 1 << readyBfUnits.length; mask++) {
+        const subset: string[] = [];
+        for (let i = 0; i < readyBfUnits.length; i++) {
+          if (mask & (1 << i)) {
+            subset.push(readyBfUnits[i]);
+          }
+        }
+        results.push({
+          destination: "base",
+          playerId: context.playerId as string,
+          unitIds: subset,
+        });
+      }
       return results;
     },
     reducer: (draft, context) => {
@@ -278,12 +318,13 @@ export const movementMoves: Partial<
         }
       }
 
+      const toBase = destination === "base";
       for (const unitId of unitIds) {
         // Capture the source zone before the move so the fired event
         // Reports accurate from/to locations.
         const fromZone =
           (context.zones.getCardZone(unitId as CoreCardId) as string | undefined) ?? "base";
-        const toZone = `battlefield-${destination}`;
+        const toZone = toBase ? "base" : `battlefield-${destination}`;
 
         // Exhaust the unit (cost of moving)
         counters.setFlag(unitId as CoreCardId, "exhausted", true);
@@ -313,7 +354,7 @@ export const movementMoves: Partial<
 
       // Rule 548.2: When units arrive at an uncontrolled battlefield,
       // Start a non-combat showdown to give the opponent a window to respond
-      const bf = draft.battlefields[destination];
+      const bf = toBase ? undefined : draft.battlefields[destination];
       if (bf && bf.controller !== playerId) {
         // Check if there are only friendly units (no opposing units)
         const bfZoneId = `battlefield-${destination}` as CoreZoneId;
