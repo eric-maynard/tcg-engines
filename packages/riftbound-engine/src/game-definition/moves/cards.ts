@@ -1115,6 +1115,13 @@ export const cardPlayMoves: Partial<
         return false;
       }
 
+      // Rule 309.1.a: Closed State (chain open) admits only Reaction plays;
+      // champion units are non-Reaction, so require neutral-open.
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return false;
+      }
+
       const championZoneCards = context.zones.getCardsInZone(
         "championZone" as CoreZoneId,
         context.params.playerId as CorePlayerId,
@@ -1130,6 +1137,12 @@ export const cardPlayMoves: Partial<
         return [];
       }
       if (state.turn.activePlayer !== context.playerId) {
+        return [];
+      }
+
+      // Rule 309.1.a: no champion-zone plays while a chain exists.
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
         return [];
       }
 

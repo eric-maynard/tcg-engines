@@ -793,8 +793,7 @@ function renderZones() {
   }
   function renderRuneStacks(runes) {
     // Group by domain — one consolidated stack per domain, regardless of count.
-    // Visual stacking caps at STACK_MAX cards but the count label always reflects
-    // The true total so players can see how many runes they actually have.
+    // Every rune renders its own DOM card so it stays individually clickable.
     const groups = {};
     for (const c of runes) {
       const d = (Array.isArray(c.domain) ? c.domain[0] : c.domain) || "unknown";
