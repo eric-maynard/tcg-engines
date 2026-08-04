@@ -1990,6 +1990,7 @@ const server = Bun.serve({
       const isSandbox = body.sandbox === true && SANDBOX_ENABLED;
       const lobbyId = crypto.randomUUID();
       const code = generateLobbyCode();
+      console.log(`[Lobby] create ${code} sandbox=${isSandbox} from=${req.headers.get("x-forwarded-for") || req.headers.get("host")}`);
       const lobby: Lobby = {
         code,
         coinFlip: null,
@@ -2227,11 +2228,16 @@ const server = Bun.serve({
     // ========================================
 
     // GET /ws/lobby/:id?role=host|guest — upgrade to lobby WebSocket
-    if (pathname.match(/^\/ws\/lobby\/[^/]+$/) && req.headers.get("upgrade") === "websocket") {
+    if (pathname.match(/^\/ws\/lobby\/[^/]+$/)) {
+      const upgradeHdr = req.headers.get("upgrade");
       const lobbyId = pathname.split("/")[3];
+      console.log(`[WS] /ws/lobby/${lobbyId} upgrade='${upgradeHdr}' host='${req.headers.get("host")}' ua='${(req.headers.get("user-agent")||"").slice(0,40)}'`);
+      if (upgradeHdr?.toLowerCase() !== "websocket") {
+        return json({ error: "Expected WebSocket upgrade", got: upgradeHdr }, 426);
+      }
       const role = url.searchParams.get("role") as "host" | "guest" ?? "host";
       const lobby = lobbies.get(lobbyId);
-      if (!lobby) {return json({ error: "Lobby not found" }, 404);}
+      if (!lobby) {console.log(`[WS] lobby ${lobbyId} not found (have ${lobbies.size})`); return json({ error: "Lobby not found" }, 404);}
 
       const connId = crypto.randomUUID();
       const upgraded = server.upgrade<WsData>(req, {
@@ -2244,7 +2250,7 @@ const server = Bun.serve({
     }
 
     // GET /ws/game/:id?player=X — upgrade to game WebSocket
-    if (pathname.match(/^\/ws\/game\/[^/]+$/) && req.headers.get("upgrade") === "websocket") {
+    if (pathname.match(/^\/ws\/game\/[^/]+$/) && req.headers.get("upgrade")?.toLowerCase() === "websocket") {
       const gameId = pathname.split("/")[3];
       const playerId = url.searchParams.get("player") ?? "player-1";
       const session = gameSessions.get(gameId);
