@@ -55,6 +55,7 @@ try {
 } catch (e) {
   console.error(`unreachable: ${e}`);
   process.exit(2);
+  throw e;
 }
 rec("GET /play returns 200", res.status === 200, `status=${res.status}`);
 const html = await res.text();
@@ -108,3 +109,5 @@ try {
 const fails = checks.filter((c) => !c.ok);
 console.log(`\n[ui-audit-lite] ${checks.length - fails.length}/${checks.length} passed`);
 process.exit(fails.length ? 1 : 0);
+
+export {};
