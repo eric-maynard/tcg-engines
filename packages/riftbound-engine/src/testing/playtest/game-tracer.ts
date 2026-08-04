@@ -162,7 +162,13 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
       chosen = pc
         ? // Engine gap: pendingChoice with no valid picks (e.g. empty revealed hand)
           // has no escape hatch. Record it as a deadlock finding.
-          { moveId: "resolvePendingChoice", params: { playerId: active, pickedCardId: pc.revealed?.[0] } }
+          {
+            moveId: "resolvePendingChoice",
+            params:
+              pc.type === "name-card"
+                ? { playerId: active, pickedName: pc.options?.[0] }
+                : { playerId: active, pickedCardId: pc.revealed?.[0] },
+          }
         : ia?.chain?.active
           ? { moveId: "passChainPriority", params: { playerId: active } }
           : ia?.showdownStack?.length

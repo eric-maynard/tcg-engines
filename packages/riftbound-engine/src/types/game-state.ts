@@ -98,6 +98,13 @@ export interface RiftboundCardMeta {
   restrictions?: string[];
 
   /**
+   * Card name chosen by this card's controller via a "name a card" effect
+   * (rule 762). Linked abilities read this to enforce "cards with that
+   * name" restrictions (e.g. Fallen Feline).
+   */
+  namedCard?: string;
+
+  /**
    * Card instance ID whose abilities/text are copied onto this card while
    * this card is attached/bound to it. Used by Svellsongur to copy the unit's
    * text to the equipment for as long as it's attached.
@@ -289,7 +296,7 @@ export interface SetupState {
  * from it. While a pending choice exists, only `resolvePendingChoice` is
  * a legal move.
  */
-export interface PendingChoice {
+export interface RevealAndPickChoice {
   /** The kind of choice that is pending. */
   readonly type: "reveal-and-pick";
 
@@ -317,6 +324,25 @@ export interface PendingChoice {
    */
   readonly onPicked: "recycle" | "banish" | "discard";
 }
+
+/**
+ * Rule 762: the controller must name a legal card. The chosen name is
+ * recorded on `sourceCardId`'s `namedCard` meta so linked abilities can
+ * read it (e.g. Fallen Feline).
+ */
+export interface NameCardChoice {
+  readonly type: "name-card";
+  /** Player who names the card. */
+  readonly prompter: PlayerId;
+  /** Card whose meta receives the chosen name. */
+  readonly sourceCardId: CardId;
+  /** Card type the named card must have. */
+  readonly cardType: "spell" | "unit" | "gear";
+  /** Legal card names of `cardType` known to the current game's registry. */
+  readonly options: readonly string[];
+}
+
+export type PendingChoice = RevealAndPickChoice | NameCardChoice;
 
 /**
  * Complete Riftbound game state

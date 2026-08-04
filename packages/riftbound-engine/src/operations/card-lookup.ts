@@ -270,6 +270,20 @@ export class CardDefinitionRegistry {
     return { energy: def.energyCost ?? 0, power };
   }
 
+  /**
+   * List distinct card names known to this registry, optionally filtered by
+   * card type. Used by rule-762 "name a card" effects to enumerate legal
+   * choices for the current game.
+   */
+  listNames(cardType?: string): string[] {
+    const names = new Set<string>();
+    for (const def of this.definitions.values()) {
+      if (cardType && def.cardType !== cardType) continue;
+      if (def.name) names.add(def.name);
+    }
+    return [...names].sort();
+  }
+
   get size(): number {
     return this.definitions.size;
   }

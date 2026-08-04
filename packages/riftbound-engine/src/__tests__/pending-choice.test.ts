@@ -14,7 +14,7 @@ import type {
 } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "../abilities/effect-executor";
 import { executeEffect } from "../abilities/effect-executor";
-import type { PendingChoice, RiftboundGameState } from "../types";
+import type { PendingChoice, RevealAndPickChoice, RiftboundGameState } from "../types";
 import {
   isValidPendingPick,
   pendingChoiceMoves,
@@ -132,10 +132,11 @@ describe("reveal-hand effect", () => {
 
     expect(draft.pendingChoice).toBeDefined();
     expect(draft.pendingChoice?.type).toBe("reveal-and-pick");
-    expect(draft.pendingChoice?.prompter).toBe("p1");
-    expect(draft.pendingChoice?.revealer).toBe("p2");
-    expect(draft.pendingChoice?.revealed).toEqual(["card-a", "card-b", "card-c"]);
-    expect(draft.pendingChoice?.onPicked).toBe("recycle");
+    const pc = draft.pendingChoice as RevealAndPickChoice;
+    expect(pc.prompter).toBe("p1");
+    expect(pc.revealer).toBe("p2");
+    expect(pc.revealed).toEqual(["card-a", "card-b", "card-c"]);
+    expect(pc.onPicked).toBe("recycle");
   });
 
   it("does NOT create a pendingChoice when the filter excludes every revealed card", () => {
@@ -174,7 +175,7 @@ describe("reveal-hand effect", () => {
 
     executeEffect(effect, ctx);
 
-    expect(draft.pendingChoice?.filter?.excludeCardTypes).toEqual(["unit"]);
+    expect((draft.pendingChoice as RevealAndPickChoice | undefined)?.filter?.excludeCardTypes).toEqual(["unit"]);
   });
 
   it("does nothing when the revealer has an empty hand", () => {
@@ -204,7 +205,7 @@ describe("reveal-hand effect", () => {
 
     executeEffect(effect, ctx);
 
-    expect(draft.pendingChoice?.onPicked).toBe("recycle");
+    expect((draft.pendingChoice as RevealAndPickChoice | undefined)?.onPicked).toBe("recycle");
   });
 });
 
@@ -414,7 +415,7 @@ describe("resolvePendingChoice move", () => {
   it("reducer moves the picked card to banishment when onPicked is banish", () => {
     const state = makeState(false);
     if (state.pendingChoice) {
-      (state.pendingChoice as { onPicked: PendingChoice["onPicked"] }).onPicked = "banish";
+      (state.pendingChoice as { onPicked: RevealAndPickChoice["onPicked"] }).onPicked = "banish";
     }
     const moves: { cardId: string; targetZoneId: string }[] = [];
     const context = {
@@ -438,7 +439,7 @@ describe("resolvePendingChoice move", () => {
   it("reducer moves the picked card to trash when onPicked is discard", () => {
     const state = makeState(false);
     if (state.pendingChoice) {
-      (state.pendingChoice as { onPicked: PendingChoice["onPicked"] }).onPicked = "discard";
+      (state.pendingChoice as { onPicked: RevealAndPickChoice["onPicked"] }).onPicked = "discard";
     }
     const moves: { cardId: string; targetZoneId: string }[] = [];
     const context = {
@@ -478,5 +479,44 @@ describe("resolvePendingChoice move", () => {
 
     expect(moves).toHaveLength(0);
     expect(state.pendingChoice).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Rule 762 name-card effect (Fallen Feline)
+// ---------------------------------------------------------------------------
+
+describe("name-card effect (rule 762)", () => {
+  it("prompts the controller to name a spell and records it on the source card", () => {
+    const registry = getGlobalCardRegistry();
+    registry.register("nc-spell-a", { cardType: "spell", id: "nc-spell-a", name: "Bolt" });
+    registry.register("nc-spell-b", { cardType: "spell", id: "nc-spell-b", name: "Zap" });
+    registry.register("nc-unit", { cardType: "unit", id: "nc-unit", name: "Grunt" });
+
+    const { ctx, draft } = buildMockCtx({});
+
+    executeEffect({ type: "name-card", cardType: "spell" } as unknown as ExecutableEffect, ctx);
+
+    expect(draft.pendingChoice?.type).toBe("name-card");
+    const pc = draft.pendingChoice as Extract<PendingChoice, { type: "name-card" }>;
+    expect(pc.prompter).toBe("p1");
+    expect(pc.sourceCardId).toBe("source-spell");
+    expect(pc.options).toContain("Bolt");
+    expect(pc.options).toContain("Zap");
+    expect(pc.options).not.toContain("Grunt");
+
+    // Biome-ignore lint/suspicious/noExplicitAny: enumerator/reducer signatures vary
+    const move = pendingChoiceMoves.resolvePendingChoice as any;
+    const enumerated = move.enumerator(draft, { playerId: "p1" });
+    expect(enumerated).toContainEqual({ pickedName: "Bolt", playerId: "p1" });
+
+    const meta: Record<string, unknown> = {};
+    const context = {
+      cards: { updateCardMeta: (_id: string, m: Record<string, unknown>) => Object.assign(meta, m) },
+      params: { pickedName: "Bolt", playerId: "p1" },
+    };
+    move.reducer(draft, context);
+    expect(meta.namedCard).toBe("Bolt");
+    expect(draft.pendingChoice).toBeUndefined();
   });
 });

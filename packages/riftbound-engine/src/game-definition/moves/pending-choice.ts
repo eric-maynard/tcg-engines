@@ -24,6 +24,9 @@ import type {
  * choice (i.e., is in the revealed snapshot and passes the filter).
  */
 export function isValidPendingPick(choice: PendingChoice, cardId: string): boolean {
+  if (choice.type !== "reveal-and-pick") {
+    return false;
+  }
   if (!choice.revealed.includes(cardId)) {
     return false;
   }
@@ -43,6 +46,9 @@ export function isValidPendingPick(choice: PendingChoice, cardId: string): boole
  * that passes the filter. Returns undefined if no valid pick exists.
  */
 export function pickDefaultForChoice(choice: PendingChoice): string | undefined {
+  if (choice.type === "name-card") {
+    return choice.options[0];
+  }
   return choice.revealed.find((id) => isValidPendingPick(choice, id));
 }
 
@@ -50,7 +56,7 @@ export function pickDefaultForChoice(choice: PendingChoice): string | undefined 
  * Returns the target zone a picked card is moved to based on the stored
  * `onPicked` action.
  */
-function onPickedTargetZone(action: PendingChoice["onPicked"]): CoreZoneId {
+function onPickedTargetZone(action: "recycle" | "banish" | "discard"): CoreZoneId {
   switch (action) {
     case "recycle": {
       return "mainDeck" as CoreZoneId;
@@ -76,6 +82,12 @@ export const pendingChoiceMoves: Partial<
       if (choice.prompter !== context.params.playerId) {
         return false;
       }
+      if (choice.type === "name-card") {
+        // Rule 762: any legal card name is valid; the enumerated `options`
+        // are the names known to this game's registry.
+        const name = context.params.pickedName;
+        return typeof name === "string" && choice.options.includes(name);
+      }
       return isValidPendingPick(choice, context.params.pickedCardId as string);
     },
     enumerator: (state, context) => {
@@ -85,6 +97,12 @@ export const pendingChoiceMoves: Partial<
       }
       if (choice.prompter !== (context.playerId as string)) {
         return [];
+      }
+      if (choice.type === "name-card") {
+        return choice.options.map((name) => ({
+          pickedName: name,
+          playerId: context.playerId as string,
+        }));
       }
       const results: { playerId: string; pickedCardId: string }[] = [];
       for (const cardId of choice.revealed) {
@@ -102,6 +120,21 @@ export const pendingChoiceMoves: Partial<
       if (!choice) {
         return;
       }
+
+      if (choice.type === "name-card") {
+        // Rule 762 / 383.2.b: record the chosen name on the source card so
+        // linked abilities ("cards with that name") can read it.
+        const name = context.params.pickedName;
+        if (typeof name !== "string" || !choice.options.includes(name)) {
+          return;
+        }
+        context.cards.updateCardMeta(choice.sourceCardId as CoreCardId, {
+          namedCard: name,
+        } as Partial<RiftboundCardMeta>);
+        draft.pendingChoice = undefined;
+        return;
+      }
+
       const { pickedCardId } = context.params;
 
       if (!isValidPendingPick(choice, pickedCardId as string)) {

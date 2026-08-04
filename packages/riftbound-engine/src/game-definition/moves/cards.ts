@@ -285,6 +285,62 @@ function deductCost(
   }
 }
 
+type SpellEffectTargetShape = {
+  type?: string;
+  target?: {
+    type: string;
+    quantity?: number | "all" | "any" | { upTo?: number; atLeast?: number };
+  };
+  player?: string;
+  options?: { effect?: SpellEffectTargetShape }[];
+};
+
+/**
+ * Rule 355.8 / 419.2.a: a spell is a legal Play only if valid choices exist for
+ * every caster-chosen target. For a modal (`choice`) effect the caster picks one
+ * mode, so the spell is legal iff at least one mode's targets can be satisfied.
+ */
+function spellEffectHasLegalTargets(
+  effect: SpellEffectTargetShape | undefined,
+  ctx: Parameters<typeof resolveTarget>[1],
+): boolean {
+  if (!effect) {
+    return true;
+  }
+  // Rule 355.8: modal spells — at least one option must have a valid target set.
+  if (effect.type === "choice" && Array.isArray(effect.options)) {
+    return effect.options.some((opt) => spellEffectHasLegalTargets(opt?.effect, ctx));
+  }
+  // Rule 355.10.d: quantity:"all" selects programmatically — those objects are
+  // not caster-chosen targets, so 355.8's ≥1-valid-target gate does not apply.
+  // Rule 355.13 / 419.2.a: "up to N" / "any" permits choosing zero targets.
+  const qty = effect.target?.quantity;
+  const zeroTargetsLegal =
+    qty === "any" ||
+    (typeof qty === "object" && qty.upTo !== undefined && qty.atLeast === undefined);
+  if (
+    effect.target &&
+    effect.target.type !== "self" &&
+    effect.target.quantity !== "all" &&
+    !zeroTargetsLegal &&
+    !effect.player
+  ) {
+    const resolved = resolveTarget(
+      effect.target as {
+        type: string;
+        controller?: "friendly" | "enemy" | "any";
+        location?: string;
+        quantity?: number | "all";
+      },
+      ctx,
+    );
+    return resolved.length > 0;
+  }
+  // Rule 355.5.a / 358.3.a: per-player criteria-based instructions and
+  // targetless effects impose no play-legality constraint.
+  return true;
+}
+
 /**
  * Card play move definitions
  */
@@ -671,58 +727,24 @@ export const cardPlayMoves: Partial<
         }
       }
 
-      // Rule 355.5.a / 358.3.a: per-player criteria-based instructions ("Each player …")
-      // are not caster play-time Choices; an impossible instruction is skipped on
-      // resolution rather than making the play illegal, so only gate on caster-chosen targets.
+      // Rule 355.8 / 419.2.a: gate on caster-chosen targets (including modal options).
       const abilities = registry.getAbilities(context.params.cardId) ?? [];
       const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
-      const effect = spellAbility?.effect as
-        | {
-            target?: {
-              type: string;
-              quantity?: number | "all" | "any" | { upTo?: number; atLeast?: number };
-            };
-            player?: string;
-          }
-        | undefined;
-      // Rule 355.10.d: quantity:"all" selects programmatically — those objects are
-      // not caster-chosen targets, so 355.8's ≥1-valid-target gate does not apply.
-      // Rule 355.13 / 419.2.a: "up to N" / "any" permits choosing zero targets,
-      // so a spell with an upTo quantity is legal to play with no matches.
-      const qty = effect?.target?.quantity;
-      const zeroTargetsLegal =
-        qty === "any" ||
-        (typeof qty === "object" && qty.upTo !== undefined && qty.atLeast === undefined);
       if (
-        effect?.target &&
-        effect.target.type !== "self" &&
-        effect.target.quantity !== "all" &&
-        !zeroTargetsLegal &&
-        !effect.player
+        !spellEffectHasLegalTargets(spellAbility?.effect as SpellEffectTargetShape | undefined, {
+          cards: {
+            getCardOwner: (c) => context.cards.getCardOwner(c),
+          },
+          draft: state,
+          playerId: context.params.playerId as string,
+          sourceCardId: context.params.cardId as string,
+          zones: {
+            getCardZone: (c) => context.zones.getCardZone(c),
+            getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
+          },
+        })
       ) {
-        const resolved = resolveTarget(
-          effect.target as {
-            type: string;
-            controller?: "friendly" | "enemy" | "any";
-            location?: string;
-            quantity?: number | "all";
-          },
-          {
-            cards: {
-              getCardOwner: (c) => context.cards.getCardOwner(c),
-            },
-            draft: state,
-            playerId: context.params.playerId as string,
-            sourceCardId: context.params.cardId as string,
-            zones: {
-              getCardZone: (c) => context.zones.getCardZone(c),
-              getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
-            },
-          },
-        );
-        if (resolved.length === 0) {
-          return false;
-        }
+        return false;
       }
 
       return true;
@@ -773,58 +795,24 @@ export const cardPlayMoves: Partial<
           continue;
         }
 
-        // Rule 355.5.a / 358.3.a: skip the target-existence gate for per-player
-        // criteria-based effects ("Each player …"); only caster-chosen targets
-        // make a spell illegal to play when none exist.
+        // Rule 355.8 / 419.2.a: gate on caster-chosen targets (including modal options).
         const abilities = registry.getAbilities(cardId as string) ?? [];
         const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
-        const effect = spellAbility?.effect as
-          | {
-              target?: {
-                type: string;
-                quantity?: number | "all" | "any" | { upTo?: number; atLeast?: number };
-              };
-              player?: string;
-            }
-          | undefined;
-        // Rule 355.10.d: quantity:"all" is programmatic selection, not a caster
-        // Choice — do not require ≥1 match to enumerate the play.
-        // Rule 355.13 / 419.2.a: "up to N" / "any" permits choosing zero targets,
-        // so a spell with an upTo quantity is legal to play with no matches.
-        const qty = effect?.target?.quantity;
-        const zeroTargetsLegal =
-          qty === "any" ||
-          (typeof qty === "object" && qty.upTo !== undefined && qty.atLeast === undefined);
         if (
-          effect?.target &&
-          effect.target.type !== "self" &&
-          effect.target.quantity !== "all" &&
-          !zeroTargetsLegal &&
-          !effect.player
+          !spellEffectHasLegalTargets(spellAbility?.effect as SpellEffectTargetShape | undefined, {
+            cards: {
+              getCardOwner: (c) => context.cards.getCardOwner(c),
+            },
+            draft: state,
+            playerId: context.playerId as string,
+            sourceCardId: cardId as string,
+            zones: {
+              getCardZone: (c) => context.zones.getCardZone(c),
+              getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
+            },
+          })
         ) {
-          const resolved = resolveTarget(
-            effect.target as {
-              type: string;
-              controller?: "friendly" | "enemy" | "any";
-              location?: string;
-              quantity?: number | "all";
-            },
-            {
-              cards: {
-                getCardOwner: (c) => context.cards.getCardOwner(c),
-              },
-              draft: state,
-              playerId: context.playerId as string,
-              sourceCardId: cardId as string,
-              zones: {
-                getCardZone: (c) => context.zones.getCardZone(c),
-                getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
-              },
-            },
-          );
-          if (resolved.length === 0) {
-            continue;
-          }
+          continue;
         }
 
         results.push({

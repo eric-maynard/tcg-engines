@@ -412,7 +412,7 @@ export interface RiftboundMoves {
    * to let the active player pick a card from an opponent's revealed hand.
    * The chosen card is recycled/banished/discarded per the stored effect.
    */
-  resolvePendingChoice: { playerId: PlayerId; pickedCardId: CardId };
+  resolvePendingChoice: { playerId: PlayerId; pickedCardId?: CardId; pickedName?: string };
 
   // ============================================
   // Token & Sandbox Meta Moves (W10)

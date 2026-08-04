@@ -133,6 +133,20 @@ export interface RevealHandEffect {
   readonly onPicked?: "recycle" | "banish" | "discard";
 }
 
+/**
+ * Name-a-card effect (rule 762 / 383.2.b).
+ *
+ * The controller names a card of the given `cardType`. The engine places a
+ * `pendingChoice` on the game state; play is paused until the controller
+ * issues a `resolvePendingChoice` move with `pickedName`. The chosen name is
+ * recorded on the source card's `namedCard` meta so linked abilities (e.g.
+ * Fallen Feline's "opponents can't play spells with that name") can read it.
+ */
+export interface NameCardEffect {
+  readonly type: "name-card";
+  readonly cardType: "spell" | "unit" | "gear";
+}
+
 // ============================================================================
 // Combat Effects
 // ============================================================================
@@ -680,6 +694,7 @@ export type Effect =
   | LookEffect
   | RevealEffect
   | RevealHandEffect
+  | NameCardEffect
 
   // Combat
   | DamageEffect

@@ -3680,8 +3680,19 @@
       "isChampion": false,
       "rulesText": "When you play me, name a spell.\nWhile I'm at a battlefield, opponents can't play spells with that name.",
       "abilities": [
-        null,
-        null
+        {
+          "type": "triggered",
+          "trigger": { "event": "play-self" },
+          "effect": { "type": "name-card", "cardType": "spell" }
+        },
+        {
+          "type": "static",
+          "condition": { "type": "at-battlefield", "who": "self" },
+          "effect": {
+            "type": "raw",
+            "text": "opponents can't play spells with that name."
+          }
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/e5d46c6d56dc14670b5e25547eeb1ee3ceca5a80-744x1039.png?accountingTag=RB",

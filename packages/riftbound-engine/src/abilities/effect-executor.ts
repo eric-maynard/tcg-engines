@@ -1081,6 +1081,26 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       break;
     }
 
+    case "name-card": {
+      // Rule 762 / 383.2.b: on resolution the controller names a legal card
+      // of the given type. Pause play via pendingChoice; resolvePendingChoice
+      // records the chosen name on the source card's `namedCard` meta.
+      const cardType =
+        (effect as unknown as { cardType?: "spell" | "unit" | "gear" }).cardType ?? "spell";
+      const options = getGlobalCardRegistry().listNames(cardType);
+      if (options.length === 0) {
+        break;
+      }
+      ctx.draft.pendingChoice = {
+        cardType,
+        options,
+        prompter: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        type: "name-card",
+      };
+      break;
+    }
+
     case "remove-restriction": {
       const { restriction } = effect as unknown as { restriction: string };
       if (!restriction) {
