@@ -47,6 +47,16 @@ function showPreview(event, el) {
   if (card.meta?.buffed) stats += `<span style="color:#f0c040">Buffed</span>`;
   document.getElementById("previewStats").innerHTML = stats;
 
+  // Refuse to preview cards in the opponent's hidden zones outside sandbox
+  // mode — even if the thumbnail were a card back, this handler would leak.
+  if (!isSandboxGame) {
+    const zone = el.dataset.zone || el.closest("[data-zone]")?.dataset.zone;
+    const owner = el.dataset.owner || el.closest("[data-owner]")?.dataset.owner;
+    if (owner && owner !== viewingPlayer && (zone === "hand" || zone === "mainDeck" || zone === "runeDeck")) {
+      return;
+    }
+  }
+
   // Position
   const rect = el.getBoundingClientRect();
   const previewEl = document.getElementById("cardPreview");
@@ -55,8 +65,12 @@ function showPreview(event, el) {
     document.getElementById("coinOverlay")?.classList.contains("visible");
   let left = rect.right + 8;
   let top = rect.top;
-  if (pregameVisible) {
+  // Anchor far-left when the tooltip would land over the board center
+  // (pregame overlay, or hovering the opponent-hand row at the top —
+  // otherwise it drops onto the phase tracker and centre battlefields).
+  if (pregameVisible || rect.top < 220) {
     left = 20;
+    top = Math.max(60, rect.bottom + 8);
   } else if (left + 230 > window.innerWidth) {
     left = rect.left - 230;
   }

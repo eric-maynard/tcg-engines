@@ -57,7 +57,7 @@ Screenshot: Read the image at ${SHOTS_DIR}/${j.shot}
 
 Review lens: **${j.lens.key}** — ${j.lens.prompt}
 
-This is the "${j.shot.replace(/^\d+[a-z]?-|\.png$/g,'').replace(/-/g,' ')}" screen. The app is a card game like Magic Arena / Hearthstone; opponent's hand should be face-down; hover shows a large preview; mulligan lets you swap cards.
+This is the "${j.shot.replace(/^\d+[a-z]?-|\.png$/g,'').replace(/-/g,' ')}" screen. The app is a card game like Magic Arena / Hearthstone. **This is goldfish/sandbox mode — the opponent hand is intentionally face-up** (you play both sides). Do NOT report opponent-hand-face-up as a finding. Hover shows a large preview; mulligan lets you swap cards.
 
 Return up to 4 concrete findings for THIS lens only. Skip if nothing to report. Be specific: "hover preview covers Keep button" not "layout could be better".`,
     { label: `${j.shot} × ${j.lens.key}`, phase: 'Review', schema: FINDINGS_SCHEMA }

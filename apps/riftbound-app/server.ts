@@ -1995,7 +1995,9 @@ const server = Bun.serve({
         guest: isSandbox
           ? { connId: "", deckId: "default", name: "Goldfish", ready: true, ws: null }
           : null,
-        host: { connId: "", deckId: null, name: body.name || "Player 1", ready: false, ws: null },
+        // Never echo the client-supplied name (may be an email). Resolve the
+        // authenticated user's stored displayName so opponents only ever see that.
+        host: { connId: "", deckId: null, name: (getUserById(getUserIdFromRequest(req) ?? "")?.displayName) || (body.name?.split("@")[0]) || "Player 1", ready: false, ws: null },
         id: lobbyId,
         sandbox: isSandbox,
         status: "waiting",
@@ -2016,7 +2018,7 @@ const server = Bun.serve({
       if (lobby.guest) {return json({ error: "Lobby is full" }, 400);}
       if (lobby.status !== "waiting") {return json({ error: "Lobby already started" }, 400);}
 
-      lobby.guest = { connId: "", deckId: null, name: body.name || "Player 2", ready: false, ws: null };
+      lobby.guest = { connId: "", deckId: null, name: (getUserById(getUserIdFromRequest(req) ?? "")?.displayName) || (body.name?.split("@")[0]) || "Player 2", ready: false, ws: null };
       broadcastLobby(lobby);
       return json({ code, lobbyId });
     }

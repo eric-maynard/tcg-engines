@@ -22,8 +22,9 @@ export function createUser(username: string, password: string, displayName?: str
   const id = crypto.randomUUID();
   const passwordHash = hashPassword(password);
 
-  // Cap display name to 32 chars; fall back to username prefix if not provided
-  const name = (displayName || username).slice(0, 32);
+  // Cap display name to 32 chars. Never fall back to the raw email — that
+  // would broadcast the account address to every opponent via the lobby.
+  const name = (displayName || username.split("@")[0] || "Player").slice(0, 32);
 
   db.run(
     "INSERT INTO users (id, username, display_name, password_hash) VALUES (?, ?, ?, ?)",
