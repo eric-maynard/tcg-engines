@@ -1361,7 +1361,11 @@ function finalizeEndTurn(session: GameSession, nextPlayer: string): void {
   const isFirstTurnForPlayer = runeDeckSize === 12;
   const channelCount = isFirstTurnForPlayer && stateForChannel.turn.number === 2 ? 3 : 2;
   session.engine.executeMove("channelRunes", {
-    params: { count: channelCount, playerId: nextPlayer },
+    // Rule 606.3.a: channelling is a directed Game Action — the engine's
+    // condition rejects the move without `directed: true`. Without this the
+    // call was silently failing on every end-turn, so runes never accumulated
+    // past the pregame's initial 2.
+    params: { count: channelCount, directed: true, playerId: nextPlayer },
     playerId: nextPlayer as PlayerId,
   });
 
