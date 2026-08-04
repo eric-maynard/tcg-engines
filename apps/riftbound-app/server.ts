@@ -1990,7 +1990,7 @@ const server = Bun.serve({
       const isSandbox = body.sandbox === true && SANDBOX_ENABLED;
       const lobbyId = crypto.randomUUID();
       const code = generateLobbyCode();
-      console.log(`[Lobby] create ${code} sandbox=${isSandbox} from=${req.headers.get("x-forwarded-for") || req.headers.get("host")}`);
+      console.log(`[Lobby] create id=${lobbyId.slice(0,8)} sandbox=${isSandbox}`);
       const lobby: Lobby = {
         code,
         coinFlip: null,
