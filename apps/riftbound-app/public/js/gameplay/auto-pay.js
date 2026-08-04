@@ -242,5 +242,9 @@ function canAutoPay(cardId) {
     m.params?.cardId === cardId
   );
   if (hasPlay) return true;
+  // Rule 309.1.a: while the chain is active the turn state is Closed and only
+  // Reaction plays are legal. planCostPayment checks affordability only, so in
+  // Closed state defer entirely to the server's move list (checked above).
+  if (gameState?.interaction?.chain?.active) return false;
   return planCostPayment(card).ok;
 }

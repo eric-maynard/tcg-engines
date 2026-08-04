@@ -278,7 +278,7 @@ describe("Rule 515.3 / 606.1: Channel phase moves runes from the top of the rune
 });
 
 describe("Rule 594 / 154.2.b: Recycled runes go to the bottom of the rune deck (not main deck)", () => {
-  it("recycleRune moves a runePool card out of runePool and adds 1 energy + 1 power", () => {
+  it("recycleRune moves a runePool card out of runePool and adds 1 power (no energy)", () => {
     // Use P2 as current player so P1's empty runeDeck isn't re-channeled by
     // The flow manager's post-move cascade (which would cycle our recycled
     // Rune back to P1's runePool and break the zone assertion).
@@ -301,10 +301,11 @@ describe("Rule 594 / 154.2.b: Recycled runes go to the bottom of the rune deck (
     expect(getCardsInZone(engine, "runePool", P1)).not.toContain("rune-fury");
     expect(getCardsInZone(engine, "mainDeck", P1)).not.toContain("rune-fury");
 
-    // Rule 156.2: power gained matches the rune's domain; Rule 594.1: +1 energy.
+    // Rule 164.2.b: recycle adds exactly 1 Power of the rune's domain and no
+    // energy (energy comes only from the exhaust ability, 164.2.a).
     const st = getState(engine);
     expect(st.runePools[P1].power.fury).toBeGreaterThanOrEqual(1);
-    expect(st.runePools[P1].energy).toBeGreaterThanOrEqual(1);
+    expect(st.runePools[P1].energy).toBe(0);
   });
 });
 

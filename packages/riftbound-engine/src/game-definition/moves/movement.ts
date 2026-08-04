@@ -214,6 +214,7 @@ export const movementMoves: Partial<
         destination: string;
       }[] = [];
 
+      const readyUnits: string[] = [];
       for (const cardId of baseCards) {
         const owner = context.cards.getCardOwner(cardId);
         if ((owner as string) !== (context.playerId as string)) {
@@ -229,11 +230,29 @@ export const movementMoves: Partial<
           continue;
         }
 
-        for (const bfId of Object.keys(state.battlefields || {})) {
+        readyUnits.push(cardId as string);
+      }
+
+      // Rule 144.3: a Standard Move may move multiple units together to the
+      // same destination as one action. Enumerate every non-empty subset of
+      // ready base units per battlefield so the group move is offered.
+      const subsets: string[][] = [];
+      for (let mask = 1; mask < 1 << readyUnits.length; mask++) {
+        const subset: string[] = [];
+        for (let i = 0; i < readyUnits.length; i++) {
+          if (mask & (1 << i)) {
+            subset.push(readyUnits[i]);
+          }
+        }
+        subsets.push(subset);
+      }
+
+      for (const bfId of Object.keys(state.battlefields || {})) {
+        for (const unitIds of subsets) {
           results.push({
             destination: bfId,
             playerId: context.playerId as string,
-            unitIds: [cardId as string],
+            unitIds,
           });
         }
       }

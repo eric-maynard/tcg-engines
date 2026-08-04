@@ -1001,16 +1001,9 @@ function renderActions() {
     if (!placed) sections.other.moves.push(move);
   }
 
-  // Keep the sidebar's Play Cards list in sync with the hand's Auto Pay badges
-  // (both derive from canAutoPay so the two "playable now" views never diverge).
-  if (typeof canAutoPay === "function") {
-    const listed = new Set(sections.play.moves.map(m => m.params?.cardId));
-    for (const c of zoneForPlayer("hand", viewingPlayer)) {
-      if (!c?.id || listed.has(c.id) || !canAutoPay(c.id)) continue;
-      const mid = c.cardType === "spell" ? "playSpell" : c.cardType === "gear" ? "playGear" : "playUnit";
-      sections.play.moves.push({ moveId: mid, params: { cardId: c.id }, playerId: viewingPlayer, _autoPay: true });
-    }
-  }
+  // Rule 355.8: the action list must mirror server availableMoves exactly. Do not
+  // synthesize play entries from canAutoPay — affordability alone ignores target
+  // legality, so cost-payable spells with no valid targets would wrongly appear here.
 
   let html = "";
 

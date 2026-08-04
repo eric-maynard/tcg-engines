@@ -177,6 +177,27 @@ function getRepeatEnergySurcharge(cardId: string, repeatCount: number): number {
 }
 
 /**
+ * Rule 357.1.a: during the Pay Costs step a player may activate [Reaction]
+ * resource abilities (e.g. a rune's "[T]: Add [1]") to add Energy. For
+ * affordability checks we therefore credit each ready rune in the player's
+ * Rune Pool as +1 potential energy on top of the banked pool.
+ */
+function getPotentialRuneEnergy(
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  counters: { getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined },
+  playerId: string,
+): number {
+  let potential = 0;
+  const runes = zones.getCardsInZone("runePool" as CoreZoneId, playerId as CorePlayerId);
+  for (const runeId of runes) {
+    if (!counters.getFlag(runeId, "exhausted")) {
+      potential += 1;
+    }
+  }
+  return potential;
+}
+
+/**
  * Check if player can afford a card's cost from their rune pool.
  */
 function canAffordCard(
@@ -185,6 +206,7 @@ function canAffordCard(
   cardId: string,
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+  potentialEnergy = 0,
 ): boolean {
   const registry = getGlobalCardRegistry();
   const pool = state.runePools[playerId];
@@ -200,7 +222,10 @@ function canAffordCard(
   const adjustedEnergy =
     Math.max(0, baseCost.energy + modifier - interactive) + xAmount + repeatSurcharge;
 
-  if (pool.energy < adjustedEnergy) {
+  // Rule 357.1.a: ready runes can be exhausted for energy during Pay Costs,
+  // so treat their yield as available when testing affordability.
+  const availableEnergy = pool.energy + potentialEnergy;
+  if (availableEnergy < adjustedEnergy) {
     return false;
   }
 
@@ -214,7 +239,7 @@ function canAffordCard(
 
   const deflectCost = getDeflectSurcharge(state, playerId, extras.targets);
   if (deflectCost > 0) {
-    const remainingEnergy = pool.energy - adjustedEnergy;
+    const remainingEnergy = availableEnergy - adjustedEnergy;
     if (remainingEnergy < deflectCost) {
       return false;
     }
@@ -344,6 +369,7 @@ export const cardPlayMoves: Partial<
           context.params.cardId,
           {},
           createMetaAccessor(context.cards),
+          getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
         )
       ) {
         return false;
@@ -374,6 +400,13 @@ export const cardPlayMoves: Partial<
       if (!pool) {
         return [];
       }
+      // Rule 357.1.a: credit ready runes as available energy for enumeration.
+      const potential = getPotentialRuneEnergy(
+        context.zones,
+        context.counters,
+        context.playerId as string,
+      );
+      const affordPool = { energy: pool.energy + potential, power: pool.power };
 
       const handCards = context.zones.getCardsInZone(
         "hand" as CoreZoneId,
@@ -386,7 +419,7 @@ export const cardPlayMoves: Partial<
         if (!def || def.cardType !== "unit") {
           continue;
         }
-        if (!registry.canAfford(cardId as string, pool)) {
+        if (!registry.canAfford(cardId as string, affordPool)) {
           continue;
         }
 
@@ -474,6 +507,7 @@ export const cardPlayMoves: Partial<
           context.params.cardId,
           { chosenTargetId: context.params.chosenTargetId },
           createMetaAccessor(context.cards),
+          getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
         )
       ) {
         return false;
@@ -505,6 +539,14 @@ export const cardPlayMoves: Partial<
         return [];
       }
 
+      // Rule 357.1.a: credit ready runes as available energy for enumeration.
+      const potential = getPotentialRuneEnergy(
+        context.zones,
+        context.counters,
+        context.playerId as string,
+      );
+      const affordPool = { energy: pool.energy + potential, power: pool.power };
+
       const handCards = context.zones.getCardsInZone(
         "hand" as CoreZoneId,
         context.playerId as CorePlayerId,
@@ -518,7 +560,7 @@ export const cardPlayMoves: Partial<
         }
         // Cards with interactive cost reduction are enumerated against their
         // Base cost; the actual cost is computed per-target at play time.
-        if (!registry.canAfford(cardId as string, pool)) {
+        if (!registry.canAfford(cardId as string, affordPool)) {
           continue;
         }
 
@@ -603,6 +645,7 @@ export const cardPlayMoves: Partial<
             xAmount: context.params.xAmount,
           },
           createMetaAccessor(context.cards),
+          getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
         )
       ) {
         return false;
@@ -628,11 +671,15 @@ export const cardPlayMoves: Partial<
         }
       }
 
-      // Rule 537: Check that required targets exist before allowing the spell
+      // Rule 355.5.a / 358.3.a: per-player criteria-based instructions ("Each player …")
+      // are not caster play-time Choices; an impossible instruction is skipped on
+      // resolution rather than making the play illegal, so only gate on caster-chosen targets.
       const abilities = registry.getAbilities(context.params.cardId) ?? [];
       const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
-      const effect = spellAbility?.effect as { target?: { type: string } } | undefined;
-      if (effect?.target && effect.target.type !== "self") {
+      const effect = spellAbility?.effect as
+        | { target?: { type: string }; player?: string }
+        | undefined;
+      if (effect?.target && effect.target.type !== "self" && !effect.player) {
         const resolved = resolveTarget(
           effect.target as {
             type: string;
@@ -675,6 +722,13 @@ export const cardPlayMoves: Partial<
       if (!pool) {
         return [];
       }
+      // Rule 357.1.a: credit ready runes as available energy for enumeration.
+      const potential = getPotentialRuneEnergy(
+        context.zones,
+        context.counters,
+        context.playerId as string,
+      );
+      const affordPool = { energy: pool.energy + potential, power: pool.power };
 
       const handCards = context.zones.getCardsInZone(
         "hand" as CoreZoneId,
@@ -687,7 +741,7 @@ export const cardPlayMoves: Partial<
         if (!def || def.cardType !== "spell") {
           continue;
         }
-        if (!registry.canAfford(cardId as string, pool)) {
+        if (!registry.canAfford(cardId as string, affordPool)) {
           continue;
         }
 
@@ -699,11 +753,15 @@ export const cardPlayMoves: Partial<
           continue;
         }
 
-        // Check that the spell has at least one legal target (rule 537)
+        // Rule 355.5.a / 358.3.a: skip the target-existence gate for per-player
+        // criteria-based effects ("Each player …"); only caster-chosen targets
+        // make a spell illegal to play when none exist.
         const abilities = registry.getAbilities(cardId as string) ?? [];
         const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
-        const effect = spellAbility?.effect as { target?: { type: string } } | undefined;
-        if (effect?.target && effect.target.type !== "self") {
+        const effect = spellAbility?.effect as
+          | { target?: { type: string }; player?: string }
+          | undefined;
+        if (effect?.target && effect.target.type !== "self" && !effect.player) {
           const resolved = resolveTarget(
             effect.target as {
               type: string;
@@ -1069,7 +1127,15 @@ export const cardPlayMoves: Partial<
         return [];
       }
 
-      const energy = state.runePools?.[context.playerId]?.energy ?? 0;
+      // Rule 108.3.d/419.1.a with 357.1.a: credit ready runes as available energy.
+      const banked = state.runePools?.[context.playerId]?.energy ?? 0;
+      const energy =
+        banked +
+        getPotentialRuneEnergy(
+          context.zones,
+          context.counters,
+          context.playerId as string,
+        );
       const results: { playerId: PlayerId; location: string }[] = [];
       for (const cardId of championZoneCards) {
         const def = context.registry?.get(cardId);

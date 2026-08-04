@@ -189,10 +189,11 @@ export const resourceMoves: Partial<
         targetZoneId: "runeDeck" as CoreZoneId,
       });
 
-      // Add 1 energy and 1 power of the specified domain
+      // Rule 164.2.b: A Basic Rune's recycle ability is "Recycle this: Add [C]" —
+      // it adds exactly 1 Power of the rune's domain. Energy is only produced by
+      // the separate exhaust ability (164.2.a), never by recycling.
       const pool = draft.runePools[playerId];
       if (pool) {
-        pool.energy += 1;
         pool.power[domain] = (pool.power[domain] ?? 0) + 1;
       }
     },
