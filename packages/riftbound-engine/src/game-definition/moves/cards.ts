@@ -677,9 +677,16 @@ export const cardPlayMoves: Partial<
       const abilities = registry.getAbilities(context.params.cardId) ?? [];
       const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
       const effect = spellAbility?.effect as
-        | { target?: { type: string }; player?: string }
+        | { target?: { type: string; quantity?: number | "all" }; player?: string }
         | undefined;
-      if (effect?.target && effect.target.type !== "self" && !effect.player) {
+      // Rule 355.10.d: quantity:"all" selects programmatically — those objects are
+      // not caster-chosen targets, so 355.8's ≥1-valid-target gate does not apply.
+      if (
+        effect?.target &&
+        effect.target.type !== "self" &&
+        effect.target.quantity !== "all" &&
+        !effect.player
+      ) {
         const resolved = resolveTarget(
           effect.target as {
             type: string;
@@ -759,9 +766,16 @@ export const cardPlayMoves: Partial<
         const abilities = registry.getAbilities(cardId as string) ?? [];
         const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
         const effect = spellAbility?.effect as
-          | { target?: { type: string }; player?: string }
+          | { target?: { type: string; quantity?: number | "all" }; player?: string }
           | undefined;
-        if (effect?.target && effect.target.type !== "self" && !effect.player) {
+        // Rule 355.10.d: quantity:"all" is programmatic selection, not a caster
+        // Choice — do not require ≥1 match to enumerate the play.
+        if (
+          effect?.target &&
+          effect.target.type !== "self" &&
+          effect.target.quantity !== "all" &&
+          !effect.player
+        ) {
           const resolved = resolveTarget(
             effect.target as {
               type: string;
@@ -1136,9 +1150,11 @@ export const cardPlayMoves: Partial<
           context.counters,
           context.playerId as string,
         );
+      // Rule 419.1.a: use the global card registry (context.registry has no .get()).
+      const registry = getGlobalCardRegistry();
       const results: { playerId: PlayerId; location: string }[] = [];
       for (const cardId of championZoneCards) {
-        const def = context.registry?.get(cardId);
+        const def = registry.get(cardId as string);
         const cost = def?.energyCost ?? 0;
         if (cost > energy) {
           continue;

@@ -505,7 +505,40 @@
       "isChampion": false,
       "rulesText": "[Empower] — Discard 1 (Pay the cost: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +1 [Might].",
       "abilities": [
-        null
+        {
+          "_rule": "827.1.c.1 — Empower — [Cost] is the activated ability '[Cost]: Empower this. Play only if not Empowered.'",
+          "cost": {
+            "discard": 1
+          },
+          "effect": {
+            "target": "self",
+            "type": "empower"
+          },
+          "name": "Empower",
+          "restrictions": [
+            {
+              "condition": {
+                "condition": {
+                  "type": "while-empowered"
+                },
+                "type": "not"
+              },
+              "type": "use-only-if"
+            }
+          ],
+          "type": "activated"
+        },
+        {
+          "condition": {
+            "type": "while-empowered"
+          },
+          "effect": {
+            "amount": 1,
+            "target": "self",
+            "type": "modify-might"
+          },
+          "type": "static"
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/03b9a8e704e0f09b686d89d4c2d79f100f212b0f-744x1039.png?accountingTag=RB",
