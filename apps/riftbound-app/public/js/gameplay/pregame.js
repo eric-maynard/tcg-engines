@@ -165,7 +165,7 @@ function renderBattlefieldSelection(pregame, container) {
     html += `
       <div class="bf-choice ${isSelected ? "selected" : ""}" onclick="selectBattlefield('${esc(bf.id)}')">
         <div class="bf-name">${esc(bf.name)}</div>
-        <div class="bf-text">${esc(bf.rulesText || "")}</div>
+        <div class="bf-text">${iconify(bf.rulesText || "")}</div>
       </div>
     `;
   }
@@ -214,7 +214,13 @@ function renderMulliganUI(pregame, state, container) {
            onmouseenter="showPreview(event, this)" onmouseleave="hidePreview()"
            style="cursor:pointer;">
         <img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(card.name)}"
-             onerror="this.style.background='linear-gradient(135deg,#201a38,#2a2248)';this.alt='${esc(card.name)}'">
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="card-fallback">
+          <div class="fallback-cost">${card.energyCost != null ? esc(card.energyCost) : "&mdash;"}</div>
+          <div class="fallback-name">${esc(card.name || "")}</div>
+          <div class="fallback-type">${esc(card.cardType || "")}</div>
+          <div class="fallback-text">${iconify(card.rulesText || "")}</div>
+        </div>
         <div class="card-name">${esc(card.name || "")}</div>
       </div>
     `;
@@ -226,7 +232,7 @@ function renderMulliganUI(pregame, state, container) {
     html += `<div class="pregame-waiting">Waiting for opponent...</div>`;
   } else {
     html += `
-      <div id="mulliganStatus" style="color:#8a82a6;font-size:13px;margin-top:8px;">Select 0-2 cards to send back, then confirm</div>
+      <div id="mulliganStatus" style="color:#8a82a6;font-size:13px;margin-top:8px;">Select 0-2 cards to send back, then confirm &middot; hover a card for full rules text</div>
       <div class="mulligan-actions" id="mulliganBtns">
         <button class="start-btn mulligan-btn-keep" onclick="confirmMulligan()">Keep Hand</button>
       </div>

@@ -147,15 +147,16 @@ function showOnboardingHintIfNeeded() {
   hint.id = "onboardingHint";
   hint.className = "onboarding-hint";
   hint.innerHTML = `
-    <span>First game? Tap the <strong>i</strong> for controls and board tips.</span>
+    <span>First game? Tap the <strong class="onboarding-hint-icon" aria-hidden="true">i</strong> button for controls and board tips.</span>
     <button type="button" class="onboarding-hint-close" aria-label="Dismiss">&times;</button>
   `;
   hint.querySelector(".onboarding-hint-close").addEventListener("click", (e) => {
     e.stopPropagation();
     dismissOnboardingHint();
   });
-  // Anchor next to the sidebar button.
-  anchor.parentElement.appendChild(hint);
+  // Insert as an in-flow banner right after the (i) button (before the
+  // sidebar header) so it pushes content down instead of overlaying it.
+  anchor.insertAdjacentElement("afterend", hint);
 }
 
 /** Poll lightly for the sidebar to appear so we can attach the hint. */

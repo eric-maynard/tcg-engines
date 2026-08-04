@@ -102,14 +102,13 @@ Rules:
 
   phase('Sync')
   await agent(
-`Sync UI changes to the devbox and bounce the app:
+`Sync UI changes to the devbox. Do NOT kill or restart the server — the app hot-reloads static files.
 
-1. \`cd ${REPO} && rsync -a apps/riftbound-app/public/ emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/public/ && rsync -a apps/riftbound-app/server.ts emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/server.ts\`
-2. \`ssh emaynard-tcg 'cd ~/tcg/tcg-engines/apps/riftbound-app && pkill -f "bun run server.ts" 2>/dev/null; sleep 1; SANDBOX_ENABLED=true nohup ~/.bun/bin/bun run server.ts > /tmp/appN.log 2>&1 & sleep 2 && head -3 /tmp/appN.log'\`
-3. Verify \`curl -sI http://localhost:3000/play | head -1\` returns 200
+Run exactly (with dangerouslyDisableSandbox:true since rsync/ssh need network):
+  cd ${REPO} && rsync -a apps/riftbound-app/public/ emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/public/ && curl -sI --max-time 5 http://localhost:3000/play | head -1
 
-Return ok=true if step 3 succeeded.`,
-    { label: `R${round} sync+bounce`, phase: 'Sync', schema: SYNC_SCHEMA }
+Return ok=true if rsync exit 0 and curl returned 200.`,
+    { label: `R${round} sync`, phase: 'Sync', schema: SYNC_SCHEMA }
   )
 
   rounds.push({round, total:flat.length, unique:deduped.length, high:highs.length, fixed:applied, topAreas:toFix.map(f=>f.area)})

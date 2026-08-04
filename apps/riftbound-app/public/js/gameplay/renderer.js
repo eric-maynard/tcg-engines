@@ -679,7 +679,12 @@ function renderCardElement(card, isFacedown = false, zone = "") {
          ondblclick="openZoom('${esc(card.id)}')"
          style="${isLegendZone && !isPlayable ? "cursor:default;" : ""}">
       <img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(card.name)}"
-           onerror="this.style.background='linear-gradient(135deg,#201a38,#2a2248)';this.alt='${esc(card.name)}'">
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="card-fallback">
+        <div class="fallback-cost">${card.energyCost != null ? esc(card.energyCost) : "&mdash;"}</div>
+        <div class="fallback-name">${esc(card.name || "")}</div>
+        <div class="fallback-type">${esc(card.cardType || "")}</div>
+      </div>
       ${card.meta?.damage > 0 ? `<div class="card-damage">${card.meta.damage}</div>` : ""}
       ${autoPayBtn}
       ${hideBtn}
@@ -778,7 +783,11 @@ function renderZones() {
            ondblclick="openZoom('${esc(c.id)}')"
            title="${esc(cardName)}">
         <img class="card-img" src="${imgSrc}" alt="${esc(cardName)}"
-             onerror="this.style.background='linear-gradient(135deg,#201a38,#2a2248)';this.removeAttribute('src');">
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="card-fallback">
+          <div class="fallback-name">${esc(cardName)}</div>
+          <div class="fallback-type">rune</div>
+        </div>
       </div>
     `;
   }
@@ -881,8 +890,6 @@ function renderBattlefields() {
         <div class="bf-art"
              data-card-id="${esc(bfId)}"
              data-def-id="${esc(bfCard?.definitionId || bfId)}"
-             onmouseenter="showPreview(event, this)"
-             onmouseleave="hidePreview()"
              ondblclick="openZoom('${esc(bfId)}')"></div>
         ${hasShowdown ? `<div class="bf-showdown-badge">${activeShowdown.isCombatShowdown ? "COMBAT" : "SHOWDOWN"}</div>` : ""}
         <div class="bf-body">
@@ -994,6 +1001,17 @@ function renderActions() {
     if (!placed) sections.other.moves.push(move);
   }
 
+  // Keep the sidebar's Play Cards list in sync with the hand's Auto Pay badges
+  // (both derive from canAutoPay so the two "playable now" views never diverge).
+  if (typeof canAutoPay === "function") {
+    const listed = new Set(sections.play.moves.map(m => m.params?.cardId));
+    for (const c of zoneForPlayer("hand", viewingPlayer)) {
+      if (!c?.id || listed.has(c.id) || !canAutoPay(c.id)) continue;
+      const mid = c.cardType === "spell" ? "playSpell" : c.cardType === "gear" ? "playGear" : "playUnit";
+      sections.play.moves.push({ moveId: mid, params: { cardId: c.id }, playerId: viewingPlayer, _autoPay: true });
+    }
+  }
+
   let html = "";
 
   for (const section of Object.values(sections)) {
@@ -1023,10 +1041,13 @@ function renderActions() {
       if (moves.length === 1) {
         const m = moves[0];
         const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
+        const onclick = m._autoPay
+          ? `autoPayAndPlay(${JSON.stringify(m.params?.cardId)})`
+          : `executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})`;
 
         html += `
           <button class="action-btn ${isPrimary ? "primary" : ""} ${isHighlighted ? "highlighted" : ""}"
-                  onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+                  onclick='${onclick}'>
             ${esc(label)}
             ${paramStr ? `<div class="action-detail">${esc(paramStr)}</div>` : ""}
           </button>
@@ -1101,9 +1122,12 @@ function renderActions() {
                 (m.params?.cardId === interaction.sourceCardId ||
                  m.params?.unitIds?.includes(interaction.sourceCardId) ||
                  m.params?.unitId === interaction.sourceCardId);
+              const onclick = m._autoPay
+                ? `autoPayAndPlay(${JSON.stringify(m.params?.cardId)})`
+                : `executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})`;
               return `
                 <button class="action-btn ${moveHighlighted ? "highlighted" : ""}"
-                        onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+                        onclick='${onclick}'>
                   ${esc(paramStr || `Option ${i + 1}`)}
                 </button>
               `;
@@ -1506,7 +1530,7 @@ function findCardElementFromEvent(event) {
   if (!target || typeof target.closest !== "function") return null;
   // Ignore hover over the preview slot itself (its img is not a `.card`).
   if (target.closest("#hover-preview")) return null;
-  return target.closest(".card");
+  return target.closest(".card, .bf-art");
 }
 
 function onDocumentCardMouseOver(event) {

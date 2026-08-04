@@ -29,6 +29,7 @@
     <div class="start-screen" id="startScreen">
       <!-- Step 1: Choose Host or Join -->
       <div id="lobbyMenu">
+        <h1>Play</h1>
         <p style="margin-bottom:20px;">Play against another player</p>
         <div style="display:flex; gap:12px;">
           <button class="start-btn" onclick="hostLobby()">Host Game</button>
@@ -97,12 +98,12 @@
             <option value="default">Fury/Chaos Starter Deck</option>
             <!-- Saved decks populated by loadSavedDecks() -->
           </select>
-          <p id="deckLoadStatus" style="color:#4a4268;font-size:10px;margin-top:4px;"></p>
+          <p id="deckLoadStatus" style="color:#a8a0c6;font-size:12px;margin-top:4px;"></p>
         </div>
 
-        <!-- Start button (host only, both ready) -->
-        <button id="lobbyStartBtn" class="start-btn hidden" onclick="lobbyStartGame()" style="margin-top:8px;">Start Game</button>
-        <p id="lobbyStatus" style="color:#6a6288;font-size:12px;margin-top:8px;">Waiting for opponent...</p>
+        <!-- Start button (always visible; disabled until both ready) -->
+        <button id="lobbyStartBtn" class="start-btn" disabled onclick="lobbyStartGame()" style="margin-top:8px;">Start Game</button>
+        <p id="lobbyStatus" style="color:#a8a0c6;font-size:12px;margin-top:8px;">Select your deck to continue</p>
         <button style="margin-top:12px;background:none;border:none;color:#6a6288;cursor:pointer;font-size:12px;text-decoration:underline;" onclick="leaveLobby()">Back</button>
       </div>
     </div>
@@ -138,7 +139,7 @@
         <div class="zone-row hand-zone" id="player-hand" style="justify-content:center;flex:1;"></div>
         <div id="player-decks" style="display:flex; gap:4px; align-items:center; flex-shrink:0;"></div>
       </div>
-      <div class="player-info" id="playerInfo" style="position:absolute;bottom:4px;left:8px;z-index:5;"></div>
+      <div class="player-info" id="playerInfo" style="flex-shrink:0;"></div>
     </div>
 
     <!-- Opponent Disconnect Banner -->
@@ -172,7 +173,8 @@
     </div>
     <!-- Hover preview slot: shows large readable version of currently hovered card -->
     <div class="hover-preview" id="hover-preview" aria-hidden="true">
-      <img id="hoverPreviewImg" src="" alt="">
+      <img id="hoverPreviewImg" src="" alt=""
+           onerror="this.parentElement.classList.remove('has-card')">
       <div class="hover-preview-empty" id="hoverPreviewEmpty">Hover a card</div>
     </div>
     <!-- W10c: client-only board toggles panel. Populated by board-toggles.js

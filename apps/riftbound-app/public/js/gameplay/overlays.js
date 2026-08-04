@@ -63,20 +63,21 @@ function showPreview(event, el) {
   const pregameVisible =
     document.getElementById("pregameOverlay")?.classList.contains("visible") ||
     document.getElementById("coinOverlay")?.classList.contains("visible");
-  let left = rect.right + 8;
-  let top = rect.top;
-  // Anchor far-left when the tooltip would land over the board center
-  // (pregame overlay, or hovering the opponent-hand row at the top —
-  // otherwise it drops onto the phase tracker and centre battlefields).
-  if (pregameVisible || rect.top < 220) {
-    left = 20;
-    top = Math.max(60, rect.bottom + 8);
-  } else if (left + 230 > window.innerWidth) {
-    left = rect.left - 230;
-  }
-  // Reserve space for hand zone at bottom
-  const handZoneTop = window.innerHeight - 180;
-  if (top + 300 > handZoneTop) top = handZoneTop - 310;
+  // In-game the sidebar #hover-preview inspector already shows the full card;
+  // the floating tooltip only occludes battlefields and the phase strip. Keep
+  // it solely for pregame overlays where the sidebar is covered.
+  if (!pregameVisible) return;
+  // Reveal before measuring so offsetHeight/Width reflect the populated panel.
+  previewEl.classList.add("visible");
+  const previewH = previewEl.offsetHeight || 420;
+  const previewW = previewEl.offsetWidth || 236;
+  // Mulligan/coin overlay: place the detail panel above the hand row so it
+  // never covers the instruction line / Keep Hand button that sit below it,
+  // and never runs off the bottom viewport edge.
+  let left = Math.max(8, Math.min(rect.left, window.innerWidth - previewW - 8));
+  let top = rect.top - previewH - 12;
+  // Viewport clamp — keep the whole panel on-screen.
+  if (top + previewH > window.innerHeight - 8) top = window.innerHeight - previewH - 8;
   if (top < 8) top = 8;
 
   previewEl.style.left = left + "px";

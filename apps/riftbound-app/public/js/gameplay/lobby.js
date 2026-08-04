@@ -199,9 +199,9 @@ function renderLobbyRoom(lobby) {
     document.getElementById("lobbyGuest").classList.add("empty");
   }
 
-  // Start button (host only, both ready)
+  // Start button — always visible; enabled only for the host when both sides are ready.
   const canStart = lobbyRole === "host" && lobby.host.hasDeck && lobby.guest?.hasDeck;
-  document.getElementById("lobbyStartBtn").classList.toggle("hidden", !canStart);
+  document.getElementById("lobbyStartBtn").disabled = !canStart;
 
   // Status text
   const statusEl = document.getElementById("lobbyStatus");
@@ -279,7 +279,8 @@ async function loadSavedDecks() {
       select.appendChild(group);
       if (statusEl) statusEl.textContent = decks.length + " saved deck" + (decks.length === 1 ? "" : "s") + " found";
     } else {
-      if (statusEl) statusEl.textContent = "No saved decks — build one in the Deck Builder";
+      // Dropdown always includes the starter deck, so don't claim "No saved decks".
+      if (statusEl) statusEl.textContent = "";
     }
   } catch {
     if (statusEl) statusEl.textContent = "";

@@ -377,6 +377,29 @@
       background: linear-gradient(135deg, #201a38, #2a2248);
     }
 
+    /* Shown by the <img onerror> handler when card art fails to load, so the
+       card face reads as name/cost/type instead of a broken-image glyph. */
+    .card .card-fallback {
+      display: none;
+      position: absolute;
+      inset: 0;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 6px;
+      text-align: center;
+      background: linear-gradient(135deg, #201a38, #2a2248);
+      color: #e0d4ff;
+    }
+    .card .card-fallback .fallback-cost {
+      font-size: 14px; font-weight: 700; color: #c4a0ff;
+      border: 1px solid #5a4a80; border-radius: 50%;
+      width: 24px; height: 24px; line-height: 22px;
+    }
+    .card .card-fallback .fallback-name { font-size: 11px; font-weight: 600; line-height: 1.2; word-break: break-word; }
+    .card .card-fallback .fallback-type { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #8a82a6; }
+
     .card-name {
       /* Card image is authoritative — do not superimpose text on it. Kept as
          a hidden element so JS that queries .card-name still works. */
@@ -1119,6 +1142,10 @@
       gap: 4px;
       max-height: 220px;
       overflow-y: auto;
+      /* overflow-y:auto zeroes the flex min-height, so the sidebar column was
+         crushing this panel to a sliver; keep it at content height (capped by
+         max-height) so Turn Actions stay reachable. */
+      flex-shrink: 0;
     }
 
     .actions-title {
@@ -1354,6 +1381,19 @@
       color: #e0dced;
     }
 
+    /* Anchor lobby steps in a panel so the action cluster reads as placed,
+       not adrift in the empty viewport. */
+    #lobbyMenu, #joinForm, #lobbyRoom {
+      background: #14121f;
+      border: 1px solid #2a2740;
+      border-radius: 12px;
+      padding: 28px 32px;
+      min-width: 360px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    #lobbyMenu h1 { margin-bottom: 4px; }
+
     .start-screen p {
       color: #8a82a6;
       font-size: 14px;
@@ -1375,6 +1415,15 @@
       background: linear-gradient(135deg, #305080, #4a80c0);
       transform: translateY(-2px);
       box-shadow: 0 4px 16px rgba(50,100,180,0.3);
+    }
+
+    .start-btn:disabled {
+      background: #1e1b30;
+      border-color: #3a3560;
+      color: #6a6288;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
     }
 
     .hidden { display: none !important; }
@@ -2017,14 +2066,34 @@
     .bf-choice .bf-name { font-size: 14px; font-weight: 700; color: #c4a0ff; margin-bottom: 4px; }
     .bf-choice .bf-text { font-size: 11px; color: #8a82a6; line-height: 1.4; }
 
-    /* Mulligan hand */
+    /* Mulligan hand — break out of the 700px .pregame-step cap so card
+       ability text is readable without hovering (uses spare vertical room). */
     .mulligan-hand {
       display: flex; gap: 16px; justify-content: center; flex-wrap: nowrap;
-      margin: 20px 0;
+      width: 95vw; margin: 20px calc(50% - 47.5vw);
     }
-    .mulligan-hand .card { width: 150px; min-width: 120px; height: 210px; flex-shrink: 1; }
-    .mulligan-hand .card .card-name { font-size: 12px; padding: 4px 6px; }
+    .mulligan-hand .card { width: 200px; min-width: 150px; height: 280px; flex-shrink: 1; }
+    .mulligan-hand .card .card-name { font-size: 13px; padding: 4px 6px; }
     .mulligan-hand .card .card-img { object-fit: cover; }
+    .mulligan-hand .card .card-fallback {
+      display: none; position: absolute; inset: 0;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; padding: 10px; text-align: center;
+      background: linear-gradient(135deg, #201a38, #2a2248);
+      color: #e0d4ff;
+    }
+    .mulligan-hand .card .card-fallback .fallback-cost {
+      font-size: 20px; font-weight: 700; color: #c4a0ff;
+      border: 1px solid #5a4a80; border-radius: 50%;
+      width: 32px; height: 32px; line-height: 30px;
+    }
+    .mulligan-hand .card .card-fallback .fallback-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
+    .mulligan-hand .card .card-fallback .fallback-type { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #8a82a6; }
+    .mulligan-hand .card .card-fallback .fallback-text {
+      font-size: 10px; line-height: 1.3; color: #b0a8c8;
+      display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical;
+      overflow: hidden; max-width: 100%;
+    }
 
     .mulligan-hand .card:hover {
       transform: translateY(-8px) scale(1.05);
@@ -2962,12 +3031,14 @@
        Onboarding hint banner
        ============================================ */
     .onboarding-hint {
-      position: absolute;
-      top: 40px;
-      right: 8px;
-      z-index: 20;
-      max-width: 220px;
-      padding: 10px 28px 10px 12px;
+      /* In normal flow (inserted before .sidebar-header) so the turn-status,
+         connection text and Available Actions header shift down instead of
+         being covered by an absolute overlay. Top margin clears the
+         absolutely-positioned (i) button, which ends at top:34px; the ::after
+         arrow extends 6px above this box to point at it. */
+      position: relative;
+      margin: 40px 8px 0 8px;
+      padding: 10px 26px 10px 10px;
       background: linear-gradient(135deg, #2a2050, #3a2a70);
       border: 1px solid #7a50c0;
       border-radius: 8px;
@@ -2977,15 +3048,43 @@
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
       animation: onboarding-pop 0.3s ease-out;
     }
-    .onboarding-hint strong {
+    /* Arrow pointing up at the (i) button so the hint reads as anchored to it
+       even though the box sits clear of the Leave button and header text. */
+    .onboarding-hint::after {
+      content: '';
+      position: absolute;
+      top: -6px;
+      right: 8px;
+      width: 10px;
+      height: 10px;
+      background: #2a2050;
+      border-left: 1px solid #7a50c0;
+      border-top: 1px solid #7a50c0;
+      transform: rotate(45deg);
+    }
+    /* Inline replica of .help-info-btn — drawn with CSS (ASCII `i` in a circle)
+       instead of the ⓘ glyph, which renders as tofu on some font stacks. */
+    .onboarding-hint strong.onboarding-hint-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1.5px solid #c4a0ff;
       color: #c4a0ff;
-      font-style: italic;
       font-family: Georgia, serif;
+      font-style: italic;
+      font-weight: 700;
+      font-size: 10px;
+      line-height: 1;
+      vertical-align: -3px;
     }
     .onboarding-hint-close {
       position: absolute;
       top: 4px;
       right: 4px;
+      pointer-events: auto;
       width: 20px;
       height: 20px;
       background: transparent;
