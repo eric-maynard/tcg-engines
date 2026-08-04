@@ -113,6 +113,19 @@ console.log("Loading cards...");
 const allCards = getAllCards();
 const registry = getCardRegistry();
 
+// cardId → CDN imageUrl, from the per-set JSON. Used as a fallback when
+// downloads/card-images/ is absent.
+const cardImageUrls = new Map<string, string>();
+for (const setJson of Object.values(
+  await import("../../packages/riftbound-cards/src/data/sets/index").catch(() => ({})),
+)) {
+  const cards = (setJson as { cards?: { id: string; imageUrl?: string }[] })?.cards ?? [];
+  for (const c of cards) {
+    if (c.id && c.imageUrl) {cardImageUrls.set(c.id, c.imageUrl);}
+  }
+}
+console.log(`Card image CDN fallback: ${cardImageUrls.size} URLs loaded`);
+
 // Patch legends with championTag at runtime
 let legendsPatched = 0;
 for (const card of allCards) {
@@ -2252,11 +2265,12 @@ const server = Bun.serve({
       return new Response("Image not found", { status: 404 });
     }
 
-    // GET /card-image/:cardId — serve card image by ID (looks up local file)
+    // GET /card-image/:cardId — serve card image by ID.
+    // Prefers local downloads/card-images/; falls back to the official CDN
+    // imageUrl from set JSON when local files aren't present.
     if (pathname.startsWith("/card-image/")) {
       const cardId = pathname.split("/")[2];
-      // Find the image file for this card ID
-      for (const setDir of ["ogn", "ogs", "sfd", "unl"]) {
+      for (const setDir of ["ogn", "ogs", "sfd", "unl", "ven"]) {
         const dir = path.join(IMAGES_DIR, setDir);
         if (!fs.existsSync(dir)) {continue;}
         const files = fs.readdirSync(dir);
@@ -2267,6 +2281,13 @@ const server = Bun.serve({
             headers: { "Cache-Control": "public, max-age=86400", "Content-Type": "image/png" },
           });
         }
+      }
+      const cdnUrl = cardImageUrls.get(cardId);
+      if (cdnUrl) {
+        return new Response(null, {
+          headers: { "Cache-Control": "public, max-age=86400", "Location": cdnUrl },
+          status: 302,
+        });
       }
       return new Response("Image not found", { status: 404 });
     }
