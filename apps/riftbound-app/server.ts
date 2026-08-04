@@ -816,11 +816,18 @@ function buildDefaultDeck(domain1 = "fury", domain2 = "chaos"): DeckConfig {
   const bfs = allCards.filter((c) => c.cardType === "battlefield");
   const battlefieldIds = bfs.slice(0, 3).map((bf) => bf.id);
 
-  // Select a legend and matching champion from the chosen domains
+  // Select a legend whose domains are a SUBSET of {domain1,domain2} — matching
+  // "either" produced Kai'Sa (fury/mind) on a fury/chaos deck.
   let legendId: string | undefined;
   let championId: string | undefined;
 
-  const legend = allCards.find((c) => c.cardType === "legend" && matchesDomain(c));
+  const domainsOf = (c: { domain?: string | string[] }) =>
+    Array.isArray(c.domain) ? c.domain : c.domain ? [c.domain] : [];
+  const legend =
+    allCards.find((c) => c.cardType === "legend"
+      && domainsOf(c).every((d) => d === domain1 || d === domain2)
+      && domainsOf(c).length > 0) ??
+    allCards.find((c) => c.cardType === "legend" && matchesDomain(c));
   if (legend) {
     legendId = legend.id;
     const tag = (legend as Record<string, unknown>).championTag as string | undefined;
@@ -2644,8 +2651,8 @@ const server = Bun.serve({
           let p2Roll = 0;
           if (lobby.sandbox) {
             // In goldfish mode, rig so the host always wins (goldfish can't choose)
-            p1Roll = 21;
-            p2Roll = Math.floor(Math.random() * 20) + 1;
+            p1Roll = 20;
+            p2Roll = Math.floor(Math.random() * 19) + 1;
           } else {
             // Reroll on tie
             do {

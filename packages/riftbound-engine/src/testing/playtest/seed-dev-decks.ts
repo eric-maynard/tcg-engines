@@ -28,9 +28,9 @@ async function loginOrRegister(username: string, password: string) {
 }
 
 const DECK_RECIPES: [string, string, string][] = [
-  ["Annie Aggro", "fury", "chaos"],
-  ["Yasuo Tempo", "mind", "order"],
-  ["Braum Midrange", "body", "calm"],
+  ["Jinx (Fury/Chaos)", "fury", "chaos"],
+  ["Viktor (Mind/Order)", "mind", "order"],
+  ["Lee Sin (Body/Calm)", "body", "calm"],
 ];
 
 const all = getAllCards();

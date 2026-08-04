@@ -354,28 +354,9 @@
       background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'><path d='M6 2h12v2l-4 6 4 6v2H6v-2l4-6-4-6V2zm2.5 2 3.5 5.25L15.5 4h-7zM8.5 20h7L12 14.75 8.5 20z'/></svg>");
     }
 
-    /* Brief enter animation when a card just appears on a board zone */
+    /* Board-entry animation disabled — cards appear instantly. */
     .card--just-played {
-      animation: card-just-played-enter 600ms ease-out;
-    }
-    @keyframes card-just-played-enter {
-      0% {
-        transform: translateY(-12px) scale(0.92);
-        opacity: 0;
-        box-shadow: 0 0 18px rgba(140, 110, 220, 0.0);
-      }
-      40% {
-        opacity: 1;
-        box-shadow: 0 0 24px rgba(140, 110, 220, 0.55);
-      }
-      100% {
-        transform: translateY(0) scale(1);
-        opacity: 1;
-        box-shadow: 0 0 0 rgba(140, 110, 220, 0.0);
-      }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .card--just-played { animation: none; }
+      animation: none;
     }
 
     /* Legacy `.card.exhausted` (no rotation) — overlay handles the visual now.
@@ -436,19 +417,19 @@
     }
     .hand-zone .card .card-name { font-size: 10px; padding: 3px 6px; }
 
-    /* Battlefield unit cards — compact but image fills the card (no cropping) */
+    /* Battlefield unit cards — large enough to read art/text */
     .bf-units .card {
-      width: 72px;
-      min-width: 72px;
-      height: 100px;
+      width: 90px;
+      min-width: 90px;
+      height: 126px;
     }
-    .bf-units .card .card-name { font-size: 9px; }
-    .bf-units .card .card-damage { width: 16px; height: 16px; font-size: 9px; }
+    .bf-units .card .card-name { font-size: 10px; }
+    .bf-units .card .card-damage { width: 18px; height: 18px; font-size: 10px; }
 
     /* Rune pool: domain-grouped stacks */
     .rune-pool-grid {
       display: flex;
-      gap: 6px;
+      gap: 10px;
       align-items: flex-end;
       padding: 4px 6px;
       border: 1px solid #a0903044;
@@ -458,8 +439,8 @@
     }
     .rune-stack {
       position: relative;
-      width: 52px;
-      min-height: 88px;  /* fallback so absolutely-positioned cards inside are always visible */
+      width: 62px;
+      min-height: 100px;  /* fallback so absolutely-positioned cards inside are always visible */
       flex-shrink: 0;
     }
     .rune-stack-label {
@@ -473,9 +454,9 @@
     }
     .rune-stack .card {
       position: absolute;
-      width: 50px;
-      min-width: 50px;
-      height: 70px;
+      width: 60px;
+      min-width: 60px;
+      height: 84px;
       left: 1px;
       transition: transform 0.15s;
       cursor: pointer;
@@ -484,11 +465,16 @@
       z-index: 20 !important;
       transform: translateY(-24px) scale(1.2) !important;
     }
-    /* Exhausted runes use the overlay (.card--exhausted::before) for dimming.
-       No extra opacity rule needed; just keep them hoverable. */
-    .rune-stack .card.exhausted:hover {
+    /* Exhausted runes rotate 90° (tabletop tap convention) in addition to the
+       overlay dim from .card--exhausted::before. */
+    .rune-stack .card.card--exhausted,
+    .rune-stack .card.exhausted {
+      transform: rotate(90deg);
+    }
+    .rune-stack .card.exhausted:hover,
+    .rune-stack .card.card--exhausted:hover {
       z-index: 20 !important;
-      transform: translateY(-18px) scale(1.15) !important;
+      transform: translateY(-18px) scale(1.15) rotate(90deg) !important;
     }
     .rune-stack .card .card-name {
       display: none;
@@ -840,8 +826,10 @@
     }
 
     .bf-art {
-      flex: 0 0 170px;
-      width: 170px;
+      flex: 0 0 200px;
+      width: 200px;
+      min-height: 150px;
+      cursor: pointer;
       /* Use `contain` so the entire card art is visible (no cropping). The
          art will letterbox vertically against the card frame background.
          Battlefield cards are landscape and the column is portrait, so

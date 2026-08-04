@@ -1,5 +1,17 @@
 // overlays.js — UI overlays: card preview, zoom, leave game, disconnect banner
 
+const ICON_TOKENS = ["rainbow", "fury", "mind", "body", "calm", "chaos", "order", "might", "t"];
+
+function iconify(text) {
+  let html = esc(text || "");
+  html = html.replace(/\[(\d+)\]/g, '<span class="ico ico-num">$1</span>');
+  for (const tok of ICON_TOKENS) {
+    const re = new RegExp("\\[" + tok + "\\]", "gi");
+    html = html.replace(re, `<span class="ico ico-${tok}"></span>`);
+  }
+  return html;
+}
+
 function showPreview(event, el) {
   const defId = el.dataset.defId || "";
   const imgId = defId.replace(/^player-[12]-/, "");
@@ -24,7 +36,7 @@ function showPreview(event, el) {
 
   document.getElementById("previewName").textContent = card.name || cardId;
   document.getElementById("previewType").textContent = card.cardType || "";
-  document.getElementById("previewText").textContent = card.rulesText || "";
+  document.getElementById("previewText").innerHTML = iconify(card.rulesText || "");
 
   let stats = "";
   if (card.energyCost != null) stats += `<span>Cost: ${card.energyCost}</span>`;
@@ -38,9 +50,16 @@ function showPreview(event, el) {
   // Position
   const rect = el.getBoundingClientRect();
   const previewEl = document.getElementById("cardPreview");
+  const pregameVisible =
+    document.getElementById("pregameOverlay")?.classList.contains("visible") ||
+    document.getElementById("coinOverlay")?.classList.contains("visible");
   let left = rect.right + 8;
   let top = rect.top;
-  if (left + 230 > window.innerWidth) left = rect.left - 230;
+  if (pregameVisible) {
+    left = 20;
+  } else if (left + 230 > window.innerWidth) {
+    left = rect.left - 230;
+  }
   // Reserve space for hand zone at bottom
   const handZoneTop = window.innerHeight - 180;
   if (top + 300 > handZoneTop) top = handZoneTop - 310;
@@ -69,7 +88,7 @@ function openZoom(cardId) {
   document.getElementById("zoomImg").src = `/card-image/${defId}`;
   document.getElementById("zoomName").textContent = card.name || cardId;
   document.getElementById("zoomType").textContent = `${card.cardType || ""}${card.domain ? " — " + card.domain : ""}`;
-  document.getElementById("zoomText").textContent = card.rulesText || "";
+  document.getElementById("zoomText").innerHTML = iconify(card.rulesText || "");
 
   let stats = "";
   if (card.energyCost != null) stats += `<span>Cost: ${card.energyCost}</span>`;

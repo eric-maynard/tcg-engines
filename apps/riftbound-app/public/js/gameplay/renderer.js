@@ -878,7 +878,12 @@ function renderBattlefields() {
            data-drop-zone="${esc(bfId)}"
            onclick="onBattlefieldClick(event, '${esc(bfId)}')"
            style="--bf-img: url('/card-image/${esc(bfImgId)}');">
-        <div class="bf-art"></div>
+        <div class="bf-art"
+             data-card-id="${esc(bfId)}"
+             data-def-id="${esc(bfCard?.definitionId || bfId)}"
+             onmouseenter="showPreview(event, this)"
+             onmouseleave="hidePreview()"
+             ondblclick="openZoom('${esc(bfId)}')"></div>
         ${hasShowdown ? `<div class="bf-showdown-badge">${activeShowdown.isCombatShowdown ? "COMBAT" : "SHOWDOWN"}</div>` : ""}
         <div class="bf-body">
           <div class="bf-header">

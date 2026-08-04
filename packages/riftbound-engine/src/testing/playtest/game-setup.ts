@@ -169,9 +169,44 @@ export function buildDefaultDeck(
     if (r) runes.push(r.id);
   }
 
-  const bfs = allCards.filter((c) => c.cardType === "battlefield").slice(0, 3).map((c) => c.id);
+  // Legend must match the deck's domain identity (both if it's dual-domain,
+  // else the primary). Falling back to first-match-either produced Kai'Sa on
+  // an "Annie" fury/chaos deck because Daughter of the Void is fury/mind.
+  const domainsOf = (c: CardDef) =>
+    Array.isArray(c.domain) ? c.domain : c.domain ? [c.domain] : [];
+  const legend =
+    allCards.find(
+      (c) =>
+        c.cardType === "legend" &&
+        domainsOf(c).includes(domain1) &&
+        domainsOf(c).includes(domain2)
+    ) ??
+    allCards.find((c) => c.cardType === "legend" && domainsOf(c).includes(domain1)) ??
+    allCards.find((c) => c.cardType === "legend" && inDomain(c));
 
-  const legend = allCards.find((c) => c.cardType === "legend" && inDomain(c));
+  // Runes follow the legend's actual domains so power costs are payable.
+  const legendDomains = legend ? domainsOf(legend) : [domain1, domain2];
+  const [rd1, rd2] = [legendDomains[0] ?? domain1, legendDomains[1] ?? legendDomains[0] ?? domain2];
+  runes.length = 0;
+  const r1 = allCards.find((c) => c.cardType === "rune" && c.name === `${cap(rd1)} Rune`);
+  const r2 = allCards.find((c) => c.cardType === "rune" && c.name === `${cap(rd2)} Rune`);
+  for (let i = 0; i < 12; i++) {
+    const r = i < 6 ? r1 : r2;
+    if (r) runes.push(r.id);
+  }
+
+  // Battlefields matching legend domains where possible; distinct.
+  const bfs = allCards
+    .filter((c) => c.cardType === "battlefield" && (inDomain(c) || domainsOf(c).length === 0))
+    .slice(0, 3)
+    .map((c) => c.id);
+  if (bfs.length < 3) {
+    for (const c of allCards.filter((x) => x.cardType === "battlefield")) {
+      if (bfs.length >= 3) break;
+      if (!bfs.includes(c.id)) bfs.push(c.id);
+    }
+  }
+
   let championId: string | undefined;
   if (legend) {
     const tag = legend.championTag as string | undefined;
