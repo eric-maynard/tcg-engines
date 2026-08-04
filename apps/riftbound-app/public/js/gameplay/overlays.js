@@ -34,19 +34,6 @@ function showPreview(event, el) {
   img.onerror = function() { this.style.display = "none"; };
   img.onload = function() { this.style.display = "block"; };
 
-  document.getElementById("previewName").textContent = card.name || cardId;
-  document.getElementById("previewType").textContent = card.cardType || "";
-  document.getElementById("previewText").innerHTML = iconify(card.rulesText || "");
-
-  let stats = "";
-  if (card.energyCost != null) stats += `<span>Cost: ${card.energyCost}</span>`;
-  if (card.might != null) stats += `<span>Might: ${card.might}</span>`;
-  if (card.meta?.damage > 0) stats += `<span style="color:#d04040">Damage: ${card.meta.damage}</span>`;
-  if (card.meta?.exhausted) stats += `<span style="color:#d08030">Exhausted</span>`;
-  if (card.meta?.stunned) stats += `<span style="color:#d04040">Stunned</span>`;
-  if (card.meta?.buffed) stats += `<span style="color:#f0c040">Buffed</span>`;
-  document.getElementById("previewStats").innerHTML = stats;
-
   // Refuse to preview cards in the opponent's hidden zones outside sandbox
   // mode — even if the thumbnail were a card back, this handler would leak.
   if (!isSandboxGame) {
@@ -63,10 +50,6 @@ function showPreview(event, el) {
   const pregameVisible =
     document.getElementById("pregameOverlay")?.classList.contains("visible") ||
     document.getElementById("coinOverlay")?.classList.contains("visible");
-  // In-game the sidebar #hover-preview inspector already shows the full card;
-  // the floating tooltip only occludes battlefields and the phase strip. Keep
-  // it solely for pregame overlays where the sidebar is covered.
-  if (!pregameVisible) return;
   // Reveal before measuring so offsetHeight/Width reflect the populated panel.
   previewEl.classList.add("visible");
   const previewH = previewEl.offsetHeight || 420;

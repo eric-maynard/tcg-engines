@@ -360,6 +360,10 @@ document.addEventListener("dragstart", (e) => {
 
 /** Animate a card element flying from source to destination */
 function animateCardFly(sourceEl, destEl, onDone) {
+  // Zone-change animation disabled — invoke callback immediately.
+  if (onDone) onDone();
+  return;
+
   if (!sourceEl || !destEl) { if (onDone) onDone(); return; }
 
   const srcRect = sourceEl.getBoundingClientRect();

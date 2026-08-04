@@ -2,6 +2,23 @@
 
 let ws = null;
 let wsReconnectAttempts = 0;
+let _imagesPreloaded = false;
+
+function preloadCardImages(state) {
+  if (_imagesPreloaded || !state?.zones) return;
+  _imagesPreloaded = true;
+  const seen = new Set();
+  for (const zoneCards of Object.values(state.zones)) {
+    if (!Array.isArray(zoneCards)) continue;
+    for (const c of zoneCards) {
+      const defId = (c?.definitionId || "").replace(/^player-[12]-/, "");
+      if (!defId || seen.has(defId)) continue;
+      seen.add(defId);
+      new Image().src = `/card-image/${defId}`;
+    }
+  }
+}
+
 let wsReconnectTimer = null;
 let wsConnected = false;
 const WS_MAX_RECONNECT_DELAY = 30000; // 30s cap
@@ -37,6 +54,7 @@ function connectWs() {
         gameState = msg.state;
         availableMoves = msg.moves || [];
         if (msg.state?.playerNames) playerNames = msg.state.playerNames;
+        preloadCardImages(msg.state);
         resetInteractionSilent();
 
         // Check for pregame state

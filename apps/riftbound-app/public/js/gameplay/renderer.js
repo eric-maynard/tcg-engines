@@ -804,13 +804,13 @@ function renderZones() {
     for (const [domain, cards] of Object.entries(groups)) {
       const color = DOMAIN_COLORS[domain] || "#a09030";
       const visibleCards = cards.slice(0, STACK_MAX);
-      const stackHeight = 70 + (visibleCards.length - 1) * 14;
+      const stackHeight = 154 + (visibleCards.length - 1) * 26;
       const label = DOMAIN_LABELS[domain] ?? domain[0].toUpperCase();
       const labelText = cards.length > 1 ? `${label} (${cards.length})` : label;
       html += `<div class="rune-stack" style="min-height:${stackHeight + 18}px;height:${stackHeight + 18}px;">`;
       html += `<div class="rune-stack-label" style="color:${color};">${labelText}</div>`;
       visibleCards.forEach((c, i) => {
-        html += renderRuneCard(c, 16 + i * 14, i + 1, color);
+        html += renderRuneCard(c, 16 + i * 26, i + 1, color);
       });
       html += `</div>`;
     }

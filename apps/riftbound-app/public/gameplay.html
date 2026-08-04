@@ -58,6 +58,10 @@
           <option value="default">Fury/Chaos Starter Deck</option>
         </select>
         <p id="soloDeckStatus" style="color:#6a6288;font-size:11px;margin-top:6px;"></p>
+        <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
+          <label style="color:#8a82a6;font-size:12px;"><input type="radio" name="soloMode" value="duel" checked> Bo1 (random battlefield)</label>
+          <label style="color:#8a82a6;font-size:12px;"><input type="radio" name="soloMode" value="match"> Bo3 (pick battlefield)</label>
+        </div>
         <div style="display:flex;gap:8px;margin-top:16px;">
           <button class="start-btn" onclick="startSoloGame()">Play</button>
           <button style="background:none;border:none;color:#6a6288;cursor:pointer;font-size:12px;" onclick="showMenu()">Back</button>

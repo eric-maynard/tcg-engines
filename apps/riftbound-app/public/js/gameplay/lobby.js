@@ -383,7 +383,8 @@ async function showSoloDeckPicker(mode) {
 
 async function startSoloGame() {
   const deckId = document.getElementById("soloDeckSelect").value || "default";
-  const data = await api("/api/lobby/create", "POST", { name: currentUsername || "Player 1", sandbox: true });
+  const gameMode = document.querySelector('input[name="soloMode"]:checked')?.value || "duel";
+  const data = await api("/api/lobby/create", "POST", { gameMode, name: currentUsername || "Player 1", sandbox: true });
   if (data.error) {
     document.getElementById("soloDeckStatus").textContent = data.error;
     return;

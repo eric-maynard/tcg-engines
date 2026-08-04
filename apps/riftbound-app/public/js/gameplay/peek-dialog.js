@@ -69,6 +69,9 @@ let _peekOpen = false;
  * directly (the engine move is informational only).
  */
 function openPeekDialog(count = 1) {
+  if (document.getElementById("pregameOverlay")?.classList.contains("visible")) {
+    return;
+  }
   if (typeof gameState !== "object" || !gameState || !gameState.zones) {
     return;
   }
