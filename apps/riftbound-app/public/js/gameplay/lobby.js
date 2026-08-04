@@ -1,5 +1,15 @@
 // lobby.js — Lobby management (create, join, deck selection, game mode, start)
 
+function _surfaceLobbyError(msg) {
+  console.error("[lobby]", msg);
+  for (const id of ["soloDeckStatus", "lobbyStatus", "joinError"]) {
+    const el = document.getElementById(id);
+    if (el && el.offsetParent !== null) { el.textContent = msg; el.style.color = "#d04040"; }
+  }
+  const btn = document.querySelector('#soloDeckPicker .start-btn');
+  if (btn) btn.disabled = false;
+}
+
 function showMenu() {
   document.getElementById("lobbyMenu").classList.remove("hidden");
   document.getElementById("joinForm").classList.add("hidden");
@@ -80,9 +90,26 @@ function copyLobbyCode() {
 
 function connectLobbyWs(onOpen) {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  lobbyWs = new WebSocket(`${proto}//${location.host}/ws/lobby/${lobbyId}?role=${lobbyRole}`);
+  const wsUrl = `${proto}//${location.host}/ws/lobby/${lobbyId}?role=${lobbyRole}`;
+  console.log("[lobby] connecting", wsUrl);
+  lobbyWs = new WebSocket(wsUrl);
 
-  if (onOpen) lobbyWs.addEventListener("open", () => { try { onOpen(); } catch {} });
+  const failTimer = setTimeout(() => {
+    if (lobbyWs && lobbyWs.readyState !== WebSocket.OPEN) {
+      _surfaceLobbyError(`WebSocket to ${wsUrl} did not open within 5s. If you're behind a proxy/port-forward, it may not support WS upgrade.`);
+    }
+  }, 5000);
+  lobbyWs.addEventListener("open", () => {
+    clearTimeout(failTimer);
+    console.log("[lobby] ws open");
+    if (onOpen) try { onOpen(); } catch (e) { _surfaceLobbyError(String(e)); }
+  });
+  lobbyWs.addEventListener("error", (e) => {
+    _surfaceLobbyError(`WebSocket error: ${e?.message || "connection failed"} (${wsUrl})`);
+  });
+  lobbyWs.addEventListener("close", (e) => {
+    if (e.code !== 1000 && !gameId) _surfaceLobbyError(`WebSocket closed: code ${e.code} ${e.reason || ""}`);
+  });
 
   lobbyWs.onmessage = (e) => {
     let msg;

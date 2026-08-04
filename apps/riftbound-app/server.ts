@@ -2546,7 +2546,7 @@ const server = Bun.serve({
       const gamePath = path.join(STATIC_DIR, "gameplay.html");
       if (fs.existsSync(gamePath)) {
         return new Response(Bun.file(gamePath), {
-          headers: { "Content-Type": "text/html" },
+          headers: { "Cache-Control": "no-store, no-cache, must-revalidate", "Content-Type": "text/html" },
         });
       }
     }
