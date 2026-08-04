@@ -140,6 +140,12 @@ function normalizeTokens(text: string): string {
   result = result.replace(/\[Exhaust\]/gi, ":rb_exhaust:");
   // Convert [N] (numeric energy cost) to :rb_energy_N:
   result = result.replace(/\[(\d+)\]/g, ":rb_energy_$1:");
+  // Strip parenthesized domain-icon reminders like "Body ([body])" → "Body".
+  // Must run before the [domain]→:rb_rune_X: pass so stripReminders (which
+  // replaces the leading-whitespace form with "") doesn't glue the tag to the
+  // next word ("Bodyunit"), which defeats target parsing and, downstream, the
+  // Rule 355.8 target-existence gate.
+  result = result.replace(/\s*\(\[(?:fury|calm|mind|body|chaos|order|rainbow)\]\)/gi, "");
   // Convert [domain] to :rb_rune_domain:
   result = result.replace(
     /\[(fury|calm|mind|body|chaos|order|rainbow)\]/gi,
@@ -572,7 +578,7 @@ function parseModifyMightEffect(text: string): ModifyMightEffect | SequenceEffec
   // Accepted and dropped; it's purely a text-level connector back to the
   // Base-level effect it replaces.
   const match = text.match(
-    /^Give ((?:a|an|another|two|three|four|five|\d+)?\s*(?:friendly |enemy |attacking enemy )?(?:unit|units|me|it)(?:\s+(?:at a battlefield|here|there))?|your\s+\w+(?:\s+\w+)?)\s+(?:each\s+)?([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(?:to a minimum of (\d+)\s*:rb_might:))?(?:\s+instead)?\.?$/i,
+    /^Give ((?:a|an|another|two|three|four|five|\d+)?\s*(?:friendly |enemy |attacking enemy )?(?:\w+ )*?(?:unit|units|me|it)(?:\s+(?:at a battlefield|here|there))?|your\s+\w+(?:\s+\w+)?)\s+(?:each\s+)?([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(?:to a minimum of (\d+)\s*:rb_might:))?(?:\s+instead)?\.?$/i,
   );
   if (!match) {
     return undefined;
@@ -2388,6 +2394,37 @@ function parseNextSpellBonusDamageEffect(text: string): Effect | undefined {
 /**
  * Try to parse any known effect from text
  */
+/**
+ * Try to parse an empower / disempower effect.
+ *
+ * Handles:
+ * - "Empower me/it/this." / "empower me."
+ * - "Empower a [friendly] unit."
+ * - "Disempower me/it/this."
+ * - "Disempower a [friendly|enemy] unit."
+ */
+function parseEmpowerEffect(text: string): Effect | undefined {
+  const match = text.match(
+    /^(dis)?empower (me|it|this|(?:a|an|another)\s+(?:friendly |enemy )?(?:unit|gear)(?:\s+(?:here|at a battlefield))?|something(?: else)?)\.?$/i,
+  );
+  if (!match) {
+    return undefined;
+  }
+  const dis = Boolean(match[1]);
+  const targetStr = match[2].toLowerCase().trim();
+  let target: AnyTarget;
+  if (targetStr === "me" || targetStr === "this") {
+    target = "self" as AnyTarget;
+  } else if (targetStr === "it") {
+    target = { type: "unit" } as AnyTarget;
+  } else if (targetStr.startsWith("something")) {
+    target = { excludeSelf: targetStr.includes("else"), type: "permanent" } as unknown as AnyTarget;
+  } else {
+    target = parseCardTarget(targetStr) as AnyTarget;
+  }
+  return { target, type: dis ? "disempower" : "empower" } as unknown as Effect;
+}
+
 function parseEffect(text: string): Effect | undefined {
   let cleaned = normalizeTokens(stripReminders(text)).trim();
   if (!cleaned) {
@@ -2440,6 +2477,7 @@ function parseEffect(text: string): Effect | undefined {
     parseSpendXpToEffect(cleaned) ??
     parseSpendXpEffect(cleaned) ??
     parsePredictEffect(cleaned) ??
+    parseEmpowerEffect(cleaned) ??
     undefined
   );
 }
@@ -3318,6 +3356,41 @@ function parseActivatedAbilityInner(text: string): ActivatedAbility | undefined 
         return { cost, effect: rawEffect, type: "activated" };
       }
     }
+
+    // Try "Discard <thing>" or "Disempower me" as leading text costs, optionally
+    // Followed by additional `, :rb_...:` cost tokens before the `:` delimiter.
+    // E.g. "Discard a gear, :rb_energy_1:, :rb_exhaust:: Deal 4 to a unit at a battlefield."
+    //      "Disempower me, :rb_rune_rainbow:, :rb_exhaust:: Ready a unit."
+    const textCost2Match = text.match(
+      /^(Discard (?:a |an )?(?:gear|unit|card|spell)|Disempower me)((?:,\s*:rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)|exhaust):)*):\s*(.+)$/is,
+    );
+    if (textCost2Match) {
+      const costText = textCost2Match[1].trim();
+      const extraTokens = textCost2Match[2]?.trim() ?? "";
+      const effectPart = textCost2Match[3].trim();
+
+      let cost: Cost;
+      if (/^Disempower/i.test(costText)) {
+        cost = { disempower: "self" } as unknown as Cost;
+      } else {
+        const discardWhat = costText.replace(/^Discard\s+(?:a |an )?/i, "").toLowerCase();
+        cost = { discard: { amount: 1, cardType: discardWhat } } as unknown as Cost;
+      }
+      if (extraTokens) {
+        const extraCost = parseCost(extraTokens.replace(/^,\s*/, ""));
+        cost = { ...cost, ...extraCost } as Cost;
+      }
+
+      const effect = parseEffects(effectPart);
+      if (effect) {
+        return { cost, effect, type: "activated" };
+      }
+      const stripped = stripReminders(effectPart).trim();
+      if (stripped) {
+        const rawEffect: Effect = { text: stripped, type: "raw" } as unknown as Effect;
+        return { cost, effect: rawEffect, type: "activated" };
+      }
+    }
     return undefined;
   }
 
@@ -3488,6 +3561,10 @@ function parseSpellAbility(text: string): SpellAbility | undefined {
   effectText = effectText.replace(/^I cost[^.]*\.\s*/i, "");
   // Strip "This spell's Energy cost is reduced..." preamble
   effectText = effectText.replace(/^This spell's Energy cost[^.]*\.\s*/i, "");
+  // Strip "Ignore [Deflect] while paying this spell's cost." preamble — a
+  // static cost rider, not the spell's targeted effect (Rule 355.8 target
+  // parsing must reach the effect sentence that follows).
+  effectText = effectText.replace(/^Ignore \[Deflect\][^.]*\.\s*/i, "");
   // Strip "If an enemy unit has died this turn, this costs..." preamble
   effectText = effectText.replace(/^If an enemy unit has died this turn[^.]*\.\s*/i, "");
   // Strip "If an opponent's score is within N points of the Victory Score, this costs..." preamble
@@ -3855,6 +3932,67 @@ const TRIGGER_PATTERNS: {
     pattern: /^The first time a player plays a non-token unit here each turn,\s*/i,
     restrictions: [{ type: "first-time-each-turn" }, { type: "non-token" }],
   },
+  // "When I become ready, ..." (Fretful Feline)
+  { event: "become-ready", on: "self", pattern: /^When I become ready,\s*/i },
+  // "When you empower something [else], ..." (Matriarch of War, Soul's Reflection)
+  {
+    event: "empower",
+    on: "controller",
+    pattern: /^When you empower something(?: else)?,\s*/i,
+  },
+  // "When you banish a card [you own], ..." (Master of Shadows)
+  {
+    event: "banish",
+    on: "controller",
+    pattern: /^When you banish a card(?: you own)?,\s*/i,
+  },
+  // "When you play a card from anywhere other than your hand, ..." (Heart of the Tempest)
+  {
+    event: "play-card-not-from-hand",
+    on: "controller",
+    pattern: /^When you play a card from anywhere other than your hand,\s*/i,
+  },
+  // "When you play a card on an opponent's turn, ..." (Viktor, Innovator)
+  {
+    event: "play-card",
+    on: "controller",
+    pattern: /^When you play a card on an opponent's turn,\s*/i,
+    restrictions: [{ type: "on-opponent-turn" }],
+  },
+  // "When an opponent plays a gear, ..." (Ravenbloom Prefect)
+  { event: "play-gear", on: "opponent", pattern: /^When an opponent plays a gear,\s*/i },
+  // "When combat starts here, ..." (Threshold of the Gray)
+  { event: "combat-start", on: "controller-here", pattern: /^When combat starts here,\s*/i },
+  // "When a combat that I was in ends, ..." (Affectionate Poro)
+  { event: "combat-end", on: "self", pattern: /^When a combat that I was in ends,\s*/i },
+  // "When you play your first card each turn, ..." (Astral Heron)
+  {
+    event: "play-card",
+    on: "controller",
+    pattern: /^When you play your first card each turn,\s*/i,
+    restrictions: [{ count: 1, type: "nth-time-each-turn" }],
+  },
+  // "Once each turn, when an enemy unit here dies, ..." (Nasus)
+  {
+    event: "die",
+    on: "enemy-units",
+    pattern: /^Once each turn, when an enemy unit(?: here)? dies,\s*/i,
+    restrictions: [{ type: "once-each-turn" }],
+  },
+  // "At the start of your Main Phase, ..." (Bottled Constellation)
+  { event: "main-phase", on: "controller", pattern: /^At the start of your Main Phase,\s*/i },
+  // "When you play me or the first time you play a non-token gear each turn, ..." (Jayce)
+  {
+    event: "play-self-or-play-gear",
+    on: "self",
+    pattern: /^When you play me or the first time you play a non-token gear each turn,\s*/i,
+  },
+  // "When you play this or at the start of your Beginning Phase, ..." (Forgotten Relic)
+  {
+    event: "play-self-or-beginning-phase",
+    on: "self",
+    pattern: /^When you play this or at the start of your Beginning Phase,\s*/i,
+  },
 ];
 
 function parseTriggeredAbility(text: string): TriggeredAbility | undefined {
@@ -3886,6 +4024,16 @@ function parseTriggeredAbility(text: string): TriggeredAbility | undefined {
 }
 
 function parseTriggeredAbilityInner(text: string): TriggeredAbility | undefined {
+  // Reorder "If <cond> at the start of your Beginning Phase, <effect>" to the
+  // Canonical "At the start of your Beginning Phase, if <cond>, <effect>" form
+  // So the trigger-pattern loop below matches. (Forsaken Baccai / Oasis Raider.)
+  const ifAtPhaseMatch = text.match(
+    /^If (.+?) at the start of your (Beginning|Main) Phase,\s*(.+)$/i,
+  );
+  if (ifAtPhaseMatch) {
+    text = `At the start of your ${ifAtPhaseMatch[2]} Phase, if ${ifAtPhaseMatch[1]}, ${ifAtPhaseMatch[3]}`;
+  }
+
   for (const tp of TRIGGER_PATTERNS) {
     const match = tp.pattern.exec(text);
     if (!match) {

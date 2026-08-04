@@ -80,14 +80,17 @@ const suspicious = drawnButNeverPlayable.filter((id) => {
   return true;
 });
 
-// Cards played whose rulesText should have produced an ability but didn't —
-// these silently do nothing when their trigger fires (Traveling Merchant class).
-const unimplementedAbility = [...defEverPlayed].filter((id) => {
-  const c = cardById.get(id);
-  if (!c || !c.rulesText?.trim()) return false;
-  if (/^\s*\[/.test(c.rulesText)) return false; // pure keyword text like [Tank]
+// Cards whose rulesText should have produced an ability but didn't — these
+// silently do nothing when their trigger fires. Scan the WHOLE pool (not just
+// played) since a card being un-implemented is a bug regardless of whether
+// this run happened to draw it.
+function hasNoImpl(c: any) {
+  if (!c?.rulesText?.trim()) return false;
+  if (/^\s*\[/.test(c.rulesText) && !/\bwhen\b|\bat the\b|:/i.test(c.rulesText)) return false;
   return !c.abilities || c.abilities.length === 0;
-});
+}
+const unimplementedAbility = [...cardById.values()].filter(hasNoImpl).map((c: any) => c.id);
+const unimplementedAndPlayed = [...defEverPlayed].filter((id) => hasNoImpl(cardById.get(id)));
 
 const report = {
   summary: {
@@ -97,7 +100,8 @@ const report = {
     everPlayed: defEverPlayed.size,
     drawnButNeverPlayable: drawnButNeverPlayable.length,
     suspicious: suspicious.length,
-    unimplementedAbility: unimplementedAbility.length,
+    unimplementedAbilityTotal: unimplementedAbility.length,
+    unimplementedAndPlayed: unimplementedAndPlayed.length,
     neverDrawn: neverDrawn.length,
     moveFailed: moveFailed.length,
     enumErrors: enumErrors.length,

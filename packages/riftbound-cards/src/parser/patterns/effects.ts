@@ -71,7 +71,7 @@ export const MOVE_FROM_TO_PATTERN =
  * @example "Give a unit -4 :rb_might: this turn, to a minimum of 1 :rb_might:." -> ["a unit", "-4", "this turn", "to a minimum of 1 :rb_might:"]
  */
 export const MODIFY_MIGHT_PATTERN =
-  /^Give (me|it|(?:a|an|two|three|four|five|\d+)?\s*(?:friendly |enemy |attacking enemy )?(?:unit|units)(?:\s+(?:at a battlefield|here|there))?)\s+([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(to a minimum of (\d+)\s*:rb_might:))?\.?$/i;
+  /^Give (me|it|(?:a|an|two|three|four|five|\d+)?\s*(?:friendly |enemy |attacking enemy )?(?:\w+ )*?(?:unit|units)(?:\s+(?:at a battlefield|here|there))?)\s+([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(to a minimum of (\d+)\s*:rb_might:))?\.?$/i;
 
 // ============================================================================
 // Damage Effect Patterns

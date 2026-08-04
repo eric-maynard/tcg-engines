@@ -268,6 +268,18 @@ function parseStaticAbilityInner(
   cleanText: string,
   text: string,
 ): StaticAbilityParseResult | undefined {
+  // "This/I enter(s) exhausted." — self-state static (Platewyrm Egg).
+  if (/^(?:This|I) enters? exhausted\.?$/i.test(cleanText)) {
+    return {
+      ability: {
+        effect: { type: "enters-exhausted" } as unknown as Effect,
+        type: "static",
+      } as StaticAbility,
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // "X can be played to an occupied battlefield[, if Y]" — a permission
   // Granting static used by UNL Ambush/Hunt units like Arachnoid Horror.
   // Emits a `can-play-to-occupied` effect that the engine can reference.
