@@ -75,14 +75,10 @@ await p.waitForTimeout(800);
 await p.goto("http://localhost:3000/play", { waitUntil: "domcontentloaded" });
 await p.evaluate(() => { localStorage.removeItem("rb_session"); localStorage.removeItem("rb_lobby"); sessionStorage.clear(); });
 await p.goto("http://localhost:3000/play", { waitUntil: "networkidle" });
-await p.getByRole('button', { name: 'Goldfish', exact: true }).click();
-await p.waitForTimeout(600);
-await p.selectOption('select', { index: 1 });
-await p.waitForTimeout(300);
-await p.locator('button:visible', { hasText: 'Start Game' }).click();
-await p.waitForSelector('.coin-choose-btn:visible', { timeout: 15000 });
-await p.click('.coin-choose-btn');
-await p.waitForSelector('#coinOverlay:not(.visible)', { timeout: 8000 }).catch(()=>{});
+await p.click('.mode-card:has-text("Goldfish")');
+await p.waitForTimeout(400);
+await p.selectOption('#soloDeckSelect', { index: 1 }).catch(()=>{});
+await p.click('#soloDeckPicker button:has-text("Play")');
 await p.waitForSelector('#pregameOverlay.visible, #player-hand .card', { timeout: 10000 }).catch(()=>{});
 for (let i=0;i<12;i++) {
   if (!(await p.$('#pregameOverlay.visible, #coinOverlay.visible'))) break;

@@ -4,6 +4,7 @@ function showMenu() {
   document.getElementById("lobbyMenu").classList.remove("hidden");
   document.getElementById("joinForm").classList.add("hidden");
   document.getElementById("lobbyRoom").classList.add("hidden");
+  document.getElementById("soloDeckPicker")?.classList.add("hidden");
 }
 
 function leaveLobby() {
@@ -77,22 +78,29 @@ function copyLobbyCode() {
   });
 }
 
-function connectLobbyWs() {
+function connectLobbyWs(onOpen) {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   lobbyWs = new WebSocket(`${proto}//${location.host}/ws/lobby/${lobbyId}?role=${lobbyRole}`);
+
+  if (onOpen) lobbyWs.addEventListener("open", () => { try { onOpen(); } catch {} });
 
   lobbyWs.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
 
     if (msg.type === "lobby_update") {
-      renderLobbyRoom(msg.lobby);
+      // Solo direct-play: never surface the lobby room or the d20 overlay.
+      if (!_soloAutoStart) renderLobbyRoom(msg.lobby);
 
       // Step 1: Coin flip happened — show flip overlay (winner chooses)
       if (msg.lobby.coinFlip && !msg.lobby.coinFlip.firstPlayer && msg.lobby.status !== "started") {
         playerNames[P1] = msg.lobby.host?.name || "Player 1";
         playerNames[P2] = msg.lobby.guest?.name || "Player 2";
-        showCoinFlip(msg.lobby.coinFlip, null);
+        if (_soloAutoStart) {
+          lobbyWs.send(JSON.stringify({ choice: "self", type: "choose_first" }));
+        } else {
+          showCoinFlip(msg.lobby.coinFlip, null);
+        }
       }
 
       // Step 2: Game started (winner chose) — update overlay, then dismiss and connect
@@ -255,6 +263,23 @@ function setGameMode(mode) {
 }
 
 /** Fetch saved decks and populate the dropdown */
+async function loadSavedDecksInto(select, statusEl) {
+  if (!select) return;
+  select.querySelectorAll("optgroup").forEach(g => g.remove());
+  try {
+    const decks = await api("/api/saved-decks");
+    if (Array.isArray(decks) && decks.length > 0) {
+      const group = document.createElement("optgroup");
+      group.label = "Your Saved Decks";
+      for (const d of decks) {
+        const o = document.createElement("option"); o.value = d.id; o.textContent = d.name; group.appendChild(o);
+      }
+      select.appendChild(group);
+      if (statusEl) statusEl.textContent = decks.length + " saved deck" + (decks.length === 1 ? "" : "s");
+    }
+  } catch {}
+}
+
 async function loadSavedDecks() {
   const select = document.getElementById("deckSelect");
   const statusEl = document.getElementById("deckLoadStatus");
@@ -307,6 +332,46 @@ async function loadSavedDecks() {
 function lobbyStartGame() {
   if (!lobbyWs || lobbyWs.readyState !== WebSocket.OPEN) return;
   lobbyWs.send(JSON.stringify({ type: "start_game" }));
+}
+
+/**
+ * Solo modes (Goldfish / VS AI) skip the lobby room entirely — the player
+ * just picks a deck and plays. Server-side we still create a `sandbox:true`
+ * lobby (that's what wires up the Goldfish auto-play), but the client never
+ * shows the lobby room: deck selection + start happen in one go.
+ */
+let _soloMode = "goldfish";
+let _soloAutoStart = false;
+
+async function showSoloDeckPicker(mode) {
+  _soloMode = mode;
+  document.getElementById("lobbyMenu").classList.add("hidden");
+  document.getElementById("soloDeckPicker").classList.remove("hidden");
+  await loadSavedDecksInto(document.getElementById("soloDeckSelect"), document.getElementById("soloDeckStatus"));
+}
+
+async function startSoloGame() {
+  const deckId = document.getElementById("soloDeckSelect").value || "default";
+  const data = await api("/api/lobby/create", "POST", { name: currentUsername || "Player 1", sandbox: true });
+  if (data.error) {
+    document.getElementById("soloDeckStatus").textContent = data.error;
+    return;
+  }
+  lobbyId = data.lobbyId;
+  lobbyCode = data.code;
+  lobbyRole = "host";
+  isSandboxGame = true;
+  viewingPlayer = P1;
+
+  // Open the WS, and once open: set deck → start. The lobby_update handler
+  // sees _soloAutoStart and auto-sends choose_first when the coinFlip lands,
+  // so no d20 overlay is shown — straight to mulligan.
+  _soloAutoStart = true;
+  connectLobbyWs(() => {
+    lobbyWs.send(JSON.stringify({ deckId, type: "select_deck" }));
+    lobbyWs.send(JSON.stringify({ type: "start_game" }));
+  });
+  document.getElementById("soloDeckPicker").classList.add("hidden");
 }
 
 /** Solo (hot-seat) — creates a lobby with P2 auto-joined using default deck */

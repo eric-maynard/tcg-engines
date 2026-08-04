@@ -30,14 +30,37 @@
       <!-- Step 1: Choose Host or Join -->
       <div id="lobbyMenu">
         <h1>Play</h1>
-        <p style="margin-bottom:20px;">Play against another player</p>
-        <div style="display:flex; gap:12px;">
-          <button class="start-btn" onclick="hostLobby()">Host Game</button>
-          <button class="start-btn" style="background:linear-gradient(135deg,#3a2060,#5a3090);border-color:#7a50c0;" onclick="showJoinForm()">Join Game</button>
+        <div class="mode-grid">
+          <button class="mode-card" onclick="hostLobby()">
+            <div class="mode-card-title">Host Lobby</div>
+            <div class="mode-card-desc">Create a lobby and share the code</div>
+          </button>
+          <button class="mode-card" onclick="showJoinForm()">
+            <div class="mode-card-title">Join Lobby</div>
+            <div class="mode-card-desc">Enter a friend's 4-letter code</div>
+          </button>
+          <button class="mode-card" id="sandboxOption" onclick="showSoloDeckPicker('goldfish')">
+            <div class="mode-card-title">Goldfish</div>
+            <div class="mode-card-desc">Practice against a passive opponent</div>
+          </button>
+          <button class="mode-card" disabled title="Coming soon">
+            <div class="mode-card-title">VS AI</div>
+            <div class="mode-card-desc">Coming soon</div>
+          </button>
         </div>
-        <div id="sandboxOption" style="margin-top:16px;">
-          <button class="start-btn" style="background:#1e1b30;border-color:#3a3560;font-size:13px;padding:10px 24px;color:#8a82a6;" onclick="hostSandbox()">Goldfish</button>
-          <p style="color:#4a4268;font-size:11px;margin-top:4px;">Practice against a passive opponent</p>
+      </div>
+
+      <!-- Solo (goldfish/AI) deck picker — no lobby, just pick and play -->
+      <div id="soloDeckPicker" class="hidden">
+        <h2 style="color:#e0dced;margin-bottom:8px;">Goldfish</h2>
+        <p style="color:#8a82a6;font-size:12px;margin-bottom:16px;">Pick a deck and start playing.</p>
+        <select id="soloDeckSelect" style="width:280px;padding:10px 12px;font-size:14px;background:#1e1b30;border:2px solid #3a3560;border-radius:8px;color:#e0dced;">
+          <option value="default">Fury/Chaos Starter Deck</option>
+        </select>
+        <p id="soloDeckStatus" style="color:#6a6288;font-size:11px;margin-top:6px;"></p>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button class="start-btn" onclick="startSoloGame()">Play</button>
+          <button style="background:none;border:none;color:#6a6288;cursor:pointer;font-size:12px;" onclick="showMenu()">Back</button>
         </div>
       </div>
 
