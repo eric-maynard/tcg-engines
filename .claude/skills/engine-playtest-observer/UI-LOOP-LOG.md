@@ -26,3 +26,21 @@ Driver: `ui-rules-drive.ts` — plays a real game via `executeMove()`, captures 
 
 **24 rules/card bugs found + fixed via live UI.** All 1265/0 tests green.
 
+## Headless observer R5 (wf_e752afc8-695, 8 traces, 159 agents, 18.7M tok)
+
+**60 CONFIRMED** (190 raw → 75 unique). Top cluster = **mandatory-combat-sequencing gap**:
+
+| Rule | Count | Gap |
+|---|---|---|
+| 460 | 11 | Combat initiation modeled as elective, not mandatory at Cleanup |
+| 465.1/.2/.2.c | 16 | Combat Damage Step optional after showdown closes; no attacker-first distribution |
+| 348.1 | 7 | Showdown-close doesn't force remaining combat steps; can re-open |
+| 466.5.d | 6 | Establish Control / Conquer optional, deferrable across turns |
+| 308.1/.1.a, 343.1.a | 13 | Turn state not Showdown while Combat is in progress |
+| 320.1 | 3 | Priority/Focus awarded during Cleanup |
+| 383.3 | 5 | Triggers not always on chain (known) |
+| 811.1.b, 823.1.c.1, 808.1.c | 10 | Hidden→Reaction, Hunt, Deathknell keyword impls |
+| 439.2 | 3 | Create-token zone entry |
+
+**Fix path**: introduce an `outstandingTasks` queue on interaction state; when a task is queued, only that task's move enumerates. `combatPending[]` in state-based-checks.ts:334 already computes what's needed — it's just never consumed. See `HEADLESS-R5-RESULTS.json`.
+
