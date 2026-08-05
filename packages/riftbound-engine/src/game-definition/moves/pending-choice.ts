@@ -248,6 +248,17 @@ export const pendingChoiceMoves: Partial<
 
       // Clear the pending choice so play can resume.
       draft.pendingChoice = undefined;
+
+      // Resume the originating effect's `then` clause (e.g. discard 1 → draw 1).
+      if (choice.then) {
+        const effectCtx = buildEffectContext(
+          draft,
+          choice.prompter,
+          choice.sourceCardId ?? "",
+          context,
+        );
+        executeEffect(choice.then as ExecutableEffect, effectCtx);
+      }
     },
   },
 };

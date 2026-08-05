@@ -150,9 +150,13 @@ function renderBattlefieldShowdownPanel(battlefieldEl, battlefieldId, showdown) 
   const hasFocus = showdown.focusPlayer === viewingPlayer;
   const readyToClose = isShowdownReadyToClose(showdown);
   const canCancel = canViewerCancelShowdown(showdown);
+  const pending = gameState?.pendingChoice;
+  const choiceBlocking = pending && (pending.prompter ?? pending.playerId) === viewingPlayer;
 
   const focusName = pName(showdown.focusPlayer);
-  const bannerText = readyToClose
+  const bannerText = choiceBlocking
+    ? "Resolve your choice first"
+    : readyToClose
     ? "All passes registered — ready to conquer"
     : hasFocus
     ? "Showdown in progress — your focus"
@@ -180,6 +184,10 @@ function renderBattlefieldShowdownPanel(battlefieldEl, battlefieldId, showdown) 
   const panel = document.createElement("div");
   panel.className = "battlefield__showdown-panel";
   panel.setAttribute("data-battlefield-id", battlefieldId);
+  if (choiceBlocking) {
+    panel.style.opacity = "0.5";
+    panel.style.pointerEvents = "none";
+  }
 
   const typeLabel = showdown.isCombatShowdown ? "Combat Showdown" : "Showdown";
 

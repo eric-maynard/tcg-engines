@@ -827,6 +827,8 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           prompter: ctx.playerId,
           revealed: hand,
           revealer: ctx.playerId,
+          sourceCardId: ctx.sourceCardId,
+          then: (effect as { then?: unknown }).then,
           type: "reveal-and-pick",
         };
       } else {

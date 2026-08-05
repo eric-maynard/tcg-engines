@@ -252,6 +252,7 @@ function render() {
   renderLog();
   renderActions();
   renderChainOverlay();
+  renderPendingChoiceModal();
   renderGameOver();
 
   // Re-apply valid target highlights after DOM rebuild
@@ -1369,6 +1370,64 @@ function requestUndo() {
 function requestRedo() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify({ type: "redo" }));
+}
+
+// Pending Choice Modal
+
+function renderPendingChoiceModal() {
+  let overlay = document.getElementById("pendingChoiceOverlay");
+  const pending = gameState?.pendingChoice;
+  const mine = pending && (pending.prompter ?? pending.playerId) === viewingPlayer;
+
+  if (!pending || !mine) {
+    if (overlay) overlay.classList.remove("visible");
+    return;
+  }
+
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "pendingChoiceOverlay";
+    overlay.className = "chain-overlay";
+    overlay.innerHTML = '<div class="chain-box" id="pendingChoiceBox"></div>';
+    document.body.appendChild(overlay);
+  }
+  const box = document.getElementById("pendingChoiceBox");
+
+  const title = pending.onPicked === "discard" ? "Discard a card"
+    : pending.onPicked === "banish" ? "Banish a card"
+    : pending.onPicked === "recycle" ? "Recycle a card"
+    : pending.onPicked === "draw" ? "Choose a card to draw"
+    : pending.type === "name-card" ? "Name a card"
+    : pending.type === "choose-destination" ? "Choose a destination"
+    : pending.type === "choose-target" ? "Choose a target"
+    : "Choose a card";
+
+  let html = `<div class="chain-title">${esc(title)}</div>`;
+  html += `<div class="chain-subtitle">Play is paused until you choose</div>`;
+
+  const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
+  html += `<div class="pending-choice-cards" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:12px 0;max-width:640px;">`;
+  for (const m of picks) {
+    const cid = m.params?.pickedCardId;
+    const params = JSON.stringify(m.params).replace(/'/g, "\\'");
+    const player = JSON.stringify(m.playerId).replace(/'/g, "\\'");
+    if (cid) {
+      const card = findCard(cid);
+      const imgId = (card?.definitionId ?? cid).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
+      html += `<img class="card-img pending-choice-card" src="/card-image/${esc(imgId)}"
+        alt="${esc(card?.name ?? cid)}" title="${esc(card?.name ?? cid)}"
+        style="width:110px;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4);"
+        onclick='executeMove("resolvePendingChoice", ${params}, ${player})'>`;
+    } else {
+      const label = m.params?.pickedZoneId ?? m.params?.pickedName ?? "—";
+      html += `<button class="action-btn highlighted"
+        onclick='executeMove("resolvePendingChoice", ${params}, ${player})'>${esc(String(label))}</button>`;
+    }
+  }
+  html += `</div>`;
+
+  box.innerHTML = html;
+  overlay.classList.add("visible");
 }
 
 // Chain / Showdown Overlay

@@ -333,6 +333,16 @@ export interface RevealAndPickChoice {
    * the rest. Omit to leave the unpicked cards where they are.
    */
   readonly onRest?: "recycle";
+
+  /** Card that produced the effect (used as the follow-up effect's source). */
+  readonly sourceCardId?: CardId;
+
+  /**
+   * Follow-up effect to run once the pick has been applied. Carries the
+   * originating effect's `then` clause so sequenced effects like
+   * `discard 1, then draw 1` resume after the player has chosen.
+   */
+  readonly then?: unknown;
 }
 
 /**
