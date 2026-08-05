@@ -108,6 +108,13 @@ export interface RiftboundCardMeta {
   namedCard?: string;
 
   /**
+   * Rule 355.8 (unl-182-219): mode indexes already picked from a "choose one
+   * you haven't already chosen" effect on this card. Read by the `choice`
+   * executor to hide already-taken options on subsequent Repeat casts.
+   */
+  modesChosenThisTurn?: number[];
+
+  /**
    * Card instance ID whose abilities/text are copied onto this card while
    * this card is attached/bound to it. Used by Svellsongur to copy the unit's
    * text to the equipment for as long as it's attached.
@@ -328,6 +335,12 @@ export interface RevealAndPickChoice {
   readonly onPicked: "recycle" | "banish" | "discard" | "draw";
 
   /**
+   * Rule 729 (ogn-235-298): "You may recycle it" — when set the prompter
+   * may decline the pick entirely, leaving the revealed card(s) in place.
+   */
+  readonly optional?: boolean;
+
+  /**
    * What to do with the revealed cards that were NOT picked. Used by
    * look/Vision effects (Rule 435) that put one card in hand and recycle
    * the rest. Omit to leave the unpicked cards where they are.
@@ -409,11 +422,65 @@ export interface ChooseDestinationChoice {
   readonly options: readonly string[];
 }
 
+/**
+ * Rule 355.8 (unl-182-219): a modal ("Choose one —") spell/ability lets its
+ * controller pick which option resolves. `options` are the option indexes the
+ * controller may still pick; when `notChosenThisTurn` is set the reducer
+ * records the picked index on `sourceCardId`'s meta so Repeat casts of the
+ * same effect exclude it.
+ */
+export interface ChooseModeChoice {
+  readonly type: "choose-mode";
+  /** Player who chooses the mode (the ability's controller). */
+  readonly playerId: PlayerId;
+  /** Card that produced the effect (used as the effect's source). */
+  readonly sourceCardId: CardId;
+  /** The full choice effect (carries `options[]` so the reducer can execute the pick). */
+  readonly effect: unknown;
+  /** Legal option indexes the player may choose from. */
+  readonly options: readonly number[];
+  /** When true, the picked index is recorded on `sourceCardId`'s `modesChosenThisTurn`. */
+  readonly notChosenThisTurn?: boolean;
+}
+
+/**
+ * Rule 583 (unl-021-219): a "you may …" triggered ability has resolved off the
+ * chain and its controller must accept or decline before the effect runs.
+ */
+export interface OptInChoice {
+  readonly type: "opt-in";
+  /** Player who accepts or declines (the ability's controller). */
+  readonly playerId: PlayerId;
+  /** Card that produced the trigger. */
+  readonly sourceCardId: CardId;
+  /** The resolved chain item to execute if the player accepts. */
+  readonly resolved: unknown;
+}
+
+/**
+ * rule-id: ven-041-166-weaponmaster-on-play-equip
+ * Weaponmaster — "When you play me, you may Equip one of your Equipment to
+ * me for [rainbow] less, even if it's already attached." Surfaced as a
+ * pendingChoice by playUnit; the controller picks an equipment or declines.
+ */
+export interface WeaponmasterEquipChoice {
+  readonly type: "weaponmaster-equip";
+  /** Controller of the just-played Weaponmaster unit. */
+  readonly playerId: PlayerId;
+  /** The Weaponmaster unit to attach the picked equipment to. */
+  readonly unitId: CardId;
+  /** Friendly equipment IDs on board (attached or unattached). */
+  readonly options: readonly CardId[];
+}
+
 export type PendingChoice =
   | RevealAndPickChoice
   | NameCardChoice
   | ChooseTargetChoice
-  | ChooseDestinationChoice;
+  | ChooseDestinationChoice
+  | ChooseModeChoice
+  | OptInChoice
+  | WeaponmasterEquipChoice;
 
 /**
  * Complete Riftbound game state

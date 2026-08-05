@@ -621,6 +621,8 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   }
   if (card.meta?.stunned) classes.push("stunned");
   if (card.meta?.buffed) classes.push("buffed");
+  // rule-827 (ven-021-166): surface Empowered state so `[Empowered]>` bonuses are visible
+  if (card.meta?.empowered) classes.push("empowered");
   if (isCardSummoningSick(card, zone)) classes.push("card--summoning-sick");
   if (isCardJustPlayed(card, zone)) classes.push("card--just-played");
   if (selectedCard === card.id) classes.push("selected");
@@ -654,6 +656,17 @@ function renderCardElement(card, isFacedown = false, zone = "") {
       onclick="event.stopPropagation(); toggleHideHandCard('${esc(card.id)}');">Hide</button>`;
   }
 
+  // rule-827 (ven-021-166): effective Might = base + mightModifier + staticMightBonus.
+  // Render a badge only when the effective value differs from the printed base so
+  // Empower / modify-might effects are visible on the board card.
+  const baseMight = card.might;
+  const effMight = baseMight != null
+    ? Math.max(0, baseMight + (card.meta?.mightModifier ?? 0) + (card.meta?.staticMightBonus ?? 0))
+    : null;
+  const mightBadge = (effMight != null && effMight !== baseMight)
+    ? `<div class="card-might" title="Effective Might">${effMight}</div>`
+    : "";
+
   return `
     <div class="${classes.join(" ")}"
          data-card-id="${esc(card.id)}"
@@ -672,6 +685,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
         <div class="fallback-type">${esc(card.cardType || "")}</div>
       </div>
       ${card.meta?.damage > 0 ? `<div class="card-damage">${card.meta.damage}</div>` : ""}
+      ${mightBadge}
       ${hideBtn}
       <div class="card-name">${esc(card.name || "")}</div>
     </div>

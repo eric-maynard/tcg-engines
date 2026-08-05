@@ -8508,12 +8508,20 @@
           "type": "keyword"
         },
         {
+          "_rule": "rule-id: ogn-235-298 — 416.1.a Recycle to Main Deck: 'When you recycle one or more cards to your Main Deck, buff a friendly unit' is a triggered ability, not a static one.",
           "effect": {
-            "description": "When you recycle one or more cards to your Main Deck, buff a friendly unit",
-            "effects": [],
-            "type": "sequence"
+            "target": {
+              "type": "unit",
+              "controller": "friendly"
+            },
+            "type": "buff"
           },
-          "type": "static"
+          "optional": false,
+          "trigger": {
+            "event": "recycle",
+            "on": "self"
+          },
+          "type": "triggered"
         }
       ],
       "parseSuccess": true,

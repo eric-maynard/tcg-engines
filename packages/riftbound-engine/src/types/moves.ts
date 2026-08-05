@@ -209,6 +209,13 @@ export interface RiftboundMoves {
      * ignored (and the spell always resolves once).
      */
     repeatCount?: number;
+    /**
+     * rule-id: ven-049-166 — play this spell from the owner's trash for its
+     * `[Flow]` cost instead of its base cost. Only legal when the card is in
+     * the trash zone and has a Flow cost keyword. On resolve the card is
+     * banished instead of returning to the trash.
+     */
+    viaFlow?: boolean;
   };
 
   /** Place Hidden card facedown */
@@ -446,6 +453,9 @@ export interface RiftboundMoves {
     pickedCardId?: CardId;
     pickedName?: string;
     pickedZoneId?: string;
+    pickedMode?: number;
+    /** Rule 583 (unl-021-219): accept/decline an optional "you may" trigger. */
+    accept?: boolean;
   };
 
   // ============================================

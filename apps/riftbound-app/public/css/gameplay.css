@@ -370,6 +370,8 @@
 
     .card.stunned { border-color: #d04040; box-shadow: inset 0 0 8px #d0404044; }
     .card.buffed { border-color: #f0c040; box-shadow: inset 0 0 8px #f0c04044; }
+    /* rule-827: Empowered permanents get a distinct glow so `[Empowered]>` state reads on-board */
+    .card.empowered { border-color: #40c0d0; box-shadow: inset 0 0 8px #40c0d044; }
 
 
     .card-img {
@@ -428,6 +430,26 @@
       z-index: 6;
     }
 
+    /* rule-827: effective-Might badge (base + mightModifier + staticMightBonus).
+       Bottom-left mirrors the printed Might position on the card face. */
+    .card-might {
+      position: absolute;
+      bottom: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #40c0d0;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+      z-index: 6;
+    }
+
     /* Hand cards — large, image-only; min-width prevents unreadable compression.
        All owned hand cards are clickable (for cost payment, card selection, etc.),
        so they all show cursor:pointer. Playable cards also get a green pulse glow. */
@@ -450,6 +472,7 @@
     }
     .bf-units .card .card-name { font-size: 10px; }
     .bf-units .card .card-damage { width: 18px; height: 18px; font-size: 10px; }
+    .bf-units .card .card-might { width: 18px; height: 18px; font-size: 10px; }
 
     /* Rune pool: domain-grouped stacks */
     .rune-pool-grid {

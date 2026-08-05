@@ -2213,8 +2213,25 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When I become ready, give me +2 [Might] this turn.",
-      "abilities": [],
-      "parseSuccess": false,
+      "abilities": [
+        {
+          "effect": {
+            "amount": 2,
+            "duration": "turn",
+            "target": {
+              "type": "unit"
+            },
+            "type": "modify-might"
+          },
+          "optional": false,
+          "trigger": {
+            "event": "ready",
+            "on": "self"
+          },
+          "type": "triggered"
+        }
+      ],
+      "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/24370c9e33705b393c40f426e221ae851a65dd05-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null
@@ -3242,8 +3259,47 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "[Empower] [6][chaos][chaos] ([6][chaos][chaos]: Empower me. Use only if not Empowered.)\nWhen I become [Empowered], choose an opponent. They [Burn 3]. Then you may do this: Choose a unit in their trash and play it, ignoring its cost. (To Burn 3, they put the top 3 cards of their Main Deck into their trash.)",
-      "abilities": [],
-      "parseSuccess": false,
+      "abilities": [
+        {
+          "_rule": "827.1.c.1 — Empower — [Cost] is the activated ability '[Cost]: Empower this. Play only if not Empowered.'",
+          "cost": {
+            "energy": 6,
+            "power": ["chaos", "chaos"]
+          },
+          "effect": {
+            "target": "self",
+            "type": "empower"
+          },
+          "name": "Empower",
+          "restrictions": [
+            {
+              "condition": {
+                "condition": {
+                  "type": "while-empowered"
+                },
+                "type": "not"
+              },
+              "type": "use-only-if"
+            }
+          ],
+          "type": "activated"
+        },
+        {
+          "_rule": "827.1.c — 'When I become [Empowered]' triggered ability (ven-114-166 Kharox)",
+          "effect": {
+            "description": "choose an opponent. They Burn 3. Then you may choose a unit in their trash and play it, ignoring its cost.",
+            "effects": [],
+            "type": "sequence"
+          },
+          "optional": false,
+          "trigger": {
+            "event": "empower",
+            "on": "self"
+          },
+          "type": "triggered"
+        }
+      ],
+      "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2453848e7069e994498c828d72c33df6905f38e5-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null

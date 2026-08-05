@@ -776,12 +776,15 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
 
       if (dest === "choose") {
         // Rule 355.4 — no stated destination: the controller chooses base or
-        // any battlefield other than the unit's current zone.
+        // any battlefield other than the unit's current zone. Options must be
+        // ZONE ids (base / battlefield-<bfId>) so resolvePendingChoice can pass
+        // them straight to zones.moveCard (rule 350.1).
         const cardId = moveTargets[0];
         const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
-        const options = ["base", ...Object.keys(ctx.draft.battlefields)].filter(
-          (z) => z !== currentZone,
-        );
+        const options = [
+          "base",
+          ...Object.keys(ctx.draft.battlefields).map((bfId) => `battlefield-${bfId}`),
+        ].filter((z) => z !== currentZone);
         if (options.length === 0) {
           break;
         }
@@ -834,6 +837,8 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       } else {
         for (let i = 0; i < Math.min(count, hand.length); i++) {
           ctx.zones.moveCard({ cardId: hand[i] as CoreCardId, targetZoneId: "trash" as CoreZoneId });
+          // Rule ogn-006-298: emit the discard event for auto-discarded cards.
+          ctx.fireTriggers?.({ cardId: hand[i], playerId: ctx.playerId, type: "discard" });
         }
       }
       break;
@@ -939,10 +944,21 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       const targets = getTargetIds(effect, ctx);
       const empowerTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
       for (const targetId of empowerTargets) {
+        const wasEmpowered =
+          (ctx.cards.getCardMeta(targetId as CoreCardId) as { empowered?: boolean } | undefined)
+            ?.empowered ?? false;
         ctx.cards.updateCardMeta?.(
           targetId as CoreCardId,
           { empowered: effect.type === "empower" } as unknown as Record<string, unknown>,
         );
+        // Rule 827.1.c: "When I become [Empowered]" fires on the false→true edge.
+        if (effect.type === "empower" && !wasEmpowered) {
+          ctx.fireTriggers?.({
+            cardId: targetId,
+            owner: ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId,
+            type: "empower",
+          });
+        }
       }
       break;
     }
@@ -1122,11 +1138,27 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       }
 
       const registry = getGlobalCardRegistry();
+      // Rule unl-160-219: chain-moves stamps ability-minted tokens with
+      // definitionId `token-def-<slug>`; the snapshot builder resolves that
+      // id, so mirror the manual addToken path and register the shared
+      // definition once under the same key (instance ids are still
+      // registered below for by-instance registry lookups).
+      const tokenSlug = tokenDef.name.toLowerCase().replace(/\s+/g, "-");
+      const tokenDefinitionId = `token-def-${tokenSlug}`;
+      if (!registry.get(tokenDefinitionId)) {
+        registry.register(tokenDefinitionId, {
+          cardType: tokenDef.type === "gear" ? "gear" : "unit",
+          id: tokenDefinitionId,
+          keywords: tokenDef.keywords ? [...tokenDef.keywords] : undefined,
+          might: tokenDef.might,
+          name: tokenDef.name,
+        });
+      }
       // Rule sfd-171-221: a static EntersReady grant on a friendly board card
       // overrides rule 143.4 for every token this effect creates.
       const tokenEntersReady = tokenEntersReadyFromStaticGrant(ctx, tokenDef.type);
       for (let i = 0; i < count; i++) {
-        const tokenId = `token-${tokenDef.name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}-${i}`;
+        const tokenId = `token-${tokenSlug}-${Date.now()}-${i}`;
         ctx.createCardInZone(tokenId, targetZone, ctx.playerId);
         // Rule 143.4 / 185.2.d: token units enter play exhausted; gear tokens
         // enter ready unless the effect says otherwise (sfd-004-221).
@@ -1388,6 +1420,9 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       ctx.draft.pendingChoice = {
         onPicked,
         ...(onRest ? { onRest } : {}),
+        // rule-id: ogn-235-298-vision-optional-recycle — "You may recycle it"
+        // means leave-on-top is a legal outcome; the pick must be declinable.
+        ...(visionLike ? { optional: true } : {}),
         prompter: ctx.playerId,
         revealed: topN,
         revealer: ctx.playerId,

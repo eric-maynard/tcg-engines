@@ -74,6 +74,7 @@ const EVENT_MAP: Record<string, string> = {
   die: "die",
   discard: "discard",
   draw: "draw",
+  empower: "empower",
   "end-of-turn": "end-of-turn",
   "gain-xp": "gain-xp",
   "grant-keyword": "grant-keyword",
@@ -300,8 +301,12 @@ export function findMatchingTriggers(
   const matches: MatchedTrigger[] = [];
 
   for (const card of boardCards) {
-    // Only cards on the board (or in legendZone) can have triggers fire
+    // Only cards on the board (or in legendZone) can have triggers fire.
+    // Rule ogn-006-298: for a discard event, the discarded card itself is
+    // allowed to match from trash so "When you discard me" self-triggers fire.
+    const isDiscardSubject = event.type === "discard" && event.cardId === card.id;
     if (
+      !isDiscardSubject &&
       card.zone !== "base" &&
       !card.zone.startsWith("battlefield") &&
       card.zone !== "legendZone"

@@ -12,9 +12,9 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *   Deal 3 to a unit at a base.
  *   Give a unit at a battlefield -4 [Might] this turn.
  *
- * Modelled as a choice spell with the `repeat` field capturing one of
- * the three escalating repeat costs (the engine approximates this as the
- * cheapest for scheduling — full multi-tier repeat costs are pending).
+ * Modelled as a choice spell with a three-tier `repeat` cost so the nth
+ * extra activation pays the nth listed cost (rule 820.1.c.2 / 820.1.c.3 /
+ * 820.3).
  */
 const abilities: Ability[] = [
   {
@@ -47,7 +47,8 @@ const abilities: Ability[] = [
       ],
       type: "choice",
     },
-    repeat: { energy: 1 },
+    // Rule 820.1.c.2 / 820.1.c.3 / 820.3: [1] / [rainbow] / [1][rainbow].
+    repeat: [{ energy: 1 }, { power: ["rainbow"] }, { energy: 1, power: ["rainbow"] }],
     timing: "action",
     type: "spell",
   },

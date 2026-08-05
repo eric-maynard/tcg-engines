@@ -10,6 +10,7 @@ import type {
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
 } from "@tcg/core";
+import { fireTriggers } from "../../abilities/trigger-runner";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
 
@@ -119,12 +120,19 @@ export const discardMoves: Partial<
   },
 
   discardCard: {
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { cardId } = context.params;
+      const playerId = context.cards.getCardOwner(cardId as CoreCardId) ?? "";
       context.zones.moveCard({
         cardId: cardId as CoreCardId,
         targetZoneId: "trash" as CoreZoneId,
       });
+      // Rule ogn-006-298: emit the discard event so "When you discard me…"
+      // self-triggers can fire.
+      fireTriggers(
+        { cardId: cardId as string, playerId, type: "discard" },
+        { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+      );
     },
   },
 

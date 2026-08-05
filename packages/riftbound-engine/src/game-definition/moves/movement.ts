@@ -395,6 +395,36 @@ export const movementMoves: Partial<
           playerId,
           defender,
         );
+
+        // Rule 625.1.c.1 / 625.1.c.2 (sfd-177-221): opening a Combat
+        // Showdown assigns combat roles and fires "attack" / "defend" so
+        // "When I attack/defend" triggers land on the initial chain.
+        if (hasOpponentUnit) {
+          const triggerCtx = { cards: context.cards, counters, draft, zones };
+          for (const unitId of unitIds) {
+            context.cards.updateCardMeta(
+              unitId as CoreCardId,
+              { combatRole: "attacker" } as Partial<RiftboundCardMeta>,
+            );
+            fireTriggers(
+              { battlefieldId: destination, cardId: unitId, type: "attack" },
+              triggerCtx,
+            );
+          }
+          for (const cardId of allUnits) {
+            const owner = context.cards.getCardOwner(cardId);
+            if (owner !== undefined && (owner as string) !== playerId) {
+              context.cards.updateCardMeta(
+                cardId,
+                { combatRole: "defender" } as Partial<RiftboundCardMeta>,
+              );
+              fireTriggers(
+                { battlefieldId: destination, cardId: cardId as string, type: "defend" },
+                triggerCtx,
+              );
+            }
+          }
+        }
       }
     },
   },

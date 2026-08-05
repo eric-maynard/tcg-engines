@@ -43,6 +43,14 @@ export interface ChainItem {
   readonly targets?: readonly string[];
   /** Whether this is a triggered ability (auto-added, not player-initiated) */
   readonly triggered?: boolean;
+  /**
+   * rule-id: ven-021-166 — the GameEvent that fired this trigger, so target
+   * qualifiers like "a battlefield I moved to or from" can resolve against
+   * the event's from/to zones at chain-resolution time.
+   */
+  readonly triggerEvent?: unknown;
+  /** Rule 583 (unl-021-219): "you may" trigger — controller opts in on resolve */
+  readonly optional?: boolean;
   /** Whether this item was countered (skip execution on resolve) */
   readonly countered?: boolean;
 }

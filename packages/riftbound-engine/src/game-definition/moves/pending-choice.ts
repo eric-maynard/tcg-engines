@@ -13,6 +13,7 @@
 import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { ExecutableEffect } from "../../abilities/effect-executor";
+import { fireTriggers } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type {
   PendingChoice,
@@ -20,7 +21,7 @@ import type {
   RiftboundGameState,
   RiftboundMoves,
 } from "../../types";
-import { buildEffectContext } from "./chain-moves";
+import { buildEffectContext, executeResolvedItem } from "./chain-moves";
 
 /**
  * Returns true when the given card ID is a valid pick for the pending
@@ -48,12 +49,21 @@ export function isValidPendingPick(choice: PendingChoice, cardId: string): boole
  * Pick a default (goldfish) card for the choice: the first revealed card
  * that passes the filter. Returns undefined if no valid pick exists.
  */
-export function pickDefaultForChoice(choice: PendingChoice): string | undefined {
+export function pickDefaultForChoice(choice: PendingChoice): string | number | undefined {
   if (choice.type === "name-card") {
     return choice.options[0];
   }
   if (choice.type === "choose-target" || choice.type === "choose-destination") {
     return choice.options[0];
+  }
+  if (choice.type === "choose-mode") {
+    return choice.options[0];
+  }
+  if (choice.type === "opt-in") {
+    return undefined;
+  }
+  if (choice.type === "weaponmaster-equip") {
+    return undefined;
   }
   return choice.revealed.find((id) => isValidPendingPick(choice, id));
 }
@@ -88,6 +98,29 @@ export const pendingChoiceMoves: Partial<
       if (!choice) {
         return false;
       }
+      if (choice.type === "weaponmaster-equip") {
+        // rule-id: ven-041-166-weaponmaster-on-play-equip
+        if (choice.playerId !== context.params.playerId) {
+          return false;
+        }
+        return (
+          context.params.accept === false ||
+          choice.options.includes(context.params.pickedCardId as string)
+        );
+      }
+      if (choice.type === "opt-in") {
+        // Rule 583 (unl-021-219): controller may accept or decline.
+        return (
+          choice.playerId === context.params.playerId &&
+          typeof context.params.accept === "boolean"
+        );
+      }
+      if (choice.type === "choose-mode") {
+        if (choice.playerId !== context.params.playerId) {
+          return false;
+        }
+        return choice.options.includes(context.params.pickedMode as number);
+      }
       if (choice.type === "choose-target") {
         if (choice.playerId !== context.params.playerId) {
           return false;
@@ -109,12 +142,46 @@ export const pendingChoiceMoves: Partial<
         const name = context.params.pickedName;
         return typeof name === "string" && choice.options.includes(name);
       }
+      // rule-id: ogn-235-298-vision-optional-recycle
+      if (choice.optional && context.params.accept === false) {
+        return true;
+      }
       return isValidPendingPick(choice, context.params.pickedCardId as string);
     },
     enumerator: (state, context) => {
       const choice = state.pendingChoice;
       if (!choice) {
         return [];
+      }
+      if (choice.type === "weaponmaster-equip") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        return [
+          ...choice.options.map((eq) => ({
+            pickedCardId: eq,
+            playerId: context.playerId as string,
+          })),
+          { accept: false, playerId: context.playerId as string },
+        ];
+      }
+      if (choice.type === "opt-in") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        return [
+          { accept: true, playerId: context.playerId as string },
+          { accept: false, playerId: context.playerId as string },
+        ];
+      }
+      if (choice.type === "choose-mode") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        return choice.options.map((idx) => ({
+          pickedMode: idx,
+          playerId: context.playerId as string,
+        }));
       }
       if (choice.type === "choose-target") {
         if (choice.playerId !== (context.playerId as string)) {
@@ -143,7 +210,7 @@ export const pendingChoiceMoves: Partial<
           playerId: context.playerId as string,
         }));
       }
-      const results: { playerId: string; pickedCardId: string }[] = [];
+      const results: { playerId: string; pickedCardId?: string; accept?: boolean }[] = [];
       for (const cardId of choice.revealed) {
         if (isValidPendingPick(choice, cardId)) {
           results.push({
@@ -152,11 +219,116 @@ export const pendingChoiceMoves: Partial<
           });
         }
       }
+      // rule-id: ogn-235-298-vision-optional-recycle — "You may recycle it"
+      // must offer a decline path that leaves the card on top.
+      if (choice.optional) {
+        results.push({ accept: false, playerId: context.playerId as string });
+      }
       return results;
     },
     reducer: (draft, context) => {
       const choice = draft.pendingChoice;
       if (!choice) {
+        return;
+      }
+
+      if (choice.type === "weaponmaster-equip") {
+        // rule-id: ven-041-166-weaponmaster-on-play-equip
+        // "You may Equip one of your Equipment to me … even if it's already
+        // attached." Decline (`accept:false`) clears the prompt; a pick
+        // detaches from any prior holder and re-attaches to the Weaponmaster.
+        draft.pendingChoice = undefined;
+        const picked = context.params.pickedCardId as string | undefined;
+        if (context.params.accept === false || !picked || !choice.options.includes(picked)) {
+          return;
+        }
+        const registry = getGlobalCardRegistry();
+        const priorMeta = context.cards.getCardMeta(picked as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        const priorHolder = priorMeta?.attachedTo;
+        if (priorHolder && priorHolder !== choice.unitId) {
+          const holderMeta = context.cards.getCardMeta(priorHolder as CoreCardId) as
+            | Partial<RiftboundCardMeta>
+            | undefined;
+          context.cards.updateCardMeta(priorHolder as CoreCardId, {
+            equippedWith: (holderMeta?.equippedWith ?? []).filter((id) => id !== picked),
+          } as Partial<RiftboundCardMeta>);
+        }
+        const equipDef = registry.get(picked);
+        const newEquipMeta: Partial<RiftboundCardMeta> = { attachedTo: choice.unitId };
+        if (equipDef?.copyAttachedUnitText) {
+          newEquipMeta.copiedFromCardId = choice.unitId;
+        }
+        context.cards.updateCardMeta(picked as CoreCardId, newEquipMeta);
+        const unitMeta = context.cards.getCardMeta(choice.unitId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        const already = unitMeta?.equippedWith ?? [];
+        if (!already.includes(picked)) {
+          context.cards.updateCardMeta(choice.unitId as CoreCardId, {
+            equippedWith: [...already, picked],
+          } as Partial<RiftboundCardMeta>);
+        }
+        fireTriggers(
+          {
+            cardId: choice.unitId,
+            equipmentId: picked,
+            playerId: choice.playerId,
+            type: "attach-equipment",
+          },
+          { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        );
+        return;
+      }
+
+      if (choice.type === "opt-in") {
+        // Rule 583 (unl-021-219): on accept, resume executeResolvedItem with
+        // the optional flag cleared so target selection etc. proceeds normally;
+        // on decline the trigger fizzles.
+        draft.pendingChoice = undefined;
+        if (context.params.accept === true) {
+          executeResolvedItem(
+            choice.resolved as Parameters<typeof executeResolvedItem>[0],
+            draft,
+            context,
+          );
+        }
+        return;
+      }
+
+      if (choice.type === "choose-mode") {
+        // Rule 355.8 (unl-182-219): execute the picked modal option; when
+        // `notChosenThisTurn` is set, record the index on the source card's
+        // meta so subsequent Repeat casts exclude it.
+        const idx = context.params.pickedMode as number;
+        if (!choice.options.includes(idx)) {
+          return;
+        }
+        const modalOptions =
+          (choice.effect as { options?: { effect: unknown }[] } | undefined)?.options ?? [];
+        const picked = modalOptions[idx]?.effect;
+        draft.pendingChoice = undefined;
+        if (choice.notChosenThisTurn) {
+          const prior =
+            (
+              context.cards.getCardMeta(choice.sourceCardId as CoreCardId) as
+                | Partial<RiftboundCardMeta>
+                | undefined
+            )?.modesChosenThisTurn ?? [];
+          context.cards.updateCardMeta(choice.sourceCardId as CoreCardId, {
+            modesChosenThisTurn: [...prior, idx],
+          } as Partial<RiftboundCardMeta>);
+        }
+        if (picked) {
+          const effectCtx = buildEffectContext(
+            draft,
+            choice.playerId,
+            choice.sourceCardId,
+            context,
+          );
+          executeEffect(picked as ExecutableEffect, effectCtx);
+        }
         return;
       }
 
@@ -190,9 +362,12 @@ export const pendingChoiceMoves: Partial<
         if (!choice.options.includes(zoneId)) {
           return;
         }
+        // Rule 323.6 / 355.4: options are battlefield ids (or "base"), not core
+        // zone ids — map to the battlefield-* zone so replay-to-same-bf resolves.
+        const targetZoneId = zoneId === "base" ? zoneId : `battlefield-${zoneId}`;
         context.zones.moveCard({
           cardId: choice.cardId as CoreCardId,
-          targetZoneId: zoneId as CoreZoneId,
+          targetZoneId: targetZoneId as CoreZoneId,
         });
         draft.pendingChoice = undefined;
         return;
@@ -208,6 +383,13 @@ export const pendingChoiceMoves: Partial<
         context.cards.updateCardMeta(choice.sourceCardId as CoreCardId, {
           namedCard: name,
         } as Partial<RiftboundCardMeta>);
+        draft.pendingChoice = undefined;
+        return;
+      }
+
+      // rule-id: ogn-235-298-vision-optional-recycle — declining leaves the
+      // revealed card(s) where they are (on top of the deck for Vision).
+      if (choice.optional && context.params.accept === false) {
         draft.pendingChoice = undefined;
         return;
       }
@@ -233,6 +415,16 @@ export const pendingChoiceMoves: Partial<
       }
       context.counters.clearAllCounters(pickedCardId as CoreCardId);
       context.zones.moveCard(moveParams);
+
+      // Rule ogn-006-298: emit the discard event so "When you discard me…"
+      // self-triggers (Flame Chompers) can fire. Guarded so unit-test stubs
+      // that omit the full zone bag don't crash.
+      if (choice.onPicked === "discard" && typeof context.zones.getCardsInZone === "function") {
+        fireTriggers(
+          { cardId: pickedCardId as string, playerId: choice.revealer, type: "discard" },
+          { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        );
+      }
 
       // Rule 435 (ogn-174-298): look/Vision recycles the unpicked cards.
       if (choice.onRest === "recycle") {

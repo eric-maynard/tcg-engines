@@ -153,13 +153,26 @@ function canAffordPower(
  * Execute a resolved chain item's effect.
  * Skips execution if the item was countered (rule 543).
  */
-function executeResolvedItem(
+export function executeResolvedItem(
   resolved: ChainItem,
   draft: RiftboundGameState,
   context: Parameters<typeof buildEffectContext>[3],
 ): void {
   // Countered items don't execute their effects
   if (resolved.countered) {
+    return;
+  }
+
+  // Rule 583 (unl-021-219): a "you may …" trigger reaches resolution but its
+  // effect runs only if the controller opts in. Pause via an `opt-in` pending
+  // choice; on accept the reducer re-enters here with `optional` cleared.
+  if (resolved.optional) {
+    draft.pendingChoice = {
+      type: "opt-in",
+      playerId: resolved.controller,
+      sourceCardId: resolved.cardId,
+      resolved: { ...resolved, optional: false },
+    };
     return;
   }
 
@@ -189,6 +202,14 @@ function executeResolvedItem(
 
   const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
 
+  // rule-id: ven-021-166 — expose the firing event's from/to zones so
+  // `location: "move-to-or-from"` targets resolve against only the
+  // battlefields the triggering move touched.
+  const trigEvt = resolved.triggerEvent as { from?: string; to?: string } | undefined;
+  const triggerZones = trigEvt
+    ? [trigEvt.from, trigEvt.to].filter((z): z is string => typeof z === "string")
+    : undefined;
+
   // Rule 355.10: for a resolved effect that targets a caster-chosen single
   // card ("give a unit X"), the controller picks which card. When targets
   // were not bound at chain-placement time and more than one legal option
@@ -215,6 +236,7 @@ function executeResolvedItem(
         playerId: resolved.controller,
         sourceCardId: resolved.cardId,
         sourceZone: baseCtx.sourceZone,
+        triggerZones,
         zones: baseCtx.zones,
       },
     );
@@ -673,6 +695,27 @@ export const chainMoves: Partial<
         }
       }
 
+      // Rule 580.3 (unl-160-219): "Use this ability only while I'm at a
+      // battlefield" attaches a self-at-battlefield restriction to the
+      // activated ability; the host card must be at a battlefield zone.
+      const abilityRestrictions = (ability as { restrictions?: readonly { type: string }[] })
+        .restrictions;
+      if (abilityRestrictions?.some((r) => r.type === "self-at-battlefield")) {
+        if (!zone.startsWith("battlefield")) {
+          return false;
+        }
+      }
+      // Rule 827.1.c.1: [Empower] carries an implicit "Play only if not
+      // Empowered" — reject activation when the host is already Empowered.
+      if (abilityRestrictions?.some((r) => r.type === "not-empowered")) {
+        const hostMeta = context.cards.getCardMeta(cardId as CoreCardId) as
+          | { empowered?: boolean }
+          | undefined;
+        if (hostMeta?.empowered === true) {
+          return false;
+        }
+      }
+
       // If an inherited ability was requested, verify that the host card
       // Legitimately exposes it (prevents arbitrary cross-card activation).
       if (sourceCardId && sourceCardId !== cardId) {
@@ -894,6 +937,28 @@ export const chainMoves: Partial<
             }
           }
 
+          // Rule 580.3 (unl-160-219): "Use this ability only while I'm at a
+          // battlefield" — skip when the host card is not at a battlefield.
+          const abilityRestrictions = (ability as { restrictions?: readonly { type: string }[] })
+            .restrictions;
+          if (abilityRestrictions?.some((r) => r.type === "self-at-battlefield")) {
+            const hostZone = context.zones.getCardZone(entry.hostCardId as CoreCardId) as
+              | string
+              | undefined;
+            if (!hostZone?.startsWith("battlefield")) {
+              continue;
+            }
+          }
+          // Rule 827.1.c.1: [Empower] — skip when the host is already Empowered.
+          if (abilityRestrictions?.some((r) => r.type === "not-empowered")) {
+            const hostMeta = context.cards.getCardMeta(entry.hostCardId as CoreCardId) as
+              | { empowered?: boolean }
+              | undefined;
+            if (hostMeta?.empowered === true) {
+              continue;
+            }
+          }
+
           // Check timing
           const isReaction = ability.keyword === "Reaction" || ability.timing === "reaction";
           const timing = (isReaction ? "reaction" : "action") as "action" | "reaction";
@@ -1093,6 +1158,11 @@ export const chainMoves: Partial<
             cardId: discardId as CoreCardId,
             targetZoneId: "trash" as CoreZoneId,
           });
+          // Rule ogn-006-298: emit the discard event for the paid-as-cost card.
+          fireTriggers(
+            { cardId: discardId as string, playerId, type: "discard" },
+            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+          );
         }
 
         // Handle kill (sacrifice) cost — the chosen permanent is trashed as
@@ -1186,6 +1256,10 @@ export const chainMoves: Partial<
             // Rule 348.1 → resolveFullCombat becomes legal (Combat Damage Step).
             bf.showdownComplete = true;
           } else {
+            // Rule 348.2 / 316.8.b / 466.5.a: Non-Combat Showdown close — mark
+            // the battlefield's showdown complete so startShowdown does not
+            // re-stage the same battlefield this turn.
+            bf.showdownComplete = true;
             // Rule 348.2.a: Non-Combat Showdown close — if only one player's
             // units remain and they don't already control it, they establish
             // Control. 348.2.a.1: this is a Conquer if not yet scored.

@@ -52,10 +52,9 @@ function hasMovesForCard(cardId, zone) {
     if (m.params?.unitIds?.includes(cardId)) return true;
     return false;
   });
-  if (hasDirectMove) return true;
-  // Workstream 7: a hand card counts as playable if Auto Pay can satisfy its cost.
-  if (zone === "hand" && typeof canAutoPay === "function" && canAutoPay(cardId)) return true;
-  return false;
+  // DESIGN.md §Resource management: no auto-pay — a hand card is draggable
+  // only when the engine already lists a legal play move for it.
+  return hasDirectMove;
 }
 
 /** Get the moves and valid targets for a card being dragged from a zone */
@@ -71,11 +70,6 @@ function getDragContext(cardId, zone) {
     );
     if (matchingMoves.length > 0) {
       action = "playCard";
-      validTargets = ["player-base"];
-    } else if (typeof canAutoPay === "function" && canAutoPay(cardId)) {
-      // Workstream 7: if the card is not immediately playable but a cost plan exists,
-      // still allow dragging — we will auto-pay on drop.
-      action = "playCardAuto";
       validTargets = ["player-base"];
     }
   } else if (zone === "championZone") {
@@ -246,7 +240,6 @@ document.addEventListener("pointermove", (e) => {
     const isValidZone = dropZone && (
       dragState.validTargets.includes(dropZone) ||
       (dragState.action === "playCard" && dropZone === "player-base") ||
-      (dragState.action === "playCardAuto" && dropZone === "player-base") ||
       (dragState.action === "playChampion" && dropZone === "player-base")
     );
 
@@ -291,7 +284,6 @@ document.addEventListener("pointerup", (e) => {
     const isValid = dropZone && (
       dragState.validTargets.includes(dropZone) ||
       (dragState.action === "playCard" && dropZone === "player-base") ||
-      (dragState.action === "playCardAuto" && dropZone === "player-base") ||
       (dragState.action === "playChampion" && dropZone === "player-base")
     );
 
@@ -305,8 +297,15 @@ document.addEventListener("pointerup", (e) => {
           params: { playerId: viewingPlayer, location },
           playerId: viewingPlayer,
         };
-      } else if ((dragState.action === "playCard" || dragState.action === "playCardAuto") && dropZone === "player-base") {
-        move = dragState.matchingMoves[0];
+      } else if (dragState.action === "playCard" && dropZone === "player-base") {
+        // Multiple play variants (Accelerate / sacrifice) → open the choice
+        // modal instead of silently picking the first.
+        if (dragState.matchingMoves.length > 1 && typeof openPlayCostModal === "function") {
+          openPlayCostModal(cardId);
+          move = null;
+        } else {
+          move = dragState.matchingMoves[0];
+        }
       } else {
         move = dragState.matchingMoves.find(m =>
           m.params?.destination === dropZone ||
@@ -321,28 +320,25 @@ document.addEventListener("pointerup", (e) => {
         animateCardFly(dragState.sourceEl, destEl, () => {
           executeMove(move.moveId, move.params, move.playerId);
         });
-      } else if (dragState.action === "playCardAuto" && typeof autoPayAndPlay === "function") {
-        // Auto-pay + play when no direct move exists but a cost plan does.
-        const destEl = document.querySelector(`[data-drop-zone="${CSS.escape(dropZone)}"]`);
-        animateCardFly(dragState.sourceEl, destEl, () => {
-          autoPayAndPlay(cardId);
-        });
       }
-    } else if (unitDrop && dragState.zone === "hand" && typeof autoPayAndPlay === "function") {
-      // Equipment drag-onto-unit: single gesture that pays the cost and equips.
-      // Avoids the Rift Atlas anti-pattern of a separate "Equip" button that leaves
-      // the equipment on the base and fails to route the next click correctly.
+    } else if (unitDrop && dragState.zone === "hand") {
+      // Equipment drag-onto-unit: play the gear with the unit as chosen target
+      // if the engine lists that as a legal move. No auto-pay — the player must
+      // have tapped runes first (DESIGN.md §Resource management).
       const card = findCard(cardId);
       if (card && (card.cardType === "gear" || card.cardType === "equipment")) {
-        const destEl = document.querySelector(`[data-card-id="${CSS.escape(unitDrop.unitId)}"]`);
-        animateCardFly(dragState.sourceEl, destEl, () => {
-          autoPayAndPlay(cardId, {
-            preferredMoveId: "playGear",
-            moveParamsOverrides: { chosenTargetId: unitDrop.unitId },
+        const gearMove = availableMoves.find(m =>
+          m.moveId === "playGear" && m.params?.cardId === cardId &&
+          (!m.params?.chosenTargetId || m.params.chosenTargetId === unitDrop.unitId));
+        if (gearMove) {
+          const destEl = document.querySelector(`[data-card-id="${CSS.escape(unitDrop.unitId)}"]`);
+          const params = { ...gearMove.params, chosenTargetId: unitDrop.unitId };
+          animateCardFly(dragState.sourceEl, destEl, () => {
+            executeMove("playGear", params, gearMove.playerId);
           });
-        });
-      } else {
-        // Not equipment — snap back (no-op, ghost will be removed below).
+        } else if (typeof showToast === "function") {
+          showToast("Tap runes to pay the cost first");
+        }
       }
     }
 

@@ -439,7 +439,13 @@ function parseCardTarget(targetText: string): {
     target.quantity = { upTo: wordMap[numWord] ?? (Number.parseInt(numWord, 10) || 1) };
   }
 
-  if (
+  // rule-id: ven-021-166 — "at a battlefield I moved to or from" must restrict
+  // targeting to the triggering move's source/destination battlefields; the
+  // plain "at a battlefield" substring check below would silently drop the
+  // qualifier and let the resolver treat it as any battlefield.
+  if (lower.includes("i moved to or from") || lower.includes("i moved from or to")) {
+    target.location = "move-to-or-from" as Location;
+  } else if (
     lower.includes("at a battlefield") ||
     lower.includes("at battlefields") ||
     lower.includes("at my battlefield")
@@ -486,6 +492,25 @@ function parseDamageEffect(text: string): DamageEffect | undefined {
     const target = parseCardTarget(mightDamageMatch[1]);
     return {
       amount: { might: "self" },
+      target: target as AnyTarget,
+      type: "damage",
+    } as DamageEffect;
+  }
+
+  // rule-id: ven-041-166 — "Deal N to TARGET for each COUNT" scales the amount by the
+  // count expression; must not fall through to the generic matcher below (parseCardTarget
+  // would see "each " in "for each Equipment" and emit quantity:"all", turning single-target
+  // per-attachment damage into flat AoE).
+  const forEachMatch = text.match(/^Deal (\d+) to (.+?) for each (.+?)\.?$/i);
+  if (forEachMatch) {
+    const per = Number.parseInt(forEachMatch[1], 10);
+    const target = parseCardTarget(forEachMatch[2]);
+    const countText = forEachMatch[3].trim();
+    const count = /^equipment attached to (?:me|it|this)$/i.test(countText)
+      ? ({ attachedTo: "self", quantity: "all", type: "equipment" } as unknown as AnyTarget)
+      : ({ ...parseCardTarget(countText), quantity: "all" } as unknown as AnyTarget);
+    return {
+      amount: { count, ...(per !== 1 ? { multiplier: per } : {}) },
       target: target as AnyTarget,
       type: "damage",
     } as DamageEffect;
@@ -697,10 +722,11 @@ function parseKillEffect(text: string): KillEffect | SequenceEffect | undefined 
   // Also handles: "Kill a friendly [Mighty] unit.", "Kill an enemy unit here.",
   // "Kill up to one gear.", "Kill up to N units."
   const richMatch = text.match(
-    /^Kill ((?:a|an|all|any number of|up to (?:one|two|three|four|five|\d+))\s+(?:damaged\s+|stunned\s+|\[Mighty\]\s+)?(?:friendly\s+|enemy\s+)?(?:\[Mighty\]\s+)?(?:unit|units|gear)(?:\s+(?:at a battlefield|here|there))?)(?:\s+with\s+.+)?\.?$/i,
+    /^Kill ((?:a|an|all|any number of|up to (?:one|two|three|four|five|\d+))\s+(?:damaged\s+|stunned\s+|\[Mighty\]\s+)?(?:friendly\s+|enemy\s+)?(?:\[Mighty\]\s+)?(?:unit|units|gear)(?:\s+(?:at a battlefield|here|there))?)(\s+with\s+.+?)?\.?$/i,
   );
   if (richMatch) {
     const targetStr = richMatch[1];
+    const withClause = richMatch[2];
     // Check if it looks like a gear target
     if (/gear/i.test(targetStr)) {
       const gearTarget: {
@@ -726,6 +752,13 @@ function parseKillEffect(text: string): KillEffect | SequenceEffect | undefined 
     }
     // Use parseCardTarget for unit targets (handles controller, location, quantity, filter)
     const target = parseCardTarget(targetStr);
+    // rule-id: sfd-158-221 — preserve "with N [Might] or less" constraint on kill targets
+    const mightLteMatch = withClause?.match(/with\s+(\d+)\s*:rb_might:\s*or\s*less/i);
+    if (mightLteMatch) {
+      (target as { filter?: unknown }).filter = {
+        might: { lte: Number.parseInt(mightLteMatch[1], 10) },
+      };
+    }
     return { target: target as AnyTarget, type: "kill" };
   }
 
@@ -1069,14 +1102,43 @@ function parseMoveEffect(text: string): MoveEffect | undefined {
   );
   if (anyNumberMatch) {
     const controllerRaw = anyNumberMatch[1]?.trim().toLowerCase();
-    const target: { type: "unit"; controller?: "friendly" | "enemy"; quantity: "all" } = {
-      quantity: "all",
+    // rule-id: sfd-177-221 — "any number of" is a player-choice quantity ("any"),
+    // not a mandatory "all"; and the optional qualifier word before "units"
+    // (e.g. "token") is a target filter that must not be dropped.
+    const unitPhrase = anyNumberMatch[2].toLowerCase();
+    const qualifier = unitPhrase.replace(/\s*units?$/, "").trim();
+    const target: {
+      type: "unit";
+      controller?: "friendly" | "enemy";
+      quantity: "any";
+      filter?: Filter;
+    } = {
+      quantity: "any",
       type: "unit",
     };
     if (controllerRaw === "your" || controllerRaw === "friendly") {
       target.controller = "friendly";
     } else if (controllerRaw === "enemy") {
       target.controller = "enemy";
+    }
+    if (qualifier) {
+      const simpleFilters: readonly SimpleFilter[] = [
+        "mighty",
+        "buffed",
+        "damaged",
+        "stunned",
+        "ready",
+        "exhausted",
+        "token",
+        "equipped",
+        "attacking",
+        "defending",
+        "alone",
+        "facedown",
+      ];
+      target.filter = (simpleFilters as readonly string[]).includes(qualifier)
+        ? (qualifier as SimpleFilter)
+        : { tag: qualifier.charAt(0).toUpperCase() + qualifier.slice(1) };
     }
     const to = parseLocationString(anyNumberMatch[3]);
     return { target: target as AnyTarget, to, type: "move" };
@@ -3264,9 +3326,13 @@ function parseActivatedAbilityInner(text: string): ActivatedAbility | undefined 
   );
   if (empowerKwMatch) {
     const cost = parseCost(empowerKwMatch[1].trim());
+    // Rule 827.1.c.1: [Empower] is sugar for "COST: Empower me. Play only if
+    // not Empowered." — attach a not-empowered restriction so the engine hides
+    // the ability once meta.empowered is set (ven-021-166 et al.).
     const ability = {
       cost,
       effect: { target: "self", type: "empower" } as unknown as Effect,
+      restrictions: [{ type: "not-empowered" }],
       type: "activated",
     } as ActivatedAbility;
     if (empowerKwMatch[2]) {
@@ -3979,7 +4045,9 @@ const TRIGGER_PATTERNS: {
     restrictions: [{ type: "first-time-each-turn" }, { type: "non-token" }],
   },
   // "When I become ready, ..." (Fretful Feline)
-  { event: "become-ready", on: "self", pattern: /^When I become ready,\s*/i },
+  // rule-id: ven-071-166 — engine emits/matches TriggerEvent "ready" (EVENT_MAP
+  // in trigger-matcher.ts + trigger-types.ts); "become-ready" never matched.
+  { event: "ready", on: "self", pattern: /^When I become ready,\s*/i },
   // "When you empower something [else], ..." (Matriarch of War, Soul's Reflection)
   {
     event: "empower",
@@ -4385,7 +4453,7 @@ const ALL_VALUE_KEYWORDS: readonly string[] = [
   // Keyword in the splitter would wrongly peel it off as its own ability.
 ];
 
-const ALL_COST_KEYWORDS: readonly string[] = ["Accelerate", "Equip", "Repeat"];
+const ALL_COST_KEYWORDS: readonly string[] = ["Accelerate", "Equip", "Repeat", "Flow"];
 
 const ALL_EFFECT_KEYWORDS: readonly string[] = ["Deathknell", "Legion", "Vision"];
 
@@ -4451,7 +4519,7 @@ function skipReminderText(text: string, startIndex: number): number {
  * Captures: keyword name, optional value
  */
 const KEYWORD_AT_POS_RE =
-  /^\[(Tank|Backline|Ganking|Hidden|Temporary|Quick-Draw|Weaponmaster|Unique|Ambush|Assault|Shield|Deflect|Hunt|Accelerate|Equip|Repeat|Deathknell|Legion|Vision)(?:\s+(\d+))?\]/;
+  /^\[(Tank|Backline|Ganking|Hidden|Temporary|Quick-Draw|Weaponmaster|Unique|Ambush|Assault|Shield|Deflect|Hunt|Accelerate|Equip|Repeat|Flow|Deathknell|Legion|Vision)(?:\s+(\d+))?\]/;
 
 /**
  * Split card text into segments, each representing a single ability.
@@ -4519,8 +4587,8 @@ function splitAbilityText(text: string): TextSegment[] {
         // Need to consume the cost tokens and reminder text
         let costEnd = endOfKeyword;
 
-        // For Equip and Repeat: consume inline cost tokens and optional "— " prefix
-        if (keyword === "Equip" || keyword === "Repeat") {
+        // For Equip / Repeat / Flow: consume inline cost tokens and optional "— " prefix
+        if (keyword === "Equip" || keyword === "Repeat" || keyword === "Flow") {
           // Skip optional " — " prefix (also always skip leading whitespace)
           const dashMatch = text.slice(costEnd).match(/^\s*(?:—\s*)?/);
           if (dashMatch) {
@@ -5456,7 +5524,7 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
       (a) => "effect" in a && (a as { effect: { type: string } }).effect?.type === "raw",
     );
     const startsWithKeyword =
-      /^\[(?:Tank|Backline|Ganking|Hidden|Temporary|Quick-Draw|Weaponmaster|Unique|Ambush|Assault|Shield|Deflect|Hunt|Accelerate|Equip|Repeat|Deathknell|Legion|Vision|Action|Reaction)(?:\s+\d+)?\]/.test(
+      /^\[(?:Tank|Backline|Ganking|Hidden|Temporary|Quick-Draw|Weaponmaster|Unique|Ambush|Assault|Shield|Deflect|Hunt|Accelerate|Equip|Repeat|Flow|Deathknell|Legion|Vision|Action|Reaction)(?:\s+\d+)?\]/.test(
         trimmed,
       );
 
@@ -5627,7 +5695,7 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
  * Check if text contains any keyword bracket pattern
  */
 function hasAnyKeywordBracket(text: string): boolean {
-  return /\[(Tank|Backline|Ganking|Hidden|Temporary|Quick-Draw|Weaponmaster|Unique|Ambush|Assault|Shield|Deflect|Hunt|Accelerate|Equip|Repeat|Deathknell|Legion|Vision|Action|Reaction)(?:\s+\d+)?\]/.test(
+  return /\[(Tank|Backline|Ganking|Hidden|Temporary|Quick-Draw|Weaponmaster|Unique|Ambush|Assault|Shield|Deflect|Hunt|Accelerate|Equip|Repeat|Flow|Deathknell|Legion|Vision|Action|Reaction)(?:\s+\d+)?\]/.test(
     text,
   );
 }

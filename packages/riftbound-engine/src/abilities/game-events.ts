@@ -26,6 +26,7 @@ export type GameEvent =
   | { type: "start-of-turn"; playerId: string }
   | { type: "end-of-turn"; playerId: string }
   | { type: "become-mighty"; cardId: string; owner: string }
+  | { type: "empower"; cardId: string; owner: string }
   | { type: "heal"; cardId: string; amount: number }
   | { type: "stun"; cardId: string }
   | { type: "grant-keyword"; cardId: string; keyword: string }

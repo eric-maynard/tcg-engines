@@ -266,6 +266,17 @@ export function orderTriggers(
 
 export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
   const boardCards = getBoardCards(ctx);
+  // Rule ogn-006-298 (Flame Chompers): a card that reads "When you discard
+  // me…" is in the trash by the time the discard event is processed. Include
+  // the discarded card itself in the scan so its self-trigger can match.
+  if (event.type === "discard" && !boardCards.some((c) => c.id === event.cardId)) {
+    boardCards.push({
+      abilities: toTriggerableAbilities(event.cardId),
+      id: event.cardId,
+      owner: event.playerId,
+      zone: ctx.zones.getCardZone?.(event.cardId as CoreCardId) ?? "trash",
+    });
+  }
   const allMatches = findMatchingTriggers(event, boardCards, ctx.draft);
 
   // Rule 724 (Legion) and other conditional triggers: filter matches by
@@ -313,6 +324,12 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
           cardId: match.cardId,
           controller: match.cardOwner,
           effect,
+          // Rule 583 (unl-021-219): carry the "you may" flag onto the chain so
+          // executeResolvedItem can prompt the controller to opt in or decline.
+          optional: match.ability.optional === true,
+          // rule-id: ven-021-166 — carry the firing event so "moved to or from"
+          // target qualifiers can resolve against its from/to zones.
+          triggerEvent: match.event,
           triggered: true,
           type: "ability",
         },

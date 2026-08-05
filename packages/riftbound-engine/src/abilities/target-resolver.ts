@@ -43,6 +43,11 @@ export interface TargetResolverContext {
   readonly playerId: string;
   readonly sourceCardId: string;
   readonly sourceZone?: string;
+  /**
+   * rule-id: ven-021-166 — from/to zones of the GameEvent that fired the
+   * trigger being resolved, for `location: "move-to-or-from"` filtering.
+   */
+  readonly triggerZones?: readonly string[];
   readonly draft: RiftboundGameState;
   readonly zones: {
     getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
@@ -124,14 +129,29 @@ export function resolveTarget(
 
   // Filter by location
   if (target.location === "here" && ctx.sourceZone) {
+    // Rule 350.1 / 383.2.c: on a battlefield card's own ability, "here" means
+    // the per-battlefield unit zone (battlefield-<cardId>), not battlefieldRow.
+    const hereZone =
+      ctx.sourceZone === "battlefieldRow" ? `battlefield-${ctx.sourceCardId}` : ctx.sourceZone;
     filtered = filtered.filter((id) => {
       const zone = ctx.zones.getCardZone(id as CoreCardId);
-      return zone === ctx.sourceZone;
+      return zone === hereZone;
     });
   } else if (target.location === "base") {
     filtered = filtered.filter((id) => {
       const zone = ctx.zones.getCardZone(id as CoreCardId);
       return zone === "base";
+    });
+  } else if (target.location === "move-to-or-from") {
+    // rule-id: ven-021-166 — only battlefields the triggering move touched are
+    // legal; fall back to the source's current zone (the move destination) when
+    // the trigger event wasn't threaded through.
+    const moveZones = (
+      ctx.triggerZones ?? (ctx.sourceZone ? [ctx.sourceZone] : [])
+    ).filter((z) => z.startsWith("battlefield"));
+    filtered = filtered.filter((id) => {
+      const zone = ctx.zones.getCardZone(id as CoreCardId) ?? "";
+      return moveZones.includes(zone);
     });
   } else if (target.location?.startsWith("battlefield")) {
     filtered = filtered.filter((id) => {

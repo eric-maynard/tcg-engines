@@ -322,6 +322,12 @@ interface CostExtras {
    * top of the base cost. See RiftboundMoves.playSpell.repeatCount.
    */
   repeatCount?: number;
+  /**
+   * rule-id: ven-049-166 — when true, the card is being played via its
+   * `[Flow]` keyword from the trash: substitute the Flow cost for the
+   * card's printed base cost.
+   */
+  viaFlow?: boolean;
 }
 
 /**
@@ -333,11 +339,44 @@ function getRepeatEnergySurcharge(cardId: string, repeatCount: number): number {
     return 0;
   }
   const registry = getGlobalCardRegistry();
-  const cost = registry.getSpellRepeatCost(cardId);
-  if (!cost) {
+  const tiers = registry.getSpellRepeatCost(cardId);
+  if (!tiers || tiers.length === 0) {
     return 0;
   }
-  return (cost.energy ?? 0) * repeatCount;
+  // Rule 820.1.c.2 / 820.1.c.3 / 820.3: nth repeat pays tiers[n-1]. A
+  // single-tier Repeat applies its cost to every repeat, so clamp the
+  // index instead of stopping at tiers.length.
+  let energy = 0;
+  for (let i = 0; i < repeatCount; i++) {
+    energy += tiers[Math.min(i, tiers.length - 1)].energy;
+  }
+  return energy;
+}
+
+/**
+ * Compute the total Repeat surcharge (power, per domain) for a spell
+ * being played with `repeatCount` additional effects.
+ * Rule 820.1.c.2 / 820.1.c.3 / 820.3.
+ */
+function getRepeatPowerSurcharge(
+  cardId: string,
+  repeatCount: number,
+): Partial<Record<string, number>> {
+  if (repeatCount <= 0) {
+    return {};
+  }
+  const registry = getGlobalCardRegistry();
+  const tiers = registry.getSpellRepeatCost(cardId);
+  if (!tiers || tiers.length === 0) {
+    return {};
+  }
+  const power: Partial<Record<string, number>> = {};
+  for (let i = 0; i < repeatCount; i++) {
+    for (const domain of tiers[Math.min(i, tiers.length - 1)].power) {
+      power[domain] = (power[domain] ?? 0) + 1;
+    }
+  }
+  return power;
 }
 
 /**
@@ -355,6 +394,29 @@ export function getPotentialRuneEnergy(
 }
 
 /**
+ * rule-id: ven-049-166 — resolve the base cost to charge for a play. Normally
+ * the printed cost; when playing via [Flow] from the trash, the card's Flow
+ * keyword cost replaces the printed cost.
+ */
+function getBaseCostForPlay(
+  cardId: string,
+  extras: CostExtras,
+): { energy: number; power: Partial<Record<string, number>> } {
+  const registry = getGlobalCardRegistry();
+  if (extras.viaFlow) {
+    const flow = registry.getSpellFlowCost(cardId);
+    if (flow) {
+      const power: Partial<Record<string, number>> = {};
+      for (const domain of flow.power) {
+        power[domain] = (power[domain] ?? 0) + 1;
+      }
+      return { energy: flow.energy, power };
+    }
+  }
+  return registry.getCostToDeduct(cardId);
+}
+
+/**
  * Check if player can afford a card's cost from their rune pool.
  */
 function canAffordCard(
@@ -365,14 +427,13 @@ function canAffordCard(
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
   potentialEnergy = 0,
 ): boolean {
-  const registry = getGlobalCardRegistry();
   const pool = state.runePools[playerId];
   if (!pool) {
     return false;
   }
 
   const modifier = getCostModifier(cardId, getCardMeta);
-  const baseCost = registry.getCostToDeduct(cardId);
+  const baseCost = getBaseCostForPlay(cardId, extras);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
@@ -386,10 +447,15 @@ function canAffordCard(
     return false;
   }
 
-  // Check power (domain requirements are not affected by cost modifiers)
-  for (const [domain, amount] of Object.entries(baseCost.power)) {
+  // Check power (domain requirements are not affected by cost modifiers).
+  // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
+  const repeatPower = getRepeatPowerSurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  const powerDomains = new Set([...Object.keys(baseCost.power), ...Object.keys(repeatPower)]);
+  for (const domain of powerDomains) {
+    const need =
+      (baseCost.power[domain as keyof typeof baseCost.power] ?? 0) + (repeatPower[domain] ?? 0);
     const available = pool.power[domain as keyof typeof pool.power] ?? 0;
-    if (available < (amount ?? 0)) {
+    if (available < need) {
       return false;
     }
   }
@@ -414,8 +480,7 @@ function deductCost(
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
 ): void {
-  const registry = getGlobalCardRegistry();
-  const cost = registry.getCostToDeduct(cardId);
+  const cost = getBaseCostForPlay(cardId, extras);
   const pool = draft.runePools[playerId];
   if (!pool) {
     return;
@@ -429,8 +494,13 @@ function deductCost(
     Math.max(0, cost.energy + modifier - interactive) + xAmount + repeatSurcharge;
 
   pool.energy = Math.max(0, pool.energy - adjustedEnergy);
-  for (const [domain, amount] of Object.entries(cost.power)) {
-    if (amount && amount > 0) {
+  // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
+  const repeatPower = getRepeatPowerSurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  const powerDomains = new Set([...Object.keys(cost.power), ...Object.keys(repeatPower)]);
+  for (const domain of powerDomains) {
+    const amount =
+      (cost.power[domain as keyof typeof cost.power] ?? 0) + (repeatPower[domain] ?? 0);
+    if (amount > 0) {
       const key = domain as keyof typeof pool.power;
       pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - amount);
     }
@@ -479,6 +549,43 @@ function findAmountReferenceTarget(
     }
   }
   return undefined;
+}
+
+/**
+ * Rule 355.14.b/c / 355.15 (unl-192-219 Alpha Strike): a `damage` effect with
+ * `split: true` names caster-chosen split targets that are locked at
+ * finalization alongside the might-reference target. Surface the split
+ * effect's enemy target descriptor so play-time enumeration can bind them.
+ */
+function findSplitDamageEffect(
+  effect: SpellEffectTargetShape | undefined,
+): SpellEffectTargetShape | undefined {
+  if (!effect) return undefined;
+  if (effect.type === "damage" && (effect as { split?: boolean }).split === true) {
+    return effect;
+  }
+  if (effect.type === "sequence" && Array.isArray(effect.effects)) {
+    for (const sub of effect.effects) {
+      const found = findSplitDamageEffect(sub);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+function enumerateSubsetsUpTo(pool: string[], maxSize: number): string[][] {
+  const out: string[][] = [[]];
+  const limit = Math.min(maxSize, pool.length);
+  const walk = (start: number, chosen: string[]) => {
+    if (chosen.length === limit) return;
+    for (let i = start; i < pool.length; i++) {
+      const next = [...chosen, pool[i]];
+      out.push(next);
+      walk(i + 1, next);
+    }
+  };
+  walk(0, []);
+  return out;
 }
 
 /**
@@ -892,6 +999,43 @@ export const cardPlayMoves: Partial<
       if (draft.cardsPlayedThisTurn) {
         draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
       }
+
+      // rule-id: ven-041-166-weaponmaster-on-play-equip
+      // Weaponmaster is a `{type:"keyword"}` ability, so trigger-matcher never
+      // schedules it. Surface the "you may Equip … for [rainbow] less" prompt
+      // directly: when the just-played unit has Weaponmaster and the player
+      // owns any on-board equipment, block on a pendingChoice so the
+      // controller can pick one (or decline). The [rainbow] discount is
+      // implicit — the on-play attach charges nothing.
+      if (
+        !draft.pendingChoice &&
+        getGlobalCardRegistry().hasKeyword(cardId, "Weaponmaster")
+      ) {
+        const registry = getGlobalCardRegistry();
+        const boardZones: string[] = ["base"];
+        for (const bfId of Object.keys(draft.battlefields ?? {})) {
+          boardZones.push(getBattlefieldZoneId(bfId));
+        }
+        const equipOptions: string[] = [];
+        for (const zoneId of boardZones) {
+          for (const id of zones.getCardsInZone(
+            zoneId as CoreZoneId,
+            playerId as CorePlayerId,
+          )) {
+            if (registry.get(id as string)?.cardType === "equipment") {
+              equipOptions.push(id as string);
+            }
+          }
+        }
+        if (equipOptions.length > 0) {
+          draft.pendingChoice = {
+            options: equipOptions,
+            playerId,
+            type: "weaponmaster-equip",
+            unitId: cardId,
+          };
+        }
+      }
     },
   },
 
@@ -1050,7 +1194,18 @@ export const cardPlayMoves: Partial<
       }
 
       const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
-      if (zone !== "hand") {
+      // rule-id: ven-049-166 — [Flow] lets the owner play a spell from their
+      // trash for its Flow cost. viaFlow is only legal from the trash zone on
+      // a card that carries a Flow keyword; non-Flow plays remain hand-only.
+      const viaFlow = context.params.viaFlow === true;
+      if (viaFlow) {
+        if (zone !== "trash") {
+          return false;
+        }
+        if (!getGlobalCardRegistry().getSpellFlowCost(context.params.cardId)) {
+          return false;
+        }
+      } else if (zone !== "hand") {
         return false;
       }
 
@@ -1079,6 +1234,7 @@ export const cardPlayMoves: Partial<
           {
             repeatCount: reqRepeatCount,
             targets: context.params.targets,
+            viaFlow,
             xAmount: context.params.xAmount,
           },
           createMetaAccessor(context.cards),
@@ -1158,7 +1314,13 @@ export const cardPlayMoves: Partial<
         context.playerId as CorePlayerId,
       );
 
-      const results: { playerId: string; cardId: string; targets?: string[] }[] = [];
+      const results: {
+        playerId: string;
+        cardId: string;
+        targets?: string[];
+        repeatCount?: number;
+        viaFlow?: boolean;
+      }[] = [];
       for (const cardId of handCards) {
         const def = registry.get(cardId as string);
         if (!def || def.cardType !== "spell") {
@@ -1203,7 +1365,142 @@ export const cardPlayMoves: Partial<
         // player/battlefield targets, and self are not caster-chosen.
         // Rule 355.14.a: an amount:{might:<selector>} reference is also a
         // caster-chosen play-time target (unl-192-219).
-        const tgt = spellEffect?.target ?? findAmountReferenceTarget(spellEffect);
+        const refTgt = findAmountReferenceTarget(spellEffect);
+        const tgt = spellEffect?.target ?? refTgt;
+        const isCardTarget =
+          tgt !== undefined &&
+          typeof tgt !== "string" &&
+          tgt.type !== "self" &&
+          tgt.type !== "player" &&
+          tgt.type !== "battlefield" &&
+          tgt.quantity !== "all";
+        const baseVariants: { playerId: string; cardId: string; targets?: string[] }[] = [];
+        if (isCardTarget) {
+          const validTargets = resolveTarget(
+            tgt as Parameters<typeof resolveTarget>[0],
+            resolverCtx,
+          );
+          // Rule 355.14.b/c / 355.15 (unl-192-219): when the enumerated target
+          // is the might-reference of a split-damage effect, the caster ALSO
+          // chooses up to N enemy split targets at finalization (N = ref's
+          // current Might; zero is legal). Enumerate every subset so all
+          // choices are locked on the chain item before opponents respond.
+          const splitEffect = refTgt ? findSplitDamageEffect(spellEffect) : undefined;
+          const splitDesc =
+            splitEffect?.target && typeof splitEffect.target !== "string"
+              ? splitEffect.target
+              : undefined;
+          for (const targetId of validTargets) {
+            if (splitDesc) {
+              const n = getCardEffectiveMight(targetId as string, (c) =>
+                context.cards.getCardMeta?.(c),
+              );
+              const splitPool = resolveTarget(
+                { ...splitDesc, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+                resolverCtx,
+              );
+              for (const subset of enumerateSubsetsUpTo(splitPool, n)) {
+                baseVariants.push({
+                  cardId: cardId as string,
+                  playerId: context.playerId as string,
+                  targets: [targetId as string, ...subset],
+                });
+              }
+            } else {
+              baseVariants.push({
+                cardId: cardId as string,
+                playerId: context.playerId as string,
+                targets: [targetId as string],
+              });
+            }
+          }
+        } else {
+          baseVariants.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+          });
+        }
+        results.push(...baseVariants);
+
+        // unl-182-219 [Repeat]: the additional cost is paid at cast time, so
+        // enumerate one variant per affordable repeatCount alongside the base
+        // play. Skip when every tier is free of energy AND power to avoid an
+        // unbounded loop (rule 820.1.c.2 / 820.3 — canAffordCard bounds n
+        // once any tier charges a resource).
+        const repeatCost = registry.getSpellRepeatCost(cardId as string);
+        if (repeatCost?.some((t) => t.energy > 0 || t.power.length > 0)) {
+          const meta = createMetaAccessor(context.cards);
+          for (const base of baseVariants) {
+            for (let n = 1; ; n++) {
+              if (
+                !canAffordCard(
+                  state,
+                  context.playerId as string,
+                  cardId as string,
+                  { repeatCount: n, targets: base.targets },
+                  meta,
+                  potential,
+                )
+              ) {
+                break;
+              }
+              results.push({ ...base, repeatCount: n });
+            }
+          }
+        }
+      }
+
+      // rule-id: ven-049-166 — [Flow]: enumerate spells in the owner's trash
+      // that carry a Flow cost keyword as playable via their alternate cost.
+      const trashCards = context.zones.getCardsInZone(
+        "trash" as CoreZoneId,
+        context.playerId as CorePlayerId,
+      );
+      const meta = createMetaAccessor(context.cards);
+      for (const cardId of trashCards) {
+        const def = registry.get(cardId as string);
+        if (!def || def.cardType !== "spell") {
+          continue;
+        }
+        if (!registry.getSpellFlowCost(cardId as string)) {
+          continue;
+        }
+        if (
+          !canAffordCard(state, context.playerId as string, cardId as string, { viaFlow: true }, meta, potential)
+        ) {
+          continue;
+        }
+        const timing = (registry.getSpellTiming(cardId as string) ?? "action") as
+          | "action"
+          | "reaction";
+        if (!isLegalTiming(timing, turnState)) {
+          continue;
+        }
+        if (timing === "action" && turnState === "neutral-open") {
+          if (state.turn.activePlayer !== (context.playerId as string)) {
+            continue;
+          }
+        }
+        const abilities = registry.getAbilities(cardId as string) ?? [];
+        const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
+        const spellEffect = spellAbility?.effect as SpellEffectTargetShape | undefined;
+        const resolverCtx = {
+          cards: {
+            getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
+            getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
+          },
+          draft: state,
+          playerId: context.playerId as string,
+          sourceCardId: cardId as string,
+          zones: {
+            getCardZone: (c: CoreCardId) => context.zones.getCardZone(c),
+            getCardsInZone: (z: CoreZoneId, p?: CorePlayerId) => context.zones.getCardsInZone(z, p),
+          },
+        };
+        if (!spellEffectHasLegalTargets(spellEffect, resolverCtx)) {
+          continue;
+        }
+        const tgt = spellEffect?.target;
         const isCardTarget =
           tgt !== undefined &&
           typeof tgt !== "string" &&
@@ -1221,19 +1518,21 @@ export const cardPlayMoves: Partial<
               cardId: cardId as string,
               playerId: context.playerId as string,
               targets: [targetId as string],
+              viaFlow: true,
             });
           }
         } else {
           results.push({
             cardId: cardId as string,
             playerId: context.playerId as string,
+            viaFlow: true,
           });
         }
       }
       return results;
     },
     reducer: (draft, context) => {
-      const { cardId, playerId, targets, xAmount, repeatCount } = context.params;
+      const { cardId, playerId, targets, xAmount, repeatCount, viaFlow } = context.params;
       const { zones } = context;
 
       const repeatN = Math.max(0, repeatCount ?? 0);
@@ -1241,7 +1540,7 @@ export const cardPlayMoves: Partial<
         draft,
         playerId,
         cardId,
-        { repeatCount: repeatN, targets, xAmount },
+        { repeatCount: repeatN, targets, viaFlow: viaFlow === true, xAmount },
         createMetaAccessor(context.cards),
       );
 
@@ -1293,10 +1592,12 @@ export const cardPlayMoves: Partial<
         draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
       }
 
-      // Move spell to trash (it resolves from the chain later)
+      // Move spell to trash (it resolves from the chain later).
+      // rule-id: ven-049-166 — a spell played via [Flow] from the trash is
+      // banished instead of returning to the trash.
       zones.moveCard({
         cardId: cardId as CoreCardId,
-        targetZoneId: "trash" as CoreZoneId,
+        targetZoneId: (viaFlow ? "banishment" : "trash") as CoreZoneId,
       });
     },
   },

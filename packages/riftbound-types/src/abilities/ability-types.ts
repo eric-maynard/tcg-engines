@@ -61,6 +61,7 @@ export type RiftboundKeyword =
   // Special
   | "Unique" // Only 1 in deck
   | "Repeat" // Pay to repeat effect
+  | "Flow" // Play from trash for its Flow cost, then banish
 
   // UNL champion progression keywords
   | "Hunt" // When conquering or holding, gain N XP
@@ -79,7 +80,7 @@ export type ValueKeyword = "Assault" | "Shield" | "Deflect" | "Hunt" | "Predict"
 /**
  * Keywords that have costs
  */
-export type CostKeyword = "Accelerate" | "Equip" | "Repeat";
+export type CostKeyword = "Accelerate" | "Equip" | "Repeat" | "Flow";
 
 /**
  * Keywords that have effects
@@ -347,8 +348,12 @@ export interface SpellAbility {
   /** Additional cost beyond the card's cost */
   readonly additionalCost?: Cost;
 
-  /** Repeat cost (for [Repeat] keyword) */
-  readonly repeat?: Cost;
+  /**
+   * Repeat cost (for [Repeat] keyword). A single Cost applies to every
+   * repeat; an array encodes multi-tier Repeat where the nth extra
+   * activation pays tiers[n-1] (rule 820.1.c.2 / 820.1.c.3 / 820.3).
+   */
+  readonly repeat?: Cost | readonly Cost[];
 
   /** Condition for the spell to be played */
   readonly condition?: Condition;
@@ -525,7 +530,7 @@ export function isValueKeyword(keyword: RiftboundKeyword): keyword is ValueKeywo
  * Check if keyword is a cost keyword
  */
 export function isCostKeyword(keyword: RiftboundKeyword): keyword is CostKeyword {
-  return keyword === "Accelerate" || keyword === "Equip" || keyword === "Repeat";
+  return keyword === "Accelerate" || keyword === "Equip" || keyword === "Repeat" || keyword === "Flow";
 }
 
 /**
@@ -651,7 +656,7 @@ export function staticAbility(
 export function spell(
   timing: "action" | "reaction",
   effect: Effect,
-  options?: { additionalCost?: Cost; repeat?: Cost; condition?: Condition },
+  options?: { additionalCost?: Cost; repeat?: Cost | readonly Cost[]; condition?: Condition },
 ): SpellAbility {
   return {
     effect,

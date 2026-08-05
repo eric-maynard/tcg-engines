@@ -185,51 +185,13 @@ async function autoPayAndPlay(cardId, opts = {}) {
     return result;
   }
 
-  // Otherwise plan a cost payment first.
+  // DESIGN.md §Resource management: ready runes are NOT auto-counted or auto-exhausted;
+  // the player must explicitly tap runes first. If no play move exists yet, do not
+  // schedule exhaustRune/recycleRune on the player's behalf — surface guidance instead.
   const plan = planCostPayment(card);
-  if (!plan.ok) {
-    showToast(plan.error);
-    return { success: false, error: plan.error };
-  }
-
-  snapshotResources();
-  for (const step of plan.steps) {
-    const r = await autoPayExecuteMoveAsync(step.moveId, step.params);
-    if (!r.success) {
-      showToast(`Auto Pay failed: ${r.error}`);
-      return r;
-    }
-  }
-
-  // After paying, re-enumerate play moves. Prefer the server-provided list; fall back
-  // to synthesizing params from the card definition if it has not been refreshed yet.
-  const refreshed = availableMoves.filter(m =>
-    (m.moveId === "playUnit" || m.moveId === "playSpell" || m.moveId === "playGear") &&
-    m.params?.cardId === cardId
-  );
-
-  let playMove;
-  if (refreshed.length > 0) {
-    playMove = opts.preferredMoveId
-      ? refreshed.find(m => m.moveId === opts.preferredMoveId) || refreshed[0]
-      : refreshed[0];
-  } else {
-    const moveId = card.cardType === "spell" ? "playSpell"
-      : card.cardType === "gear" ? "playGear"
-      : "playUnit";
-    playMove = {
-      moveId: opts.preferredMoveId || moveId,
-      params: { cardId, playerId: viewingPlayer },
-      playerId: viewingPlayer,
-    };
-  }
-
-  const params = { ...playMove.params, ...(opts.moveParamsOverrides || {}) };
-  const finalResult = await autoPayExecuteMoveAsync(playMove.moveId, params);
-  if (!finalResult.success) {
-    showToast(`Could not play card: ${finalResult.error}`);
-  }
-  return finalResult;
+  const msg = plan.ok ? "Tap runes to pay this card's cost first" : plan.error;
+  showToast(msg);
+  return { success: false, error: msg };
 }
 
 /** Convenience: check whether a card is auto-payable right now (for the Auto Pay button). */
@@ -242,9 +204,8 @@ function canAutoPay(cardId) {
     m.params?.cardId === cardId
   );
   if (hasPlay) return true;
-  // Rule 309.1.a: while the chain is active the turn state is Closed and only
-  // Reaction plays are legal. planCostPayment checks affordability only, so in
-  // Closed state defer entirely to the server's move list (checked above).
-  if (gameState?.interaction?.chain?.active) return false;
-  return planCostPayment(card).ok;
+  // DESIGN.md §Resource management: ready runes are NOT auto-counted or auto-exhausted;
+  // the player must explicitly tap runes first. Do not treat an affordability plan as
+  // playability — only the server-enumerated play moves (checked above) count.
+  return false;
 }

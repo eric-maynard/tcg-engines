@@ -22,7 +22,7 @@ import { extractAndParseCost, mergeCosts, parseAdditionalCostText, parseCost } f
 /**
  * Cost keywords that have an associated cost
  */
-export const COST_KEYWORDS: readonly CostKeyword[] = ["Accelerate", "Equip", "Repeat"] as const;
+export const COST_KEYWORDS: readonly CostKeyword[] = ["Accelerate", "Equip", "Repeat", "Flow"] as const;
 
 // ============================================================================
 // Cost Keyword Parsing
@@ -32,7 +32,7 @@ export const COST_KEYWORDS: readonly CostKeyword[] = ["Accelerate", "Equip", "Re
  * Pattern to match cost keywords with their reminder text
  * Captures: [1] keyword name, [2] everything after until next keyword or end
  */
-const COST_KEYWORD_PATTERN = /\[(Accelerate|Equip|Repeat)\]([^[]*?)(?=\[|$)/g;
+const COST_KEYWORD_PATTERN = /\[(Accelerate|Equip|Repeat|Flow)\]([^[]*?)(?=\[|$)/g;
 
 /**
  * Pattern to extract cost from Accelerate reminder text
@@ -117,6 +117,15 @@ export function parseCostKeyword(
 
     case "Repeat": {
       // For Repeat, cost appears directly after keyword
+      const costMatch = followingText.match(REPEAT_COST_PATTERN);
+      if (costMatch) {
+        cost = parseCost(costMatch[1]);
+      }
+      break;
+    }
+
+    // rule-id: ven-049-166 — Flow cost appears directly after keyword, same shape as Repeat.
+    case "Flow": {
       const costMatch = followingText.match(REPEAT_COST_PATTERN);
       if (costMatch) {
         cost = parseCost(costMatch[1]);

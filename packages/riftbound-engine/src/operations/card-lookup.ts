@@ -89,7 +89,9 @@ export interface CardDefinitionLookup {
      * replay the spell's effect multiple times. Rule: [Repeat] — pay
      * :cost: to repeat the effect.
      */
-    readonly repeat?: { energy?: number; power?: string[] };
+    readonly repeat?:
+      | { energy?: number; power?: readonly string[] }
+      | readonly { energy?: number; power?: readonly string[] }[];
   }[];
 }
 
@@ -185,17 +187,39 @@ export class CardDefinitionRegistry {
    * time. Returns `undefined` if the card is not a spell or has no
    * Repeat cost defined.
    */
-  getSpellRepeatCost(cardId: string): { energy: number; power: readonly string[] } | undefined {
+  getSpellRepeatCost(
+    cardId: string,
+  ): readonly { energy: number; power: readonly string[] }[] | undefined {
     const def = this.definitions.get(cardId);
     if (!def?.abilities) {
       return undefined;
     }
     for (const ab of def.abilities) {
       if (ab.type === "spell" && ab.repeat) {
-        return {
-          energy: ab.repeat.energy ?? 0,
-          power: ab.repeat.power ?? [],
-        };
+        // Rule 820.1.c.2 / 820.1.c.3 / 820.3: multi-tier Repeat lists one
+        // additional cost per extra activation. Normalise single-cost
+        // Repeat to a one-element tier list so callers handle both shapes.
+        const tiers = Array.isArray(ab.repeat) ? ab.repeat : [ab.repeat];
+        return tiers.map((t) => ({ energy: t.energy ?? 0, power: t.power ?? [] }));
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * rule-id: ven-049-166 — Get a spell's [Flow] cost, if any. Flow lets the
+   * owner play the spell from their trash for this alternate cost, then
+   * banish it. Returns `undefined` when the card has no Flow keyword.
+   */
+  getSpellFlowCost(cardId: string): { energy: number; power: readonly string[] } | undefined {
+    const def = this.definitions.get(cardId);
+    if (!def?.abilities) {
+      return undefined;
+    }
+    for (const ab of def.abilities) {
+      if (ab.type === "keyword" && ab.keyword === "Flow") {
+        const c = ab.cost as { energy?: number; power?: readonly string[] } | undefined;
+        return { energy: c?.energy ?? 0, power: c?.power ?? [] };
       }
     }
     return undefined;

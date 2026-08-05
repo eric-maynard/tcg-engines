@@ -1092,11 +1092,18 @@ function createGameFromDecks(
     if (p1Pick) {
       const cardId = `${P1}-bf-${p1Pick}`;
       registerCard(internal, cardId, p1Pick, P1, "battlefieldRow");
+      // Rule 419.4.a / 383.2.c: battlefield-card triggered abilities (e.g. Abandoned
+      // Hall unl-205) must be visible to the trigger runner, so register the
+      // definition in the engine's global card registry like every other card.
+      const def = registry.get(p1Pick);
+      if (def) cardReg.register(cardId, makeLookupPayload(def as unknown as Record<string, unknown>, cardId));
       bfIds.push(cardId);
     }
     if (p2Pick) {
       const cardId = `${P2}-bf-${p2Pick}`;
       registerCard(internal, cardId, p2Pick, P2, "battlefieldRow");
+      const def = registry.get(p2Pick);
+      if (def) cardReg.register(cardId, makeLookupPayload(def as unknown as Record<string, unknown>, cardId));
       bfIds.push(cardId);
     }
     engine.executeMove("placeBattlefields", {
@@ -1185,6 +1192,11 @@ function finalizePregame(session: GameSession): void {
     for (const [pid, defId] of Object.entries(pregame.battlefieldSelections)) {
       const cardId = `${pid}-bf-${defId}`;
       registerCard(internal, cardId, defId, pid, "battlefieldRow");
+      // Rule 419.4.a / 383.2.c: register the battlefield card's definition so its
+      // triggered/static abilities (Abandoned Hall unl-205 etc.) are visible to
+      // the engine's trigger runner.
+      const def = registry.get(defId);
+      if (def) getGlobalCardRegistry().register(cardId, makeLookupPayload(def as unknown as Record<string, unknown>, cardId));
       bfIds.push(cardId);
     }
     engine.executeMove("placeBattlefields", {
