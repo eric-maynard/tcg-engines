@@ -232,7 +232,7 @@ describe("Effect: Draw", () => {
       const result = parseAbilities("[Deathknell] — Draw 1. (When I die, get the effect.)");
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           effect: expect.objectContaining({

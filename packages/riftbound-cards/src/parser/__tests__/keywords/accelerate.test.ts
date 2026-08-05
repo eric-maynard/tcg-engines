@@ -88,7 +88,7 @@ describe("Keyword: Accelerate", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(2);
+      expect(result.abilities).toHaveLength(3);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining(Abilities.accelerate(Costs.energyAndPower(1, "calm"))),
       );
@@ -137,7 +137,7 @@ describe("Keyword: Accelerate", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(2);
+      expect(result.abilities).toHaveLength(3);
     });
 
     it("should parse '[Accelerate] Each Equipment attached to me gives double its base Might bonus.'", () => {

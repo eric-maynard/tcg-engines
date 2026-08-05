@@ -243,7 +243,7 @@ describe("Effect: Discard", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           keyword: "Deathknell",

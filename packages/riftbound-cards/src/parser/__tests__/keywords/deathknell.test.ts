@@ -14,9 +14,16 @@ describe("Keyword: Deathknell", () => {
       const result = parseAbilities("[Deathknell] — Draw 1. (When I die, get the effect.)");
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining(Abilities.deathknell(Effects.draw(1))),
+      );
+      expect(result.abilities?.[1]).toEqual(
+        expect.objectContaining({
+          effect: expect.objectContaining({ amount: 1, type: "draw" }),
+          trigger: { event: "die", on: "self" },
+          type: "triggered",
+        }),
       );
     });
 
@@ -26,7 +33,7 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           condition: expect.objectContaining({
@@ -44,7 +51,7 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           condition: expect.objectContaining({
@@ -64,9 +71,15 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining(Abilities.deathknell(Effects.channel(1, true))),
+      );
+      expect(result.abilities?.[1]).toEqual(
+        expect.objectContaining({
+          trigger: { event: "die", on: "self" },
+          type: "triggered",
+        }),
       );
     });
 
@@ -76,7 +89,7 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(2);
+      expect(result.abilities).toHaveLength(3);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           keyword: "Accelerate",
@@ -89,6 +102,12 @@ describe("Keyword: Deathknell", () => {
           type: "keyword",
         }),
       );
+      expect(result.abilities?.[2]).toEqual(
+        expect.objectContaining({
+          trigger: { event: "die", on: "self" },
+          type: "triggered",
+        }),
+      );
     });
   });
 
@@ -99,7 +118,7 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           effect: expect.objectContaining({
@@ -120,7 +139,7 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           effect: expect.objectContaining({
@@ -140,7 +159,7 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           effect: expect.objectContaining({
@@ -158,7 +177,7 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           effect: expect.objectContaining({
@@ -177,7 +196,7 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           effect: expect.objectContaining({
@@ -198,7 +217,7 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           effect: expect.objectContaining({
@@ -218,7 +237,7 @@ describe("Keyword: Deathknell", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(2);
+      expect(result.abilities).toHaveLength(3);
     });
   });
 

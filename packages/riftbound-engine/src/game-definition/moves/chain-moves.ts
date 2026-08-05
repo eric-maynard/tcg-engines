@@ -31,6 +31,7 @@ import type { EffectContext, ExecutableEffect } from "../../abilities/effect-exe
 import { resolveTarget } from "../../abilities/target-resolver";
 import type { TargetDescriptor } from "../../abilities/target-resolver";
 import { fireTriggers } from "../../abilities/trigger-runner";
+import { evaluateWhileLevel } from "../../abilities/xp-conditions";
 import { performCleanup } from "../../cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
@@ -638,6 +639,16 @@ export const chainMoves: Partial<
         return false;
       }
 
+      // Rule 728 / [Level N]: an activated ability gated by a while-level
+      // condition is unavailable until the controller has ≥ threshold XP.
+      const abilityCondition = (ability as { condition?: { type?: string; threshold?: number } })
+        .condition;
+      if (abilityCondition?.type === "while-level") {
+        if (!evaluateWhileLevel(state, playerId, abilityCondition.threshold ?? 0)) {
+          return false;
+        }
+      }
+
       // If an inherited ability was requested, verify that the host card
       // Legitimately exposes it (prevents arbitrary cross-card activation).
       if (sourceCardId && sourceCardId !== cardId) {
@@ -813,6 +824,17 @@ export const chainMoves: Partial<
 
         for (const entry of entries) {
           const { ability } = entry;
+
+          // Rule 728 / [Level N]: skip activated abilities whose while-level
+          // condition is not yet met (e.g. Honeyfruit's Level-6 ability).
+          const abilityCondition = (
+            ability as { condition?: { type?: string; threshold?: number } }
+          ).condition;
+          if (abilityCondition?.type === "while-level") {
+            if (!evaluateWhileLevel(state, playerId, abilityCondition.threshold ?? 0)) {
+              continue;
+            }
+          }
 
           // Check timing
           const isReaction = ability.keyword === "Reaction" || ability.timing === "reaction";

@@ -5020,7 +5020,7 @@ function splitOnAbilityBoundaries(text: string): string[] {
   // Pattern that matches the start of a new ability in card text.
   // Uses lookahead so we don't consume the matched text.
   const boundaryPattern =
-    /(?=(?:When (?:you |I |a |an |another |the )|At the (?:start|end) of |The (?:first|second|third|next) time |Whenever |While (?:I'm|you)|Other friendly |Your [A-Z]|Friendly (?:units|buffed)|Enemy (?:units|gear)|Stunned (?:enemy|friendly) |Each |If (?:you've|an |I )|Play (?:a |an |one |two |three |four |five |six |\d+ )|Recycle \d|Spend ))|(?<=[.\n)]\s*)(?=I enter ready)|(?<=\.\s?)(?=:rb_)|(?<=\.)\n(?=[A-Z])/g;
+    /(?=(?:When (?:you |I |a |an |another |the )|At the (?:start|end) of |The (?:first|second|third|next) time |Whenever |While (?:I'm|you)|Other friendly |Your [A-Z]|Friendly (?:units|buffed)|Enemy (?:units|gear)|Stunned (?:enemy|friendly) |Each |If (?:you've|an |I )|Play (?:a |an |one |two |three |four |five |six |\d+ )|Recycle \d|Spend ))|(?<=[.\n)]\s*)(?=I enter ready)|(?<=\.\s?)(?=:rb_)|(?<=\.)\n(?=[A-Z\[:])/g;
 
   const indices: number[] = [];
   let match: RegExpExecArray | null;
@@ -5242,6 +5242,19 @@ function expandHuntKeywords(abilities: Ability[]): Ability[] {
         trigger: { event: "hold", on: "self" },
         type: "triggered",
       } as TriggeredAbility);
+    }
+    // Rule 808.1: `[Deathknell] — <effect>` is sugar for a self-death trigger.
+    // Emit the explicit triggered form so trigger-runner/trigger-matcher (which
+    // only match `type === "triggered"`) fire it on the `die` event.
+    if (ab.type === "keyword" && (ab as { keyword?: string }).keyword === "Deathknell") {
+      const effect = (ab as { effect?: Effect }).effect;
+      if (effect) {
+        result.push({
+          effect,
+          trigger: { event: "die", on: "self" },
+          type: "triggered",
+        } as TriggeredAbility);
+      }
     }
   }
   return result;

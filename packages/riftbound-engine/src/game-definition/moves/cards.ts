@@ -17,6 +17,26 @@ import { resolveTarget } from "../../abilities/target-resolver";
 import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { canPlayViaAmbush } from "../../keywords/keyword-effects";
+
+/**
+ * Check whether a card carries a static ability whose effect has the given
+ * `type`. Used for enter-state modifiers such as `enter-ready` (rule 143.4
+ * override — unit enters ready instead of exhausted) and `enters-exhausted`
+ * (gear that enters tapped, e.g. Honeyfruit unl-049-219).
+ */
+function hasStaticEffect(cardId: string, effectType: string): boolean {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  for (const ability of abilities) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const effect = (ability as { effect?: { type?: string } }).effect;
+    if (effect?.type === effectType) {
+      return true;
+    }
+  }
+  return false;
+}
 import {
   extractBattlefieldId,
   getBattlefieldZoneId,
@@ -523,7 +543,11 @@ export const cardPlayMoves: Partial<
         targetZoneId: location as CoreZoneId,
       });
 
-      counters.setFlag(cardId as CoreCardId, "exhausted", true);
+      // Rule 143.4: units enter exhausted unless a static "I enter ready"
+      // effect (enter-ready) says otherwise (e.g. Eager Drakehound sfd-006-221).
+      if (!hasStaticEffect(cardId, "enter-ready")) {
+        counters.setFlag(cardId as CoreCardId, "exhausted", true);
+      }
 
       // Fire "play-self" and "play-card" triggers BEFORE incrementing the
       // Rule-724 counter, so a Legion trigger on this card itself cannot
@@ -665,6 +689,13 @@ export const cardPlayMoves: Partial<
         cardId: cardId as CoreCardId,
         targetZoneId: "base" as CoreZoneId,
       });
+
+      // Gear normally enters ready (rule 143.4 applies to units only), but a
+      // static "This enters exhausted" effect forces it to enter tapped
+      // (e.g. Honeyfruit unl-049-219).
+      if (hasStaticEffect(cardId, "enters-exhausted")) {
+        context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
+      }
 
       // Fire "play-self" / "play-card" triggers BEFORE incrementing the
       // Rule-724 counter (see comment in playUnit).
@@ -1264,7 +1295,9 @@ export const cardPlayMoves: Partial<
             targetZoneId: location as CoreZoneId,
           });
 
-          counters.setFlag(championId, "exhausted", true);
+          if (!hasStaticEffect(championId as string, "enter-ready")) {
+            counters.setFlag(championId, "exhausted", true);
+          }
         }
       }
     },
