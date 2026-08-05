@@ -1092,7 +1092,7 @@ function renderActions() {
           } else {
             html += `
               <button class="action-btn ${highlighted ? "highlighted" : ""}"
-                      onclick='openPlayCostModal(${JSON.stringify(cid)})'>
+                      data-play-cost-card="${esc(cid)}">
                 Play ${esc(name)}
                 <div class="action-detail">${variants.length} cost options…</div>
               </button>`;
@@ -1184,6 +1184,9 @@ function renderActions() {
   }
 
   list.innerHTML = html;
+  list.querySelectorAll("[data-play-cost-card]").forEach(el => {
+    el.addEventListener("click", () => openPlayCostModal(el.dataset.playCostCard));
+  });
 }
 
 function toggleMoveGroup(moveId) {
@@ -1532,19 +1535,24 @@ function openPlayCostModal(cardId) {
   html += `<div class="chain-subtitle">Choose how to pay</div>`;
   html += `<div class="choice-modal-cards"><img class="choice-modal-card" style="margin:0" src="/card-image/${esc(imgId)}" alt=""></div>`;
   html += `<div class="choice-modal-btns">`;
-  for (const m of variants) {
-    const { label, detail } = describePlayVariant(m, card);
-    const params = JSON.stringify(m.params).replace(/'/g, "\\'");
-    const player = JSON.stringify(m.playerId).replace(/'/g, "\\'");
-    html += `<button class="choice-modal-btn"
-      onclick='closeChoiceModal(); executeMove(${JSON.stringify(m.moveId)}, ${params}, ${player})'>
+  for (let i = 0; i < variants.length; i++) {
+    const { label, detail } = describePlayVariant(variants[i], card);
+    html += `<button class="choice-modal-btn" data-variant-idx="${i}">
       ${esc(label)}<small>${esc(detail)}</small>
     </button>`;
   }
   html += `</div>`;
-  html += `<button class="choice-modal-cancel" onclick="closeChoiceModal()">Cancel</button>`;
+  html += `<button class="choice-modal-cancel">Cancel</button>`;
 
   box.innerHTML = html;
+  box.querySelectorAll(".choice-modal-btn[data-variant-idx]").forEach(el => {
+    el.addEventListener("click", () => {
+      const m = variants[Number(el.dataset.variantIdx)];
+      closeChoiceModal();
+      if (m) executeMove(m.moveId, m.params, m.playerId);
+    });
+  });
+  box.querySelector(".choice-modal-cancel")?.addEventListener("click", closeChoiceModal);
   overlay.classList.add("visible");
 }
 
