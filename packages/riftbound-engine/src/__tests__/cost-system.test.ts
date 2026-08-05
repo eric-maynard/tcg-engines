@@ -646,3 +646,89 @@ describe("Paid Additional Cost Condition", () => {
     expect(result).toBe(false);
   });
 });
+
+// ============================================================================
+// Power Cost Enforcement (regression: set-JSON `power` was dropped, so no card
+// ever charged a domain-power cost — every card was playable for energy alone)
+// ============================================================================
+
+describe("Power Cost Enforcement", () => {
+  afterEach(() => {
+    clearGlobalCardRegistry();
+  });
+
+  test("Sinister Poro (2 energy + 1 chaos) is unplayable without chaos, deducts both when played", async () => {
+    const { getAllCards } = await import("../../../riftbound-cards/src/data/all-cards");
+    const { createPlayableGame, getZoneCards } = await import("../testing/playtest/game-setup");
+
+    const allCards = getAllCards();
+    const poro = allCards.find((c) => c.id === "unl-137-219");
+    expect(poro?.powerCost).toEqual(["chaos"]);
+    expect(poro?.energyCost).toBe(2);
+
+    const deck = {
+      battlefieldIds: ["ogn-275-298"],
+      mainDeckCardIds: Array.from({ length: 40 }, () => "unl-137-219"),
+      runeDeckCardIds: Array.from({ length: 12 }, () => "ogn-166-298"),
+    };
+    const P1 = "player-1";
+    const { engine } = createPlayableGame(allCards as never, deck, deck, "power-cost-test");
+
+    const hand = getZoneCards(engine, "hand", P1);
+    const poroInstance = hand.find((id) => id.endsWith("unl-137-219"));
+    expect(poroInstance).toBeDefined();
+
+    // 2 energy, 0 chaos → NOT enumerated, executeMove rejected
+    engine.executeMove("emptyRunePool", {
+      params: { directed: true, playerId: P1 },
+      playerId: P1 as CorePlayerId,
+    });
+    engine.executeMove("addResources", {
+      params: { energy: 2, playerId: P1, power: {} },
+      playerId: P1 as CorePlayerId,
+    });
+    let s = engine.getState();
+    expect(s.runePools[P1].energy).toBe(2);
+    expect(s.runePools[P1].power.chaos ?? 0).toBe(0);
+
+    let moves = engine.enumerateMoves(P1 as CorePlayerId, { validOnly: true });
+    let playPoro = moves.find(
+      (m) => m.moveId === "playUnit" && (m.params as { cardId?: string })?.cardId === poroInstance,
+    );
+    expect(playPoro).toBeUndefined();
+
+    const rejected = engine.executeMove("playUnit", {
+      params: { cardId: poroInstance!, location: "base", playerId: P1 },
+      playerId: P1 as CorePlayerId,
+    });
+    expect(rejected.success).toBe(false);
+
+    // Add 1 chaos → enumerated, and playing deducts 2 energy + 1 chaos
+    engine.executeMove("addResources", {
+      params: { energy: 0, playerId: P1, power: { chaos: 1 } },
+      playerId: P1 as CorePlayerId,
+    });
+    s = engine.getState();
+    expect(s.runePools[P1].power.chaos).toBe(1);
+
+    moves = engine.enumerateMoves(P1 as CorePlayerId, { validOnly: true });
+    playPoro = moves.find(
+      (m) => m.moveId === "playUnit" && (m.params as { cardId?: string })?.cardId === poroInstance,
+    );
+    expect(playPoro).toBeDefined();
+
+    const played = engine.executeMove("playUnit", {
+      params: {
+        ...(playPoro!.params as Record<string, unknown>),
+        cardId: poroInstance!,
+        playerId: P1,
+      },
+      playerId: P1 as CorePlayerId,
+    });
+    expect(played.success).toBe(true);
+
+    s = engine.getState();
+    expect(s.runePools[P1].energy).toBe(0);
+    expect(s.runePools[P1].power.chaos).toBe(0);
+  });
+});

@@ -815,7 +815,7 @@ function adaptJsonCard(c: Record<string, unknown>): Card {
     might: c.might,
     mightBonus: c.mightBonus ?? undefined,
     name: c.name,
-    powerCost: c.power ?? c.powerCost,
+    powerCost: derivePowerCost(domains, c.power as number | null) ?? c.powerCost,
     rarity: c.rarity,
     rulesText: c.rulesText,
     setId: c.set,
@@ -824,8 +824,50 @@ function adaptJsonCard(c: Record<string, unknown>): Card {
   } as unknown as Card;
 }
 
+import ognJson from "./sets/ogn.json";
+import ogsJson from "./sets/ogs.json";
+import sfdJson from "./sets/sfd.json";
+import unlJson from "./sets/unl.json";
 import venJson from "./sets/ven.json";
 const JSON_SETS = [venJson] as { cards: Record<string, unknown>[] }[];
+const ALL_SET_JSON = [ognJson, ogsJson, sfdJson, unlJson, venJson] as {
+  cards: Record<string, unknown>[];
+}[];
+
+/**
+ * Expand a set-JSON `{domains, power: N}` into the engine's `powerCost: Domain[]`.
+ * Single-domain cards require N of that domain; multi-domain cards use N rainbow
+ * (payable by any domain — 41 cards, refinable once per-pip domain data lands).
+ */
+function derivePowerCost(
+  domains: string[] | undefined,
+  power: number | null | undefined,
+): string[] | undefined {
+  if (!power || power <= 0) {return undefined;}
+  const domain = domains && domains.length === 1 ? domains[0] : "rainbow";
+  return Array.from({ length: power }, () => domain);
+}
+
+const _powerCostById = new Map<string, string[]>();
+for (const set of ALL_SET_JSON) {
+  for (const c of set.cards) {
+    const pc = derivePowerCost(c.domains as string[] | undefined, c.power as number | null);
+    if (pc) {_powerCostById.set(c.id as string, pc);}
+  }
+}
+
+/**
+ * Hand-authored .ts card definitions predate power extraction and carry no
+ * `powerCost`. Backfill from the regenerated set JSON so the engine's
+ * canAffordCard/deductCost see the real domain requirement.
+ */
+function backfillPowerCost(cards: Card[]): Card[] {
+  return cards.map((card) => {
+    if (card.powerCost !== undefined) {return card;}
+    const pc = _powerCostById.get(card.id);
+    return pc ? ({ ...card, powerCost: pc } as Card) : card;
+  });
+}
 
 /**
  * Get all cards with parsed abilities attached.
@@ -833,7 +875,7 @@ const JSON_SETS = [venJson] as { cards: Record<string, unknown>[] }[];
 export function getAllCards(): Card[] {
   if (!_cachedCards) {
     const jsonCards = JSON_SETS.flatMap((s) => s.cards.map(adaptJsonCard));
-    _cachedCards = enrichCards([...getRawCards(), ...jsonCards]);
+    _cachedCards = enrichCards(backfillPowerCost([...getRawCards(), ...jsonCards]));
   }
   return _cachedCards;
 }

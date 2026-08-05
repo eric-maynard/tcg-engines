@@ -29,7 +29,7 @@ interface FullCard {
   energy: number | null;
   might: number | null;
   mightBonus: number | null;
-  power: string[] | null;
+  power: number | null;
   tags: string[];
   isChampion: boolean;
   rulesText: string;
@@ -165,6 +165,13 @@ function getMightBonus(c: Record<string, unknown>): number | null {
   return v?.id ?? null;
 }
 
+function getPower(c: Record<string, unknown>): number | null {
+  const p = c.power as Record<string, unknown> | null;
+  if (!p) {return null;}
+  const v = p.value as Record<string, number>;
+  return v?.id ?? null;
+}
+
 function getText(c: Record<string, unknown>): string {
   const t = c.text as Record<string, unknown>;
   if (!t) {return "";}
@@ -282,7 +289,7 @@ for (const c of uniqueCards) {
     energy: getEnergy(c),
     might: getMight(c),
     mightBonus: getMightBonus(c),
-    power: null, // Power costs aren't in the gallery data directly
+    power: getPower(c),
     tags,
     isChampion: championTag !== null && championTags.has(championTag),
     rulesText: text,

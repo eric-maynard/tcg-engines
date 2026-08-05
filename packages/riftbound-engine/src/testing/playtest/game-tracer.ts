@@ -185,12 +185,24 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
     // never charges (e.g. potential-rune-energy widened enumerator only).
     let costViolation: string | undefined;
     if ((result as any)?.success && /^play(Unit|Spell|Gear|FromChampionZone)$/.test(chosen.moveId)) {
-      const before = s.runePools?.[active]?.energy ?? 0;
-      const after = engine.getState().runePools?.[active]?.energy ?? 0;
+      const poolBefore = s.runePools?.[active];
+      const poolAfter = engine.getState().runePools?.[active];
+      const before = poolBefore?.energy ?? 0;
+      const after = poolAfter?.energy ?? 0;
       const def = allCards.find((c) => chosen.params?.cardId?.endsWith(c.id));
       const cost = def?.energyCost ?? 0;
       if (before - after < cost && cost > 0) {
         costViolation = `${chosen.moveId} ${def?.id} cost=${cost} but energy ${before}→${after} (deducted ${before - after})`;
+      }
+      const powerCost: string[] = def?.powerCost ?? [];
+      const need: Record<string, number> = {};
+      for (const d of powerCost) need[d] = (need[d] ?? 0) + 1;
+      for (const [d, n] of Object.entries(need)) {
+        const pb = (poolBefore?.power as any)?.[d] ?? 0;
+        const pa = (poolAfter?.power as any)?.[d] ?? 0;
+        if (pb - pa < n) {
+          costViolation = `${costViolation ? costViolation + "; " : ""}${chosen.moveId} ${def?.id} power[${d}]=${n} but ${pb}→${pa} (deducted ${pb - pa})`;
+        }
       }
     }
 
