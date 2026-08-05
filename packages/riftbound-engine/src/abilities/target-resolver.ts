@@ -62,16 +62,27 @@ export interface TargetResolverContext {
  * @returns Array of resolved card IDs (may be empty if no valid targets)
  */
 export function resolveTarget(
-  target: TargetDescriptor | undefined,
+  target: TargetDescriptor | string | undefined,
   ctx: TargetResolverContext,
 ): string[] {
   if (!target) {
     return [];
   }
 
+  // Bare-string target: parser emits "self" for it/me/itself; any other
+  // string is a pre-resolved card ID (see getTargetIds in effect-executor).
+  if (typeof target === "string") {
+    return target === "self" ? [ctx.sourceCardId] : [target];
+  }
+
   // Self target
   if (target.type === "self") {
     return [ctx.sourceCardId];
+  }
+
+  // Battlefield definitions live in battlefieldRow, not the unit board.
+  if (target.type === "battlefield") {
+    return ctx.zones.getCardsInZone("battlefieldRow" as CoreZoneId).map((c) => c as string);
   }
 
   // Collect candidate cards from the board
@@ -167,9 +178,9 @@ function getBoardCardIds(ctx: TargetResolverContext): string[] {
     ids.push(...bfCards.map((c) => c as string));
   }
 
-  // Battlefield row cards (battlefield cards themselves)
-  const battlefieldRowCards = ctx.zones.getCardsInZone("battlefieldRow" as CoreZoneId);
-  ids.push(...battlefieldRowCards.map((c) => c as string));
+  // NOTE: battlefieldRow (the battlefield-definition cards themselves) is
+  // intentionally excluded here — those are locations, not units/permanents,
+  // and are only valid when target.type === "battlefield" (handled above).
 
   // NOTE: Champion zone is intentionally excluded. Cards in the champion zone
   // Have not been played to the board and are not valid targets for board-

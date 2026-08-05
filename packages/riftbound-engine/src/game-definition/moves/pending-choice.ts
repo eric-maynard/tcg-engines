@@ -52,7 +52,7 @@ export function pickDefaultForChoice(choice: PendingChoice): string | undefined 
   if (choice.type === "name-card") {
     return choice.options[0];
   }
-  if (choice.type === "choose-target") {
+  if (choice.type === "choose-target" || choice.type === "choose-destination") {
     return choice.options[0];
   }
   return choice.revealed.find((id) => isValidPendingPick(choice, id));
@@ -91,6 +91,12 @@ export const pendingChoiceMoves: Partial<
         }
         return choice.options.includes(context.params.pickedCardId as string);
       }
+      if (choice.type === "choose-destination") {
+        if (choice.playerId !== context.params.playerId) {
+          return false;
+        }
+        return choice.options.includes(context.params.pickedZoneId as string);
+      }
       if (choice.prompter !== context.params.playerId) {
         return false;
       }
@@ -113,6 +119,15 @@ export const pendingChoiceMoves: Partial<
         }
         return choice.options.map((cardId) => ({
           pickedCardId: cardId,
+          playerId: context.playerId as string,
+        }));
+      }
+      if (choice.type === "choose-destination") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        return choice.options.map((zoneId) => ({
+          pickedZoneId: zoneId,
           playerId: context.playerId as string,
         }));
       }
@@ -152,6 +167,19 @@ export const pendingChoiceMoves: Partial<
           boundTargets: [picked],
         };
         executeEffect(choice.effect as ExecutableEffect, effectCtx);
+        draft.pendingChoice = undefined;
+        return;
+      }
+
+      if (choice.type === "choose-destination") {
+        const zoneId = context.params.pickedZoneId as string;
+        if (!choice.options.includes(zoneId)) {
+          return;
+        }
+        context.zones.moveCard({
+          cardId: choice.cardId as CoreCardId,
+          targetZoneId: zoneId as CoreZoneId,
+        });
         draft.pendingChoice = undefined;
         return;
       }

@@ -491,6 +491,48 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       break;
     }
 
+    case "move": {
+      const targets = getTargetIds(effect, ctx);
+      const moveTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
+      const dest = (effect as unknown as { to?: string }).to;
+
+      if (dest === "choose") {
+        // Rule 355.4 — no stated destination: the controller chooses base or
+        // any battlefield other than the unit's current zone.
+        const cardId = moveTargets[0];
+        const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
+        const options = ["base", ...Object.keys(ctx.draft.battlefields)].filter(
+          (z) => z !== currentZone,
+        );
+        if (options.length === 0) {
+          break;
+        }
+        ctx.draft.pendingChoice = {
+          cardId,
+          options,
+          playerId: ctx.playerId,
+          type: "choose-destination",
+        };
+        break;
+      }
+
+      let targetZone: string;
+      if (dest === "here" && ctx.sourceZone) {
+        targetZone = ctx.sourceZone;
+      } else if (dest && dest !== "here") {
+        targetZone = dest;
+      } else {
+        targetZone = "base";
+      }
+      for (const targetId of moveTargets) {
+        ctx.zones.moveCard({
+          cardId: targetId as CoreCardId,
+          targetZoneId: targetZone as CoreZoneId,
+        });
+      }
+      break;
+    }
+
     case "discard": {
       const count = resolveAmount(effect.amount ?? 1, ctx);
       const hand = ctx.zones

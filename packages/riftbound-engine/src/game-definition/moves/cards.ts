@@ -278,14 +278,21 @@ function deductCost(
   }
 }
 
+type SpellEffectTargetDescriptor =
+  | string
+  | {
+      type: string;
+      quantity?: number | "all" | "any" | { upTo?: number; atLeast?: number };
+    };
+
 type SpellEffectTargetShape = {
   type?: string;
-  target?: {
-    type: string;
-    quantity?: number | "all" | "any" | { upTo?: number; atLeast?: number };
-  };
+  target?: SpellEffectTargetDescriptor;
+  target1?: SpellEffectTargetDescriptor;
+  target2?: SpellEffectTargetDescriptor;
   player?: string;
   options?: { effect?: SpellEffectTargetShape }[];
+  effects?: SpellEffectTargetShape[];
 };
 
 /**
@@ -304,34 +311,59 @@ function spellEffectHasLegalTargets(
   if (effect.type === "choice" && Array.isArray(effect.options)) {
     return effect.options.some((opt) => spellEffectHasLegalTargets(opt?.effect, ctx));
   }
-  // Rule 355.10.d: quantity:"all" selects programmatically — those objects are
-  // not caster-chosen targets, so 355.8's ≥1-valid-target gate does not apply.
-  // Rule 355.13 / 419.2.a: "up to N" / "any" permits choosing zero targets.
-  const qty = effect.target?.quantity;
-  const zeroTargetsLegal =
-    qty === "any" ||
-    (typeof qty === "object" && qty.upTo !== undefined && qty.atLeast === undefined);
-  if (
-    effect.target &&
-    effect.target.type !== "self" &&
-    effect.target.quantity !== "all" &&
-    !zeroTargetsLegal &&
-    !effect.player
-  ) {
-    const resolved = resolveTarget(
-      effect.target as {
-        type: string;
-        controller?: "friendly" | "enemy" | "any";
-        location?: string;
-        quantity?: number | "all";
-      },
-      ctx,
-    );
-    return resolved.length > 0;
+  // Sequence effects: every sub-effect's targets must be satisfiable.
+  if (effect.type === "sequence" && Array.isArray(effect.effects)) {
+    return effect.effects.every((sub) => spellEffectHasLegalTargets(sub, ctx));
+  }
+  // Multi-target effects (swap-might etc.) carry target1/target2 alongside or
+  // instead of `target`; every present descriptor must resolve non-empty.
+  for (const tgt of [effect.target, effect.target1, effect.target2]) {
+    if (!targetDescriptorIsSatisfiable(tgt, effect.player, ctx)) {
+      return false;
+    }
   }
   // Rule 355.5.a / 358.3.a: per-player criteria-based instructions and
   // targetless effects impose no play-legality constraint.
   return true;
+}
+
+function targetDescriptorIsSatisfiable(
+  tgt: SpellEffectTargetDescriptor | undefined,
+  player: string | undefined,
+  ctx: Parameters<typeof resolveTarget>[1],
+): boolean {
+  if (!tgt) {
+    return true;
+  }
+  // Legacy parser output: bare string "self".
+  if (typeof tgt === "string") {
+    return true;
+  }
+  // Self / player / battlefield are not caster-chosen board targets.
+  if (tgt.type === "self" || tgt.type === "player" || tgt.type === "battlefield" || player) {
+    return true;
+  }
+  // Rule 355.10.d: quantity:"all" selects programmatically — those objects are
+  // not caster-chosen targets, so 355.8's ≥1-valid-target gate does not apply.
+  // Rule 355.13 / 419.2.a: "up to N" / "any" permits choosing zero targets.
+  const qty = tgt.quantity;
+  const zeroTargetsLegal =
+    qty === "all" ||
+    qty === "any" ||
+    (typeof qty === "object" && qty.upTo !== undefined && qty.atLeast === undefined);
+  if (zeroTargetsLegal) {
+    return true;
+  }
+  const resolved = resolveTarget(
+    tgt as {
+      type: string;
+      controller?: "friendly" | "enemy" | "any";
+      location?: string;
+      quantity?: number | "all";
+    },
+    ctx,
+  );
+  return resolved.length > 0;
 }
 
 /**
@@ -816,6 +848,7 @@ export const cardPlayMoves: Partial<
         const tgt = spellEffect?.target;
         const isCardTarget =
           tgt !== undefined &&
+          typeof tgt !== "string" &&
           tgt.type !== "self" &&
           tgt.type !== "player" &&
           tgt.type !== "battlefield" &&

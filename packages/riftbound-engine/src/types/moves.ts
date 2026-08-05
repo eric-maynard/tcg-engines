@@ -364,6 +364,12 @@ export interface RiftboundMoves {
     cardId: CardId;
     abilityIndex: number;
     sourceCardId?: CardId;
+    /**
+     * When the ability's cost includes `kill` (sacrifice a friendly
+     * permanent), this is the instance ID of the card to trash. Required
+     * whenever `cost.kill` is present.
+     */
+    sacrificeId?: CardId;
   };
 
   // ============================================
@@ -412,7 +418,12 @@ export interface RiftboundMoves {
    * to let the active player pick a card from an opponent's revealed hand.
    * The chosen card is recycled/banished/discarded per the stored effect.
    */
-  resolvePendingChoice: { playerId: PlayerId; pickedCardId?: CardId; pickedName?: string };
+  resolvePendingChoice: {
+    playerId: PlayerId;
+    pickedCardId?: CardId;
+    pickedName?: string;
+    pickedZoneId?: string;
+  };
 
   // ============================================
   // Token & Sandbox Meta Moves (W10)

@@ -257,7 +257,11 @@ export interface SwapMightEffect {
 export interface MoveEffect {
   readonly type: "move";
   readonly target: AnyTarget;
-  readonly to: Location;
+  /**
+   * Destination. `"choose"` when the rules text names no destination
+   * (rule 355.4 — the unit's controller chooses base or a battlefield).
+   */
+  readonly to: Location | "choose";
   readonly from?: Location;
 }
 

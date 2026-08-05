@@ -90,7 +90,7 @@ export function parseRecallEffect(text: string): RecallEffect | undefined {
  *
  * @example
  * parseMovEffect("Move a friendly unit.")
- * // Returns: { type: "move", target: { type: "unit", controller: "friendly" }, to: "base" }
+ * // Returns: { type: "move", target: { type: "unit", controller: "friendly" }, to: "choose" }
  */
 export function parseMoveEffect(text: string): MoveEffect | undefined {
   // Try from/to pattern first (more specific)
@@ -140,10 +140,10 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
       (target as { quantity: typeof quantity }).quantity = quantity;
     }
 
-    // Parse destination, default to "base" if not specified
-    const to: Location = destinationStr
+    // Parse destination; when unspecified the player chooses (rule 355.4)
+    const to: Location | "choose" = destinationStr
       ? parseLocationString(destinationStr.replace(/^to\s+/, ""))
-      : "base";
+      : "choose";
 
     return {
       target,

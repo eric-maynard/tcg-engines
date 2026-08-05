@@ -728,3 +728,109 @@ describe("The Zero Drive: per-instance exile tracking", () => {
     expect(harness.cardStore.get("zero-drive-1")!.meta.exiledByThis).toEqual(["exiled-1"]);
   });
 });
+
+// ============================================================================
+// Malzahar, Fanatic — sacrifice (kill) cost on activated ability
+// ============================================================================
+
+describe("Malzahar, Fanatic (ogn-113-298): sacrifice cost", () => {
+  let registry: CardDefinitionRegistry;
+
+  beforeEach(() => {
+    registry = new CardDefinitionRegistry();
+    setGlobalCardRegistry(registry);
+    registry.register("malzahar-1", {
+      abilities: [
+        {
+          cost: { exhaust: true, kill: { controller: "friendly", type: "permanent" } },
+          effect: { amount: 2, resource: "rainbow", type: "add-resource" },
+          type: "activated",
+        },
+      ],
+      cardType: "unit",
+      id: "malzahar-1",
+      might: 3,
+      name: "Malzahar, Fanatic",
+    });
+    registry.register("fodder-1", {
+      abilities: [],
+      cardType: "unit",
+      id: "fodder-1",
+      might: 1,
+      name: "Voidling",
+    });
+  });
+
+  afterEach(() => {
+    clearGlobalCardRegistry();
+  });
+
+  const emptyMeta = {
+    buffed: false,
+    combatRole: null,
+    damage: 0,
+    exhausted: false,
+    hidden: false,
+    stunned: false,
+  };
+
+  test("not enumerated when there is no other friendly permanent to sacrifice", () => {
+    const state = createMockState();
+    const harness = createHarness({
+      "malzahar-1": { meta: { ...emptyMeta }, owner: "p1", zone: "base" },
+    });
+    const context = {
+      cards: harness.cards,
+      counters: harness.counters,
+      playerId: "p1" as CorePlayerId,
+      zones: harness.zones,
+    };
+
+    const enumerator = chainMoves.activateAbility!.enumerator!;
+    const results = enumerator(state, context as unknown as Parameters<typeof enumerator>[1]);
+
+    // The host card cannot pay its own kill cost, so with no other friendly
+    // permanent on the board the ability must not be enumerated at all.
+    const malzaharEntries = results.filter((r) => r.cardId === "malzahar-1");
+    expect(malzaharEntries.length).toBe(0);
+  });
+
+  test("enumerates one option per friendly permanent and reducer trashes the pick", () => {
+    const state = createMockState();
+    const harness = createHarness({
+      "fodder-1": { meta: { ...emptyMeta }, owner: "p1", zone: "base" },
+      "malzahar-1": { meta: { ...emptyMeta }, owner: "p1", zone: "base" },
+    });
+    const enumCtx = {
+      cards: harness.cards,
+      counters: harness.counters,
+      playerId: "p1" as CorePlayerId,
+      zones: harness.zones,
+    };
+
+    const enumerator = chainMoves.activateAbility!.enumerator!;
+    const results = enumerator(state, enumCtx as unknown as Parameters<typeof enumerator>[1]);
+
+    const malzaharEntries = results.filter((r) => r.cardId === "malzahar-1");
+    expect(malzaharEntries.length).toBe(1);
+    expect(malzaharEntries[0]!.sacrificeId).toBe("fodder-1");
+
+    // Activate, choosing the fodder unit as the sacrifice.
+    const reducer = chainMoves.activateAbility!.reducer!;
+    const reducerCtx = {
+      cards: harness.cards,
+      counters: harness.counters,
+      params: {
+        abilityIndex: 0,
+        cardId: "malzahar-1",
+        playerId: "p1",
+        sacrificeId: "fodder-1",
+      },
+      zones: harness.zones,
+    };
+    reducer(state, reducerCtx as unknown as Parameters<typeof reducer>[1]);
+
+    expect(harness.cardStore.get("fodder-1")!.zone).toBe("trash");
+    expect(harness.cardStore.get("malzahar-1")!.meta.exhausted).toBe(true);
+  });
+});

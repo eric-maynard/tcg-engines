@@ -2252,7 +2252,7 @@ const server = Bun.serve({
         // Spawn: any of the ~1000 defs is testable regardless of loaded deck.
         const def = allCards.find((c) => c.id === body.defId);
         if (!def) return json({ error: "unknown defId" }, 404);
-        found = `${pid}-tutor-${body.defId}`;
+        found = `${pid}-main-999-${body.defId}`;
         (internal as any).cards[found] = { controller: pid, definitionId: body.defId, owner: pid, position: undefined, zone: "hand" };
         (internal as any).cardMetas[found] = { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false };
         getGlobalCardRegistry().register(found, def as any);

@@ -362,7 +362,26 @@ export interface ChooseTargetChoice {
   readonly remaining: number;
 }
 
-export type PendingChoice = RevealAndPickChoice | NameCardChoice | ChooseTargetChoice;
+/**
+ * Rule 355.4: a `move` effect with no stated destination lets the unit's
+ * controller choose base or any battlefield. The chosen zone ID is passed
+ * back via `resolvePendingChoice` and the stored `cardId` is moved there.
+ */
+export interface ChooseDestinationChoice {
+  readonly type: "choose-destination";
+  /** Player who chooses the destination (the ability's controller). */
+  readonly playerId: PlayerId;
+  /** Unit to move once a destination is chosen. */
+  readonly cardId: CardId;
+  /** Legal destination zone IDs (base + battlefields, excluding current). */
+  readonly options: readonly string[];
+}
+
+export type PendingChoice =
+  | RevealAndPickChoice
+  | NameCardChoice
+  | ChooseTargetChoice
+  | ChooseDestinationChoice;
 
 /**
  * Complete Riftbound game state

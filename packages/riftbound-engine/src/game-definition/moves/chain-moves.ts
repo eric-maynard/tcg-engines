@@ -649,6 +649,28 @@ export const chainMoves: Partial<
             return false;
           }
         }
+
+        // Rule 577.2: A [Kill] (sacrifice) cost requires a legal target on
+        // the board matching the descriptor. Malzahar (ogn-113-298) is the
+        // canonical case: exhaust + kill a friendly permanent → +2 rainbow.
+        // The host card cannot pay its own kill cost.
+        if (cost.kill) {
+          const sacrificeId = context.params.sacrificeId as string | undefined;
+          const options = resolveTarget(cost.kill as TargetDescriptor, {
+            cards: context.cards,
+            draft: state,
+            playerId,
+            sourceCardId: cardId,
+            sourceZone: zone,
+            zones: context.zones,
+          }).filter((id) => id !== cardId);
+          if (options.length === 0) {
+            return false;
+          }
+          if (sacrificeId && !options.includes(sacrificeId)) {
+            return false;
+          }
+        }
       }
 
       return true;
@@ -668,6 +690,7 @@ export const chainMoves: Partial<
         cardId: string;
         abilityIndex: number;
         sourceCardId?: string;
+        sacrificeId?: string;
       }[] = [];
 
       // Collect cards on base, battlefields, legendZone, battlefieldRow, and championZone
@@ -778,11 +801,34 @@ export const chainMoves: Partial<
             }
           }
 
+          // Rule 577.2: A [Kill] (sacrifice) cost enumerates one activation
+          // per legal sacrifice target so the caller can pick which permanent
+          // to trash. No legal target → the ability is not activatable.
+          let sacrificeOptions: string[] | undefined;
+          const killCost = (ability.cost as Record<string, unknown> | undefined)?.kill;
+          if (killCost) {
+            const hostZone = context.zones.getCardZone(entry.hostCardId as CoreCardId) as
+              | string
+              | undefined;
+            sacrificeOptions = resolveTarget(killCost as TargetDescriptor, {
+              cards: context.cards,
+              draft: state,
+              playerId,
+              sourceCardId: entry.hostCardId,
+              sourceZone: hostZone,
+              zones: context.zones,
+            }).filter((id) => id !== entry.hostCardId);
+            if (sacrificeOptions.length === 0) {
+              continue;
+            }
+          }
+
           const result: {
             playerId: string;
             cardId: string;
             abilityIndex: number;
             sourceCardId?: string;
+            sacrificeId?: string;
           } = {
             abilityIndex: entry.abilityIndex,
             cardId: entry.hostCardId,
@@ -791,13 +837,19 @@ export const chainMoves: Partial<
           if (entry.sourceCardId !== entry.hostCardId) {
             result.sourceCardId = entry.sourceCardId;
           }
-          results.push(result);
+          if (sacrificeOptions) {
+            for (const sacrificeId of sacrificeOptions) {
+              results.push({ ...result, sacrificeId });
+            }
+          } else {
+            results.push(result);
+          }
         }
       }
       return results;
     },
     reducer: (draft, context) => {
-      const { playerId, cardId, abilityIndex, sourceCardId } = context.params;
+      const { playerId, cardId, abilityIndex, sourceCardId, sacrificeId } = context.params;
 
       const registry = getGlobalCardRegistry();
       // For inherited/copied abilities, look up the ability text from the
@@ -818,6 +870,18 @@ export const chainMoves: Partial<
         // Source (Heimerdinger exhausts himself for an inherited ability).
         if (cost.exhaust) {
           context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
+        }
+
+        // Handle kill (sacrifice) cost — the chosen permanent is trashed as
+        // part of paying the cost, before the effect resolves.
+        if (cost.kill) {
+          if (!sacrificeId) {
+            return;
+          }
+          context.zones.moveCard({
+            cardId: sacrificeId as CoreCardId,
+            targetZoneId: "trash" as CoreZoneId,
+          });
         }
       }
 
