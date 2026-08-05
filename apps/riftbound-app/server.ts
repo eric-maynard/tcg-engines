@@ -2427,9 +2427,9 @@ const server = Bun.serve({
       const username = process.env.DEFAULT_USERNAME;
       const password = process.env.DEFAULT_PASSWORD;
       if (username && password) {
-        return json({ password, username });
+        return json({ available: true, password, username });
       }
-      return json({ error: "No dev credentials configured" }, 404);
+      return json({ available: false });
     }
 
     // ========================================

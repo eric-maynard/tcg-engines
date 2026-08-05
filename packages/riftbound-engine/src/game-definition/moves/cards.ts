@@ -37,6 +37,96 @@ function hasStaticEffect(cardId: string, effectType: string): boolean {
   }
   return false;
 }
+
+/**
+ * Runtime replacement stored in `draft.activeReplacements` by the
+ * effect-executor `case "replacement"`.
+ */
+interface ActiveReplacementEntry {
+  replaces?: string;
+  duration?: string;
+  owner?: string;
+  target?: { type?: string; controller?: string };
+}
+
+/**
+ * Rule 571 consumer for `enters-ready` replacements installed at runtime
+ * (Sun Disc ogn-021-298: "the next unit you play this turn enters ready").
+ * Scans `draft.activeReplacements` for a matching entry, removes it when
+ * `duration:"next"`, and reports whether one applied so the caller can skip
+ * the rule-143.4 exhaust flag.
+ */
+function consumeEntersReadyReplacement(
+  draft: RiftboundGameState,
+  playerId: string,
+): boolean {
+  const active = draft.activeReplacements as ActiveReplacementEntry[] | undefined;
+  if (!active || active.length === 0) {
+    return false;
+  }
+  for (let i = 0; i < active.length; i++) {
+    const entry = active[i];
+    if (entry?.replaces !== "enters-ready") {
+      continue;
+    }
+    // "the next unit YOU play" — the replacement is scoped to its installer.
+    // A friendly-controller target filter narrows to the same player; an
+    // absent/any controller matches everyone.
+    const controller = entry.target?.controller;
+    if (entry.owner !== undefined && entry.owner !== playerId) {
+      continue;
+    }
+    if (controller === "enemy") {
+      continue;
+    }
+    const targetType = entry.target?.type;
+    if (targetType !== undefined && targetType !== "unit") {
+      continue;
+    }
+    if (entry.duration === "next") {
+      active.splice(i, 1);
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Optional additional-cost declared on a unit card at play time.
+ */
+interface OptionalPlayCost {
+  /** `"accelerate"` (rule 717) enters the unit ready when paid. */
+  readonly kind: "accelerate" | "kill";
+  /** Extra energy/power to deduct when the cost is paid. */
+  readonly cost?: { energy?: number; power?: readonly string[] };
+  /** Target descriptor for a "kill a friendly X" additional cost. */
+  readonly kill?: unknown;
+}
+
+/**
+ * Read a unit's optional additional play-cost from its abilities.
+ *
+ * Recognises Accelerate (`{type:"keyword", keyword:"Accelerate", cost}`) and
+ * the "you may kill a friendly X as an additional cost to play me" pattern
+ * (`{type:"static"|"additional-cost-option", cost:{kill: TargetDescriptor}}`).
+ */
+function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefined {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  for (const ability of abilities) {
+    if (ability.type === "keyword" && ability.keyword === "Accelerate") {
+      const cost = ability.cost as { energy?: number; power?: readonly string[] } | undefined;
+      return { cost, kind: "accelerate" };
+    }
+    const rawCost = ability.cost as { kill?: unknown } | undefined;
+    if (
+      (ability.type === "static" || ability.type === "additional-cost-option") &&
+      rawCost?.kill
+    ) {
+      return { kill: rawCost.kill, kind: "kill" };
+    }
+  }
+  return undefined;
+}
 import {
   extractBattlefieldId,
   getBattlefieldZoneId,
@@ -514,7 +604,7 @@ export const cardPlayMoves: Partial<
         context.playerId as CorePlayerId,
       );
 
-      const results: { playerId: string; cardId: string; location: string }[] = [];
+      const results: RiftboundMoves["playUnit"][] = [];
       for (const cardId of handCards) {
         const def = registry.get(cardId as string);
         if (!def || def.cardType !== "unit") {
@@ -529,14 +619,83 @@ export const cardPlayMoves: Partial<
           location: "base",
           playerId: context.playerId as string,
         });
+
+        // Rule 560 / 717: when the unit declares an optional additional
+        // play-cost, also enumerate the paid variant so callers can elect
+        // to pay it.
+        const optional = getOptionalPlayCost(cardId as string);
+        if (optional?.kind === "accelerate") {
+          const extraEnergy = optional.cost?.energy ?? 0;
+          const extraPower = optional.cost?.power ?? [];
+          const canAffordExtra =
+            affordPool.energy >= (def.energyCost ?? 0) + extraEnergy &&
+            extraPower.every(
+              (d) => (affordPool.power[d as keyof typeof affordPool.power] ?? 0) >= 1,
+            );
+          if (canAffordExtra) {
+            results.push({
+              additionalCostSpec: { energy: extraEnergy, power: extraPower },
+              cardId: cardId as string,
+              location: "base",
+              paidAdditionalCost: true,
+              playerId: context.playerId as string,
+            });
+          }
+        } else if (optional?.kind === "kill") {
+          const killDescriptor = {
+            ...(optional.kill as Record<string, unknown>),
+            quantity: "all" as const,
+          };
+          const sacrificeOptions = resolveTarget(
+            killDescriptor as Parameters<typeof resolveTarget>[0],
+            {
+              cards: context.cards as Parameters<typeof resolveTarget>[1]["cards"],
+              draft: state,
+              playerId: context.playerId as string,
+              sourceCardId: cardId as string,
+              zones: context.zones,
+            },
+          );
+          for (const sacrificeId of sacrificeOptions) {
+            results.push({
+              cardId: cardId as string,
+              location: "base",
+              paidAdditionalCost: true,
+              playerId: context.playerId as string,
+              sacrificeId,
+            });
+          }
+        }
       }
       return results;
     },
     reducer: (draft, context) => {
-      const { cardId, playerId, location } = context.params;
+      const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId } =
+        context.params;
       const { zones, counters } = context;
 
       deductCost(draft, playerId, cardId, {}, createMetaAccessor(context.cards));
+
+      // Rule 560: optional additional cost — deduct extra energy/power and/or
+      // trash the chosen sacrifice before the unit enters play.
+      let paidAccelerate = false;
+      if (paidAdditionalCost) {
+        const pool = draft.runePools[playerId];
+        if (pool && additionalCostSpec) {
+          pool.energy = Math.max(0, pool.energy - (additionalCostSpec.energy ?? 0));
+          for (const domain of additionalCostSpec.power ?? []) {
+            const key = domain as keyof typeof pool.power;
+            pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
+          }
+        }
+        if (sacrificeId) {
+          zones.moveCard({
+            cardId: sacrificeId as CoreCardId,
+            targetZoneId: "trash" as CoreZoneId,
+          });
+        }
+        paidAccelerate = getOptionalPlayCost(cardId)?.kind === "accelerate";
+      }
 
       zones.moveCard({
         cardId: cardId as CoreCardId,
@@ -544,8 +703,14 @@ export const cardPlayMoves: Partial<
       });
 
       // Rule 143.4: units enter exhausted unless a static "I enter ready"
-      // effect (enter-ready) says otherwise (e.g. Eager Drakehound sfd-006-221).
-      if (!hasStaticEffect(cardId, "enter-ready")) {
+      // effect (enter-ready) says otherwise (e.g. Eager Drakehound sfd-006-221),
+      // Accelerate was paid (rule 717), or a runtime `enters-ready` replacement
+      // (rule 571 — Sun Disc ogn-021-298) applies.
+      const entersReady =
+        hasStaticEffect(cardId, "enter-ready") ||
+        paidAccelerate ||
+        consumeEntersReadyReplacement(draft, playerId);
+      if (!entersReady) {
         counters.setFlag(cardId as CoreCardId, "exhausted", true);
       }
 
@@ -553,11 +718,8 @@ export const cardPlayMoves: Partial<
       // Rule-724 counter, so a Legion trigger on this card itself cannot
       // Satisfy its own condition — it must observe the count of cards
       // That were played EARLIER in this turn.
-      // paidAdditionalCost is false until optional-cost enumeration is wired
-      // into playUnit — this blocks paid-additional-cost payoffs from firing
-      // for free (Zaun Punk sfd-160-221).
       fireTriggers(
-        { cardId, paidAdditionalCost: false, playerId, type: "play-self" },
+        { cardId, paidAdditionalCost: paidAdditionalCost === true, playerId, type: "play-self" },
         { cards: context.cards, counters, draft, zones },
       );
       fireTriggers(
@@ -1295,7 +1457,10 @@ export const cardPlayMoves: Partial<
             targetZoneId: location as CoreZoneId,
           });
 
-          if (!hasStaticEffect(championId as string, "enter-ready")) {
+          const entersReady =
+            hasStaticEffect(championId as string, "enter-ready") ||
+            consumeEntersReadyReplacement(draft, playerId);
+          if (!entersReady) {
             counters.setFlag(championId, "exhausted", true);
           }
         }

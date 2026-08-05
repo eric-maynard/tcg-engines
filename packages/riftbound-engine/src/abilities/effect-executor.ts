@@ -892,10 +892,15 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       for (let i = 0; i < count; i++) {
         const tokenId = `token-${tokenDef.name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}-${i}`;
         ctx.createCardInZone(tokenId, targetZone, ctx.playerId);
+        // `effect` (and thus `tokenDef`) reaches here via the chain-state
+        // Draft when resolving from passChainPriority, so any nested array
+        // Is an immer proxy that will be revoked after this reducer's
+        // Produce() returns. Copy arrays before storing them in the
+        // Long-lived registry so later hasKeyword() reads don't throw.
         registry.register(tokenId, {
           cardType: tokenDef.type === "gear" ? "gear" : "unit",
           id: tokenId,
-          keywords: tokenDef.keywords,
+          keywords: tokenDef.keywords ? [...tokenDef.keywords] : undefined,
           might: tokenDef.might,
           name: tokenDef.name,
         });

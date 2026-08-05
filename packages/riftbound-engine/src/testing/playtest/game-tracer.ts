@@ -118,7 +118,7 @@ function pickWeighted(moves: any[], rand: () => number) {
 /** Who should act next: pendingChoice prompter > chain priority holder > showdown focus holder > turn player. */
 function actingPlayer(s: RiftboundGameState): string {
   const pc: any = (s as any).pendingChoice;
-  if (pc?.prompter) return pc.prompter;
+  if (pc?.playerId ?? pc?.prompter) return pc.playerId ?? pc.prompter;
   const ia: any = (s as any).interaction;
   if (ia?.chain?.active && ia.chain.activePlayer) return ia.chain.activePlayer;
   const sd = ia?.showdownStack?.[ia.showdownStack.length - 1];
@@ -175,10 +175,13 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
             ? { moveId: "passShowdownFocus", params: { playerId: active } }
             : { moveId: "endTurn", params: { playerId: active } };
     }
-    const result = engine.executeMove(chosen.moveId, {
-      params: (chosen.params ?? {}) as any,
-      playerId: active,
-    });
+    const result =
+      chosen.moveId === "endTurn"
+        ? advanceTurn(engine, ["player-1", "player-2"])
+        : engine.executeMove(chosen.moveId, {
+            params: (chosen.params ?? {}) as any,
+            playerId: active,
+          });
 
     // Hard invariant: a play* move must have deducted at least its cost.
     // Catches the class where enumerator/condition credit resources the reducer
@@ -229,9 +232,6 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
 
     if ((result as any)?.success) {
       consecFail = 0;
-      if (chosen.moveId === "endTurn") {
-        advanceTurn(engine, ["player-1", "player-2"]);
-      }
     } else if (++consecFail > 5) {
       appendFileSync(
         traceFile,

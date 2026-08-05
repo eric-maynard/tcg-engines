@@ -155,8 +155,25 @@ export interface RiftboundMoves {
   // Card Play Moves
   // ============================================
 
-  /** Play unit to Base or Battlefield */
-  playUnit: { playerId: PlayerId; cardId: CardId; location: LocationId };
+  /**
+   * Play unit to Base or Battlefield.
+   *
+   * `paidAdditionalCost` is `true` when the player elects to pay an
+   * optional additional cost declared on the card (Accelerate — rule 717,
+   * or "you may kill a friendly X as an additional cost to play me").
+   * When set, `additionalCostSpec` carries the extra energy/power to
+   * deduct and/or `sacrificeId` names the friendly permanent to trash as
+   * part of paying the cost. All three are optional — omitting them plays
+   * the unit without paying its optional cost.
+   */
+  playUnit: {
+    playerId: PlayerId;
+    cardId: CardId;
+    location: LocationId;
+    paidAdditionalCost?: boolean;
+    additionalCostSpec?: { energy?: number; power?: readonly string[] };
+    sacrificeId?: CardId;
+  };
 
   /**
    * Play gear to Base.

@@ -356,84 +356,57 @@ export function createPlayableGame(
     };
   }
 
-  // Transition to playing (mirrors server.ts finalizePregame — applyPatches, not transitionToPlay)
+  // Transition to playing via the engine's transitionToPlay move so the
+  // FlowManager leaves the `setup` segment and enters `mainGame` (mirrors
+  // Server.ts finalizePregame). The flow then cascades awaken → beginning →
+  // Channel (2 runes) → draw (1 card) → main for P1 on its own.
   engine.applyPatches([
-    { op: "replace", path: ["status"], value: "playing" },
-    { op: "replace", path: ["turn", "activePlayer"], value: P1 },
-    { op: "replace", path: ["turn", "phase"], value: "main" },
-    { op: "replace", path: ["turn", "number"], value: 1 },
+    { op: "replace", path: ["setup", "firstPlayer"], value: P1 },
+    { op: "replace", path: ["setup", "secondPlayer"], value: P2 },
   ]);
-  engine.executeMove("channelRunes", {
-    params: { count: 2, directed: true, playerId: P1 },
-    playerId: P1 as PlayerId,
-  });
-  engine.executeMove("drawCard", {
-    params: { count: 1, playerId: P1 },
-    playerId: P1 as PlayerId,
-  });
+  engine.executeMove("transitionToPlay", { params: {}, playerId: P1 as PlayerId });
 
   return { engine, instanceIds };
 }
 
 /**
- * Drive end-of-turn → start-of-next-turn manually. Mirrors
- * apps/riftbound-app/server.ts preparePlayerRotation + finalizeEndTurn,
- * because the engine's flow manager does not reliably cascade phases when
- * the game was set up via applyPatches.
+ * Drive end-of-turn → start-of-next-turn. Mirrors server.ts
+ * preparePlayerRotation + executeMove("endTurn") + finalizeEndTurn: the
+ * FlowManager cascades main → ending → cleanup → awaken → beginning →
+ * channel → draw → main on its own once the next player is set.
  *
- * Call this immediately after a successful `endTurn` executeMove.
+ * Call this INSTEAD of executing `endTurn` directly.
  */
-export function advanceTurn(engine: Engine, players: readonly string[]): string {
+export function advanceTurn(
+  engine: Engine,
+  players: readonly string[],
+): { next: string; success: boolean; error?: string } {
   const s = engine.getState();
   const cur = s.turn.activePlayer;
   const idx = players.indexOf(cur);
   const next = players[(idx + 1) % players.length];
 
+  // The flow's onBegin callbacks (awaken/channel/draw) read getCurrentPlayer(),
+  // So the next player must be set BEFORE endTurn cascades them.
   engine.getFlowManager()?.setCurrentPlayer(next as PlayerId);
 
-  // Rule 517.2.c: empty rune pools at end of turn
-  for (const pid of players) {
-    engine.executeMove("emptyRunePool", {
-      params: { directed: true, playerId: pid },
-      playerId: pid as PlayerId,
-    });
+  const result = engine.executeMove("endTurn", {
+    params: { playerId: cur },
+    playerId: cur as PlayerId,
+  }) as { success?: boolean; error?: string };
+
+  if (result?.success === false) {
+    engine.getFlowManager()?.setCurrentPlayer(cur as PlayerId);
+    return { error: result.error, next, success: false };
   }
 
-  const turnNo = (s.turn as { number?: number }).number ?? 1;
-  engine.applyPatches([
-    { op: "replace", path: ["turn", "number"], value: turnNo + 1 },
-    { op: "replace", path: ["turn", "activePlayer"], value: next },
-    { op: "replace", path: ["turn", "phase"], value: "main" },
-    { op: "replace", path: ["conqueredThisTurn", next], value: [] },
-    { op: "replace", path: ["scoredThisTurn", next], value: [] },
-  ]);
-
-  // Rule 515.1 Awaken
-  engine.executeMove("readyAll", { params: { playerId: next }, playerId: next as PlayerId });
-
-  // Rule 515.2.b Hold scoring
-  const s2 = engine.getState();
-  for (const [bfId, bf] of Object.entries(s2.battlefields ?? {})) {
-    if ((bf as { controller?: string }).controller === next) {
-      engine.executeMove("scorePoint", {
-        params: { battlefieldId: bfId, method: "hold", playerId: next },
-        playerId: next as PlayerId,
-      });
-    }
+  const after = engine.getState();
+  if (after.turn.activePlayer !== next || after.turn.phase !== "main") {
+    engine.applyPatches([
+      { op: "replace", path: ["turn", "activePlayer"], value: next },
+      { op: "replace", path: ["turn", "phase"], value: "main" },
+    ]);
   }
 
-  // Rule 515.3 Channel (with 644.7 catch-up)
-  const isFirstTurnForNext = turnNo + 1 === players.indexOf(next) + 1;
-  engine.executeMove("channelRunes", {
-    params: { count: isFirstTurnForNext ? 3 : 2, directed: true, playerId: next },
-    playerId: next as PlayerId,
-  });
-
-  // Rule 515.4.b Draw
-  engine.executeMove("drawCard", {
-    params: { count: 1, playerId: next },
-    playerId: next as PlayerId,
-  });
-
-  return next;
+  return { next, success: true };
 }

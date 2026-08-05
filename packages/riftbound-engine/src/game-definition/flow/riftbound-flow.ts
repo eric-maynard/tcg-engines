@@ -188,38 +188,31 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 phase: "awaken",
               };
 
-              // Ready ALL game objects controlled by the turn player (rule 515.1)
+              // Ready ALL game objects controlled by the turn player (rule 515.1).
+              // Exhausted is written via counters.setFlag → cardMeta.__flags.exhausted at
+              // Runtime, but test helpers seed the top-level meta.exhausted; treat either
+              // As exhausted and clear both. queryCards scans every cardMeta so this
+              // Covers base, battlefields, and runePool in one pass.
               const playerId = context.getCurrentPlayer();
-
-              // Collect cards from base
-              const baseCards = context.zones.getCardsInZone(
-                "base" as CoreZoneId,
-                playerId as CorePlayerId,
-              );
-
-              // Collect cards from all battlefields
-              const bfCards: CoreCardId[] = [];
-              for (const bfId of Object.keys(context.state.battlefields)) {
-                const cards = context.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
-                for (const cardId of cards) {
-                  const owner = context.cards.getCardOwner?.(cardId);
-                  if (owner === playerId) {
-                    bfCards.push(cardId);
-                  }
-                }
-              }
-
-              // Ready all exhausted cards
               const triggerCtx = buildFlowTriggerContext(context);
-              for (const cardId of [...baseCards, ...bfCards]) {
-                const meta = context.cards.getCardMeta(cardId);
-                if (meta?.exhausted) {
-                  context.cards.updateCardMeta(cardId, { exhausted: false });
-                  fireTriggers(
-                    { cardId: cardId as string, playerId: playerId as string, type: "ready" },
-                    triggerCtx,
-                  );
+              type Flagged = { __flags?: Record<string, boolean>; exhausted?: boolean };
+              const exhausted = context.cards.queryCards((_id, meta) => {
+                const m = meta as Flagged;
+                return m.__flags?.exhausted === true || m.exhausted === true;
+              });
+              for (const cardId of exhausted) {
+                if (context.cards.getCardOwner?.(cardId) !== playerId) {
+                  continue;
                 }
+                const meta = context.cards.getCardMeta(cardId) as Flagged;
+                context.cards.updateCardMeta(cardId, {
+                  __flags: { ...(meta.__flags ?? {}), exhausted: false },
+                  exhausted: false,
+                } as Partial<RiftboundCardMeta>);
+                fireTriggers(
+                  { cardId: cardId as string, playerId: playerId as string, type: "ready" },
+                  triggerCtx,
+                );
               }
             },
 
