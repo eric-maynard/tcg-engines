@@ -1067,6 +1067,37 @@ function renderActions() {
             ${paramStr ? `<div class="action-detail">${esc(paramStr)}</div>` : ""}
           </button>
         `;
+      } else if (moveId === "playUnit" || moveId === "playFromChampionZone") {
+        // Group by cardId — a card with ≥2 variants (base vs Accelerate /
+        // sacrifice) opens the play-cost choice modal instead of listing
+        // near-identical sub-buttons.
+        const byCard = {};
+        for (const m of moves) {
+          const key = m.params?.cardId ?? "__champion";
+          (byCard[key] ??= []).push(m);
+        }
+        for (const [cid, variants] of Object.entries(byCard)) {
+          const card = cid === "__champion" ? null : findCard(cid);
+          const name = card?.name ?? (cid === "__champion" ? "Champion" : cid);
+          const highlighted = interaction.sourceCardId === cid;
+          if (variants.length === 1) {
+            const m = variants[0];
+            const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
+            html += `
+              <button class="action-btn ${highlighted ? "highlighted" : ""}"
+                      onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+                ${esc(label)}
+                ${paramStr ? `<div class="action-detail">${esc(paramStr)}</div>` : ""}
+              </button>`;
+          } else {
+            html += `
+              <button class="action-btn ${highlighted ? "highlighted" : ""}"
+                      onclick='openPlayCostModal(${JSON.stringify(cid)})'>
+                Play ${esc(name)}
+                <div class="action-detail">${variants.length} cost options…</div>
+              </button>`;
+          }
+        }
       } else if (moveId === "exhaustRune" || moveId === "recycleRune") {
         // Group rune moves by domain so we don't list 11+ individual runes
         const byDomain = {};
@@ -1372,26 +1403,37 @@ function requestRedo() {
   ws.send(JSON.stringify({ type: "redo" }));
 }
 
-// Pending Choice Modal
+// Choice Modals — shared Arena-style overlay for pending choices and
+// optional-cost play prompts.
 
-function renderPendingChoiceModal() {
-  let overlay = document.getElementById("pendingChoiceOverlay");
-  const pending = gameState?.pendingChoice;
-  const mine = pending && (pending.prompter ?? pending.playerId) === viewingPlayer;
-
-  if (!pending || !mine) {
-    if (overlay) overlay.classList.remove("visible");
-    return;
-  }
-
+function ensureChoiceOverlay() {
+  let overlay = document.getElementById("choiceOverlay");
   if (!overlay) {
     overlay = document.createElement("div");
-    overlay.id = "pendingChoiceOverlay";
+    overlay.id = "choiceOverlay";
     overlay.className = "chain-overlay";
-    overlay.innerHTML = '<div class="chain-box" id="pendingChoiceBox"></div>';
+    overlay.innerHTML = '<div class="chain-box choice-modal" id="choiceBox"></div>';
     document.body.appendChild(overlay);
   }
-  const box = document.getElementById("pendingChoiceBox");
+  return { overlay, box: document.getElementById("choiceBox") };
+}
+
+function closeChoiceModal() {
+  const overlay = document.getElementById("choiceOverlay");
+  if (overlay) overlay.classList.remove("visible");
+}
+
+function renderPendingChoiceModal() {
+  const pending = gameState?.pendingChoice;
+  const mine = pending && (pending.prompter ?? pending.playerId) === viewingPlayer;
+  const { overlay, box } = ensureChoiceOverlay();
+
+  if (!pending || !mine) {
+    // Don't stomp a play-cost modal that's currently open.
+    if (overlay.dataset.mode === "pending") closeChoiceModal();
+    return;
+  }
+  overlay.dataset.mode = "pending";
 
   const title = pending.onPicked === "discard" ? "Discard a card"
     : pending.onPicked === "banish" ? "Banish a card"
@@ -1406,25 +1448,93 @@ function renderPendingChoiceModal() {
   html += `<div class="chain-subtitle">Play is paused until you choose</div>`;
 
   const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
-  html += `<div class="pending-choice-cards" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:12px 0;max-width:640px;">`;
-  for (const m of picks) {
-    const cid = m.params?.pickedCardId;
-    const params = JSON.stringify(m.params).replace(/'/g, "\\'");
-    const player = JSON.stringify(m.playerId).replace(/'/g, "\\'");
-    if (cid) {
+  const cardPicks = picks.filter(m => m.params?.pickedCardId);
+  const otherPicks = picks.filter(m => !m.params?.pickedCardId);
+
+  if (cardPicks.length) {
+    html += `<div class="choice-modal-cards">`;
+    for (const m of cardPicks) {
+      const cid = m.params.pickedCardId;
       const card = findCard(cid);
       const imgId = (card?.definitionId ?? cid).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
-      html += `<img class="card-img pending-choice-card" src="/card-image/${esc(imgId)}"
+      const params = JSON.stringify(m.params).replace(/'/g, "\\'");
+      const player = JSON.stringify(m.playerId).replace(/'/g, "\\'");
+      html += `<img class="choice-modal-card" src="/card-image/${esc(imgId)}"
         alt="${esc(card?.name ?? cid)}" title="${esc(card?.name ?? cid)}"
-        style="width:110px;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4);"
         onclick='executeMove("resolvePendingChoice", ${params}, ${player})'>`;
-    } else {
+    }
+    html += `</div>`;
+  }
+  if (otherPicks.length) {
+    html += `<div class="choice-modal-btns">`;
+    for (const m of otherPicks) {
       const label = m.params?.pickedZoneId ?? m.params?.pickedName ?? "—";
-      html += `<button class="action-btn highlighted"
+      const params = JSON.stringify(m.params).replace(/'/g, "\\'");
+      const player = JSON.stringify(m.playerId).replace(/'/g, "\\'");
+      html += `<button class="choice-modal-btn"
         onclick='executeMove("resolvePendingChoice", ${params}, ${player})'>${esc(String(label))}</button>`;
     }
+    html += `</div>`;
+  }
+
+  box.innerHTML = html;
+  overlay.classList.add("visible");
+}
+
+/** Build a human label for one play-variant of a card. */
+function describePlayVariant(m, card) {
+  const baseCost = card?.energyCost ?? 0;
+  if (!m.params?.paidAdditionalCost) {
+    return { label: "Play", detail: `${baseCost} energy` };
+  }
+  const spec = m.params.additionalCostSpec;
+  if (m.params.sacrificeId) {
+    const sac = findCard(m.params.sacrificeId);
+    return {
+      label: `Play + sacrifice ${sac?.name ?? m.params.sacrificeId}`,
+      detail: `${baseCost} energy — kill ${sac?.name ?? "a permanent"} as an additional cost`,
+    };
+  }
+  const parts = [];
+  if (spec?.energy) parts.push(`${spec.energy} energy`);
+  if (spec?.power?.length) parts.push(spec.power.join(" + "));
+  const extra = parts.length ? parts.join(" + ") : "additional cost";
+  return {
+    label: `Play + Accelerate`,
+    detail: `${baseCost} + ${extra} — enters ready`,
+  };
+}
+
+/**
+ * Open the Arena-style play-cost modal for a card that has ≥2 play variants
+ * (base vs paidAdditionalCost / sacrifice).
+ */
+function openPlayCostModal(cardId) {
+  const variants = availableMoves.filter(m =>
+    (m.moveId === "playUnit" || m.moveId === "playFromChampionZone") &&
+    (m.params?.cardId === cardId || (m.moveId === "playFromChampionZone" && !m.params?.cardId)),
+  );
+  if (variants.length === 0) return;
+  const card = findCard(cardId);
+  const { overlay, box } = ensureChoiceOverlay();
+  overlay.dataset.mode = "playCost";
+
+  const imgId = (card?.definitionId ?? cardId).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
+  let html = `<div class="chain-title">Play ${esc(card?.name ?? cardId)}</div>`;
+  html += `<div class="chain-subtitle">Choose how to pay</div>`;
+  html += `<div class="choice-modal-cards"><img class="choice-modal-card" style="margin:0" src="/card-image/${esc(imgId)}" alt=""></div>`;
+  html += `<div class="choice-modal-btns">`;
+  for (const m of variants) {
+    const { label, detail } = describePlayVariant(m, card);
+    const params = JSON.stringify(m.params).replace(/'/g, "\\'");
+    const player = JSON.stringify(m.playerId).replace(/'/g, "\\'");
+    html += `<button class="choice-modal-btn"
+      onclick='closeChoiceModal(); executeMove(${JSON.stringify(m.moveId)}, ${params}, ${player})'>
+      ${esc(label)}<small>${esc(detail)}</small>
+    </button>`;
   }
   html += `</div>`;
+  html += `<button class="choice-modal-cancel" onclick="closeChoiceModal()">Cancel</button>`;
 
   box.innerHTML = html;
   overlay.classList.add("visible");

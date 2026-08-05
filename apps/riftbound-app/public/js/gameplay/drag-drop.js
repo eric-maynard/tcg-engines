@@ -78,6 +78,15 @@ function getDragContext(cardId, zone) {
       action = "playCardAuto";
       validTargets = ["player-base"];
     }
+  } else if (zone === "championZone") {
+    matchingMoves = availableMoves.filter(m => m.moveId === "playFromChampionZone");
+    if (matchingMoves.length > 0) {
+      action = "playChampion";
+      validTargets = ["player-base"];
+      for (const bfId of Object.keys(gameState?.battlefields ?? {})) {
+        validTargets.push(bfId);
+      }
+    }
   } else if (zone === "base") {
     matchingMoves = availableMoves.filter(m =>
       m.moveId === "standardMove" &&
@@ -237,7 +246,8 @@ document.addEventListener("pointermove", (e) => {
     const isValidZone = dropZone && (
       dragState.validTargets.includes(dropZone) ||
       (dragState.action === "playCard" && dropZone === "player-base") ||
-      (dragState.action === "playCardAuto" && dropZone === "player-base")
+      (dragState.action === "playCardAuto" && dropZone === "player-base") ||
+      (dragState.action === "playChampion" && dropZone === "player-base")
     );
 
     // For equipment drag-onto-unit: allow dropping on a friendly unit card too.
@@ -281,13 +291,21 @@ document.addEventListener("pointerup", (e) => {
     const isValid = dropZone && (
       dragState.validTargets.includes(dropZone) ||
       (dragState.action === "playCard" && dropZone === "player-base") ||
-      (dragState.action === "playCardAuto" && dropZone === "player-base")
+      (dragState.action === "playCardAuto" && dropZone === "player-base") ||
+      (dragState.action === "playChampion" && dropZone === "player-base")
     );
 
     if (isValid) {
       // Find the matching move and execute it
       let move = null;
-      if ((dragState.action === "playCard" || dragState.action === "playCardAuto") && dropZone === "player-base") {
+      if (dragState.action === "playChampion") {
+        const location = dropZone === "player-base" ? "base" : dropZone;
+        move = dragState.matchingMoves.find(m => m.params?.location === location) ?? {
+          moveId: "playFromChampionZone",
+          params: { playerId: viewingPlayer, location },
+          playerId: viewingPlayer,
+        };
+      } else if ((dragState.action === "playCard" || dragState.action === "playCardAuto") && dropZone === "player-base") {
         move = dragState.matchingMoves[0];
       } else {
         move = dragState.matchingMoves.find(m =>
