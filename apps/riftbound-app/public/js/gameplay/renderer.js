@@ -1453,31 +1453,39 @@ function renderPendingChoiceModal() {
 
   if (cardPicks.length) {
     html += `<div class="choice-modal-cards">`;
-    for (const m of cardPicks) {
-      const cid = m.params.pickedCardId;
+    for (let i = 0; i < cardPicks.length; i++) {
+      const cid = cardPicks[i].params.pickedCardId;
       const card = findCard(cid);
       const imgId = (card?.definitionId ?? cid).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
-      const params = JSON.stringify(m.params).replace(/'/g, "\\'");
-      const player = JSON.stringify(m.playerId).replace(/'/g, "\\'");
-      html += `<img class="choice-modal-card" src="/card-image/${esc(imgId)}"
-        alt="${esc(card?.name ?? cid)}" title="${esc(card?.name ?? cid)}"
-        onclick='executeMove("resolvePendingChoice", ${params}, ${player})'>`;
+      html += `<img class="choice-modal-card" data-pick-idx="${i}" src="/card-image/${esc(imgId)}"
+        alt="${esc(card?.name ?? cid)}" title="${esc(card?.name ?? cid)}">`;
     }
     html += `</div>`;
   }
   if (otherPicks.length) {
     html += `<div class="choice-modal-btns">`;
-    for (const m of otherPicks) {
-      const label = m.params?.pickedZoneId ?? m.params?.pickedName ?? "—";
-      const params = JSON.stringify(m.params).replace(/'/g, "\\'");
-      const player = JSON.stringify(m.playerId).replace(/'/g, "\\'");
-      html += `<button class="choice-modal-btn"
-        onclick='executeMove("resolvePendingChoice", ${params}, ${player})'>${esc(String(label))}</button>`;
+    for (let i = 0; i < otherPicks.length; i++) {
+      const label = otherPicks[i].params?.pickedZoneId ?? otherPicks[i].params?.pickedName ?? "—";
+      html += `<button class="choice-modal-btn" data-other-idx="${i}">${esc(String(label))}</button>`;
     }
     html += `</div>`;
   }
 
   box.innerHTML = html;
+  // Attach handlers via delegation instead of inline onclick — avoids
+  // interpolating server-derived params into an HTML attribute.
+  box.querySelectorAll(".choice-modal-card").forEach(el => {
+    el.addEventListener("click", () => {
+      const m = cardPicks[Number(el.dataset.pickIdx)];
+      if (m) executeMove("resolvePendingChoice", m.params, m.playerId);
+    });
+  });
+  box.querySelectorAll(".choice-modal-btn").forEach(el => {
+    el.addEventListener("click", () => {
+      const m = otherPicks[Number(el.dataset.otherIdx)];
+      if (m) executeMove("resolvePendingChoice", m.params, m.playerId);
+    });
+  });
   overlay.classList.add("visible");
 }
 

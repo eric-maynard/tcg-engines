@@ -15,9 +15,10 @@ const VIDEO = A.videoUrl ?? ''
 const FRAMES = A.frames ?? 60
 const LANE = A.lane ?? 23
 const BATCH = 6
-if (!VIDEO || !/^(https:\/\/(www\.)?(youtube\.com|youtu\.be)\/|\/[\w./-]+\.mp4$)/.test(VIDEO)) {
-  throw new Error('videoUrl must be a YouTube URL or a local .mp4 path')
+if (!VIDEO || !/^(https:\/\/(www\.)?(youtube\.com\/watch\?v=[\w-]{11}|youtu\.be\/[\w-]{11})([&?][\w=&%-]{0,200})?|\/[\w./-]{1,200}\.mp4)$/.test(VIDEO)) {
+  throw new Error('videoUrl must be a YouTube watch URL or a local .mp4 path')
 }
+if (!Number.isInteger(LANE) || LANE < 0 || LANE > 63) throw new Error('invalid lane')
 
 const OK = { type:'object', properties:{ok:{type:'boolean'},count:{type:'number'},dir:{type:'string'},notes:{type:'string'}}, required:['ok'] }
 const BEHAVIORS = { type:'object', properties:{behaviors:{type:'array',items:{type:'object',properties:{
