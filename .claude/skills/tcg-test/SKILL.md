@@ -15,7 +15,7 @@ One entry point for the three test harnesses. Each pass runs:
 
 - Devbox `emaynard-tcg` reachable; app supervisor running (`ssh emaynard-tcg 'cat /tmp/app.pid'`)
 - Port forward: `ssh -N -L 3000:localhost:3000 emaynard-tcg &` → `curl -sI http://localhost:3000/play` returns 200
-- 12 pw-repl lanes: `ls /tmp/pw-repl-*.sock | wc -l` should be ≥12; if not, in a tmux window: `cd /tmp/pwtest && for i in $(seq 0 11); do (bun pw-repl.ts --sock $i start > /tmp/pw-repl-$i.log 2>&1 &); done`
+- 24 pw-repl lanes: `ls /tmp/pw-repl-*.sock | wc -l` should be ≥24; if not, in a tmux window: `cd /tmp/pwtest && for i in $(seq 0 23); do (bun pw-repl.ts --sock $i start > /tmp/pw-repl-$i.log 2>&1 &); done`
 
 ## Run
 
@@ -35,6 +35,8 @@ Args (all optional):
 - `seed` — deterministic seed for tracer + monkey + card-pick shuffle
 - `cardIds` — override auto-pick with a specific list (e.g. re-test after fixes)
 - `rulings` — how many FAQ rulings to execute as live scenarios (default 0; 96 total available). Curated hard cases from riftboundfaq.com — interactions random play won't hit.
+- `autoFix` — apply top-N systemic fixes + sync + bounce before returning (default true). Set false to report-only.
+- `fixTopN` — how many systemic (engine/server layer) bugs to auto-fix per pass (default 4).
 
 ## Output
 

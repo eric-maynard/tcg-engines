@@ -12,7 +12,9 @@ export const meta = {
 const REPO = '/root/src/tcg/tcg-engines'
 const A = typeof args === 'string' ? JSON.parse(args) : (args ?? {})
 const N_CARDS = A.cards ?? 48
-const N_LANES = A.lanes ?? 12
+const N_LANES = A.lanes ?? 24
+const AUTO_FIX = A.autoFix ?? true
+const FIX_TOP_N = A.fixTopN ?? 4
 const MONKEY_ROUNDS = A.monkeyRounds ?? 1
 const SEED = A.seed ?? 'tcg-test'
 if (!/^[A-Za-z0-9_-]{1,64}$/.test(SEED)) throw new Error('invalid seed (must match ^[A-Za-z0-9_-]{1,64}$)')
@@ -60,6 +62,50 @@ const cardTest = cards.length
   ? await workflow({scriptPath: `${REPO}/.claude/workflows/riftbound-card-playtest.js`}, { cardIds: cards, lanes: N_LANES })
   : { tested:0, played:0, bugs:0, unique:0, confirmed:[], refuted:0, notPlayed:[] }
 
+// ───────────────────────── Auto-fix systemic bugs ─────────────────────────
+// Fix the top-N confirmed findings BEFORE returning so the next loop iteration
+// doesn't rediscover them. Card-specific fixes are batched separately.
+const FIX = { type:'object', properties:{applied:{type:'boolean'},files:{type:'array',items:{type:'string'}},notes:{type:'string'}}, required:['applied'] }
+const allConfirmed = [
+  ...(cardTest.confirmed||[]),
+  ...monkeyConfirmed,
+  ...(rulingsResult.diverges||[]).map(d=>({what:d.observed,layer:'engine',cards:[d.cardId],reason:d.expected,file:''})),
+]
+// Rank: engine/server layer first (systemic), then by cards.length (affects most)
+const systemic = allConfirmed
+  .filter(f => ['engine','server'].includes(f.layer||''))
+  .sort((a,b) => (b.cards?.length||1) - (a.cards?.length||1))
+  .slice(0, FIX_TOP_N)
+
+let fixResults = []
+if (AUTO_FIX && systemic.length) {
+  log(`auto-fixing top ${systemic.length} systemic bugs`)
+  fixResults = await parallel(systemic.map((f,i) => () =>
+    agent(
+`Repo: ${REPO}. Apply a surgical fix for this CONFIRMED bug from the tcg-test pass.
+
+**Bug** (${f.layer}, affects ${(f.cards||[]).length} card(s)): ${f.what}
+**Source**: ${f.file || '(see reason)'}
+**Reason**: ${f.reason}
+
+Read the source, make the minimal edit that brings behavior in line with the rules. Add a rule-id comment. Do NOT touch files another parallel fixer is likely editing — if the fix requires broad refactoring, note it and set applied=false.
+
+After editing, run \`bun test packages/riftbound-engine/src/__tests__/\` locally (or via ssh emaynard-tcg with dangerouslyDisableSandbox). If tests fail, revert and set applied=false.`,
+      { label:`fix ${i}: ${(f.file||f.what).slice(0,30)}`, phase:'Report', schema:FIX }
+    )
+  ))
+  const applied = fixResults.filter(r=>r?.applied).length
+  log(`${applied}/${systemic.length} fixes applied`)
+
+  // Sync + test + bounce so the next pass runs on fixed code
+  await agent(
+`Sync engine+cards+server to devbox, run tests, bounce app (dangerouslyDisableSandbox for ssh):
+  cd ${REPO} && rsync -a packages/ emaynard-tcg:/root/tcg/tcg-engines/packages/ --exclude node_modules && rsync -a apps/riftbound-app/server.ts emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/server.ts
+  ssh emaynard-tcg 'cd ~/tcg/tcg-engines && ~/.bun/bin/bun test packages/riftbound-engine/src/__tests__/ 2>&1 | tail -3 && kill $(cat /tmp/app.pid) 2>/dev/null; sleep 3'
+Return ok=true if tests show 0 fail.`,
+    { label:'sync+bounce', phase:'Report', schema:OK })
+}
+
 // ───────────────────────── Aggregate + update tracking ─────────────────────────
 phase('Report')
 await agent(
@@ -90,6 +136,11 @@ return {
   rulings: {
     total: rulingsResult.total, matches: rulingsResult.MATCHES,
     diverges: rulingsResult.DIVERGES, findings: rulingsResult.diverges,
+  },
+  autoFix: {
+    attempted: systemic.length,
+    applied: fixResults.filter(r=>r?.applied).length,
+    fixes: fixResults.map((r,i)=>({bug:systemic[i]?.what?.slice(0,80), applied:r?.applied, files:r?.files, notes:r?.notes})),
   },
   byLayer,
   totalConfirmed: (cardTest.confirmed||[]).length + monkeyConfirmed.length + (rulingsResult.DIVERGES||0),
