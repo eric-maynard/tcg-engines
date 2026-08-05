@@ -93,14 +93,21 @@ export function buildEffectContext(
     },
     counters: context.counters,
     createCardInZone: zonesWithCreate.createCardInZone
-      ? (cardId, zoneId, ownerId) =>
-          zonesWithCreate.createCardInZone?.({
+      ? (cardId, zoneId, ownerId) => {
+          // [invariant:no-console-errors] Ability-minted token instance ids
+          // (token-<slug>-<ts>-<n>) are not valid definitionIds — the image
+          // server only knows the shared token-def-<slug> ids used by the
+          // manual addToken path. Derive that shared id here so snapshots
+          // ship a resolvable definitionId instead of the instance id.
+          const slug = /^token-(.+)-\d+-\d+$/.exec(cardId)?.[1];
+          return zonesWithCreate.createCardInZone?.({
             cardId: cardId as CoreCardId,
             controllerId: ownerId as CorePlayerId,
-            definitionId: cardId,
+            definitionId: slug ? `token-def-${slug}` : cardId,
             ownerId: ownerId as CorePlayerId,
             zoneId: zoneId as CoreZoneId,
-          })
+          });
+        }
       : undefined,
     draft,
     fireTriggers: (event) => fireTriggers(event, triggerCtx),

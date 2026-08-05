@@ -1096,6 +1096,8 @@ function createGameFromDecks(
     // Create per-battlefield zones (dynamic zones for unit placement)
     for (const bfCardId of bfIds) {
       internal.zones[`battlefield-${bfCardId}`] = { cardIds: [], config: { faceDown: false, id: `battlefield-${bfCardId}`, name: `Battlefield ${bfCardId}`, ordered: false, visibility: "public" } };
+      // Rule 811.1.b: every battlefield has a facedown sub-zone for [Hidden] cards (rule 107.3.a).
+      internal.zones[`facedown-${bfCardId}`] = { cardIds: [], config: { faceDown: true, id: `facedown-${bfCardId}`, maxSize: 1, name: `Facedown at ${bfCardId}`, ordered: false, visibility: "private" } };
     }
   }
 
@@ -1182,6 +1184,8 @@ function finalizePregame(session: GameSession): void {
     // Create per-battlefield zones (dynamic zones for unit placement)
     for (const bfCardId of bfIds) {
       internal.zones[`battlefield-${bfCardId}`] = { cardIds: [], config: { faceDown: false, id: `battlefield-${bfCardId}`, name: `Battlefield ${bfCardId}`, ordered: false, visibility: "public" } };
+      // Rule 811.1.b: every battlefield has a facedown sub-zone for [Hidden] cards (rule 107.3.a).
+      internal.zones[`facedown-${bfCardId}`] = { cardIds: [], config: { faceDown: true, id: `facedown-${bfCardId}`, maxSize: 1, name: `Facedown at ${bfCardId}`, ordered: false, visibility: "private" } };
     }
   }
 

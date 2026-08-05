@@ -892,6 +892,10 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       for (let i = 0; i < count; i++) {
         const tokenId = `token-${tokenDef.name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}-${i}`;
         ctx.createCardInZone(tokenId, targetZone, ctx.playerId);
+        // Rule 143.4 / 185.2.d: token units enter play exhausted.
+        if (tokenDef.type !== "gear") {
+          ctx.counters.setFlag(tokenId as CoreCardId, "exhausted", true);
+        }
         // `effect` (and thus `tokenDef`) reaches here via the chain-state
         // Draft when resolving from passChainPriority, so any nested array
         // Is an immer proxy that will be revoked after this reducer's
@@ -1074,8 +1078,27 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "look": {
-      // Peek at top N cards of a zone — informational only, no state change needed
-      // In a full UI implementation this would show cards to the player
+      // Rule 435: "Look at the top N cards … [put/recycle/…]". Show a
+      // reveal-and-pick pending choice with the top-N options. The parser
+      // currently emits {type:"look", amount, from} and drops the pick/rest
+      // clauses; default to onPicked:"draw", onRest:"recycle" (Stacked Deck /
+      // Vision) until the parser threads those through.
+      const n = resolveAmount((effect as { amount?: unknown }).amount ?? 1, ctx);
+      const from = ((effect as { from?: string }).from ?? "deck") === "deck"
+        ? "mainDeck"
+        : (effect as { from?: string }).from!;
+      const deck = ctx.zones.getCardsInZone(from as CoreZoneId, ctx.playerId as CorePlayerId);
+      const topN = deck.slice(0, n).map((c) => c as string);
+      if (topN.length === 0) break;
+      ctx.draft.pendingChoice = {
+        onPicked: (effect as { onPicked?: string }).onPicked ?? "draw",
+        onRest: (effect as { onRest?: string }).onRest ?? "recycle",
+        options: topN,
+        playerId: ctx.playerId,
+        remaining: 1,
+        sourceCardId: ctx.sourceCardId,
+        type: "reveal-and-pick",
+      } as RiftboundGameState["pendingChoice"];
       break;
     }
 
