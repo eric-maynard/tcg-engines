@@ -3232,6 +3232,33 @@ function parseActivatedAbility(text: string): ActivatedAbility | undefined {
 }
 
 function parseActivatedAbilityInner(text: string): ActivatedAbility | undefined {
+  // "[Empower] COST" keyword-ability form (rules-text sugar for
+  // "COST: Empower me. Use only if not Empowered.") — e.g. Sandspinner
+  // (ven-001-166) "[Empower] [5]", Cog Cadet (ven-054-166) "[Empower] — [Exhaust]".
+  // Optionally followed by "This ability costs [N] less if COND." on the same line.
+  // Matches only the first line so multi-line rulesText (with a following
+  // [Empowered] static or a second activated ability) is left for the caller
+  // to split.
+  const empowerLine = text.split("\n")[0];
+  const empowerKwMatch = stripReminders(empowerLine).match(
+    /^\[Empower\]\s*(?:—|-)?\s*((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)|exhaust):\s*)+)\.?\s*(?:This ability costs :rb_energy_(\d+): less if ([^.]+)\.?)?\s*$/i,
+  );
+  if (empowerKwMatch) {
+    const cost = parseCost(empowerKwMatch[1].trim());
+    const ability = {
+      cost,
+      effect: { target: "self", type: "empower" } as unknown as Effect,
+      type: "activated",
+    } as ActivatedAbility;
+    if (empowerKwMatch[2]) {
+      (ability as unknown as { costModifier: unknown }).costModifier = {
+        condition: { text: empowerKwMatch[3]?.trim(), type: "raw" },
+        reduction: Number.parseInt(empowerKwMatch[2], 10),
+      };
+    }
+    return ability;
+  }
+
   // Compound: ":rb_energy_N::rb_rune_X:, Recycle <noun> from your trash, :rb_exhaust:: EFFECT"
   // Used by gear like Assembly Rig where the activation cost is energy + rune + recycle + exhaust.
   // Must run BEFORE the standard ACTIVATED_PATTERN because that pattern would otherwise

@@ -83,6 +83,7 @@ const EVENT_MAP: Record<string, string> = {
   "play-card": "play-card",
   "play-self": "play-self",
   "play-spell": "play-spell",
+  ready: "ready",
   "start-of-turn": "start-of-turn",
   stun: "stun",
   "take-damage": "take-damage",
@@ -149,8 +150,11 @@ function triggerMatchesEvent(
   card: CardWithAbilities,
   state?: TriggerMatcherState,
 ): boolean {
-  // Event type must match
-  if (trigger.event !== event.type) {
+  // Event type must match. Compound trigger events ("choose-or-ready",
+  // "play-self-or-play-gear") match if the fired event is any of the parts.
+  const mapped = EVENT_MAP[event.type] ?? event.type;
+  const triggerEvents = trigger.event.split("-or-");
+  if (!triggerEvents.includes(mapped)) {
     return false;
   }
 

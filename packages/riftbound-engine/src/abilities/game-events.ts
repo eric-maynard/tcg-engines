@@ -31,5 +31,6 @@ export type GameEvent =
   | { type: "grant-keyword"; cardId: string; keyword: string }
   | { type: "win-combat"; cardId: string; battlefieldId: string }
   | { type: "choose"; cardId: string; chooserId: string }
+  | { type: "ready"; cardId: string; playerId: string }
   | { type: "hide"; cardId: string; playerId: string }
   | { type: "gain-xp"; playerId: string; amount: number };

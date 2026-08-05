@@ -210,10 +210,15 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               }
 
               // Ready all exhausted cards
+              const triggerCtx = buildFlowTriggerContext(context);
               for (const cardId of [...baseCards, ...bfCards]) {
                 const meta = context.cards.getCardMeta(cardId);
                 if (meta?.exhausted) {
                   context.cards.updateCardMeta(cardId, { exhausted: false });
+                  fireTriggers(
+                    { cardId: cardId as string, playerId: playerId as string, type: "ready" },
+                    triggerCtx,
+                  );
                 }
               }
             },

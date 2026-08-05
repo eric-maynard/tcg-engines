@@ -487,12 +487,14 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
 
     case "ready": {
       const targets = getTargetIds(effect, ctx);
-      if (targets.length === 0) {
-        ctx.counters.setFlag(ctx.sourceCardId as CoreCardId, "exhausted", false);
-      } else {
-        for (const targetId of targets) {
-          ctx.counters.setFlag(targetId as CoreCardId, "exhausted", false);
-        }
+      const readied = targets.length === 0 ? [ctx.sourceCardId] : targets;
+      for (const targetId of readied) {
+        ctx.counters.setFlag(targetId as CoreCardId, "exhausted", false);
+        ctx.fireTriggers?.({
+          cardId: targetId,
+          playerId: ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId,
+          type: "ready",
+        });
       }
       break;
     }

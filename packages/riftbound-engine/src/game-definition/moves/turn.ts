@@ -6,6 +6,7 @@
  */
 
 import type { PlayerId as CorePlayerId, GameMoveDefinitions } from "@tcg/core";
+import { fireTriggers } from "../../abilities/trigger-runner";
 import { createInteractionState, getTurnState } from "../../chain";
 import {
   getActivePlayers,
@@ -188,7 +189,7 @@ export const turnMoves: Partial<
   readyAll: {
     condition: (state, context) =>
       state.status === "playing" && state.turn.activePlayer === context.params.playerId,
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { playerId } = context.params;
       const { counters } = context;
 
@@ -200,6 +201,10 @@ export const turnMoves: Partial<
         const owner = context.cards.getCardOwner(cardId);
         if ((owner as string) === playerId) {
           counters.setFlag(cardId, "exhausted", false);
+          fireTriggers(
+            { cardId: cardId as string, playerId, type: "ready" },
+            { cards: context.cards, counters, draft, zones: context.zones },
+          );
         }
       }
     },

@@ -69,6 +69,15 @@ export function buildEffectContext(
     };
   },
 ): EffectContext {
+  const zonesWithCreate = context.zones as typeof context.zones & {
+    createCardInZone?: (params: {
+      cardId: CoreCardId;
+      definitionId: string;
+      zoneId: CoreZoneId;
+      ownerId: CorePlayerId;
+      controllerId?: CorePlayerId;
+    }) => void;
+  };
   const triggerCtx = {
     cards: context.cards,
     counters: context.counters,
@@ -82,6 +91,16 @@ export function buildEffectContext(
       updateCardMeta: context.cards.updateCardMeta as EffectContext["cards"]["updateCardMeta"],
     },
     counters: context.counters,
+    createCardInZone: zonesWithCreate.createCardInZone
+      ? (cardId, zoneId, ownerId) =>
+          zonesWithCreate.createCardInZone?.({
+            cardId: cardId as CoreCardId,
+            controllerId: ownerId as CorePlayerId,
+            definitionId: cardId,
+            ownerId: ownerId as CorePlayerId,
+            zoneId: zoneId as CoreZoneId,
+          })
+      : undefined,
     draft,
     fireTriggers: (event) => fireTriggers(event, triggerCtx),
     playerId,
@@ -89,6 +108,36 @@ export function buildEffectContext(
     sourceZone: context.zones.getCardZone(sourceCardId as CoreCardId) as string | undefined,
     zones: context.zones,
   };
+}
+
+/**
+ * Rule 135.2.e.5.a: a [rainbow] Power cost may be paid with Power of any
+ * Domain. Return true if the pool can cover the given per-domain need,
+ * treating "rainbow" as consuming from whichever domain has the most left.
+ */
+function canAffordPower(
+  pool: Partial<Record<string, number>>,
+  needed: Record<string, number>,
+): boolean {
+  const remaining: Record<string, number> = {};
+  for (const [d, v] of Object.entries(pool)) {
+    if (typeof v === "number" && v > 0) {
+      remaining[d] = v;
+    }
+  }
+  let rainbowNeed = 0;
+  for (const [d, count] of Object.entries(needed)) {
+    if (d === "rainbow") {
+      rainbowNeed += count;
+      continue;
+    }
+    if ((remaining[d] ?? 0) < count) {
+      return false;
+    }
+    remaining[d] -= count;
+  }
+  const leftover = Object.values(remaining).reduce((a, b) => a + b, 0);
+  return leftover >= rainbowNeed;
 }
 
 /**
@@ -176,6 +225,14 @@ function executeResolvedItem(
     ...(_variables ? { variables: _variables } : {}),
     ...(boundTargets ? { boundTargets } : {}),
   };
+  // Rule 359.2: "when you choose me" triggers fire when a spell/ability's
+  // controller picks a card as a target.
+  if (boundTargets && boundTargets.length > 0) {
+    const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+    for (const targetId of boundTargets) {
+      fireTriggers({ cardId: targetId, chooserId: resolved.controller, type: "choose" }, trigCtx);
+    }
+  }
   executeEffect(effect, effectCtx);
 
   // Rule 419.4.a: abilities that trigger on playing a card fire when that
@@ -411,8 +468,16 @@ function deductAbilityCost(
   const powerCost = cost.power as string[] | undefined;
   if (powerCost) {
     for (const domain of powerCost) {
-      const key = domain as keyof typeof pool.power;
-      pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
+      // Rule 135.2.e.5.a: [rainbow] costs are paid with any Domain's Power.
+      const key =
+        domain === "rainbow"
+          ? (Object.entries(pool.power).sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0] as
+              | keyof typeof pool.power
+              | undefined)
+          : (domain as keyof typeof pool.power);
+      if (key !== undefined) {
+        pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
+      }
     }
   }
 }
@@ -624,10 +689,21 @@ export const chainMoves: Partial<
           for (const d of powerCost) {
             needed[d] = (needed[d] ?? 0) + 1;
           }
-          for (const [d, count] of Object.entries(needed)) {
-            if ((pool.power[d as keyof typeof pool.power] ?? 0) < count) {
-              return false;
-            }
+          if (!canAffordPower(pool.power, needed)) {
+            return false;
+          }
+        }
+
+        // "Spend N XP" costs (rule 728) require the host card to have ≥N XP
+        // counters at activation time.
+        const xpCost = cost.xp as number | undefined;
+        if (xpCost && xpCost > 0) {
+          const {getCounter} = (
+            context.counters as { getCounter?: (c: CoreCardId, t: string) => number }
+          );
+          const have = getCounter ? getCounter(cardId as CoreCardId, "xp") : 0;
+          if (have < xpCost) {
+            return false;
           }
         }
 
@@ -769,14 +845,20 @@ export const chainMoves: Partial<
               for (const d of powerCost) {
                 needed[d] = (needed[d] ?? 0) + 1;
               }
-              let affordable = true;
-              for (const [d, count] of Object.entries(needed)) {
-                if ((pool.power[d as keyof typeof pool.power] ?? 0) < count) {
-                  affordable = false;
-                  break;
-                }
+              if (!canAffordPower(pool.power, needed)) {
+                continue;
               }
-              if (!affordable) {
+            }
+
+            const xpCost = cost.xp as number | undefined;
+            if (xpCost && xpCost > 0) {
+              const {getCounter} = (
+                context.counters as { getCounter?: (c: CoreCardId, t: string) => number }
+              );
+              const have = getCounter
+                ? getCounter(entry.hostCardId as CoreCardId, "xp")
+                : 0;
+              if (have < xpCost) {
                 continue;
               }
             }
@@ -870,6 +952,12 @@ export const chainMoves: Partial<
         // Source (Heimerdinger exhausts himself for an inherited ability).
         if (cost.exhaust) {
           context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
+        }
+
+        // Handle "Spend N XP" cost — remove N XP counters from the host card.
+        const xpCost = cost.xp as number | undefined;
+        if (xpCost && xpCost > 0) {
+          context.counters.removeCounter(cardId as CoreCardId, "xp", xpCost);
         }
 
         // Handle kill (sacrifice) cost — the chosen permanent is trashed as
