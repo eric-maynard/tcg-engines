@@ -1646,6 +1646,70 @@
       text-shadow: 0 1px 4px rgba(0,0,0,0.5);
       white-space: nowrap;
     }
+    /* "+1" energy marker rising from a rune on right-click quick-recycle */
+    @keyframes energy-float-rise {
+      0%   { opacity: 0; transform: translate(-50%, 0) scale(0.8); }
+      15%  { opacity: 1; transform: translate(-50%, -6px) scale(1.1); }
+      100% { opacity: 0; transform: translate(-50%, -46px) scale(1); }
+    }
+    .energy-float {
+      position: fixed;
+      transform: translate(-50%, 0);
+      pointer-events: none;
+      z-index: 6000;
+      font-size: 18px;
+      font-weight: 800;
+      color: #5a9fff;
+      text-shadow: 0 0 8px rgba(90,159,255,0.7), 0 1px 3px rgba(0,0,0,0.8);
+      animation: energy-float-rise 0.6s ease-out forwards;
+      white-space: nowrap;
+    }
+    .energy-float::before { content: "\26A1"; margin-right: 2px; font-size: 15px; }
+
+    /* Targeting mode: legal target cards glow gold; the rest of the board dims slightly */
+    .card.valid-target {
+      outline: 3px solid #ffd070;
+      outline-offset: 2px;
+      box-shadow: 0 0 18px 6px rgba(255,208,112,0.65);
+      cursor: crosshair;
+      animation: target-card-glow 1s ease-in-out infinite;
+      z-index: 50;
+    }
+    @keyframes target-card-glow {
+      0%, 100% { box-shadow: 0 0 12px 3px rgba(255,208,112,0.45); }
+      50%      { box-shadow: 0 0 24px 9px rgba(255,208,112,0.85); }
+    }
+    body.targeting-mode .card:not(.valid-target):not(.interaction-source) { filter: brightness(0.8); }
+    body.targeting-mode .card { cursor: not-allowed; }
+    body.targeting-mode .card.valid-target { cursor: crosshair; }
+    .target-banner {
+      position: fixed;
+      top: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9000;
+      padding: 8px 18px;
+      background: linear-gradient(135deg, #5a4010, #8a6020);
+      border: 2px solid #ffd070;
+      border-radius: 999px;
+      color: #fff4d8;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 4px 20px rgba(255,208,112,0.35);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .target-banner.visible { opacity: 1; }
+    /* Pending-choice prompts whose picks are board cards: let clicks through the backdrop */
+    .chain-overlay.targeting {
+      pointer-events: none;
+      background: rgba(5,3,15,0.25);
+      justify-content: flex-end;
+      padding-bottom: 24px;
+    }
+    .chain-overlay.targeting .chain-box { pointer-events: auto; }
+
     .resource-delta.energy { color: #5a9fff; }
     .resource-delta.fury { color: #e06060; }
     .resource-delta.calm { color: #60c0e0; }

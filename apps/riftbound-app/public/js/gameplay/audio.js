@@ -83,17 +83,9 @@ document.addEventListener("contextmenu", (e) => {
     const cardId = card.dataset.cardId;
     const zone = card.dataset.zone;
 
-    // Right-click on a rune = recycle it
+    // Right-click on a rune = recycle it (a ready rune is tapped for +1 first).
     if (zone === "runePool") {
-      const recycleMove = availableMoves.find(m =>
-        m.moveId === "recycleRune" && (m.params?.runeId === cardId || m.params?.cardId === cardId)
-      );
-      if (recycleMove) {
-        snapshotResources();
-        executeMove(recycleMove.moveId, recycleMove.params, recycleMove.playerId);
-      } else {
-        showToast("Cannot recycle this rune");
-      }
+      quickRecycleRune(cardId, card);
       return;
     }
 

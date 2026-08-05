@@ -1,16 +1,6 @@
 // interactions.js — Card interaction: selection, cost payment, action bar, target highlights
 
-// Dynamically load auto-pay.js if it is not already loaded. This avoids touching
-// gameplay.html while keeping the cost solver in its own file per the workstream spec.
-(function ensureAutoPayLoaded() {
-  if (typeof autoPayAndPlay === "function") return;
-  if (document.querySelector('script[data-module="auto-pay"]')) return;
-  const s = document.createElement("script");
-  s.src = "/js/gameplay/auto-pay.js";
-  s.setAttribute("data-module", "auto-pay");
-  // eslint-disable-next-line no-undef
-  document.head.appendChild(s);
-})();
+// DESIGN.md §Resource management: no auto-pay module is loaded.
 
 function switchPlayer(pid) {
   viewingPlayer = pid;
@@ -28,8 +18,27 @@ function onCardClick(cardId) {
     if (handleArmedCardClick(cardId)) return;
   }
 
-  // If we are in awaitTarget mode and the clicked card is a valid target, execute
-  // (this would be relevant for card-targeting in the future)
+  // Pending choose-target/choose-card: clicking a highlighted board card resolves it.
+  if (gameState?.pendingChoice) {
+    const pick = pendingChoicePickForCard(cardId);
+    if (pick) {
+      executeMove("resolvePendingChoice", pick.params, pick.playerId);
+      return;
+    }
+  }
+
+  // Targeting mode: clicking a legal target plays the pending move; anything else cancels.
+  if (isChoosingTarget()) {
+    const move = pickTargetedMove(interaction.pendingMoves, cardId);
+    if (move) {
+      executeMove(move.moveId, move.params, move.playerId);
+      cancelInteraction();
+    } else {
+      cancelInteraction();
+      showToast("Targeting cancelled");
+    }
+    return;
+  }
 
   // If in costPayment mode and clicking a rune, handle the rune action without leaving costPayment
   if (interaction.mode === "costPayment") {
@@ -151,6 +160,7 @@ function cancelInteraction() {
   };
   selectedCard = null;
   document.getElementById("actionBar").classList.add("hidden");
+  hideTargetBanner();
   clearValidTargetHighlights();
   clearRuneTappableHighlights();
   render();
@@ -160,6 +170,194 @@ function cancelInteraction() {
 function clearValidTargetHighlights() {
   document.querySelectorAll(".valid-target").forEach(el => el.classList.remove("valid-target"));
   document.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
+  document.body.classList.remove("targeting-mode");
+}
+
+// ---- Targeting mode -----------------------------------------------------------
+// The engine enumerates one move per legal target (params.targets[0] or
+// params.chosenTargetId). Rather than silently playing the first variant, the UI
+// enters awaitTarget/chooseTarget: legal targets glow, click picks, Esc cancels.
+
+/** The card a targeted move variant points at, or null for untargeted moves. */
+function moveTargetId(m) {
+  const t = m?.params?.targets;
+  if (Array.isArray(t) && t.length > 0) return t[0];
+  return m?.params?.chosenTargetId ?? null;
+}
+
+function isChoosingTarget() {
+  return interaction.mode === "awaitTarget" && interaction.action === "chooseTarget";
+}
+
+/** Among pending variants, pick the one for `targetId` (prefer base-cost, single-target). */
+function pickTargetedMove(moves, targetId) {
+  const matches = (moves || []).filter(m => moveTargetId(m) === targetId);
+  if (matches.length === 0) return null;
+  return matches.find(m => !m.params?.paidAdditionalCost && (m.params?.targets?.length ?? 1) === 1)
+    || matches[0];
+}
+
+/**
+ * If `moves` (all for one source card / ability) carry per-target variants, enter
+ * targeting mode and return true. Returns false when the caller should just play:
+ * no targeted variants, or the only target is the source card itself.
+ */
+function beginTargetingIfNeeded(moves, sourceCardId) {
+  const targeted = (moves || []).filter(m => moveTargetId(m));
+  if (targeted.length === 0) return false;
+  const targetIds = [...new Set(targeted.map(moveTargetId))];
+  if (targetIds.length === 1 && targetIds[0] === sourceCardId) return false;
+  enterAwaitTargetMode(targeted, sourceCardId);
+  return true;
+}
+
+/** Enter targeting for `moves`, or play immediately when no target choice is needed. */
+function beginTargetingOrPlay(moves, sourceCardId) {
+  if (!moves || moves.length === 0) return;
+  if (beginTargetingIfNeeded(moves, sourceCardId)) return;
+  const m = moves[0];
+  executeMove(m.moveId, m.params, m.playerId);
+  if (interaction.mode !== "idle") cancelInteraction();
+}
+
+function enterAwaitTargetMode(pendingMoves, sourceCardId) {
+  const targetIds = [...new Set(pendingMoves.map(moveTargetId))];
+  interaction = {
+    mode: "awaitTarget",
+    sourceCardId,
+    sourceZone: findCardZone(sourceCardId),
+    action: "chooseTarget",
+    validTargets: targetIds,
+    matchingMoves: pendingMoves,
+    pendingMoves,
+    pendingCardId: null,
+    pendingCardCost: 0,
+    enteredAt: performance.now(),
+  };
+  selectedCard = sourceCardId;
+  document.getElementById("actionBar")?.classList.add("hidden");
+  if (typeof closeZoom === "function") closeZoom();
+  render(); // re-applies .valid-target via applyValidTargetHighlights
+  const name = (findCard(sourceCardId)?.name || "this card").replace(/^player-[12]-/, "");
+  showTargetBanner(`Choose a target for ${name} — Esc to cancel`);
+}
+
+function showTargetBanner(text) {
+  let banner = document.getElementById("targetBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "targetBanner";
+    banner.className = "target-banner";
+    document.body.appendChild(banner);
+  }
+  banner.textContent = text;
+  banner.classList.add("visible");
+}
+
+function hideTargetBanner() {
+  document.getElementById("targetBanner")?.classList.remove("visible");
+}
+
+/** Highlight every board/hand card that is a legal target of the pending moves. */
+function applyChooseTargetHighlights() {
+  for (const id of interaction.validTargets || []) {
+    document.querySelectorAll(`[data-card-id="${CSS.escape(id)}"]`).forEach(el => el.classList.add("valid-target"));
+  }
+  document.body.classList.add("targeting-mode");
+}
+
+/** resolvePendingChoice move that picks `cardId`, if the viewer is the prompter. */
+function pendingChoicePickForCard(cardId) {
+  const pending = gameState?.pendingChoice;
+  if (!pending) return null;
+  if ((pending.prompter ?? pending.playerId) !== viewingPlayer) return null;
+  return availableMoves.find(m => m.moveId === "resolvePendingChoice" && m.params?.pickedCardId === cardId) || null;
+}
+
+/** Mirror the pending-choice modal's card picks onto the board as .valid-target glows. */
+function applyPendingChoiceHighlights() {
+  const pending = gameState?.pendingChoice;
+  if (!pending || (pending.prompter ?? pending.playerId) !== viewingPlayer) return;
+  for (const m of availableMoves) {
+    if (m.moveId !== "resolvePendingChoice" || !m.params?.pickedCardId) continue;
+    document.querySelectorAll(`[data-card-id="${CSS.escape(m.params.pickedCardId)}"]`)
+      .forEach(el => el.classList.add("valid-target"));
+  }
+}
+
+// Click on empty board space cancels targeting. Clicks that land on cards, the
+// sidebar action list, or a modal are handled by their own listeners.
+document.addEventListener("click", (e) => {
+  if (!isChoosingTarget()) return;
+  if (performance.now() - (interaction.enteredAt || 0) < 80) return;
+  if (e.target.closest("[data-card-id], #actionsList, #actionBar, .chain-overlay, .target-banner")) return;
+  cancelInteraction();
+});
+
+// Cards without a pointerdown handler (e.g. an opponent legend) still need to be
+// clickable as targets; route those through onCardClick here.
+document.addEventListener("click", (e) => {
+  if (!isChoosingTarget() && !gameState?.pendingChoice) return;
+  const el = e.target.closest("[data-card-id]");
+  if (!el || el.hasAttribute("onpointerdown")) return;
+  if (!el.classList.contains("valid-target")) return;
+  onCardClick(el.dataset.cardId);
+});
+
+// ---- Rune quick-recycle (right-click) ----------------------------------------------
+
+/** Float a "+1" energy marker up from `el` (appended to body so re-renders don't cut it). */
+function showEnergyFloat(el, text = "+1") {
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const f = document.createElement("div");
+  f.className = "energy-float";
+  f.textContent = text;
+  f.style.left = `${rect.left + rect.width / 2}px`;
+  f.style.top = `${rect.top + rect.height / 3}px`;
+  document.body.appendChild(f);
+  setTimeout(() => f.remove(), 700);
+}
+
+function findRuneMove(moveId, runeId) {
+  return availableMoves.find(m =>
+    m.moveId === moveId && (m.params?.runeId === runeId || m.params?.cardId === runeId)
+  );
+}
+
+/**
+ * Right-click a rune = recycle. A ready rune is auto-tapped first for +1 energy
+ * (strictly better than recycling it ready), then recycled once the exhaust lands.
+ */
+function quickRecycleRune(runeId, el) {
+  const exhaustMove = findRuneMove("exhaustRune", runeId);
+  if (!exhaustMove) {
+    const recycleMove = findRuneMove("recycleRune", runeId);
+    if (recycleMove) {
+      snapshotResources();
+      executeMove(recycleMove.moveId, recycleMove.params, recycleMove.playerId);
+    } else {
+      showToast("Cannot recycle this rune");
+    }
+    return;
+  }
+
+  snapshotResources();
+  executeMove(exhaustMove.moveId, exhaustMove.params, exhaustMove.playerId);
+  showEnergyFloat(el);
+
+  // Wait for the state frame where the rune is exhausted, then recycle it.
+  let tries = 0;
+  (function tryRecycle() {
+    const exhausted = findCard(runeId)?.meta?.exhausted === true;
+    const recycleMove = exhausted ? findRuneMove("recycleRune", runeId) : null;
+    if (recycleMove) {
+      snapshotResources();
+      executeMove(recycleMove.moveId, recycleMove.params, recycleMove.playerId);
+      return;
+    }
+    if (++tries <= 10) setTimeout(tryRecycle, 100);
+  })();
 }
 
 /** Enter selected mode for legend card — activate abilities */
@@ -253,21 +451,27 @@ function enterHandCardSelected(cardId) {
     m.params?.cardId === cardId
   );
 
-  // Single-click auto-play: if the card is already playable, skip the action bar and
-  // play it directly. This is the Workstream 7 click-to-play contract.
-  if (playMoves.length > 0 && typeof autoPayAndPlay === "function") {
-    autoPayAndPlay(cardId);
+  // Targeted spells/gear: never auto-pick a target — enter targeting mode.
+  if (playMoves.length > 0 && beginTargetingIfNeeded(playMoves, cardId)) {
+    return;
+  }
+
+  // Single-click play: the engine already lists a legal play (cost is paid
+  // from the pool the player tapped). Multiple non-target variants (Accelerate /
+  // sacrifice) open the play-cost modal instead of silently picking one.
+  if (playMoves.length > 0) {
+    if (playMoves.length > 1 && typeof openPlayCostModal === "function") {
+      openPlayCostModal(cardId);
+    } else {
+      const m = playMoves[0];
+      executeMove(m.moveId, m.params, m.playerId);
+    }
     return;
   }
 
   if (playMoves.length === 0) {
     const card = findCard(cardId);
 
-    // Workstream 7: try Auto Pay first — if a valid cost plan exists, pay and play.
-    if (card && typeof autoPayAndPlay === "function" && typeof canAutoPay === "function" && canAutoPay(cardId)) {
-      autoPayAndPlay(cardId);
-      return;
-    }
 
     // Fall back to the existing manual cost-payment mode (users who prefer clicking
     // runes manually still get the old flow).
@@ -500,7 +704,9 @@ function enterBattlefieldCardSelected(cardId, zone) {
 function applyValidTargetHighlights() {
   clearValidTargetHighlights();
 
-  if (interaction.action === "playCard") {
+  if (interaction.action === "chooseTarget") {
+    applyChooseTargetHighlights();
+  } else if (interaction.action === "playCard") {
     // Highlight the player base zone
     const baseEl = document.getElementById("player-base");
     if (baseEl) baseEl.classList.add("valid-target");
@@ -579,13 +785,13 @@ function getBattlefieldName(bfId) {
 
 /** Execute a move matching the current interaction by moveId (and optionally abilityIndex) */
 function executeInteractionMove(moveId, abilityIndex) {
-  let move;
-  if (abilityIndex != null) {
-    move = interaction.matchingMoves.find(m => m.moveId === moveId && m.params?.abilityIndex === abilityIndex);
-  } else {
-    move = interaction.matchingMoves.find(m => m.moveId === moveId);
-  }
-  if (!move) return;
+  const moves = interaction.matchingMoves.filter(m =>
+    m.moveId === moveId && (abilityIndex == null || m.params?.abilityIndex === abilityIndex)
+  );
+  if (moves.length === 0) return;
+  // Per-target variants → targeting mode instead of silently taking the first.
+  if (beginTargetingIfNeeded(moves, interaction.sourceCardId)) return;
+  const move = moves[0];
   executeMove(move.moveId, move.params, move.playerId);
   cancelInteraction();
 }

@@ -87,6 +87,8 @@ function resetInteractionSilent() {
   selectedCard = null;
   const actionBar = document.getElementById("actionBar");
   if (actionBar) actionBar.classList.add("hidden");
+  if (typeof hideTargetBanner === "function") hideTargetBanner();
+  document.body.classList.remove("targeting-mode");
   clearRuneTappableHighlights();
 }
 

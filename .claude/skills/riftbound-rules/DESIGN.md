@@ -21,6 +21,9 @@ Product decisions the visual observer agents must check FOR (not just "is it bro
 - No fly-animation on zone change — cards appear at destination immediately
 - Drag from hand/base directly to a target zone (no click-then-click)
 - Click a rune to exhaust it (turn sideways + energy +1)
+- Right-click rune = recycle. Recycling an untapped rune auto-taps it first for +1 energy (you'd always do this), shown as a +1 float.
+- Targeted spells/abilities enter a targeting mode: legal targets glow, click to choose, Esc cancels. Never auto-pick a target.
+- Card zoom (double-click) never sits above a modal: opening the chain / pending-choice / play-cost modal closes it, Esc or backdrop click closes it, and it won't open while a modal is up.
 
 ## Pregame
 - Mulligan: 4 large cards, hover for full image, Keep/Send-back

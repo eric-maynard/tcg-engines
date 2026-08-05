@@ -81,6 +81,10 @@ function hidePreview() {
 }
 
 function openZoom(cardId) {
+  // A modal (chain / pending choice / play-cost) owns the screen; the zoom overlay
+  // sits above it in z-order and would trap the user, so refuse to open.
+  if (document.querySelector(".chain-overlay.visible")) return;
+  if (typeof isChoosingTarget === "function" && isChoosingTarget()) return;
   let card = null;
   if (gameState?.zones) {
     for (const zoneCards of Object.values(gameState.zones)) {
@@ -107,8 +111,25 @@ function openZoom(cardId) {
 }
 
 function closeZoom() {
-  document.getElementById("cardZoom").classList.remove("visible");
+  document.getElementById("cardZoom")?.classList.remove("visible");
 }
+
+// Backdrop click closes the zoom (gameplay.html also wires an inline onclick;
+// this keeps it working if that attribute is ever dropped).
+(function wireZoomBackdrop() {
+  function go() {
+    const zoom = document.getElementById("cardZoom");
+    if (zoom && !zoom.dataset.wired) {
+      zoom.dataset.wired = "1";
+      zoom.addEventListener("click", closeZoom);
+    }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", go, { once: true });
+  } else {
+    go();
+  }
+})();
 
 /** Handle clicks on battlefield containers (for movement targets) */
 function onBattlefieldClick(e, bfId) {

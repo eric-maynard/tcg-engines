@@ -8,6 +8,9 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (document.getElementById("cardZoom")?.classList.contains("visible")) {
       closeZoom();
+    } else if (typeof isChoosingTarget === "function" && isChoosingTarget()) {
+      // Targeting mode is always cancellable, even with the chain open (reactions).
+      cancelInteraction();
     } else if (document.getElementById("chainOverlay")?.classList.contains("visible")) {
       // Don't close chain overlay with escape — must pass or act
     } else if (interaction.mode !== "idle") {

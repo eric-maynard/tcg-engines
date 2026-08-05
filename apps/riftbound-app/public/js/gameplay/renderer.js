@@ -265,6 +265,9 @@ function render() {
     applyRuneTappableHighlights();
   }
 
+  // Pending choose-target/choose-card: glow the pickable cards on the board too.
+  if (typeof applyPendingChoiceHighlights === "function") applyPendingChoiceHighlights();
+
   // W10c: mount the board toggles panel on first render (no-op afterwards).
   if (typeof initBoardToggles === "function") initBoardToggles();
 }
@@ -294,8 +297,8 @@ function formatMoveDescription(moveId, params) {
   const bf = (v) => typeof v === "string" ? getBattlefieldName(v) : String(v ?? "");
   switch (moveId) {
     case "playUnit": return `${r(params.cardId)} to ${params.location ?? "base"}`;
-    case "playSpell": return `${r(params.cardId)}`;
-    case "playGear": return `${r(params.cardId)}`;
+    case "playSpell": return `${r(params.cardId)}${params.targets?.length ? " → " + r(params.targets) : ""}`;
+    case "playGear": return `${r(params.cardId)}${params.chosenTargetId ? " → " + r(params.chosenTargetId) : ""}`;
     case "exhaustRune": return `${r(params.runeId)}`;
     case "recycleRune": return `${r(params.runeId)}${params.domain ? " for " + params.domain : ""}`;
     case "standardMove": return `${r(params.unitIds)} to ${bf(params.destination)}`;
@@ -307,7 +310,7 @@ function formatMoveDescription(moveId, params) {
     case "recallUnit": return `${r(params.unitId)}`;
     case "hideCard": return `at ${bf(params.battlefieldId)}`;
     case "scorePoint": return `${bf(params.battlefieldId)}`;
-    case "activateAbility": return `${r(params.cardId)}`;
+    case "activateAbility": return `${r(params.cardId)}${params.targets?.length ? " → " + r(params.targets) : ""}`;
     case "resolveFullCombat": return `${bf(params.battlefieldId)}`;
     case "passChainPriority": return null;
     case "passShowdownFocus": return null;
@@ -780,7 +783,7 @@ function renderZones() {
            onmouseenter="showPreview(event, this)"
            onmouseleave="hidePreview()"
            ondblclick="openZoom('${esc(c.id)}')"
-           title="${esc(cardName)}">
+           title="${esc(cardName)} — click: exhaust (+1 energy) · right-click: recycle (taps first if ready)">
         <img class="card-img" src="${imgSrc}" alt="${esc(cardName)}"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
         <div class="card-fallback">
@@ -1002,6 +1005,10 @@ function renderActions() {
   }
 
   let html = "";
+  // Move groups whose variants differ only by target; the button enters
+  // targeting mode (interactions.js) instead of executing a variant directly.
+  const targetPlayGroups = [];
+  const TARGETABLE_MOVES = ["playSpell", "playGear", "playUnit", "activateAbility"];
 
   // Pending choice (discard / pick-from-revealed / choose-target) — the engine
   // blocks every other move until this is answered, so surface it as a modal
@@ -1069,7 +1076,31 @@ function renderActions() {
           m.params?.unitId === interaction.sourceCardId
         );
 
-      if (moves.length === 1) {
+      if (TARGETABLE_MOVES.includes(moveId) && typeof moveTargetId === "function" && moves.some(m => moveTargetId(m))) {
+        // Per-target variants: one button per source card (+ability) that
+        // enters targeting mode — never a silent first-target pick.
+        const groups = {};
+        for (const m of moves) {
+          const key = `${m.params?.cardId ?? ""}#${m.params?.abilityIndex ?? ""}`;
+          (groups[key] ??= []).push(m);
+        }
+        for (const variants of Object.values(groups)) {
+          const cid = variants[0].params?.cardId;
+          const name = findCard(cid)?.name ?? cid ?? label;
+          const targetIds = [...new Set(variants.map(moveTargetId).filter(Boolean))];
+          const detail = targetIds.length
+            ? `${name} — ${targetIds.length} target${targetIds.length === 1 ? "" : "s"}…`
+            : name;
+          const highlighted = interaction.sourceCardId === cid;
+          html += `
+            <button class="action-btn ${highlighted ? "highlighted" : ""}"
+                    data-target-play="${targetPlayGroups.length}">
+              ${esc(label)}
+              <div class="action-detail">${esc(detail)}</div>
+            </button>`;
+          targetPlayGroups.push({ moves: variants, sourceCardId: cid });
+        }
+      } else if (moves.length === 1) {
         const m = moves[0];
         const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
         const onclick = `executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})`;
@@ -1200,6 +1231,12 @@ function renderActions() {
   list.innerHTML = html;
   list.querySelectorAll("[data-play-cost-card]").forEach(el => {
     el.addEventListener("click", () => openPlayCostModal(el.dataset.playCostCard));
+  });
+  list.querySelectorAll("[data-target-play]").forEach(el => {
+    el.addEventListener("click", () => {
+      const g = targetPlayGroups[Number(el.dataset.targetPlay)];
+      if (g) beginTargetingOrPlay(g.moves, g.sourceCardId);
+    });
   });
 }
 
@@ -1448,9 +1485,17 @@ function renderPendingChoiceModal() {
   if (!pending || !mine) {
     // Don't stomp a play-cost modal that's currently open.
     if (overlay.dataset.mode === "pending") closeChoiceModal();
+    overlay.classList.remove("targeting");
     return;
   }
   overlay.dataset.mode = "pending";
+  // Card picks are mirrored as board glows (applyPendingChoiceHighlights); let
+  // clicks reach the board by making the backdrop pass-through for those prompts.
+  const hasBoardPicks = pending.type === "choose-target" || availableMoves.some(m =>
+    m.moveId === "resolvePendingChoice" && m.params?.pickedCardId &&
+    document.querySelector(`#game-scale-wrapper [data-card-id="${CSS.escape(m.params.pickedCardId)}"]`));
+  overlay.classList.toggle("targeting", !!hasBoardPicks);
+  if (typeof closeZoom === "function") closeZoom();
 
   const title = pending.onPicked === "discard" ? "Discard a card"
     : pending.onPicked === "banish" ? "Banish a card"
@@ -1543,6 +1588,8 @@ function openPlayCostModal(cardId) {
   const card = findCard(cardId);
   const { overlay, box } = ensureChoiceOverlay();
   overlay.dataset.mode = "playCost";
+  overlay.classList.remove("targeting");
+  if (typeof closeZoom === "function") closeZoom();
 
   const imgId = (card?.definitionId ?? cardId).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
   let html = `<div class="chain-title">Play ${esc(card?.name ?? cardId)}</div>`;
@@ -1589,6 +1636,7 @@ function renderChainOverlay() {
     return;
   }
 
+  if (!overlay.classList.contains("visible") && typeof closeZoom === "function") closeZoom();
   overlay.classList.add("visible");
   box.classList.remove("showdown-active");
 

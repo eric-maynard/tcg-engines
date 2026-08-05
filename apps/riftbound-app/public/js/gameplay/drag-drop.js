@@ -26,7 +26,9 @@ function onZoneClick(targetId) {
 
   // For playCard to base, check if target is the base zone
   if (interaction.action === "playCard" && targetId === "player-base") {
-    const move = interaction.matchingMoves[0];
+    const moves = interaction.matchingMoves;
+    if (beginTargetingIfNeeded(moves, interaction.sourceCardId)) return;
+    const move = moves[0];
     if (move) {
       animateCardFly(sourceEl, destEl, () => {
         executeMove(move.moveId, move.params, move.playerId);
@@ -275,6 +277,9 @@ document.addEventListener("pointerup", (e) => {
 
   const wasDragging = dragState.isDragging;
   const cardId = dragState.cardId;
+  // Set when the drop resolves to per-target variants; targeting mode is entered
+  // after drag cleanup so its highlights survive clearValidTargetHighlights().
+  let targetingMoves = null;
 
   if (wasDragging) {
     // Check for drop on a valid zone first, then fall back to unit-drop for equipment.
@@ -298,9 +303,13 @@ document.addEventListener("pointerup", (e) => {
           playerId: viewingPlayer,
         };
       } else if (dragState.action === "playCard" && dropZone === "player-base") {
-        // Multiple play variants (Accelerate / sacrifice) → open the choice
-        // modal instead of silently picking the first.
-        if (dragState.matchingMoves.length > 1 && typeof openPlayCostModal === "function") {
+        if (dragState.matchingMoves.some(m => moveTargetId(m))) {
+          // Per-target variants → targeting mode (entered after cleanup below).
+          targetingMoves = dragState.matchingMoves;
+          move = null;
+        } else if (dragState.matchingMoves.length > 1 && typeof openPlayCostModal === "function") {
+          // Multiple play variants (Accelerate / sacrifice) → open the choice
+          // modal instead of silently picking the first.
           openPlayCostModal(cardId);
           move = null;
         } else {
@@ -353,6 +362,9 @@ document.addEventListener("pointerup", (e) => {
     // Reset interaction
     if (interaction.mode === "awaitTarget") {
       resetInteractionSilent();
+    }
+    if (targetingMoves) {
+      beginTargetingOrPlay(targetingMoves, cardId);
     }
   } else {
     // Was just a click (didn't cross drag threshold) — handle as card click
