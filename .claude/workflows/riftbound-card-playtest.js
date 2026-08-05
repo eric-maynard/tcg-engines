@@ -8,9 +8,10 @@ export const meta = {
 }
 
 const REPO = '/root/src/tcg/tcg-engines'
-const CARD_LIST = args?.cardList ?? '/tmp/card-list.json'
-const CARD_IDS = args?.cardIds ?? []
-const N_LANES = args?.lanes ?? 8
+const A = typeof args === 'string' ? JSON.parse(args) : (args ?? {})
+const CARD_LIST = A.cardList ?? '/tmp/card-list.json'
+const CARD_IDS = A.cardIds ?? []
+const N_LANES = A.lanes ?? 8
 
 if (!CARD_IDS.length) throw new Error('args.cardIds required')
 
