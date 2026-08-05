@@ -34,6 +34,7 @@ Args (all optional):
 - `monkeyRounds` — how many monkey rounds (default 1; 0 to skip)
 - `seed` — deterministic seed for tracer + monkey + card-pick shuffle
 - `cardIds` — override auto-pick with a specific list (e.g. re-test after fixes)
+- `rulings` — how many FAQ rulings to execute as live scenarios (default 0; 96 total available). Curated hard cases from riftboundfaq.com — interactions random play won't hit.
 
 ## Output
 

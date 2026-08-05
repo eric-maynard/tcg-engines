@@ -37,6 +37,11 @@ const monkey = MONKEY_ROUNDS > 0
 const monkeyConfirmed = (monkey?.rounds ?? []).flatMap(r => r.findings ?? [])
 const monkeyInvariants = (monkey?.rounds ?? []).flatMap(r => r.invariants ?? [])
 
+// ───────────────────────── FAQ rulings (curated hard cases) ─────────────────────────
+const rulingsResult = (A.rulings ?? 0) > 0
+  ? await workflow({scriptPath: `${REPO}/.claude/workflows/riftbound-rulings-playtest.js`}, { limit: A.rulings, lanes: N_LANES })
+  : { total:0, MATCHES:0, DIVERGES:0, diverges:[] }
+
 // ───────────────────────── Per-card playtest ─────────────────────────
 phase('Cards')
 // Pick next N untested cards; caller can override with A.cardIds
@@ -81,6 +86,10 @@ return {
     notPlayed: cardTest.notPlayed,
     findings: cardTest.confirmed,
   },
+  rulings: {
+    total: rulingsResult.total, matches: rulingsResult.MATCHES,
+    diverges: rulingsResult.DIVERGES, findings: rulingsResult.diverges,
+  },
   byLayer,
-  totalConfirmed: (cardTest.confirmed||[]).length + monkeyConfirmed.length,
+  totalConfirmed: (cardTest.confirmed||[]).length + monkeyConfirmed.length + (rulingsResult.DIVERGES||0),
 }
