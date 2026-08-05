@@ -11,6 +11,8 @@
  */
 
 import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
+import { executeEffect } from "../../abilities/effect-executor";
+import type { ExecutableEffect } from "../../abilities/effect-executor";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type {
   PendingChoice,
@@ -18,6 +20,7 @@ import type {
   RiftboundGameState,
   RiftboundMoves,
 } from "../../types";
+import { buildEffectContext } from "./chain-moves";
 
 /**
  * Returns true when the given card ID is a valid pick for the pending
@@ -47,6 +50,9 @@ export function isValidPendingPick(choice: PendingChoice, cardId: string): boole
  */
 export function pickDefaultForChoice(choice: PendingChoice): string | undefined {
   if (choice.type === "name-card") {
+    return choice.options[0];
+  }
+  if (choice.type === "choose-target") {
     return choice.options[0];
   }
   return choice.revealed.find((id) => isValidPendingPick(choice, id));
@@ -79,6 +85,12 @@ export const pendingChoiceMoves: Partial<
       if (!choice) {
         return false;
       }
+      if (choice.type === "choose-target") {
+        if (choice.playerId !== context.params.playerId) {
+          return false;
+        }
+        return choice.options.includes(context.params.pickedCardId as string);
+      }
       if (choice.prompter !== context.params.playerId) {
         return false;
       }
@@ -94,6 +106,15 @@ export const pendingChoiceMoves: Partial<
       const choice = state.pendingChoice;
       if (!choice) {
         return [];
+      }
+      if (choice.type === "choose-target") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        return choice.options.map((cardId) => ({
+          pickedCardId: cardId,
+          playerId: context.playerId as string,
+        }));
       }
       if (choice.prompter !== (context.playerId as string)) {
         return [];
@@ -118,6 +139,20 @@ export const pendingChoiceMoves: Partial<
     reducer: (draft, context) => {
       const choice = draft.pendingChoice;
       if (!choice) {
+        return;
+      }
+
+      if (choice.type === "choose-target") {
+        const picked = context.params.pickedCardId as string;
+        if (!choice.options.includes(picked)) {
+          return;
+        }
+        const effectCtx = {
+          ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+          boundTargets: [picked],
+        };
+        executeEffect(choice.effect as ExecutableEffect, effectCtx);
+        draft.pendingChoice = undefined;
         return;
       }
 

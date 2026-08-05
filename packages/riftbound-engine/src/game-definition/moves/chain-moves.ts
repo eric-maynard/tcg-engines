@@ -28,6 +28,8 @@ import {
 import type { ChainItem } from "../../chain";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
+import { resolveTarget } from "../../abilities/target-resolver";
+import type { TargetDescriptor } from "../../abilities/target-resolver";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { performCleanup } from "../../cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
@@ -38,7 +40,7 @@ import { getPotentialRuneEnergy } from "./cards";
 /**
  * Build an EffectContext from a move reducer's context.
  */
-function buildEffectContext(
+export function buildEffectContext(
   draft: RiftboundGameState,
   playerId: string,
   sourceCardId: string,
@@ -128,10 +130,51 @@ function executeResolvedItem(
   const effect = effectRest as ExecutableEffect;
 
   const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+
+  // Rule 355.10: for a resolved effect that targets a caster-chosen single
+  // card ("give a unit X"), the controller picks which card. When targets
+  // were not bound at chain-placement time and more than one legal option
+  // exists, pause and ask via a `choose-target` pending choice; the effect
+  // runs from `resolvePendingChoice` once the pick is made.
+  let boundTargets = resolved.targets;
+  const target = effect.target as TargetDescriptor | undefined;
+  if (
+    !boundTargets &&
+    target &&
+    target.type !== "self" &&
+    target.type !== "player" &&
+    target.type !== "battlefield" &&
+    target.quantity !== "all"
+  ) {
+    const options = resolveTarget(
+      { ...target, quantity: "all" },
+      {
+        cards: baseCtx.cards,
+        draft,
+        playerId: resolved.controller,
+        sourceCardId: resolved.cardId,
+        sourceZone: baseCtx.sourceZone,
+        zones: baseCtx.zones,
+      },
+    );
+    if (options.length >= 2) {
+      draft.pendingChoice = {
+        type: "choose-target",
+        playerId: resolved.controller,
+        sourceCardId: resolved.cardId,
+        effect,
+        options,
+        remaining: 1,
+      };
+      return;
+    }
+    boundTargets = options;
+  }
+
   const effectCtx: EffectContext = {
     ...baseCtx,
     ...(_variables ? { variables: _variables } : {}),
-    ...(resolved.targets ? { boundTargets: resolved.targets } : {}),
+    ...(boundTargets ? { boundTargets } : {}),
   };
   executeEffect(effect, effectCtx);
 

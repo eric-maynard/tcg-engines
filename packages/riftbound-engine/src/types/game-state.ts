@@ -342,7 +342,27 @@ export interface NameCardChoice {
   readonly options: readonly string[];
 }
 
-export type PendingChoice = RevealAndPickChoice | NameCardChoice;
+/**
+ * Rule 355.10: when a triggered/resolved ability says "give a unit X" and
+ * more than one legal target exists, the ability's controller chooses which
+ * one. The chosen card ID is passed back via `resolvePendingChoice` and the
+ * stored `effect` is then executed with that card bound as its target.
+ */
+export interface ChooseTargetChoice {
+  readonly type: "choose-target";
+  /** Player who chooses the target (the ability's controller). */
+  readonly playerId: PlayerId;
+  /** Card that produced the effect (used as the effect's source). */
+  readonly sourceCardId: CardId;
+  /** The effect to execute once a target is chosen. */
+  readonly effect: unknown;
+  /** Legal target card IDs the player may choose from. */
+  readonly options: readonly CardId[];
+  /** Number of targets still to choose (currently always 1). */
+  readonly remaining: number;
+}
+
+export type PendingChoice = RevealAndPickChoice | NameCardChoice | ChooseTargetChoice;
 
 /**
  * Complete Riftbound game state
