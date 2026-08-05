@@ -676,25 +676,48 @@ export const cardPlayMoves: Partial<
 
       deductCost(draft, playerId, cardId, {}, createMetaAccessor(context.cards));
 
-      // Rule 560: optional additional cost — deduct extra energy/power and/or
-      // trash the chosen sacrifice before the unit enters play.
+      // Rule 560: optional additional cost. Re-derive from the card definition
+      // instead of trusting client-supplied additionalCostSpec/sacrificeId — a
+      // multiplayer client could otherwise trash an opponent's card or claim an
+      // Accelerate benefit the card doesn't have.
       let paidAccelerate = false;
+      let paidAdditionalCostActual = false;
       if (paidAdditionalCost) {
+        const optional = getOptionalPlayCost(cardId);
         const pool = draft.runePools[playerId];
-        if (pool && additionalCostSpec) {
-          pool.energy = Math.max(0, pool.energy - (additionalCostSpec.energy ?? 0));
-          for (const domain of additionalCostSpec.power ?? []) {
-            const key = domain as keyof typeof pool.power;
-            pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
+        if (optional?.kind === "accelerate" && pool) {
+          const need = optional.cost ?? {};
+          const canPay =
+            pool.energy >= (need.energy ?? 0) &&
+            (need.power ?? []).every((d: string) => (pool.power[d as keyof typeof pool.power] ?? 0) >= 1);
+          if (canPay) {
+            pool.energy -= need.energy ?? 0;
+            for (const domain of need.power ?? []) {
+              const key = domain as keyof typeof pool.power;
+              pool.power[key] = (pool.power[key] ?? 0) - 1;
+            }
+            paidAccelerate = true;
+            paidAdditionalCostActual = true;
+          }
+        } else if (optional?.kind === "kill" && sacrificeId) {
+          const owner = context.cards.getCardOwner(sacrificeId as CoreCardId);
+          const zone = context.zones.getCardZone(sacrificeId as CoreCardId);
+          const inPlay =
+            zone === "base" ||
+            (typeof zone === "string" && zone.startsWith("battlefield-"));
+          const kind = getGlobalCardRegistry().get(sacrificeId as string)?.cardType;
+          const okType =
+            !optional.kill?.type ||
+            optional.kill.type === "permanent" ||
+            optional.kill.type === kind;
+          if (owner === playerId && inPlay && sacrificeId !== cardId && okType) {
+            zones.moveCard({
+              cardId: sacrificeId as CoreCardId,
+              targetZoneId: "trash" as CoreZoneId,
+            });
+            paidAdditionalCostActual = true;
           }
         }
-        if (sacrificeId) {
-          zones.moveCard({
-            cardId: sacrificeId as CoreCardId,
-            targetZoneId: "trash" as CoreZoneId,
-          });
-        }
-        paidAccelerate = getOptionalPlayCost(cardId)?.kind === "accelerate";
       }
 
       zones.moveCard({
@@ -719,7 +742,7 @@ export const cardPlayMoves: Partial<
       // Satisfy its own condition — it must observe the count of cards
       // That were played EARLIER in this turn.
       fireTriggers(
-        { cardId, paidAdditionalCost: paidAdditionalCost === true, playerId, type: "play-self" },
+        { cardId, paidAdditionalCost: paidAdditionalCostActual, playerId, type: "play-self" },
         { cards: context.cards, counters, draft, zones },
       );
       fireTriggers(
