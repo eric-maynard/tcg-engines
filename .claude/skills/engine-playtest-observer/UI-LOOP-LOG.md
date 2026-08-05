@@ -69,3 +69,16 @@ Driver: `ui-rules-drive.ts` — plays a real game via `executeMove()`, captures 
 
 ~90 rules/engine bugs found + fixed across all loops. 1266/0 tests.
 
+## Per-card playtest (pw-repl + tutor endpoint; one agent = player + judge)
+
+Agent tutors card into hand with resources granted, plays it via real UI, does what rulesText says, reports what didn't match.
+
+| Batch | Cards | Played | Bugs | CONFIRMED | Systemic fixed | Commit |
+|---|---|---|---|---|---|---|
+| pilot | 24 | 24 | 37 | 18 | cost.kill; target-"self" string; move to:"choose" | 15b0aa3 |
+| pilot-card | — | — | — | — | +8 card defs; swap-might/empower/replacement effects | 8aeb005 |
+| 2 | 96 | 91 | 106 | 23 | damage-desync (spell dmg didn't kill); nth-time-each-turn dropped; paid-additional-cost | 0a103fc |
+| 2b | — | — | — | — | Empower parser; XP-cost; create-token; ready/choose triggers; -or- event split; rainbow power | 74abc55 |
+| 3 | 96 | 95 | 84 | 23 | (fixer running: enter-ready/exhausted; while-level; [Add] collapse; Deathknell parser) | 6fb410b |
+| **total** | **216** | **210** | **227** | **64** | **~16 systemic** | |
+
