@@ -154,7 +154,8 @@ describe("Keyword: Shield", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(2);
+      // [Vision] keyword + its expanded play-self trigger + [Shield]
+      expect(result.abilities).toHaveLength(3);
     });
   });
 });

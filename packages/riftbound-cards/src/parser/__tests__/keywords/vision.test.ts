@@ -16,11 +16,20 @@ describe("Keyword: Vision", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      expect(result.abilities).toHaveLength(2);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           keyword: "Vision",
           type: "keyword",
+        }),
+      );
+      // Rule 729: [Vision] expands to an explicit play-self trigger so the
+      // engine's trigger-runner (which only walks type==="triggered") fires it.
+      expect(result.abilities?.[1]).toEqual(
+        expect.objectContaining({
+          effect: expect.objectContaining({ type: "look" }),
+          trigger: { event: "play-self", on: "self" },
+          type: "triggered",
         }),
       );
     });
@@ -33,8 +42,8 @@ describe("Keyword: Vision", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(2);
-      expect(result.abilities?.[1]).toEqual(
+      expect(result.abilities).toHaveLength(3);
+      expect(result.abilities?.[2]).toEqual(
         expect.objectContaining({
           effect: expect.objectContaining({
             keyword: "Vision",
@@ -51,7 +60,7 @@ describe("Keyword: Vision", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(2);
+      expect(result.abilities).toHaveLength(3);
     });
   });
 
@@ -62,8 +71,8 @@ describe("Keyword: Vision", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(2);
-      expect(result.abilities?.[1]).toEqual(
+      expect(result.abilities).toHaveLength(3);
+      expect(result.abilities?.[2]).toEqual(
         expect.objectContaining({
           effect: expect.objectContaining({
             type: "buff",
@@ -84,14 +93,20 @@ describe("Keyword: Vision", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(2);
+      expect(result.abilities).toHaveLength(3);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           keyword: "Vision",
           type: "keyword",
         }),
       );
-      expect(result.abilities?.[1]).toEqual(expect.objectContaining(Abilities.shield(1)));
+      expect(result.abilities?.[1]).toEqual(
+        expect.objectContaining({
+          trigger: { event: "play-self", on: "self" },
+          type: "triggered",
+        }),
+      );
+      expect(result.abilities?.[2]).toEqual(expect.objectContaining(Abilities.shield(1)));
     });
   });
 

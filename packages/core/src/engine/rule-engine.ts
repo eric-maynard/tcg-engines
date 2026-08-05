@@ -633,6 +633,11 @@ export class RuleEngine<
         // Check automatic endIf transitions after move execution
         // This enables automatic phase/segment/turn transitions based on endIf conditions
         this.flowManager.checkEndConditions();
+
+        // Flow hooks mutate a produce()'d copy of the state held by the
+        // FlowManager; sync it back so those mutations (turn.phase, VP,
+        // rune pools, per-turn tracking) are visible to getState().
+        this.currentState = this.flowManager.getGameState();
       }
 
       // Log successful completion (DEBUG level)

@@ -749,6 +749,7 @@ function makeLookupPayload(def: Record<string, unknown>, cardId: string, overrid
     moveEscalation: def.moveEscalation as boolean | undefined,
     name: def.name as string,
     powerCost: def.powerCost as string[] | undefined,
+    tags: def.tags as string[] | undefined,
     timing: def.timing as string | undefined,
     tracksExiledCards: def.tracksExiledCards as boolean | undefined,
   };
@@ -1184,27 +1185,19 @@ function finalizePregame(session: GameSession): void {
     }
   }
 
-  // Transition to playing
+  // Transition to playing via the engine's transitionToPlay move so the
+  // FlowManager leaves the `setup` segment and enters `mainGame`. The flow
+  // Then cascades awaken → beginning → channel (2 runes) → draw (1 card) →
+  // Main for the first player. Patching state directly here left the
+  // FlowManager stuck in `setup`, so every endTurn's flow.endPhase() cycled
+  // Inside setupPhase and never ran mainGame.beginning.onBegin (Temporary
+  // Sweep, Hold scoring).
   engine.applyPatches([
-    { op: "replace", path: ["status"], value: "playing" },
-    { op: "replace", path: ["turn", "activePlayer"], value: pregame.firstPlayer },
-    { op: "replace", path: ["turn", "phase"], value: "main" },
-    { op: "replace", path: ["turn", "number"], value: 1 },
+    { op: "replace", path: ["setup", "firstPlayer"], value: pregame.firstPlayer },
+    { op: "replace", path: ["setup", "secondPlayer"], value: pregame.secondPlayer },
   ]);
-
-  // Channel 2 runes for the first player (Rule 515.3: channel phase).
-  // `directed: true` is required by the channelRunes move's condition
-  // (rule 606.3.a — channelling is a directed action, not a discretionary
-  // Player move). Without this flag the move is silently rejected and the
-  // First player starts with zero runes.
-  engine.executeMove("channelRunes", {
-    params: { count: 2, directed: true, playerId: pregame.firstPlayer },
-    playerId: pregame.firstPlayer as PlayerId,
-  });
-
-  // Draw 1 card for the first player (Rule 515.4.b: draw phase)
-  engine.executeMove("drawCard", {
-    params: { count: 1, playerId: pregame.firstPlayer },
+  engine.executeMove("transitionToPlay", {
+    params: {},
     playerId: pregame.firstPlayer as PlayerId,
   });
 
@@ -1289,49 +1282,24 @@ function preparePlayerRotation(session: GameSession, currentPlayerId: string): s
 /**
  * Finalize the end-turn after the endTurn move has executed.
  *
- * Performs end-of-turn cleanup and start-of-turn setup:
- * 1. Rule 517.2.c: Empty rune pools for all players
- * 2. Increment turn number
- * 3. Verify flow state landed correctly (safety net)
- * 4. Rule 515.1: Ready all cards for the new active player (Awaken)
- * 5. Rule 515.3: Channel 2 runes for the new active player
- * 6. Rule 515.4.b: Draw 1 card for the new active player
+ * The engine's FlowManager now runs the full turn cycle (ending → cleanup →
+ * awaken → beginning → channel → draw → main); this function only verifies
+ * the flow landed on the expected player/phase and appends the turn-passed
+ * log entry.
  */
 function finalizeEndTurn(session: GameSession, nextPlayer: string): void {
-  const state = session.engine.getState();
-
-  // Auto-resolve all contested battlefields before turn passes (rules 620-628)
-  const stateForCombat = session.engine.getState();
-  for (const [bfId, bf] of Object.entries(stateForCombat.battlefields || {})) {
-    if (bf.contested) {
-      session.engine.executeMove("resolveFullCombat", {
-        params: { battlefieldId: bfId },
-        playerId: stateForCombat.turn.activePlayer as PlayerId,
-      });
-    }
-  }
-
-  // Rule 517.2.c: Empty rune pools for all players at end of previous turn
-  for (const pid of session.players) {
-    session.engine.executeMove("emptyRunePool", {
-      params: { directed: true, playerId: pid },
-      playerId: pid as PlayerId,
-    });
-  }
-
-  // Increment the turn number
-  const currentTurnNumber = session.engine.getState().turn.number ?? 1;
-  session.engine.applyPatches([
-    { op: "replace", path: ["turn", "number"], value: currentTurnNumber + 1 },
-  ]);
-
-  // Safety net: ensure the state landed on the expected player/phase.
-  // The flow system should handle phase cycling (channel, draw, main) automatically.
-  const stateAfterCleanup = session.engine.getState();
-  if (stateAfterCleanup.turn.activePlayer !== nextPlayer || stateAfterCleanup.turn.phase !== "main") {
+  // The endTurn move calls flow.endPhase(), and with the FlowManager now in
+  // The `mainGame` segment (see finalizePregame), the flow cascades the full
+  // Phase chain itself: main → ending (rule 517: clear damage/stun/mightMod,
+  // Empty rune pools) → cleanup → next-turn awaken (rule 515.1: ready all) →
+  // Beginning (rule 728.1.b Temporary sweep + rule 630.2 Hold scoring) →
+  // Channel (rule 515.3 / 644.7) → draw (rule 515.4.b) → main. Nothing to
+  // Reimplement here.
+  const stateAfter = session.engine.getState();
+  if (stateAfter.turn.activePlayer !== nextPlayer || stateAfter.turn.phase !== "main") {
     console.warn(
       `Flow state mismatch after endTurn: expected activePlayer=${nextPlayer} phase=main, ` +
-      `got activePlayer=${stateAfterCleanup.turn.activePlayer} phase=${stateAfterCleanup.turn.phase}. ` +
+      `got activePlayer=${stateAfter.turn.activePlayer} phase=${stateAfter.turn.phase}. ` +
       "Patching state as safety net.",
     );
     session.engine.applyPatches([
@@ -1339,54 +1307,6 @@ function finalizeEndTurn(session: GameSession, nextPlayer: string): void {
       { op: "replace", path: ["turn", "phase"], value: "main" },
     ]);
   }
-
-  // Rule 515.1: Awaken phase — ready all cards for the new active player
-  session.engine.executeMove("readyAll", {
-    params: { playerId: nextPlayer },
-    playerId: nextPlayer as PlayerId,
-  });
-
-  // Clear turn-scoped tracking for the new player before Hold scoring
-  session.engine.applyPatches([
-    { op: "replace", path: ["conqueredThisTurn", nextPlayer], value: [] },
-    { op: "replace", path: ["scoredThisTurn", nextPlayer], value: [] },
-  ]);
-
-  // Rule 515.2 / Rule 630.2: Beginning phase — Hold scoring
-  // A player scores 1 VP for each battlefield they control at the start of their turn
-  const stateForHold = session.engine.getState();
-  for (const [bfId, bf] of Object.entries(stateForHold.battlefields || {})) {
-    if (bf.controller === nextPlayer) {
-      session.engine.executeMove("scorePoint", {
-        params: { battlefieldId: bfId, method: "hold", playerId: nextPlayer },
-        playerId: nextPlayer as PlayerId,
-      });
-    }
-  }
-
-  // Rule 515.3 / Rule 644.7: Channel phase — channel runes for the new active player
-  // The second player channels 3 runes on their first turn instead of 2
-  const stateForChannel = session.engine.getState();
-  const internalForChannel = getInternalSnapshot(session.engine);
-  const runeZone = internalForChannel.zones["runeDeck"];
-  const runeDeckSize = runeZone?.cardIds?.filter((id: string) => id.startsWith(nextPlayer))?.length ?? 0;
-  // Full rune deck = 12 means this player hasn't channeled yet (first turn)
-  const isFirstTurnForPlayer = runeDeckSize === 12;
-  const channelCount = isFirstTurnForPlayer && stateForChannel.turn.number === 2 ? 3 : 2;
-  session.engine.executeMove("channelRunes", {
-    // Rule 606.3.a: channelling is a directed Game Action — the engine's
-    // condition rejects the move without `directed: true`. Without this the
-    // call was silently failing on every end-turn, so runes never accumulated
-    // past the pregame's initial 2.
-    params: { count: channelCount, directed: true, playerId: nextPlayer },
-    playerId: nextPlayer as PlayerId,
-  });
-
-  // Rule 515.4.b: Draw phase — draw 1 card for the new active player
-  session.engine.executeMove("drawCard", {
-    params: { count: 1, playerId: nextPlayer },
-    playerId: nextPlayer as PlayerId,
-  });
 
   session.log.push(
     makeLogEntry(

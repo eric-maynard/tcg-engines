@@ -5225,11 +5225,30 @@ function parseSpellWithRepeat(text: string): SpellAbility | undefined {
  * and trigger-matching (the engine's `find-matching-triggers` walks the
  * ability list), so downstream code can still tell the unit has Hunt.
  */
+/**
+ * Trigger events that effect-keyword shorthands expand to. The engine's
+ * trigger-runner/trigger-matcher only walk `type === "triggered"` abilities,
+ * so each `{type:"keyword", keyword:K, effect:E}` also gets an explicit
+ * `{type:"triggered", trigger:{event:…}, effect:E}` sibling.
+ */
+const KEYWORD_TRIGGER_EVENTS: Readonly<Record<string, string>> = {
+  Deathknell: "die", // Rule 808.1
+  Vision: "play-self", // Rule 729
+  // Legion (rule 724) is NOT a pure trigger shorthand — it modifies whatever
+  // ability follows (static cost reduction, activated, or triggered), so it
+  // stays as {type:"keyword", keyword:"Legion"} for the engine's legion
+  // condition handling.
+};
+
 function expandHuntKeywords(abilities: Ability[]): Ability[] {
   const result: Ability[] = [];
   for (const ab of abilities) {
     result.push(ab);
-    if (ab.type === "keyword" && (ab as { keyword?: string }).keyword === "Hunt") {
+    if (ab.type !== "keyword") {
+      continue;
+    }
+    const kw = (ab as { keyword?: string }).keyword;
+    if (kw === "Hunt") {
       const amount = (ab as { value?: number }).value ?? 1;
       const gainXp = { amount, type: "gain-xp" } as unknown as Effect;
       result.push({
@@ -5242,16 +5261,17 @@ function expandHuntKeywords(abilities: Ability[]): Ability[] {
         trigger: { event: "hold", on: "self" },
         type: "triggered",
       } as TriggeredAbility);
+      continue;
     }
-    // Rule 808.1: `[Deathknell] — <effect>` is sugar for a self-death trigger.
-    // Emit the explicit triggered form so trigger-runner/trigger-matcher (which
-    // only match `type === "triggered"`) fire it on the `die` event.
-    if (ab.type === "keyword" && (ab as { keyword?: string }).keyword === "Deathknell") {
+    const event = kw ? KEYWORD_TRIGGER_EVENTS[kw] : undefined;
+    if (event) {
       const effect = (ab as { effect?: Effect }).effect;
       if (effect) {
+        const condition = (ab as { condition?: unknown }).condition;
         result.push({
+          ...(condition ? { condition } : {}),
           effect,
-          trigger: { event: "die", on: "self" },
+          trigger: { event, on: "self" },
           type: "triggered",
         } as TriggeredAbility);
       }

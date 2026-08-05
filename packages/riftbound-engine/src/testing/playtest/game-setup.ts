@@ -89,6 +89,7 @@ function makeLookupPayload(
     moveEscalation: def.moveEscalation as boolean | undefined,
     name: (def.name as string) ?? cardId,
     powerCost: def.powerCost as string[] | undefined,
+    tags: def.tags as string[] | undefined,
     timing: def.timing as string | undefined,
     tracksExiledCards: def.tracksExiledCards as boolean | undefined,
   };

@@ -487,7 +487,12 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
 
     case "ready": {
       const targets = getTargetIds(effect, ctx);
-      const readied = targets.length === 0 ? [ctx.sourceCardId] : targets;
+      // Only fall back to the source card when the ability has NO target
+      // descriptor ("ready me"). A targeted ready that finds no legal targets
+      // fizzles — otherwise Bubble Bot's "ready another friendly Mech" readies
+      // itself when no other Mech is on the board.
+      const hasTargetSpec = "target" in effect && effect.target != null;
+      const readied = targets.length === 0 && !hasTargetSpec ? [ctx.sourceCardId] : targets;
       for (const targetId of readied) {
         ctx.counters.setFlag(targetId as CoreCardId, "exhausted", false);
         ctx.fireTriggers?.({

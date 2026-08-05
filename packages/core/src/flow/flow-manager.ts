@@ -435,17 +435,32 @@ export class FlowManager<TState, TCardMeta = any> {
   }
 
   /**
-   * Task 9.7: Check and execute endIf conditions
+   * Task 9.7: Check and execute endIf conditions.
+   *
+   * Loops until no endIf fires so that a chain of auto-advancing phases
+   * (e.g. awaken → beginning → channel → draw, all `endIf: () => true`)
+   * cascades to the next player-driven phase in a single pass. Bounded to
+   * guard against a misconfigured flow that never settles.
    */
   public checkEndConditions(): void {
+    for (let guard = 0; guard < 32; guard++) {
+      if (!this.checkEndConditionsOnce()) {
+        return;
+      }
+    }
+    this.logger?.warn("checkEndConditions: cascade guard tripped (>32 transitions)");
+  }
+
+  /** One pass of endIf evaluation. Returns true if a transition fired. */
+  private checkEndConditionsOnce(): boolean {
     if (!this.currentGameSegment) {
-      return;
+      return false;
     }
 
     const gameSegments = this.normalizedGameSegments;
     const gameSegmentDef = gameSegments[this.currentGameSegment];
     if (!gameSegmentDef) {
-      return;
+      return false;
     }
 
     const { phases } = gameSegmentDef.turn;
@@ -460,7 +475,7 @@ export class FlowManager<TState, TCardMeta = any> {
           if (stepDef.endIf(context)) {
             // Call private transition to avoid recursive checkEndConditions
             this.transitionToNextStep();
-            return;
+            return true;
           }
         }
       }
@@ -474,7 +489,7 @@ export class FlowManager<TState, TCardMeta = any> {
         if (phaseDef.endIf(context)) {
           // Call private transition to avoid recursive checkEndConditions
           this.transitionToNextPhase();
-          return;
+          return true;
         }
       }
     }
@@ -485,7 +500,7 @@ export class FlowManager<TState, TCardMeta = any> {
       if (gameSegmentDef.turn.endIf(context)) {
         // Call private transition to avoid recursive checkEndConditions
         this.transitionToNextTurn();
-        return;
+        return true;
       }
     }
 
@@ -495,8 +510,11 @@ export class FlowManager<TState, TCardMeta = any> {
       if (gameSegmentDef.endIf(context)) {
         // Call private transition to avoid recursive checkEndConditions
         this.transitionToNextGameSegment();
+        return true;
       }
     }
+
+    return false;
   }
 
   /**

@@ -23,6 +23,8 @@ export interface CardDefinitionLookup {
   readonly might?: number;
   readonly domain?: string | string[];
   readonly keywords?: string[];
+  /** Card tags (Mech, Poro, champion names, …) — used by target filters. */
+  readonly tags?: readonly string[];
   readonly timing?: string;
   readonly isChampion?: boolean;
   /** Might bonus when equipment is attached to a unit */
