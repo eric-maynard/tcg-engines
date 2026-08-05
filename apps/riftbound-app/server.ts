@@ -2223,6 +2223,69 @@ const server = Bun.serve({
       return json({ state: buildGameSnapshot(session), success: true });
     }
 
+    // POST /api/game/:id/tutor {defId, playerId?} — sandbox-only test hook.
+    // Moves the first deck card whose id ends with defId into that player's
+    // hand. Lets the per-card playtest agent guarantee the card under test is
+    // in hand instead of relying on shuffle luck.
+    if (pathname.match(/^\/api\/game\/[^/]+\/tutor$/) && req.method === "POST") {
+      if (!SANDBOX_ENABLED) return json({ error: "sandbox disabled" }, 403);
+      const gameId = pathname.split("/")[3];
+      const session = gameSessions.get(gameId);
+      if (!session || !session.sandbox) return json({ error: "sandbox game not found" }, 404);
+      const body = (await req.json().catch(() => ({}))) as { defId?: string; playerId?: string };
+      if (!body.defId) return json({ error: "defId required" }, 400);
+      const pid = body.playerId || "player-1";
+      const internal = (session.engine as any).internalState as {
+        zones: Record<string, { cardIds: string[] }>;
+      };
+      const deck = internal.zones["mainDeck"];
+      const hand = internal.zones["hand"];
+      if (!deck || !hand) return json({ error: "zones missing" }, 500);
+      const idx = deck.cardIds.findIndex(
+        (c) => c.startsWith(pid) && c.endsWith(body.defId!),
+      );
+      let found: string;
+      if (idx >= 0) {
+        [found] = deck.cardIds.splice(idx, 1);
+        (internal as any).cards[found].zone = "hand";
+      } else {
+        // Spawn: any of the ~1000 defs is testable regardless of loaded deck.
+        const def = allCards.find((c) => c.id === body.defId);
+        if (!def) return json({ error: "unknown defId" }, 404);
+        found = `${pid}-tutor-${body.defId}`;
+        (internal as any).cards[found] = { controller: pid, definitionId: body.defId, owner: pid, position: undefined, zone: "hand" };
+        (internal as any).cardMetas[found] = { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false };
+        getGlobalCardRegistry().register(found, def as any);
+      }
+      hand.cardIds.push(found);
+      // Grant enough energy+power via addResources (goes through the engine so
+      // getState()/undo/snapshot all see it).
+      const def = allCards.find((c) => c.id === body.defId) as any;
+      session.engine.executeMove("addResources", {
+        params: {
+          energy: (def?.energyCost ?? 0) + 4,
+          playerId: pid,
+          power: Object.fromEntries((def?.powerCost ?? []).map((d: string) => [d, 2])),
+        },
+        playerId: pid as PlayerId,
+      });
+      // Push a full state_update including per-client availableMoves so the
+      // agent's `pw moves` reflects the tutored hand immediately.
+      for (const [, client] of session.clients) {
+        const clientMoves = buildAvailableMoves(session, client.playerId);
+        client.ws.send(
+          JSON.stringify({
+            log: session.log,
+            moves: clientMoves,
+            seq: ++session.seq,
+            state: buildGameSnapshot(session, client.playerId),
+            type: "state_update",
+          }),
+        );
+      }
+      return json({ ok: true, cardId: found });
+    }
+
     // ========================================
     // WebSocket Upgrade
     // ========================================

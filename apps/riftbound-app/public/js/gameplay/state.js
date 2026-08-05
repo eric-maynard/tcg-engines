@@ -23,6 +23,7 @@ Object.defineProperty(window, "__rbViewingPlayer", {
 let selectedCard = null; // kept for backward compat with zoom/preview
 let availableMoves = [];
 Object.defineProperty(window, "__rbAvailableMoves", { get() { return availableMoves; }, configurable: true });
+Object.defineProperty(window, "__rbGameId", { get() { return gameId; }, configurable: true });
 let lastSeq = -1;
 let requestCounter = 0;
 
