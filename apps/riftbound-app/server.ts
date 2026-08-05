@@ -119,9 +119,21 @@ const cardImageUrls = new Map<string, string>();
 for (const setJson of Object.values(
   await import("../../packages/riftbound-cards/src/data/sets/index").catch(() => ({})),
 )) {
-  const cards = (setJson as { cards?: { id: string; imageUrl?: string }[] })?.cards ?? [];
+  const cards = (setJson as { cards?: { id: string; name?: string; cardType?: string; imageUrl?: string }[] })?.cards ?? [];
   for (const c of cards) {
-    if (c.id && c.imageUrl) {cardImageUrls.set(c.id, c.imageUrl);}
+    if (c.id && c.imageUrl) {
+      cardImageUrls.set(c.id, c.imageUrl);
+      // Tokens minted in-game carry a synthetic definitionId of the form
+      // `token-def-<slug>` (see riftbound-engine moves/token.ts). Index each
+      // set-token image by that slug too so /card-image/ can serve it. The
+      // set JSON name may carry a region suffix ("Recruit (NX)") — strip it.
+      if (/-t\d+$/.test(c.id) && c.name) {
+        const slug = c.name.replace(/\s*\([^)]*\)$/, "").toLowerCase().replace(/\s+/g, "-");
+        if (!cardImageUrls.has(`token-def-${slug}`)) {
+          cardImageUrls.set(`token-def-${slug}`, c.imageUrl);
+        }
+      }
+    }
   }
 }
 console.log(`Card image CDN fallback: ${cardImageUrls.size} URLs loaded`);
@@ -686,6 +698,7 @@ function buildGameSnapshot(session: GameSession, viewingPlayer?: string) {
         : null,
     },
     log: buildHistoryLog(session),
+    pendingChoice: state.pendingChoice,
     playerNames: session.playerNames,
     players: state.players,
     runePools: state.runePools,
@@ -1417,8 +1430,31 @@ function sandboxAutoPlay(session: GameSession, goldfish: string): void {
       }
     }
 
-    // Auto-pass showdown focus if Goldfish has it
     const goldMoves = session.engine.enumerateMoves(goldfish as PlayerId, { validOnly: true });
+
+    // Auto-resolve any pending choice addressed to the goldfish (discard,
+    // pick-from-revealed, choose-target). Without this the game deadlocks —
+    // pendingChoice blocks every other move for both players.
+    const pending = (state as { pendingChoice?: { prompter?: string; playerId?: string } }).pendingChoice;
+    if (pending && (pending.prompter ?? pending.playerId) === goldfish) {
+      const pick = goldMoves.find((m) => m.moveId === "resolvePendingChoice");
+      if (pick) {
+        const r = session.engine.executeMove("resolvePendingChoice", {
+          params: pick.params as Record<string, unknown>,
+          playerId: goldfish as PlayerId,
+        });
+        if (r.success) {
+          session.log.push(makeLogEntry(
+            `${actorName(goldfish, session.playerNames)} resolved a choice.`,
+            { rewindable: true },
+          ));
+          acted = true;
+          continue;
+        }
+      }
+    }
+
+    // Auto-pass showdown focus if Goldfish has it
     const passFocus = goldMoves.find((m) => m.moveId === "passShowdownFocus");
     if (passFocus) {
       session.engine.executeMove("passShowdownFocus", {
@@ -1433,6 +1469,46 @@ function sandboxAutoPlay(session: GameSession, goldfish: string): void {
       );
       acted = true;
       continue;
+    }
+
+    // Auto-resolve combat / conquer when the human player isn't the one to do
+    // it. resolveFullCombat has no player param — the enumerator offers it to
+    // whichever player is enumerated, so on the goldfish's turn it falls to the
+    // goldfish. conquerBattlefield is per-player.
+    if (state.turn.activePlayer === goldfish) {
+      const combat = goldMoves.find((m) => m.moveId === "resolveFullCombat");
+      if (combat) {
+        const r = session.engine.executeMove("resolveFullCombat", {
+          params: combat.params as Record<string, unknown>,
+          playerId: goldfish as PlayerId,
+        });
+        if (r.success) {
+          session.log.push(makeLogEntry(
+            `Combat resolved at ${(combat.params as { battlefieldId?: string }).battlefieldId}.`,
+            { rewindable: true },
+          ));
+          acted = true;
+          continue;
+        }
+      }
+      const conquer = goldMoves.find(
+        (m) => m.moveId === "conquerBattlefield" &&
+          (m.params as { playerId?: string }).playerId === goldfish,
+      );
+      if (conquer) {
+        const r = session.engine.executeMove("conquerBattlefield", {
+          params: conquer.params as Record<string, unknown>,
+          playerId: goldfish as PlayerId,
+        });
+        if (r.success) {
+          session.log.push(makeLogEntry(
+            `${actorName(goldfish, session.playerNames)} conquered a battlefield.`,
+            { rewindable: true },
+          ));
+          acted = true;
+          continue;
+        }
+      }
     }
 
     // Auto end turn if it's the Goldfish's turn

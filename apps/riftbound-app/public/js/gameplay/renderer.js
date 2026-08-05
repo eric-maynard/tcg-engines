@@ -641,21 +641,6 @@ function renderCardElement(card, isFacedown = false, zone = "") {
     ? ""
     : `onpointerdown="onPointerDown(event, '${esc(card.id)}')"`;
 
-  // Workstream 7: render a compact Auto Pay button only on hand cards the viewing
-  // player owns. This gives a visible, clickable path that pays the card's cost and
-  // plays it in one action — alongside the drag-to-play and click-to-play paths.
-  // Inline styles keep the change scoped to this file (CSS is off-limits this pass).
-  let autoPayBtn = "";
-  if (zone === "hand" && isOwned && typeof canAutoPay === "function" && canAutoPay(card.id)) {
-    autoPayBtn = `<button
-      class="card-auto-pay-btn"
-      type="button"
-      title="Auto Pay and play this card"
-      onpointerdown="event.stopPropagation();"
-      onclick="event.stopPropagation(); autoPayAndPlay('${esc(card.id)}');"
-      style="position:absolute;left:4px;bottom:22px;padding:2px 6px;font-size:9px;font-weight:700;letter-spacing:0.5px;background:rgba(30,160,80,0.92);color:#eafff0;border:1px solid #7ff2a8;border-radius:3px;cursor:pointer;z-index:3;text-transform:uppercase;">Auto Pay</button>`;
-  }
-
   // W13: per-card Hide toggle on viewer-owned hand cards. Click replaces
   // the face with a card-back; state persists in localStorage.
   let hideBtn = "";
@@ -686,7 +671,6 @@ function renderCardElement(card, isFacedown = false, zone = "") {
         <div class="fallback-type">${esc(card.cardType || "")}</div>
       </div>
       ${card.meta?.damage > 0 ? `<div class="card-damage">${card.meta.damage}</div>` : ""}
-      ${autoPayBtn}
       ${hideBtn}
       <div class="card-name">${esc(card.name || "")}</div>
     </div>
@@ -1002,11 +986,35 @@ function renderActions() {
     if (!placed) sections.other.moves.push(move);
   }
 
-  // Rule 355.8: the action list must mirror server availableMoves exactly. Do not
-  // synthesize play entries from canAutoPay — affordability alone ignores target
-  // legality, so cost-payable spells with no valid targets would wrongly appear here.
-
   let html = "";
+
+  // Pending choice (discard / pick-from-revealed / choose-target) — the engine
+  // blocks every other move until this is answered, so surface it as a modal
+  // panel at the top of the action list rather than burying it under "Other".
+  const pending = gameState?.pendingChoice;
+  if (pending) {
+    const mine = (pending.prompter ?? pending.playerId) === viewingPlayer;
+    const verb = pending.onPicked === "discard" ? "Discard a card"
+      : pending.onPicked === "banish" ? "Banish a card"
+      : pending.onPicked === "recycle" ? "Recycle a card"
+      : pending.type === "choose-destination" ? "Choose a destination"
+      : "Choose a card";
+    html += `<div class="action-section-title" style="background:#3a2a4a;color:#ffd070;padding:6px;border-radius:3px;">
+      ${mine ? "⚠ " + esc(verb) : "Waiting for opponent to " + esc(verb.toLowerCase())}
+    </div>`;
+    if (mine) {
+      const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
+      for (const m of picks) {
+        const cid = m.params?.pickedCardId ?? m.params?.pickedZoneId ?? m.params?.pickedName;
+        const card = typeof cid === "string" ? findCard(cid) : null;
+        const label = card?.name ?? String(cid);
+        html += `<button class="action-btn highlighted"
+          onclick='executeMove("resolvePendingChoice", ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+          ${esc(label)}
+        </button>`;
+      }
+    }
+  }
 
   for (const section of Object.values(sections)) {
     if (section.moves.length === 0) continue;
@@ -1035,9 +1043,7 @@ function renderActions() {
       if (moves.length === 1) {
         const m = moves[0];
         const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
-        const onclick = m._autoPay
-          ? `autoPayAndPlay(${JSON.stringify(m.params?.cardId)})`
-          : `executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})`;
+        const onclick = `executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})`;
 
         html += `
           <button class="action-btn ${isPrimary ? "primary" : ""} ${isHighlighted ? "highlighted" : ""}"
@@ -1116,9 +1122,7 @@ function renderActions() {
                 (m.params?.cardId === interaction.sourceCardId ||
                  m.params?.unitIds?.includes(interaction.sourceCardId) ||
                  m.params?.unitId === interaction.sourceCardId);
-              const onclick = m._autoPay
-                ? `autoPayAndPlay(${JSON.stringify(m.params?.cardId)})`
-                : `executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})`;
+              const onclick = `executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})`;
               return `
                 <button class="action-btn ${moveHighlighted ? "highlighted" : ""}"
                         onclick='${onclick}'>

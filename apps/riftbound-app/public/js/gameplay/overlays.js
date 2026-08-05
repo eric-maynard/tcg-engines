@@ -28,6 +28,14 @@ function showPreview(event, el) {
 
   if (!card) return;
 
+  // Runes: suppress the zoom popout — the stacked rune pool is dense and the
+  // hover preview obscures neighbouring runes. Checked both by cardType and
+  // by container so opponent-owned runes (whose cardType may be redacted)
+  // are covered too.
+  if (card.cardType === "rune" || el.closest(".rune-stack")) {
+    return;
+  }
+
   const preview = document.getElementById("cardPreview");
   const img = document.getElementById("previewImg");
   img.src = `/card-image/${imgId}`;
