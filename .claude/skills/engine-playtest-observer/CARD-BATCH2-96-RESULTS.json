@@ -1,0 +1,2443 @@
+{
+  "summary": "Per-card playtesting: N lane-agents, each with its own browser, tests a bucket of cards by tutoring each into hand and playing it.",
+  "agentCount": 37,
+  "logs": [
+    "96 cards in 12 lanes (8/8/8/8/8/8/8/8/8/8/8/8)",
+    "96/96 tested; 91 played; 106 bugs"
+  ],
+  "result": {
+    "tested": 96,
+    "played": 91,
+    "notPlayed": [
+      {
+        "id": "ogn-170-298",
+        "notes": "Card definition file has no effects/abilities block (metadata only), so the engine never offers it — effectively unimplemented."
+      },
+      {
+        "id": "unl-192-219",
+        "notes": "Not offered as playSpell even after playing a friendly unit — engine gates it on having enemy units at battlefields, which goldfish never provides. Force-executing the move was rejected silently."
+      },
+      {
+        "id": "ven-146-166",
+        "notes": "playSpell correctly NOT offered on turn 1 (no unit at any battlefield to target). Could not construct a state with both a unit at a battlefield and ≥4 energy within the goldfish flow (turn-3 energy resets to 0). No defect observed in target-legality gating."
+      },
+      {
+        "id": "sfd-188-221",
+        "notes": "void-rush.ts sequence step 2 is {type:'banish', target:{type:'card'}} — playSpell's spellEffectHasLegalTargets gates on that generic card target at cast time and finds none, so the spell is never legal. Target should be scoped to the revealed cards (pending-value), not a board card"
+      },
+      {
+        "id": "unl-038-219",
+        "notes": "Could not get the spell to cast under any board state tried (no enemy, friendly unit, enemy unit at base). Goldfish AI never plays units."
+      }
+    ],
+    "bugs": 106,
+    "unique": 104,
+    "confirmed": [
+      {
+        "what": "Damage state fields inconsistent",
+        "expected": "meta.damage should reflect the 2 damage marked on the unit so UI/death checks see it.",
+        "observed": "meta.damage=0 while meta.__counters.damage=2 on the same card in the state snapshot.",
+        "layer": "server",
+        "cardId": "unl-014-219",
+        "cards": [
+          "unl-014-219",
+          "unl-020-219"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effect-executor.ts",
+        "reason": "Two disjoint damage stores exist and only combat keeps them in sync. Core `addCounter` writes to `meta.__counters[type]` (operations-impl.ts:459), never to top-level `meta.damage`. Spell/ability damage (Monster Harpoon unl-014-219, Dancing Grenade unl-020-219) goes through effect-executor.ts:407 which only calls `ctx.counters.addCounter(targetId,\"damage\",amount)` — so `meta.__counters.damage=2` but `meta.damage` stays 0. The `assignDamage` (combat.ts:195) and `addDamage` (counters.ts:65) moves do the same. Only `resolveFullCombat` (combat.ts:381-392) writes both the counter AND `updateCardMeta({damage:…})`. Meanwhile all readers use the top-level field: end-of-turn clear at riftbound-flow.ts:503 checks `meta.damage>0`, and UI reads `card.meta?.damage` at renderer.js:688, overlays.js:94, combat.js:47 — so spell-dealt damage is invisible to UI and the end-step clear, exactly matching the observed `meta.damage=0` / `meta.__counters.damage=2` snapshot."
+      },
+      {
+        "what": "Empower activated ability not available",
+        "expected": "activateAbility move offered for Sandspinner with cost [2] (5 base − 3 discount, since I control 2 runes ≤ 4) while I have 4 energy",
+        "observed": "No activateAbility entry for player-1-main-999-ven-001-166 in moves list; forcing executeMove('activateAbility',{abilityIndex:0,...}) was a no-op (energy unchanged, no state change, no error)",
+        "layer": "engine",
+        "cardId": "ven-001-166",
+        "cards": [
+          "ven-001-166",
+          "ven-054-166"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/ven.json",
+        "reason": "ven-001-166's Empower keyword ability never reaches the engine as an activated ability, so activateAbility is neither enumerated nor executable. Chain: ven.json:21-23 stores \"abilities\": [null] for ven-001-166 (generator parse miss on \"[Empower] [5]. This ability costs [3] less…\"). all-cards.ts:805-807 (adaptJsonCard) filters the null and leaves abilities undefined, so enrich-cards.ts:29 re-runs parseAbilities on rulesText. parser/index.ts has no handler for the \"[Empower] <cost>\" keyword-ability form (only parseEmpowerEffect at :2406 for the verb, disempower-cost at :3365, and empower-trigger at :3939), so the runtime parse yields only [{type:\"static\", effect:{keyword:\"Deflect\",…}}] — verified by executing getAllCards() with bun. server.ts:725/973 registers that abilities array verbatim into the global registry. In chain-moves.ts, collectActivatedAbilities:256 skips it (type !== \"activated\"), so the enumerator at :732-738 emits no activateAbility entry; and the condition at :570-574 (abilities[0].type !== \"activated\" → return false) makes a forced executeMove a silent no-op — matching the observed \"no entry in moves list; forced call was no-op, no error\". ven-054-166 (ven.json:1777 \"abilities\": []) hits the same path: runtime parseAbilities returns success:false, abilities stays undefined, getAbilities (card-lookup.ts:163) returns [], enumerator/condition see nothing."
+      },
+      {
+        "what": "Trigger 'When you play your second card in a turn' fires on every card play",
+        "expected": "Ability should trigger exactly once, on the second card played in a turn",
+        "observed": "Ability went on the chain when Darius (1st card) was played, again on the 2nd card, and again on the 3rd card. Card def trigger is {event:'play-card', on:'self'} with no 'second card' condition.",
+        "layer": "card",
+        "cardId": "ogn-027-298",
+        "cards": [
+          "ogn-027-298"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/trigger-runner.ts:85",
+        "reason": "Runtime ability for ogn-027-298 (from parser, not ogn.json) is trigger={event:\"play-card\", on:\"controller\", restrictions:[{count:2, type:\"nth-time-each-turn\"}]}. toTriggerableAbilities() at trigger-runner.ts:85-88 copies only {event, on} and drops `restrictions`; triggerMatchesEvent() at trigger-matcher.ts:132-136 matches on:\"controller\" whenever event.playerId === card.owner. No `nth-time-each-turn` handling exists anywhere in the engine (grep: zero hits). Result: the ability goes on the chain for every card the controller plays — 1st (Darius), 2nd, 3rd — instead of only the 2nd. (Report's cited `on:\"self\"` is from ogn.json, which is not loaded — JSON_SETS=[venJson] at all-cards.ts:828; the TS card def has no abilities so the parser output is used. The observed behavior is nonetheless correct.)"
+      },
+      {
+        "what": "No prompt for optional additional cost",
+        "expected": "playUnit should prompt 'You may kill a friendly gear as an additional cost' (a friendly gear was on the board)",
+        "observed": "No pendingChoice, no alternate move variant; unit went straight to base for 3 energy with the friendly gear untouched",
+        "layer": "card",
+        "cardId": "sfd-160-221",
+        "cards": [
+          "sfd-160-221"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/sfd/zaun-punk.ts",
+        "reason": "zaun-punk.ts:4-16 defines the card with no `abilities` field — only static data + rulesText. The optional \"kill a friendly gear as an additional cost\" is not encoded as an ability (contrast pyke-dockside-butcher.ts:14-34 which at least encodes the paid-additional-cost payoff). Even if it were, playUnit at riftbound-engine/src/game-definition/moves/cards.ts:378-547 has no additional-cost handling: the enumerator (461-514) only emits `{cardId, location: \"base\"}` with no cost-variant, and the reducer (515-546) just calls deductCost with `{}`, moves the card, exhausts it, and fires triggers — never sets a pendingChoice and never touches the friendly gear. So the observed behavior (unit goes straight to base for 3 energy, no prompt) is exactly what the code does."
+      },
+      {
+        "what": "'if you paid the additional cost' condition not checked",
+        "expected": "The 'kill a gear' trigger should only fire if the optional additional cost was paid",
+        "observed": "Additional cost was never offered/paid, yet the on-play trigger put {type:'kill', target:{type:'gear'}} on the chain and killed the friendly Orb of Regret (trash went 0→1)",
+        "layer": "card",
+        "cardId": "sfd-160-221",
+        "cards": [
+          "sfd-160-221"
+        ],
+        "verdict": "CONFIRMED",
+        "reason": "The parser correctly emits condition {type:\"paid-additional-cost\"} on Zaun Punk's play-self trigger (verified by running parseAbilities on the rulesText). However, the trigger path's condition gate — evaluateTriggerCondition() at trigger-runner.ts:108-121 — only handles c.type === \"legion\" (line 117) and returns true for every other condition type (line 120, documented as \"permissive\"). So {type:\"paid-additional-cost\"} passes the filter at fireTriggers() line 266-268, the trigger is pushed onto the chain (line 297-312) with effect {type:\"kill\", target:{type:\"gear\"}}, and executeResolvedItem() (chain-moves.ts:98-179) executes it with no condition re-check. The correct evaluator for this condition type exists at static-abilities.ts:227-229 (checks ctx.draft.additionalCostsPaid?.[source.id]) but is never invoked on the trigger path. Additionally, the first sentence of the rules text produces no ability (parser output has only the triggered ability), so the optional additional cost is never offered — additionalCostsPaid stays unset — yet the kill still fires.",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/trigger-runner.ts:120"
+      },
+      {
+        "what": "On-play trigger does not fire",
+        "expected": "'When you play me … you may ready something besides me that's exhausted' — with an exhausted Forecaster already at base, playing Jayce should put a triggered ability on the chain and prompt to ready a target",
+        "observed": "chain=null, pendingChoice=null after playing Jayce; the exhausted Forecaster stayed exhausted. Card def has abilities:[] and parseSuccess:false.",
+        "layer": "card",
+        "cardId": "ven-068a-166",
+        "cards": [
+          "ven-068a-166"
+        ],
+        "verdict": "CONFIRMED",
+        "reason": "On-play trigger for ven-068a-166 (Jayce) does not fire. Root cause differs from the report's hypothesis: the JSON's abilities:[] / parseSuccess:false (ven.json:2127-2128) is NOT the cause — adaptJsonCard (all-cards.ts:807) maps the empty array to undefined, so enrichCard (enrich-cards.ts:22-31) re-parses rulesText at runtime and DOES attach a triggered ability. The parser emits trigger.event = \"play-self-or-play-gear\" (parser/index.ts:3986). When Jayce is played, the engine fires event type \"play-self\" (moves/cards.ts:533/669/1157), and triggerMatchesEvent does a strict equality check `trigger.event !== event.type` (trigger-matcher.ts:84) — \"play-self-or-play-gear\" ≠ \"play-self\", so it returns false. The compound event \"play-self-or-play-gear\" is not mapped or decomposed anywhere in the engine (grep: zero hits outside the parser). Result: findMatchingTriggers returns no matches, fireTriggers returns 0 without adding to the chain (trigger-runner.ts:287-289), yielding the observed chain=null, pendingChoice=null and the exhausted Forecaster staying exhausted.",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/trigger-matcher.ts:84"
+      },
+      {
+        "what": "Energy cost reduction not applied",
+        "expected": "With a 2-might unit controlled, Sky Splitter should cost 8-2=6 energy",
+        "observed": "Energy went 12→4 on cast (full 8 paid). Card def's static cost-reduction ability has effects:[] (description-only stub).",
+        "layer": "card",
+        "cardId": "ogn-014-298",
+        "cards": [
+          "ogn-014-298"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/ogn.json:463-470",
+        "reason": "Sky Splitter's cost-reduction is a description-only stub. In ogn.json:463-470 the static ability is `{type:\"static\", effect:{type:\"sequence\", effects:[], description:\"...\"}}` — no `cost-reduction` effect node. The TS def (sky-splitter.ts:4-16) has no `abilities` field and no `interactiveCostReduction`. The engine's deductCost (game-definition/moves/cards.ts:260-267) only subtracts `meta.costModifier` and `getInteractiveReduction` (requires `interactiveCostReduction:\"target-might\"`, card-lookup.ts:207-208); it never scans the played card's own statics, and `computeStaticCostReduction` (operations/static-cost-reduction.ts) has no non-test callers and explicitly skips the played card / `target:\"self\"` anyway. Result: full printed 8 energy is deducted → 12→4, not 12→6."
+      },
+      {
+        "what": "'Deal 5 to a unit at a battlefield' does not apply damage",
+        "expected": "Target unit (Lecturing Yordle, 2 might) should take 5 damage and die",
+        "observed": "After both players passed and chain cleared, target still at battlefield with meta.damage=0; only the spell itself moved to trash. Game log shows 'dev cast Sky Splitter' then priority passes, no damage/death entry.",
+        "layer": "engine",
+        "cardId": "ogn-014-298",
+        "cards": [
+          "ogn-014-298"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effect-executor.ts",
+        "reason": "Sky Splitter's parsed effect ({type:\"damage\", amount:5, target:{type:\"unit\",location:\"battlefield\"}}) reaches executeEffect via chain resolution, but the \"damage\" case at effect-executor.ts:407 applies damage via `ctx.counters.addCounter(targetId, \"damage\", amount)`. The real core impl (core/src/operations/operations-impl.ts:450-459) writes that to `cardMetas[id].__counters.damage`, not the top-level `meta.damage` field. State-based death checks (cleanup/state-based-checks.ts:94) and the server/UI read `meta.damage` (initialized to 0 at server.ts:711), so the write is invisible: meta.damage stays 0 and the unit never dies. Unit tests pass only because they mock addCounter to write straight to meta[counter] (wave5-cost-primitives.test.ts:104-109), masking the mismatch. Affects all executeEffect \"damage\" effects, including ogn-014-298."
+      },
+      {
+        "what": "Crumbling Sands offered as playSpell with no target and no spell on the chain; playing it puts {type:'counter'} on chain with no target and it resolves doing nothing",
+        "expected": "'Counter a spell' requires a spell on the chain as a target; should not be enumerated as a legal move when the chain is empty (and the 'if an opponent has played another spell this turn' condition is also unmet)",
+        "observed": "playSpell listed with no targets param on an empty board/chain; energy 5→4; chain item {effect:{type:'counter'}} with no targets; resolved to nothing",
+        "layer": "engine",
+        "cardId": "ven-039-166",
+        "cards": [
+          "ven-039-166"
+        ],
+        "verdict": "CONFIRMED",
+        "reason": "Parser output for ven-039-166 rulesText is `{type:\"spell\", timing:\"reaction\", effect:{type:\"counter\"}}` — no `target` descriptor and no condition (parser/index.ts:1777-1781 matches \"Counter a spell if an opponent has played another spell this turn.\" via `/^Counter (a spell.*...)\\.?$/i` and returns bare `{type:\"counter\"}`, dropping both the spell-on-chain target and the opponent-played-another-spell condition). In the engine, `spellEffectHasLegalTargets` (cards.ts:303-328) returns `true` for any effect lacking `target`/`target1`/`target2`, so the playSpell condition (cards.ts:759) and enumerator gate (cards.ts:840) both pass on an empty chain; the enumerator then falls into the non-card-target branch (cards.ts:848-873) and emits `{playerId, cardId}` with no `targets`. The reducer puts `{effect:{type:\"counter\"}, targets:undefined}` on the chain (cards.ts:918-925) after deducting cost. On resolution, `case \"counter\"` (effect-executor.ts:818-835) checks `chain.items.length > 0` and silently no-ops when nothing is below it. Net: Crumbling Sands is offered and playable with no target on an empty chain, spends 1 energy, and resolves doing nothing.",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/cards.ts:840"
+      },
+      {
+        "what": "'Spend 2 XP: [Buff] me' activated ability is offered and activates with 0 XP on the card",
+        "expected": "activateAbility should be gated on having ≥2 XP counters; activating should remove 2 XP",
+        "observed": "Freshly played (0 XP), activateAbility{abilityIndex:3} was in moves; executing it put a buff effect on the chain with no XP consumed",
+        "layer": "engine",
+        "cardId": "unl-102-219",
+        "cards": [
+          "unl-102-219"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain-moves.ts",
+        "reason": "Runtime parse of unl-102-219 yields ability index 3 = {type:\"activated\", cost:{xp:2}, effect:{type:\"buff\",target:\"self\"}} (verified via getAllCards()). The activateAbility move never inspects cost.xp: condition checks only cost.energy/power/exhaust/kill (chain-moves.ts:602-674, esp. 609/621/638/657); enumerator likewise (chain-moves.ts:749-824); reducer's deductAbilityCost handles only energy/power (chain-moves.ts:370-418) and inline handles only exhaust/kill (chain-moves.ts:865-886). Engine repro with player.xp=0: checkMoveLegal→true, enumerateMoves offers {abilityIndex:3}, applyMove succeeds, buff item lands on chain, player.xp stays 0."
+      },
+      {
+        "what": "On-play trigger 'play a 1 Might Recruit unit token at your base' resolves but no token is created",
+        "expected": "After the create-token chain item resolves, a Recruit unit token (might 1) should be in base zone",
+        "observed": "Chain item {type:'create-token', token:{name:'Recruit',might:1}, location:'base'} resolved; base afterward contains only the gear itself, no token",
+        "layer": "engine",
+        "cardId": "ogn-212-298",
+        "cards": [
+          "ogn-212-298"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain-moves.ts",
+        "reason": "buildEffectContext (chain-moves.ts:43-92) constructs the EffectContext used to resolve chain items but never sets `createCardInZone` on the returned object (see the return at lines 78-91 — only cards/counters/draft/fireTriggers/playerId/sourceCardId/sourceZone/zones are set). When ogn-212-298's play-self trigger places {type:'create-token', token:{name:'Recruit',might:1}, location:'base'} on the chain and it later resolves via executeResolvedItem→buildEffectContext→executeEffect, effect-executor.ts:837-840 hits `if (!ctx.createCardInZone) { break; }` and silently skips token creation. The core zones API does expose createCardInZone (used directly in moves/token.ts:114-151), but buildEffectContext neither accepts it in its context param type (lines 47-70) nor wires it into the EffectContext, so any create-token effect resolved off the chain is a no-op."
+      },
+      {
+        "what": "'Kill this: Recycle up to 4 cards from trashes' activated ability is never offered",
+        "expected": "activateAbility for the gear should appear in moves once it's in play (‘up to 4’ includes 0, so empty trashes shouldn't gate it)",
+        "observed": "No activateAbility entry for player-1-main-999-ogn-212-298 in moves after the gear resolved to base",
+        "layer": "card",
+        "cardId": "ogn-212-298",
+        "cards": [
+          "ogn-212-298"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain-moves.ts",
+        "reason": "Forge of the Future (ogn-212-298) defines its activated ability with cost `{ kill: \"self\" }` (forge-of-the-future.ts:26). The activateAbility enumerator (chain-moves.ts:808-824) and condition (chain-moves.ts:657-673) handle kill costs by calling resolveTarget(cost.kill, …) — which for \"self\" returns [hostCardId] (target-resolver.ts:75) — and then unconditionally filtering out the host card via `.filter((id) => id !== entry.hostCardId)` (line 820) / `.filter((id) => id !== cardId)` (line 666). The result is an empty options list, so the enumerator hits `continue` at line 822 and the condition returns false at line 668. The self-exclusion was written for Malzahar-style \"kill another friendly permanent\" costs (comment at line 656) but incorrectly also blocks `kill: \"self\"`, so the ability is never offered in moves regardless of trash contents."
+      },
+      {
+        "what": "'When you choose or ready me, give me +1 Might this turn' does not fire when Irelia readies during Awaken",
+        "expected": "After turn cycles and Irelia readies at start of controller's turn, might should be 5 (base 4 +1) for that turn",
+        "observed": "Turn 1: played exhausted, might 4. Turn 3 (after auto-cycle): exhausted=false, might still 4; no chain item, no pendingChoice",
+        "layer": "engine",
+        "cardId": "ven-174-166",
+        "cards": [
+          "ven-174-166"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
+        "reason": "Awaken phase readies cards without firing any trigger. riftbound-flow.ts:182-218 (awaken.onBegin) calls context.cards.updateCardMeta(cardId, {exhausted: false}) but never calls fireTriggers; the readyAll move (turn.ts:188-205) likewise only sets the flag. There is no \"ready\" variant in GameEvent (abilities/game-events.ts:11-35) and no \"ready\" entry in EVENT_MAP (abilities/trigger-matcher.ts:48-73), even though TriggerEvent in riftbound-types (trigger-types.ts:52) declares \"ready\". So a \"when you ready me\" trigger can never match. Compounding: ven.json:4575-4578 stores abilities:[null,null] for ven-174-166, so the card has no structured ability to fire even if the event existed. Net effect matches the observation: after auto-cycle, exhausted=false, might stays 4, no chain item."
+      },
+      {
+        "what": "Morbid Return is never enumerated as a legal playSpell even with a unit in the controller's trash",
+        "expected": "With Watchful Sentry (unit) in player-1 trash and 28 energy, playSpell for ogn-170-298 should appear (with a target prompt for the trash unit)",
+        "observed": "trash count=2 (incl. a unit), card in hand, energy 28; moves list contains zero playSpell entries for ogn-170-298; force-executing playSpell returns 400",
+        "layer": "card",
+        "cardId": "ogn-170-298",
+        "cards": [
+          "ogn-170-298"
+        ],
+        "verdict": "CONFIRMED",
+        "reason": "Repro (bun script driving the real playSpell condition/enumerator with the actual enriched def for ogn-170-298): with a unit in P1's trash and no board units, condition=false and enumerator=[]; with a board unit present, it wrongly enumerates the board unit as the target and never the trash unit. Root cause: the parser gives Morbid Return effect.target={type:\"unit\",location:\"trash\"}, but resolveTarget() sources candidates only from getBoardCardIds (base + battlefield zones) at target-resolver.ts:89/166-191, and the location filter chain at target-resolver.ts:125-141 handles only \"here\"/\"base\"/\"battlefield*\" — there is no \"trash\" branch. So targetDescriptorIsSatisfiable (cards.ts:357-366) resolves against board units, returning [] on an empty board, which makes spellEffectHasLegalTargets false and blocks both the condition (cards.ts:758-773) and the enumerator (cards.ts:840-842). Force-executing hits the same condition path → 400.",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/target-resolver.ts:89"
+      },
+      {
+        "what": "'When you choose a friendly unit, you may pay [1] and exhaust this to draw 1' does not trigger when a friendly unit is chosen by a spell",
+        "expected": "After Stupefy resolves targeting friendly Keeper of Masks, a pendingChoice/chain item should offer paying 1 + exhausting Spirit Wheel to draw 1",
+        "observed": "Stupefy resolved on the friendly unit (might 2→1); no pendingChoice, no chain item referencing sfd-144-221, Spirit Wheel remained exhausted=false, hand size unchanged by the trigger",
+        "layer": "engine",
+        "cardId": "sfd-144-221",
+        "cards": [
+          "sfd-144-221"
+        ],
+        "verdict": "CONFIRMED",
+        "reason": "The engine never emits a `choose` GameEvent, so Spirit Wheel's trigger `{event:\"choose\", on:{cardType:\"unit\",controller:\"friendly\"}}` (spirit-wheel.ts:23-26) can never match. The event type is defined (game-events.ts:33) and mapped (trigger-matcher.ts:53), but a repo-wide grep shows zero `fireTriggers({...type:\"choose\"...})` call sites in production code — the only construction is in a unit test (engine-gaps-phase2.test.ts:315). When Stupefy is played, the target is bound at cards.ts:861-867 and the spell is placed on the chain at cards.ts:921-925 with no `choose` event fired; resolution at chain-moves.ts:179-204 fires only `play-spell`/`play-card`; and the `choose-target` pending-choice reducer (pending-choice.ts:160-172) also fires nothing. Secondary defect: even if emitted, the event shape `{cardId, chooserId}` lacks `owner`/`playerId`, so trigger-matcher.ts:153 yields `subjectOwner=undefined` and line 178 rejects the match for `controller:\"friendly\"`.",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/cards.ts:923"
+      },
+      {
+        "what": "Static '+1 Might while you have another unit here' not applied",
+        "expected": "With Forecaster also at base, Trusty Ramhound should show might 3 (base 2 +1)",
+        "observed": "Both units at base; state reports Ramhound might=2 (state does reflect effective might — Stupefy debuff earlier showed 2→1 on another unit)",
+        "layer": "engine",
+        "cardId": "sfd-159-221",
+        "cards": [
+          "sfd-159-221"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/sfd/trusty-ramhound.ts",
+        "reason": "trusty-ramhound.ts:4-15 defines no `abilities` array (only `rulesText`), so `registry.getAbilities()` (card-lookup.ts:162-163) returns [] and `recalculateStaticEffects` (static-abilities.ts:483) never applies the +1 might modifier. Other sfd cards (e.g. loyal-pup.ts:27) do carry an `abilities` field, confirming this is the wiring path. Secondary gap: even if wired, `evaluateCondition` has no \"another unit here\" condition — the closest, `while-alone` (static-abilities.ts:156-165), returns false outside battlefields, so it wouldn't work at base either."
+      },
+      {
+        "what": "Dealing 6 damage to a 3-might unit does not kill it",
+        "expected": "Per rule 143.2.a, Vanguard Captain (might 3) should be killed and moved to trash after taking 6 damage",
+        "observed": "Spell resolved (energy 9→4, spell to trash), but Vanguard Captain remained on battlefield-player-1-bf with might 3; trash only incremented by 1 (the spell)",
+        "layer": "engine",
+        "cardId": "ogn-085-298",
+        "cards": [
+          "ogn-085-298"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/ogn/falling-comet.ts",
+        "reason": "Falling Comet (ogn-085-298) has no `abilities` array — only display-only `rulesText` (falling-comet.ts:4-15). The playSpell reducer looks up the effect via `registry.getAbilities(cardId).find(a => a.type === \"spell\")?.effect` (cards.ts:892-894) and stores it on the chain item; for this card that is `undefined`. On resolution, `executeResolvedItem` sees `rawEffect === undefined`, retries the same registry lookup, again gets no spell ability, and returns without ever calling `executeEffect` (chain-moves.ts:108-123). Thus no `damage` effect runs, `performCleanup`'s rule-520 check (state-based-checks.ts:92-173) sees `meta.damage === 0`, and Vanguard Captain (might 3) is never killed. Cost deduction (cards.ts:883, energy 9→4) and moving the spell to trash happen unconditionally, matching the observed state. Contrast bullet-time.ts which correctly declares `abilities: [{ type: \"spell\", effect: { type: \"damage\", … } }]`. Defect is a missing card ability definition (riftbound-cards layer), not the death-check logic itself."
+      },
+      {
+        "what": "Lethal damage does not kill the target",
+        "expected": "Per rule 143.2.a, a unit with damage ≥ might is killed. Watchful Sentry (might 1) taking 2 damage should die and go to trash (and fire its Deathknell).",
+        "observed": "After Monster Harpoon resolved, Watchful Sentry remained on the battlefield with meta.__counters.damage=2 but meta.damage=0; trash contained only Monster Harpoon; no death log entry; Sentry's Deathknell did not fire.",
+        "layer": "engine",
+        "cardId": "unl-014-219",
+        "cards": [
+          "unl-014-219"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/cleanup/state-based-checks.ts",
+        "reason": "Damage write/read mismatch. The \"damage\" effect (effect-executor.ts:407) calls ctx.counters.addCounter(targetId, \"damage\", amount), which per core operations-impl.ts:459 stores into meta.__counters.damage. The lethal-damage state-based check at state-based-checks.ts:94 reads `const damage = meta?.damage ?? 0` — a different, never-written field — so line 96 `if (damage <= 0) continue` always short-circuits and the kill at lines 109-172 never runs. Result: Watchful Sentry ends up with meta.__counters.damage=2, meta.damage=0, stays on battlefield, no trash move, no Deathknell — exactly as observed. performCleanup is invoked after chain resolution (chain-moves.ts:467/516), so the check does run; it just reads the wrong key."
+      },
+      {
+        "what": "'When you play me' trigger not implemented",
+        "expected": "On play, a triggered ability should go on the chain to heal friendly units here and prompt to move up to one enemy unit from here to its base.",
+        "observed": "Played to base with no chain item, no pendingChoice, no heal/move log entry. Card def (janna-savior.ts) has no abilities[] array — only rulesText.",
+        "layer": "card",
+        "cardId": "sfd-053-221",
+        "cards": [
+          "sfd-053-221"
+        ],
+        "verdict": "CONFIRMED",
+        "reason": "janna-savior.ts:4-18 defines only rulesText with no abilities[] array. Engine reads triggers from card.abilities via getAbilities() (card-lookup.ts:163 returns [] when absent) → toTriggerableAbilities() (trigger-runner.ts:73-76) returns [], so no play-self trigger goes on the chain. Compare gentle-gemdragon.ts:15-34 which correctly implements abilities with trigger:{event:\"play-self\"}.",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/sfd/janna-savior.ts"
+      },
+      {
+        "what": "[Reaction] keyword not implemented",
+        "expected": "Janna should be playable at reaction speed and to a battlefield you control.",
+        "observed": "Card def has no keywords/abilities entry for Reaction; only playUnit→base offered (though on turn 1 with no controlled battlefields that specific restriction is expected).",
+        "layer": "card",
+        "cardId": "sfd-053-221",
+        "cards": [
+          "sfd-053-221"
+        ],
+        "verdict": "CONFIRMED",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/sfd/janna-savior.ts",
+        "reason": "Card def at janna-savior.ts:4-18 declares no `keywords` array and no `abilities` entry — [Reaction] appears only in `rulesText`. At runtime the parser (enrich-cards.ts:20-39 → parser/index.ts) does not emit `{type:\"keyword\", keyword:\"Reaction\"}` for it; empirically the enriched card has `keywords: undefined` and its sole ability is `{type:\"spell\", timing:\"reaction\", ...}`, so `CardDefinitionRegistry.hasKeyword(id, \"Reaction\")` (card-lookup.ts:118-129) returns false. The `playUnit` move (cards.ts:378-515) only checks `registry.hasKeyword(cardId, \"Ambush\")` (line 405) for reaction-speed/battlefield targeting and its enumerator only ever offers `location: \"base\"` gated on active-player/main-phase/neutral-open — there is no Reaction-keyword branch. Result: Janna cannot be played at reaction speed or to a controlled battlefield; only playUnit→base is offered, matching the reported observation. (Note: sfd.json:1987-1990 does carry a Reaction keyword ability, but JSON_SETS in all-cards.ts:828 loads only `venJson`, so sfd.json is not consumed at runtime.)"
+      },
+      {
+        "what": "Activated ability not offered",
+        "expected": "With the gear ready and 2 mind power available, activateAbility for Temporal Portal (cost [rainbow]+Exhaust) should appear in available moves.",
+        "observed": "Only the legend's activateAbility was listed; Temporal Portal never appeared. Forcing executeMove('activateAbility',{cardId:portal,abilityIndex:0}) did nothing — gear stayed unexhausted, no log entry.",
+        "layer": "engine",
+        "cardId": "sfd-078-221",
+        "cards": [
+          "sfd-078-221"
+        ],
+        "verdict": "CONFIRMED",
+        "reason": "Temporal Portal's ability cost is `power: [\"rainbow\"]` (temporal-portal.ts:13). The activateAbility power-affordability check does a literal per-key lookup `(pool.power[d] ?? 0) < count` at chain-moves.ts:628 (condition) and chain-moves.ts:774 (enumerator). The RunePool.power type is `Partial<Record<\"fury\"|\"calm\"|\"mind\"|\"body\"|\"chaos\"|\"order\", number>>` (types/moves.ts:32,37) — there is no \"rainbow\" key, so with 2 mind power the lookup yields 0 and `0 < 1` fails affordability. Per rule 135.2.e.5.a, a [rainbow] cost can be paid by Power of any Domain, but neither check sums across domains or special-cases \"rainbow\". Result: enumerator skips the entry (not offered), and forcing the move hits the condition at :628 which returns false, so the reducer never runs (gear stays unexhausted, no log) — matching both observed symptoms.",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain-moves.ts:628"
+      },
+      {
+        "what": "Missing 'choose a friendly unit' target selector",
+        "expected": "rulesText: 'Choose a friendly unit. It deals damage equal to its Might…' — the spell should prompt for one friendly unit whose Might sets the damage amount.",
+        "observed": "Card impl (alpha-strike.ts) encodes amount as {might:{controller:'friendly',type:'unit'}} with no chooser; there is no target/prompt for the friendly unit selection.",
+        "layer": "card",
+        "cardId": "unl-192-219",
+        "cards": [
+          "unl-192-219"
+        ],
+        "verdict": "CONFIRMED",
+        "reason": "alpha-strike.ts:30-32 encodes amount as {might:{controller:\"friendly\",type:\"unit\"}} with no choose/target step for the friendly unit anywhere in the ability sequence (lines 26-58). The engine's resolveAmount (effect-executor.ts:183-188) only recognizes might:\"self\"; the object form falls through to `return 0` at line 223, so no prompt is issued and damage is 0. rulesText (line 70) requires \"Choose a friendly unit\" but the implementation never selects one.",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/unl/alpha-strike.ts:30"
+      },
+      {
+        "what": "XP gain over-counts (documented FIXME)",
+        "expected": "Gain 1 XP for each unit *this* kills.",
+        "observed": "Impl uses for-each over enemy units with filter:'damaged' — counts already-damaged units, not units killed by this effect. FIXME comment in source acknowledges the approximation.",
+        "layer": "card",
+        "cardId": "unl-192-219",
+        "cards": [
+          "unl-192-219"
+        ],
+        "verdict": "CONFIRMED",
+        "reason": "The for-each effect uses `filter: \"damaged\"` on enemy units at battlefield (lines 44-49), counting damaged units rather than units killed by this effect. The FIXME comment at lines 20-23 explicitly acknowledges this approximation over-counts already-damaged units and that a true implementation would need a per-effect kill counter.",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/unl/alpha-strike.ts:20-23,42-51"
+      }
+    ],
+    "refuted": 2,
+    "reports": [
+      {
+        "cardId": "ven-097-166",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base as 1-might unit. [Hidden] not testable (hideCard requires a controlled battlefield, none on turn 1). +1 Might per other Spiderling not testable (tutor endpoint reuses fixed instance id player-1-main-999-<defId>, so a second copy cannot be spawned). Card def has abilities:[null,null] and no .ts impl, so the might-per-name buff is almost certainly unimplemented."
+      },
+      {
+        "cardId": "ogn-027-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Trigger 'When you play your second card in a turn' fires on every card play",
+            "expected": "Ability should trigger exactly once, on the second card played in a turn",
+            "observed": "Ability went on the chain when Darius (1st card) was played, again on the 2nd card, and again on the 3rd card. Card def trigger is {event:'play-card', on:'self'} with no 'second card' condition.",
+            "layer": "card"
+          },
+          {
+            "what": "+2 Might buff not reflected in state after ability resolves",
+            "expected": "Darius might should read 7 (5+2) after the +2 modify-might effect resolves",
+            "observed": "state.base[].might stayed at 5 after chain resolved (ready effect DID apply — exhausted flipped true→false). Either modify-might isn't applying or the state snapshot omits temporary buffs.",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Both the ready and modify-might effects go on the chain; ready applies, might buff not visible."
+      },
+      {
+        "cardId": "unl-018-219",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base as 6-might unit, no on-play effects (correct). Conquer trigger untestable in goldfish turn-1 setup. Card def's conquer ability has effects:[] (empty sequence) so 'play two Gold gear tokens' would do nothing when triggered — flagged for follow-up but not runtime-observed."
+      },
+      {
+        "cardId": "ogn-158-298",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base as 10-might unit. Shield 3 / Tank are combat-only, untestable here. 'When an opponent moves to a battlefield other than mine, draw 1' untestable (goldfish opponent auto-passes without moving). Card def abilities[] contains only Shield+Tank keywords — the draw trigger is absent from the definition."
+      },
+      {
+        "cardId": "sfd-160-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "No prompt for optional additional cost",
+            "expected": "playUnit should prompt 'You may kill a friendly gear as an additional cost' (a friendly gear was on the board)",
+            "observed": "No pendingChoice, no alternate move variant; unit went straight to base for 3 energy with the friendly gear untouched",
+            "layer": "card"
+          },
+          {
+            "what": "'if you paid the additional cost' condition not checked",
+            "expected": "The 'kill a gear' trigger should only fire if the optional additional cost was paid",
+            "observed": "Additional cost was never offered/paid, yet the on-play trigger put {type:'kill', target:{type:'gear'}} on the chain and killed the friendly Orb of Regret (trash went 0→1)",
+            "layer": "card"
+          }
+        ],
+        "notes": "Net effect: playing Zaun Punk unconditionally kills a gear with no player choice, which is the opposite of the printed 'you may … if you paid' gating."
+      },
+      {
+        "cardId": "ogn-052-298",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base as 2-might unit. Shield keyword (value 1) present in def. Defender bonus is combat-only, not testable in goldfish."
+      },
+      {
+        "cardId": "ven-068a-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "On-play trigger does not fire",
+            "expected": "'When you play me … you may ready something besides me that's exhausted' — with an exhausted Forecaster already at base, playing Jayce should put a triggered ability on the chain and prompt to ready a target",
+            "observed": "chain=null, pendingChoice=null after playing Jayce; the exhausted Forecaster stayed exhausted. Card def has abilities:[] and parseSuccess:false.",
+            "layer": "card"
+          }
+        ],
+        "notes": "Entire rules text is unimplemented (abilities array empty)."
+      },
+      {
+        "cardId": "ogn-014-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Energy cost reduction not applied",
+            "expected": "With a 2-might unit controlled, Sky Splitter should cost 8-2=6 energy",
+            "observed": "Energy went 12→4 on cast (full 8 paid). Card def's static cost-reduction ability has effects:[] (description-only stub).",
+            "layer": "card"
+          },
+          {
+            "what": "'Deal 5 to a unit at a battlefield' does not apply damage",
+            "expected": "Target unit (Lecturing Yordle, 2 might) should take 5 damage and die",
+            "observed": "After both players passed and chain cleared, target still at battlefield with meta.damage=0; only the spell itself moved to trash. Game log shows 'dev cast Sky Splitter' then priority passes, no damage/death entry.",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Spell was correctly gated on having a battlefield-unit target and correctly offered during a showdown ([Action] timing works). Cost reduction and damage resolution both broken."
+      },
+      {
+        "cardId": "ven-039-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Crumbling Sands offered as playSpell with no target and no spell on the chain; playing it puts {type:'counter'} on chain with no target and it resolves doing nothing",
+            "expected": "'Counter a spell' requires a spell on the chain as a target; should not be enumerated as a legal move when the chain is empty (and the 'if an opponent has played another spell this turn' condition is also unmet)",
+            "observed": "playSpell listed with no targets param on an empty board/chain; energy 5→4; chain item {effect:{type:'counter'}} with no targets; resolved to nothing",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Reaction spell playable into an empty chain with no counter target — target/legality check missing."
+      },
+      {
+        "cardId": "unl-102-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'Spend 2 XP: [Buff] me' activated ability is offered and activates with 0 XP on the card",
+            "expected": "activateAbility should be gated on having ≥2 XP counters; activating should remove 2 XP",
+            "observed": "Freshly played (0 XP), activateAbility{abilityIndex:3} was in moves; executing it put a buff effect on the chain with no XP consumed",
+            "layer": "engine"
+          }
+        ],
+        "notes": "XP cost of the activated ability is not enforced; ability usable immediately with 0 XP."
+      },
+      {
+        "cardId": "ogn-212-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "On-play trigger 'play a 1 Might Recruit unit token at your base' resolves but no token is created",
+            "expected": "After the create-token chain item resolves, a Recruit unit token (might 1) should be in base zone",
+            "observed": "Chain item {type:'create-token', token:{name:'Recruit',might:1}, location:'base'} resolved; base afterward contains only the gear itself, no token",
+            "layer": "engine"
+          },
+          {
+            "what": "'Kill this: Recycle up to 4 cards from trashes' activated ability is never offered",
+            "expected": "activateAbility for the gear should appear in moves once it's in play (‘up to 4’ includes 0, so empty trashes shouldn't gate it)",
+            "observed": "No activateAbility entry for player-1-main-999-ogn-212-298 in moves after the gear resolved to base",
+            "layer": "card"
+          }
+        ],
+        "notes": "Gear enters play and trigger fires, but token creation is a no-op and the sacrifice/recycle ability is not exposed."
+      },
+      {
+        "cardId": "ven-174-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'When you choose or ready me, give me +1 Might this turn' does not fire when Irelia readies during Awaken",
+            "expected": "After turn cycles and Irelia readies at start of controller's turn, might should be 5 (base 4 +1) for that turn",
+            "observed": "Turn 1: played exhausted, might 4. Turn 3 (after auto-cycle): exhausted=false, might still 4; no chain item, no pendingChoice",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Unit plays fine (energy 9→4, base, exhausted); the ready trigger never grants +1 might."
+      },
+      {
+        "cardId": "ogn-170-298",
+        "played": false,
+        "bugs": [
+          {
+            "what": "Morbid Return is never enumerated as a legal playSpell even with a unit in the controller's trash",
+            "expected": "With Watchful Sentry (unit) in player-1 trash and 28 energy, playSpell for ogn-170-298 should appear (with a target prompt for the trash unit)",
+            "observed": "trash count=2 (incl. a unit), card in hand, energy 28; moves list contains zero playSpell entries for ogn-170-298; force-executing playSpell returns 400",
+            "layer": "card"
+          }
+        ],
+        "notes": "Card definition file has no effects/abilities block (metadata only), so the engine never offers it — effectively unimplemented."
+      },
+      {
+        "cardId": "sfd-144-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'When you choose a friendly unit, you may pay [1] and exhaust this to draw 1' does not trigger when a friendly unit is chosen by a spell",
+            "expected": "After Stupefy resolves targeting friendly Keeper of Masks, a pendingChoice/chain item should offer paying 1 + exhausting Spirit Wheel to draw 1",
+            "observed": "Stupefy resolved on the friendly unit (might 2→1); no pendingChoice, no chain item referencing sfd-144-221, Spirit Wheel remained exhausted=false, hand size unchanged by the trigger",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Gear plays fine; card def has the triggered ability wired, but the engine emits no 'choose' event for it to react to."
+      },
+      {
+        "cardId": "sfd-159-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Static '+1 Might while you have another unit here' not applied",
+            "expected": "With Forecaster also at base, Trusty Ramhound should show might 3 (base 2 +1)",
+            "observed": "Both units at base; state reports Ramhound might=2 (state does reflect effective might — Stupefy debuff earlier showed 2→1 on another unit)",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Unit plays to base correctly; conditional static might buff does not apply when a second friendly unit joins the same zone."
+      },
+      {
+        "cardId": "ogn-085-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Dealing 6 damage to a 3-might unit does not kill it",
+            "expected": "Per rule 143.2.a, Vanguard Captain (might 3) should be killed and moved to trash after taking 6 damage",
+            "observed": "Spell resolved (energy 9→4, spell to trash), but Vanguard Captain remained on battlefield-player-1-bf with might 3; trash only incremented by 1 (the spell)",
+            "layer": "engine"
+          },
+          {
+            "what": "playSpell move enumerated twice for the same card+target",
+            "expected": "One playSpell entry per (card, target) combination",
+            "observed": "moves contained two identical entries {moveId:'playSpell', cardId:'player-1-main-999-ogn-085-298', targets:['player-1-main-26-ogn-218-298']}",
+            "layer": "server"
+          }
+        ],
+        "notes": "Target selection works (targets param populated per unit-at-battlefield); damage resolution does not apply lethal-damage kill check."
+      },
+      {
+        "cardId": "ven-sp3-006",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base and moved to enemy battlefield OK (3 might, exhausted on entry). 'When I attack or defend' trigger could not be verified — goldfish AI never fields units so no enemy target existed; nothing was added to the chain when Ahri moved to Altar to Unity uncontested. No .ts impl file exists (ven set is JSON-only)."
+      },
+      {
+        "cardId": "unl-014-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Lethal damage does not kill the target",
+            "expected": "Per rule 143.2.a, a unit with damage ≥ might is killed. Watchful Sentry (might 1) taking 2 damage should die and go to trash (and fire its Deathknell).",
+            "observed": "After Monster Harpoon resolved, Watchful Sentry remained on the battlefield with meta.__counters.damage=2 but meta.damage=0; trash contained only Monster Harpoon; no death log entry; Sentry's Deathknell did not fire.",
+            "layer": "engine"
+          },
+          {
+            "what": "Damage state fields inconsistent",
+            "expected": "meta.damage should reflect the 2 damage marked on the unit so UI/death checks see it.",
+            "observed": "meta.damage=0 while meta.__counters.damage=2 on the same card in the state snapshot.",
+            "layer": "server"
+          }
+        ],
+        "notes": "Spell went on chain with correct effect {type:damage, amount:2, target unit@battlefield} and required a battlefield target to be castable. Conditional 'deal 4 if you control a facedown card' not exercised (no facedown in play). Card def has no abilities[] (parser-generated)."
+      },
+      {
+        "cardId": "sfd-053-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'When you play me' trigger not implemented",
+            "expected": "On play, a triggered ability should go on the chain to heal friendly units here and prompt to move up to one enemy unit from here to its base.",
+            "observed": "Played to base with no chain item, no pendingChoice, no heal/move log entry. Card def (janna-savior.ts) has no abilities[] array — only rulesText.",
+            "layer": "card"
+          },
+          {
+            "what": "[Reaction] keyword not implemented",
+            "expected": "Janna should be playable at reaction speed and to a battlefield you control.",
+            "observed": "Card def has no keywords/abilities entry for Reaction; only playUnit→base offered (though on turn 1 with no controlled battlefields that specific restriction is expected).",
+            "layer": "card"
+          }
+        ],
+        "notes": "Entered base as 3-might unit for 3 energy. Trigger effects are vacuous with no damaged allies / no enemies at base, but nothing was added to the chain at all."
+      },
+      {
+        "cardId": "sfd-078-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Activated ability not offered",
+            "expected": "With the gear ready and 2 mind power available, activateAbility for Temporal Portal (cost [rainbow]+Exhaust) should appear in available moves.",
+            "observed": "Only the legend's activateAbility was listed; Temporal Portal never appeared. Forcing executeMove('activateAbility',{cardId:portal,abilityIndex:0}) did nothing — gear stayed unexhausted, no log entry.",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Gear equipped for 3 energy into base zone, exhausted=false. Card def (temporal-portal.ts) DOES declare abilities:[{type:'activated',cost:{exhaust:true,power:['rainbow']},…}] but the engine never enumerates it."
+      },
+      {
+        "cardId": "unl-192-219",
+        "played": false,
+        "bugs": [
+          {
+            "what": "Missing 'choose a friendly unit' target selector",
+            "expected": "rulesText: 'Choose a friendly unit. It deals damage equal to its Might…' — the spell should prompt for one friendly unit whose Might sets the damage amount.",
+            "observed": "Card impl (alpha-strike.ts) encodes amount as {might:{controller:'friendly',type:'unit'}} with no chooser; there is no target/prompt for the friendly unit selection.",
+            "layer": "card"
+          },
+          {
+            "what": "XP gain over-counts (documented FIXME)",
+            "expected": "Gain 1 XP for each unit *this* kills.",
+            "observed": "Impl uses for-each over enemy units with filter:'damaged' — counts already-damaged units, not units killed by this effect. FIXME comment in source acknowledges the approximation.",
+            "layer": "card"
+          }
+        ],
+        "notes": "Not offered as playSpell even after playing a friendly unit — engine gates it on having enemy units at battlefields, which goldfish never provides. Force-executing the move was rejected silently."
+      },
+      {
+        "cardId": "ogn-224-298",
+        "played": true,
+        "bugs": [],
+        "notes": "Cast with no gear in play: chain showed sequence[kill upTo 1 gear, draw 1]; on resolve deck 35→34 and hand net-unchanged (spell out, +1 drawn) — draw worked. No 'drew 1' log line emitted for the Salvage draw but state changed correctly. 'Kill up to one gear' path not exercised (no gear on board)."
+      },
+      {
+        "cardId": "ogn-075-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "[Accelerate] optional cost not offered",
+            "expected": "With ≥1 energy and ≥1 calm power available, playing Tasty Faefolk should offer paying [1][calm] additional to enter ready.",
+            "observed": "With energy=11 and calm power=2, only a single playUnit→base move was listed; no accelerate variant, no pendingChoice. Unit entered exhausted; calm power untouched.",
+            "layer": "card"
+          },
+          {
+            "what": "[Deathknell] not implemented",
+            "expected": "Card should carry a Deathknell trigger (channel 2 runes exhausted, draw 1 on death).",
+            "observed": "Card def (tasty-faefolk.ts) has no abilities[] array — Deathknell exists only in rulesText.",
+            "layer": "card"
+          }
+        ],
+        "notes": "Played for 7 energy as a vanilla 6-might unit. Both keywords are stub-only (rulesText, no ability objects)."
+      },
+      {
+        "cardId": "unl-020-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Targets all units instead of one chosen unit",
+            "expected": "rulesText 'Deal 2 to a unit' — player should be prompted to choose a single unit target.",
+            "observed": "playSpell offered with no targets param; chain effect was {type:'damage', amount:2, target:{type:'unit', quantity:'all'}}. No target-selection prompt. With one unit on board it dealt 2 to it, but the effect shape would hit every unit.",
+            "layer": "card"
+          },
+          {
+            "what": "'Controller may play this again for [rainbow]' replay not implemented",
+            "expected": "After resolving, the target's controller should be offered the option to recast Dancing Grenade for [rainbow] with escalating bonus damage.",
+            "observed": "Spell went straight to trash after resolve; no pendingChoice, no replay move offered. Card def (dancing-grenade.ts) has no abilities[] — parser-generated effect only covers the base damage.",
+            "layer": "card"
+          },
+          {
+            "what": "Damage state fields inconsistent",
+            "expected": "meta.damage on the hit unit should read 2.",
+            "observed": "Noxian Drummer showed meta.damage=0 but meta.__counters.damage=2 (same split-tracking issue seen with Monster Harpoon).",
+            "layer": "server"
+          }
+        ],
+        "notes": "Castable even before any unit was in play (no-target playSpell was listed on an empty board). Card has no timing keyword in rulesText but def sets timing:'action'."
+      },
+      {
+        "cardId": "ogn-208-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Additional cost 'kill a friendly unit' not enforced",
+            "expected": "playUnit should be illegal when no friendly unit is on board; when legal, should prompt to choose a friendly unit to kill as part of the play cost",
+            "observed": "playUnit offered with zero friendly units on board; played to base for 4 energy with no sacrifice prompt and no unit killed (trash count stayed 0)",
+            "layer": "card"
+          }
+        ],
+        "notes": "No hand-authored card file exists (path in card-list is a stub); parser does not emit an additionalCost, so the engine treats it as a vanilla 4/6."
+      },
+      {
+        "cardId": "sfd-023-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Second damage clause ('then deal 2 to up to one other unit') is missing from the parsed effect",
+            "expected": "Two sequential damage effects: (1) deal 2 to a chosen unit at a battlefield, (2) deal 2 to up to one other unit anywhere; player prompted for both targets",
+            "observed": "Chain contained a single effect {type:'damage', amount:2, target:{type:'unit', quantity:{upTo:1}, location:'battlefield'}}; only the primary target took 2 damage; no second-target prompt ever surfaced. First-target quantity is also wrong (upTo:1 makes it optional; rulesText requires exactly one).",
+            "layer": "card"
+          }
+        ],
+        "notes": "Dealt 2 to Fallen Feline (3→1 remaining) and went to trash. Repeat cost untested (no fury power available). Card def has no explicit effect — relies on rules-text parser which collapsed the two clauses into one."
+      },
+      {
+        "cardId": "ogn-177-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'When a friendly unit moves from my location' trigger does not fire",
+            "expected": "After Forecaster standardMove'd from base (where Stealthy Pursuer also sits) to a battlefield, an optional triggered ability should go on the chain / a pendingChoice should offer moving Stealthy Pursuer along",
+            "observed": "Forecaster moved to battlefield; chain=null, pendingChoice=null; Stealthy Pursuer stayed at base with no prompt. Card definition has the ability wired (trigger:{event:'move', on:{location:'here', controller:'friendly', excludeSelf:true}}) but the engine never dispatched it.",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Unit itself plays fine as a 4/4 to base."
+      },
+      {
+        "cardId": "ogn-128-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "No selection prompt for the friendly and enemy unit; spell playable with no legal enemy and resolves as a no-op",
+            "expected": "playSpell requires choosing one friendly unit and one enemy unit (illegal to cast if either set is empty); on resolution both take damage equal to the other's Might",
+            "observed": "playSpell was offered with no targets param while board had 1 friendly / 0 enemy units. Chain item carried effect {type:'fight', attacker:{controller:'friendly'}, defender:{controller:'enemy'}} with no bound targets. After passChainPriority the spell went to trash, no pendingChoice appeared, and Soaring Scout took 0 damage.",
+            "layer": "engine"
+          }
+        ],
+        "notes": "'fight' effect type appears unimplemented in the resolver — no target enumeration at play time and no choice at resolution."
+      },
+      {
+        "cardId": "sfd-157-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Sand Soldier token is not created when the on-play trigger resolves",
+            "expected": "After the triggered ability resolves, a 2-Might Sand Soldier unit token appears in the same zone as Royal Guard (base)",
+            "observed": "Trigger correctly went on chain as {type:'create-token', token:{name:'Sand Soldier', might:2, type:'unit'}, location:'here'}; after both players passed priority the chain cleared but no token exists in any zone (checked base, all battlefields, trash, banishment) and the game log has no token-creation entry",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Trigger placement is correct; the create-token resolver silently produces nothing."
+      },
+      {
+        "cardId": "sfd-151-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Targets only one friendly unit instead of two",
+            "expected": "playSpell enumerates two-unit target sets (rulesText: 'Give two friendly units each +1 Might'); both selected units receive mightModifier +1",
+            "observed": "With two friendly units on board, moves list offered playSpell twice, each with a single-element targets array. Chain effect correctly carried target.quantity:2, but resolution applied meta.mightModifier:1 only to the one selected unit (Soaring Scout); Watchful Sentry got no modifier.",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Parser output is right (quantity:2); move-enumeration and resolver only honor a single target. Repeat option not offered (only 2 energy left, correct)."
+      },
+      {
+        "cardId": "unl-055-219",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base as 5/5. Shield/Tank keywords and stun-trigger are defined in the card file but could not be exercised — goldfish opponent never puts a unit on a battlefield, so no stun target exists and no defender-combat scenario is reachable in this harness."
+      },
+      {
+        "cardId": "unl-004-219",
+        "played": true,
+        "bugs": [],
+        "notes": "Played as 1-Might. After casting Thermo Beam (5-cost spell) same turn, engine set meta.staticMightBonus:4 on Neophyte — conditional +4 Might works correctly."
+      },
+      {
+        "cardId": "unl-164-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "On-play trigger 'each player must kill one of their units' auto-selected which unit to kill without prompting",
+            "expected": "With 2 controlled units (Carrion Dredger + Safety Inspector) on base, player-1 should be prompted to choose which unit to kill",
+            "observed": "No pendingChoice / target-selection move appeared; after passChainPriority the engine silently killed Carrion Dredger and left Safety Inspector",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Trigger fired and a unit died. Could not test the optional 'spend 3 XP as additional cost' branch (player had 0 XP; no additional-cost variant of playUnit was offered)."
+      },
+      {
+        "cardId": "unl-130-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "On-play trigger resolved but no Bird token was created for the opponent",
+            "expected": "After resolution, the chosen opponent (player-2) has a 1-Might Bird unit token with Deflect at their base",
+            "observed": "Chain item {type:create-token, token:{name:Bird,might:1,keywords:[Deflect]}, location:'base'} resolved with no visible effect — server zones show only Walking Roost in base and no token in any zone for either player",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Deflect keyword present in rulesText; no 'choose an opponent' prompt (acceptable in 2-player), but the token creation itself did nothing."
+      },
+      {
+        "cardId": "sfd-081-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "On-play 'you and each opponent may play a Gold gear token' produced no prompt and no tokens",
+            "expected": "Player-1 (and opponent) each get a yes/no choice to play a Gold gear token exhausted; if opponent accepts, player-1 gets an additional Gold token",
+            "observed": "Chain item {type:create-token, token:{name:Gold,type:gear}, ready:false} resolved with no pendingChoice and no Gold gear tokens in any zone afterward (server zones show only Card Sharp in base)",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Same failure shape as Walking Roost — create-token effect resolves to nothing; also missing the 'may' choice and the per-opponent bonus-token clause."
+      },
+      {
+        "cardId": "ogn-112-298",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base for 6 energy, might 6, exhausted. 'When I conquer' trigger untestable in fresh goldfish state (requires points > spell cost, a spell in trash, and combat resolution). Ganking not exercisable this turn (unit exhausted). No defects observed at play time."
+      },
+      {
+        "cardId": "sfd-052-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "activateAbility for '[Exhaust]: Give a unit +3 Might' did not prompt for a target",
+            "expected": "Activating the ability should require choosing a unit (target parameter or pendingChoice)",
+            "observed": "activateAbility move takes no target param; after execution, chain item {type:modify-might, amount:3, target:{type:unit}} appeared with no bound target and no pendingChoice/target-selection moves were offered — only passChainPriority",
+            "layer": "engine"
+          },
+          {
+            "what": "After ability resolution, no unit received +3 Might",
+            "expected": "The chosen unit's might increases by 3 for the turn (Vanguard Captain 3 → 6)",
+            "observed": "Gear became exhausted (cost paid) but Vanguard Captain remained at might 3 after chain resolved; ability fizzled",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Gear entered play ready and activateAbility was listed; cost (exhaust) is applied but the effect does nothing."
+      },
+      {
+        "cardId": "ven-146-166",
+        "played": false,
+        "bugs": [],
+        "notes": "playSpell correctly NOT offered on turn 1 (no unit at any battlefield to target). Could not construct a state with both a unit at a battlefield and ≥4 energy within the goldfish flow (turn-3 energy resets to 0). No defect observed in target-legality gating."
+      },
+      {
+        "cardId": "ven-152-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Rebuttal is offered as a legal playSpell when there is no spell on the chain to choose",
+            "expected": "playSpell for Rebuttal should not be legal unless there is a spell on the chain with energy cost ≤ 4",
+            "observed": "Turn 1 main phase, empty chain: moves list contains playSpell for Rebuttal (and no other spells). It cast successfully for 1 energy.",
+            "layer": "engine"
+          },
+          {
+            "what": "Rebuttal effect is unimplemented (raw text placeholder)",
+            "expected": "On resolution: prompt to choose a spell on the chain, then a 'may pay [rainbow]' choice; if paid, gain control + rechoose targets; otherwise counter the spell",
+            "observed": "Chain item effect is {type:'raw', text:'Choose a spell...'} — no choose-spell prompt, no pay-rainbow prompt, no counter applied; passChainPriority resolved it with zero effect",
+            "layer": "card"
+          }
+        ],
+        "notes": "Card consumes 1 energy and goes to trash but does literally nothing."
+      },
+      {
+        "cardId": "unl-148-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "On-play 'banish all units from your trash' banished units from BASE instead of trash",
+            "expected": "With trash empty and 3 units on base, resolving the trigger banishes nothing; base units remain in play",
+            "observed": "Chain effect described {type:banish, target:{location:'trash', type:'unit', quantity:'all'}}, but after resolution: banishment zone contains [Safety Inspector, Enthralling Protector, Fallen Feline] (all previously on base), base contains only Cursed Sarcophagus, trash still empty",
+            "layer": "engine"
+          },
+          {
+            "what": "Activated ability '[Exhaust]: Play a unit banished with this' is never offered",
+            "expected": "With Cursed Sarcophagus ready and 3 units in banishment, moves list should include activateAbility for cardId player-1-main-999-unl-148-219",
+            "observed": "moves list has no activateAbility entry for the Sarcophagus (only the legend's ability); gear is ready (exhausted:false)",
+            "layer": "card"
+          }
+        ],
+        "notes": "Severe: wipes the controller's board. The effect descriptor says location:'trash' so the resolver appears to ignore the location filter on banish targets."
+      },
+      {
+        "cardId": "ogn-122-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'Take a turn after this one' does not grant an extra turn",
+            "expected": "After casting Time Warp and ending turn 1, player-1 should take turn 2 (extra turn) before opponent's turn",
+            "observed": "Chain item contained only {type:'banish',target:'self'} — no extra-turn effect. After endTurn, Goldfish took turn 2, then player-1 got turn 3. Log: 'dev ended their turn' → 'Goldfish channeled 3 runes' → 'Goldfish ended their turn'",
+            "layer": "card"
+          },
+          {
+            "what": "'Banish this' sends the spell to trash instead of banishment",
+            "expected": "After resolution, Time Warp should be in the banishment zone",
+            "observed": "zones.banishment=[], zones.trash=['player-1-main-999-ogn-122-298']. The chain's {type:'banish',target:'self'} effect resolved but the card ended up in trash",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Card def (time-warp.ts) has no abilities field — rulesText parser only picked up 'Banish this', missed the extra-turn clause"
+      },
+      {
+        "cardId": "ven-055-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Empower [3] activated ability not available",
+            "expected": "With Applied Researchers on base and 4 energy, an activateAbility move should be offered to pay [3] and Empower it",
+            "observed": "No activateAbility move for player-1-main-999-ven-055-166 in __rbAvailableMoves; card meta has no 'empowered' flag; card state has no abilities field. Only the legend's activateAbility was offered",
+            "layer": "card"
+          }
+        ],
+        "notes": "No cards/ven/ hand-coded impl exists — card is data-only from ven.json with no parsed abilities. Empowered spell-cost reduction untestable without Empower"
+      },
+      {
+        "cardId": "sfd-169-221",
+        "played": true,
+        "bugs": [],
+        "notes": "Gear equipped to base OK (unexhausted). Could not naturally trigger 'when a friendly unit dies' in goldfish — sandbox killUnit move only calls zones.moveCard→trash without dispatchUnitDied, so the trigger never fires via that path (engine test-hook gap, not this card). Card def (altar-of-memories.ts) has correct triggered ability wired"
+      },
+      {
+        "cardId": "unl-077-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Token units do not receive +1 Might from Soul Shepherd",
+            "expected": "A friendly Recruit token should show might 2 (base 1 + 1 from Soul Shepherd's static)",
+            "observed": "Legend's create-token chain item resolved but produced NO token anywhere. Sandbox '+ Recruit' button spawned {id:'token-recruit-player-1-2', cardType:'unknown', might:undefined, name:<id>}; UI renders it as 'UNKNOWN' with might '—'. No +1 applied",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Soul Shepherd landed on base at might 3. Root cause is broken token instantiation (cardType 'unknown', no might), which makes the +1 static unobservable"
+      },
+      {
+        "cardId": "ogn-197-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'When you play me, give me +3 Might this turn' does not apply",
+            "expected": "Teemo (base might 1) should be might 4 after the on-play trigger resolves",
+            "observed": "Chain correctly held {type:'modify-might',amount:3,target:'self',duration:'turn'}. After both players passed and chain went null, Teemo's might is still 1 and meta.buffed=false. No log line for the buff",
+            "layer": "engine"
+          }
+        ],
+        "notes": "hideCard move exists in engine but was not enumerated for Teemo; UI shows a HIDE button on every hand card regardless of [Hidden] keyword — didn't verify if it succeeds"
+      },
+      {
+        "cardId": "ogn-012-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Legion cost reduction does not apply",
+            "expected": "After playing Trusty Ramhound first (energy 8→6), playing Noxus Hopeful should cost 2 (energy 6→4)",
+            "observed": "Energy went 8→6→2: Noxus Hopeful charged full 4. Hand-state energyCost stayed 4 after the first play. Card def (noxus-hopeful.ts) has no abilities/keywords field — Legion is only in rulesText",
+            "layer": "card"
+          }
+        ],
+        "notes": "Engine has legion-conditions.ts, but the card definition never declares the Legion keyword so the reducer never sees it"
+      },
+      {
+        "cardId": "unl-114-219",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base (might 4, exhausted), then standardMove'd to enemy battlefield next turn — non-combat showdown resolved, no draw (correct: no combat). Ambush (reaction-timing play) and 'when I win a combat, draw 1' need enemy units — not exercisable vs passive Goldfish. Card def has no abilities field"
+      },
+      {
+        "cardId": "sfd-188-221",
+        "played": false,
+        "bugs": [
+          {
+            "what": "Void Rush is unplayable — playSpell condition rejected",
+            "expected": "With 6 energy and cost 2, playSpell should be offered; casting should reveal top 2, prompt to banish/play one at -2, draw the rest",
+            "observed": "No playSpell move in __rbAvailableMoves for the card. Forcing executeMove('playSpell',...) → toast 'Move rejected: Move playSpell condition not met'. Energy/hand unchanged",
+            "layer": "card"
+          }
+        ],
+        "notes": "void-rush.ts sequence step 2 is {type:'banish', target:{type:'card'}} — playSpell's spellEffectHasLegalTargets gates on that generic card target at cast time and finds none, so the spell is never legal. Target should be scoped to the revealed cards (pending-value), not a board card"
+      },
+      {
+        "cardId": "ven-113-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "On-play [Burn 2] trigger does nothing",
+            "expected": "Playing Kennen mills top 2 cards of main deck into trash (deck 35→33, trash 0→2)",
+            "observed": "Trigger goes on chain as {type:'raw',text:'[Burn 2].'}, resolves with no effect: deck stays 35, trash stays 0. No 'burn' effect type exists in effect-executor and the ven set has no card impl file.",
+            "layer": "card"
+          }
+        ],
+        "notes": "ven set has no implementation directory; auto-parser emits type:'raw' for Burn keyword so both abilities are inert."
+      },
+      {
+        "cardId": "ven-095-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "On-move 'you may Burn 1 to give +1 Might' does nothing and offers no choice",
+            "expected": "After moving, a yes/no prompt to Burn 1; on accept, deck -1, trash +1, unit might 2→3 this turn",
+            "observed": "Trigger goes on chain as {type:'raw',text:'[Burn 1] to give me +1 :rb_might: this turn.'}; no pendingChoice; on resolve deck unchanged (34→34), trash 0, might stays 2.",
+            "layer": "card"
+          }
+        ],
+        "notes": "Same root cause as ven-113: ven set unimplemented, Burn keyword unparsed → raw no-op."
+      },
+      {
+        "cardId": "sfd-018-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Reveal replacement effect not implemented",
+            "expected": "While in play, any 'reveal from deck' first shows top card with a 'recycle it?' prompt before revealing",
+            "observed": "Card definition (packages/riftbound-cards/src/cards/sfd/void-hatchling.ts) is a bare stub with no abilities/replacementEffects field; engine has no hook for it. Plays as vanilla 2-might unit.",
+            "layer": "card"
+          }
+        ],
+        "notes": "Plays to base fine (energy 6→4, might 2); passive replacement is a stub."
+      },
+      {
+        "cardId": "ven-077-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "No activated abilities available (Empower and Exhaust-to-buff both missing)",
+            "expected": "After playing gear, activateAbility moves offered for '[2]: Empower this' and '[Exhaust]: Give a unit +2/+4 Might'",
+            "observed": "pw moves lists no activateAbility entries for player-1-main-999-ven-077-166 even with a friendly unit on board and 4 energy available; gear sits inert.",
+            "layer": "card"
+          }
+        ],
+        "notes": "ven set unimplemented; gear plays to base (energy 8→4) but is a dead card."
+      },
+      {
+        "cardId": "ogn-194-298",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base (energy 8→4, might 4); moved base→bf and conquered. Ganking bf→bf not reachable in goldfish flow (unit returns to base after conquering). Reveal-from-deck trigger not testable without a reveal source. No bugs observed in what was exercised."
+      },
+      {
+        "cardId": "ogn-185-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'then draw 1' after discard never executes",
+            "expected": "On move: discard-1 prompt → pick → card to trash → draw 1 (hand 6→5→6, deck 34→33, trash 0→1)",
+            "observed": "Discard prompt shown correctly, picked card went to trash, but no draw: hand 6→5, deck stays 34, trash 0→1. Game log shows 'resolve pending choice' with no subsequent 'drew 1 card'. effect-executor.ts case 'discard' sets pendingChoice and breaks without handling effect.then.",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Auto-parser correctly built {type:'discard',amount:1,then:{type:'draw',amount:1}}; the engine drops the then-clause after the pending-choice discard path."
+      },
+      {
+        "cardId": "unl-167-219",
+        "played": true,
+        "bugs": [],
+        "notes": "Played (energy 9→4, might 6); on-play trigger correctly parsed as {type:'return-to-hand',target:{location:'trash',filter:[Bird|Cat|Dog|Poro]}}; fizzled cleanly with empty trash. Could not verify with a valid target (no tag data in test deck)."
+      },
+      {
+        "cardId": "unl-048-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "On-hold Sprite token is never created",
+            "expected": "After Trevor holds a battlefield, a ready 3-might Sprite unit token with [Temporary] appears at that battlefield",
+            "observed": "Hold scored (VP +1), trigger went on chain as {type:'create-token',token:{might:3,name:'Sprite',keywords:['Temporary']},ready:true,location:'here'}, both players passed, chain resolved — but no token exists in any zone. effect-executor.ts case 'create-token' silently breaks when ctx.createCardInZone is not provided (comment line 105: 'silently skipped').",
+            "layer": "engine"
+          },
+          {
+            "what": "'here' resolves to Trevor's current zone (base), not the held battlefield",
+            "expected": "Token spawns at the battlefield Trevor was holding when the trigger fired",
+            "observed": "By resolution time Trevor has returned to base; effect-executor uses ctx.sourceZone (Trevor's current zone) for location:'here', so even if creation worked the token would land at base, not the held battlefield.",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Played fine (might 3); Shield keyword not exercised (no defender scenario)."
+      },
+      {
+        "cardId": "unl-122-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Optional additional [chaos] cost / enter-ready not offered after playing a spell",
+            "expected": "After casting a spell (Meditation) this turn, playing Crescent Guardian should present a choice to pay [chaos] as an additional cost; if paid, the unit enters ready",
+            "observed": "No pendingChoice/prompt appeared; unit went straight to base with exhausted:true and chaos power unchanged (still 3). Parsed ability in set JSON is a static with empty effects[]",
+            "layer": "card"
+          }
+        ],
+        "notes": "Baseline (no spell played) works correctly — enters exhausted, cost 4. Conditional path is a no-op."
+      },
+      {
+        "cardId": "unl-038-219",
+        "played": false,
+        "bugs": [
+          {
+            "what": "playSpell not offered even with an enemy unit on the board",
+            "expected": "With an enemy-controlled unit in play (Otterpus, transferred to player-2 via transferControl), Skyward Strike should be castable targeting it",
+            "observed": "No playSpell move enumerated for unl-038-219; REST /move playSpell returns 'condition not met' both with and without targets param",
+            "layer": "engine"
+          },
+          {
+            "what": "[Level 6] Stun clause missing from parsed ability",
+            "expected": "Card has two effects: 'Move an enemy unit' plus a Level-6-gated 'Stun an enemy unit'",
+            "observed": "Set JSON abilities[] contains only a single {type:'move', to:'base', target:{type:'unit'}} — the Level-6 Stun clause is absent and the target filter lacks controller:'enemy'",
+            "layer": "card"
+          }
+        ],
+        "notes": "Could not get the spell to cast under any board state tried (no enemy, friendly unit, enemy unit at base). Goldfish AI never plays units."
+      },
+      {
+        "cardId": "ven-102-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Triggered ability 'When an opponent plays a gear' not parsed",
+            "expected": "Card should register a triggered ability so that when player-2 plays a gear, player-1 gets a may-choice to banish Prefect and the gear",
+            "observed": "Set JSON abilities[] is empty (no triggered ability registered at all). Attempt to have player-2 play gear via REST failed with 'condition not met' (not p2's turn), so runtime trigger untestable, but with abilities=[] it cannot fire",
+            "layer": "card"
+          }
+        ],
+        "notes": "Unit itself plays fine (3 cost, 3 might, exhausted). Trigger is unimplemented at parser level."
+      },
+      {
+        "cardId": "ogn-140-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Dragon cost reduction does not apply",
+            "expected": "With Herald of Scales on board, playing Direwing (a Dragon, printed cost 7) should cost 5 energy (7-2)",
+            "observed": "Energy went 30→23 playing Direwing — full 7 paid. Herald's parsed ability is static with empty effects[]. Additionally, no card in any set JSON has 'Dragon' in tags[] (tags only contain champion names), so tribal filter has nothing to match",
+            "layer": "card"
+          }
+        ],
+        "notes": "Herald plays correctly (4 cost, 3 might). Static effect is a complete no-op; tribal-tag data missing across all sets."
+      },
+      {
+        "cardId": "unl-098-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Level 11 +4 Might static not applied",
+            "expected": "With player-1 at 11 XP, Targonian Visionary should show might 10 (base 6 + 4)",
+            "observed": "After gainXp to xp=11, base zone card still reports might:6 (no effectiveMight field, no meta bonus). Parsed ability is static with empty effects[]",
+            "layer": "card"
+          }
+        ],
+        "notes": "Plays fine (6 cost, 6 might). XP-gated static bonus never activates."
+      },
+      {
+        "cardId": "sfd-146-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Combat spell-cost modifier not implemented",
+            "expected": "While Vex is in combat, friendly spells cost [1][rainbow] less (min 1) and enemy spells cost [1][rainbow] more",
+            "observed": "Parsed ability is static with empty effects[] — no cost-modifier registered. Could not construct combat in goldfish (no enemy units) to verify runtime, but with effects=[] the engine has nothing to apply",
+            "layer": "card"
+          }
+        ],
+        "notes": "Unit plays correctly (5 cost, 5 might, exhausted). Static ability parsed to empty sequence."
+      },
+      {
+        "cardId": "ogn-157-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Activation cost 'Spend my buff' not enforced",
+            "expected": "activateAbility should only be legal when Udyr has a buff (meta.buffed=true), and activating should remove the buff",
+            "observed": "activateAbility offered and succeeds with meta.buffed=false; buff state unchanged after activation. Parsed cost is {} (empty)",
+            "layer": "card"
+          },
+          {
+            "what": "Modal 'Choose one' resolves with no choice prompt and no effect",
+            "expected": "On resolution, a pendingChoice should list the 4 modes (Deal 2 / Stun / Ready me / Ganking); picking 'Ready me' should set exhausted:false",
+            "observed": "Chain item correctly carried a {type:'choice',options:[4 modes]} effect, but after passChainPriority the chain cleared with pendingChoice:null and Udyr still exhausted:true — no mode was chosen or applied",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Unit plays (6 cost, 6 might). Modal effect structure reaches the chain but the resolver never surfaces the choice."
+      },
+      {
+        "cardId": "ogn-165-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'Return a unit from your trash to your hand' trigger resolves with no target selection and no effect",
+            "expected": "With Forecaster (unit) in trash, playing Cemetery Attendant should prompt to select a trash unit (or auto-select the only one) and move it to hand",
+            "observed": "Trigger went on chain with effect {type:'return-to-hand',target:{location:'trash',type:'unit'}}; after passChainPriority, pendingChoice=null, trash still contains Forecaster, hand does not — nothing was returned",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Unit plays (3 cost, 3 might). Trigger fires and reaches chain but effect executor does nothing on resolution."
+      },
+      {
+        "cardId": "unl-173-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Additional cost 'kill a friendly Mighty unit' not enforced",
+            "expected": "playSpell should be illegal when no friendly unit with 5+ Might is in play; if legal, a Mighty unit must be killed as part of the cost",
+            "observed": "playSpell was offered and resolved with an empty board (no units at all); no unit was killed, energy was spent, spell went on chain and resolved",
+            "layer": "engine"
+          },
+          {
+            "what": "'Channel 1 rune exhausted' put the rune in the base zone, ready",
+            "expected": "One rune added to the rune pool in exhausted state (rune count 2→3, ready count unchanged)",
+            "observed": "New Mind Rune appeared in the base zone with exhausted:false; rune pool stayed at 2/2 (UI 'Runes 2/2', state.base contained the rune card)",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Draw 2 worked (hand 5→7). Both the cost-gate and the channel-destination are wrong."
+      },
+      {
+        "cardId": "ven-001-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Empower activated ability not available",
+            "expected": "activateAbility move offered for Sandspinner with cost [2] (5 base − 3 discount, since I control 2 runes ≤ 4) while I have 4 energy",
+            "observed": "No activateAbility entry for player-1-main-999-ven-001-166 in moves list; forcing executeMove('activateAbility',{abilityIndex:0,...}) was a no-op (energy unchanged, no state change, no error)",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Unit entered base at might 6 exhausted (correct). Empower keyword ability appears unimplemented — cannot test the [Empowered] Deflect/Assault 2 grant."
+      },
+      {
+        "cardId": "sfd-206-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "No target selection for 'Choose a friendly unit and a spell'",
+            "expected": "pendingChoice or per-target playSpell params prompting for one friendly unit and one spell on the chain",
+            "observed": "Spell went straight onto the chain with effect {type:'counter'} and no targets; no pendingChoice surfaced at any point",
+            "layer": "engine"
+          },
+          {
+            "what": "'+Might equal to that spell's Energy cost' not applied",
+            "expected": "After Riposte resolves countering Danger Zone (cost 1), the chosen friendly unit (Daring Poro, only candidate) has might 2→3 for the turn",
+            "observed": "Danger Zone was marked countered:true, but Daring Poro remained at might 2; chain effect only encoded {type:'counter'} with no modify-might component",
+            "layer": "card"
+          }
+        ],
+        "notes": "Counter half works (spell on chain got countered:true). Unit-buff half is entirely missing from the parsed effect."
+      },
+      {
+        "cardId": "ogn-005-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Lethal spell damage does not kill the target",
+            "expected": "Daring Poro (might 2) takes 3 damage → dies → moves to trash → 'if this kills it, draw 1' fires (hand +1)",
+            "observed": "After resolution Poro is still on the battlefield; server state shows meta.damage:0 but meta.__counters.damage:3 — damage went to a counters bucket the death check doesn't read. No draw occurred (hand 7→6, only Disintegrate left).",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Targeting worked (playSpell enumerated only battlefield units). Damage is written to __counters.damage instead of meta.damage, so state-based death and the conditional draw never trigger."
+      },
+      {
+        "cardId": "unl-071-219",
+        "played": true,
+        "bugs": [],
+        "notes": "On-play trigger fired; Keeper of Masks (other friendly unit at same location) received grantedKeywords:[{keyword:'Shield',duration:'turn'}], Chakram Dancer itself did not (excludeSelf correct). Ambush reaction-timing not exercised."
+      },
+      {
+        "cardId": "sfd-027-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'If you have two or fewer cards in your hand, I enter ready' not applied",
+            "expected": "With 2 cards remaining in hand after playing Dunebreaker, it enters with exhausted:false",
+            "observed": "Played with hand=3 (→2 after leaving hand); Dunebreaker entered with exhausted:true, same as the >2-hand case. Conditional replacement effect appears unimplemented.",
+            "layer": "card"
+          }
+        ],
+        "notes": "Plays to base at might correct, cost 7 deducted. 'When I hold, draw 2' not exercised (requires holding a battlefield across a scoring step)."
+      },
+      {
+        "cardId": "sfd-074-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'You may kill a gear' resolves without a choice prompt",
+            "expected": "pendingChoice offering to kill Orb of Regret or decline",
+            "observed": "No pendingChoice; Orb of Regret was moved to trash automatically on trigger resolution",
+            "layer": "engine"
+          },
+          {
+            "what": "Cost restriction 'Energy cost no more than [1]' missing from kill target",
+            "expected": "Effect target filters gears to energyCost ≤ 1",
+            "observed": "Chain effect target is {type:'gear'} with no cost filter — any gear would be a legal kill target",
+            "layer": "card"
+          },
+          {
+            "what": "'If you do, play a Gold gear token exhausted' never fires",
+            "expected": "After Orb of Regret is killed, a Gold gear token is created (exhausted) in player-1's gear zone",
+            "observed": "No Gold token anywhere in zones after resolution. The parsed condition is {type:'paid-additional-cost'} which never becomes true for a triggered 'you may…if you do' — wrong condition wiring.",
+            "layer": "card"
+          }
+        ],
+        "notes": "Trigger fires and kills a gear; the optional/conditional/token pieces are all wrong."
+      },
+      {
+        "cardId": "unl-171-219",
+        "played": true,
+        "bugs": [],
+        "notes": "Entered base at might 6, cost 3 deducted. Card def carries Deflect/Tank/NoCombatDamage abilities. Static keywords not functionally exercised (would need opponent targeting + combat), but nothing broke on play."
+      },
+      {
+        "cardId": "ven-035-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Sanction's 'Choose one' modal resolves with no mode-selection prompt and no effect",
+            "expected": "On cast, player is prompted to choose Empower or Disempower, then selects a target unit; the chosen effect applies and reverses at end of turn",
+            "observed": "Spell went on chain with effect.type='choice' whose two options are both type:'raw' (unparsed text). No pendingChoice was raised. On resolution the spell went to trash with no target prompt and no state change on any unit.",
+            "layer": "card"
+          }
+        ],
+        "notes": "Both modal options are raw stubs; also playSpell was offered even with zero units on board (no legal target)."
+      },
+      {
+        "cardId": "unl-092-219",
+        "played": true,
+        "bugs": [],
+        "notes": "On-play trigger put gain-xp on chain; after resolution player-1 XP went 0→1. Works correctly."
+      },
+      {
+        "cardId": "sfd-110-221",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base with might 3. One-on-one combat trigger not testable — Goldfish has no units on board and no combat could be initiated. Card impl (fiora-peerless.ts) has properly typed double-might triggers."
+      },
+      {
+        "cardId": "ven-125-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Activated ability '[order]: Ready me and give me +1 Might this turn' has unimplemented effect",
+            "expected": "activateAbility move offered for Hungry Wolf (given order power + enemy-chosen precondition); on activation, unit readies and gets +1 might until end of turn, usable once per turn",
+            "observed": "Parser output for the ability is {cost:{power:['order']}, effect:{type:'raw', text:'Ready me and give me +1...'}}. No activateAbility move was ever enumerated for the card. The 'only if you've chosen an enemy unit this turn / only once each turn' restrictions are not captured as structured conditions either.",
+            "layer": "card"
+          }
+        ],
+        "notes": "Unit played to base (might 4, exhausted). Ability effect body is a raw text stub."
+      },
+      {
+        "cardId": "ogn-139-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'When you play another unit, buff me' trigger never fires",
+            "expected": "After Cithria is on board, playing another friendly unit puts a buff-self trigger on the chain and Cithria gains a +1 might buff on resolution",
+            "observed": "Played Cithria (might 1) to base, then played Disciple of Shen to base. chain stayed null, no pendingChoice, Cithria's might stayed 1 and meta.buffed stayed false. Parser produces the correct trigger {event:'play-unit', on:{controller:'friendly',excludeSelf:true}} but the engine did not fire it.",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Trigger definition is correct at the card layer; the play-unit-on-other-friendly listener is not wired in the engine."
+      },
+      {
+        "cardId": "ogn-118-298",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base (might 5). Could not kill a friendly unit in Goldfish setup so the death trigger was not exercised. Runtime parser produces the correct trigger {event:'die', on:{controller:'friendly'}, restrictions:[first-time-each-turn]} — no card-layer defect found."
+      },
+      {
+        "cardId": "sfd-128-221",
+        "played": true,
+        "bugs": [],
+        "notes": "Played to base (might 2). Defend trigger not testable — no attacker available in Goldfish. Runtime parser produces the correct optional sequence [kill self, move attacking unit to base] — no card-layer defect found."
+      },
+      {
+        "cardId": "ogn-009-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Damage from Hextech Ray does not kill the target and is stored inconsistently",
+            "expected": "Deal 3 damage to the targeted unit at a battlefield; a 2-might unit taking 3 damage dies and moves to trash",
+            "observed": "Cast on Noxian Emissary (might 2) at a battlefield. After chain resolution the Emissary is still in play; server state shows meta.damage:0 but meta.__counters.damage:3 on the same card. No 'dealt damage' or 'died' log entry. The damage effect writes to __counters.damage while the death/state check reads meta.damage.",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Target selection and chain effect (damage:3, target:unit@battlefield) worked correctly; the resolution/death-check side is broken."
+      },
+      {
+        "cardId": "sfd-060-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Deflect keyword not implemented on card",
+            "expected": "Card def should carry abilities:[{keyword:'Deflect',type:'keyword',value:1}] so opponents pay [rainbow] to target her",
+            "observed": "tianna-crownguard.ts has no abilities/keywords field at all; plays as vanilla 7-cost 4-might unit",
+            "layer": "card"
+          },
+          {
+            "what": "'While I'm at a battlefield, opponents can't gain points' static ability not implemented",
+            "expected": "A static ability entry that suppresses opponent point gain while she is at a battlefield",
+            "observed": "No abilities field on the card def; nothing in engine reacts to her presence",
+            "layer": "card"
+          }
+        ],
+        "notes": "Played to base for 7 energy (11→4). Could not move same turn (summoning sick). Card def is stats-only — both printed abilities are missing from the definition."
+      },
+      {
+        "cardId": "ogn-229-298",
+        "played": true,
+        "bugs": [],
+        "notes": "Worked correctly: playSpell offered per-target move, chain item {type:kill,target:unit}, after both players passed priority the target unit went to trash (base emptied, trash 1→2)."
+      },
+      {
+        "cardId": "unl-080-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Third step of triggered sequence (Spell/Gear/Unit modal) never prompts and never applies the discarded-type branch",
+            "expected": "After discarding a Unit card, Hwei gains +3 Might this turn (or at minimum a choice prompt appears since the def models it as type:'choice')",
+            "observed": "Discarded Unsung Hero (unit); no resolvePendingChoice for the modal appeared and Hwei's might stayed at base 5 (mightModifier 0). The 'choice' step was silently skipped.",
+            "layer": "engine"
+          },
+          {
+            "what": "Modal is encoded as a free player 'choice' instead of being conditioned on the discarded card's type",
+            "expected": "Branch is auto-selected based on discarded card's cardType per rulesText",
+            "observed": "hwei-brooding-painter.ts models step 3 as {type:'choice',options:[Spell,Gear,Unit]} — an approximation the file comment acknowledges — so a player could pick any branch regardless of what was discarded",
+            "layer": "card"
+          },
+          {
+            "what": "Discard prompt excludes one hand card",
+            "expected": "'draw 1, then discard 1' — the discard prompt should offer every card now in hand including the just-drawn one",
+            "observed": "Hand contained 8 cards at prompt time but resolvePendingChoice offered only 7 pickedCardId options; Patched Porobot (player-1-main-17-ven-058-166) was in hand but not selectable",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Trigger fires on standardMove and goes on chain; draw+discard work; the modal step is both mis-modeled (card) and dropped by the sequence resolver (engine)."
+      },
+      {
+        "cardId": "ven-010-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Targets all units at battlefields instead of a single chosen unit",
+            "expected": "playSpell should require selecting one unit target ('Deal 2 to a unit at a battlefield')",
+            "observed": "playSpell move enumerated with no targets param; chain item effect is {type:'damage',amount:2,target:{type:'unit',quantity:'all',location:'battlefield'}} — no target-selection prompt at all",
+            "layer": "engine"
+          },
+          {
+            "what": "Bonus damage per same-name card in trash not implemented",
+            "expected": "amount = 2 + (copies of Consuming Curse in trash)",
+            "observed": "Effect amount is a fixed 2 with no scaling reference; no TS card def exists (JSON abilities:[null]), effect appears auto-generated",
+            "layer": "card"
+          }
+        ],
+        "notes": "After resolve the battlefield unit received __counters.damage:2 (meta.damage stayed 0) and did not die at 2 might — noting only, unclear if lethal-outside-combat is intended."
+      },
+      {
+        "cardId": "sfd-047-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'When you buff me, ready me' trigger not implemented",
+            "expected": "After applying a buff (modifyBuff +1/+0), a trigger goes on the chain and Simian Ancestor readies (exhausted→false)",
+            "observed": "Log shows 'dev buffed Simian Ancestor by +1/+0' and meta.mightModifier:1, but no chain item fired and exhausted stayed true. Card def simian-ancestor.ts has no abilities field.",
+            "layer": "card"
+          }
+        ],
+        "notes": "Played to base (enters exhausted); sandbox modifyBuff applied a +1 mightModifier but the printed trigger did nothing."
+      },
+      {
+        "cardId": "sfd-196-221",
+        "played": true,
+        "bugs": [
+          {
+            "what": "No target selection prompt for either unit; spell resolves with zero effect",
+            "expected": "Prompt to choose a unit for +2 Might and a different unit for -2 Might; those units' might changes for the turn",
+            "observed": "playSpell enumerated with no targets param; chain item is sequence[{modify-might +2 target:{type:'unit'}},{modify-might -2 target:{type:'unit'}}] with no bound targets. After both players passed priority, both units at base still had might 2 / mightModifier 0. No resolvePendingChoice appeared.",
+            "layer": "engine"
+          },
+          {
+            "what": "Card definition has no abilities entry",
+            "expected": "defiant-dance.ts should declare abilities with two distinct unit targets ('a unit' and 'another unit')",
+            "observed": "defiant-dance.ts has only rulesText/timing — no abilities array; effect on chain appears auto-generated and lacks the 'another unit' distinctness constraint",
+            "layer": "card"
+          }
+        ],
+        "notes": "Spell went to trash (trash 0→1) but had no board effect at all."
+      },
+      {
+        "cardId": "unl-179-219",
+        "played": true,
+        "bugs": [
+          {
+            "what": "'When I move to a battlefield, look at top 3…' trigger does not fire",
+            "expected": "After standardMove to a battlefield, a triggered ability goes on the chain and a peek/choice prompt shows the top 3 deck cards",
+            "observed": "After moving Rift Herald to player-1-bf, interaction.chain was null, no pendingChoice, no peek dialog, deck size unchanged",
+            "layer": "card"
+          },
+          {
+            "what": "[Deathknell] play-a-unit-from-hand ability not implemented",
+            "expected": "Card def carries a Deathknell keyword ability that triggers on death",
+            "observed": "rift-herald.ts has no abilities field at all — both printed abilities are missing from the definition",
+            "layer": "card"
+          }
+        ],
+        "notes": "Plays and moves as a vanilla 8-cost 7-might unit; neither ability is wired."
+      },
+      {
+        "cardId": "ogn-034-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Conquer-with-5+-excess-damage trigger not implemented",
+            "expected": "Card def carries a triggered ability on conquer that checks excess damage assigned and awards 1 point",
+            "observed": "tryndamere-barbarian.ts has no abilities field; plays as vanilla 7-cost 8-might unit",
+            "layer": "card"
+          }
+        ],
+        "notes": "Played to base for 7 energy. Could not construct a full attack-with-enemy-defenders scenario in goldfish, but card def has no ability entry so the trigger cannot fire regardless."
+      },
+      {
+        "cardId": "ogn-254-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "No target selection prompt for 'Choose a unit'",
+            "expected": "Playing the spell should present a pendingChoice/target prompt to choose a specific unit",
+            "observed": "No pendingChoice; chain effect carried a generic filter {target:{type:'unit'}} instead of a chosen instance id",
+            "layer": "card"
+          },
+          {
+            "what": "Legion mode not applied",
+            "expected": "With another card (Trifarian Gloryseeker) already played this turn, Legion should apply 'Kill it now instead' and kill the chosen unit immediately on resolution",
+            "observed": "Chain effect was still the non-Legion replacement variant; after passing priority the unit remained on base alive (base still contained Gloryseeker, might 2)",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Spell cost paid (8→2 after also playing a 2-cost unit) and moved to trash; effect resolved to nothing observable."
+      },
+      {
+        "cardId": "ogn-134-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Channeled rune placed into wrong zone",
+            "expected": "'Channel 1 rune' should move a rune from rune deck into the rune pool",
+            "observed": "Rune deck went 10→9 but the new rune (player-1-rune-9-ogn-214-298) appeared in state.base (unit base zone), not runePool; runePool count stayed at 2 and UI 'Runes 2/2' unchanged",
+            "layer": "engine"
+          },
+          {
+            "what": "Channeled rune not exhausted",
+            "expected": "rulesText says 'Channel 1 rune exhausted' — the new rune should enter exhausted:true",
+            "observed": "The channeled rune had exhausted:false",
+            "layer": "card"
+          }
+        ],
+        "notes": "Cost paid (6→4), spell resolved via chain; the 'if you can't, draw 1' fallback not tested (rune deck had cards)."
+      },
+      {
+        "cardId": "sfd-008-221",
+        "played": true,
+        "bugs": [],
+        "notes": "Unit entered base with might 3. Weaponmaster trigger produced no prompt but no Equipment was in play, so no valid target — cannot confirm whether the trigger is wired. No observable defect."
+      },
+      {
+        "cardId": "ven-054-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Empower activated ability not available",
+            "expected": "'[Empower] — [Exhaust]' should appear as an activateAbility move while the gear is ready and not Empowered",
+            "observed": "No activateAbility move enumerated for the Tome (only the legend had one); force-executing activateAbility abilityIndex:0 was a no-op (gear stayed ready, no empowered marker, no state change)",
+            "layer": "engine"
+          },
+          {
+            "what": "Card image 404 for tutored/spawned card",
+            "expected": "Card art should render for cards spawned via tutor",
+            "observed": "Console errors: 'Failed to load resource: 404' for the spawned card asset (visible across multiple spawned cards)",
+            "layer": "ui"
+          }
+        ],
+        "notes": "Gear entered base ready. Second ability (Disempower→Draw) untestable since Empower can't be applied first."
+      },
+      {
+        "cardId": "sfd-020-221",
+        "played": true,
+        "bugs": [],
+        "notes": "Unit entered base exhausted with might 4. Both abilities are combat-triggered (win combat / attack-or-defend) — not reachable in a turn-1 goldfish setup, so no defect observed in what was testable."
+      },
+      {
+        "cardId": "ogn-016-298",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Legion on-play trigger did not fire",
+            "expected": "After playing another unit first (Faithful Manufactor), playing Dangerous Duo should trigger Legion: prompt to choose a unit and give it +2 Might this turn",
+            "observed": "No chain item, no pendingChoice, no might change on any unit (Manufactor stayed 2, Dangerous Duo stayed 3)",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Unit entered base correctly; only the Legion effect is missing. Same Legion-not-tracked pattern as ogn-254-298."
+      },
+      {
+        "cardId": "ven-100-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "No Tentacle tokens created",
+            "expected": "On resolution, two 1-Might Tentacle unit tokens should be created (with a location prompt or default to base)",
+            "observed": "Chain item had no 'effect' payload at all ({cardId,controller,type:'spell',id} only); after passChainPriority, base=[] and all bfZones empty",
+            "layer": "card"
+          },
+          {
+            "what": "Flow not offered from trash",
+            "expected": "After the spell is in trash and player has ≥3 energy, a play-from-trash / Flow move should be enumerated",
+            "observed": "trash=1, energy=4, but no move referencing ven-100-166 or any flow/playFromTrash moveId in the moves list",
+            "layer": "engine"
+          }
+        ],
+        "notes": "Spell cost paid (7→4) and card went to trash; resolved with zero effect."
+      },
+      {
+        "cardId": "ven-047-166",
+        "played": true,
+        "bugs": [
+          {
+            "what": "Empower [2] activated ability not available",
+            "expected": "With unit in play and 4 energy, an activateAbility move for Empower (cost [2]) should be listed",
+            "observed": "No activateAbility for the Mage; force-executing it surfaced UI toast 'Move rejected: Move activateAbility condition not met'; energy unchanged at 4, might stayed 3, no empowered marker",
+            "layer": "engine"
+          },
+          {
+            "what": "Downstream effects untestable due to Empower failure",
+            "expected": "Becoming Empowered should trigger Predict 2 (top-2 look/recycle prompt) and grant static +1 Might",
+            "observed": "Neither reachable because Empower cannot be activated",
+            "layer": "card"
+          }
+        ],
+        "notes": "Unit entered base with might 3. Same Empower-keyword-not-activatable pattern as ven-054-166."
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Playtest"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "lane0 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "a6aa5a2f1176da9c9",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893777041,
+      "queuedAt": 1785893774386,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 0). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 0 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |  …",
+      "lastProgressAt": 1785894746650,
+      "tokens": 150300,
+      "toolCalls": 94,
+      "durationMs": 969609,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"ven-097-166\",\"played\":true,\"bugs\":[],\"notes\":\"Played to base as 1-might unit. [Hidden] not testable (hideCard requires a controlled battlefield, none on turn 1). +1 Might per other Spiderling not testable (tutor endpoint reuses fixed instance id player-1-main-999-<defId>, so a second copy cannot be spawned). Card def has abilities:[null,null] and no .ts impl, so the might-pe…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "lane1 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "aa7093eb008a00469",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893777784,
+      "queuedAt": 1785893774386,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 1). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 1 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |  …",
+      "lastProgressAt": 1785894615453,
+      "tokens": 141017,
+      "toolCalls": 76,
+      "durationMs": 837668,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"ven-039-166\",\"played\":true,\"bugs\":[{\"what\":\"Crumbling Sands offered as playSpell with no target and no spell on the chain; playing it puts {type:'counter'} on chain with no target and it resolves doing nothing\",\"expected\":\"'Counter a spell' requires a spell on the chain as a target; should not be enumerated as a legal move when the chain is empty (and the 'if an opponent has…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "lane2 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "a2babbddc5f9f5220",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893779205,
+      "queuedAt": 1785893774386,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 2). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 2 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |  …",
+      "lastProgressAt": 1785894699723,
+      "tokens": 159466,
+      "toolCalls": 74,
+      "durationMs": 920518,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"ven-sp3-006\",\"played\":true,\"bugs\":[],\"notes\":\"Played to base and moved to enemy battlefield OK (3 might, exhausted on entry). 'When I attack or defend' trigger could not be verified — goldfish AI never fields units so no enemy target existed; nothing was added to the chain when Ahri moved to Altar to Unity uncontested. No .ts impl file exists (ven set is JSON-only).\"},{\"card…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "lane3 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "a9bb1772311ee2b88",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893779965,
+      "queuedAt": 1785893774386,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 3). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 3 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |  …",
+      "lastProgressAt": 1785894743832,
+      "tokens": 155902,
+      "toolCalls": 87,
+      "durationMs": 963867,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"ogn-208-298\",\"played\":true,\"bugs\":[{\"what\":\"Additional cost 'kill a friendly unit' not enforced\",\"expected\":\"playUnit should be illegal when no friendly unit is on board; when legal, should prompt to choose a friendly unit to kill as part of the play cost\",\"observed\":\"playUnit offered with zero friendly units on board; played to base for 4 energy with no sacrifice prompt and…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "lane4 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "a20eabcad80634df2",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893777240,
+      "queuedAt": 1785893774386,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 4). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 4 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |  …",
+      "lastProgressAt": 1785894520409,
+      "tokens": 137553,
+      "toolCalls": 48,
+      "durationMs": 743169,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"unl-164-219\",\"played\":true,\"bugs\":[{\"what\":\"On-play trigger 'each player must kill one of their units' auto-selected which unit to kill without prompting\",\"expected\":\"With 2 controlled units (Carrion Dredger + Safety Inspector) on base, player-1 should be prompted to choose which unit to kill\",\"observed\":\"No pendingChoice / target-selection move appeared; after passChainPrio…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "lane5 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "a79997ca0067108e8",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893777874,
+      "queuedAt": 1785893774386,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 5). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 5 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |  …",
+      "lastProgressAt": 1785894741282,
+      "tokens": 163873,
+      "toolCalls": 84,
+      "durationMs": 963408,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"ogn-122-298\",\"played\":true,\"bugs\":[{\"what\":\"'Take a turn after this one' does not grant an extra turn\",\"expected\":\"After casting Time Warp and ending turn 1, player-1 should take turn 2 (extra turn) before opponent's turn\",\"observed\":\"Chain item contained only {type:'banish',target:'self'} — no extra-turn effect. After endTurn, Goldfish took turn 2, then player-1 got turn 3.…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "lane6 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "acd0b4b8fabb9c0fa",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893778220,
+      "queuedAt": 1785893774386,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 6). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 6 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |  …",
+      "lastProgressAt": 1785894721292,
+      "tokens": 150504,
+      "toolCalls": 82,
+      "durationMs": 943072,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"ven-113-166\",\"played\":true,\"bugs\":[{\"what\":\"On-play [Burn 2] trigger does nothing\",\"expected\":\"Playing Kennen mills top 2 cards of main deck into trash (deck 35→33, trash 0→2)\",\"observed\":\"Trigger goes on chain as {type:'raw',text:'[Burn 2].'}, resolves with no effect: deck stays 35, trash stays 0. No 'burn' effect type exists in effect-executor and the ven set has no card i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "lane7 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "a446967e796773324",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893779012,
+      "queuedAt": 1785893774386,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 7). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 7 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |  …",
+      "lastProgressAt": 1785894819715,
+      "tokens": 162081,
+      "toolCalls": 89,
+      "durationMs": 1040703,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"unl-122-219\",\"played\":true,\"bugs\":[{\"what\":\"Optional additional [chaos] cost / enter-ready not offered after playing a spell\",\"expected\":\"After casting a spell (Meditation) this turn, playing Crescent Guardian should present a choice to pay [chaos] as an additional cost; if paid, the unit enters ready\",\"observed\":\"No pendingChoice/prompt appeared; unit went straight to base …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "lane8 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "a8b275e9f89969d04",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893778639,
+      "queuedAt": 1785893774386,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 8). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 8 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |  …",
+      "lastProgressAt": 1785894827417,
+      "tokens": 154185,
+      "toolCalls": 68,
+      "durationMs": 1048778,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"unl-173-219\",\"played\":true,\"bugs\":[{\"what\":\"Additional cost 'kill a friendly Mighty unit' not enforced\",\"expected\":\"playSpell should be illegal when no friendly unit with 5+ Might is in play; if legal, a Mighty unit must be killed as part of the cost\",\"observed\":\"playSpell was offered and resolved with an empty board (no units at all); no unit was killed, energy was spent, s…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "lane9 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "abc078406c94fed6c",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893777441,
+      "queuedAt": 1785893774386,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 9). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 9 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |  …",
+      "lastProgressAt": 1785894821606,
+      "tokens": 150286,
+      "toolCalls": 93,
+      "durationMs": 1044165,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"ven-035-166\",\"played\":true,\"bugs\":[{\"what\":\"Sanction's 'Choose one' modal resolves with no mode-selection prompt and no effect\",\"expected\":\"On cast, player is prompted to choose Empower or Disempower, then selects a target unit; the chosen effect applies and reverses at end of turn\",\"observed\":\"Spell went on chain with effect.type='choice' whose two options are both type:'ra…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 11,
+      "label": "lane10 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "a23f329cd8dd3699c",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893778295,
+      "queuedAt": 1785893774387,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 10). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 10 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |…",
+      "lastProgressAt": 1785894671260,
+      "tokens": 150930,
+      "toolCalls": 68,
+      "durationMs": 892965,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"sfd-060-221\",\"played\":true,\"bugs\":[{\"what\":\"Deflect keyword not implemented on card\",\"expected\":\"Card def should carry abilities:[{keyword:'Deflect',type:'keyword',value:1}] so opponents pay [rainbow] to target her\",\"observed\":\"tianna-crownguard.ts has no abilities/keywords field at all; plays as vanilla 7-cost 4-might unit\",\"layer\":\"card\"},{\"what\":\"'While I'm at a battlefie…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 12,
+      "label": "lane11 (8 cards)",
+      "phaseIndex": 1,
+      "phaseTitle": "Playtest",
+      "agentId": "a0406070abcdacec1",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785893777765,
+      "queuedAt": 1785893774387,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a playtester with a live browser session (lane 11). Test each of these Riftbound cards ONE AT A TIME. For each: tutor it into hand, play it, do what its rulesText says should happen, and note anything that didn't work.\n\n## Tools (use dangerouslyDisableSandbox for all Bash — unix socket + network)\nBrowser: `pw() { bun /tmp/pwtest/pw-repl.ts --sock 11 \"$@\" 2>/dev/null; }`\n  pw click <sel>  |…",
+      "lastProgressAt": 1785894474072,
+      "tokens": 133399,
+      "toolCalls": 59,
+      "durationMs": 696307,
+      "resultPreview": "{\"reports\":[{\"cardId\":\"ogn-254-298\",\"played\":true,\"bugs\":[{\"what\":\"No target selection prompt for 'Choose a unit'\",\"expected\":\"Playing the spell should present a pendingChoice/target prompt to choose a specific unit\",\"observed\":\"No pendingChoice; chain effect carried a generic filter {target:{type:'unit'}} instead of a chosen instance id\",\"layer\":\"card\"},{\"what\":\"Legion mode not applied\",\"expected…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 13,
+      "label": "verify unl-014-219",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ad683603e1c17f998",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834417,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard unl-014-219 — Damage state fields inconsistent\nExpected: meta.damage should reflect the 2 damage marked on the unit so UI/death checks see it.\nObserved: meta.damage=0 while meta.__counters.damage=2 on the same card in the state snapshot.\nLayer: server. Affects: unl-014-219, unl-020-219\n\nSource: engine=/root/src/tcg/tcg-engines/packages/riftbound-eng…",
+      "lastProgressAt": 1785894880032,
+      "tokens": 85628,
+      "toolCalls": 18,
+      "durationMs": 45615,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effect-executor.ts\",\"reason\":\"Two disjoint damage stores exist and only combat keeps them in sync. Core `addCounter` writes to `meta.__counters[type]` (operations-impl.ts:459), never to top-level `meta.damage`. Spell/ability damage (Monster Harpoon unl-014-219, Dancing Grenade unl-020-219) goes through…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 14,
+      "label": "verify ven-001-166",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ab998ccaaf438a0c6",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834153,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ven-001-166 — Empower activated ability not available\nExpected: activateAbility move offered for Sandspinner with cost [2] (5 base − 3 discount, since I control 2 runes ≤ 4) while I have 4 energy\nObserved: No activateAbility entry for player-1-main-999-ven-001-166 in moves list; forcing executeMove('activateAbility',{abilityIndex:0,...}) was a no-op…",
+      "lastProgressAt": 1785895008969,
+      "tokens": 118042,
+      "toolCalls": 45,
+      "durationMs": 174815,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/ven.json\",\"reason\":\"ven-001-166's Empower keyword ability never reaches the engine as an activated ability, so activateAbility is neither enumerated nor executable. Chain: ven.json:21-23 stores \\\"abilities\\\": [null] for ven-001-166 (generator parse miss on \\\"[Empower] [5]. This ability costs [3] less…\\\"…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 15,
+      "label": "verify ogn-027-298",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "abf8eaad3287386f7",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834745,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ogn-027-298 — Trigger 'When you play your second card in a turn' fires on every card play\nExpected: Ability should trigger exactly once, on the second card played in a turn\nObserved: Ability went on the chain when Darius (1st card) was played, again on the 2nd card, and again on the 3rd card. Card def trigger is {event:'play-card', on:'self'} with n…",
+      "lastProgressAt": 1785895070927,
+      "tokens": 125569,
+      "toolCalls": 42,
+      "durationMs": 236182,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/trigger-runner.ts:85\",\"reason\":\"Runtime ability for ogn-027-298 (from parser, not ogn.json) is trigger={event:\\\"play-card\\\", on:\\\"controller\\\", restrictions:[{count:2, type:\\\"nth-time-each-turn\\\"}]}. toTriggerableAbilities() at trigger-runner.ts:85-88 copies only {event, on} and drops `restrictions`; t…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 16,
+      "label": "verify ogn-027-298",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "aee475eb63193a88d",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834356,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "REFUTED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ogn-027-298 — +2 Might buff not reflected in state after ability resolves\nExpected: Darius might should read 7 (5+2) after the +2 modify-might effect resolves\nObserved: state.base[].might stayed at 5 after chain resolved (ready effect DID apply — exhausted flipped true→false). Either modify-might isn't applying or the state snapshot omits temporary …",
+      "lastProgressAt": 1785894934483,
+      "tokens": 109001,
+      "toolCalls": 32,
+      "durationMs": 100127,
+      "resultPreview": "{\"verdict\":\"REFUTED\",\"reason\":\"state.base[].might is the printed base might by design — server.ts:668 sets `might: def.might` from the card definition, so it will always read 5 for Darius. The +2 buff is applied to `meta.mightModifier` (effect-executor.ts:616-628 → operations-impl.ts:358-366 merge), and that field IS included in the snapshot via `meta: { ...baseMeta, ... }` at server.ts:667. Clien…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 17,
+      "label": "verify sfd-160-221",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a79c0016562bdc755",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894835149,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard sfd-160-221 — No prompt for optional additional cost\nExpected: playUnit should prompt 'You may kill a friendly gear as an additional cost' (a friendly gear was on the board)\nObserved: No pendingChoice, no alternate move variant; unit went straight to base for 3 energy with the friendly gear untouched\nLayer: card. Affects: sfd-160-221\n\nSource: engine…",
+      "lastProgressAt": 1785894897513,
+      "tokens": 87472,
+      "toolCalls": 16,
+      "durationMs": 62364,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/sfd/zaun-punk.ts\",\"reason\":\"zaun-punk.ts:4-16 defines the card with no `abilities` field — only static data + rulesText. The optional \\\"kill a friendly gear as an additional cost\\\" is not encoded as an ability (contrast pyke-dockside-butcher.ts:14-34 which at least encodes the paid-additional-cost payoff). …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 18,
+      "label": "verify sfd-160-221",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a2b7ee8ee564fa1a2",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894838017,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard sfd-160-221 — 'if you paid the additional cost' condition not checked\nExpected: The 'kill a gear' trigger should only fire if the optional additional cost was paid\nObserved: Additional cost was never offered/paid, yet the on-play trigger put {type:'kill', target:{type:'gear'}} on the chain and killed the friendly Orb of Regret (trash went 0→1)\nLayer…",
+      "lastProgressAt": 1785894990706,
+      "tokens": 111197,
+      "toolCalls": 31,
+      "durationMs": 152689,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"reason\":\"The parser correctly emits condition {type:\\\"paid-additional-cost\\\"} on Zaun Punk's play-self trigger (verified by running parseAbilities on the rulesText). However, the trigger path's condition gate — evaluateTriggerCondition() at trigger-runner.ts:108-121 — only handles c.type === \\\"legion\\\" (line 117) and returns true for every other condition type (line 120, do…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 19,
+      "label": "verify ven-068a-166",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a594f22d8053abe4a",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834515,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ven-068a-166 — On-play trigger does not fire\nExpected: 'When you play me … you may ready something besides me that's exhausted' — with an exhausted Forecaster already at base, playing Jayce should put a triggered ability on the chain and prompt to ready a target\nObserved: chain=null, pendingChoice=null after playing Jayce; the exhausted Forecaster s…",
+      "lastProgressAt": 1785894987295,
+      "tokens": 104912,
+      "toolCalls": 36,
+      "durationMs": 152780,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"reason\":\"On-play trigger for ven-068a-166 (Jayce) does not fire. Root cause differs from the report's hypothesis: the JSON's abilities:[] / parseSuccess:false (ven.json:2127-2128) is NOT the cause — adaptJsonCard (all-cards.ts:807) maps the empty array to undefined, so enrichCard (enrich-cards.ts:22-31) re-parses rulesText at runtime and DOES attach a triggered ability. The…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 20,
+      "label": "verify ogn-014-298",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a34fbb556e108b4d3",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834612,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ogn-014-298 — Energy cost reduction not applied\nExpected: With a 2-might unit controlled, Sky Splitter should cost 8-2=6 energy\nObserved: Energy went 12→4 on cast (full 8 paid). Card def's static cost-reduction ability has effects:[] (description-only stub).\nLayer: card. Affects: ogn-014-298\n\nSource: engine=/root/src/tcg/tcg-engines/packages/riftbou…",
+      "lastProgressAt": 1785894928148,
+      "tokens": 100733,
+      "toolCalls": 23,
+      "durationMs": 93536,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/ogn.json:463-470\",\"reason\":\"Sky Splitter's cost-reduction is a description-only stub. In ogn.json:463-470 the static ability is `{type:\\\"static\\\", effect:{type:\\\"sequence\\\", effects:[], description:\\\"...\\\"}}` — no `cost-reduction` effect node. The TS def (sky-splitter.ts:4-16) has no `abilities` field a…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 21,
+      "label": "verify ogn-014-298",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ad88a8bdcc64230d9",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894835169,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ogn-014-298 — 'Deal 5 to a unit at a battlefield' does not apply damage\nExpected: Target unit (Lecturing Yordle, 2 might) should take 5 damage and die\nObserved: After both players passed and chain cleared, target still at battlefield with meta.damage=0; only the spell itself moved to trash. Game log shows 'dev cast Sky Splitter' then priority passes…",
+      "lastProgressAt": 1785895084022,
+      "tokens": 127821,
+      "toolCalls": 48,
+      "durationMs": 248853,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effect-executor.ts\",\"reason\":\"Sky Splitter's parsed effect ({type:\\\"damage\\\", amount:5, target:{type:\\\"unit\\\",location:\\\"battlefield\\\"}}) reaches executeEffect via chain resolution, but the \\\"damage\\\" case at effect-executor.ts:407 applies damage via `ctx.counters.addCounter(targetId, \\\"damage\\\", amoun…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 22,
+      "label": "verify ven-039-166",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a4bf23b1e62390d5d",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834284,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ven-039-166 — Crumbling Sands offered as playSpell with no target and no spell on the chain; playing it puts {type:'counter'} on chain with no target and it resolves doing nothing\nExpected: 'Counter a spell' requires a spell on the chain as a target; should not be enumerated as a legal move when the chain is empty (and the 'if an opponent has played…",
+      "lastProgressAt": 1785894932857,
+      "tokens": 98734,
+      "toolCalls": 32,
+      "durationMs": 98573,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"reason\":\"Parser output for ven-039-166 rulesText is `{type:\\\"spell\\\", timing:\\\"reaction\\\", effect:{type:\\\"counter\\\"}}` — no `target` descriptor and no condition (parser/index.ts:1777-1781 matches \\\"Counter a spell if an opponent has played another spell this turn.\\\" via `/^Counter (a spell.*...)\\\\.?$/i` and returns bare `{type:\\\"counter\\\"}`, dropping both the spell-on-chain…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 23,
+      "label": "verify unl-102-219",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "aa59261da37f0b9e9",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834539,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard unl-102-219 — 'Spend 2 XP: [Buff] me' activated ability is offered and activates with 0 XP on the card\nExpected: activateAbility should be gated on having ≥2 XP counters; activating should remove 2 XP\nObserved: Freshly played (0 XP), activateAbility{abilityIndex:3} was in moves; executing it put a buff effect on the chain with no XP consumed\nLayer: …",
+      "lastProgressAt": 1785895060212,
+      "tokens": 136935,
+      "toolCalls": 50,
+      "durationMs": 225673,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain-moves.ts\",\"reason\":\"Runtime parse of unl-102-219 yields ability index 3 = {type:\\\"activated\\\", cost:{xp:2}, effect:{type:\\\"buff\\\",target:\\\"self\\\"}} (verified via getAllCards()). The activateAbility move never inspects cost.xp: condition checks only cost.energy/power/exhaust/kill (chai…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 24,
+      "label": "verify ogn-212-298",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "abdb8d9aae4f020ec",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834337,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ogn-212-298 — On-play trigger 'play a 1 Might Recruit unit token at your base' resolves but no token is created\nExpected: After the create-token chain item resolves, a Recruit unit token (might 1) should be in base zone\nObserved: Chain item {type:'create-token', token:{name:'Recruit',might:1}, location:'base'} resolved; base afterward contains only …",
+      "lastProgressAt": 1785894877361,
+      "tokens": 85388,
+      "toolCalls": 15,
+      "durationMs": 43024,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain-moves.ts\",\"reason\":\"buildEffectContext (chain-moves.ts:43-92) constructs the EffectContext used to resolve chain items but never sets `createCardInZone` on the returned object (see the return at lines 78-91 — only cards/counters/draft/fireTriggers/playerId/sourceCardId/sourceZone/zone…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 25,
+      "label": "verify ogn-212-298",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a0045c493bbc1661b",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894835381,
+      "queuedAt": 1785894831743,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ogn-212-298 — 'Kill this: Recycle up to 4 cards from trashes' activated ability is never offered\nExpected: activateAbility for the gear should appear in moves once it's in play (‘up to 4’ includes 0, so empty trashes shouldn't gate it)\nObserved: No activateAbility entry for player-1-main-999-ogn-212-298 in moves after the gear resolved to base\nLayer…",
+      "lastProgressAt": 1785894867760,
+      "tokens": 83825,
+      "toolCalls": 9,
+      "durationMs": 32379,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain-moves.ts\",\"reason\":\"Forge of the Future (ogn-212-298) defines its activated ability with cost `{ kill: \\\"self\\\" }` (forge-of-the-future.ts:26). The activateAbility enumerator (chain-moves.ts:808-824) and condition (chain-moves.ts:657-673) handle kill costs by calling resolveTarget(cos…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 26,
+      "label": "verify ven-174-166",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a73e5157f6b0009f0",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834374,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ven-174-166 — 'When you choose or ready me, give me +1 Might this turn' does not fire when Irelia readies during Awaken\nExpected: After turn cycles and Irelia readies at start of controller's turn, might should be 5 (base 4 +1) for that turn\nObserved: Turn 1: played exhausted, might 4. Turn 3 (after auto-cycle): exhausted=false, might still 4; no ch…",
+      "lastProgressAt": 1785894893507,
+      "tokens": 92105,
+      "toolCalls": 19,
+      "durationMs": 59133,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts\",\"reason\":\"Awaken phase readies cards without firing any trigger. riftbound-flow.ts:182-218 (awaken.onBegin) calls context.cards.updateCardMeta(cardId, {exhausted: false}) but never calls fireTriggers; the readyAll move (turn.ts:188-205) likewise only sets the flag. There i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 27,
+      "label": "verify ogn-170-298",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ae3b1c9c3eff0d22e",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894834468,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ogn-170-298 — Morbid Return is never enumerated as a legal playSpell even with a unit in the controller's trash\nExpected: With Watchful Sentry (unit) in player-1 trash and 28 energy, playSpell for ogn-170-298 should appear (with a target prompt for the trash unit)\nObserved: trash count=2 (incl. a unit), card in hand, energy 28; moves list contains z…",
+      "lastProgressAt": 1785895019092,
+      "tokens": 122247,
+      "toolCalls": 42,
+      "durationMs": 184624,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"reason\":\"Repro (bun script driving the real playSpell condition/enumerator with the actual enriched def for ogn-170-298): with a unit in P1's trash and no board units, condition=false and enumerator=[]; with a board unit present, it wrongly enumerates the board unit as the target and never the trash unit. Root cause: the parser gives Morbid Return effect.target={type:\\\"unit…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 28,
+      "label": "verify sfd-144-221",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a32caca2b7528362d",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894835828,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard sfd-144-221 — 'When you choose a friendly unit, you may pay [1] and exhaust this to draw 1' does not trigger when a friendly unit is chosen by a spell\nExpected: After Stupefy resolves targeting friendly Keeper of Masks, a pendingChoice/chain item should offer paying 1 + exhausting Spirit Wheel to draw 1\nObserved: Stupefy resolved on the friendly uni…",
+      "lastProgressAt": 1785894901084,
+      "tokens": 98416,
+      "toolCalls": 22,
+      "durationMs": 65256,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"reason\":\"The engine never emits a `choose` GameEvent, so Spirit Wheel's trigger `{event:\\\"choose\\\", on:{cardType:\\\"unit\\\",controller:\\\"friendly\\\"}}` (spirit-wheel.ts:23-26) can never match. The event type is defined (game-events.ts:33) and mapped (trigger-matcher.ts:53), but a repo-wide grep shows zero `fireTriggers({...type:\\\"choose\\\"...})` call sites in production code — …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 29,
+      "label": "verify sfd-159-221",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "af7eb8eeab6c2aced",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894872239,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard sfd-159-221 — Static '+1 Might while you have another unit here' not applied\nExpected: With Forecaster also at base, Trusty Ramhound should show might 3 (base 2 +1)\nObserved: Both units at base; state reports Ramhound might=2 (state does reflect effective might — Stupefy debuff earlier showed 2→1 on another unit)\nLayer: engine. Affects: sfd-159-221\n…",
+      "lastProgressAt": 1785894901339,
+      "tokens": 87838,
+      "toolCalls": 10,
+      "durationMs": 29100,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/sfd/trusty-ramhound.ts\",\"reason\":\"trusty-ramhound.ts:4-15 defines no `abilities` array (only `rulesText`), so `registry.getAbilities()` (card-lookup.ts:162-163) returns [] and `recalculateStaticEffects` (static-abilities.ts:483) never applies the +1 might modifier. Other sfd cards (e.g. loyal-pup.ts:27) do …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 30,
+      "label": "verify ogn-085-298",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ad05809e69571fe6f",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894882172,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ogn-085-298 — Dealing 6 damage to a 3-might unit does not kill it\nExpected: Per rule 143.2.a, Vanguard Captain (might 3) should be killed and moved to trash after taking 6 damage\nObserved: Spell resolved (energy 9→4, spell to trash), but Vanguard Captain remained on battlefield-player-1-bf with might 3; trash only incremented by 1 (the spell)\nLayer:…",
+      "lastProgressAt": 1785895014153,
+      "tokens": 124941,
+      "toolCalls": 37,
+      "durationMs": 131981,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/ogn/falling-comet.ts\",\"reason\":\"Falling Comet (ogn-085-298) has no `abilities` array — only display-only `rulesText` (falling-comet.ts:4-15). The playSpell reducer looks up the effect via `registry.getAbilities(cardId).find(a => a.type === \\\"spell\\\")?.effect` (cards.ts:892-894) and stores it on the chain it…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 31,
+      "label": "verify ogn-085-298",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a7a6b759bcb586a9a",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894885376,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "REFUTED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard ogn-085-298 — playSpell move enumerated twice for the same card+target\nExpected: One playSpell entry per (card, target) combination\nObserved: moves contained two identical entries {moveId:'playSpell', cardId:'player-1-main-999-ogn-085-298', targets:['player-1-main-26-ogn-218-298']}\nLayer: server. Affects: ogn-085-298\n\nSource: engine=/root/src/tcg/tc…",
+      "lastProgressAt": 1785895276886,
+      "tokens": 167825,
+      "toolCalls": 73,
+      "durationMs": 391510,
+      "resultPreview": "{\"verdict\":\"REFUTED\",\"file\":\"/root/src/tcg/tcg-engines/apps/riftbound-app/server.ts\",\"reason\":\"Not an enumeration defect. The playSpell enumerator (packages/riftbound-engine/src/game-definition/moves/cards.ts:806-873) iterates hand cards once and, for Falling Comet's target descriptor {type:\\\"unit\\\", location:\\\"battlefield\\\"}, resolveTarget returns filtered.slice(0,1) (packages/riftbound-engine/sr…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 32,
+      "label": "verify unl-014-219",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a909fc61c43ca0c09",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894898171,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard unl-014-219 — Lethal damage does not kill the target\nExpected: Per rule 143.2.a, a unit with damage ≥ might is killed. Watchful Sentry (might 1) taking 2 damage should die and go to trash (and fire its Deathknell).\nObserved: After Monster Harpoon resolved, Watchful Sentry remained on the battlefield with meta.__counters.damage=2 but meta.damage=0; t…",
+      "lastProgressAt": 1785894938432,
+      "tokens": 90333,
+      "toolCalls": 17,
+      "durationMs": 40261,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/cleanup/state-based-checks.ts\",\"reason\":\"Damage write/read mismatch. The \\\"damage\\\" effect (effect-executor.ts:407) calls ctx.counters.addCounter(targetId, \\\"damage\\\", amount), which per core operations-impl.ts:459 stores into meta.__counters.damage. The lethal-damage state-based check at state-based-checks.ts:9…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 33,
+      "label": "verify sfd-053-221",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a9883c51cd06f7e63",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894902520,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard sfd-053-221 — 'When you play me' trigger not implemented\nExpected: On play, a triggered ability should go on the chain to heal friendly units here and prompt to move up to one enemy unit from here to its base.\nObserved: Played to base with no chain item, no pendingChoice, no heal/move log entry. Card def (janna-savior.ts) has no abilities[] array — …",
+      "lastProgressAt": 1785894931417,
+      "tokens": 81936,
+      "toolCalls": 10,
+      "durationMs": 28897,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"reason\":\"janna-savior.ts:4-18 defines only rulesText with no abilities[] array. Engine reads triggers from card.abilities via getAbilities() (card-lookup.ts:163 returns [] when absent) → toTriggerableAbilities() (trigger-runner.ts:73-76) returns [], so no play-self trigger goes on the chain. Compare gentle-gemdragon.ts:15-34 which correctly implements abilities with trigger…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 34,
+      "label": "verify sfd-053-221",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "aeef165266e8e5a64",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894905563,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard sfd-053-221 — [Reaction] keyword not implemented\nExpected: Janna should be playable at reaction speed and to a battlefield you control.\nObserved: Card def has no keywords/abilities entry for Reaction; only playUnit→base offered (though on turn 1 with no controlled battlefields that specific restriction is expected).\nLayer: card. Affects: sfd-053-221…",
+      "lastProgressAt": 1785895061994,
+      "tokens": 117785,
+      "toolCalls": 44,
+      "durationMs": 156430,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/sfd/janna-savior.ts\",\"reason\":\"Card def at janna-savior.ts:4-18 declares no `keywords` array and no `abilities` entry — [Reaction] appears only in `rulesText`. At runtime the parser (enrich-cards.ts:20-39 → parser/index.ts) does not emit `{type:\\\"keyword\\\", keyword:\\\"Reaction\\\"}` for it; empirically the enr…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 35,
+      "label": "verify sfd-078-221",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ad555e4a5fe77b4cc",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894907956,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard sfd-078-221 — Activated ability not offered\nExpected: With the gear ready and 2 mind power available, activateAbility for Temporal Portal (cost [rainbow]+Exhaust) should appear in available moves.\nObserved: Only the legend's activateAbility was listed; Temporal Portal never appeared. Forcing executeMove('activateAbility',{cardId:portal,abilityIndex:…",
+      "lastProgressAt": 1785895024766,
+      "tokens": 111695,
+      "toolCalls": 32,
+      "durationMs": 116809,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"reason\":\"Temporal Portal's ability cost is `power: [\\\"rainbow\\\"]` (temporal-portal.ts:13). The activateAbility power-affordability check does a literal per-key lookup `(pool.power[d] ?? 0) < count` at chain-moves.ts:628 (condition) and chain-moves.ts:774 (enumerator). The RunePool.power type is `Partial<Record<\\\"fury\\\"|\\\"calm\\\"|\\\"mind\\\"|\\\"body\\\"|\\\"chaos\\\"|\\\"order\\\", number>…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 36,
+      "label": "verify unl-192-219",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ae9dc39dd9601d7b7",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894932937,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard unl-192-219 — Missing 'choose a friendly unit' target selector\nExpected: rulesText: 'Choose a friendly unit. It deals damage equal to its Might…' — the spell should prompt for one friendly unit whose Might sets the damage amount.\nObserved: Card impl (alpha-strike.ts) encodes amount as {might:{controller:'friendly',type:'unit'}} with no chooser; ther…",
+      "lastProgressAt": 1785894971178,
+      "tokens": 78608,
+      "toolCalls": 7,
+      "durationMs": 38241,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"reason\":\"alpha-strike.ts:30-32 encodes amount as {might:{controller:\\\"friendly\\\",type:\\\"unit\\\"}} with no choose/target step for the friendly unit anywhere in the ability sequence (lines 26-58). The engine's resolveAmount (effect-executor.ts:183-188) only recognizes might:\\\"self\\\"; the object form falls through to `return 0` at line 223, so no prompt is issued and damage is …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 37,
+      "label": "verify unl-192-219",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a951451e5e39a639d",
+      "model": "capybara-v9-fast[1m]",
+      "fallbackModel": "capybara-v9-fast",
+      "state": "done",
+      "startedAt": 1785894936622,
+      "queuedAt": 1785894831744,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CONFIRMED",
+      "promptPreview": "Verify. Default REFUTED without file:line.\n\nCard unl-192-219 — XP gain over-counts (documented FIXME)\nExpected: Gain 1 XP for each unit *this* kills.\nObserved: Impl uses for-each over enemy units with filter:'damaged' — counts already-damaged units, not units killed by this effect. FIXME comment in source acknowledges the approximation.\nLayer: card. Affects: unl-192-219\n\nSource: engine=/root/src/t…",
+      "lastProgressAt": 1785894947112,
+      "tokens": 72959,
+      "toolCalls": 3,
+      "durationMs": 10489,
+      "resultPreview": "{\"verdict\":\"CONFIRMED\",\"reason\":\"The for-each effect uses `filter: \\\"damaged\\\"` on enemy units at battlefield (lines 44-49), counting damaged units rather than units killed by this effect. The FIXME comment at lines 20-23 explicitly acknowledges this approximation over-counts already-damaged units and that a true implementation would need a per-effect kill counter.\",\"file\":\"/root/src/tcg/tcg-engin…"
+    }
+  ],
+  "totalTokens": 4431441,
+  "totalToolCalls": 1635
+}
