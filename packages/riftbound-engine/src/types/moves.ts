@@ -387,6 +387,12 @@ export interface RiftboundMoves {
      * whenever `cost.kill` is present.
      */
     sacrificeId?: CardId;
+    /**
+     * When the ability's cost includes `discard` (rule 422.3), this is the
+     * instance ID of the hand card to trash as payment. Required whenever
+     * `cost.discard` is present.
+     */
+    discardId?: CardId;
   };
 
   // ============================================

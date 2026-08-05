@@ -21,6 +21,7 @@ export interface TriggerRestriction {
  */
 export interface TriggerMatcherState {
   readonly cardsPlayedThisTurn?: Record<string, number>;
+  readonly turn?: { readonly activePlayer?: string };
 }
 
 /**
@@ -126,9 +127,13 @@ function restrictionSatisfied(
     case "during-showdown":
       // TODO(during-showdown): showdown state not exposed here.
       return false;
-    case "on-opponent-turn":
-      // TODO(on-opponent-turn): active-player check not exposed here.
-      return false;
+    case "on-opponent-turn": {
+      // ven-176-166 (Viktor, Innovator): satisfied when the turn's active
+      // player is not this card's controller. Active player is threaded via
+      // TriggerMatcherState.turn (callers pass the full game state draft).
+      const active = state?.turn?.activePlayer;
+      return active !== undefined && active !== card.owner;
+    }
     case "self-at-battlefield":
       return card.zone.startsWith("battlefield");
     case "non-token":
@@ -170,6 +175,15 @@ function triggerMatchesEvent(
       // Battlefield card self-triggers (hold, conquer): match by battlefieldId.
       // The controller who holds/conquers may differ from the card's deck owner.
       if (event.battlefieldId !== card.id) {
+        return false;
+      }
+    } else if (mapped === "hold" && "battlefieldId" in event && !("cardId" in event)) {
+      // Rule 383.4.d.2.a: a unit's self-hold trigger requires the unit to be
+      // present at the held battlefield — a unit at base never "holds".
+      if (card.zone !== `battlefield-${event.battlefieldId}`) {
+        return false;
+      }
+      if ("playerId" in event && event.playerId !== card.owner) {
         return false;
       }
     } else if ("playerId" in event && !("cardId" in event) && event.playerId !== card.owner) {

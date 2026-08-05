@@ -1,5 +1,4 @@
 import type { Ability } from "@tcg/riftbound-types";
-import type { Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import type { GearCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
@@ -10,37 +9,17 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  until you reveal a unit and banish it. Play it, ignoring its cost, and
  *  recycle the rest."
  *
- * Modeled as an end-of-turn trigger with a sequence: reveal-until-unit
- * (with banish as the `then`), then play the pending unit and recycle the
- * rest.
+ * Rule 354.2: modeled as a single reveal-until-unit effect. The engine's
+ * `reveal` handler performs the banish → play-ignoring-cost → recycle-rest
+ * flow atomically, so no follow-up sequence steps are needed here.
  */
 const abilities: Ability[] = [
   {
     effect: {
-      effects: [
-        {
-          amount: 1,
-          from: "deck",
-          type: "reveal",
-          until: "unit",
-        },
-        {
-          target: { type: "card" },
-          type: "banish",
-        },
-        {
-          ignoreCost: true,
-          target: { type: "pending-value" },
-          type: "play",
-        } as unknown as Effect,
-        {
-          amount: 1,
-          from: "board",
-          type: "recycle",
-        },
-      ],
-      pendingValue: { source: 1 },
-      type: "sequence",
+      amount: 1,
+      from: "deck",
+      type: "reveal",
+      until: "unit",
     },
     trigger: {
       event: "end-of-turn",

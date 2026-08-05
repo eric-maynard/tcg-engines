@@ -323,9 +323,16 @@ export interface RevealAndPickChoice {
   /**
    * What to do with the picked card. `"recycle"` sends it to the bottom of
    * its owner's main deck, `"banish"` sends it to banishment, `"discard"`
-   * sends it to the owner's trash.
+   * sends it to the owner's trash, `"draw"` puts it in the prompter's hand.
    */
-  readonly onPicked: "recycle" | "banish" | "discard";
+  readonly onPicked: "recycle" | "banish" | "discard" | "draw";
+
+  /**
+   * What to do with the revealed cards that were NOT picked. Used by
+   * look/Vision effects (Rule 435) that put one card in hand and recycle
+   * the rest. Omit to leave the unpicked cards where they are.
+   */
+  readonly onRest?: "recycle";
 }
 
 /**
@@ -363,6 +370,18 @@ export interface ChooseTargetChoice {
   readonly options: readonly CardId[];
   /** Number of targets still to choose (currently always 1). */
   readonly remaining: number;
+  /**
+   * Rule 355.14.h (unl-192-219): when set, the pick is a target to DROP —
+   * the stored effect is re-executed with this list minus the picked id as
+   * its bound targets, preserving the reference unit at index 0.
+   */
+  readonly boundTargets?: readonly CardId[];
+  /**
+   * Rule 355.14.e/f/g (unl-192-219): when true the pick is a resolution-time
+   * split-damage ASSIGNMENT — the picked id is APPENDED to `boundTargets`
+   * (one extra occurrence = one extra point of damage) rather than removed.
+   */
+  readonly assign?: true;
 }
 
 /**

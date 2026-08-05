@@ -1750,8 +1750,21 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "If a player would score 1 point from conquering or holding during their first or second turn, they draw 1 instead.",
-      "abilities": [],
-      "parseSuccess": false,
+      "abilities": [
+        {
+          "type": "replacement",
+          "name": "Rule 571.4 — score→draw replacement (Otterpus)",
+          "replaces": "score",
+          "target": { "type": "player", "which": "any" },
+          "condition": {
+            "type": "not",
+            "condition": { "threshold": 3, "type": "turn-count-at-least" }
+          },
+          "replacement": { "amount": 1, "type": "draw" },
+          "duration": "permanent"
+        }
+      ],
+      "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/62f77b80a6d8f28a92c039595baf5943c4e055f0-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null

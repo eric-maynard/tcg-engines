@@ -39,6 +39,24 @@ function hasStaticEffect(cardId: string, effectType: string): boolean {
 }
 
 /**
+ * Read a static `play-restriction` effect's `allowedLocation` string
+ * ("You may play me to …"). Returns undefined when the card has none.
+ */
+function getPlayLocationPermission(cardId: string): string | undefined {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  for (const ability of abilities) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const effect = (ability as { effect?: { type?: string; allowedLocation?: string } }).effect;
+    if (effect?.type === "play-restriction") {
+      return effect.allowedLocation;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Runtime replacement stored in `draft.activeReplacements` by the
  * effect-executor `case "replacement"`.
  */
@@ -96,7 +114,7 @@ function consumeEntersReadyReplacement(
  */
 interface OptionalPlayCost {
   /** `"accelerate"` (rule 717) enters the unit ready when paid. */
-  readonly kind: "accelerate" | "kill";
+  readonly kind: "accelerate" | "kill" | "pay";
   /** Extra energy/power to deduct when the cost is paid. */
   readonly cost?: { energy?: number; power?: readonly string[] };
   /** Target descriptor for a "kill a friendly X" additional cost. */
@@ -106,9 +124,12 @@ interface OptionalPlayCost {
 /**
  * Read a unit's optional additional play-cost from its abilities.
  *
- * Recognises Accelerate (`{type:"keyword", keyword:"Accelerate", cost}`) and
- * the "you may kill a friendly X as an additional cost to play me" pattern
- * (`{type:"static"|"additional-cost-option", cost:{kill: TargetDescriptor}}`).
+ * Recognises Accelerate (`{type:"keyword", keyword:"Accelerate", cost}`), the
+ * "you may kill a friendly X as an additional cost to play me" pattern
+ * (`{type:"static"|"additional-cost-option", cost:{kill: TargetDescriptor}}`),
+ * and the plain "you may pay [X] as an additional cost to play me" pattern
+ * emitted by the parser as
+ * `{type:"static", effect:{type:"additional-cost-option", additionalCost}}`.
  */
 function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefined {
   const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
@@ -123,6 +144,39 @@ function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefined {
       rawCost?.kill
     ) {
       return { kill: rawCost.kill, kind: "kill" };
+    }
+    // Rule 560 — sfd-109-221: plain "you may pay COST" additional cost. The
+    // parser wraps it as a static ability whose effect is
+    // `{type:"additional-cost-option", additionalCost}` with no top-level
+    // `cost`, so read the nested effect and decode the rune-token string.
+    const effect = ability.effect as
+      | { type?: string; additionalCost?: unknown }
+      | undefined;
+    if (
+      (ability.type === "static" || ability.type === "additional-cost-option") &&
+      effect?.type === "additional-cost-option" &&
+      effect.additionalCost !== undefined
+    ) {
+      let energy = 0;
+      const power: string[] = [];
+      const raw = effect.additionalCost;
+      if (typeof raw === "string") {
+        for (const m of raw.matchAll(/:rb_energy_(\d+):/g)) {
+          energy += Number.parseInt(m[1], 10);
+        }
+        for (const m of raw.matchAll(
+          /:rb_rune_(fury|calm|mind|body|chaos|order|rainbow):/g,
+        )) {
+          power.push(m[1]);
+        }
+      } else if (typeof raw === "object" && raw !== null) {
+        const obj = raw as { energy?: number; power?: readonly string[] };
+        energy = obj.energy ?? 0;
+        if (obj.power) {power.push(...obj.power);}
+      }
+      if (energy > 0 || power.length > 0) {
+        return { cost: { energy, power }, kind: "pay" };
+      }
     }
   }
   return undefined;
@@ -395,22 +449,44 @@ type SpellEffectTargetDescriptor =
       quantity?: number | "all" | "any" | { upTo?: number; atLeast?: number };
     };
 
-type SpellEffectTargetShape = {
+export type SpellEffectTargetShape = {
   type?: string;
   target?: SpellEffectTargetDescriptor;
   target1?: SpellEffectTargetDescriptor;
   target2?: SpellEffectTargetDescriptor;
+  amount?: { might?: SpellEffectTargetDescriptor | string };
   player?: string;
   options?: { effect?: SpellEffectTargetShape }[];
   effects?: SpellEffectTargetShape[];
 };
 
 /**
+ * Rule 355.8 / 355.14.a (unl-192-219 Alpha Strike): an `amount:{might:<selector>}`
+ * expression whose selector is a board descriptor names a caster-chosen standard
+ * target even though it appears as an amount, not as `effect.target`. Surface it
+ * so play-time enumeration binds it to the chain item.
+ */
+function findAmountReferenceTarget(
+  effect: SpellEffectTargetShape | undefined,
+): SpellEffectTargetDescriptor | undefined {
+  if (!effect) return undefined;
+  const ref = effect.amount?.might;
+  if (ref && typeof ref !== "string") return ref;
+  if (effect.type === "sequence" && Array.isArray(effect.effects)) {
+    for (const sub of effect.effects) {
+      const found = findAmountReferenceTarget(sub);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Rule 355.8 / 419.2.a: a spell is a legal Play only if valid choices exist for
  * every caster-chosen target. For a modal (`choice`) effect the caster picks one
  * mode, so the spell is legal iff at least one mode's targets can be satisfied.
  */
-function spellEffectHasLegalTargets(
+export function spellEffectHasLegalTargets(
   effect: SpellEffectTargetShape | undefined,
   ctx: Parameters<typeof resolveTarget>[1],
 ): boolean {
@@ -424,6 +500,13 @@ function spellEffectHasLegalTargets(
   // Sequence effects: every sub-effect's targets must be satisfiable.
   if (effect.type === "sequence" && Array.isArray(effect.effects)) {
     return effect.effects.every((sub) => spellEffectHasLegalTargets(sub, ctx));
+  }
+  // Rule 355.10.d: "for each <criteria>" is a programmatic selection, not a
+  // caster-chosen target — 355.8's ≥1-valid-target gate does not apply, and the
+  // nested per-object effect binds to each selected object rather than a
+  // caster-declared target. Zero matches is legal.
+  if (effect.type === "for-each") {
+    return true;
   }
   // Multi-target effects (swap-might etc.) carry target1/target2 alongside or
   // instead of `target`; every present descriptor must resolve non-empty.
@@ -514,12 +597,29 @@ export const cardPlayMoves: Partial<
       const registry = getGlobalCardRegistry();
       const hasAmbush = registry.hasKeyword(context.params.cardId, "Ambush");
 
-      if (targetIsBattlefield) {
-        // Ambush path: relax phase / active-player gating and permit the
-        // Unit to be played directly to the target battlefield.
-        if (!hasAmbush) {
+      if (targetIsBattlefield && !hasAmbush) {
+        // Rule ogn-174-298: static play-restriction ("You may play me to an
+        // open battlefield") lets a non-Ambush unit be played to an
+        // uncontrolled battlefield at standard main-phase timing.
+        const allowed = getPlayLocationPermission(context.params.cardId as string);
+        const bfId = extractBattlefieldId(location ?? "");
+        const bf = bfId ? state.battlefields?.[bfId] : undefined;
+        if (allowed !== "an open battlefield" || !bf || bf.controller) {
           return false;
         }
+        if (state.turn.activePlayer !== context.params.playerId) {
+          return false;
+        }
+        if (state.turn.phase !== "main") {
+          return false;
+        }
+        const interaction = state.interaction ?? createInteractionState();
+        if (getTurnState(interaction) !== "neutral-open") {
+          return false;
+        }
+      } else if (targetIsBattlefield) {
+        // Ambush path: relax phase / active-player gating and permit the
+        // Unit to be played directly to the target battlefield.
         const bfId = extractBattlefieldId(location ?? "");
         if (!bfId) {
           return false;
@@ -575,16 +675,15 @@ export const cardPlayMoves: Partial<
       if (state.pendingChoice) {
         return [];
       }
-      if (state.turn.activePlayer !== (context.playerId as string)) {
-        return [];
-      }
-      if (state.turn.phase !== "main") {
-        return [];
-      }
+      // Rule ven-123-166 / 577.3.c: Ambush lets a unit be played to a
+      // battlefield with friendly units at reaction timing, so the
+      // active-player / main-phase / neutral-open gates only govern the
+      // standard base-play path — do not early-return here.
       const interaction = state.interaction ?? createInteractionState();
-      if (getTurnState(interaction) !== "neutral-open") {
-        return [];
-      }
+      const standardTiming =
+        state.turn.activePlayer === (context.playerId as string) &&
+        state.turn.phase === "main" &&
+        getTurnState(interaction) === "neutral-open";
 
       const registry = getGlobalCardRegistry();
       const pool = state.runePools[context.playerId as string];
@@ -614,17 +713,55 @@ export const cardPlayMoves: Partial<
           continue;
         }
 
+        // Rule ven-123-166 / 577.3.c: offer Ambush plays to any battlefield
+        // where the player already has friendly units (reaction timing —
+        // legal even outside the active player's main phase / neutral-open).
+        if (registry.hasKeyword(cardId as string, "Ambush")) {
+          for (const bfId of Object.keys(state.battlefields ?? {})) {
+            const bfZoneId = getBattlefieldZoneId(bfId);
+            const friendly = context.zones.getCardsInZone(
+              bfZoneId as CoreZoneId,
+              context.playerId as CorePlayerId,
+            );
+            if (friendly.length > 0) {
+              results.push({
+                cardId: cardId as string,
+                location: bfZoneId as string,
+                playerId: context.playerId as string,
+              });
+            }
+          }
+        }
+
+        if (!standardTiming) {
+          continue;
+        }
+
         results.push({
           cardId: cardId as string,
           location: "base",
           playerId: context.playerId as string,
         });
 
+        // Rule ogn-174-298: offer open (uncontrolled) battlefields when the
+        // card carries a static play-restriction permitting it.
+        if (getPlayLocationPermission(cardId as string) === "an open battlefield") {
+          for (const [bfId, bf] of Object.entries(state.battlefields ?? {})) {
+            if (!bf.controller) {
+              results.push({
+                cardId: cardId as string,
+                location: getBattlefieldZoneId(bfId) as string,
+                playerId: context.playerId as string,
+              });
+            }
+          }
+        }
+
         // Rule 560 / 717: when the unit declares an optional additional
         // play-cost, also enumerate the paid variant so callers can elect
         // to pay it.
         const optional = getOptionalPlayCost(cardId as string);
-        if (optional?.kind === "accelerate") {
+        if (optional?.kind === "accelerate" || optional?.kind === "pay") {
           const extraEnergy = optional.cost?.energy ?? 0;
           const extraPower = optional.cost?.power ?? [];
           const canAffordExtra =
@@ -685,7 +822,7 @@ export const cardPlayMoves: Partial<
       if (paidAdditionalCost) {
         const optional = getOptionalPlayCost(cardId);
         const pool = draft.runePools[playerId];
-        if (optional?.kind === "accelerate" && pool) {
+        if ((optional?.kind === "accelerate" || optional?.kind === "pay") && pool) {
           const need = optional.cost ?? {};
           const canPay =
             pool.energy >= (need.energy ?? 0) &&
@@ -696,7 +833,7 @@ export const cardPlayMoves: Partial<
               const key = domain as keyof typeof pool.power;
               pool.power[key] = (pool.power[key] ?? 0) - 1;
             }
-            paidAccelerate = true;
+            paidAccelerate = optional.kind === "accelerate";
             paidAdditionalCostActual = true;
           }
         } else if (optional?.kind === "kill" && sacrificeId) {
@@ -1064,7 +1201,9 @@ export const cardPlayMoves: Partial<
         // single-card target descriptor, enumerate one legal Play per valid
         // target so the caster picks. Programmatic selections (quantity:"all"),
         // player/battlefield targets, and self are not caster-chosen.
-        const tgt = spellEffect?.target;
+        // Rule 355.14.a: an amount:{might:<selector>} reference is also a
+        // caster-chosen play-time target (unl-192-219).
+        const tgt = spellEffect?.target ?? findAmountReferenceTarget(spellEffect);
         const isCardTarget =
           tgt !== undefined &&
           typeof tgt !== "string" &&

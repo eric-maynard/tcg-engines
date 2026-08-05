@@ -36,7 +36,8 @@ import { performCleanup } from "../../cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
-import { getPotentialRuneEnergy } from "./cards";
+import { getPotentialRuneEnergy, spellEffectHasLegalTargets } from "./cards";
+import type { SpellEffectTargetShape } from "./cards";
 
 /**
  * Build an EffectContext from a move reducer's context.
@@ -194,10 +195,13 @@ function executeResolvedItem(
   // exists, pause and ask via a `choose-target` pending choice; the effect
   // runs from `resolvePendingChoice` once the pick is made.
   let boundTargets = resolved.targets;
-  const target = effect.target as TargetDescriptor | undefined;
+  const target = effect.target as TargetDescriptor | string | undefined;
   if (
     !boundTargets &&
     target &&
+    // ogn-122-298: bare-string target ("self" / instanceId) is already fully
+    // specified — never route through the choose-target prompt.
+    typeof target !== "string" &&
     target.type !== "self" &&
     target.type !== "player" &&
     target.type !== "battlefield" &&
@@ -241,7 +245,9 @@ function executeResolvedItem(
       fireTriggers({ cardId: targetId, chooserId: resolved.controller, type: "choose" }, trigCtx);
     }
   }
+  const preLen = draft.interaction?.chain?.items.length ?? 0;
   executeEffect(effect, effectCtx);
+  const postLen = draft.interaction?.chain?.items.length ?? 0;
 
   // Rule 419.4.a: abilities that trigger on playing a card fire when that
   // act is completed by resolution — not when the card is placed on the
@@ -266,6 +272,17 @@ function executeResolvedItem(
       },
       trigCtx,
     );
+    // Rule 354.2 / 383.2.c / 337.1.b: a pending play the resolving spell put on
+    // the chain (Thrill of the Hunt banish→play) must finalize BEFORE any
+    // trigger that becomes pending because the spell was played (Abandoned
+    // Hall). Lift the effect-added items back above the just-queued triggers so
+    // the replayed unit is on the board when the trigger's target is chosen.
+    const chain = draft.interaction?.chain;
+    if (chain && postLen > preLen && chain.items.length > postLen) {
+      const items = chain.items as ChainItem[];
+      const pendingPlays = items.splice(preLen, postLen - preLen);
+      items.push(...pendingPlays);
+    }
   }
 }
 
@@ -744,6 +761,23 @@ export const chainMoves: Partial<
           }
         }
 
+        // Rule 357.2 / 422.3: a "Discard N" cost requires ≥N cards in hand
+        // at activation time; the caller names which card via `discardId`.
+        const discardCost = cost.discard as number | undefined;
+        if (discardCost && discardCost > 0) {
+          const hand = context.zones.getCardsInZone(
+            "hand" as CoreZoneId,
+            playerId as CorePlayerId,
+          );
+          if (hand.length < discardCost) {
+            return false;
+          }
+          const discardId = context.params.discardId as string | undefined;
+          if (discardId && !hand.includes(discardId as CoreCardId)) {
+            return false;
+          }
+        }
+
         // Rule 577.2: A [Kill] (sacrifice) cost requires a legal target on
         // the board matching the descriptor. Malzahar (ogn-113-298) is the
         // canonical case: exhaust + kill a friendly permanent → +2 rainbow.
@@ -767,6 +801,22 @@ export const chainMoves: Partial<
         }
       }
 
+      // Rule 355.8 / 355.10.c: an activated ability whose effect names a
+      // caster-chosen target cannot be put on the chain when no legal
+      // choice exists (e.g. Unlicensed Armory with zero friendly units).
+      if (
+        !spellEffectHasLegalTargets(ability.effect as SpellEffectTargetShape | undefined, {
+          cards: context.cards,
+          draft: state,
+          playerId,
+          sourceCardId: cardId,
+          sourceZone: zone,
+          zones: context.zones,
+        })
+      ) {
+        return false;
+      }
+
       return true;
     },
     enumerator: (state, context) => {
@@ -785,6 +835,7 @@ export const chainMoves: Partial<
         abilityIndex: number;
         sourceCardId?: string;
         sacrificeId?: string;
+        discardId?: string;
       }[] = [];
 
       // Collect cards on base, battlefields, legendZone, battlefieldRow, and championZone
@@ -912,6 +963,24 @@ export const chainMoves: Partial<
             }
           }
 
+          // Rule 357.2 / 422.3: a "Discard N" cost enumerates one activation
+          // per hand card so the caller can pick which card to discard. Fewer
+          // than N cards in hand → the ability is not activatable.
+          let discardOptions: string[] | undefined;
+          const discardCost = (ability.cost as Record<string, unknown> | undefined)?.discard as
+            | number
+            | undefined;
+          if (discardCost && discardCost > 0) {
+            const hand = context.zones.getCardsInZone(
+              "hand" as CoreZoneId,
+              playerId as CorePlayerId,
+            );
+            if (hand.length < discardCost) {
+              continue;
+            }
+            discardOptions = [...hand] as string[];
+          }
+
           // Rule 577.2: A [Kill] (sacrifice) cost enumerates one activation
           // per legal sacrifice target so the caller can pick which permanent
           // to trash. No legal target → the ability is not activatable.
@@ -934,12 +1003,31 @@ export const chainMoves: Partial<
             }
           }
 
+          // Rule 355.8 / 355.10.c: skip abilities whose caster-chosen effect
+          // target has no legal choices on the current board.
+          const hostZone = context.zones.getCardZone(entry.hostCardId as CoreCardId) as
+            | string
+            | undefined;
+          if (
+            !spellEffectHasLegalTargets(ability.effect as SpellEffectTargetShape | undefined, {
+              cards: context.cards,
+              draft: state,
+              playerId,
+              sourceCardId: entry.hostCardId,
+              sourceZone: hostZone,
+              zones: context.zones,
+            })
+          ) {
+            continue;
+          }
+
           const result: {
             playerId: string;
             cardId: string;
             abilityIndex: number;
             sourceCardId?: string;
             sacrificeId?: string;
+            discardId?: string;
           } = {
             abilityIndex: entry.abilityIndex,
             cardId: entry.hostCardId,
@@ -948,19 +1036,25 @@ export const chainMoves: Partial<
           if (entry.sourceCardId !== entry.hostCardId) {
             result.sourceCardId = entry.sourceCardId;
           }
-          if (sacrificeOptions) {
-            for (const sacrificeId of sacrificeOptions) {
-              results.push({ ...result, sacrificeId });
+          const bases: (typeof result)[] = sacrificeOptions
+            ? sacrificeOptions.map((sacrificeId) => ({ ...result, sacrificeId }))
+            : [result];
+          if (discardOptions) {
+            for (const base of bases) {
+              for (const discardId of discardOptions) {
+                results.push({ ...base, discardId });
+              }
             }
           } else {
-            results.push(result);
+            results.push(...bases);
           }
         }
       }
       return results;
     },
     reducer: (draft, context) => {
-      const { playerId, cardId, abilityIndex, sourceCardId, sacrificeId } = context.params;
+      const { playerId, cardId, abilityIndex, sourceCardId, sacrificeId, discardId } =
+        context.params;
 
       const registry = getGlobalCardRegistry();
       // For inherited/copied abilities, look up the ability text from the
@@ -987,6 +1081,18 @@ export const chainMoves: Partial<
         const xpCost = cost.xp as number | undefined;
         if (xpCost && xpCost > 0) {
           context.counters.removeCounter(cardId as CoreCardId, "xp", xpCost);
+        }
+
+        // Rule 357.2 / 422.3: pay the "Discard N" cost — the chosen hand
+        // card is trashed before the ability is placed on the chain.
+        if (cost.discard) {
+          if (!discardId) {
+            return;
+          }
+          context.zones.moveCard({
+            cardId: discardId as CoreCardId,
+            targetZoneId: "trash" as CoreZoneId,
+          });
         }
 
         // Handle kill (sacrifice) cost — the chosen permanent is trashed as

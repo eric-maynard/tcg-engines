@@ -660,7 +660,14 @@ function buildGameSnapshot(session: GameSession, viewingPlayer?: string) {
     zones[zoneId] = zone.cardIds.map((cardId) => {
       const cardInstance = internal.cards[cardId];
       const meta = internal.cardMetas[cardId];
-      const def = cardInstance ? registry.get(cardInstance.definitionId) : undefined;
+      // rule-sfd-171-221: tokens minted in-game (definitionId `token-def-<slug>`)
+      // are only registered in the engine's global registry, not the static set
+      // registry — fall back so the snapshot carries name/type/might instead of
+      // the raw instance id and cardType 'unknown'.
+      const def = cardInstance
+        ? (registry.get(cardInstance.definitionId) ??
+            (getGlobalCardRegistry().get(cardInstance.definitionId) as Card | undefined))
+        : undefined;
 
       // Read exhausted state from the counter system's __flags (where setFlag stores it)
       // Rather than the initial meta.exhausted field which may be stale
@@ -1300,21 +1307,23 @@ function finalizeEndTurn(session: GameSession, nextPlayer: string): void {
   // Channel (rule 515.3 / 644.7) → draw (rule 515.4.b) → main. Nothing to
   // Reimplement here.
   const stateAfter = session.engine.getState();
-  if (stateAfter.turn.activePlayer !== nextPlayer || stateAfter.turn.phase !== "main") {
+  // Rule 734: turn.onEnd may have redirected to an additional-turn owner.
+  const actualNext = stateAfter.turn.activePlayer || nextPlayer;
+  if (stateAfter.turn.phase !== "main") {
     console.warn(
-      `Flow state mismatch after endTurn: expected activePlayer=${nextPlayer} phase=main, ` +
+      `Flow state mismatch after endTurn: expected phase=main, ` +
       `got activePlayer=${stateAfter.turn.activePlayer} phase=${stateAfter.turn.phase}. ` +
       "Patching state as safety net.",
     );
     session.engine.applyPatches([
-      { op: "replace", path: ["turn", "activePlayer"], value: nextPlayer },
+      { op: "replace", path: ["turn", "activePlayer"], value: actualNext },
       { op: "replace", path: ["turn", "phase"], value: "main" },
     ]);
   }
 
   session.log.push(
     makeLogEntry(
-      `Turn passed to ${session.playerNames[nextPlayer] ?? nextPlayer}.`,
+      `Turn passed to ${session.playerNames[actualNext] ?? actualNext}.`,
     ),
   );
 }
@@ -2265,7 +2274,11 @@ const server = Bun.serve({
         params: {
           energy: (def?.energyCost ?? 0) + 4,
           playerId: pid,
-          power: Object.fromEntries((def?.powerCost ?? []).map((d: string) => [d, 2])),
+          // rule-id: tutor-power-grant-counts-duplicate-pips
+          power: (def?.powerCost ?? []).reduce(
+            (acc: Record<string, number>, d: string) => ({ ...acc, [d]: (acc[d] ?? 0) + 1 }),
+            {},
+          ),
         },
         playerId: pid as PlayerId,
       });

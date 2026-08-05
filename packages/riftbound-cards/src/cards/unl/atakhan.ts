@@ -5,12 +5,18 @@ import { createCardId } from "@tcg/riftbound-types/cards";
 /**
  * Atakhan — unl-170-219
  *
- * - Optional additional cost: kill a friendly unit → cost reduction (not
- *   representable in Effect union; omitted).
+ * - Optional additional cost: kill a friendly unit → cost reduction.
  * - [Ganking]
  * - When I attack, the defender must kill one of their units here.
  */
 const abilities: Ability[] = [
+  // Rule 560: optional additional play-cost — shape read by
+  // getOptionalPlayCost() (riftbound-engine cards.ts) so the paid variant
+  // is enumerated and the player is prompted.
+  {
+    cost: { kill: { controller: "friendly", type: "unit" } },
+    type: "additional-cost-option",
+  } as unknown as Ability,
   { keyword: "Ganking", type: "keyword" },
   {
     effect: {

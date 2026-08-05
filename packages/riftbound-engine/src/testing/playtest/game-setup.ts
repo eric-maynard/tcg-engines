@@ -401,12 +401,18 @@ export function advanceTurn(
   }
 
   const after = engine.getState();
-  if (after.turn.activePlayer !== next || after.turn.phase !== "main") {
+  // Rule 734: the flow's turn.onEnd may have redirected to an additional-turn
+  // owner; treat the flow's activePlayer as authoritative.
+  const actualNext = after.turn.activePlayer || next;
+  if (actualNext !== next) {
+    engine.getFlowManager()?.setCurrentPlayer(actualNext as PlayerId);
+  }
+  if (after.turn.activePlayer !== actualNext || after.turn.phase !== "main") {
     engine.applyPatches([
-      { op: "replace", path: ["turn", "activePlayer"], value: next },
+      { op: "replace", path: ["turn", "activePlayer"], value: actualNext },
       { op: "replace", path: ["turn", "phase"], value: "main" },
     ]);
   }
 
-  return { next, success: true };
+  return { next: actualNext, success: true };
 }

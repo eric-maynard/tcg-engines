@@ -12,6 +12,7 @@ import type {
   RiftboundGameState,
   RiftboundMoves,
 } from "../../types";
+import { fireTriggers } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 
 /**
@@ -108,8 +109,8 @@ export const equipmentMoves: Partial<
 
       return true;
     },
-    reducer: (_draft, context) => {
-      const { equipmentId, unitId } = context.params;
+    reducer: (draft, context) => {
+      const { equipmentId, unitId, playerId } = context.params;
 
       // Mark equipment as attached to the unit. Equipment flagged with
       // `copyAttachedUnitText` (Svellsongur) also records `copiedFromCardId`
@@ -130,6 +131,22 @@ export const equipmentMoves: Partial<
       context.cards.updateCardMeta(
         unitId as CoreCardId,
         { equippedWith: [...currentEquipped, equipmentId] } as Partial<RiftboundCardMeta>,
+      );
+
+      // rule-id: sfd-049-221-attach-equipment-fires-once
+      // Rule 383.2.c / 401.1: fire the attach-equipment event so "When you
+      // Attach an Equipment to me" triggers (Aphelios, Jax) reach the chain.
+      // `cardId` is the receiving unit so `on: "self"` matches the holder;
+      // `copyAttachedUnitText` replacement effects (Svellsongur) do not add
+      // A second attachment event, so this fires exactly once per attach.
+      fireTriggers(
+        { cardId: unitId, equipmentId, playerId, type: "attach-equipment" },
+        {
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          zones: context.zones,
+        },
       );
     },
   },

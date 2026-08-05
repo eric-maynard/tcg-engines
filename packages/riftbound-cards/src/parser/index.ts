@@ -330,7 +330,9 @@ function parseChannelEffect(text: string): ChannelEffect | undefined {
  */
 function parseBuffEffect(text: string): BuffEffect | undefined {
   const match = text.match(
-    /^Buff (me|it|(?:up to (?:two|three|four|five|six|\d+)\s+)?(?:another\s+|other\s+)?(?:all\s+)?(?:a\s+|an\s+)?(?:exhausted\s+|stunned\s+|damaged\s+)?(?:friendly |enemy )?(?:unit|units)(?:\s+(?:here|there|at a battlefield))?)\.?/i,
+    // rule-id: unl-043-219 — `units?` not `(?:unit|units)`: the alternation matched
+    // "unit" first and dropped the trailing "s here", so location:"here" was never set.
+    /^Buff (me|it|(?:up to (?:two|three|four|five|six|\d+)\s+)?(?:another\s+|other\s+)?(?:all\s+)?(?:a\s+|an\s+)?(?:exhausted\s+|stunned\s+|damaged\s+)?(?:friendly |enemy )?units?(?:\s+(?:here|there|at a battlefield))?)\.?/i,
   );
   if (!match) {
     return undefined;
@@ -1798,14 +1800,25 @@ function parseLookEffect(text: string): LookEffect | undefined {
  * Try to parse a fight effect
  */
 function parseFightEffect(text: string): FightEffect | undefined {
-  if (/deal damage equal to their Mights to each other\.?$/i.test(text)) {
-    return {
-      attacker: { controller: "friendly", type: "unit" } as AnyTarget,
-      defender: { controller: "enemy", type: "unit" } as AnyTarget,
-      type: "fight",
-    };
+  if (!/deal damage equal to their Mights to each other\.?$/i.test(text)) {
+    return undefined;
   }
-  return undefined;
+  // rule-id: unl-110-219-fight-targets-any — derive attacker/defender from the
+  // leading "Choose …" clause instead of hardcoding friendly/enemy so
+  // controller-agnostic wordings ("Choose two units") stay controller-agnostic.
+  let attacker: AnyTarget = { controller: "friendly", type: "unit" } as AnyTarget;
+  let defender: AnyTarget = { controller: "enemy", type: "unit" } as AnyTarget;
+  const twoMatch = text.match(/^Choose two ((?:[\w-]+ )*?units?)\b/i);
+  const pairMatch = text.match(/^Choose ((?:a|an|another) [^.]+?) and ((?:a|an|another) [^.]+?)\./i);
+  if (twoMatch) {
+    const t = parseTarget(twoMatch[1]);
+    attacker = t;
+    defender = t;
+  } else if (pairMatch) {
+    attacker = parseTarget(pairMatch[1]);
+    defender = parseTarget(pairMatch[2]);
+  }
+  return { attacker, defender, type: "fight" };
 }
 
 /**
@@ -1932,7 +1945,8 @@ function parseSpendBuffEffect(text: string): Effect | undefined {
  * Try to parse an extra-turn effect: "Take an extra turn after this one."
  */
 function parseExtraTurnEffect(text: string): Effect | undefined {
-  const match = text.match(/^Take an extra turn after this one\.?$/i);
+  // rule-id: ogn-122-298 — "Take a turn after this one." must parse as extra-turn
+  const match = text.match(/^Take an?(?: extra)? turn after this one\.?$/i);
   if (!match) {
     return undefined;
   }
@@ -1973,6 +1987,7 @@ function parseCreateTokenEffect(text: string): CreateTokenEffect | undefined {
       type: "create-token";
       token: TokenDefinition;
       amount?: number;
+      ready?: boolean;
       location?: string;
     } = {
       token,
@@ -1981,6 +1996,10 @@ function parseCreateTokenEffect(text: string): CreateTokenEffect | undefined {
     const amount = wordToNumber(gearMatch[1]);
     if (amount > 1) {
       effect.amount = amount;
+    }
+    // Rule 185.2.d (sfd-004-221): "…gear token exhausted" enters exhausted.
+    if (gearMatch[4]) {
+      effect.ready = false;
     }
     return effect as CreateTokenEffect;
   }

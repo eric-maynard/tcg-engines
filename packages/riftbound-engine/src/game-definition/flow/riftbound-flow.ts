@@ -26,6 +26,7 @@ import type {
 import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { dequeueExtraTurn } from "../../operations/turn-queue";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
 import { canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
@@ -169,6 +170,17 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           const turnPlayer = context.state.players[currentPlayer];
           if (turnPlayer) {
             turnPlayer.turnsTaken = (turnPlayer.turnsTaken ?? 0) + 1;
+          }
+        },
+
+        onEnd: (context) => {
+          // Rule 734: an additional turn is inserted directly after the
+          // current turn. If one is pending, its owner becomes the next turn
+          // player; otherwise normal seat-order rotation (set by the caller
+          // before endTurn) is left untouched.
+          const extra = dequeueExtraTurn(context.state);
+          if (extra !== undefined) {
+            context.setCurrentPlayer(extra);
           }
         },
 

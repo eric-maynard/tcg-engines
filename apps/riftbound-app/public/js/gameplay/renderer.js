@@ -1002,6 +1002,20 @@ function renderActions() {
     html += `<div class="action-section-title" style="background:#3a2a4a;color:#ffd070;padding:6px;border-radius:3px;">
       ${mine ? "⚠ " + esc(verb) : "Waiting for opponent to " + esc(verb.toLowerCase())}
     </div>`;
+    // rule-729 (ogn-174-298): reveal-and-pick from a hidden zone (deck/hand)
+    // must show the revealed card(s) so the prompter can see what they are
+    // choosing between — the resolvePendingChoice buttons alone only carry
+    // the name text.
+    if (mine && Array.isArray(pending.revealed) && pending.revealed.length) {
+      html += `<div class="pending-choice visible" data-pending-choice style="display:flex;gap:4px;flex-wrap:wrap;padding:4px 0;">`;
+      for (const rid of pending.revealed) {
+        const rc = findCard(rid);
+        const imgId = rc?.definitionId ?? rid;
+        html += `<img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(rc?.name ?? rid)}"
+          title="${esc(rc?.name ?? rid)}" style="width:90px;border-radius:4px;">`;
+      }
+      html += `</div>`;
+    }
     if (mine) {
       const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
       for (const m of picks) {

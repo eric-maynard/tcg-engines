@@ -162,9 +162,9 @@ return {
     diverges: rulingsResult.DIVERGES, findings: rulingsResult.diverges,
   },
   autoFix: {
-    attempted: systemic.length,
+    attempted: allConfirmed.length,
     applied: fixResults.filter(r=>r?.applied).length,
-    fixes: fixResults.map((r,i)=>({bug:systemic[i]?.what?.slice(0,80), applied:r?.applied, files:r?.files, notes:r?.notes})),
+    fixes: fixResults,
   },
   byLayer,
   totalConfirmed: (cardTest.confirmed||[]).length + monkeyConfirmed.length + (rulingsResult.DIVERGES||0),

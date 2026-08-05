@@ -62,7 +62,7 @@ export function pickDefaultForChoice(choice: PendingChoice): string | undefined 
  * Returns the target zone a picked card is moved to based on the stored
  * `onPicked` action.
  */
-function onPickedTargetZone(action: "recycle" | "banish" | "discard"): CoreZoneId {
+function onPickedTargetZone(action: "recycle" | "banish" | "discard" | "draw"): CoreZoneId {
   switch (action) {
     case "recycle": {
       return "mainDeck" as CoreZoneId;
@@ -72,6 +72,9 @@ function onPickedTargetZone(action: "recycle" | "banish" | "discard"): CoreZoneI
     }
     case "discard": {
       return "trash" as CoreZoneId;
+    }
+    case "draw": {
+      return "hand" as CoreZoneId;
     }
   }
 }
@@ -162,12 +165,23 @@ export const pendingChoiceMoves: Partial<
         if (!choice.options.includes(picked)) {
           return;
         }
+        // Rule 355.14.h (unl-192-219): a choose-target carrying boundTargets is
+        // a split-target DROP prompt — remove the picked id and re-execute so
+        // the split handler re-evaluates might vs remaining-target count.
+        // Rule 355.14.e/f/g: with `assign` set it is instead a resolution-time
+        // damage-distribution pick — APPEND the picked id (one occurrence per
+        // surplus point) so the split handler credits it +1.
+        const boundTargets = choice.assign
+          ? [...(choice.boundTargets ?? []), picked]
+          : choice.boundTargets
+            ? choice.boundTargets.filter((id) => id !== picked)
+            : [picked];
+        draft.pendingChoice = undefined;
         const effectCtx = {
           ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
-          boundTargets: [picked],
+          boundTargets,
         };
         executeEffect(choice.effect as ExecutableEffect, effectCtx);
-        draft.pendingChoice = undefined;
         return;
       }
 
@@ -219,6 +233,18 @@ export const pendingChoiceMoves: Partial<
       }
       context.counters.clearAllCounters(pickedCardId as CoreCardId);
       context.zones.moveCard(moveParams);
+
+      // Rule 435 (ogn-174-298): look/Vision recycles the unpicked cards.
+      if (choice.onRest === "recycle") {
+        for (const restId of choice.revealed) {
+          if (restId === pickedCardId) continue;
+          context.zones.moveCard({
+            cardId: restId as CoreCardId,
+            position: "bottom",
+            targetZoneId: "mainDeck" as CoreZoneId,
+          });
+        }
+      }
 
       // Clear the pending choice so play can resume.
       draft.pendingChoice = undefined;

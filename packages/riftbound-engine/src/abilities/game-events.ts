@@ -33,4 +33,5 @@ export type GameEvent =
   | { type: "choose"; cardId: string; chooserId: string }
   | { type: "ready"; cardId: string; playerId: string }
   | { type: "hide"; cardId: string; playerId: string }
+  | { type: "attach-equipment"; cardId: string; equipmentId: string; playerId: string }
   | { type: "gain-xp"; playerId: string; amount: number };

@@ -1083,7 +1083,8 @@ function parseStaticAbilityInner(
     const amount = Number.parseInt(scoredThisTurnMatch[1], 10);
     const effectText = scoredThisTurnMatch[2];
     // Parse the effect (e.g. "take an extra turn after this one")
-    const extraTurnMatch = effectText.match(/^take an extra turn after this one$/i);
+    // rule-id: ogn-122-298 — accept "take a turn after this one" (no "extra")
+    const extraTurnMatch = effectText.match(/^take an?(?: extra)? turn after this one$/i);
     const effect: Effect = extraTurnMatch
       ? ({ type: "extra-turn" } as unknown as Effect)
       : ({ text: effectText, type: "raw" } as unknown as Effect);
