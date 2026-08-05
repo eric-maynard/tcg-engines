@@ -7,6 +7,16 @@
  * The expert-watcher agent reads the step log and screenshots and calls out
  * anything the UI/engine did wrong.
  *
+ * Also runs a small set of HARD INVARIANTS after every step (things a human
+ * playtester notices in seconds but a purely-visual agent misses):
+ *   - pendingChoice must gate all other moves and must be visible
+ *   - playing a card must deduct ≥ its printed energy cost
+ *   - units that just entered a battlefield must be exhausted (rule 143.4)
+ *   - "When I move/arrive/play" rulesText must produce a visible consequence
+ *   - no console/page errors
+ * Violations are written per-step and rolled up at the top of trace.json so
+ * the workflow can surface them before any agent review.
+ *
  *   bun monkey-drive.ts --steps 40 --seed <s> --out /tmp/monkey
  */
 import { chromium } from "playwright";
@@ -62,25 +72,32 @@ const readState = () => p.evaluate(() => {
     id: c.id, def: c.definitionId, name: c.name, type: c.cardType, cost: c.energyCost,
     might: c.might, exhausted: c.meta?.exhausted, damage: c.meta?.damage, rulesText: c.rulesText,
   }));
+  const bfZones = Object.fromEntries(Object.keys(gs?.zones || {}).filter(k => k.startsWith("battlefield-")).map(k => [k, zone(k)]));
   return {
     turn: gs?.turn, status: gs?.status, runePools: gs?.runePools,
     interaction: gs?.interaction, pendingChoice: gs?.pendingChoice,
     battlefields: gs?.battlefields,
     hand: zone("hand"), base: zone("base"), runePool: zone("runePool"),
     trash: zone("trash").length, chain: zone("chain"),
-    bfZones: Object.fromEntries(Object.keys(gs?.zones || {}).filter(k => k.startsWith("battlefield-")).map(k => [k, zone(k)])),
+    bfZones,
     moves: ((window as any).__rbAvailableMoves || []).map((m: any) => ({ moveId: m.moveId, params: m.params })),
+    // Flat helpers for invariant diffing.
+    energy: gs?.runePools?.["player-1"]?.energy ?? 0,
+    handIds: zone("hand").map((c: any) => c.id),
+    boardById: Object.fromEntries([...zone("base"), ...Object.values(bfZones).flat()].map((c: any) => [c.id, c])),
     // DOM
     dom: {
       handCount: document.querySelectorAll('#player-hand .card').length,
       baseCount: document.querySelectorAll('#player-base .card').length,
       baseExhausted: document.querySelectorAll('#player-base .card.card--exhausted').length,
+      bfExhausted: document.querySelectorAll('[id^="bf-"] .card.card--exhausted, .bf-zone .card.card--exhausted').length,
       runeCount: document.querySelectorAll('#player-runePool .card').length,
       runeExhausted: document.querySelectorAll('#player-runePool .card.exhausted').length,
       resourceBar: document.getElementById('resourceBar')?.textContent?.replace(/\s+/g, ' ').trim(),
       actionButtons: [...document.querySelectorAll('#actionsList .action-btn')].map(e => e.textContent?.trim()).slice(0, 20),
       overlays: [...document.querySelectorAll('.visible[id$="Overlay"], .visible[id$="Dialog"]')].map(e => e.id),
       chainVisible: !!document.querySelector('.chain-overlay.visible, #chainOverlay.visible'),
+      pendingChoiceVisible: !!document.querySelector('#pendingChoice.visible, #pendingChoiceOverlay.visible, .pending-choice.visible, [data-pending-choice].visible'),
     },
   };
 });
@@ -89,14 +106,14 @@ const clickables = () => p.evaluate(() => {
   // Stamp a stable data-mkey on every clickable so the driver can address them
   // reliably (avoids nth-of-type mis-hits).
   let ord = 0;
-  const out: { key: string; kind: string; label: string }[] = [];
+  const out: { key: string; kind: string; label: string; cardId?: string }[] = [];
   const push = (els: NodeListOf<Element>, kind: string, labelAttr?: string) => {
     els.forEach((e) => {
       const label = (labelAttr ? e.getAttribute(labelAttr) : e.textContent)?.trim().slice(0, 60) || "";
       if (kind === "action" && /Concede|Leave|Rewind|Redo/i.test(label)) return;
       const key = `mk-${ord++}`;
       (e as HTMLElement).dataset.mkey = key;
-      out.push({ key, kind, label });
+      out.push({ key, kind, label, cardId: e.getAttribute("data-card-id") || undefined });
     });
   };
   push(document.querySelectorAll('#actionsList > .action-btn'), "action");
@@ -110,29 +127,101 @@ const clickables = () => p.evaluate(() => {
 });
 const loc = (key: string) => p.locator(`[data-mkey="${key}"]`).first();
 
+// ───────────────────────── invariants ─────────────────────────
+type Violation = { rule: string; detail: string; step: number };
+const PENDING_OK = new Set(["resolvePendingChoice", "concede"]);
+
+function checkInvariants(step: number, prev: any, cur: any, action: string, target: string, playedCard: any): Violation[] {
+  const v: Violation[] = [];
+  const push = (rule: string, detail: string) => v.push({ rule, detail, step });
+
+  // I1. pendingChoice must gate every other move.
+  if (cur.pendingChoice) {
+    const leaked = [...new Set(cur.moves.map((m: any) => m.moveId).filter((id: string) => !PENDING_OK.has(id)))];
+    if (leaked.length) push("pendingChoice-gates-moves", `pendingChoice(${cur.pendingChoice.type}) set but moves offered: ${leaked.join(",")}`);
+    // I2. …and must be surfaced to the player.
+    if (!cur.dom.pendingChoiceVisible && !cur.dom.chainVisible && !cur.dom.overlays.length)
+      push("pendingChoice-visible", `pendingChoice(${cur.pendingChoice.type}) set but no modal/overlay visible`);
+  }
+  // I3. Energy is never negative.
+  if (cur.energy < 0) push("energy-nonneg", `energy=${cur.energy}`);
+  // I4. No page/console errors.
+  if (cur.errs?.length) push("no-console-errors", cur.errs.slice(0, 3).join(" | "));
+
+  if (!prev) return v;
+
+  // I5. Playing a card deducts at least its printed cost.
+  if (playedCard && prev.handIds.includes(playedCard.id) && !cur.handIds.includes(playedCard.id)) {
+    const spent = prev.energy - cur.energy;
+    if ((playedCard.cost ?? 0) > 0 && spent < playedCard.cost)
+      push("cost-paid", `${playedCard.name} cost=${playedCard.cost} but energy ${prev.energy}→${cur.energy} (spent ${spent})`);
+  }
+  // I6. Units that newly appear on board (base or bf) enter exhausted (rule 143.4).
+  for (const [id, c] of Object.entries<any>(cur.boardById)) {
+    if (!prev.boardById[id] && c.type === "unit" && c.exhausted !== true)
+      push("unit-enters-exhausted", `${c.name} entered ${findZone(cur, id)} with exhausted=${c.exhausted}`);
+  }
+  // I7. A unit that changed zones and has a "When I move/arrive" trigger must
+  // produce a consequence (chain grew, pendingChoice set, hand/trash delta).
+  for (const [id, c] of Object.entries<any>(cur.boardById)) {
+    const was = prev.boardById[id];
+    if (was && findZone(prev, id) !== findZone(cur, id) && /when i (move|arrive)/i.test(c.rulesText || "")) {
+      const consequence = (cur.chain?.length || 0) > (prev.chain?.length || 0)
+        || (!!cur.pendingChoice && !prev.pendingChoice)
+        || cur.trash !== prev.trash
+        || cur.handIds.length !== prev.handIds.length;
+      if (!consequence) push("move-trigger-fired", `${c.name} moved ("${c.rulesText?.slice(0, 40)}…") but no chain/prompt/zone change`);
+    }
+  }
+  // I8. If the engine exhausts a board card, the DOM must show it tapped.
+  const engineTapped = Object.values<any>(cur.boardById).filter(c => c.exhausted).length;
+  const domTapped = (cur.dom.baseExhausted || 0) + (cur.dom.bfExhausted || 0);
+  if (engineTapped > 0 && domTapped < engineTapped)
+    push("exhausted-rendered", `engine has ${engineTapped} exhausted board cards, DOM shows ${domTapped}`);
+
+  return v;
+}
+function findZone(st: any, id: string) {
+  if (st.base.some((c: any) => c.id === id)) return "base";
+  for (const [z, cs] of Object.entries<any[]>(st.bfZones)) if (cs.some(c => c.id === id)) return z;
+  return "?";
+}
+
 const trace: any[] = [];
+const allViolations: Violation[] = [];
 let stepN = 0;
-async function snap(action: string, target: string) {
-  const n = String(stepN++).padStart(2, "0");
+let prevState: any = null;
+async function snap(action: string, target: string, playedCard?: any) {
+  const n = String(stepN).padStart(2, "0");
   await p.screenshot({ path: `${OUT}/${n}.png` });
   const st = await readState();
   const errsNow = errs.splice(0);
-  trace.push({ step: n, action, target, shot: `${n}.png`, errs: errsNow, ...st });
-  console.log(`→ ${n} ${action} ${target}  t${st.turn?.number}/${st.turn?.phase} e=${st.runePools?.["player-1"]?.energy} moves=${st.moves.length} ${errsNow.length ? "ERRS=" + errsNow.length : ""}`);
+  const stWithErrs = { ...st, errs: errsNow };
+  const invariantViolations = checkInvariants(stepN, prevState, stWithErrs, action, target, playedCard);
+  allViolations.push(...invariantViolations);
+  trace.push({ step: n, action, target, shot: `${n}.png`, errs: errsNow, invariantViolations, ...st });
+  const vTag = invariantViolations.length ? ` INV[${invariantViolations.map(v => v.rule).join(",")}]` : "";
+  console.log(`→ ${n} ${action} ${target}  t${st.turn?.number}/${st.turn?.phase} e=${st.energy} moves=${st.moves.length}${errsNow.length ? " ERRS=" + errsNow.length : ""}${vTag}`);
+  prevState = stWithErrs;
+  stepN++;
+  return st;
 }
 
 await snap("start", "");
 
+// Consequential-sequence bias: after playing a unit, prefer to move it; after
+// moving a unit, prefer a showdown/score action. This walks the exact chains a
+// human goldfish player tries first.
+type Intent = { kind: "move-unit"; cardId: string } | { kind: "score" } | null;
+let intent: Intent = null;
+
 for (let i = 0; i < STEPS; i++) {
-  const st = await readState();
+  const st = prevState;
   if (st.status !== "playing") break;
 
-  // What can I click?
   const cands = await clickables();
   if (!cands.length) { await snap("stuck", "nothing clickable"); break; }
 
-  // Weighted-random: prefer sub-actions and modal buttons (they advance state);
-  // sometimes drag a hand card to a drop zone; sometimes just poke a card.
   const modal = cands.filter(c => c.kind === "modal-btn");
   const subs = cands.filter(c => c.kind === "sub-action");
   const acts = cands.filter(c => c.kind === "action");
@@ -141,23 +230,44 @@ for (let i = 0; i < STEPS; i++) {
   const drops = cands.filter(c => c.kind === "drop-zone");
   const bases = cands.filter(c => c.kind === "base-card");
 
+  // If there is a pendingChoice with no modal, deliberately try a non-choice
+  // action once so the invariant/expert can see whether it succeeds.
+  const probePending = st.pendingChoice && !modal.length && (acts.length || subs.length) && rand() < 0.5;
+
   const r = rand();
-  let did = "noop", tgt = "";
+  let did = "noop", tgt = "", playedCard: any = null;
   try {
-    if (modal.length) {
+    if (modal.length && !probePending) {
       const c = pick(modal); await loc(c.key).click({ timeout: 3000 }); did = "click-modal"; tgt = c.label;
+    } else if (intent?.kind === "move-unit" && drops.length) {
+      const src = bases.find(b2 => b2.cardId === intent!.cardId) ?? cands.find(c => c.cardId === intent!.cardId);
+      if (src) {
+        const d = pick(drops.filter(d2 => /battlefield/i.test(d2.label)) .length ? drops.filter(d2 => /battlefield/i.test(d2.label)) : drops);
+        await loc(src.key).dragTo(loc(d.key), { timeout: 3000 });
+        did = "intent-move"; tgt = `${src.label} → ${d.label}`; intent = { kind: "score" };
+      } else intent = null;
+    } else if (intent?.kind === "score") {
+      const scoreBtn = [...subs, ...acts].find(a => /Score|Showdown|Declare|End Showdown/i.test(a.label));
+      if (scoreBtn) { await loc(scoreBtn.key).click({ timeout: 3000 }); did = "intent-score"; tgt = scoreBtn.label; }
+      intent = null;
     } else if (r < 0.15 && hands.length && drops.length) {
       const h = pick(hands), d = pick(drops);
+      playedCard = st.hand.find((c: any) => c.id === h.cardId) ?? st.hand.find((c: any) => c.name && h.label.includes(c.name));
       await loc(h.key).dragTo(loc(d.key), { timeout: 3000 });
       did = "drag"; tgt = `${h.label} → ${d.label}`;
+      if (playedCard?.type === "unit" && rand() < 0.6) intent = { kind: "move-unit", cardId: playedCard.id };
     } else if (r < 0.25 && bases.length && drops.length) {
       const b2 = pick(bases), d = pick(drops);
       await loc(b2.key).dragTo(loc(d.key), { timeout: 3000 });
       did = "drag-base"; tgt = `${b2.label} → ${d.label}`;
+      if (rand() < 0.6) intent = { kind: "score" };
     } else if (r < 0.35 && runes.length) {
       const c = pick(runes); await loc(c.key).click({ timeout: 3000 }); did = "click-rune"; tgt = c.label;
     } else if (r < 0.60 && subs.length) {
       const c = pick(subs); await loc(c.key).click({ timeout: 3000 }); did = "click-sub"; tgt = c.label;
+      const m = c.label.match(/Play (?:Unit|Spell|Gear)[:\s]+(.+)/i);
+      if (m) playedCard = st.hand.find((x: any) => x.name && m[1].includes(x.name));
+      if (playedCard?.type === "unit" && rand() < 0.6) intent = { kind: "move-unit", cardId: playedCard.id };
     } else if (acts.length) {
       const nonEnd = acts.filter(a => !/End Turn/i.test(a.label));
       const c = pick((nonEnd.length && rand() < 0.75) ? nonEnd : acts);
@@ -165,12 +275,27 @@ for (let i = 0; i < STEPS; i++) {
     } else {
       const c = pick(cands); await loc(c.key).click({ timeout: 3000 }).catch(() => {}); did = "click-any"; tgt = c.label;
     }
-  } catch (e) { did = "error"; tgt = String(e).slice(0, 80); }
+  } catch (e) { did = "error"; tgt = String(e).slice(0, 80); intent = null; }
 
   await p.waitForTimeout(400);
-  await snap(did, tgt);
+  await snap(did, tgt, playedCard);
 }
 
-writeFileSync(`${OUT}/trace.json`, JSON.stringify({ seed: SEED, steps: trace }, null, 2));
+// Roll up: dedupe violations by rule so the workflow gets a compact list.
+const violationsByRule: Record<string, { rule: string; count: number; steps: number[]; sample: string }> = {};
+for (const v of allViolations) {
+  const e = (violationsByRule[v.rule] ??= { rule: v.rule, count: 0, steps: [], sample: v.detail });
+  e.count++; if (!e.steps.includes(v.step)) e.steps.push(v.step);
+}
+
+writeFileSync(`${OUT}/trace.json`, JSON.stringify({
+  seed: SEED,
+  invariants: Object.values(violationsByRule),
+  steps: trace,
+}, null, 2));
 console.log(`\n${trace.length} steps → ${OUT}/trace.json (seed=${SEED})`);
+if (allViolations.length) {
+  console.log(`  ${allViolations.length} invariant violations across ${Object.keys(violationsByRule).length} rules:`);
+  for (const e of Object.values(violationsByRule)) console.log(`    ${e.rule} ×${e.count} @${e.steps.join(",")}: ${e.sample}`);
+}
 await b.close();

@@ -21,6 +21,14 @@ import {
   pickDefaultForChoice,
 } from "../game-definition/moves/pending-choice";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import {
+  P1,
+  P2,
+  createBattlefield,
+  createCard,
+  createMinimalGameState,
+  enumerateLegalMoves,
+} from "./rules-audit/helpers";
 
 // ---------------------------------------------------------------------------
 // Mock builder — an EffectContext where hand zones and a card registry are
@@ -518,5 +526,62 @@ describe("name-card effect (rule 762)", () => {
     move.reducer(draft, context);
     expect(meta.namedCard).toBe("Bolt");
     expect(draft.pendingChoice).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. Regression: pendingChoice gates every other move
+// ---------------------------------------------------------------------------
+
+describe("pendingChoice gates every discretionary move", () => {
+  it("enumerateMoves returns ONLY resolvePendingChoice + concede while a choice is pending", () => {
+    const engine = createMinimalGameState({ phase: "main", currentPlayer: P1 });
+
+    // Board state that would otherwise enumerate resource / movement / combat
+    // moves for P1: a battlefield with a friendly unit, a ready base unit, and
+    // a ready rune in the pool.
+    createBattlefield(engine, "bf-gate", { controller: null });
+    createCard(engine, "gate-unit-base", { cardType: "unit", might: 2, owner: P1, zone: "base" });
+    createCard(engine, "gate-unit-bf", {
+      cardType: "unit",
+      might: 2,
+      owner: P1,
+      zone: "battlefield-bf-gate",
+    });
+    createCard(engine, "gate-rune", {
+      cardType: "rune",
+      domain: "fire",
+      owner: P1,
+      zone: "runePool",
+    });
+    createCard(engine, "gate-hand-spell", { cardType: "spell", owner: P2, zone: "hand" });
+
+    // Sanity: without a pending choice these board pieces DO enumerate other
+    // moves (guards against the test passing only because the board is empty).
+    const before = new Set(enumerateLegalMoves(engine, P1).map((m) => m.moveId));
+    expect(before.has("resolvePendingChoice")).toBe(false);
+    expect(before.size).toBeGreaterThan(2);
+
+    // Install a pending choice directly on the engine's state.
+    const internal = engine as unknown as { currentState: RiftboundGameState };
+    const patched = structuredClone(internal.currentState) as RiftboundGameState;
+    patched.pendingChoice = {
+      onPicked: "discard",
+      prompter: P1,
+      revealed: ["gate-hand-spell"],
+      revealer: P2,
+      type: "reveal-and-pick",
+    };
+    internal.currentState = patched;
+    engine.getFlowManager()?.syncState(patched);
+
+    const moves = enumerateLegalMoves(engine, P1);
+    const moveIds = new Set(moves.map((m) => m.moveId));
+
+    expect(moveIds.has("resolvePendingChoice")).toBe(true);
+    expect(moveIds.has("concede")).toBe(true);
+    for (const id of moveIds) {
+      expect(["resolvePendingChoice", "concede"]).toContain(id);
+    }
   });
 });

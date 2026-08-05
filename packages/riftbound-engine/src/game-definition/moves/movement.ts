@@ -134,6 +134,9 @@ export const movementMoves: Partial<
    */
   standardMove: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (state.status !== "playing") {
         return false;
       }
@@ -194,6 +197,9 @@ export const movementMoves: Partial<
       return true;
     },
     enumerator: (state, context) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       if (state.status !== "playing") {
         return [];
       }
@@ -402,6 +408,9 @@ export const movementMoves: Partial<
    */
   gankingMove: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (state.status !== "playing") {
         return false;
       }
@@ -436,6 +445,9 @@ export const movementMoves: Partial<
       return true;
     },
     enumerator: (state, context) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       if (state.status !== "playing") {
         return [];
       }

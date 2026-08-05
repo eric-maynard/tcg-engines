@@ -482,12 +482,18 @@ export const chainMoves: Partial<
    */
   resolveChain: {
     condition: (state) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (!state.interaction?.chain?.active) {
         return false;
       }
       return allPlayersPassed(state.interaction);
     },
     enumerator: (state) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       if (!state.interaction?.chain?.active) {
         return [];
       }
@@ -845,6 +851,9 @@ export const chainMoves: Partial<
    */
   passShowdownFocus: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       const interaction = state.interaction ?? createInteractionState();
       // Rule 509.1: focus cannot pass while a chain is active on top of the
       // showdown — the chain must fully resolve first.
@@ -858,6 +867,9 @@ export const chainMoves: Partial<
       return activeShowdown.focusPlayer === context.params.playerId;
     },
     enumerator: (state, context) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       const interaction = state.interaction ?? createInteractionState();
       if (interaction.chain?.active) {
         return [];
@@ -937,6 +949,9 @@ export const chainMoves: Partial<
       if (state.status !== "playing") {
         return false;
       }
+      if (state.pendingChoice) {
+        return false;
+      }
       // Rule 548: Starting a Showdown is a Discretionary Action, legal only
       // in a Neutral Open state (no chain, no showdown). Also blocks nested
       // showdowns — a second showdown cannot stack while one is already open.
@@ -964,6 +979,9 @@ export const chainMoves: Partial<
     },
     enumerator: (state, context) => {
       if (state.status !== "playing") {
+        return [];
+      }
+      if (state.pendingChoice) {
         return [];
       }
       const interaction = state.interaction ?? createInteractionState();
@@ -1018,11 +1036,17 @@ export const chainMoves: Partial<
    */
   endShowdown: {
     condition: (state) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       const interaction = state.interaction ?? createInteractionState();
       const activeShowdown = getActiveShowdown(interaction);
       return activeShowdown?.active === false || isShowdownEnded(interaction);
     },
     enumerator: (state) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       const interaction = state.interaction ?? createInteractionState();
       if (!interaction.showdownStack?.length) {
         return [];
@@ -1178,6 +1202,9 @@ export const chainMoves: Partial<
   counterSpell: {
     condition: (state, context) => {
       if (state.status !== "playing") {
+        return false;
+      }
+      if (state.pendingChoice) {
         return false;
       }
       const chain = state.interaction?.chain;

@@ -40,6 +40,9 @@ export const combatMoves: Partial<
    */
   contestBattlefield: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (state.status !== "playing") {
         return false;
       }
@@ -78,6 +81,9 @@ export const combatMoves: Partial<
       return hasPlayerUnit && hasOpponentUnit;
     },
     enumerator: (state, context) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       if (state.status !== "playing") {
         return [];
       }
@@ -226,6 +232,9 @@ export const combatMoves: Partial<
    */
   resolveFullCombat: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (state.status !== "playing") {
         return false;
       }
@@ -240,6 +249,9 @@ export const combatMoves: Partial<
       return bf?.contested === true && bf.showdownComplete === true;
     },
     enumerator: (state) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       if (state.status !== "playing") {
         return [];
       }
@@ -505,6 +517,9 @@ export const combatMoves: Partial<
    */
   conquerBattlefield: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (state.status !== "playing") {
         return false;
       }
@@ -555,6 +570,9 @@ export const combatMoves: Partial<
       return hasPlayerUnit && !hasOpponentUnit;
     },
     enumerator: (state, context) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       if (state.status !== "playing") {
         return [];
       }
@@ -670,6 +688,9 @@ export const combatMoves: Partial<
    */
   scorePoint: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (state.status !== "playing") {
         return false;
       }
@@ -704,6 +725,9 @@ export const combatMoves: Partial<
       return true;
     },
     enumerator: (state, context) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       if (state.status !== "playing") {
         return [];
       }

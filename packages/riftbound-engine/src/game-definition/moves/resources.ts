@@ -28,6 +28,9 @@ export const resourceMoves: Partial<
    */
   channelRunes: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (state.status !== "playing") {
         return false;
       }
@@ -66,6 +69,9 @@ export const resourceMoves: Partial<
    */
   exhaustRune: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (state.status !== "playing") {
         return false;
       }
@@ -88,6 +94,9 @@ export const resourceMoves: Partial<
       return true;
     },
     enumerator: (state, context) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       if (state.status !== "playing") {
         return [];
       }
@@ -130,6 +139,9 @@ export const resourceMoves: Partial<
    */
   recycleRune: {
     condition: (state, context) => {
+      if (state.pendingChoice) {
+        return false;
+      }
       if (state.status !== "playing") {
         return false;
       }
@@ -151,6 +163,9 @@ export const resourceMoves: Partial<
       return true;
     },
     enumerator: (state, context) => {
+      if (state.pendingChoice) {
+        return [];
+      }
       if (state.status !== "playing") {
         return [];
       }
@@ -206,7 +221,7 @@ export const resourceMoves: Partial<
    * Used for card effects that generate resources.
    */
   addResources: {
-    condition: (state) => state.status === "playing",
+    condition: (state) => !state.pendingChoice && state.status === "playing",
     reducer: (draft, context) => {
       const { playerId, energy = 0, power = {} } = context.params;
 
@@ -232,7 +247,7 @@ export const resourceMoves: Partial<
    * Used for paying costs.
    */
   spendResources: {
-    condition: (state) => state.status === "playing",
+    condition: (state) => !state.pendingChoice && state.status === "playing",
     reducer: (draft, context) => {
       const { playerId, energy = 0, power = {} } = context.params;
 
