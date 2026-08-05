@@ -815,7 +815,7 @@ function adaptJsonCard(c: Record<string, unknown>): Card {
     might: c.might,
     mightBonus: c.mightBonus ?? undefined,
     name: c.name,
-    powerCost: derivePowerCost(domains, c.power as number | null) ?? c.powerCost,
+    powerCost: derivePowerCost(c.id as string, domains, c.power as number | null) ?? c.powerCost,
     rarity: c.rarity,
     rulesText: c.rulesText,
     setId: c.set,
@@ -835,14 +835,27 @@ const ALL_SET_JSON = [ognJson, ogsJson, sfdJson, unlJson, venJson] as {
 }[];
 
 /**
+ * Per-card power-pip domain overrides, resolved by reading the printed card art.
+ * Visual audit (2026-08) of all 41 multi-domain cards found every one uses a
+ * left/right split hybrid pip capsule — each pip is payable by either of the
+ * card's two domains, which the engine models as "rainbow". No card prints
+ * distinct single-domain pips, so this map is currently empty; keep it as the
+ * hook for any future card that does.
+ */
+const MULTI_DOMAIN_POWER_OVERRIDES: Record<string, string[]> = {};
+
+/**
  * Expand a set-JSON `{domains, power: N}` into the engine's `powerCost: Domain[]`.
  * Single-domain cards require N of that domain; multi-domain cards use N rainbow
- * (payable by any domain — 41 cards, refinable once per-pip domain data lands).
+ * (all 41 verified as split hybrid pips — see MULTI_DOMAIN_POWER_OVERRIDES).
  */
 function derivePowerCost(
+  id: string,
   domains: string[] | undefined,
   power: number | null | undefined,
 ): string[] | undefined {
+  const override = MULTI_DOMAIN_POWER_OVERRIDES[id];
+  if (override) {return override;}
   if (!power || power <= 0) {return undefined;}
   const domain = domains && domains.length === 1 ? domains[0] : "rainbow";
   return Array.from({ length: power }, () => domain);
@@ -851,7 +864,7 @@ function derivePowerCost(
 const _powerCostById = new Map<string, string[]>();
 for (const set of ALL_SET_JSON) {
   for (const c of set.cards) {
-    const pc = derivePowerCost(c.domains as string[] | undefined, c.power as number | null);
+    const pc = derivePowerCost(c.id as string, c.domains as string[] | undefined, c.power as number | null);
     if (pc) {_powerCostById.set(c.id as string, pc);}
   }
 }

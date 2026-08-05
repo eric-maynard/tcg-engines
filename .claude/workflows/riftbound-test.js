@@ -15,6 +15,7 @@ const N_CARDS = A.cards ?? 48
 const N_LANES = A.lanes ?? 12
 const MONKEY_ROUNDS = A.monkeyRounds ?? 1
 const SEED = A.seed ?? 'tcg-test'
+if (!/^[A-Za-z0-9_-]{1,64}$/.test(SEED)) throw new Error('invalid seed (must match ^[A-Za-z0-9_-]{1,64}$)')
 
 const OK = { type:'object', properties:{ok:{type:'boolean'},summary:{type:'object'},notes:{type:'string'}}, required:['ok'] }
 const CARDLIST = { type:'object', properties:{cardIds:{type:'array',items:{type:'string'}},remaining:{type:'number'}}, required:['cardIds'] }
