@@ -128,7 +128,7 @@ export function buildDefaultDeck(
   const inDomain = (c: CardDef) =>
     c.domain &&
     (Array.isArray(c.domain)
-      ? c.domain.some((d) => d === domain1 || d === domain2)
+      ? c.domain.every((d) => d === domain1 || d === domain2)
       : c.domain === domain1 || c.domain === domain2);
 
   let salt = 0;

@@ -778,9 +778,13 @@ interface DeckConfig {
 
 /** Build a default starter deck from the card pool — uses Fury/Chaos domain (Annie starter) */
 function buildDefaultDeck(domain1 = "fury", domain2 = "chaos"): DeckConfig {
+  // Rule 302: a card is legal in a deck only if EVERY domain on the card is
+  // within the deck's identity — a body/chaos card is not legal in a
+  // fury/chaos deck. `.some()` here previously let Bullet Time (body/chaos)
+  // into the Jinx starter.
   const matchesDomain = (c: { domain?: string | string[] }) =>
     c.domain && (Array.isArray(c.domain)
-      ? c.domain.some((d: string) => d === domain1 || d === domain2)
+      ? c.domain.every((d: string) => d === domain1 || d === domain2)
       : c.domain === domain1 || c.domain === domain2);
 
   const units = allCards.filter((c) => c.cardType === "unit"
