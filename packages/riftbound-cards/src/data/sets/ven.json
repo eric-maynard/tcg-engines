@@ -768,8 +768,20 @@
       "isChampion": false,
       "rulesText": "[Accelerate] (You may pay [1][fury] as an additional cost to have me enter ready.)\nWhen I move, if you control 4 or fewer runes, draw 1.",
       "abilities": [
-        null,
-        null
+        { "keyword": "Accelerate", "type": "keyword" },
+        {
+          "effect": {
+            "condition": {
+              "comparison": { "lte": 4 },
+              "target": { "controller": "friendly", "type": "rune" },
+              "type": "count"
+            },
+            "then": { "amount": 1, "type": "draw" },
+            "type": "conditional"
+          },
+          "trigger": { "event": "move", "on": "self" },
+          "type": "triggered"
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/6b7ea97973ced0e0631554ff07c726fe0a257a3c-744x1039.png?accountingTag=RB",

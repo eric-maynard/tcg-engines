@@ -276,6 +276,39 @@ describe("Turn-scoped event tracking", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 6. CARD-PILOT-24 fixes: count condition, empower, replacement install
+// ---------------------------------------------------------------------------
+describe("CARD-PILOT-24 effect-executor fixes", () => {
+  it("count condition compares rune-pool size", () => {
+    const ctx = createMockEffectContext({ boardCardIds: ["r1", "r2", "r3", "r4"] });
+    const cond = {
+      comparison: { lte: 4 },
+      target: { controller: "friendly", type: "rune" },
+      type: "count",
+    };
+    expect(evaluateEffectCondition(cond, ctx)).toBe(true);
+    expect(
+      evaluateEffectCondition({ ...cond, comparison: { lte: 3 } }, ctx),
+    ).toBe(false);
+  });
+
+  it("empower effect sets empowered meta flag", () => {
+    const ctx = createMockEffectContext();
+    executeEffect({ type: "empower" } as ExecutableEffect, ctx);
+    expect(ctx.updatedMeta.get("source-card-1")?.empowered).toBe(true);
+  });
+
+  it("replacement effect installs into draft.activeReplacements", () => {
+    const ctx = createMockEffectContext();
+    executeEffect(
+      { bonusDamage: 1, duration: "next", replaces: "deals-bonus-damage", type: "replacement" } as ExecutableEffect,
+      ctx,
+    );
+    expect(ctx.draft.activeReplacements?.length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Test Helpers
 // ---------------------------------------------------------------------------
 

@@ -275,6 +275,37 @@ export function evaluateEffectCondition(
       }
       return false;
     }
+    case "count": {
+      const target = condition.target as TargetDescriptor | undefined;
+      const cmp = condition.comparison as
+        | { lte?: number; gte?: number; eq?: number }
+        | undefined;
+      let n: number;
+      if (target && (target as { type?: string }).type === "rune") {
+        n = ctx.zones.getCardsInZone("runePool" as CoreZoneId, ctx.playerId as CorePlayerId)
+          .length;
+      } else {
+        n = resolveTarget(target, {
+          cards: ctx.cards,
+          draft: ctx.draft,
+          playerId: ctx.playerId,
+          sourceCardId: ctx.sourceCardId,
+          sourceZone: ctx.sourceZone,
+          zones: ctx.zones,
+        }).length;
+      }
+      if (cmp?.lte !== undefined && n > cmp.lte) return false;
+      if (cmp?.gte !== undefined && n < cmp.gte) return false;
+      if (cmp?.eq !== undefined && n !== cmp.eq) return false;
+      return true;
+    }
+    case "target-controller": {
+      const want = condition.controller as "friendly" | "enemy" | undefined;
+      const bound = ctx.boundTargets?.[0];
+      if (!bound) return false;
+      const owner = ctx.cards.getCardOwner(bound as CoreCardId) ?? "";
+      return want === "friendly" ? owner === ctx.playerId : owner !== ctx.playerId;
+    }
     default: {
       return true;
     }
@@ -599,6 +630,83 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
         );
         checkBecomesMighty(targetId, mightBefore, ctx);
       }
+      break;
+    }
+
+    case "swap-might": {
+      const swap = effect as unknown as {
+        target1?: TargetDescriptor;
+        target2?: TargetDescriptor;
+      };
+      const resolverCtx = {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      };
+      let a = ctx.boundTargets?.[0];
+      let b = ctx.boundTargets?.[1];
+      if (!a || !b) {
+        const first = resolveTarget(swap.target1, resolverCtx);
+        a ??= first[0];
+        const second = resolveTarget(swap.target2, {
+          ...resolverCtx,
+          sourceZone: a ? (ctx.zones.getCardZone(a as CoreCardId) as string) : ctx.sourceZone,
+        }).filter((id) => id !== a);
+        b ??= second[0];
+      }
+      if (!a || !b) break;
+      const aBefore = getEffectiveMight(a, ctx);
+      const bBefore = getEffectiveMight(b, ctx);
+      const aMeta = ctx.cards.getCardMeta?.(a as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      const bMeta = ctx.cards.getCardMeta?.(b as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      ctx.cards.updateCardMeta?.(
+        a as CoreCardId,
+        { mightModifier: (aMeta?.mightModifier ?? 0) + (bBefore - aBefore) } as unknown as Record<
+          string,
+          unknown
+        >,
+      );
+      ctx.cards.updateCardMeta?.(
+        b as CoreCardId,
+        { mightModifier: (bMeta?.mightModifier ?? 0) + (aBefore - bBefore) } as unknown as Record<
+          string,
+          unknown
+        >,
+      );
+      checkBecomesMighty(a, aBefore, ctx);
+      checkBecomesMighty(b, bBefore, ctx);
+      break;
+    }
+
+    case "empower":
+    case "disempower": {
+      const targets = getTargetIds(effect, ctx);
+      const empowerTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
+      for (const targetId of empowerTargets) {
+        ctx.cards.updateCardMeta?.(
+          targetId as CoreCardId,
+          { empowered: effect.type === "empower" } as unknown as Record<string, unknown>,
+        );
+      }
+      break;
+    }
+
+    case "replacement": {
+      // Rule 571: an activated ability that resolves to a replacement effect
+      // installs it into game state so future events can consult it. The
+      // damage-bonus consumer wiring is TODO; this at least records intent.
+      const active = ctx.draft.activeReplacements ?? [];
+      (ctx.draft as { activeReplacements?: unknown[] }).activeReplacements = [
+        ...active,
+        { ...effect, owner: ctx.playerId, sourceCardId: ctx.sourceCardId },
+      ];
       break;
     }
 

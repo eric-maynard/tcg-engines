@@ -1,7 +1,28 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+// Rule 383.4.e: "When I attack" is an Attack Trigger — must be declared in
+// `abilities` so the engine places it on the chain when this unit gains the
+// Attacker designation.
+const abilities: Ability[] = [
+  {
+    effect: {
+      condition: {
+        comparison: { gte: 1 },
+        target: { controller: "enemy", filter: "ready", location: "here", type: "unit" },
+        type: "count",
+      },
+      then: { amount: 2, duration: "turn", target: "self", type: "modify-might" },
+      type: "conditional",
+    },
+    trigger: { event: "attack", on: "self" },
+    type: "triggered",
+  },
+];
+
 export const duneDrake: UnitCard = {
+  abilities,
   cardNumber: 131,
   cardType: "unit",
   domain: "body",

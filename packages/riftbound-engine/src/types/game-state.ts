@@ -88,6 +88,9 @@ export interface RiftboundCardMeta {
   /** Temporary Might modifier from effects (added to base Might; reset per duration) */
   mightModifier?: number;
 
+  /** Rule 827: whether this permanent is Empowered (gates `[Empowered]>` abilities) */
+  empowered?: boolean;
+
   /** Might bonus from static/passive abilities (recalculated each pass) */
   staticMightBonus?: number;
 
@@ -497,6 +500,13 @@ export interface RiftboundGameState {
    * The set is cleared at end of turn along with other turn-scoped state.
    */
   readonly consumedNextReplacements?: Record<string, true>;
+
+  /**
+   * Replacement effects installed at runtime by an activated/triggered ability
+   * (rule 571) rather than declared statically on a card definition. Consumers
+   * of `checkReplacement` may consult this alongside board-card abilities.
+   */
+  activeReplacements?: unknown[];
 
   /**
    * A pending player decision that blocks all other moves until resolved.

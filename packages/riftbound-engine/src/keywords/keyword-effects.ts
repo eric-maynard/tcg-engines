@@ -81,6 +81,14 @@ export const KEYWORD_DEFINITIONS: Record<string, KeywordDefinition> = {
     ruleNumber: 721,
     stackable: true,
   },
+  Empower: {
+    category: "state",
+    description: "Activated ability: pay [N] to Empower this (gates Empowered abilities)",
+    id: "empower",
+    name: "Empower",
+    ruleNumber: 827,
+    stackable: false,
+  },
   Ganking: {
     category: "movement",
     description: "Can move from battlefield to battlefield",

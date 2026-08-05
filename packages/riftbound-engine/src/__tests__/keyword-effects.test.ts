@@ -38,6 +38,11 @@ describe("Keyword Definitions", () => {
   test("Tank is not stackable", () => {
     expect(KEYWORD_DEFINITIONS.Tank.stackable).toBe(false);
   });
+
+  test("Empower is defined (rule 827)", () => {
+    expect(KEYWORD_DEFINITIONS.Empower.category).toBe("state");
+    expect(KEYWORD_DEFINITIONS.Empower.ruleNumber).toBe(827);
+  });
 });
 
 describe("Combat: Assault", () => {

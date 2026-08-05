@@ -2,6 +2,7 @@ import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
 export const bird: UnitCard = {
+  abilities: [{ keyword: "Deflect", type: "keyword", value: 1 }],
   cardNumber: 2,
   cardType: "unit",
   id: createCardId("unl-t02"),

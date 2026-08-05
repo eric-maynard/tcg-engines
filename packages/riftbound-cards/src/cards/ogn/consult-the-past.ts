@@ -12,5 +12,5 @@ export const consultThePast: SpellCard = {
   rulesText:
     "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Reaction] (Play any time, even before spells and abilities resolve.)\nDraw 2.",
   setId: "OGN",
-  timing: "action",
+  timing: "reaction",
 };

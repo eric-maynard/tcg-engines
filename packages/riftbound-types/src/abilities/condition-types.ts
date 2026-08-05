@@ -251,6 +251,16 @@ export interface OpponentControlsCondition {
   readonly target: Target;
 }
 
+/**
+ * If the effect's chosen target is controlled by the given player.
+ * Evaluated against the caster-bound target of the enclosing spell/ability
+ * (rule 355.8 last-known-information for "if it was a friendly/enemy …").
+ */
+export interface TargetControllerCondition {
+  readonly type: "target-controller";
+  readonly controller: "friendly" | "enemy";
+}
+
 // ============================================================================
 // Location Conditions
 // ============================================================================
@@ -410,6 +420,7 @@ export type Condition =
   // Control conditions
   | ControlCondition
   | OpponentControlsCondition
+  | TargetControllerCondition
 
   // Location conditions
   | AtLocationCondition
