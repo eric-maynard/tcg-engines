@@ -529,8 +529,11 @@ export const cardPlayMoves: Partial<
       // Rule-724 counter, so a Legion trigger on this card itself cannot
       // Satisfy its own condition — it must observe the count of cards
       // That were played EARLIER in this turn.
+      // paidAdditionalCost is false until optional-cost enumeration is wired
+      // into playUnit — this blocks paid-additional-cost payoffs from firing
+      // for free (Zaun Punk sfd-160-221).
       fireTriggers(
-        { cardId, playerId, type: "play-self" },
+        { cardId, paidAdditionalCost: false, playerId, type: "play-self" },
         { cards: context.cards, counters, draft, zones },
       );
       fireTriggers(

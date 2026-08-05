@@ -60,9 +60,24 @@ export const counterMoves: Partial<
   },
 
   addDamage: {
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { cardId, amount } = context.params;
+      // Mirror to meta.damage — death checks and the UI read meta.damage,
+      // not the __counters bag. Read prior value before addCounter.
+      const meta = (context.cards.getCardMeta(cardId as CoreCardId) ?? {}) as Partial<
+        RiftboundCardMeta
+      >;
       context.counters.addCounter(cardId as CoreCardId, "damage", amount);
+      context.cards.updateCardMeta(
+        cardId as CoreCardId,
+        { damage: (meta.damage ?? 0) + amount } as Partial<RiftboundCardMeta>,
+      );
+      performCleanup({
+        cards: context.cards as unknown as Parameters<typeof performCleanup>[0]["cards"],
+        counters: context.counters as unknown as Parameters<typeof performCleanup>[0]["counters"],
+        draft,
+        zones: context.zones as unknown as Parameters<typeof performCleanup>[0]["zones"],
+      });
     },
   },
 
@@ -70,6 +85,10 @@ export const counterMoves: Partial<
     reducer: (_draft, context) => {
       const { cardId } = context.params;
       context.counters.clearCounter(cardId as CoreCardId, "damage");
+      context.cards.updateCardMeta(
+        cardId as CoreCardId,
+        { damage: 0 } as Partial<RiftboundCardMeta>,
+      );
     },
   },
 

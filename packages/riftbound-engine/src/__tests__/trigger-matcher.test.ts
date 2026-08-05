@@ -6,6 +6,8 @@ import { describe, expect, test } from "bun:test";
 import type { GameEvent } from "../abilities/game-events";
 import type { CardWithAbilities, TriggerableAbility } from "../abilities/trigger-matcher";
 import { findMatchingTriggers } from "../abilities/trigger-matcher";
+import { evaluateTriggerCondition } from "../abilities/trigger-runner";
+import type { RiftboundGameState } from "../types";
 
 function makeAbility(event: string, on = "self"): TriggerableAbility {
   return {
@@ -274,6 +276,77 @@ describe("Trigger Matcher", () => {
 
       const matches = findMatchingTriggers(event, [observer]);
       expect(matches).toHaveLength(1);
+    });
+  });
+
+  // Regression: Bug A (card-playtest batch2) — Darius ogn-027-298
+  // "When you play your second card in a turn" fired on EVERY play because
+  // toTriggerableAbilities dropped trigger.restrictions and the matcher never
+  // checked nth-time-each-turn.
+  describe("trigger restrictions: nth-time-each-turn", () => {
+    const darius: TriggerableAbility = {
+      effect: { type: "raw" },
+      trigger: {
+        event: "play-card",
+        on: "controller",
+        restrictions: [{ count: 2, type: "nth-time-each-turn" }],
+      },
+      type: "triggered",
+    };
+    const card = makeCard("darius", [darius], "base", "p1");
+    const event: GameEvent = { cardId: "x", cardType: "unit", playerId: "p1", type: "play-card" };
+
+    test("does NOT fire on the first card play", () => {
+      const matches = findMatchingTriggers(event, [card], { cardsPlayedThisTurn: { p1: 0 } });
+      expect(matches).toHaveLength(0);
+    });
+
+    test("fires ONLY on the second card play", () => {
+      const matches = findMatchingTriggers(event, [card], { cardsPlayedThisTurn: { p1: 1 } });
+      expect(matches).toHaveLength(1);
+    });
+
+    test("does NOT fire on the third card play", () => {
+      const matches = findMatchingTriggers(event, [card], { cardsPlayedThisTurn: { p1: 2 } });
+      expect(matches).toHaveLength(0);
+    });
+  });
+
+  // Regression: Bug B (card-playtest batch2) — Zaun Punk sfd-160-221
+  // condition:{type:"paid-additional-cost"} was not handled in
+  // evaluateTriggerCondition, so the payoff fired for free.
+  describe("trigger condition: paid-additional-cost", () => {
+    const state = {} as RiftboundGameState;
+
+    test("blocks payoff when the play event did not pay the additional cost", () => {
+      const event: GameEvent = {
+        cardId: "zaun-punk",
+        paidAdditionalCost: false,
+        playerId: "p1",
+        type: "play-self",
+      };
+      expect(
+        evaluateTriggerCondition({ type: "paid-additional-cost" }, state, "p1", event),
+      ).toBe(false);
+    });
+
+    test("blocks payoff when paidAdditionalCost is absent from the event", () => {
+      const event: GameEvent = { cardId: "zaun-punk", playerId: "p1", type: "play-self" };
+      expect(
+        evaluateTriggerCondition({ type: "paid-additional-cost" }, state, "p1", event),
+      ).toBe(false);
+    });
+
+    test("allows payoff when the play event paid the additional cost", () => {
+      const event: GameEvent = {
+        cardId: "zaun-punk",
+        paidAdditionalCost: true,
+        playerId: "p1",
+        type: "play-self",
+      };
+      expect(
+        evaluateTriggerCondition({ type: "paid-additional-cost" }, state, "p1", event),
+      ).toBe(true);
     });
   });
 });

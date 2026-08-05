@@ -404,7 +404,24 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           markReplacementConsumed(ctx.draft, replacement);
           continue;
         }
+        // Mirror to meta.damage — state-based death checks (rule 520), the
+        // end-of-turn clear, and the UI all read meta.damage, not the
+        // __counters bag. Without this, spell/ability damage is invisible
+        // and never kills a unit. Read the prior value BEFORE addCounter so
+        // callers whose counter store aliases meta.damage don't double-apply.
+        const priorDamage =
+          (
+            ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+              | Partial<RiftboundCardMeta>
+              | undefined
+          )?.damage ?? 0;
         ctx.counters.addCounter(targetId as CoreCardId, "damage", amount);
+        ctx.cards.updateCardMeta?.(
+          targetId as CoreCardId,
+          {
+            damage: priorDamage + amount,
+          } as unknown as Record<string, unknown>,
+        );
       }
       break;
     }
@@ -715,9 +732,21 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       const targets = getTargetIds(effect, ctx);
       const healTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
       for (const targetId of healTargets) {
+        // Read prior value BEFORE removeCounter so callers whose counter
+        // store aliases meta.damage don't double-apply.
+        const priorDamage =
+          (
+            ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+              | Partial<RiftboundCardMeta>
+              | undefined
+          )?.damage ?? 0;
         ctx.counters.removeCounter(targetId as CoreCardId, "damage", healAmount);
-        // Healing can cross the Mighty threshold (less damage = higher effective Might)
-        // But we track Might via base stats, not damage. Damage only matters for death checks.
+        ctx.cards.updateCardMeta?.(
+          targetId as CoreCardId,
+          {
+            damage: Math.max(0, priorDamage - healAmount),
+          } as unknown as Record<string, unknown>,
+        );
       }
       break;
     }

@@ -85,6 +85,8 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
         trigger: {
           event: a.trigger.event,
           on: a.trigger.on,
+          restrictions: (a.trigger as { restrictions?: readonly { type: string; count?: number }[] })
+            .restrictions,
         },
         type: "triggered",
       });
@@ -105,10 +107,11 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
  * does not silently drop triggers with as-yet-unsupported condition
  * structures.
  */
-function evaluateTriggerCondition(
+export function evaluateTriggerCondition(
   condition: unknown,
   state: RiftboundGameState,
   controllerId: string,
+  event: GameEvent,
 ): boolean {
   if (!condition || typeof condition !== "object") {
     return true;
@@ -116,6 +119,12 @@ function evaluateTriggerCondition(
   const c = condition as { type?: string };
   if (c.type === "legion") {
     return evaluateLegionCondition(state, controllerId);
+  }
+  if (c.type === "paid-additional-cost") {
+    // Zaun Punk (sfd-160-221) et al: the payoff fires only when the optional
+    // additional cost was actually paid. The play event carries the flag; if
+    // absent the enumeration hasn't run and the payoff must NOT fire for free.
+    return (event as { paidAdditionalCost?: boolean }).paidAdditionalCost === true;
   }
   return true;
 }
@@ -257,14 +266,14 @@ export function orderTriggers(
 
 export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
   const boardCards = getBoardCards(ctx);
-  const allMatches = findMatchingTriggers(event, boardCards);
+  const allMatches = findMatchingTriggers(event, boardCards, ctx.draft);
 
   // Rule 724 (Legion) and other conditional triggers: filter matches by
   // Their ability.condition before executing. Conditions are evaluated
   // Against the controller of the card (owner, since abilities cannot
   // Change controller separately today).
   const filtered = allMatches.filter((match) =>
-    evaluateTriggerCondition(match.ability.condition, ctx.draft, match.cardOwner),
+    evaluateTriggerCondition(match.ability.condition, ctx.draft, match.cardOwner, match.event),
   );
 
   // Rule 585: Order simultaneous triggers by (1) turn player first

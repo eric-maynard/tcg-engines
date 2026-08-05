@@ -6,6 +6,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import type { CardId as CoreCardId } from "@tcg/core";
+import type { EffectContext, ExecutableEffect } from "../abilities/effect-executor";
+import { executeEffect } from "../abilities/effect-executor";
 import type { CleanupContext } from "../cleanup";
 import { performCleanup, performFullCleanup } from "../cleanup";
 import {
@@ -195,6 +198,70 @@ describe("State-Based Checks: Death by Damage (rule 520)", () => {
     const result = performCleanup(ctx);
 
     expect(result.killed).toHaveLength(0);
+
+    clearGlobalCardRegistry();
+  });
+
+  test("spell damage via executeEffect kills a unit (regression: two-store desync)", () => {
+    // Regression: executeEffect wrote only to __counters.damage, never to
+    // meta.damage, so performCleanup (which reads meta.damage) never saw
+    // spell/ability damage and lethally-damaged units survived.
+    const registry = new CardDefinitionRegistry();
+    registry.register("unit-1", {
+      cardType: "unit",
+      id: "unit-1",
+      might: 3,
+      name: "Fragile Unit",
+    });
+    setGlobalCardRegistry(registry);
+
+    const draft = createMockState({
+      battlefields: { "bf-1": { contested: false, controller: "p2", id: "bf-1" } },
+    });
+
+    const cleanupCtx = createMockContext(draft, {
+      "unit-1": { meta: {}, owner: "p2", zone: "battlefield-bf-1" },
+    });
+
+    // Build an EffectContext over the same store used by cleanupCtx.
+    const effectCtx: EffectContext = {
+      boundTargets: ["unit-1"],
+      cards: {
+        getCardMeta: cleanupCtx.cards.getCardMeta as (id: CoreCardId) => Record<string, unknown>,
+        getCardOwner: cleanupCtx.cards.getCardOwner,
+        updateCardMeta: cleanupCtx.cards.updateCardMeta as (
+          id: CoreCardId,
+          meta: Record<string, unknown>,
+        ) => void,
+      },
+      counters: {
+        addCounter: () => undefined,
+        clearCounter: () => undefined,
+        removeCounter: () => undefined,
+        setFlag: () => undefined,
+      },
+      draft,
+      playerId: "p1",
+      sourceCardId: "spell-1",
+      zones: {
+        drawCards: () => undefined,
+        getCardZone: () => undefined,
+        getCardsInZone: cleanupCtx.zones.getCardsInZone as EffectContext["zones"]["getCardsInZone"],
+        moveCard: cleanupCtx.zones.moveCard as EffectContext["zones"]["moveCard"],
+      },
+    };
+
+    const effect: ExecutableEffect = { amount: 5, type: "damage" };
+    executeEffect(effect, effectCtx);
+
+    // meta.damage must now reflect spell damage
+    expect(cleanupCtx.cards.getCardMeta("unit-1" as CoreCardId)?.damage).toBe(5);
+
+    const result = performCleanup(cleanupCtx);
+
+    expect(result.killed).toContain("unit-1");
+    // Unit ended up in trash
+    expect(cleanupCtx.zones.getCardsInZone("trash" as never)).toContain("unit-1");
 
     clearGlobalCardRegistry();
   });

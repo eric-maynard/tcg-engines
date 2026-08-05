@@ -8,6 +8,22 @@
 import type { GameEvent } from "./game-events";
 
 /**
+ * A trigger restriction (subset of @tcg/riftbound-types TriggerRestriction).
+ */
+export interface TriggerRestriction {
+  readonly type: string;
+  readonly count?: number;
+}
+
+/**
+ * Minimal game-state view needed to evaluate trigger restrictions.
+ * Avoids importing the full RiftboundGameState here.
+ */
+export interface TriggerMatcherState {
+  readonly cardsPlayedThisTurn?: Record<string, number>;
+}
+
+/**
  * A simplified ability representation for trigger matching.
  * Avoids importing full riftbound-types to keep the boundary clean.
  */
@@ -16,6 +32,7 @@ export interface TriggerableAbility {
   readonly trigger: {
     readonly event: string;
     readonly on?: string;
+    readonly restrictions?: readonly TriggerRestriction[];
   };
   readonly effect: unknown;
   readonly optional?: boolean;
@@ -73,12 +90,64 @@ const EVENT_MAP: Record<string, string> = {
 };
 
 /**
+ * Evaluate a single trigger restriction against the event and state.
+ * Returns `true` when the restriction is satisfied (i.e. the trigger may fire).
+ */
+function restrictionSatisfied(
+  restriction: TriggerRestriction,
+  trigger: TriggerableAbility["trigger"],
+  event: GameEvent,
+  card: CardWithAbilities,
+  state: TriggerMatcherState | undefined,
+): boolean {
+  switch (restriction.type) {
+    case "nth-time-each-turn": {
+      const n = restriction.count ?? 1;
+      if (trigger.event === "play-card") {
+        // Reducers fire play-card BEFORE incrementing cardsPlayedThisTurn, so
+        // the current play is the (prior + 1)th card this turn.
+        const playerId = "playerId" in event ? event.playerId : card.owner;
+        const prior = state?.cardsPlayedThisTurn?.[playerId] ?? 0;
+        return prior + 1 === n;
+      }
+      // TODO(nth-time-each-turn): event-specific counters for "draw" and
+      // "move" are not tracked yet — block the trigger rather than fire on
+      // every occurrence.
+      return false;
+    }
+    case "first-time-each-turn":
+      // TODO(first-time-each-turn): per-event first-time tracking not yet
+      // implemented — block rather than fire every time.
+      return false;
+    case "once-each-turn":
+      // TODO(once-each-turn): per-card fire tracking not yet implemented.
+      return false;
+    case "during-showdown":
+      // TODO(during-showdown): showdown state not exposed here.
+      return false;
+    case "on-opponent-turn":
+      // TODO(on-opponent-turn): active-player check not exposed here.
+      return false;
+    case "self-at-battlefield":
+      return card.zone.startsWith("battlefield");
+    case "non-token":
+      // TODO(non-token): subject-card token status not available here.
+      return false;
+    default:
+      // TODO(trigger-restriction): unknown restriction type — block rather
+      // than permissively fire (previous permissive behavior caused Bug A).
+      return false;
+  }
+}
+
+/**
  * Check if a trigger matches a game event.
  */
 function triggerMatchesEvent(
   trigger: TriggerableAbility["trigger"],
   event: GameEvent,
   card: CardWithAbilities,
+  state?: TriggerMatcherState,
 ): boolean {
   // Event type must match
   if (trigger.event !== event.type) {
@@ -184,6 +253,15 @@ function triggerMatchesEvent(
     return false;
   }
 
+  // Check restrictions (nth-time-each-turn, first-time-each-turn, ...).
+  if (trigger.restrictions && trigger.restrictions.length > 0) {
+    for (const r of trigger.restrictions) {
+      if (!restrictionSatisfied(r, trigger, event, card, state)) {
+        return false;
+      }
+    }
+  }
+
   return true;
 }
 
@@ -199,6 +277,7 @@ function triggerMatchesEvent(
 export function findMatchingTriggers(
   event: GameEvent,
   boardCards: CardWithAbilities[],
+  state?: TriggerMatcherState,
 ): MatchedTrigger[] {
   const matches: MatchedTrigger[] = [];
 
@@ -217,7 +296,7 @@ export function findMatchingTriggers(
         continue;
       }
 
-      if (triggerMatchesEvent(ability.trigger, event, card)) {
+      if (triggerMatchesEvent(ability.trigger, event, card, state)) {
         matches.push({
           ability,
           cardId: card.id,

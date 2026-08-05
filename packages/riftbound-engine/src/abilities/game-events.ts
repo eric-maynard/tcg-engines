@@ -9,7 +9,7 @@
  * All game events that can trigger abilities.
  */
 export type GameEvent =
-  | { type: "play-self"; cardId: string; playerId: string }
+  | { type: "play-self"; cardId: string; playerId: string; paidAdditionalCost?: boolean }
   | { type: "play-card"; cardId: string; playerId: string; cardType: string }
   | { type: "attack"; cardId: string; battlefieldId: string }
   | { type: "defend"; cardId: string; battlefieldId: string }
