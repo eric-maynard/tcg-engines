@@ -13,4 +13,5 @@ export const veteranPoro: UnitCard = {
   rulesText:
     "[Weaponmaster] (When you play me, you may [Equip] one of your Equipment to me for [rainbow] less, even if it's already attached.)",
   setId: "SFD",
+  tags: ["Poro"], // rule-id: unl-046-219 — printed PORO tag (missing from set data)
 };

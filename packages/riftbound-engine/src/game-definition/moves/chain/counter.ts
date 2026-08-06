@@ -2,7 +2,8 @@
  * counterSpell move (split from chain-moves.ts).
  */
 
-import type { GameMoveDefinitions } from "@tcg/core";
+import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
+import { removeChainItem } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -41,6 +42,15 @@ export const counterSpell: Defs["counterSpell"] = {
     if (target.countered) {
       return false;
     }
+    // rule-id: ogn-064-298 — "Counter a spell" targets spells only; a
+    // triggered/activated ability on the chain is never a legal target.
+    if (target.type !== "spell") {
+      return false;
+    }
+    // rule-id: ven-015-166 — "This can't be countered." (rule 544)
+    if (target.uncounterable) {
+      return false;
+    }
     return true;
   },
   // Rule 601: Counter is a card effect, not a player Discretionary Action.
@@ -53,8 +63,23 @@ export const counterSpell: Defs["counterSpell"] = {
     const { targetChainItemId } = context.params;
     for (let i = 0; i < chain.items.length; i++) {
       const item = chain.items[i];
-      if (item && item.id === targetChainItemId && !item.countered) {
+      // rule-id: ven-015-166 — uncounterable items are never marked countered.
+      if (item && item.id === targetChainItemId && !item.countered && !item.uncounterable) {
         (chain.items[i] as { countered: boolean }).countered = true;
+        // rule-id: ogn-064-298 (rule 425.1.a / 425.1.a.1) — a countered card
+        // is cleared from the chain and trashed as part of being countered.
+        if (
+          item.type === "spell" &&
+          context.zones.getCardZone(item.cardId as CoreCardId) === ("chain" as CoreZoneId)
+        ) {
+          context.zones.moveCard({
+            cardId: item.cardId as CoreCardId,
+            targetZoneId: (item.resolveTo ?? "trash") as CoreZoneId,
+          });
+        }
+        if (draft.interaction) {
+          draft.interaction = removeChainItem(draft.interaction, item.id);
+        }
         break;
       }
     }

@@ -79,7 +79,7 @@ const ENERGY_TOKEN_RE = /:rb_energy_(\d+):|\[(\d+)\]/g;
  * keeps printed cost glyphs as a token string (`":rb_energy_1::rb_rune_rainbow:"`);
  * hand-authored abilities may use a bare number or `{energy, power[]}`.
  */
-function decodeCostAmount(raw: unknown): { energy: number; power: Partial<Record<string, number>> } {
+export function decodeCostAmount(raw: unknown): { energy: number; power: Partial<Record<string, number>> } {
   const power: Partial<Record<string, number>> = {};
   if (typeof raw === "number") {
     return { energy: raw, power };
@@ -259,6 +259,91 @@ export function computeStaticCostReduction(
   }
 
   return { minimum: maxMinimum, power: totalPower, reduction: totalReduction };
+}
+
+/**
+ * rule-id: unl-146-219 — Repeat instances granted to `playedCardId` by the
+ * player's board permanents ("While I'm in a showdown, your spells have
+ * [Repeat] [2][chaos]"). Scans friendly permanents for static `grant-keyword`
+ * Repeat effects whose target matches the played card and whose condition
+ * holds, returning one cost tier per granting instance (rule 820.3). Empty
+ * when nothing on the board grants Repeat.
+ */
+export function computeGrantedSpellRepeatCost(
+  ctx: CostReductionContext,
+  playerId: string,
+  playedCardId: string,
+): { energy: number; power: readonly string[] }[] {
+  const registry = getGlobalCardRegistry();
+  const playedDef = registry.get(playedCardId);
+  if (!playedDef) {
+    return [];
+  }
+  const playedCardType = playedDef.cardType;
+  const playedKeywords = playedDef.keywords ?? [];
+  const tiers: { energy: number; power: readonly string[] }[] = [];
+
+  const zonesToScan: string[] = [...PLAYER_BOARD_ZONES];
+  for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+    zonesToScan.push(`battlefield-${bfId}`);
+  }
+  for (const zoneId of zonesToScan) {
+    const isPerPlayer = PLAYER_BOARD_ZONES.includes(zoneId);
+    const ids = isPerPlayer
+      ? ctx.zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)
+      : ctx.zones.getCardsInZone(zoneId as CoreZoneId);
+    for (const permId of ids) {
+      const controller =
+        ctx.cards.getCardController?.(permId as CoreCardId) ??
+        ctx.cards.getCardOwner(permId as CoreCardId);
+      if (controller !== playerId || (permId as string) === playedCardId) {
+        continue;
+      }
+      for (const ability of registry.getAbilities(permId as string) ?? []) {
+        if ((ability as { type?: string }).type !== "static") {
+          continue;
+        }
+        const effect = (ability as { effect?: Record<string, unknown> }).effect as
+          | { type?: string; keyword?: string; target?: unknown; cost?: unknown }
+          | undefined;
+        if (effect?.type !== "grant-keyword" || effect.keyword !== "Repeat") {
+          continue;
+        }
+        if (!matchesPlayedCard(effect.target, playedCardType, playedKeywords)) {
+          continue;
+        }
+        const cond = (ability as { condition?: Record<string, unknown> }).condition;
+        if (cond) {
+          const sourceZone = findPermanentZone(ctx, permId as string) ?? zoneId;
+          const passes = evaluateCondition(
+            cond,
+            { id: permId as string, owner: playerId, zone: sourceZone },
+            {
+              cards: {
+                getCardMeta: ctx.cards.getCardMeta,
+                getCardOwner: ctx.cards.getCardOwner,
+                updateCardMeta: ctx.cards.updateCardMeta,
+              },
+              draft: ctx.draft,
+              zones: ctx.zones as unknown as Parameters<typeof evaluateCondition>[2]["zones"],
+            },
+          );
+          if (!passes) {
+            continue;
+          }
+        }
+        const amt = decodeCostAmount(effect.cost);
+        const power: string[] = [];
+        for (const [d, n] of Object.entries(amt.power)) {
+          for (let i = 0; i < (n ?? 0); i++) {
+            power.push(d);
+          }
+        }
+        tiers.push({ energy: Math.max(0, amt.energy), power });
+      }
+    }
+  }
+  return tiers;
 }
 
 /**

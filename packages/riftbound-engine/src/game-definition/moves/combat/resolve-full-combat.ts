@@ -9,7 +9,7 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { CombatUnit } from "../../../combat";
-import { resolveCombat } from "../../../combat";
+import { PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE, resolveCombat } from "../../../combat";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { createInteractionState, getTurnState } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
@@ -104,12 +104,51 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       return;
     }
 
+    // rule-id: sfd-110-221 (rule 466.7.c) — "this combat" Might changes end at
+    // Combat Cleanup: revert the combat-scoped portion of mightModifier.
+    const expireCombatMight = (): void => {
+      for (const id of unitIds) {
+        const m = cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined;
+        const combatMod = m?.combatMightModifier ?? 0;
+        if (combatMod !== 0) {
+          cards.updateCardMeta(id, {
+            combatMightModifier: 0,
+            mightModifier: (m?.mightModifier ?? 0) - combatMod,
+          } as Partial<RiftboundCardMeta>);
+        }
+      }
+    };
+
     // Look up card definitions from the global registry
     const registry = getGlobalCardRegistry();
 
     // Build CombatUnit arrays partitioned by attacker/defender
     const attackerUnits: CombatUnit[] = [];
     const defenderUnits: CombatUnit[] = [];
+
+    // rule-id: ogn-254-298 — a runtime take-damage→kill replacement bound to a
+    // unit ("Kill it the next time it takes damage this turn") must also fire
+    // on combat damage, not only spell/ability damage.
+    // rule-id: ogn-221-298 (Imperial Decree) — a turn-wide, unbound
+    // take-damage→kill entry ("When any unit takes damage this turn, kill it")
+    // applies to every unit in this combat.
+    const activeRepl = draft.activeReplacements as
+      | {
+          replaces?: string;
+          replacement?: unknown;
+          duration?: string;
+          targetCardIds?: readonly string[];
+        }[]
+      | undefined;
+    const killOnDamageIdx = (unitId: string): number =>
+      activeRepl?.findIndex(
+        (e) =>
+          e?.replaces === "take-damage" &&
+          (e.targetCardIds
+            ? e.targetCardIds.includes(unitId)
+            : e.duration === "turn") &&
+          (e.replacement as { type?: string } | undefined)?.type === "kill",
+      ) ?? -1;
 
     for (const cardId of unitIds) {
       const owner = cards.getCardOwner(cardId) ?? "";
@@ -153,6 +192,18 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           abilityKeywords.push(ability.keyword);
           keywordValues[ability.keyword] =
             (keywordValues[ability.keyword] ?? 0) + (ability.value ?? 1);
+        } else if (ability.type === "static" && ability.condition === undefined) {
+          // rule-id: unl-060-219 — an unconditional self-granted marker keyword
+          // must reach combat even if no static recalc ran since it entered play.
+          const eff = ability.effect as { type?: string; keyword?: string; target?: unknown };
+          if (
+            eff?.type === "grant-keyword" &&
+            eff.keyword === PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE &&
+            (eff.target === undefined || eff.target === "self") &&
+            !grantedKeywords.some((gk) => gk.keyword === eff.keyword)
+          ) {
+            abilityKeywords.push(eff.keyword);
+          }
         }
       }
       for (const gk of grantedKeywords) {
@@ -172,6 +223,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         keywordValues: Object.keys(keywordValues).length > 0 ? keywordValues : undefined,
         keywords: allKeywords,
         owner,
+        ...(killOnDamageIdx(cardId as string) >= 0 ? { diesOnAnyDamage: true } : {}),
       };
 
       if (owner === attackingPlayer) {
@@ -192,6 +244,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           zones.moveCard({ cardId, targetZoneId: "base" as CoreZoneId });
         }
       }
+      expireCombatMight();
       battlefield.contested = false;
       battlefield.contestedBy = undefined;
       return;
@@ -220,6 +273,14 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
 
     // Kill units that were destroyed
     for (const killedId of result.killed) {
+      // rule-id: ogn-254-298 — a "next"-duration take-damage→kill replacement
+      // that fired on this unit's combat damage is spent.
+      if ((result.damageAssignment[killedId] ?? 0) > 0) {
+        const idx = killOnDamageIdx(killedId);
+        if (activeRepl && idx >= 0 && activeRepl[idx]?.duration === "next") {
+          activeRepl.splice(idx, 1);
+        }
+      }
       // Clear all metadata on killed unit
       cards.updateCardMeta(
         killedId as CoreCardId,
@@ -229,6 +290,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           damage: 0,
           equippedWith: undefined,
           exhausted: false,
+          combatMightModifier: 0,
           grantedKeywords: undefined,
           mightModifier: 0,
           stunned: false,
@@ -336,6 +398,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         combatRole: null,
       } as Partial<RiftboundCardMeta>);
     }
+    expireCombatMight();
 
     // Rule 466.5.b (Vendetta): if there are no Units remaining here
     // controlled by any player, the Battlefield becomes Uncontrolled.

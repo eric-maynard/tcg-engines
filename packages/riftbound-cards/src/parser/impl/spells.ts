@@ -4,12 +4,47 @@
 
 import type { SpellAbility } from "@tcg/riftbound-types";
 import type { Effect } from "@tcg/riftbound-types/abilities/effect-types";
+import type { AnyTarget } from "@tcg/riftbound-types/targeting";
 import { parseCost } from "../parsers/cost-parser";
+import { parseTarget } from "../parsers/target-parser";
 import { parseEffects } from "./effects";
 import { stripReminders } from "./normalize";
 import { parseReplacementAbility } from "./replacement";
 import type { TextSegment } from "./segments";
 import { parseTriggeredAbility } from "./triggers";
+
+// rule-id: ven-040-166 — "Choose X. <Verb> it …" spells: the preamble names the
+// caster-chosen target and the effect sentence refers back with "it". Capture
+// the head noun phrase (qualifier tails like "that's in combat with …" are
+// accepted so the preamble is still recognised) and bind it into the parsed
+// effect's pronoun slot; otherwise "Give it +N" parses as target 'self' and
+// the spell resolves against itself with no targeting prompt.
+const CHOOSE_PREAMBLE_RE =
+  /^Choose ((?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there))?)(\s+and (?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there))?|,?\s+(?:that|with|in|from|being)\b[^.]*)?\.\s*/i;
+
+function isPronounTarget(t: unknown): boolean {
+  if (t === "self") {
+    return true;
+  }
+  return (
+    typeof t === "object" &&
+    t !== null &&
+    (t as { type?: string }).type === "unit" &&
+    Object.keys(t).length === 1
+  );
+}
+
+function bindChosenTarget(effect: Effect, chosen: AnyTarget): Effect {
+  const e = effect as unknown as { type: string; target?: unknown; effects?: Effect[] };
+  if (e.type === "sequence" && Array.isArray(e.effects) && e.effects.length > 0) {
+    const [first, ...rest] = e.effects;
+    return { ...e, effects: [bindChosenTarget(first, chosen), ...rest] } as unknown as Effect;
+  }
+  if ("target" in e && isPronounTarget(e.target)) {
+    return { ...e, target: chosen } as unknown as Effect;
+  }
+  return effect;
+}
 
 // ============================================================================
 // Spell Ability Parser
@@ -54,16 +89,33 @@ export function parseSpellAbility(text: string): SpellAbility | undefined {
     "",
   );
   // Strip "Choose a/an ..." targeting preamble (e.g., "Choose an enemy unit at a battlefield.")
-  effectText = effectText.replace(
-    /^Choose (?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there|and (?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there))?))*\.\s*/i,
-    "",
-  );
+  // and remember the single chosen target so "it" in the effect binds to it.
+  let chosenTarget: AnyTarget | undefined;
+  const chooseMatch = CHOOSE_PREAMBLE_RE.exec(effectText);
+  if (chooseMatch) {
+    effectText = effectText.slice(chooseMatch[0].length);
+    if (!chooseMatch[2] || !/^\s+and /i.test(chooseMatch[2])) {
+      chosenTarget = parseTarget(chooseMatch[1]);
+    }
+  }
 
   // Strip reminder text
   effectText = stripReminders(effectText).trim();
 
+  // rule-id: ven-015-166 — "This can't be countered." is a static rider on
+  // the spell (rule 544), not part of its resolve-time effect. Lift it into
+  // a flag so the engine can refuse counter attempts against the chain item.
+  const UNCOUNTERABLE_RE = /(?:^|\s)This can(?:'|’|')t be countered\.\s*/i;
+  const uncounterable = UNCOUNTERABLE_RE.test(effectText);
+  if (uncounterable) {
+    effectText = effectText.replace(UNCOUNTERABLE_RE, " ").trim();
+  }
+  const flags: { uncounterable?: true } = uncounterable ? { uncounterable: true } : {};
+
   // Try parsing the effect
-  const effect = parseEffects(effectText);
+  const parsedEffect = parseEffects(effectText);
+  const effect =
+    parsedEffect && chosenTarget ? bindChosenTarget(parsedEffect, chosenTarget) : parsedEffect;
   if (!effect) {
     // Some spells wrap a replacement ability (e.g., Tactical Retreat:
     // "The next time it would die this turn, heal it, exhaust it, and
@@ -75,6 +127,7 @@ export function parseSpellAbility(text: string): SpellAbility | undefined {
         effect: replacementInner as unknown as Effect,
         timing: timingStr,
         type: "spell",
+        ...flags,
       };
     }
 
@@ -88,6 +141,7 @@ export function parseSpellAbility(text: string): SpellAbility | undefined {
         effect: triggeredInner as unknown as Effect,
         timing: timingStr,
         type: "spell",
+        ...flags,
       };
     }
 
@@ -96,10 +150,10 @@ export function parseSpellAbility(text: string): SpellAbility | undefined {
       return undefined;
     }
     const rawEffect: Effect = { text: effectText, type: "raw" } as unknown as Effect;
-    return { effect: rawEffect, timing: timingStr, type: "spell" };
+    return { effect: rawEffect, timing: timingStr, type: "spell", ...flags };
   }
 
-  return { effect, timing: timingStr, type: "spell" };
+  return { effect, timing: timingStr, type: "spell", ...flags };
 }
 
 /**

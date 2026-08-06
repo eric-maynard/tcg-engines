@@ -59,12 +59,15 @@ export interface ChainItem {
   readonly optInCost?: unknown;
   /** Whether this item was countered (skip execution on resolve) */
   readonly countered?: boolean;
+  /** rule-id: ven-015-166 — "This can't be countered." (rule 544): counter attempts are refused */
+  readonly uncounterable?: boolean;
   /**
    * rule-id: unl-007-219 — a spell card stays in the "chain" zone while
    * pending and only moves to its final zone when it leaves the chain
-   * (resolved or countered). Defaults to "trash"; [Flow] plays banish.
+   * (resolved or countered). Defaults to "trash"; [Flow] plays banish;
+   * rule-id: unl-131-219 — a counter may redirect it to the owner's hand.
    */
-  readonly resolveTo?: "trash" | "banishment";
+  readonly resolveTo?: "trash" | "banishment" | "hand";
 }
 
 /**
@@ -344,6 +347,32 @@ export function resolveTopItem(state: TurnInteractionState): {
   const items = [...state.chain.items];
   const resolved = items.pop()!;
 
+  return { newState: afterItemsLeft(state, items), resolved };
+}
+
+/**
+ * rule-id: ogn-064-298 (rule 425.1.a / 425.1.a.1) — a countered item is
+ * cleared from the chain as part of being countered, not left pending until
+ * the next all-pass. Removes `itemId` and re-seats priority as if it had left
+ * the chain normally.
+ */
+export function removeChainItem(
+  state: TurnInteractionState,
+  itemId: string,
+): TurnInteractionState {
+  if (!state.chain || !state.chain.items.some((it) => it.id === itemId)) {
+    return state;
+  }
+  return afterItemsLeft(
+    state,
+    state.chain.items.filter((it) => it.id !== itemId),
+  );
+}
+
+function afterItemsLeft(state: TurnInteractionState, items: ChainItem[]): TurnInteractionState {
+  if (!state.chain) {
+    return state;
+  }
   if (items.length === 0) {
     // Chain is now empty. Rule 346 (Vendetta; old 552): when the last item
     // resolves during a Showdown, Focus passes to the next Relevant Player.
@@ -358,25 +387,19 @@ export function resolveTopItem(state: TurnInteractionState): {
         { ...showdownStack[top], focusPlayer: nextFocus, passedPlayers: [] },
       ];
     }
-    return {
-      newState: { ...state, chain: null, showdownStack },
-      resolved,
-    };
+    return { ...state, chain: null, showdownStack };
   }
 
   // Chain still has items — reset passes, give priority to controller of new top item
   const newTopController = items[items.length - 1].controller;
   return {
-    newState: {
-      ...state,
-      chain: {
-        ...state.chain,
-        activePlayer: newTopController,
-        items,
-        passedPlayers: [], // Everyone must pass again (rule 543.4)
-      },
+    ...state,
+    chain: {
+      ...state.chain,
+      activePlayer: newTopController,
+      items,
+      passedPlayers: [], // Everyone must pass again (rule 543.4)
     },
-    resolved,
   };
 }
 

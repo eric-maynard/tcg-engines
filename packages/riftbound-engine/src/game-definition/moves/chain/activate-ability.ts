@@ -474,6 +474,28 @@ export const activateAbility: Defs["activateAbility"] = {
         }
       }
 
+      // rule-id: ogn-036-298 (rule 577.2 / 409) — a "Recycle N from your
+      // trash" cost requires ≥N cards in the controller's trash; any named
+      // `recycleIds` must all be in that trash.
+      const recycleCost = cost.recycle as number | undefined;
+      if (recycleCost && recycleCost > 0) {
+        const trash = context.zones.getCardsInZone(
+          "trash" as CoreZoneId,
+          playerId as CorePlayerId,
+        );
+        if (trash.length < recycleCost) {
+          return false;
+        }
+        const recycleIds = context.params.recycleIds as string[] | undefined;
+        if (
+          recycleIds &&
+          (recycleIds.length !== recycleCost ||
+            !recycleIds.every((id) => trash.includes(id as CoreCardId)))
+        ) {
+          return false;
+        }
+      }
+
       // Rule 577.2: A [Kill] (sacrifice) cost requires a legal target on
       // the board matching the descriptor. Malzahar (ogn-113-298) is the
       // canonical case: exhaust + kill a friendly permanent → +2 rainbow.
@@ -726,6 +748,21 @@ export const activateAbility: Defs["activateAbility"] = {
           discardOptions = [...hand] as string[];
         }
 
+        // rule-id: ogn-036-298 (rule 577.2) — a "Recycle N from your trash"
+        // cost is unpayable with fewer than N cards in trash.
+        const recycleCost = (ability.cost as Record<string, unknown> | undefined)?.recycle as
+          | number
+          | undefined;
+        if (recycleCost && recycleCost > 0) {
+          const trash = context.zones.getCardsInZone(
+            "trash" as CoreZoneId,
+            playerId as CorePlayerId,
+          );
+          if (trash.length < recycleCost) {
+            continue;
+          }
+        }
+
         // Rule 577.2: A [Kill] (sacrifice) cost enumerates one activation
         // per legal sacrifice target so the caller can pick which permanent
         // to trash. No legal target → the ability is not activatable.
@@ -885,6 +922,40 @@ export const activateAbility: Defs["activateAbility"] = {
           { cardId: discardId as string, playerId, type: "discard" },
           { cards: context.cards, counters: context.counters, draft, zones: context.zones },
         );
+      }
+
+      // rule-id: ogn-036-298 (rule 577.2 / 409) — pay the "Recycle N from
+      // your trash" cost: move N trash cards (caller-named via `recycleIds`,
+      // else the top N) to the bottom of the main deck before chaining.
+      const recycleCost = cost.recycle as number | undefined;
+      if (recycleCost && recycleCost > 0) {
+        const trash = context.zones.getCardsInZone(
+          "trash" as CoreZoneId,
+          playerId as CorePlayerId,
+        );
+        if (trash.length < recycleCost) {
+          return;
+        }
+        const named = context.params.recycleIds as string[] | undefined;
+        const toRecycle =
+          named && named.length === recycleCost
+            ? named
+            : (trash.slice(0, recycleCost) as readonly string[]);
+        for (const id of toRecycle) {
+          context.zones.moveCard({
+            cardId: id as CoreCardId,
+            position: "bottom",
+            targetZoneId: "mainDeck" as CoreZoneId,
+          });
+        }
+        // rule-id: ogn-235-298 — recycling to your Main Deck as a cost still
+        // triggers "When you recycle one or more cards to your Main Deck".
+        if (toRecycle.length > 0) {
+          fireTriggers(
+            { cardIds: [...toRecycle] as string[], playerId: playerId as string, type: "recycle" },
+            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+          );
+        }
       }
 
       // Handle kill (sacrifice) cost — the chosen permanent is trashed as

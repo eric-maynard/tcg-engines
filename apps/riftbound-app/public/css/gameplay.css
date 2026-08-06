@@ -140,6 +140,28 @@
       gap: 2px;
     }
 
+    /* [rule:ui-player-base-row-no-collapse] The 1080px logical board is
+       over-subscribed (rune-pool-grid reserves a full 12-rune stack), so the
+       player-area must shrink. The base row must never be the thing that
+       collapses — with min-height:0 + align-items:center it shrank to ~8px and
+       its 140px card box spilled over the resource bar (position:relative on
+       #player-base paints above it). Reserve the base row's full content height
+       and let the hand/rune row absorb the deficit instead; the rune stack's
+       reserved-but-empty tail may spill below its grid border, which is benign. */
+    .player-base-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .player-hand-row {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+      padding: 2px 0;
+      min-height: 0;
+    }
+
     /* ============================================
        Player Info Bar
        ============================================ */
@@ -590,6 +612,28 @@
       color: #3a5a80;
     }
 
+    /* rule-id: ogn-197-298 — owner's view of their own Hidden (facedown) card at a battlefield */
+    .bf-facedown {
+      display: inline-block;
+      position: relative;
+      opacity: 0.7;
+      outline: 1px dashed #3a5a80;
+      border-radius: 6px;
+    }
+    .bf-facedown::after {
+      content: 'HIDDEN';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      font-size: 8px;
+      letter-spacing: 0.5px;
+      color: #9ab;
+      background: #1a2040cc;
+      padding: 1px 3px;
+      border-radius: 3px;
+      pointer-events: none;
+    }
+
     /* Deck stack */
     .deck-stack {
       width: 80px;
@@ -643,6 +687,11 @@
       gap: 16px;
     }
     .chain-overlay.visible { display: flex; }
+    /* [rule:chain-overlay-reaction-clickthrough] The chain box only offers
+       Pass/Resolve; reactions are played from the hand / #actionsList beneath,
+       so the chain backdrop must never swallow clicks. */
+    #chainOverlay.visible { pointer-events: none; background: rgba(5,3,15,0.35); }
+    #chainOverlay.visible .chain-box { pointer-events: auto; }
 
     .chain-box {
       background: #1a1830;
@@ -924,10 +973,13 @@
     /* ============================================
        W9: Inline per-battlefield showdown panel
        ============================================ */
+    /* ui-showdown-panel-occludes-units: confine the panel to the 200px
+       .bf-art column so it overlays art, never the .bf-units rows — a unit
+       just moved here (exhausted, opening the showdown) must stay visible. */
     .battlefield__showdown-panel {
       position: absolute;
       left: 8px;
-      right: 8px;
+      width: 184px;
       bottom: 8px;
       z-index: 6;
       display: flex;
@@ -943,8 +995,9 @@
 
     .battlefield__showdown-banner {
       display: flex;
+      flex-wrap: wrap;
       align-items: baseline;
-      gap: 8px;
+      gap: 2px 8px;
       font-size: 11px;
       line-height: 1.2;
     }

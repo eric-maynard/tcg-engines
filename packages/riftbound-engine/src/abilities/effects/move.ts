@@ -136,6 +136,15 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   }
 
   const targets = getTargetIds(effect, ctx);
+  // rule-id: ven-091-166 — "move any number of enemy units …": zero picks /
+  // zero legal candidates moves nothing; only an implicit target means "me".
+  const anyNumber =
+    typeof effect.target === "object" &&
+    effect.target !== null &&
+    (effect.target as { quantity?: unknown }).quantity === "any";
+  if (anyNumber && targets.length === 0) {
+    return;
+  }
   const moveTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
   const rawDest = (
     effect as unknown as {
@@ -261,7 +270,54 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   } else {
     targetZone = "base";
   }
+  const origins: string[] = [];
   for (const targetId of moveTargets) {
+    const from = ctx.zones.getCardZone(targetId as CoreCardId);
+    if (from) {
+      origins.push(from);
+    }
     moveCardWithEvent(ctx, targetId, targetZone);
+  }
+
+  // rule-id: unl-124-219 (Isolate) — "Then, if there's an enemy unit alone at
+  // that battlefield, …": "that battlefield" is the moved unit's origin, which
+  // is only known here, so the follow-up rides on the move effect. An enemy
+  // unit is alone when it is the only unit its controller has at that zone.
+  const thenIfEnemyAlone = (
+    effect as unknown as { thenIfEnemyAloneAtOrigin?: ExecutableEffect }
+  ).thenIfEnemyAloneAtOrigin;
+  if (thenIfEnemyAlone) {
+    const enemyUnits = resolveTarget(
+      { controller: "enemy", quantity: "all", type: "unit" } as TargetDescriptor,
+      {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      },
+    );
+    const met = origins.some((zone) => {
+      if (!zone.startsWith("battlefield-")) {
+        return false;
+      }
+      const byController = new Map<string, number>();
+      for (const id of enemyUnits) {
+        if (ctx.zones.getCardZone(id as CoreCardId) !== zone) {
+          continue;
+        }
+        const ctrl =
+          ctx.cards.getCardController?.(id as CoreCardId) ??
+          ctx.cards.getCardOwner(id as CoreCardId) ??
+          "";
+        byController.set(ctrl, (byController.get(ctrl) ?? 0) + 1);
+      }
+      return [...byController.values()].some((n) => n === 1);
+    });
+    if (met) {
+      const { boundTargets: _drop, ...rest } = ctx;
+      _h.executeEffect(thenIfEnemyAlone, rest);
+    }
   }
 }

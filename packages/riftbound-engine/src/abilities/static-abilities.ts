@@ -18,6 +18,7 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
+import { getActiveShowdown } from "../chain/chain-state";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { GrantedKeyword, RiftboundCardMeta, RiftboundGameState } from "../types";
 
@@ -178,6 +179,17 @@ export function evaluateCondition(
         | Partial<RiftboundCardMeta>
         | undefined;
       return meta?.empowered === true;
+    }
+
+    // rule-id: unl-146-219 — "While I'm in a showdown" (rules 545-553): the
+    // source sits at the battlefield where the active showdown is open.
+    case "while-in-showdown": {
+      const interaction = ctx.draft.interaction;
+      const showdown = interaction ? getActiveShowdown(interaction) : null;
+      if (!showdown?.active) {
+        return false;
+      }
+      return source.zone === `battlefield-${showdown.battlefieldId}`;
     }
 
     case "control-battlefield": {
@@ -361,6 +373,11 @@ function resolveStaticTargetsFromDescriptor(
     filter?: unknown;
     quantity?: unknown;
   };
+  // rule-id: unl-146-219 — "your spells have [X]" addresses spells as they
+  // are played (read by the play-cost path), never a board permanent.
+  if (t.type === "spell") {
+    return [];
+  }
   if (t.type !== "unit" && t.type !== "gear") {
     return undefined;
   }
@@ -464,15 +481,31 @@ function applyStaticEffect(
           : ownerId;
       amount = pid ? (ctx.draft.players[pid]?.victoryPoints ?? 0) : 0;
     }
+    // rule-id: sfd-068-221 — "Each Equipment attached to me gives double its
+    // base Might bonus": effective-might sites already add the base bonus once,
+    // so contribute the extra (multiplier - 1) x sum of attached base bonuses.
+    const equipMultiplier =
+      effect.source === "equipment" && typeof effect.multiplier === "number"
+        ? (effect.multiplier as number)
+        : undefined;
+    const registry = equipMultiplier !== undefined ? getGlobalCardRegistry() : undefined;
     for (const targetId of targetIds) {
       const meta = ctx.cards.getCardMeta(targetId as CoreCardId) as
         | Partial<RiftboundCardMeta>
         | undefined;
+      let targetAmount = amount;
+      if (equipMultiplier !== undefined && registry) {
+        let equipBase = 0;
+        for (const equipId of meta?.equippedWith ?? []) {
+          equipBase += registry.getMightBonus(equipId as string);
+        }
+        targetAmount += equipBase * (equipMultiplier - 1);
+      }
       const current = meta?.staticMightBonus ?? 0;
       ctx.cards.updateCardMeta(
         targetId as CoreCardId,
         {
-          staticMightBonus: current + amount,
+          staticMightBonus: current + targetAmount,
         } as Partial<RiftboundCardMeta>,
       );
     }

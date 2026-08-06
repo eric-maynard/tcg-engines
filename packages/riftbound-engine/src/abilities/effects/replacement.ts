@@ -10,9 +10,15 @@ export function handle_replacement(effect: ExecutableEffect, ctx: EffectContext,
   // rule-id: unl-007-219 — a die-replacement rider ("If it would die this
   // turn, banish it instead") is bound to the specific unit(s) the effect
   // targeted, so state-based checks can match it against the dying card.
-  const replEff = effect as unknown as { replaces?: string; target?: unknown };
+  const replEff = effect as unknown as { replaces?: string; target?: unknown; duration?: string };
+  // rule-id: ogn-254-298 — "Choose a unit. Kill it the next time it takes
+  // damage": the play-time chosen unit (boundTargets) binds a single-fire
+  // take-damage replacement so the damage handler matches only that unit.
+  const bindsTakeDamage =
+    replEff.replaces === "take-damage" && replEff.duration === "next" && !!ctx.boundTargets;
   const targetCardIds =
-    replEff.replaces === "die" && (replEff.target !== undefined || ctx.boundTargets)
+    (replEff.replaces === "die" && (replEff.target !== undefined || ctx.boundTargets)) ||
+    bindsTakeDamage
       ? getTargetIds(effect, ctx)
       : undefined;
   (ctx.draft as { activeReplacements?: unknown[] }).activeReplacements = [

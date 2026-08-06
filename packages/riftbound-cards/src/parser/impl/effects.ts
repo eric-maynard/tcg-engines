@@ -177,6 +177,19 @@ export function parseEffects(text: string): Effect | undefined {
 
   const effects: Effect[] = [];
   for (const sentence of sentences) {
+    // rule-id: unl-131-219 — "Counter a spell. Return it to its owner's hand
+    // instead of putting it in their trash." The rider sentence modifies the
+    // preceding counter's destination rather than being its own effect.
+    const prev = effects[effects.length - 1];
+    if (
+      prev?.type === "counter" &&
+      /^Return it to its owner'?s hand instead of putting it in (?:their|its owner'?s) trash\.?$/i.test(
+        sentence.trim(),
+      )
+    ) {
+      effects[effects.length - 1] = { ...prev, destination: "hand" } as Effect;
+      continue;
+    }
     const eff = parseEffect(sentence.trim());
     if (eff) {
       effects.push(eff);

@@ -15,7 +15,9 @@ import {
   type CostReductionContext,
   type StaticCostReduction,
   applyStaticCostReduction,
+  computeGrantedSpellRepeatCost,
   computeStaticCostReduction,
+  decodeCostAmount,
   reducePowerCost,
 } from "../../../operations/static-cost-reduction";
 import { getBattlefieldZoneId } from "../../../zones/zone-configs";
@@ -38,6 +40,69 @@ export function hasStaticEffect(cardId: string, effectType: string): boolean {
     }
   }
   return false;
+}
+
+/**
+ * rule-id: ven-091-166 — a static "I enter ready" may carry a play-time
+ * condition (e.g. "If your score is not within 3 points of the Victory
+ * Score"). Returns true only if some static enter-ready ability's condition
+ * holds. Conditions this helper cannot evaluate keep the legacy
+ * unconditional behaviour.
+ */
+export function staticEnterReadyApplies(
+  cardId: string,
+  state: RiftboundGameState,
+  playerId: string,
+): boolean {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  for (const ability of abilities) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const { effect, condition } = ability as {
+      effect?: { type?: string };
+      condition?: Record<string, unknown>;
+    };
+    if (effect?.type !== "enter-ready") {
+      continue;
+    }
+    if (!condition || evaluateEnterReadyCondition(condition, state, playerId) !== false) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function evaluateEnterReadyCondition(
+  condition: Record<string, unknown>,
+  state: RiftboundGameState,
+  playerId: string,
+): boolean | undefined {
+  switch (condition.type) {
+    case "not": {
+      const inner = evaluateEnterReadyCondition(
+        (condition.condition ?? {}) as Record<string, unknown>,
+        state,
+        playerId,
+      );
+      return inner === undefined ? undefined : !inner;
+    }
+    case "score-within": {
+      const range = ((condition.points ?? condition.range) as number | undefined) ?? 0;
+      const whose = (condition.whose as string | undefined) ?? "opponent";
+      const pids = Object.keys(state.players).filter((pid) =>
+        whose === "your" ? pid === playerId : whose === "any" ? true : pid !== playerId,
+      );
+      return pids.some((pid) => {
+        const player = state.players[pid];
+        const threshold = state.victoryScore + (player?.victoryScoreModifier ?? 0);
+        return threshold - (player?.victoryPoints ?? 0) <= range;
+      });
+    }
+    default: {
+      return undefined;
+    }
+  }
 }
 
 /**
@@ -356,6 +421,7 @@ export function getDeflectSurcharge(
   cards?: {
     getCardOwner?: (cardId: CoreCardId) => string | undefined;
     getCardController?: (cardId: CoreCardId) => string | undefined;
+    getCardMeta?: (cardId: CoreCardId) => unknown;
   },
 ): number {
   if (!_targets || _targets.length === 0) {
@@ -381,6 +447,17 @@ export function getDeflectSurcharge(
     // As value 1 (rule 721.1.b.3).
     if (targetSurcharge === 0 && registry.hasKeyword(targetId, "Deflect")) {
       targetSurcharge = 1;
+    }
+    // Rule-id: ogn-063-298 (rule 721.2) — Deflect granted at runtime (e.g. by
+    // a static "friendly units have [Deflect]") lives in meta.grantedKeywords,
+    // not the printed definition, and stacks with any printed Deflect.
+    const meta = cards?.getCardMeta?.(targetId as CoreCardId) as
+      | { grantedKeywords?: readonly { keyword: string; value?: number }[] }
+      | undefined;
+    for (const gk of meta?.grantedKeywords ?? []) {
+      if (gk.keyword === "Deflect") {
+        targetSurcharge += gk.value ?? 1;
+      }
     }
     surcharge += targetSurcharge;
   }
@@ -520,6 +597,79 @@ function getBoardCostReduction(
   return computeStaticCostReduction({ draft: state, ...extras.board }, playerId, cardId);
 }
 
+export type RepeatTiers = readonly { energy: number; power: readonly string[] }[];
+
+/**
+ * rule-id: unl-146-219 — a spell's effective Repeat tiers: its own printed
+ * Repeat instances plus any granted by the caster's board permanents ("your
+ * spells have [Repeat] [2][chaos]"). Rule 820.3: each instance is a
+ * separately payable tier. Undefined when the spell has no Repeat at all.
+ */
+export function getEffectiveSpellRepeatCost(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  board?: CostExtras["board"],
+): RepeatTiers | undefined {
+  const intrinsic = getGlobalCardRegistry().getSpellRepeatCost(cardId) ?? [];
+  const granted = board
+    ? computeGrantedSpellRepeatCost({ draft: state, ...board }, playerId, cardId)
+    : [];
+  const tiers = [...intrinsic, ...granted];
+  return tiers.length > 0 ? tiers : undefined;
+}
+
+/**
+ * rule-id: ven-096-166 (rule 466) — the played card's OWN static
+ * "I cost [N] less for each …" reduction, scaled by a countable scope read
+ * off the trash. Board statics skip the played card, and `costModifier` is
+ * only written by triggered effects, so a self static on a card in hand needs
+ * its own path. Unrecognised scopes contribute 0.
+ */
+function getSelfScaledEnergyReduction(
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+): number {
+  const zones = extras.board?.zones;
+  if (!zones) {
+    return 0;
+  }
+  const registry = getGlobalCardRegistry();
+  let total = 0;
+  for (const ability of registry.getAbilities(cardId) ?? []) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const effect = ability.effect as
+      | { type?: string; target?: unknown; scope?: unknown; reduction?: unknown; amount?: unknown; by?: unknown }
+      | undefined;
+    if (
+      effect?.type !== "cost-reduction" ||
+      effect.target !== "self" ||
+      typeof effect.scope !== "string"
+    ) {
+      continue;
+    }
+    const scope = effect.scope.toLowerCase();
+    let count = 0;
+    if (scope.startsWith("for each card with my name in your trash")) {
+      const name = registry.get(cardId)?.name;
+      const trash = zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId);
+      count = name ? trash.filter((id) => registry.get(id as string)?.name === name).length : 0;
+    } else if (scope.startsWith("for each card in your trash")) {
+      // rule-id: ogn-195-298 — same shape, unfiltered trash count.
+      count = zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId).length;
+    }
+    if (count <= 0) {
+      continue;
+    }
+    const per = decodeCostAmount(effect.reduction ?? effect.amount ?? effect.by).energy;
+    total += Math.max(0, per) * count;
+  }
+  return total;
+}
+
 /** Per-domain tally of an optional additional cost's power pips. */
 export function additionalCostPower(extras: CostExtras): Partial<Record<string, number>> {
   const out: Partial<Record<string, number>> = {};
@@ -531,14 +681,17 @@ export function additionalCostPower(extras: CostExtras): Partial<Record<string, 
 
 /**
  * Compute the total Repeat surcharge (energy) for a spell being played
- * with `repeatCount` additional effects.
+ * with `repeatCount` additional effects. `tiers` overrides the printed
+ * Repeat cost (rule-id: unl-146-219 — board-granted Repeat).
  */
-export function getRepeatEnergySurcharge(cardId: string, repeatCount: number): number {
+export function getRepeatEnergySurcharge(
+  cardId: string,
+  repeatCount: number,
+  tiers: RepeatTiers | undefined = getGlobalCardRegistry().getSpellRepeatCost(cardId),
+): number {
   if (repeatCount <= 0) {
     return 0;
   }
-  const registry = getGlobalCardRegistry();
-  const tiers = registry.getSpellRepeatCost(cardId);
   if (!tiers || tiers.length === 0) {
     return 0;
   }
@@ -560,12 +713,11 @@ export function getRepeatEnergySurcharge(cardId: string, repeatCount: number): n
 export function getRepeatPowerSurcharge(
   cardId: string,
   repeatCount: number,
+  tiers: RepeatTiers | undefined = getGlobalCardRegistry().getSpellRepeatCost(cardId),
 ): Partial<Record<string, number>> {
   if (repeatCount <= 0) {
     return {};
   }
-  const registry = getGlobalCardRegistry();
-  const tiers = registry.getSpellRepeatCost(cardId);
   if (!tiers || tiers.length === 0) {
     return {};
   }
@@ -616,6 +768,35 @@ export function getBaseCostForPlay(
 }
 
 /**
+ * Rule 135.2.e.6.c (rule-id: ven-150-166): a multi-domain card's printed [C]
+ * power pips are hybrid — payable only with Power of that card's own Domains,
+ * not "any Domain" like a true [rainbow] pip. Returns those Domains for a
+ * multi-domain card, otherwise undefined.
+ */
+export function getHybridPipDomains(cardId: string): string[] | undefined {
+  const domain = getGlobalCardRegistry().get(cardId)?.domain;
+  return Array.isArray(domain) && domain.length > 1 ? domain : undefined;
+}
+
+/**
+ * Drain one Power from the most-stocked eligible domain in `pool`. Returns
+ * false if nothing eligible remains.
+ */
+function drainOnePowerPip(
+  pool: Partial<Record<string, number>>,
+  eligible: (domain: string) => boolean,
+): boolean {
+  const key = Object.entries(pool)
+    .filter(([d, v]) => (v ?? 0) > 0 && eligible(d))
+    .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0];
+  if (key === undefined) {
+    return false;
+  }
+  pool[key] = (pool[key] ?? 0) - 1;
+  return true;
+}
+
+/**
  * Check if player can afford a card's cost from their rune pool.
  */
 export function canAffordCard(
@@ -635,11 +816,17 @@ export function canAffordCard(
   const baseCost = getBaseCostForPlay(cardId, extras);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
-  const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  const repeatN = Math.max(0, extras.repeatCount ?? 0);
+  // rule-id: unl-146-219 — include board-granted Repeat instances.
+  const repeatTiers =
+    repeatN > 0 ? getEffectiveSpellRepeatCost(state, playerId, cardId, extras.board) : undefined;
+  const repeatSurcharge = getRepeatEnergySurcharge(cardId, repeatN, repeatTiers);
   const boardReduction = getBoardCostReduction(state, playerId, cardId, extras);
+  // rule-id: ven-096-166 — self static "I cost [N] less for each …".
+  const selfScaled = getSelfScaledEnergyReduction(playerId, cardId, extras);
   const adjustedEnergy = Math.max(
     0,
-    applyStaticCostReduction(Math.max(0, baseCost.energy + modifier - interactive), boardReduction) +
+    applyStaticCostReduction(Math.max(0, baseCost.energy + modifier - interactive - selfScaled), boardReduction) +
       xAmount +
       repeatSurcharge +
       (extras.additionalCost?.energy ?? 0),
@@ -656,7 +843,7 @@ export function canAffordCard(
   // only by board statics that waive power pips).
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
   const basePower = reducePowerCost(baseCost.power, boardReduction.power, pool.power);
-  const repeatPower = getRepeatPowerSurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
   const extraPower = additionalCostPower(extras);
   const powerDomains = new Set([
     ...Object.keys(basePower),
@@ -668,6 +855,10 @@ export function canAffordCard(
   // Rule 721.1.c / 721.1.c.1 (unl-030-219): the Deflect surcharge is Power of
   // any Domain, so it joins the rainbow requirement rather than energy.
   let rainbowNeed = getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards);
+  // Rule 135.2.e.6.c (rule-id: ven-150-166): a multi-domain card's printed
+  // pips are hybrid — payable only from the card's own Domains.
+  const hybridDomains = getHybridPipDomains(cardId);
+  let hybridNeed = 0;
   const remaining: Record<string, number> = {};
   for (const [d, v] of Object.entries(pool.power)) {
     if (typeof v === "number" && v > 0) {
@@ -680,7 +871,13 @@ export function canAffordCard(
       (repeatPower[domain] ?? 0) +
       (extraPower[domain] ?? 0);
     if (domain === "rainbow") {
-      rainbowNeed += need;
+      const printed = need - (extraPower[domain] ?? 0);
+      if (hybridDomains) {
+        hybridNeed += printed;
+        rainbowNeed += need - printed;
+      } else {
+        rainbowNeed += need;
+      }
       continue;
     }
     const available = remaining[domain] ?? 0;
@@ -698,9 +895,20 @@ export function canAffordCard(
     }
     remaining[domain] = available - need;
   }
-  if (rainbowNeed > 0) {
+  if (hybridDomains && hybridNeed > 0) {
+    // Rule 135.2.e.6.c: only the card's own Domains (or pooled [rainbow]
+    // Power, Rule 135.2.e.5.b) may cover hybrid pips.
+    let hybridAvailable = remaining.rainbow ?? 0;
+    for (const d of hybridDomains) {
+      hybridAvailable += remaining[d] ?? 0;
+    }
+    if (hybridAvailable < hybridNeed) {
+      return false;
+    }
+  }
+  if (rainbowNeed + hybridNeed > 0) {
     const leftover = Object.values(remaining).reduce((a, b) => a + b, 0);
-    if (leftover < rainbowNeed) {
+    if (leftover < rainbowNeed + hybridNeed) {
       return false;
     }
   }
@@ -726,11 +934,17 @@ export function deductCost(
   const modifier = getCostModifier(cardId, getCardMeta);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
-  const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  const repeatN = Math.max(0, extras.repeatCount ?? 0);
+  // rule-id: unl-146-219 — include board-granted Repeat instances.
+  const repeatTiers =
+    repeatN > 0 ? getEffectiveSpellRepeatCost(draft, playerId, cardId, extras.board) : undefined;
+  const repeatSurcharge = getRepeatEnergySurcharge(cardId, repeatN, repeatTiers);
   const boardReduction = getBoardCostReduction(draft, playerId, cardId, extras);
+  // rule-id: ven-096-166 — self static "I cost [N] less for each …".
+  const selfScaled = getSelfScaledEnergyReduction(playerId, cardId, extras);
   const adjustedEnergy = Math.max(
     0,
-    applyStaticCostReduction(Math.max(0, cost.energy + modifier - interactive), boardReduction) +
+    applyStaticCostReduction(Math.max(0, cost.energy + modifier - interactive - selfScaled), boardReduction) +
       xAmount +
       repeatSurcharge +
       (extras.additionalCost?.energy ?? 0),
@@ -739,7 +953,7 @@ export function deductCost(
   pool.energy = Math.max(0, pool.energy - adjustedEnergy);
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
   const basePower = reducePowerCost(cost.power, boardReduction.power, pool.power);
-  const repeatPower = getRepeatPowerSurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
   const extraPower = additionalCostPower(extras);
   const powerDomains = new Set([
     ...Object.keys(basePower),
@@ -749,13 +963,23 @@ export function deductCost(
   // Rule 721.1.c / 721.1.c.1 (unl-030-219): Deflect surcharge is paid in
   // Power of any Domain, never energy.
   let rainbowOwed = getDeflectSurcharge(draft, playerId, extras.targets, extras.board?.cards);
+  // Rule 135.2.e.6.c (rule-id: ven-150-166): a multi-domain card's printed
+  // pips are hybrid — paid only from the card's own Domains.
+  const hybridDomains = getHybridPipDomains(cardId);
+  let hybridOwed = 0;
   for (const domain of powerDomains) {
     const amount =
       (basePower[domain] ?? 0) +
       (repeatPower[domain] ?? 0) +
       (extraPower[domain] ?? 0);
     if (domain === "rainbow") {
-      rainbowOwed += amount;
+      const printed = amount - (extraPower[domain] ?? 0);
+      if (hybridDomains) {
+        hybridOwed += printed;
+        rainbowOwed += amount - printed;
+      } else {
+        rainbowOwed += amount;
+      }
       continue;
     }
     if (amount > 0) {
@@ -774,14 +998,18 @@ export function deductCost(
   // Rule 135.2.e.5.a: [rainbow] pips are paid with any Domain's Power — after
   // named domains, drain one pip at a time from whichever domain has the most.
   const anyPool = pool.power as Partial<Record<string, number>>;
-  while (rainbowOwed > 0) {
-    const key = Object.entries(anyPool)
-      .filter(([, v]) => (v ?? 0) > 0)
-      .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0];
-    if (key === undefined) {
+  // Rule 135.2.e.6.c: hybrid pips first, restricted to the card's own
+  // Domains (pooled [rainbow] Power as fallback per Rule 135.2.e.5.b).
+  while (hybridDomains && hybridOwed > 0) {
+    if (!drainOnePowerPip(anyPool, (d) => d === "rainbow" || hybridDomains.includes(d))) {
       break;
     }
-    anyPool[key] = (anyPool[key] ?? 0) - 1;
+    hybridOwed--;
+  }
+  while (rainbowOwed > 0) {
+    if (!drainOnePowerPip(anyPool, () => true)) {
+      break;
+    }
     rainbowOwed--;
   }
 }

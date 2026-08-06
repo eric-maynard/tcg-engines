@@ -1,5 +1,4 @@
 import type { Ability } from "@tcg/riftbound-types";
-import type { Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
@@ -10,25 +9,21 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  banish one, then play it. If it is a unit, you may play it here. Recycle
  *  the rest."
  *
- * Modeled as a triggered sequence: reveal 2, banish one (pending-value), play
- * it (with "here" as the target location if it's a unit), recycle rest.
+ * rule-id: sfd-170-221-reveal-pick-from-top — the pick must come from the two
+ * revealed top-of-deck cards, never an arbitrary board card. Modeled with the
+ * `look … onPicked:"play"` shape (same as ogn-062-298 Reinforce): the top 2
+ * are surfaced as a reveal-and-pick, the optional pick is banished then added
+ * to the chain as a play (owner chooses the location, which covers "here"),
+ * and the rest are recycled.
  */
 const abilities: Ability[] = [
   {
     effect: {
-      effects: [
-        { amount: 2, from: "deck", type: "reveal" },
-        { target: { type: "card" }, type: "banish" },
-        {
-          ignoreCost: true,
-          target: { type: "pending-value" },
-          toLocation: "here",
-          type: "play",
-        } as unknown as Effect,
-        { amount: 1, from: "board", type: "recycle" },
-      ],
-      pendingValue: { source: 1 },
-      type: "sequence",
+      amount: 2,
+      from: "deck",
+      onPicked: "play",
+      optional: true,
+      type: "look",
     },
     optional: true,
     trigger: { event: "attack", on: "self" },

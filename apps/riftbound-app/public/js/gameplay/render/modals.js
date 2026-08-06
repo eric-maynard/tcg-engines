@@ -93,7 +93,8 @@ function renderPendingChoiceModal() {
         : typeof accept === "boolean"
         ? (pending.type === "choose-target" && pending.anyNumber ? "Done" : accept ? "Yes" : "No")  // Rule ogn-067-298 / ogn-256-298
         : zid != null
-        ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, "")))
+        // Rule sfd-109-221 (356.1.b.3): a pending play may offer the optional additional cost.
+        ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, ""))) + (otherPicks[i].params?.paidAdditionalCost ? " (pay additional cost)" : "")
         : (otherPicks[i].params?.pickedName ?? "—");
       html += `<button class="choice-modal-btn" data-other-idx="${i}">${esc(String(label))}</button>`;
     }

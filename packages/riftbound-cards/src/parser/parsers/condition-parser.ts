@@ -367,6 +367,13 @@ const IF_OPPONENT_SCORE_WITHIN_PATTERN =
   /^If an opponent's score is within (\d+) points? of the Victory Score,?\s*/i;
 
 /**
+ * Pattern for "If your score is (not) within N points of the Victory Score"
+ * (rule-id: ven-091-166 — Corrupted Dragon)
+ */
+const IF_YOUR_SCORE_WITHIN_PATTERN =
+  /^If your score is (not )?within (\d+) points? of the Victory Score,?\s*/i;
+
+/**
  * Pattern for "If you're within N points of winning"
  */
 const IF_YOURE_WITHIN_PATTERN = /^If you(?:'re|'re) within (\d+) points? of winning,?\s*/i;
@@ -534,6 +541,22 @@ export function parseConditionFromText(text: string): ConditionParseResult | und
         whose: "opponent",
       },
       remainingText: text.slice(ifOpponentScoreMatch[0].length),
+      startIndex: 0,
+    };
+  }
+
+  // Try "If your score is (not) within N points of the Victory Score"
+  // rule-id: ven-091-166
+  const ifYourScoreMatch = IF_YOUR_SCORE_WITHIN_PATTERN.exec(text);
+  if (ifYourScoreMatch) {
+    const inner: Condition = {
+      points: Number.parseInt(ifYourScoreMatch[2], 10),
+      type: "score-within",
+      whose: "your",
+    };
+    return {
+      condition: ifYourScoreMatch[1] ? { condition: inner, type: "not" } : inner,
+      remainingText: text.slice(ifYourScoreMatch[0].length),
       startIndex: 0,
     };
   }
@@ -759,11 +782,28 @@ export function parseLeadingIfCondition(
   // "if there is a ready enemy unit here" / "if there are N <subj> here"
   const thereIsMatch = clause.match(/^there (?:is|are) (?:a |an )?(.+?)\s+here$/i);
   if (thereIsMatch) {
-    const subject = thereIsMatch[1];
+    let subject = thereIsMatch[1];
+    // rule-id: ven-138-166 (Shen) — keep "exactly N" / "N or more" and
+    // "other" so the engine can count instead of testing bare existence.
+    let quantity: { exactly: number } | { atLeast: number } | undefined;
+    const countMatch = subject.match(
+      /^(exactly\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten)(\+| or more)?\s+(.+)$/i,
+    );
+    if (countMatch) {
+      const n = parseNumberWord(countMatch[2]) ?? 1;
+      quantity = countMatch[1] && !countMatch[3] ? { exactly: n } : { atLeast: n };
+      subject = countMatch[4];
+    }
+    const excludeSelf = /^(?:an)?other\b/i.test(subject);
     const target = buildControlTarget(subject) ?? ({ type: "unit" } as Target);
     return {
       condition: {
-        target: { ...target, location: "here" },
+        target: {
+          ...target,
+          location: "here",
+          ...(quantity ? { quantity } : {}),
+          ...(excludeSelf ? { excludeSelf: true } : {}),
+        },
         type: "exists-here",
       } as unknown as Condition,
       effectText: rest,

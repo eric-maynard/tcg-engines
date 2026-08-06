@@ -47,9 +47,11 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
   // Matches only the first line so multi-line rulesText (with a following
   // [Empowered] static or a second activated ability) is left for the caller
   // to split.
+  // Rule 827.1.c.1 (ven-075-166 Platewyrm Egg): cost tokens may be
+  // comma-separated ("[1], [Exhaust]"), not just juxtaposed.
   const empowerLine = text.split("\n")[0];
   const empowerKwMatch = stripReminders(empowerLine).match(
-    /^\[Empower\]\s*(?:—|-)?\s*((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)|exhaust):\s*)+)\.?\s*(?:This ability costs :rb_energy_(\d+): less if ([^.]+)\.?)?\s*$/i,
+    /^\[Empower\]\s*(?:—|-)?\s*((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)|exhaust):(?:\s*,\s*|\s*))+)\.?\s*(?:This ability costs :rb_energy_(\d+): less if ([^.]+)\.?)?\s*$/i,
   );
   if (empowerKwMatch) {
     const cost = parseCost(empowerKwMatch[1].trim());
@@ -271,6 +273,33 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
   const addMatch = remaining.match(/^\[Add\]\s+(.+?)\.?\s*(?:\(.*\))?\.?\s*$/s);
   if (addMatch) {
     const resourceText = addMatch[1].trim();
+
+    // Rule 827 (rule-id: ven-075-166 Platewyrm Egg): "[Add] X. If this is
+    // [Empowered], [Add] Y instead." — Y replaces X while Empowered, so emit a
+    // conditional rather than summing both payloads.
+    const RES = "(?::rb_(?:energy_\\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)):)+";
+    const empoweredInstead = remaining.match(
+      new RegExp(
+        `^\\[Add\\]\\s+(${RES})\\.?\\s+If (?:this is|I(?:'m| am)) \\[?Empowered\\]?,\\s*\\[Add\\]\\s+(${RES})\\s+instead\\.?\\s*$`,
+        "i",
+      ),
+    );
+    if (empoweredInstead) {
+      const condEffect = {
+        condition: { type: "while-empowered" },
+        else: parseResourcePayload(empoweredInstead[1]),
+        then: parseResourcePayload(empoweredInstead[2]),
+        type: "conditional",
+      } as unknown as Effect;
+      const ability: ActivatedAbility = { cost, effect: condEffect, type: "activated" };
+      if (timing) {
+        (ability as { timing: string }).timing = timing;
+      }
+      if (condition) {
+        (ability as { condition: { type: "legion" } }).condition = condition;
+      }
+      return ability;
+    }
 
     // Check if there's additional effect text after the resource (e.g., "[Add] :rb_energy_1:. Draw 1.")
     const addAndMore = remaining.match(

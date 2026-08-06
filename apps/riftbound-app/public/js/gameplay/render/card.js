@@ -194,9 +194,11 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   // Empower / modify-might effects are visible on the board card.
   // rule-buff-might (unl-162-219): Buff is a separate +1 term (engine: `meta.buffed ? 1 : 0`),
   // not folded into mightModifier, so it must be added here to show on the board.
+  // rule-sfd-068-221: attached Equipment bonus is a separate term (server-computed
+  // meta.equipmentMightBonus from equippedWith) and must be included too.
   const baseMight = card.might;
   const effMight = baseMight != null
-    ? Math.max(0, baseMight + (card.meta?.mightModifier ?? 0) + (card.meta?.staticMightBonus ?? 0) + (card.meta?.buffed ? 1 : 0))
+    ? Math.max(0, baseMight + (card.meta?.mightModifier ?? 0) + (card.meta?.staticMightBonus ?? 0) + (card.meta?.buffed ? 1 : 0) + (card.meta?.equipmentMightBonus ?? 0))
     : null;
   const mightBadge = (effMight != null && effMight !== baseMight)
     ? `<div class="card-might" title="Effective Might">${effMight}</div>`

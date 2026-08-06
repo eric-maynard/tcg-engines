@@ -13,6 +13,7 @@ export {
   isShowdownEnded,
   passFocus,
   passPriority,
+  removeChainItem,
   resetShowdownPasses,
   resolveTopItem,
   startShowdown,

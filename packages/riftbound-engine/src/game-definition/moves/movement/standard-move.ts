@@ -295,6 +295,13 @@ export const standardMove: Defs["standardMove"] = {
         defender,
       );
 
+      // rule-id: unl-079-219 (Rule 340 / 548.2): "When a showdown begins
+      // here" fires for BOTH combat and non-combat showdowns.
+      fireTriggers(
+        { battlefieldId: destination, isCombat: hasOpponentUnit, playerId, type: "showdown-begin" },
+        { cards: context.cards, counters, draft, zones },
+      );
+
       // Rule 625.1.c.1 / 625.1.c.2 (sfd-177-221): opening a Combat
       // Showdown assigns combat roles and fires "attack" / "defend" so
       // "When I attack/defend" triggers land on the initial chain.

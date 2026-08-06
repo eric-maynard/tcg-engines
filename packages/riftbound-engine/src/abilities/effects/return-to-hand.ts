@@ -1,7 +1,32 @@
 // Effect handler: "return-to-hand"
 import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
+import type { RiftboundCardMeta } from "../../types";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
+
+/**
+ * rule-id: ogn-172-298 — a unit bounced to hand leaves the board, so its
+ * board-only state (exhausted, damage, buffs, stun, …) must not persist.
+ * moveCard only changes zone; clear the meta explicitly like the kill path.
+ */
+function bounceToHand(cardId: string, ctx: EffectContext): void {
+  ctx.zones.moveCard({
+    cardId: cardId as CoreCardId,
+    targetZoneId: "hand" as CoreZoneId,
+  });
+  ctx.counters.setFlag(cardId as CoreCardId, "exhausted", false);
+  ctx.counters.setFlag(cardId as CoreCardId, "stunned", false);
+  ctx.counters.setFlag(cardId as CoreCardId, "buffed", false);
+  ctx.cards.updateCardMeta?.(cardId as CoreCardId, {
+    buffed: false,
+    combatRole: null,
+    damage: 0,
+    exhausted: false,
+    grantedKeywords: undefined,
+    mightModifier: 0,
+    stunned: false,
+  } as Partial<RiftboundCardMeta> as Record<string, unknown>);
+}
 
 export function handle_returnToHand(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   const targets = getTargetIds(effect, ctx);
@@ -11,16 +36,10 @@ export function handle_returnToHand(effect: ExecutableEffect, ctx: EffectContext
   // enemy unit" bounces itself when the board is empty.
   const hasTargetSpec = "target" in effect && effect.target != null;
   if (targets.length === 0 && !hasTargetSpec) {
-    ctx.zones.moveCard({
-      cardId: ctx.sourceCardId as CoreCardId,
-      targetZoneId: "hand" as CoreZoneId,
-    });
+    bounceToHand(ctx.sourceCardId, ctx);
   } else {
     for (const targetId of targets) {
-      ctx.zones.moveCard({
-        cardId: targetId as CoreCardId,
-        targetZoneId: "hand" as CoreZoneId,
-      });
+      bounceToHand(targetId, ctx);
     }
   }
 }

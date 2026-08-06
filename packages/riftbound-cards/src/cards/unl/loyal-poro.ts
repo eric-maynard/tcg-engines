@@ -13,4 +13,5 @@ export const loyalPoro: UnitCard = {
   rulesText:
     "[Deathknell][&gt;] If I didn't die alone, draw 1. (When I die, get the effect. I wasn't alone if there were other friendly units here.)",
   setId: "UNL",
+  tags: ["Poro"], // rule-id: unl-046-219 — printed PORO tag (missing from set data)
 };

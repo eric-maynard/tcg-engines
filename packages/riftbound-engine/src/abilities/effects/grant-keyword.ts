@@ -9,6 +9,26 @@ export function handle_grantKeyword(effect: ExecutableEffect, ctx: EffectContext
   if (!kw) {
     return;
   }
+  // rule-id: ogn-026-298 — "opponents can't play cards this turn" is a
+  // player-level restriction, not card meta; record it on game state so the
+  // play moves can consult it.
+  const target = effect.target as { type?: string; which?: string } | undefined;
+  if (kw === "CannotPlayCards" && target?.type === "player") {
+    const which = target.which ?? "opponent";
+    const all = Object.keys(ctx.draft.players);
+    const players =
+      which === "self" || which === "controller"
+        ? [ctx.playerId]
+        : which === "all" || which === "each"
+          ? all
+          : all.filter((p) => p !== ctx.playerId);
+    const draft = ctx.draft as { cannotPlayCardsThisTurn?: Record<string, true> };
+    draft.cannotPlayCardsThisTurn ??= {};
+    for (const p of players) {
+      draft.cannotPlayCardsThisTurn[p] = true;
+    }
+    return;
+  }
   const targets = getTargetIds(effect, ctx);
   const kwTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
   const duration = (effect.duration ?? "turn") as "turn" | "permanent" | "combat";

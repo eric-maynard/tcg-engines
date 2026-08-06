@@ -79,6 +79,14 @@ export interface WhileEquippedCondition {
   readonly target?: "self" | Target;
 }
 
+/**
+ * rule-id: unl-146-219 — "While I'm in a showdown": this card is at the
+ * battlefield where the active showdown (rules 545-553) is taking place.
+ */
+export interface WhileInShowdownCondition {
+  readonly type: "while-in-showdown";
+}
+
 // ============================================================================
 // Turn Conditions
 // ============================================================================
@@ -417,6 +425,7 @@ export type Condition =
   | WhileReadyCondition
   | WhileExhaustedCondition
   | WhileEquippedCondition
+  | WhileInShowdownCondition
 
   // Turn conditions
   | ThisTurnCondition

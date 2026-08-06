@@ -81,6 +81,14 @@ export function parseStunEffect(text: string): StunEffect | undefined {
  * Try to parse a ready effect: "Ready TARGET."
  */
 export function parseReadyEffect(text: string): Effect | undefined {
+  // rule-id: ven-150-166 (Acceleration Gate) — "Ready up to 4 units, gear,
+  // and/or runes.": a comma / "and/or" list of card types is ONE mixed pool the
+  // caster picks from. Emit `types` (any-of) alongside a `permanent` base type.
+  const mixed = parseMixedTypeReadyTarget(text);
+  if (mixed) {
+    return { target: mixed, type: "ready" };
+  }
+
   // Pattern: "Ready [all/up to N/another] [controller] [TAG] TARGET [here]."
   // The broad alternation accepts:
   //   - pronouns: me, it, them
@@ -155,6 +163,63 @@ export function parseReadyEffect(text: string): Effect | undefined {
     }
   }
   return { target, type: "ready" };
+}
+
+const MIXED_TYPE_NOUNS: Record<string, "unit" | "gear" | "rune" | "legend" | "equipment"> = {
+  equipment: "equipment",
+  gear: "gear",
+  gears: "gear",
+  legend: "legend",
+  legends: "legend",
+  rune: "rune",
+  runes: "rune",
+  unit: "unit",
+  units: "unit",
+};
+
+/**
+ * rule-id: ven-150-166 — "Ready [up to N|all] [friendly|enemy|your] units, gear,
+ * and/or runes." Requires ≥2 type nouns joined by "," / "and" / "or" / "and/or".
+ */
+function parseMixedTypeReadyTarget(text: string): AnyTarget | undefined {
+  const noun = "(?:units?|gears?|runes?|legends?|equipment)";
+  const sep = "(?:,\\s*(?:(?:and\\/or|and|or)\\s+)?|\\s+(?:and\\/or|and|or)\\s+)";
+  const re = new RegExp(
+    `^Ready (?:(all|up to (?:\\w+))\\s+)?(?:(friendly|enemy|your)\\s+)?(${noun}(?:${sep}${noun})+)\\.?$`,
+    "i",
+  );
+  const m = text.match(re);
+  if (!m) {
+    return undefined;
+  }
+  const types = [
+    ...new Set(
+      m[3]
+        .split(/,|\s+/)
+        .map((w) => MIXED_TYPE_NOUNS[w.toLowerCase()])
+        .filter((t): t is NonNullable<typeof t> => t !== undefined),
+    ),
+  ];
+  if (types.length < 2) {
+    return undefined;
+  }
+  const target: Record<string, unknown> = { type: "permanent", types };
+  const qtyText = m[1]?.toLowerCase();
+  if (qtyText === "all") {
+    target.quantity = "all";
+  } else if (qtyText) {
+    const upTo = qtyText.match(/^up to (\w+)$/i);
+    if (upTo) {
+      target.quantity = { upTo: wordToNumber(upTo[1]) };
+    }
+  }
+  const ctl = m[2]?.toLowerCase();
+  if (ctl === "friendly" || ctl === "your") {
+    target.controller = "friendly";
+  } else if (ctl === "enemy") {
+    target.controller = "enemy";
+  }
+  return target as unknown as AnyTarget;
 }
 
 /**

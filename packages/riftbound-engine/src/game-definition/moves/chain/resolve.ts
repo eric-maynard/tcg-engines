@@ -12,14 +12,19 @@ import {
 import type { EffectContext, ExecutableEffect } from "../../../abilities/effect-executor";
 import { executeEffect } from "../../../abilities/effect-executor";
 import { findSpendableBuff } from "../../../abilities/effects/spend-buff";
+import { canSpendXp } from "../../../abilities/effects/spend-xp";
 import type { TargetDescriptor } from "../../../abilities/target-resolver";
-import { resolveTarget } from "../../../abilities/target-resolver";
+import { isAllAtOneBattlefield, resolveTarget } from "../../../abilities/target-resolver";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getCardEffectiveMight } from "../play/cost";
-import { isLegalMultiTargetSet } from "../play/targeting";
+import {
+  findSequenceLeadTarget,
+  isLegalMultiTargetSet,
+  type SpellEffectTargetShape,
+} from "../play/targeting";
 import { buildEffectContext } from "./effect-context";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -56,6 +61,14 @@ export function executeResolvedItem(
         leadEffect,
         buildEffectContext(draft, resolved.controller, resolved.cardId, context),
       )
+    ) {
+      return;
+    }
+    // rule-id: unl-119-219 — "you may spend 3 XP to …": an unpayable XP cost
+    // likewise suppresses the opt-in prompt.
+    if (
+      leadEffect?.type === "spend-xp" &&
+      !canSpendXp(leadEffect, buildEffectContext(draft, resolved.controller, resolved.cardId, context))
     ) {
       return;
     }
@@ -98,13 +111,17 @@ export function executeResolvedItem(
   // `location: "move-to-or-from"` targets resolve against only the
   // battlefields the triggering move touched.
   const trigEvt = resolved.triggerEvent as
-    | { from?: string; to?: string; cardId?: string }
+    | { from?: string; to?: string; cardId?: string; fromHiddenAt?: string }
     | undefined;
   const triggerZones = trigEvt
     ? [trigEvt.from, trigEvt.to].filter((z): z is string => typeof z === "string")
     : undefined;
   // rule-id: unl-133-219 — the firing event's subject card ("…[Stun] it").
   const triggerSourceId = typeof trigEvt?.cardId === "string" ? trigEvt.cardId : undefined;
+  // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): a card played from Hidden
+  // may only choose targets at the battlefield it was facedown at.
+  const hiddenZone =
+    typeof trigEvt?.fromHiddenAt === "string" ? `battlefield-${trigEvt.fromHiddenAt}` : undefined;
 
   // Rule 355.10: for a resolved effect that targets a caster-chosen single
   // card ("give a unit X"), the controller picks which card. When targets
@@ -112,7 +129,15 @@ export function executeResolvedItem(
   // exists, pause and ask via a `choose-target` pending choice; the effect
   // runs from `resolvePendingChoice` once the pick is made.
   let boundTargets = resolved.targets;
-  const target = effect.target as TargetDescriptor | string | undefined;
+  // rule-id: unl-119-219 (rule 355.10) — a `sequence` ("spend 3 XP, then deal
+  // damage to an enemy unit here") carries its caster-chosen target on a
+  // sub-step; lift the single lead descriptor so the controller is prompted
+  // instead of the step auto-picking the first candidate.
+  const target = (effect.target ??
+    findSequenceLeadTarget(effect as unknown as SpellEffectTargetShape)) as
+    | TargetDescriptor
+    | string
+    | undefined;
   if (
     !boundTargets &&
     target &&
@@ -126,7 +151,7 @@ export function executeResolvedItem(
     target.type !== "battlefield" &&
     target.quantity !== "all"
   ) {
-    const options = resolveTarget(
+    let options = resolveTarget(
       { ...target, quantity: "all" },
       {
         cards: baseCtx.cards,
@@ -141,6 +166,13 @@ export function executeResolvedItem(
         zones: baseCtx.zones,
       },
     );
+    // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): played-from-Hidden
+    // targets must be at the associated battlefield.
+    if (hiddenZone) {
+      options = options.filter(
+        (id) => baseCtx.zones.getCardZone(id as CoreCardId) === hiddenZone,
+      );
+    }
     // rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": the
     // controller picks 0..n (declining is legal even with one candidate), so
     // prompt whenever any candidate exists; candidates that alone breach the
@@ -182,6 +214,40 @@ export function executeResolvedItem(
       return;
     } else {
       boundTargets = options;
+    }
+  }
+
+  // rule-id: ogs-002-024 (rule 355.8) — "all enemy units at A battlefield"
+  // with no battlefield locked at play time: the controller picks one now.
+  // Only battlefields where the descriptor matches ≥1 card are meaningful
+  // options; with a single such battlefield it is auto-picked.
+  if (!boundTargets && isAllAtOneBattlefield(effect.target)) {
+    const bfIds = Object.keys(draft.battlefields ?? {});
+    const withMatches = bfIds.filter(
+      (bfId) =>
+        resolveTarget(effect.target as TargetDescriptor, {
+          battlefieldZone: `battlefield-${bfId}`,
+          cards: baseCtx.cards,
+          draft,
+          playerId: resolved.controller,
+          sourceCardId: resolved.cardId,
+          sourceZone: baseCtx.sourceZone,
+          zones: baseCtx.zones,
+        }).length > 0,
+    );
+    if (withMatches.length >= 2) {
+      draft.pendingChoice = {
+        type: "choose-target",
+        playerId: resolved.controller,
+        sourceCardId: resolved.cardId,
+        effect,
+        options: withMatches,
+        remaining: 1,
+      };
+      return;
+    }
+    if (withMatches.length === 1) {
+      boundTargets = [withMatches[0] as string];
     }
   }
 

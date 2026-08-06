@@ -8,21 +8,16 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * Choose a unit. Give it +1 [Might] this turn for each of the following
  * tags among your units — Bird, Cat, Dog, and Poro.
  *
- * The "X distinct tags" count is approximated: the engine's AmountExpression
- * supports a `count` query but not "distinct tags among set". For now we
- * approximate as count(friendly units with those tags), which is an
- * over-count. A tighter model can be substituted once the DSL supports
- * distinct-tag counts.
+ * rule-id: unl-046-219 — amount is the number of listed tags present on at
+ * least one friendly unit (`distinctTags`), not a filtered unit count (a
+ * filter array ANDs, so no single unit could ever match all four tags).
  */
 const abilities: Ability[] = [
   {
     effect: {
       amount: {
-        count: {
-          controller: "friendly",
-          filter: [{ tag: "Bird" }, { tag: "Cat" }, { tag: "Dog" }, { tag: "Poro" }],
-          type: "unit",
-        },
+        among: { controller: "friendly", type: "unit" },
+        distinctTags: ["Bird", "Cat", "Dog", "Poro"],
       },
       duration: "turn",
       target: { type: "unit" },

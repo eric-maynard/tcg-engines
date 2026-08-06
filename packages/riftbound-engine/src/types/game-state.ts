@@ -99,6 +99,12 @@ export interface RiftboundCardMeta {
   /** Temporary Might modifier from effects (added to base Might; reset per duration) */
   mightModifier?: number;
 
+  /**
+   * rule-id: sfd-110-221 (rule 466.7.c) — the portion of `mightModifier` that
+   * was applied "this combat" and must be reverted at Combat Cleanup.
+   */
+  combatMightModifier?: number;
+
   /** Rule 827: whether this permanent is Empowered (gates `[Empowered]>` abilities) */
   empowered?: boolean;
 
@@ -463,6 +469,13 @@ export interface ChooseDestinationChoice {
   readonly cardId: CardId;
   /** Legal destination zone IDs (base + battlefields, excluding current). */
   readonly options: readonly string[];
+  /**
+   * rule-id: ogs-015-024 (rule 439.2.b.1) — a just-created token choosing
+   * where it enters the board. Placement is not a move, so no `move` event
+   * fires; `queue` holds further created tokens to prompt for in turn.
+   */
+  readonly created?: true;
+  readonly queue?: readonly CardId[];
 }
 
 /**
@@ -618,6 +631,13 @@ export interface RiftboundGameState {
   readonly additionalCostsPaid?: Record<string, boolean>;
 
   /**
+   * rule-id: ogn-064-298 / sfd-206-221 — card id the most recent `counter`
+   * effect targeted. A countered spell leaves the chain immediately (rule
+   * 425.1.a), so "that spell's Energy cost" is read from here afterwards.
+   */
+  lastCounterTargetId?: string;
+
+  /**
    * Number of units each player has moved this turn.
    *
    * Used by move-escalation effects (e.g., Mageseeker Investigator) that
@@ -628,6 +648,12 @@ export interface RiftboundGameState {
 
   /** Events that occurred this turn, for condition checking */
   readonly turnEvents?: Record<string, string[]>;
+
+  /**
+   * rule-id: ogn-026-298 — players who can't play cards for the rest of this
+   * turn ("opponents can't play cards this turn"). Cleared at end of turn.
+   */
+  cannotPlayCardsThisTurn?: Record<string, true>;
 
   /**
    * Keys of `"next"`-duration replacements that have already fired this turn.

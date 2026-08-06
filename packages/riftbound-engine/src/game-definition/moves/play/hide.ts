@@ -205,6 +205,10 @@ export const revealHidden: Defs["revealHidden"] = {
     if (state.pendingChoice) {
       return false;
     }
+    // rule-id: ogn-026-298 — "opponents can't play cards this turn".
+    if (state.cannotPlayCardsThisTurn?.[context.params.playerId as string]) {
+      return false;
+    }
     const meta = context.cards.getCardMeta(context.params.cardId as CoreCardId) as
       | Partial<RiftboundCardMeta>
       | undefined;
@@ -293,7 +297,20 @@ export const revealHidden: Defs["revealHidden"] = {
       const turnOrder = Object.keys(draft.players);
       draft.interaction = addToChain(
         interaction,
-        { cardId, controller: playerId, effect: spellEffect, resolveTo: "trash", type: "spell" },
+        {
+          cardId,
+          controller: playerId,
+          effect: spellEffect,
+          resolveTo: "trash",
+          // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): targets for a card
+          // played from Hidden are restricted to its facedown battlefield.
+          ...(battlefieldId ? { triggerEvent: { fromHiddenAt: battlefieldId } } : {}),
+          type: "spell",
+          // rule-id: ven-015-166 — carry "This can't be countered." onto the chain item.
+          ...((spellAbility as { uncounterable?: boolean } | undefined)?.uncounterable
+            ? { uncounterable: true }
+            : {}),
+        },
         turnOrder,
       );
       // rule-id: unl-007-219 — card sits on the chain until it resolves.
@@ -334,7 +351,12 @@ export const revealHidden: Defs["revealHidden"] = {
       if (!entersReady) {
         counters.setFlag(cardId as CoreCardId, "exhausted", true);
       }
-      fireTriggers({ cardId, playerId, type: "play-self" }, { cards, counters, draft, zones });
+      // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): thread the facedown
+      // battlefield so the play-effect's targets are restricted to it.
+      fireTriggers(
+        { cardId, playerId, type: "play-self", ...(battlefieldId ? { fromHiddenAt: battlefieldId } : {}) },
+        { cards, counters, draft, zones },
+      );
       fireTriggers(
         { cardId, cardType: "unit", playerId, type: "play-card" },
         { cards, counters, draft, zones },

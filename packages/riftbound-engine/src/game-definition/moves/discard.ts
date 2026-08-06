@@ -160,7 +160,7 @@ export const discardMoves: Partial<
   },
 
   recycleCard: {
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { cardId } = context.params;
       context.counters.clearAllCounters(cardId as CoreCardId);
       context.zones.moveCard({
@@ -168,6 +168,16 @@ export const discardMoves: Partial<
         position: "bottom",
         targetZoneId: "mainDeck" as CoreZoneId,
       });
+      // rule-id: ogn-235-298 — emit `recycle` for the card's owner so "When
+      // you recycle one or more cards to your Main Deck" triggers fire.
+      // Guarded so unit-test stubs that omit the full context bags don't crash.
+      const owner = context.cards?.getCardOwner?.(cardId as CoreCardId) as string | undefined;
+      if (owner && typeof context.zones.getCardsInZone === "function") {
+        fireTriggers(
+          { cardIds: [cardId as string], playerId: owner, type: "recycle" },
+          { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        );
+      }
     },
   },
 };

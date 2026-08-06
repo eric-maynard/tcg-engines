@@ -231,6 +231,83 @@ export function evaluateTriggerCondition(
       sourceCardId,
     );
   }
+  if (c.type === "alone-in-combat" && ctx) {
+    // rule-id: sfd-110-221 (Fiora, Peerless) / rule 740.2.a-b — "one on one":
+    // the source has no other friendly unit at its location AND exactly one
+    // enemy unit is there. With a `target` (UNL "an enemy/friendly unit is
+    // alone here") only that side is checked.
+    let hereZone: string | undefined =
+      typeof (event as { battlefieldId?: unknown }).battlefieldId === "string"
+        ? `battlefield-${(event as { battlefieldId: string }).battlefieldId}`
+        : sourceCardId
+          ? (ctx.zones.getCardZone?.(sourceCardId as CoreCardId) as string | undefined)
+          : undefined;
+    if (hereZone === undefined && sourceCardId) {
+      for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+        const ids = ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
+        if (ids.some((id) => (id as string) === sourceCardId)) {
+          hereZone = `battlefield-${bfId}`;
+          break;
+        }
+      }
+    }
+    if (hereZone === undefined || !hereZone.startsWith("battlefield-")) {
+      return true;
+    }
+    const registry = getGlobalCardRegistry();
+    let friendly = 0;
+    let enemy = 0;
+    for (const id of ctx.zones.getCardsInZone(hereZone as CoreZoneId)) {
+      const def = registry.get(id as string) as { cardType?: string } | undefined;
+      if (def?.cardType !== undefined && def.cardType !== "unit") {
+        continue;
+      }
+      const owner = ctx.cards.getCardOwner(id as CoreCardId) as string | undefined;
+      if (owner === undefined) {
+        continue;
+      }
+      if (owner === controllerId) {
+        friendly++;
+      } else {
+        enemy++;
+      }
+    }
+    const targetController = (c as { target?: { controller?: string } }).target?.controller;
+    if (targetController === "enemy") {
+      return enemy === 1;
+    }
+    if (targetController === "friendly") {
+      return friendly === 1;
+    }
+    return friendly === 1 && enemy === 1;
+  }
+  if (c.type === "exists-here" && ctx) {
+    // rule-id: ven-138-166 (Shen, Leader of the Kinkou Order) — "if there is
+    // exactly one other unit you control here" counts matching units at the
+    // source's location, honouring exact quantity and excludeSelf.
+    let hereZone: string | undefined = sourceCardId
+      ? (ctx.zones.getCardZone?.(sourceCardId as CoreCardId) as string | undefined)
+      : undefined;
+    if (hereZone === undefined && sourceCardId) {
+      for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+        const ids = ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
+        if (ids.some((id) => (id as string) === sourceCardId)) {
+          hereZone = `battlefield-${bfId}`;
+          break;
+        }
+      }
+    }
+    if (hereZone === undefined) {
+      return true;
+    }
+    return evaluateControlCondition(
+      (c as { target?: unknown }).target,
+      ctx,
+      controllerId,
+      sourceCardId,
+      hereZone,
+    );
+  }
   return true;
 }
 
@@ -244,6 +321,7 @@ function evaluateControlCondition(
   ctx: TriggerRunnerContext,
   controllerId: string,
   sourceCardId?: string,
+  onlyZone?: string,
 ): boolean {
   if (!target || typeof target !== "object") {
     return true;
@@ -253,27 +331,42 @@ function evaluateControlCondition(
     controller?: string;
     excludeSelf?: boolean;
     filter?: unknown;
-    quantity?: { atLeast?: number } | number;
+    quantity?: { atLeast?: number; exactly?: number } | number;
   };
+  // rule-id: ven-138-166 — `{ exactly: N }` must match the count precisely.
+  const exact =
+    typeof t.quantity === "object" && typeof t.quantity?.exactly === "number"
+      ? t.quantity.exactly
+      : undefined;
   const min =
-    typeof t.quantity === "number"
-      ? t.quantity
-      : typeof t.quantity === "object" && typeof t.quantity?.atLeast === "number"
-        ? t.quantity.atLeast
-        : 1;
+    exact !== undefined
+      ? exact
+      : typeof t.quantity === "number"
+        ? t.quantity
+        : typeof t.quantity === "object" && typeof t.quantity?.atLeast === "number"
+          ? t.quantity.atLeast
+          : 1;
 
   const ids: string[] = [];
-  for (const playerId of Object.keys(ctx.draft.players ?? {})) {
-    ids.push(
-      ...ctx.zones
-        .getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)
-        .map((x) => x as string),
-    );
-  }
-  for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
-    ids.push(
-      ...ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId).map((x) => x as string),
-    );
+  if (onlyZone?.startsWith("battlefield-")) {
+    ids.push(...ctx.zones.getCardsInZone(onlyZone as CoreZoneId).map((x) => x as string));
+  } else {
+    for (const playerId of Object.keys(ctx.draft.players ?? {})) {
+      ids.push(
+        ...ctx.zones
+          .getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)
+          .map((x) => x as string),
+      );
+    }
+    if (onlyZone === undefined) {
+      for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+        ids.push(
+          ...ctx.zones
+            .getCardsInZone(`battlefield-${bfId}` as CoreZoneId)
+            .map((x) => x as string),
+        );
+      }
+    }
   }
 
   const registry = getGlobalCardRegistry();
@@ -319,11 +412,11 @@ function evaluateControlCondition(
       continue;
     }
     count++;
-    if (count >= min) {
+    if (exact === undefined && count >= min) {
       return true;
     }
   }
-  return count >= min;
+  return exact !== undefined ? count === exact : count >= min;
 }
 
 /**
@@ -496,6 +589,16 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
       abilities: toTriggerableAbilities(event.cardId),
       id: event.cardId,
       owner: event.playerId,
+      zone: ctx.zones.getCardZone?.(event.cardId as CoreCardId) ?? "trash",
+    });
+  }
+  // rule-id: sfd-167-221 (Unsung Hero) — Deathknell: kill moves the unit to
+  // trash before `die` fires, so include the dying card so "When I die" matches.
+  if (event.type === "die" && !boardCards.some((c) => c.id === event.cardId)) {
+    boardCards.push({
+      abilities: toTriggerableAbilities(event.cardId),
+      id: event.cardId,
+      owner: event.owner,
       zone: ctx.zones.getCardZone?.(event.cardId as CoreCardId) ?? "trash",
     });
   }

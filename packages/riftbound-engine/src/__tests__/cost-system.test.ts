@@ -196,7 +196,7 @@ describe("Cost Reduction Effect", () => {
     executeEffect(
       {
         amount: 2,
-        target: { controller: "friendly", type: "unit" },
+        target: { controller: "friendly", excludeSelf: true, type: "unit" },
         type: "cost-reduction",
       } as ExecutableEffect,
       ctx,

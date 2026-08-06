@@ -35,12 +35,16 @@ import {
   createBattlefield,
   createCard,
   createMinimalGameState,
+  drainChain,
+  enumerateLegalMoves,
   fireTrigger,
   getCardMeta,
   getCardZone,
   getCardsInZone,
+  getInteractionState,
   getState,
 } from "./helpers";
+import { getActiveShowdown } from "../../chain/chain-state";
 
 // ===========================================================================
 // Rule 711: Units in Non-Board Zones are evaluated by inherent Might
@@ -621,10 +625,10 @@ describe("Predict N: look at top N cards, may recycle", () => {
     expect(predict?.stackable).toBe(true);
   });
 
-  it("Predict N effect moves the top N cards of the player's main deck to the bottom", () => {
-    // The executor's `predict` case auto-recycles the top N cards of
-    // The controller's main deck. After Predict 2 on a deck ordered
-    // [A, B, C, D, E], the deck becomes [C, D, E, A, B].
+  it("Predict N looks at the top N cards and lets the player recycle any of them", () => {
+    // rule-id: unl-131-219-predict-look-optional-recycle — Predict is a
+    // player decision: an optional reveal-and-pick over the top N cards.
+    // Recycling both of Predict 2 on [A, B, C, D, E] yields [C, D, E, A, B].
     const engine = createMinimalGameState({ phase: "main" });
 
     // Seed P1's main deck with 5 distinct cards.
@@ -661,7 +665,28 @@ describe("Predict N: look at top N cards, may recycle", () => {
     const fired = fireTrigger(engine, { cardId: "seer", playerId: P1, type: "play-self" });
     expect(fired).toBeGreaterThanOrEqual(1);
 
-    // After Predict 2: deck should be [C, D, E, A, B].
+    // Nothing moves until the player decides.
+    expect(getCardsInZone(engine, "mainDeck", P1)).toEqual(deckOrder);
+    const first = getState(engine).pendingChoice;
+    expect(first?.type).toBe("reveal-and-pick");
+    if (first?.type !== "reveal-and-pick") throw new Error("unreachable");
+    expect(first.revealed).toEqual(["deck-a", "deck-b"]);
+    expect(first.optional).toBe(true);
+    expect(first.onPicked).toBe("recycle");
+
+    expect(
+      applyMove(engine, "resolvePendingChoice", { pickedCardId: "deck-a", playerId: P1 }).success,
+    ).toBe(true);
+    const second = getState(engine).pendingChoice;
+    expect(second?.type).toBe("reveal-and-pick");
+    if (second?.type !== "reveal-and-pick") throw new Error("unreachable");
+    expect(second.revealed).toEqual(["deck-b"]);
+    expect(
+      applyMove(engine, "resolvePendingChoice", { pickedCardId: "deck-b", playerId: P1 }).success,
+    ).toBe(true);
+    expect(getState(engine).pendingChoice).toBeUndefined();
+
+    // After recycling both: deck should be [C, D, E, A, B].
     expect(getCardsInZone(engine, "mainDeck", P1)).toEqual([
       "deck-c",
       "deck-d",
@@ -669,6 +694,33 @@ describe("Predict N: look at top N cards, may recycle", () => {
       "deck-a",
       "deck-b",
     ]);
+  });
+
+  it("Predict: declining leaves the looked-at card on top", () => {
+    // rule-id: unl-131-219-predict-look-optional-recycle
+    const engine = createMinimalGameState({ phase: "main" });
+    for (const id of ["deck-a", "deck-b"]) {
+      createCard(engine, id, { cardType: "unit", might: 1, owner: P1, zone: "mainDeck" });
+    }
+    createCard(engine, "seer", {
+      abilities: [
+        { effect: { type: "predict" }, trigger: { event: "play-self" }, type: "triggered" },
+      ],
+      cardType: "unit",
+      might: 2,
+      owner: P1,
+      zone: "base",
+    });
+    fireTrigger(engine, { cardId: "seer", playerId: P1, type: "play-self" });
+    const choice = getState(engine).pendingChoice;
+    expect(choice?.type).toBe("reveal-and-pick");
+    if (choice?.type !== "reveal-and-pick") throw new Error("unreachable");
+    expect(choice.revealed).toEqual(["deck-a"]);
+    expect(applyMove(engine, "resolvePendingChoice", { accept: false, playerId: P1 }).success).toBe(
+      true,
+    );
+    expect(getState(engine).pendingChoice).toBeUndefined();
+    expect(getCardsInZone(engine, "mainDeck", P1)).toEqual(["deck-a", "deck-b"]);
   });
 });
 
@@ -826,6 +878,92 @@ describe("Repeat N: spell effect may be repeated at added cost", () => {
       targets: ["target-unit"],
     });
     expect(result.success).toBe(false);
+  });
+
+  // rule-id: unl-146-219 (Syndra, Transcendent) — "While I'm in a showdown,
+  // your spells have [Repeat] [2][chaos]." A board static grants a payable
+  // Repeat instance to a spell with no printed Repeat, only while the source
+  // is at the showdown battlefield.
+  it("board-granted Repeat (while-in-showdown) is offered, charged, and repeats the effect", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 5, power: { chaos: 1 } } },
+    });
+    createBattlefield(engine, "bf-empty", { controller: null });
+    createCard(engine, "syndra", {
+      abilities: [
+        {
+          condition: { type: "while-in-showdown" },
+          effect: {
+            cost: { energy: 2, power: ["chaos"] },
+            keyword: "Repeat",
+            target: { controller: "friendly", type: "spell" },
+            type: "grant-keyword",
+          },
+          type: "static",
+        },
+      ] as never,
+      cardType: "unit",
+      might: 6,
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "plain-spell", {
+      abilities: [{ effect: { amount: 1, type: "gain-xp" }, timing: "action", type: "spell" }],
+      cardType: "spell",
+      energyCost: 1,
+      owner: P1,
+      zone: "hand",
+    });
+
+    // No showdown yet: Repeat is not granted.
+    expect(
+      applyMove(engine, "playSpell", { cardId: "plain-spell", playerId: P1, repeatCount: 1 })
+        .success,
+    ).toBe(false);
+    expect(
+      enumerateLegalMoves(engine, P1).some(
+        (m) => m.moveId === "playSpell" && m.params?.repeatCount === 1,
+      ),
+    ).toBe(false);
+
+    // Move Syndra to the empty battlefield → non-combat showdown opens there.
+    expect(
+      applyMove(engine, "standardMove", {
+        destination: "bf-empty",
+        playerId: P1,
+        unitIds: ["syndra"],
+      }).success,
+    ).toBe(true);
+    const interaction = getInteractionState(engine);
+    expect(interaction && getActiveShowdown(interaction)?.battlefieldId).toBe("bf-empty");
+
+    expect(
+      enumerateLegalMoves(engine, P1).some(
+        (m) =>
+          m.moveId === "playSpell" &&
+          m.params?.cardId === "plain-spell" &&
+          m.params?.repeatCount === 1,
+      ),
+    ).toBe(true);
+    // Only one granted instance → repeatCount 2 is illegal (rule 820.3).
+    expect(
+      applyMove(engine, "playSpell", { cardId: "plain-spell", playerId: P1, repeatCount: 2 })
+        .success,
+    ).toBe(false);
+    const played = applyMove(engine, "playSpell", {
+      cardId: "plain-spell",
+      playerId: P1,
+      repeatCount: 1,
+    });
+    expect(played.success).toBe(true);
+    // 1 base + [2][chaos] repeat.
+    expect(getState(engine).runePools[P1]?.energy).toBe(2);
+    expect(getState(engine).runePools[P1]?.power?.chaos ?? 0).toBe(0);
+
+    drainChain(engine);
+    expect(getState(engine).players[P1]?.xp ?? 0).toBe(2);
   });
 });
 

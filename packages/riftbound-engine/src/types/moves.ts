@@ -409,6 +409,11 @@ export interface RiftboundMoves {
      */
     discardId?: CardId;
     /**
+     * When the ability's cost includes `recycle` (rule-id: ogn-036-298), the
+     * trash cards to recycle as payment. Optional — defaults to the top N.
+     */
+    recycleIds?: CardId[];
+    /**
      * Rule 355.14.b: the effect's caster-chosen card target, locked when the
      * ability is finalized on the chain (not at resolution).
      */
@@ -469,6 +474,12 @@ export interface RiftboundMoves {
     pickedMode?: number;
     /** Rule 583 (unl-021-219): accept/decline an optional "you may" trigger. */
     accept?: boolean;
+    /**
+     * rule-id: sfd-109-221 (rule 356.1.b.3 / 560) — on a choose-destination
+     * that finalizes a pending "play it (ignoring its cost)", elect to pay the
+     * unit's optional "you may pay X as an additional cost".
+     */
+    paidAdditionalCost?: boolean;
   };
 
   // ============================================

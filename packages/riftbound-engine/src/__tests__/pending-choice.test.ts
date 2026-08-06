@@ -650,6 +650,44 @@ describe("resolvePendingChoice move", () => {
     expect(draft.pendingChoice).toBeUndefined();
   });
 
+  it("created-token choose-destination places without a move and advances the queue (ogs-015-024)", () => {
+    // rule-id: ogs-015-024 (rule 439.2.b.1)
+    const { draft } = buildMockCtx({ opponentHand: [] });
+    (draft as { pendingChoice?: unknown }).pendingChoice = {
+      cardId: "tok-0",
+      created: true,
+      options: ["base", "battlefield-bf1"],
+      playerId: "p1",
+      queue: ["tok-1"],
+      type: "choose-destination",
+    };
+    const moves: { cardId: string; targetZoneId: string }[] = [];
+    const zoneOf = new Map<string, string>([
+      ["tok-0", "base"],
+      ["tok-1", "base"],
+    ]);
+    const context = {
+      counters: { clearAllCounters: () => {} },
+      params: { pickedZoneId: "battlefield-bf1", playerId: "p1" },
+      zones: {
+        getCardZone: (id: string) => zoneOf.get(id),
+        moveCard: (p: { cardId: string; targetZoneId: string }) => {
+          moves.push(p);
+          zoneOf.set(p.cardId, p.targetZoneId);
+        },
+      },
+    };
+    // Biome-ignore lint/suspicious/noExplicitAny: reducer signature varies
+    const move = pendingChoiceMoves.resolvePendingChoice as any;
+    move.reducer(draft, context);
+    expect(moves).toEqual([{ cardId: "tok-0", targetZoneId: "battlefield-bf1" }]);
+    expect(draft.pendingChoice).toMatchObject({ cardId: "tok-1", queue: [], type: "choose-destination" });
+    move.reducer(draft, { ...context, params: { pickedZoneId: "base", playerId: "p1" } });
+    // Picking base for a token already minted there is not a zone change.
+    expect(moves).toHaveLength(1);
+    expect(draft.pendingChoice).toBeUndefined();
+  });
+
   it("reducer is a no-op when the pick is invalid", () => {
     const state = makeState(true);
     const moves: { cardId: string; targetZoneId: string }[] = [];

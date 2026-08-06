@@ -1,0 +1,43 @@
+{
+  "name": "@tcg/riftbound-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP (Model Context Protocol) stdio server exposing the Riftbound agent harness so LLM agents can create and play games headlessly",
+  "bin": {
+    "riftbound-mcp": "./src/bin.ts"
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "start": "bun ./src/bin.ts",
+    "build": "tsc --noEmit && mkdir -p dist",
+    "typecheck": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
+    "format": "bun x oxfmt --write ./src",
+    "lint": "bun x oxlint --fix ./src",
+    "test": "bun test ./src",
+    "check": "turbo format lint check-types test"
+  },
+  "dependencies": {
+    "@tcg/riftbound": "workspace:*",
+    "@tcg/riftbound-cards": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.4",
+    "typescript": "5.9.3"
+  },
+  "peerDependencies": {
+    "typescript": "5.9.3"
+  }
+}

@@ -230,10 +230,17 @@ function renderActions() {
         const card = typeof cid === "string" ? findCard(cid) : null;
         const accept = m.params?.accept;
         const zid = m.params?.pickedZoneId;
-        const label = typeof accept === "boolean" ? (accept ? "Yes" : "No")  // Rule ogn-067-298
+        // Rule ogn-155-298: choose-mode picks carry only pickedMode — name the
+        // mode from pending.effect.options like the choice modal does.
+        const modeIdx = m.params?.pickedMode;
+        const modeOpt = pending.type === "choose-mode" && modeIdx != null ? pending.effect?.options?.[modeIdx] : null;
+        const label = modeOpt
+          ? (modeOpt.label ?? modeOpt.text ?? modeOpt.effect?.text ?? `${modeOpt.effect?.type ?? "mode"}${modeOpt.effect?.amount != null ? ` ${modeOpt.effect.amount}` : ""}`)
+          : typeof accept === "boolean" ? (accept ? "Yes" : "No")  // Rule ogn-067-298
           // Rule unl-144-219: humanize destination zone ids like the choice modal does.
           : (!m.params?.pickedCardId && zid != null)
-          ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, "")))
+          // Rule sfd-109-221 (356.1.b.3): a pending play may offer the optional additional cost.
+          ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, ""))) + (m.params?.paidAdditionalCost ? " (pay additional cost)" : "")
           : (card?.name ?? String(cid));
         html += `<button class="action-btn highlighted"
           onclick='executeMove("resolvePendingChoice", ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
@@ -342,6 +349,13 @@ function renderActions() {
         // exhausted runes first so the default click never burns a ready rune.
         const isExh = (m) => findCard(m.params?.runeId)?.meta?.exhausted === true;
         const splitByState = moveId === "recycleRune";
+        // [rule:ui-recycle-rune-ready-autotap] Recycling a ready rune from the panel
+        // routes through quickRecycleRune so it auto-taps for +1 energy first, same
+        // as the right-click path — recycling it ready is strictly worse.
+        const runeClick = (m) =>
+          splitByState && !isExh(m) && typeof quickRecycleRune === "function"
+            ? `quickRecycleRune(${JSON.stringify(m.params?.runeId)}, this)`
+            : `executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})`;
         const byDomain = {};
         for (const m of moves) {
           const card = findCard(m.params?.runeId);
@@ -360,7 +374,7 @@ function renderActions() {
           const paramStr = formatMoveDescription(moveId, m.params) || formatParamsFallback(m.params);
           html += `
             <button class="action-btn ${isHighlighted ? "highlighted" : ""}"
-                    onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+                    onclick='${runeClick(m)}'>
               ${esc(label)}
               ${paramStr ? `<div class="action-detail">${esc(paramStr)}</div>` : ""}
             </button>
@@ -382,7 +396,7 @@ function renderActions() {
                   const m = domMoves[0];
                   return `
                     <button class="action-btn"
-                            onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+                            onclick='${runeClick(m)}'>
                       ${esc(domLabel)}
                     </button>
                   `;
@@ -391,7 +405,7 @@ function renderActions() {
                 const m = domMoves[0];
                 return `
                   <button class="action-btn"
-                          onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
+                          onclick='${runeClick(m)}'>
                     ${esc(domLabel)} (${domMoves.length} available)
                   </button>
                 `;

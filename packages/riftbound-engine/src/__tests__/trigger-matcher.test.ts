@@ -184,6 +184,36 @@ describe("Trigger Matcher", () => {
     });
   });
 
+  // rule-id: unl-079-219 (Diana, Lunari) — "When a showdown begins here"
+  // must fire for a NON-combat showdown opened by either player.
+  describe("showdown-begin trigger (unl-079-219)", () => {
+    const diana: TriggerableAbility = {
+      effect: { amount: 1, type: "draw" },
+      trigger: { event: "showdown-begin", on: { location: "here" } as unknown as string },
+      type: "triggered",
+    };
+    test("fires for a non-combat showdown at Diana's battlefield", () => {
+      const card = makeCard("diana", [diana], "battlefield-bf-1", "p1");
+      const event: GameEvent = {
+        battlefieldId: "bf-1",
+        isCombat: false,
+        playerId: "p2",
+        type: "showdown-begin",
+      };
+      expect(findMatchingTriggers(event, [card])).toHaveLength(1);
+    });
+    test("does not fire for a showdown at another battlefield", () => {
+      const card = makeCard("diana", [diana], "battlefield-bf-1", "p1");
+      const event: GameEvent = {
+        battlefieldId: "bf-2",
+        isCombat: false,
+        playerId: "p1",
+        type: "showdown-begin",
+      };
+      expect(findMatchingTriggers(event, [card])).toHaveLength(0);
+    });
+  });
+
   describe("non-battlefield player-scoped triggers still use owner", () => {
     test("start-of-turn trigger matches owner's turn", () => {
       const card = makeCard("unit-1", [makeAbility("start-of-turn")], "base", "p1");

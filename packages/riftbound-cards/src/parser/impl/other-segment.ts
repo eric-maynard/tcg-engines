@@ -70,6 +70,28 @@ export function parseOtherSegment(text: string): Ability | undefined {
  * and parses each sub-segment.
  */
 export function parseOtherSegmentMulti(text: string): Ability[] {
+  // Rule 827.1.c.1 (ven-075-166 Platewyrm Egg): an "[Empower] COST (reminder)"
+  // keyword line is a self-contained activated ability. stripReminders eats the
+  // trailing reminder *and* its newline, gluing the cost onto the next line's
+  // ability, so peel the [Empower] line off before stripping.
+  const lines = text.split("\n");
+  const empowerIdx = lines.findIndex((l) => /^\[Empower\]/i.test(l.trim()));
+  if (lines.length > 1 && empowerIdx >= 0) {
+    const empowerAbility = parseOtherSegment(lines[empowerIdx]);
+    if (empowerAbility) {
+      const before = lines.slice(0, empowerIdx).join("\n").trim();
+      const after = lines
+        .slice(empowerIdx + 1)
+        .join("\n")
+        .trim();
+      return [
+        ...(before ? parseOtherSegmentMulti(before) : []),
+        empowerAbility,
+        ...(after ? parseOtherSegmentMulti(after) : []),
+      ];
+    }
+  }
+
   const cleaned = stripReminders(text).trim();
   if (!cleaned) {
     return [];

@@ -129,6 +129,7 @@ export function removePlayer(
     counters.clearAllCounters(cid);
     cards.updateCardMeta(cid, {
       buffed: false,
+      combatMightModifier: 0,
       combatRole: null,
       damage: 0,
       equippedWith: undefined,

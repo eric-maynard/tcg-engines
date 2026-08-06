@@ -357,6 +357,9 @@ export interface SpellAbility {
 
   /** Condition for the spell to be played */
   readonly condition?: Condition;
+
+  /** rule-id: ven-015-166 — "This can't be countered." (rule 544) */
+  readonly uncounterable?: boolean;
 }
 
 // ============================================================================

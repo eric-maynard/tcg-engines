@@ -402,6 +402,11 @@ export interface GrantKeywordEffect {
   readonly value?: number;
   readonly target: AnyTarget;
   readonly duration?: "turn" | "permanent";
+  /**
+   * rule-id: unl-146-219 — cost attached to a cost-bearing granted keyword
+   * (e.g. "your spells have [Repeat] [2][chaos]", rule 820).
+   */
+  readonly cost?: Cost;
 }
 
 /**
@@ -542,6 +547,8 @@ export interface CounterEffect {
   readonly type: "counter";
   readonly target?: "spell" | Target;
   readonly unless?: Cost; // Counter unless they pay
+  /** rule-id: unl-131-219 — where the countered spell goes instead of trash */
+  readonly destination?: "hand";
 }
 
 /**
@@ -717,6 +724,9 @@ export type AmountExpression =
   // rule-id: ogn-121-298 — reveal top N of your Main Deck, count those with
   // `withKeyword`, then recycle all revealed cards.
   | { readonly revealTop: number; readonly withKeyword: string; readonly then?: "recycle" }
+  // rule-id: unl-046-219 — number of the listed tags carried by at least one
+  // unit matching `among` (distinct tags, not units).
+  | { readonly distinctTags: readonly string[]; readonly among: Target }
   | { readonly variable: string }; // Named variable from context
 
 // ============================================================================

@@ -607,6 +607,23 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 if (meta.mightModifier && meta.mightModifier !== 0) {
                   context.cards.updateCardMeta(cardId, { mightModifier: 0 });
                 }
+                // rule-id: sfd-110-221 — combat-scoped portion goes with it.
+                if (meta.combatMightModifier) {
+                  context.cards.updateCardMeta(cardId, { combatMightModifier: 0 });
+                }
+              }
+
+              // rule-id: ogn-197-298 — "this turn" Might modifiers expire at
+              // end of turn regardless of zone (rule 517.2.b). A unit that left
+              // the board (hand / facedown / etc.) must not carry a stale
+              // modifier into a later replay (e.g. Teemo revealed from Hidden).
+              const staleMightCards = context.cards.queryCards(
+                (_id, m) => ((m as Partial<RiftboundCardMeta>).mightModifier ?? 0) !== 0,
+              );
+              for (const cardId of staleMightCards) {
+                context.cards.updateCardMeta(cardId, {
+                  mightModifier: 0,
+                } as Partial<RiftboundCardMeta>);
               }
 
               // Empty all rune pools (rule 517.2.c)
@@ -628,6 +645,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               // Start fresh next turn.
               if (context.state.consumedNextReplacements) {
                 context.state.consumedNextReplacements = {};
+              }
+              // rule-id: ogn-026-298 — "can't play cards this turn" expires.
+              if (context.state.cannotPlayCardsThisTurn) {
+                context.state.cannotPlayCardsThisTurn = undefined;
               }
               // rule-id: unl-007-219 — expire "this turn" runtime replacements
               // (rule 517.2) so an unspent die→banish rider doesn't leak into

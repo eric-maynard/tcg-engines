@@ -265,14 +265,22 @@ function renderRuneStacks(runes) {
     // (top, highest z-index) — a rotated exhausted rune lower in the pile is fully
     // covered by the ready cards stacked over it and reads as missing.
     const visibleCards = [...cards].sort((a, b) => (a.meta?.exhausted ? 1 : 0) - (b.meta?.exhausted ? 1 : 0));
-    // Fixed footprint: size for a full 12-rune stack so the zone never resizes.
-    const stackHeight = 154 + (12 - 1) * 26;
+    // Fixed footprint so the zone never resizes.
+    // [rule:ui-rune-pool-fixed-footprint] The pool sits in the player hand row of a
+    // fixed 1080px board; a 12×26px fan (476px) starves the base row to ~0 and its
+    // units paint over the resource bar (hiding power/rune readouts). Cap the
+    // footprint to what the board can afford and compress the fan when a domain
+    // holds more runes than fit at the full 26px step — every rune stays rendered
+    // and individually clickable (rule 133.5.a.1).
+    const RUNE_CARD_H = 154, FAN_STEP = 26, FAN_SPAN = 3 * FAN_STEP;
+    const stackHeight = RUNE_CARD_H + FAN_SPAN;
+    const step = visibleCards.length > 1 ? Math.min(FAN_STEP, FAN_SPAN / (visibleCards.length - 1)) : FAN_STEP;
     const label = DOMAIN_LABELS[domain] ?? domain[0].toUpperCase();
     const labelText = cards.length > 1 ? `${label} (${cards.length})` : label;
     html += `<div class="rune-stack" style="min-height:${stackHeight + 18}px;height:${stackHeight + 18}px;">`;
     html += `<div class="rune-stack-label" style="color:${color};">${labelText}</div>`;
     visibleCards.forEach((c, i) => {
-      html += renderRuneCard(c, 16 + i * 26, i + 1, color);
+      html += renderRuneCard(c, 16 + Math.round(i * step), i + 1, color);
     });
     html += `</div>`;
   }

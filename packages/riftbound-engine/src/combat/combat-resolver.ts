@@ -26,7 +26,20 @@ export interface CombatUnit {
   readonly keywords: string[];
   /** Keyword numeric values (e.g., Assault 3 → { Assault: 3 }) */
   readonly keywordValues?: Record<string, number>;
+  /** Unit contributes no combat damage (still takes damage / can be killed). */
+  readonly dealsNoCombatDamage?: boolean;
+  /**
+   * rule-id: ogn-254-298 — a bound "kill it the next time it takes damage"
+   * replacement: any nonzero combat damage assigned to this unit kills it.
+   */
+  readonly diesOnAnyDamage?: boolean;
 }
+
+/**
+ * rule-id: unl-060-219 (Vilemaw) — marker keyword for "Enemy units here with
+ * less Might than me don't deal combat damage."
+ */
+export const PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE = "PreventWeakerEnemyCombatDamage";
 
 /**
  * Result of a combat between two sides.
@@ -83,18 +96,42 @@ function lethalThreshold(unit: CombatUnit, role?: "attacker" | "defender"): numb
  * Assault adds +X for attackers (rule 719).
  * Shield adds +X for defenders (rule 726: "+X Might while defending").
  */
+function unitCombatMight(unit: CombatUnit, isAttacker: boolean): number {
+  const bonus = isAttacker ? getKeywordValue(unit, "Assault") : getKeywordValue(unit, "Shield");
+  return Math.max(0, unit.baseMight + bonus);
+}
+
 export function calculateSideMight(units: CombatUnit[], isAttacker: boolean): number {
   let total = 0;
   for (const unit of units) {
-    let unitMight = unit.baseMight;
-    if (isAttacker) {
-      unitMight += getKeywordValue(unit, "Assault");
-    } else {
-      unitMight += getKeywordValue(unit, "Shield");
+    if (unit.dealsNoCombatDamage) {
+      continue;
     }
-    total += Math.max(0, unitMight);
+    total += unitCombatMight(unit, isAttacker);
   }
   return total;
+}
+
+/**
+ * rule-id: unl-060-219 (Vilemaw) — flag every unit on `side` whose combat
+ * Might is lower than that of an opposing PreventWeakerEnemyCombatDamage
+ * unit so it contributes no combat damage.
+ */
+function applyCombatDamagePrevention(
+  side: CombatUnit[],
+  sideIsAttacker: boolean,
+  opposing: CombatUnit[],
+): CombatUnit[] {
+  const thresholds = opposing
+    .filter((u) => hasKeyword(u, PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE))
+    .map((u) => unitCombatMight(u, !sideIsAttacker));
+  if (thresholds.length === 0) {
+    return side;
+  }
+  const maxThreshold = Math.max(...thresholds);
+  return side.map((u) =>
+    unitCombatMight(u, sideIsAttacker) < maxThreshold ? { ...u, dealsNoCombatDamage: true } : u,
+  );
 }
 
 /**
@@ -163,7 +200,14 @@ export function distributeDamage(
  * @param defenders - Units on the defending side
  * @returns CombatResult with damage, kills, and outcome
  */
-export function resolveCombat(attackers: CombatUnit[], defenders: CombatUnit[]): CombatResult {
+export function resolveCombat(
+  attackersIn: CombatUnit[],
+  defendersIn: CombatUnit[],
+): CombatResult {
+  // rule-id: unl-060-219 — weaker enemies of a Vilemaw-style unit deal no combat damage.
+  const attackers = applyCombatDamagePrevention(attackersIn, true, defendersIn);
+  const defenders = applyCombatDamagePrevention(defendersIn, false, attackersIn);
+
   // Step 1: Calculate total Might for each side
   const attackerTotal = calculateSideMight(attackers, true);
   const defenderTotal = calculateSideMight(defenders, false);
@@ -186,7 +230,11 @@ export function resolveCombat(attackers: CombatUnit[], defenders: CombatUnit[]):
     for (const unit of units) {
       const combatDamage = damageAssignment[unit.id] ?? 0;
       const totalDamage = unit.currentDamage + combatDamage;
-      if (totalDamage >= lethalThreshold(unit, role)) {
+      // rule-id: ogn-254-298 — kill on any damage taken (bound replacement).
+      if (
+        totalDamage >= lethalThreshold(unit, role) ||
+        (unit.diesOnAnyDamage === true && combatDamage > 0)
+      ) {
         killed.push(unit.id);
       }
     }

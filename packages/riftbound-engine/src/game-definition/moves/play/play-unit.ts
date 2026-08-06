@@ -20,7 +20,7 @@ import {
   isBattlefieldZone,
 } from "../../../zones/zone-configs";
 import {
-  hasStaticEffect,
+  staticEnterReadyApplies,
   canPlayToOpenBattlefield,
   playOnlyToConqueredBattlefield,
   consumeEntersReadyReplacement,
@@ -75,6 +75,10 @@ export const playUnit: Defs["playUnit"] = {
       return false;
     }
     if (state.pendingChoice) {
+      return false;
+    }
+    // rule-id: ogn-026-298 — "opponents can't play cards this turn".
+    if (state.cannotPlayCardsThisTurn?.[context.params.playerId as string]) {
       return false;
     }
 
@@ -183,12 +187,17 @@ export const playUnit: Defs["playUnit"] = {
           context.params.cardId as string,
         )
       : undefined;
+    // rule-id: ven-096-166 — board/trash access so self-scaled and friendly
+    // static cost reductions (rule 466) apply to unit plays.
+    const board = { cards: context.cards, zones: context.zones };
     if (
       !canAffordCard(
         state,
         context.params.playerId,
         context.params.cardId,
-        payable && payable.energy < 0 ? { additionalCost: { energy: payable.energy } } : {},
+        payable && payable.energy < 0
+          ? { additionalCost: { energy: payable.energy }, board }
+          : { board },
         createMetaAccessor(context.cards),
         getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
       )
@@ -227,6 +236,8 @@ export const playUnit: Defs["playUnit"] = {
       context.playerId as string,
     );
     const affordPool = { energy: pool.energy + potential, power: pool.power };
+    const board = { cards: context.cards, zones: context.zones };
+    const metaForAfford = createMetaAccessor(context.cards);
 
     const handCards = context.zones.getCardsInZone(
       "hand" as CoreZoneId,
@@ -266,7 +277,18 @@ export const playUnit: Defs["playUnit"] = {
             } satisfies RiftboundMoves["playUnit"])
           : undefined;
 
-      if (!registry.canAfford(cardId as string, affordPool)) {
+      // rule-id: ven-096-166 — gate on canAffordCard with board access so
+      // self-scaled / friendly static cost reductions are visible here.
+      if (
+        !canAffordCard(
+          state,
+          context.playerId as string,
+          cardId as string,
+          { board },
+          metaForAfford,
+          potential,
+        )
+      ) {
         if (paidVariant && standardTiming) {
           results.push(paidVariant);
         }
@@ -426,11 +448,13 @@ export const playUnit: Defs["playUnit"] = {
       }
     }
 
+    // rule-id: ven-096-166 — board/trash access for static cost reductions.
+    const board = { cards: context.cards, zones };
     deductCost(
       draft,
       playerId,
       cardId,
-      energyDiscount > 0 ? { additionalCost: { energy: -energyDiscount } } : {},
+      energyDiscount > 0 ? { additionalCost: { energy: -energyDiscount }, board } : { board },
       createMetaAccessor(context.cards),
     );
 
@@ -491,8 +515,11 @@ export const playUnit: Defs["playUnit"] = {
       cardId,
       ctx: { cards: context.cards, counters, zones },
     });
+    // rule-id: ven-091-166 — a conditional "I enter ready" static must have
+    // its condition evaluated at play time (e.g. score not within 3 of the
+    // Victory Score); an unconditional one always applies.
     const entersReady =
-      replacedReady || hasStaticEffect(cardId, "enter-ready") || paidAccelerate;
+      replacedReady || staticEnterReadyApplies(cardId, draft, playerId) || paidAccelerate;
     if (!entersReady) {
       counters.setFlag(cardId as CoreCardId, "exhausted", true);
     }

@@ -378,6 +378,14 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
 
       const baseMeta = meta ?? { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false };
 
+      // rule-sfd-068-221: engine keeps Equipment might as a separate term summed
+      // from meta.equippedWith via the registry; surface it so the UI's effective
+      // Might badge includes attached gear.
+      let equipmentMightBonus = 0;
+      for (const equipId of baseMeta.equippedWith ?? []) {
+        equipmentMightBonus += getGlobalCardRegistry().getMightBonus(equipId as string);
+      }
+
       return {
         cardType: def?.cardType ?? "unknown",
         controller: cardInstance?.controller ?? "",
@@ -385,7 +393,7 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
         domain: def?.domain,
         energyCost: def?.energyCost,
         id: cardId,
-        meta: { ...baseMeta, exhausted: exhaustedFromFlags, stunned: stunnedFromFlags },
+        meta: { ...baseMeta, equipmentMightBonus, exhausted: exhaustedFromFlags, stunned: stunnedFromFlags },
         might: def && "might" in def ? (def as Record<string, unknown>).might as number : undefined,
         name: def?.name ?? cardId,
         owner: cardInstance?.owner ?? "",

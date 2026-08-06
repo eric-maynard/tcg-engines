@@ -28,10 +28,14 @@ import type { RiftboundCardMeta, RiftboundGameState } from "../types";
  */
 export interface TargetDescriptor {
   readonly type: string;
+  /** rule-id: ven-150-166 — any-of card-type list ("units, gear, and/or runes"). */
+  readonly types?: readonly string[];
   readonly controller?: "friendly" | "enemy" | "any";
   readonly location?: string;
   readonly filter?: TargetFilter | TargetFilter[];
   readonly quantity?: number | "all";
+  /** Parser sets this for "another"/"other" wording. */
+  readonly excludeSelf?: boolean;
 }
 
 /** Single filter clause — string state literal or object predicate. */
@@ -65,6 +69,12 @@ export interface TargetResolverContext {
    * trigger being resolved, for `{ type: "trigger-source" }` ("…[Stun] it").
    */
   readonly triggerSourceId?: string;
+  /**
+   * rule-id: ogs-002-024 — the caster-chosen battlefield zone
+   * (`battlefield-<bfId>`) for `location: "battlefield"` ("… at A
+   * battlefield"). When set, only cards in that one zone match.
+   */
+  readonly battlefieldZone?: string;
   readonly draft: RiftboundGameState;
   readonly zones: {
     getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
@@ -75,6 +85,35 @@ export interface TargetResolverContext {
     getCardController?: (cardId: CoreCardId) => string | undefined;
     getCardMeta?: (cardId: CoreCardId) => Record<string, unknown> | undefined;
   };
+}
+
+/**
+ * rule-id: ogs-002-024 — "… all <units> at A battlefield": a programmatic
+ * `quantity:"all"` selection scoped to ONE caster-chosen battlefield. The
+ * battlefield (not the units) is the play-time choice.
+ */
+export function isAllAtOneBattlefield(target: unknown): boolean {
+  if (!target || typeof target !== "object") {
+    return false;
+  }
+  const t = target as { type?: string; quantity?: unknown; location?: string };
+  return t.type !== "battlefield" && t.quantity === "all" && t.location === "battlefield";
+}
+
+/**
+ * rule-id: ogs-002-024 — when bound targets are a single battlefield id for
+ * an all-at-one-battlefield descriptor, return the pinned unit zone.
+ */
+export function boundBattlefieldZone(
+  target: unknown,
+  boundTargets: readonly string[] | undefined,
+  draft: RiftboundGameState,
+): string | undefined {
+  if (!isAllAtOneBattlefield(target) || boundTargets?.length !== 1) {
+    return undefined;
+  }
+  const bfId = boundTargets[0] as string;
+  return draft.battlefields?.[bfId] ? `battlefield-${bfId}` : undefined;
 }
 
 /**
@@ -146,7 +185,20 @@ export function resolveTarget(
   const registry = getGlobalCardRegistry();
   let filtered = candidates;
 
-  if (target.type === "unit") {
+  if (target.types && target.types.length > 0) {
+    // rule-id: ven-150-166 — "units, gear, and/or runes": one mixed pool over
+    // an any-of type list. Runes live in each player's runePool, not on the
+    // board, so pull them in when the list names them.
+    const want = new Set(target.types);
+    const pool = want.has("rune") ? [...candidates, ...getRunePoolCardIds(ctx)] : candidates;
+    filtered = pool.filter((id) => {
+      const ct = registry.get(id)?.cardType;
+      if (!ct) return false;
+      if (want.has(ct)) return true;
+      if (ct === "equipment" && want.has("gear")) return true;
+      return false;
+    });
+  } else if (target.type === "unit") {
     filtered = filtered.filter((id) => {
       const def = registry.get(id);
       return def?.cardType === "unit";
@@ -215,9 +267,14 @@ export function resolveTarget(
       return ctx.sameZone === undefined || zone === ctx.sameZone;
     });
   } else if (target.location?.startsWith("battlefield")) {
+    // rule-id: ogs-002-024 — "all enemy units at A battlefield": once the
+    // caster has chosen the battlefield, pin to that single zone; unpinned
+    // (legality probes / candidate enumeration) any battlefield matches.
     filtered = filtered.filter((id) => {
       const zone = ctx.zones.getCardZone(id as CoreCardId) ?? "";
-      return zone.startsWith("battlefield");
+      return ctx.battlefieldZone === undefined
+        ? zone.startsWith("battlefield")
+        : zone === ctx.battlefieldZone;
     });
   }
 
@@ -227,8 +284,9 @@ export function resolveTarget(
     filtered = filtered.filter((id) => filters.every((f) => matchesFilter(id, f, ctx)));
   }
 
-  // Exclude self (unless explicitly targeting self)
-  if (target.type !== "self") {
+  // rule-id: ogn-097-298 (355.9.c) — an ability of a permanent can target
+  // that permanent; only drop the source when the text says "another"/"other".
+  if (target.excludeSelf) {
     filtered = filtered.filter((id) => id !== ctx.sourceCardId);
   }
 
@@ -278,6 +336,19 @@ function getBoardCardIds(ctx: TargetResolverContext): string[] {
   // Targeting effects. Champions must be played (paid for) from the champion
   // Zone to the base before they become targetable.
 
+  return ids;
+}
+
+/** rule-id: ven-150-166 — rune cards in every player's rune pool. */
+function getRunePoolCardIds(ctx: TargetResolverContext): string[] {
+  const ids: string[] = [];
+  for (const playerId of Object.keys(ctx.draft.players)) {
+    ids.push(
+      ...ctx.zones
+        .getCardsInZone("runePool" as CoreZoneId, playerId as CorePlayerId)
+        .map((c) => c as string),
+    );
+  }
   return ids;
 }
 
@@ -374,8 +445,69 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
   if ("name" in filter && typeof filter.name === "string") {
     return def?.name === filter.name;
   }
+  // rule-id: ven-015-166 — "enemy Calm unit" must match the unit's domain
+  if ("domain" in filter && typeof filter.domain === "string") {
+    return hasDomain(def, filter.domain);
+  }
+  // rule-id: ven-040-166 — "unit that's in combat with an enemy Fury unit or
+  // that's being chosen by an enemy Fury spell": the candidate must share a
+  // battlefield combat (both have a combatRole) with an opposing unit matching
+  // `inCombatWith`, or be a bound target of a pending opposing spell matching
+  // `orChosenBySpell`. "enemy" is relative to the resolving player.
+  if ("inCombatWith" in filter && typeof filter.inCombatWith === "object" && filter.inCombatWith) {
+    const spec = filter.inCombatWith as { controller?: string; domain?: string };
+    const controllerOf = (id: string): string =>
+      ctx.cards.getCardController?.(id as CoreCardId) ?? ctx.cards.getCardOwner(id as CoreCardId) ?? "";
+    const matchesSide = (id: string, want: string | undefined): boolean => {
+      if (!want || want === "any") return true;
+      const c = controllerOf(id);
+      if (want === "enemy") return c !== "" && c !== ctx.playerId && !areAllies(ctx.draft, ctx.playerId, c);
+      if (want === "friendly") return c === ctx.playerId;
+      return true;
+    };
+    const zone = ctx.zones.getCardZone(cardId as CoreCardId) ?? "";
+    if (meta?.combatRole && zone.startsWith("battlefield-")) {
+      const others = ctx.zones.getCardsInZone(zone as CoreZoneId).map((c) => c as string);
+      const hit = others.some((oid) => {
+        if (oid === cardId) return false;
+        const odef = registry.get(oid);
+        if (odef?.cardType !== "unit") return false;
+        const ometa = ctx.cards.getCardMeta?.(oid as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        if (!ometa?.combatRole || ometa.combatRole === meta.combatRole) return false;
+        if (!matchesSide(oid, spec.controller)) return false;
+        return spec.domain === undefined || hasDomain(odef, spec.domain);
+      });
+      if (hit) return true;
+    }
+    const bySpell = (filter as { orChosenBySpell?: { controller?: string; domain?: string } })
+      .orChosenBySpell;
+    if (bySpell && typeof bySpell === "object") {
+      const items = ctx.draft.interaction?.chain?.items ?? [];
+      return items.some((item) => {
+        if (item.type !== "spell" || item.countered) return false;
+        if (!(item.targets ?? []).includes(cardId)) return false;
+        const c = item.controller;
+        if (bySpell.controller === "enemy") {
+          if (!c || c === ctx.playerId || areAllies(ctx.draft, ctx.playerId, c)) return false;
+        } else if (bySpell.controller === "friendly" && c !== ctx.playerId) {
+          return false;
+        }
+        return bySpell.domain === undefined || hasDomain(registry.get(item.cardId), bySpell.domain);
+      });
+    }
+    return false;
+  }
 
   return true;
+}
+
+function hasDomain(def: unknown, want: string): boolean {
+  const raw = (def as { domain?: string | string[] } | undefined)?.domain;
+  const domains = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+  const w = want.toLowerCase();
+  return domains.some((d) => d.toLowerCase() === w);
 }
 
 function effectiveMight(

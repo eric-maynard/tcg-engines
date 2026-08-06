@@ -12,4 +12,5 @@ export const stalwartPoro: UnitCard = {
   rarity: "common",
   rulesText: "[Shield] (+1 [Might] while I'm a defender.)",
   setId: "OGN",
+  tags: ["Poro"], // rule-id: unl-046-219 — printed PORO tag (missing from set data)
 };

@@ -30,10 +30,12 @@ import {
   applyMove,
   createCard,
   createMinimalGameState,
+  getCardZone,
   getChainActivePlayer,
   getChainItems,
   getInteractionState,
   getState,
+  getZone,
   isChainActive,
   passChainPriority,
 } from "./helpers";
@@ -703,12 +705,13 @@ describe("Rule 544: Countering negates a spell on the chain", () => {
     });
     expect(counterResult.success).toBe(true);
 
-    // Rule 544.1: the item is flagged countered. When the chain resolves
-    // `executeResolvedItem` short-circuits on `resolved.countered === true`
-    // Which skips the effect execution (verified via unit inspection of
-    // `chain-moves.ts` `executeResolvedItem`).
-    const afterItems = getChainItems(engine);
-    expect(afterItems[0]?.countered).toBe(true);
+    // Rule 544.1 / 425.1.a (ogn-064-298): the countered spell is cleared from
+    // the chain immediately and put in its owner's trash without its effect
+    // ever executing — no further pass round is needed to pop it.
+    expect(getChainItems(engine)).toHaveLength(0);
+    expect(isChainActive(engine)).toBe(false);
+    expect(getCardZone(engine, "draw-spell")).toBe("trash");
+    expect(getZone(engine, P1, "hand")).toHaveLength(0);
   });
 
   it("Rule 544.3: countering does not refund costs paid", () => {

@@ -7,7 +7,7 @@ import type {
   MoveEffect,
   SequenceEffect,
 } from "@tcg/riftbound-types/abilities/effect-types";
-import type { AnyTarget, Location } from "@tcg/riftbound-types/targeting";
+import type { AnyTarget, Filter, Location, SimpleFilter } from "@tcg/riftbound-types/targeting";
 import { parseEffect } from "./effect";
 import { parseEffects } from "./effects";
 import { parseLocationString } from "./targets";
@@ -94,8 +94,10 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
   }
 
   // "any number of" pattern
+  // rule-id: ven-091-166 (Corrupted Dragon) — optional "here" location and
+  // "each with N :rb_might: or less" per-unit Might filter on the chosen set.
   const anyNumberMatch = text.match(
-    /^Move any number of (your |friendly |enemy )?((?:\w+\s+)?units?)(?:\s+at a battlefield)?\s+to\s+(base|here|its base|your base|their base|a battlefield|battlefield|this battlefield|an open battlefield|a single location)\.?$/i,
+    /^Move any number of (your |friendly |enemy )?((?:\w+\s+)?units?)(?:\s+at a battlefield|\s+(here))?(?:\s+(?:each )?with (\d+) :rb_might: or (less|more))?\s+to\s+(base|here|its base|your base|their base|a battlefield|battlefield|this battlefield|an open battlefield|a single location)\.?$/i,
   );
   if (anyNumberMatch) {
     const controllerRaw = anyNumberMatch[1]?.trim().toLowerCase();
@@ -104,15 +106,22 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
     // (e.g. "token") is a target filter that must not be dropped.
     const unitPhrase = anyNumberMatch[2].toLowerCase();
     const qualifier = unitPhrase.replace(/\s*units?$/, "").trim();
+    const hereStr = anyNumberMatch[3];
+    const mightN = anyNumberMatch[4];
+    const mightDir = anyNumberMatch[5]?.toLowerCase();
     const target: {
       type: "unit";
       controller?: "friendly" | "enemy";
+      location?: Location;
       quantity: "any";
-      filter?: Filter;
+      filter?: Filter | Filter[];
     } = {
       quantity: "any",
       type: "unit",
     };
+    if (hereStr) {
+      target.location = "here";
+    }
     if (controllerRaw === "your" || controllerRaw === "friendly") {
       target.controller = "friendly";
     } else if (controllerRaw === "enemy") {
@@ -137,7 +146,12 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
         ? (qualifier as SimpleFilter)
         : { tag: qualifier.charAt(0).toUpperCase() + qualifier.slice(1) };
     }
-    const to = parseLocationString(anyNumberMatch[3]);
+    if (mightN) {
+      const n = Number.parseInt(mightN, 10);
+      const mightFilter = { might: mightDir === "more" ? { gte: n } : { lte: n } } as Filter;
+      target.filter = target.filter ? [target.filter as Filter, mightFilter] : mightFilter;
+    }
+    const to = parseLocationString(anyNumberMatch[6]);
     return { target: target as AnyTarget, to, type: "move" };
   }
 
@@ -189,7 +203,10 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
       target.quantity = { upTo: wordToNumber(upToNumMatch[1]) };
     }
 
-    const to: Location = destStr ? parseLocationString(destStr) : "base";
+    // rule-id: ogn-173-298 (rule 355.4 / 355.4.a) — no stated destination means
+    // the controller chooses any valid location other than the current one, so
+    // emit "choose" (engine raises a choose-destination prompt) rather than base.
+    const to: Location | "choose" = destStr ? parseLocationString(destStr) : "choose";
 
     const effect: MoveEffect = { target: target as AnyTarget, to, type: "move" };
     if (fromStr) {
@@ -221,7 +238,8 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
       target.excludeSelf = true;
     }
     const toStr = flexMoveMatch[4];
-    const to: Location = toStr ? parseLocationString(toStr) : "base";
+    // rule-id: ogn-173-298 (rule 355.4) — absent destination is a player choice.
+    const to: Location | "choose" = toStr ? parseLocationString(toStr) : "choose";
     return { target: target as AnyTarget, to, type: "move" } as MoveEffect;
   }
 

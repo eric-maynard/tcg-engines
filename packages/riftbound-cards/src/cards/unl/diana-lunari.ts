@@ -25,8 +25,10 @@ const abilities: Ability[] = [
       type: "sequence",
     },
     optional: true,
+    // rule-id: unl-079-219 — "When a showdown begins here" covers non-combat
+    // showdowns too, so key off the engine's showdown-begin event (not attack).
     trigger: {
-      event: "attack",
+      event: "showdown-begin",
       on: { location: "here" },
     },
     type: "triggered",

@@ -8,6 +8,9 @@ export function handle_doubleMight(effect: ExecutableEffect, ctx: EffectContext,
   // rule-id: ven-142-166 — "double a unit's Might this turn": add the
   // unit's current effective Might to its turn-scoped mightModifier
   // (reset at Ending Step alongside other modify-might buffs).
+  // rule-id: sfd-110-221 (rule 466.7.c) — duration:"combat" also records the
+  // delta in combatMightModifier so Combat Cleanup can revert it.
+  const thisCombat = effect.duration === "combat";
   const targets = getTargetIds(effect, ctx);
   const dmTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
   for (const targetId of dmTargets) {
@@ -19,6 +22,9 @@ export function handle_doubleMight(effect: ExecutableEffect, ctx: EffectContext,
       targetId as CoreCardId,
       {
         mightModifier: (meta?.mightModifier ?? 0) + mightBefore,
+        ...(thisCombat
+          ? { combatMightModifier: (meta?.combatMightModifier ?? 0) + mightBefore }
+          : {}),
       } as unknown as Record<string, unknown>,
     );
     checkBecomesMighty(targetId, mightBefore, ctx);

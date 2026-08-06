@@ -158,6 +158,19 @@ export interface NameFilter {
 }
 
 /**
+ * rule-id: ven-040-166 — "unit that's in combat with an enemy Fury unit or
+ * that's being chosen by an enemy Fury spell". `controller` is relative to
+ * the resolving player.
+ */
+export interface InCombatWithFilter {
+  readonly inCombatWith: { readonly controller?: "friendly" | "enemy" | "any"; readonly domain?: string };
+  readonly orChosenBySpell?: {
+    readonly controller?: "friendly" | "enemy" | "any";
+    readonly domain?: string;
+  };
+}
+
+/**
  * Comparison operators for numeric filters
  */
 export interface Comparison {
@@ -180,7 +193,8 @@ export type Filter =
   | EnergyCostFilter
   | PowerCostFilter
   | KeywordFilter
-  | NameFilter;
+  | NameFilter
+  | InCombatWithFilter;
 
 /**
  * Type guard for simple filters
@@ -261,6 +275,13 @@ export function isQuantityRange(quantity: Quantity): quantity is QuantityRange {
 export interface Target {
   /** Type of card to target */
   readonly type: CardType;
+
+  /**
+   * rule-id: ven-150-166 — "units, gear, and/or runes": any-of card-type
+   * list for a single mixed pick pool. When present it supersedes `type`
+   * for candidate filtering (`type` stays as a coarse fallback).
+   */
+  readonly types?: readonly CardType[];
 
   /** Who controls the target */
   readonly controller?: TargetController;

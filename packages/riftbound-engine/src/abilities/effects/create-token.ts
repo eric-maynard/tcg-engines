@@ -103,9 +103,11 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     tokenDef.keywords?.includes("CopyOnPlay") && ctx.sourceCardId
       ? registry.get(ctx.sourceCardId)
       : undefined;
+  const createdIds: string[] = [];
   for (let i = 0; i < count; i++) {
     const tokenId = `token-${tokenSlug}-${Date.now()}-${i}`;
     ctx.createCardInZone(tokenId, targetZone, ctx.playerId);
+    createdIds.push(tokenId);
     // Rule 143.4 / 185.2.d: token units enter play exhausted; gear tokens
     // enter ready unless the effect says otherwise (sfd-004-221).
     if ((tokenDef.type !== "gear" || effect.ready === false) && !tokenEntersReady) {
@@ -138,6 +140,26 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     // fire after registry registration so trigger effects can resolve it.
     if (tokenDef.type !== "gear") {
       ctx.fireTriggers?.({ cardId: tokenId, playerId: ctx.playerId, type: "play-token-unit" });
+    }
+  }
+  // rule-id: ogs-015-024 (rule 439.2.b.1) — with no zone specified, a unit
+  // token may enter at base or any battlefield its controller controls. The
+  // tokens are minted in base; when a controlled battlefield exists the
+  // controller is prompted per token via a `created` choose-destination.
+  if (!effect.location && tokenDef.type !== "gear" && !ctx.draft.pendingChoice) {
+    const controlled = Object.entries(ctx.draft.battlefields ?? {})
+      .filter(([, bf]) => bf.controller === ctx.playerId)
+      .map(([bfId]) => `battlefield-${bfId}`);
+    const [first, ...rest] = createdIds;
+    if (controlled.length > 0 && first !== undefined) {
+      ctx.draft.pendingChoice = {
+        cardId: first,
+        created: true,
+        options: ["base", ...controlled],
+        playerId: ctx.playerId,
+        queue: rest,
+        type: "choose-destination",
+      };
     }
   }
 }

@@ -12,4 +12,5 @@ export const poutyPoro: UnitCard = {
   rarity: "common",
   rulesText: "[Deflect] (Opponents must pay [rainbow] to choose me with a spell or ability.)",
   setId: "OGN",
+  tags: ["Poro"], // rule-id: unl-046-219 — printed PORO tag (missing from set data)
 };

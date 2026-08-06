@@ -34,6 +34,7 @@ export type TriggerEvent =
   | "lose-combat" // When losing a combat
   | "conquer" // When conquering a battlefield
   | "hold" // When holding a battlefield (scoring)
+  | "showdown-begin" // rule-id: unl-079-219 — When a showdown (combat or non-combat) begins
 
   // Movement events
   | "move" // When moving

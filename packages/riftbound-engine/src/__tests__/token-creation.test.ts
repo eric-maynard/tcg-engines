@@ -255,6 +255,33 @@ describe("Token Creation Effect (rule 170-178)", () => {
     expect(baseCards).toContain(ctx.createdTokens[0]!);
   });
 
+  // rule-id: ogs-015-024 (rule 439.2.b.1) — unlocated unit tokens may enter
+  // at base or a controlled battlefield; each token is prompted in turn.
+  test("no location + controlled battlefield prompts a per-token destination choice", () => {
+    const draft = createMockState();
+    const ctx = createMockEffectContext(draft, { playerId: "p1", sourceCardId: "source-card" });
+    executeEffect(
+      { amount: 4, token: { might: 1, name: "Recruit", type: "unit" }, type: "create-token" },
+      ctx,
+    );
+    expect(ctx.createdTokens).toHaveLength(4);
+    expect(draft.pendingChoice).toMatchObject({
+      cardId: ctx.createdTokens[0],
+      created: true,
+      options: ["base", "battlefield-bf-1"],
+      playerId: "p1",
+      queue: ctx.createdTokens.slice(1),
+      type: "choose-destination",
+    });
+
+    const uncontrolled = createMockState({
+      battlefields: { "bf-1": { contested: false, controller: "p2", id: "bf-1" } },
+    });
+    const ctx2 = createMockEffectContext(uncontrolled, { playerId: "p1", sourceCardId: "s" });
+    executeEffect({ token: { might: 1, name: "Recruit", type: "unit" }, type: "create-token" }, ctx2);
+    expect(uncontrolled.pendingChoice).toBeUndefined();
+  });
+
   test("token with keywords is registered with those keywords", () => {
     const draft = createMockState();
     const ctx = createMockEffectContext(draft, {

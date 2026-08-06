@@ -91,6 +91,18 @@ function renderBattlefields() {
     const opponentUnits = unitsAtBf.filter(c => c.owner === opponent);
     const playerUnits = unitsAtBf.filter(c => c.owner === viewingPlayer);
 
+    // rule-id: ogn-197-298 — Rule 723 (Hidden): the engine parks hidden cards
+    // in a sibling `facedown-${bfId}` zone, not `battlefield-${bfId}`, so they
+    // must be read separately or they never appear on the board. The owner
+    // sees the face (private info they already know); the opponent sees a back.
+    const fdZoneId = `facedown-${bfId}`;
+    const facedownAtBf = zones[fdZoneId] || [];
+    const renderFacedown = (c) => (c.owner === viewingPlayer || isSandboxGame)
+      ? `<div class="bf-facedown" title="Hidden (facedown)">${renderCardElement(c, false, fdZoneId)}</div>`
+      : renderCardElement({}, true);
+    const opponentFacedownHtml = facedownAtBf.filter(c => c.owner === opponent).map(renderFacedown).join("");
+    const playerFacedownHtml = facedownAtBf.filter(c => c.owner === viewingPlayer).map(renderFacedown).join("");
+
     const bfName = bfNames[bfId] || bfId.replace(/^ogn-|^sfd-|^unl-/g, "").replace(/-\d+$/, "");
 
     // Get battlefield card image
@@ -119,11 +131,11 @@ function renderBattlefields() {
             <div class="bf-control">${controlLabel}${isContested ? " (Contested)" : ""}${hasShowdown ? " — " + (activeShowdown.isCombatShowdown ? "Combat" : "Showdown") : ""}</div>
           </div>
           <div class="bf-units opponent-side">
-            ${opponentUnits.map(c => renderCardElement(c, false, bfZoneId)).join("") || ""}
+            ${opponentUnits.map(c => renderCardElement(c, false, bfZoneId)).join("") || ""}${opponentFacedownHtml}
           </div>
           <div class="bf-divider"></div>
           <div class="bf-units player-side">
-            ${playerUnits.map(c => renderCardElement(c, false, bfZoneId)).join("") || ""}
+            ${playerUnits.map(c => renderCardElement(c, false, bfZoneId)).join("") || ""}${playerFacedownHtml}
           </div>
         </div>
       </div>

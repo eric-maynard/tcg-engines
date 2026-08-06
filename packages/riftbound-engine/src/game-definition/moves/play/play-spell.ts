@@ -9,7 +9,11 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { isUntargetable, resolveTarget } from "../../../abilities/target-resolver";
+import {
+  isAllAtOneBattlefield,
+  isUntargetable,
+  resolveTarget,
+} from "../../../abilities/target-resolver";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
@@ -21,11 +25,13 @@ import {
   getPotentialRuneEnergy,
   canAffordCard,
   deductCost,
+  getEffectiveSpellRepeatCost,
 } from "./cost";
 import type { SpellEffectTargetShape } from "./targeting";
 import {
   collectSequenceTargetSlots,
   findAmountReferenceTarget,
+  findReplacementChosenTarget,
   findSequenceLeadTarget,
   findSplitDamageEffect,
   enumerateSubsetsUpTo,
@@ -43,6 +49,10 @@ export const playSpell: Defs["playSpell"] = {
       return false;
     }
     if (state.pendingChoice) {
+      return false;
+    }
+    // rule-id: ogn-026-298 — "opponents can't play cards this turn".
+    if (state.cannotPlayCardsThisTurn?.[context.params.playerId as string]) {
       return false;
     }
 
@@ -73,8 +83,14 @@ export const playSpell: Defs["playSpell"] = {
     // Spells without Repeat.
     const reqRepeatCount = Math.max(0, context.params.repeatCount ?? 0);
     if (reqRepeatCount > 0) {
-      const registryCheck = getGlobalCardRegistry();
-      const repeatTiers = registryCheck.getSpellRepeatCost(context.params.cardId);
+      // rule-id: unl-146-219 — printed Repeat plus board-granted Repeat
+      // ("While I'm in a showdown, your spells have [Repeat] [2][chaos]").
+      const repeatTiers = getEffectiveSpellRepeatCost(
+        state,
+        context.params.playerId,
+        context.params.cardId,
+        { cards: context.cards, zones: context.zones },
+      );
       // rule-id: sfd-122-221 — Rule 820.1.c.3 / 820.3: each Repeat instance
       // can be paid only once, so repeatCount is bounded by the number of
       // Repeat instances on the spell.
@@ -178,10 +194,43 @@ export const playSpell: Defs["playSpell"] = {
       return false;
     }
 
+    // rule-id: ven-040-166 (rule 355.8) — an explicitly supplied single card
+    // target must itself satisfy the spell's target descriptor (controller /
+    // location / filter such as "in combat with an enemy Fury unit"); the
+    // ≥1-legal-target gate above only proves SOME candidate exists.
+    const spellTgt = (spellAbility?.effect as SpellEffectTargetShape | undefined)?.target;
+    if (
+      context.params.targets?.length === 1 &&
+      spellTgt &&
+      typeof spellTgt !== "string" &&
+      !(spellAbility?.effect as SpellEffectTargetShape).player &&
+      spellTgt.type !== "self" &&
+      spellTgt.type !== "player" &&
+      spellTgt.type !== "battlefield" &&
+      spellTgt.type !== "pending-value" &&
+      spellTgt.type !== "trigger-source" &&
+      (spellTgt.quantity === undefined || spellTgt.quantity === 1)
+    ) {
+      const pool = resolveTarget(
+        { ...spellTgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+        conditionResolverCtx,
+      );
+      if (!pool.includes(context.params.targets[0] as string)) {
+        return false;
+      }
+    }
+    // rule-id: ogs-002-024 — "all enemy units at A battlefield": supplied
+    // targets name the chosen battlefield and must be exactly one real one.
+    if (isAllAtOneBattlefield(spellTgt) && context.params.targets?.length) {
+      const t = context.params.targets;
+      if (t.length !== 1 || !state.battlefields?.[t[0] as string]) {
+        return false;
+      }
+    }
+
     // rule-id: ogn-256-298 (Fox-Fire) — a `totalMight` descriptor caps the
     // SUMMED Might of the caster-chosen set, all at one battlefield; reject
     // supplied targets that exceed it rather than trusting the client.
-    const spellTgt = (spellAbility?.effect as SpellEffectTargetShape | undefined)?.target;
     const totalMightCap =
       spellTgt && typeof spellTgt !== "string"
         ? (spellTgt as { totalMight?: { lte?: number } }).totalMight?.lte
@@ -202,6 +251,39 @@ export const playSpell: Defs["playSpell"] = {
           !chosen.every((id) => context.zones.getCardZone(id as CoreCardId) === zone)
         ) {
           return false;
+        }
+      }
+    }
+
+    // rule-id: unl-192-219 (rule 355.14.b/c / 355.15) — split-damage targets
+    // are [mightRef, ...splits]; the number of split targets may not exceed
+    // the reference unit's current Might, and each must be a legal enemy
+    // split candidate. Validate supplied targets rather than trusting the
+    // client (the enumerator already caps at N).
+    if (context.params.targets?.length) {
+      const spellEffectShape = spellAbility?.effect as SpellEffectTargetShape | undefined;
+      const refTgt = findAmountReferenceTarget(spellEffectShape);
+      const splitEffect = refTgt ? findSplitDamageEffect(spellEffectShape) : undefined;
+      const splitDesc =
+        splitEffect?.target && typeof splitEffect.target !== "string"
+          ? splitEffect.target
+          : undefined;
+      if (refTgt && splitDesc) {
+        const [refId, ...splits] = context.params.targets;
+        const cap = getCardEffectiveMight(refId as string, (c) => context.cards.getCardMeta?.(c));
+        if (splits.length > cap) {
+          return false;
+        }
+        if (splits.length > 0) {
+          const splitPool = new Set(
+            resolveTarget(
+              { ...splitDesc, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+              conditionResolverCtx,
+            ) as string[],
+          );
+          if (new Set(splits).size !== splits.length || !splits.every((id) => splitPool.has(id))) {
+            return false;
+          }
         }
       }
     }
@@ -326,6 +408,10 @@ export const playSpell: Defs["playSpell"] = {
       const tgt =
         spellEffect?.target ??
         refTgt ??
+        // rule-id: ogn-254-298 (rule 355.8) — "Choose a unit. Kill it the
+        // next time it takes damage": the chosen unit lives on the nested
+        // replacement; lift it so the caster picks at play time.
+        findReplacementChosenTarget(spellEffect) ??
         (secondTgt ? seqSlots?.[0] : findSequenceLeadTarget(spellEffect));
       const isCardTarget =
         tgt !== undefined &&
@@ -533,6 +619,36 @@ export const playSpell: Defs["playSpell"] = {
             }
           }
         }
+      } else if (isAllAtOneBattlefield(tgt) && Object.keys(state.battlefields ?? {}).length > 0) {
+        // rule-id: ogs-002-024 (rule 355.8) — "all enemy units at A
+        // battlefield": the battlefield is the caster's play-time choice.
+        // Enumerate one Play per battlefield, locking it as targets [bfId];
+        // the affected units are re-derived at resolution.
+        for (const bfId of Object.keys(state.battlefields)) {
+          baseVariants.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: [bfId],
+          });
+        }
+      } else if (spellEffect?.type === "counter") {
+        // rule-id: ogn-064-298 (rule 355.8) — "Counter a spell": the spell to
+        // counter is a caster-chosen target locked at play time. Enumerate one
+        // Play per legal chain item so the caster picks when several are
+        // pending (the handler reads it from boundTargets).
+        const wantsSpell =
+          spellEffect.target === undefined || (spellEffect.target as unknown) === "spell";
+        const seen = new Set<string>();
+        for (const item of interaction.chain?.items ?? []) {
+          if (item.countered || (wantsSpell && item.type !== "spell")) continue;
+          if (seen.has(item.cardId)) continue;
+          seen.add(item.cardId);
+          baseVariants.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: [item.cardId],
+          });
+        }
       } else {
         baseVariants.push({
           cardId: cardId as string,
@@ -580,7 +696,13 @@ export const playSpell: Defs["playSpell"] = {
       // play. Skip when every tier is free of energy AND power to avoid an
       // unbounded loop (rule 820.1.c.2 / 820.3 — canAffordCard bounds n
       // once any tier charges a resource).
-      const repeatCost = registry.getSpellRepeatCost(cardId as string);
+      // rule-id: unl-146-219 — include board-granted Repeat instances.
+      const repeatCost = getEffectiveSpellRepeatCost(
+        state,
+        context.playerId as string,
+        cardId as string,
+        board,
+      );
       if (repeatCost?.some((t) => t.energy > 0 || t.power.length > 0)) {
         const meta = createMetaAccessor(context.cards);
         for (const base of baseVariants) {
@@ -658,7 +780,11 @@ export const playSpell: Defs["playSpell"] = {
         continue;
       }
       // rule-id: sfd-017-221 (rule 355.8) — lift a sequence's lead target.
-      const tgt = spellEffect?.target ?? findSequenceLeadTarget(spellEffect);
+      // rule-id: ogn-254-298 — lift a "next time it…" replacement's chosen unit.
+      const tgt =
+        spellEffect?.target ??
+        findReplacementChosenTarget(spellEffect) ??
+        findSequenceLeadTarget(spellEffect);
       const isCardTarget =
         tgt !== undefined &&
         typeof tgt !== "string" &&
@@ -781,6 +907,10 @@ export const playSpell: Defs["playSpell"] = {
         resolveTo: viaFlow ? "banishment" : "trash",
         targets,
         type: "spell",
+        // rule-id: ven-015-166 — carry "This can't be countered." onto the chain item.
+        ...((spellAbility as { uncounterable?: boolean } | undefined)?.uncounterable
+          ? { uncounterable: true }
+          : {}),
       },
       turnOrder,
     );

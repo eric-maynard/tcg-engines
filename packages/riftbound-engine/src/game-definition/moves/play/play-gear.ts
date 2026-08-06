@@ -33,6 +33,10 @@ export const playGear: Defs["playGear"] = {
     if (state.pendingChoice) {
       return false;
     }
+    // rule-id: ogn-026-298 — "opponents can't play cards this turn".
+    if (state.cannotPlayCardsThisTurn?.[context.params.playerId as string]) {
+      return false;
+    }
     if (state.turn.activePlayer !== context.params.playerId) {
       return false;
     }

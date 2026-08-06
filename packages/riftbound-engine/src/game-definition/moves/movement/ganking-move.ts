@@ -3,7 +3,11 @@
  */
 
 import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
-import { createInteractionState, startShowdown as startShowdownState } from "../../../chain";
+import {
+  createInteractionState,
+  getTurnState,
+  startShowdown as startShowdownState,
+} from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { hasKeyword } from "./helpers";
@@ -29,6 +33,13 @@ export const gankingMove: Defs["gankingMove"] = {
       return false;
     }
     if (state.turn.phase !== "main") {
+      return false;
+    }
+    // rule-id: ogn-125-298 — Rule 140.1.b/c + 589.1.a: a Ganking move is a
+    // Standard Move (Discretionary Action), legal only in a Neutral Open
+    // state (no chain, no showdown).
+    const interaction = state.interaction ?? createInteractionState();
+    if (getTurnState(interaction) !== "neutral-open") {
       return false;
     }
 
@@ -66,6 +77,10 @@ export const gankingMove: Defs["gankingMove"] = {
       return [];
     }
     if (state.turn.phase !== "main") {
+      return [];
+    }
+    // rule-id: ogn-125-298 — Neutral Open only (mirrors standardMove).
+    if (getTurnState(state.interaction ?? createInteractionState()) !== "neutral-open") {
       return [];
     }
 
@@ -174,6 +189,18 @@ export const gankingMove: Defs["gankingMove"] = {
         hasOpponentUnit,
         playerId,
         defender,
+      );
+
+      // rule-id: unl-079-219 (Rule 340 / 548.2): "When a showdown begins
+      // here" fires for BOTH combat and non-combat showdowns.
+      fireTriggers(
+        {
+          battlefieldId: toBattlefield,
+          isCombat: hasOpponentUnit,
+          playerId,
+          type: "showdown-begin",
+        },
+        { cards: context.cards, counters, draft, zones },
       );
 
       // Rule 625.1.c.1 / 625.1.c.2: combat showdown assigns roles and fires

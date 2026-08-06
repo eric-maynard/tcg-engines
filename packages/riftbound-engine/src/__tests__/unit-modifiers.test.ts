@@ -383,6 +383,31 @@ describe("Grant Keyword Effect", () => {
     expect(meta?.grantedKeywords?.[0]?.duration).toBe("permanent");
   });
 
+  // rule-id: ogn-026-298
+  test("CannotPlayCards on a player target marks opponents on game state, not card meta", () => {
+    const draft = createMockState();
+    const ctx = createMockEffectContext(draft, {
+      cards: {
+        "unit-1": { meta: { damage: 0 }, owner: "p1", zone: "base" },
+      },
+      playerId: "p1",
+      sourceCardId: "unit-1",
+    });
+
+    executeEffect(
+      {
+        duration: "turn",
+        keyword: "CannotPlayCards",
+        target: { type: "player", which: "opponent" },
+        type: "grant-keyword",
+      } as unknown as ExecutableEffect,
+      ctx,
+    );
+
+    expect(draft.cannotPlayCardsThisTurn).toEqual({ p2: true });
+    expect(ctx.cardStore.get("unit-1")?.meta.grantedKeywords ?? []).toHaveLength(0);
+  });
+
   test("granted keywords stack with existing ones", () => {
     const draft = createMockState();
     const ctx = createMockEffectContext(draft, {

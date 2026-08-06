@@ -13,4 +13,5 @@ export const mysticPoro: UnitCard = {
   rulesText:
     "[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)",
   setId: "OGN",
+  tags: ["Poro"], // rule-id: unl-046-219 — printed PORO tag (missing from set data)
 };

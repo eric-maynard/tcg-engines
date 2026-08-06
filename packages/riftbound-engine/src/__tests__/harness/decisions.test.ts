@@ -196,7 +196,25 @@ describe("action decisions: grouping and the play bundle", () => {
       .hand(P1, BULLET_TIME, "bt")
       .build();
     const opt = game.p1.option("cast", "bt");
-    expect(opt?.fields).toEqual([{ arg: "x", kind: "int", max: 3, min: 0, name: "xAmount", required: true }]);
+    // rule-id: ogs-002-024 — "all enemy units at A battlefield" also exposes
+    // the battlefield pick as a targets field (single option here).
+    expect(opt?.fields).toContainEqual({
+      arg: "x",
+      kind: "int",
+      max: 3,
+      min: 0,
+      name: "xAmount",
+      required: true,
+    });
+    expect(opt?.fields).toContainEqual({
+      arg: "targets",
+      kind: "cards",
+      max: 1,
+      min: 1,
+      name: "targets",
+      options: [["bf1"]],
+      required: true,
+    });
     const amb = await game.p1.try((s) => s.cast("bt"));
     expect(!amb.ok && amb.error.message).toContain("needs `x` — one of: 0..3");
     const tooMuch = await game.p1.try((s) => s.cast("bt", { x: 4 }));

@@ -314,6 +314,19 @@ export class CardDefinitionRegistry {
       if (leftover < (needed.rainbow ?? 0)) {
         return false;
       }
+      // Rule 135.2.e.6.c (rule-id: ven-150-166): a multi-domain card's
+      // printed pips are hybrid — payable only with Power of the card's own
+      // Domains (or pooled [rainbow] Power, Rule 135.2.e.5.b).
+      if (Array.isArray(def.domain) && def.domain.length > 1 && (needed.rainbow ?? 0) > 0) {
+        const anyPool = pool.power as Partial<Record<string, number>>;
+        let hybridAvailable = anyPool.rainbow ?? 0;
+        for (const d of def.domain) {
+          hybridAvailable += Math.max(0, (anyPool[d] ?? 0) - (needed[d] ?? 0));
+        }
+        if (hybridAvailable < (needed.rainbow ?? 0)) {
+          return false;
+        }
+      }
     }
 
     return true;

@@ -30,6 +30,26 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     }
     return;
   }
+  // rule-id: ogn-221-298 (Imperial Decree) — "When any unit takes damage this
+  // turn, kill it": a turn-wide, unbound take-damage entry in
+  // activeReplacements is a criteria reaction, not a per-unit choice. After a
+  // unit actually takes (unprevented) damage, apply its nested effect to it.
+  const reactAnyUnitDamaged = (targetId: string): void => {
+    const list = ctx.draft.activeReplacements as
+      | { replaces?: string; replacement?: unknown; duration?: string; targetCardIds?: string[] }[]
+      | undefined;
+    for (const e of list ?? []) {
+      if (
+        e?.replaces === "take-damage" &&
+        e.duration === "turn" &&
+        !e.targetCardIds &&
+        e.replacement &&
+        typeof e.replacement === "object"
+      ) {
+        executeEffect(e.replacement as ExecutableEffect, { ...ctx, boundTargets: [targetId] });
+      }
+    }
+  };
   // Rule 355.14.a-c / 355.15: split damage. The caster first chooses a
   // friendly reference unit as a standard target (raised via choose-target
   // when >1 candidate), then up to N enemy units as split targets where
@@ -165,6 +185,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
         targetId as CoreCardId,
         { damage: priorDamage + dmg } as unknown as Record<string, unknown>,
       );
+      if (dmg > 0) reactAnyUnitDamaged(targetId);
     }
     return;
   }
@@ -204,6 +225,26 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     }
   }
   for (const { targetId, amount } of hits) {
+    // rule-id: ogn-254-298 — a runtime take-damage replacement bound to this
+    // unit at play time ("Kill it the next time it takes damage") applies its
+    // nested effect to that unit and, being single-fire, is spent.
+    const boundRepl = ctx.draft.activeReplacements as
+      | { replaces?: string; replacement?: unknown; duration?: string; targetCardIds?: string[] }[]
+      | undefined;
+    const boundIdx =
+      boundRepl?.findIndex(
+        (e) => e?.replaces === "take-damage" && e.targetCardIds?.includes(targetId) === true,
+      ) ?? -1;
+    if (boundRepl && boundIdx >= 0) {
+      const entry = boundRepl[boundIdx];
+      if (entry?.duration === "next") {
+        boundRepl.splice(boundIdx, 1);
+      }
+      if (entry?.replacement && entry.replacement !== "prevent") {
+        executeEffect(entry.replacement as ExecutableEffect, { ...ctx, boundTargets: [targetId] });
+      }
+      continue;
+    }
     // Check for "take-damage" replacement effects
     const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? "";
     const replacementCtx = {
@@ -246,5 +287,6 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
         damage: priorDamage + amount,
       } as unknown as Record<string, unknown>,
     );
+    if (amount > 0) reactAnyUnitDamaged(targetId);
   }
 }

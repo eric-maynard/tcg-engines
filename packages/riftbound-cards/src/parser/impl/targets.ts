@@ -8,12 +8,14 @@ import type { Location } from "@tcg/riftbound-types/targeting";
  * Parse a damage/kill target string into a Target-like object.
  * Extracts controller, location, quantity, and filter from natural language.
  */
+type CardTargetFilter = string | { domain: string };
+
 export function parseCardTarget(targetText: string): {
   type: "unit";
   controller?: "friendly" | "enemy";
   location?: Location;
   quantity?: "all" | number | { upTo: number };
-  filter?: string;
+  filter?: CardTargetFilter | CardTargetFilter[];
 } {
   const lower = targetText.toLowerCase();
   const target: {
@@ -21,7 +23,7 @@ export function parseCardTarget(targetText: string): {
     controller?: "friendly" | "enemy";
     location?: Location;
     quantity?: "all" | number | { upTo: number };
-    filter?: string;
+    filter?: CardTargetFilter | CardTargetFilter[];
   } = { type: "unit" };
 
   if (lower.includes("enemy")) {
@@ -79,6 +81,15 @@ export function parseCardTarget(targetText: string): {
     target.filter = "stunned";
   } else if (lower.includes("[mighty]")) {
     target.filter = "mighty";
+  }
+
+  // rule-id: ven-015-166 — "an enemy Calm unit": a domain adjective before
+  // "unit(s)" restricts targets to that domain (normalize strips the "([calm])"
+  // icon reminder, leaving the bare word).
+  const domainMatch = lower.match(/\b(fury|calm|mind|body|chaos|order)\s+units?\b/);
+  if (domainMatch) {
+    const domainFilter = { domain: domainMatch[1] };
+    target.filter = target.filter === undefined ? domainFilter : [target.filter, domainFilter].flat();
   }
 
   return target;

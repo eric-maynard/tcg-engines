@@ -16,6 +16,8 @@ import type { EffectContext, ExecutableEffect } from "../../abilities/effect-exe
 import { markContestedOnArrival } from "../../abilities/effects/move";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { addToChain, createInteractionState } from "../../chain";
+import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
+import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type {
   PendingChoice,
@@ -26,8 +28,55 @@ import type {
 import { buildEffectContext, executeResolvedItem } from "./chain-moves";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canAffordPower } from "./chain/effect-context";
-import { getCardEffectiveMight } from "./play/cost";
+import { getCardEffectiveMight, getOptionalPlayCost } from "./play/cost";
 import { isLegalMultiTargetSet } from "./play/targeting";
+
+const isBoardZone = (z: string): boolean => z === "base" || z.startsWith("battlefield-");
+
+/**
+ * rule-id: sfd-109-221 (rule 356.1.b.3 / 560) — a pending "play it, ignoring
+ * its cost" finalized via choose-destination is still a play: the unit's
+ * optional "you may pay X as an additional cost" may be paid. Returns that
+ * cost when `choice` is such a play (card entering the board from off-board)
+ * and its controller can pay it from their pool right now.
+ */
+function pendingPlayOptionalCost(
+  state: RiftboundGameState,
+  choice: PendingChoice,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): { energy: number; power: readonly string[] } | undefined {
+  if (choice.type !== "choose-destination" || choice.created) {
+    return undefined;
+  }
+  const from = context.zones?.getCardZone?.(choice.cardId as CoreCardId) as string | undefined;
+  if (from === undefined || isBoardZone(from)) {
+    return undefined;
+  }
+  const optional = getOptionalPlayCost(choice.cardId as string);
+  if (optional?.kind !== "pay" || (optional.cost?.xp ?? 0) > 0) {
+    return undefined;
+  }
+  const cost = { energy: optional.cost?.energy ?? 0, power: optional.cost?.power ?? [] };
+  return canPayOptInCost(state, choice.playerId, choice.cardId as string, cost, {
+    counters: context.counters ?? {},
+  })
+    ? cost
+    : undefined;
+}
+
+/**
+ * rule-id: ogn-063-298 — a picked choice's effect (e.g. a buff) can change
+ * what a static ability grants ("friendly buffed units have [Deflect]"), so
+ * static recalc + SBA must run after it executes, same as after a chain
+ * resolve. Guarded so unit-test stubs without full context bags don't crash.
+ */
+function postChoiceCleanup(draft: RiftboundGameState, context: unknown): void {
+  const ctx = context as Partial<PostMoveCleanupContext> | undefined;
+  if (ctx?.cards && ctx?.counters && ctx?.zones && typeof ctx.zones.getCardsInZone === "function") {
+    cleanupAndFireDeaths(draft, ctx as PostMoveCleanupContext);
+  }
+}
 
 /** rule-id: sfd-119-221 — the pay-cost carried on an opt-in choice's chain item. */
 function optInCostOf(choice: PendingChoice): Record<string, unknown> | undefined {
@@ -177,6 +226,35 @@ function onPickedTargetZone(
   }
 }
 
+/**
+ * rule-id: ogn-235-298 — emit one `recycle` event per batch of cards a player
+ * recycles to the Main Deck so "When you recycle one or more cards to your
+ * Main Deck" triggers (Karma, Channeler) fire. Guarded so unit-test stubs that
+ * omit the full zone bag don't crash.
+ */
+function fireRecycleEvent(
+  draft: RiftboundGameState,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+  playerId: string,
+  cardIds: readonly string[],
+): void {
+  if (typeof context.zones?.getCardsInZone !== "function" || !context.cards) {
+    return;
+  }
+  // "to YOUR Main Deck": only cards that went to the recycler's own deck count.
+  const own = cardIds.filter(
+    (id) => (context.cards.getCardOwner?.(id as CoreCardId) ?? playerId) === playerId,
+  );
+  if (own.length === 0) {
+    return;
+  }
+  fireTriggers(
+    { cardIds: own, playerId, type: "recycle" },
+    { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+  );
+}
+
 export const pendingChoiceMoves: Partial<
   GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>
 > = {
@@ -238,6 +316,14 @@ export const pendingChoiceMoves: Partial<
       }
       if (choice.type === "choose-destination") {
         if (choice.playerId !== context.params.playerId) {
+          return false;
+        }
+        // rule-id: sfd-109-221 (rule 356.1.b.3) — paying the optional
+        // additional cost on a pending play is only legal when payable.
+        if (
+          context.params.paidAdditionalCost === true &&
+          !pendingPlayOptionalCost(state, choice, context)
+        ) {
           return false;
         }
         return choice.options.includes(context.params.pickedZoneId as string);
@@ -319,10 +405,15 @@ export const pendingChoiceMoves: Partial<
         if (choice.playerId !== (context.playerId as string)) {
           return [];
         }
-        return choice.options.map((zoneId) => ({
-          pickedZoneId: zoneId,
-          playerId: context.playerId as string,
-        }));
+        // rule-id: sfd-109-221 (rule 356.1.b.3 / 560) — a pending "play it,
+        // ignoring its cost" still offers the unit's optional additional cost.
+        const payable = pendingPlayOptionalCost(state, choice, context) !== undefined;
+        return choice.options.flatMap((zoneId) => [
+          { pickedZoneId: zoneId, playerId: context.playerId as string },
+          ...(payable
+            ? [{ paidAdditionalCost: true, pickedZoneId: zoneId, playerId: context.playerId as string }]
+            : []),
+        ]);
       }
       if (choice.prompter !== (context.playerId as string)) {
         return [];
@@ -436,6 +527,12 @@ export const pendingChoiceMoves: Partial<
             draft,
             context,
           );
+          // rule-id: ogn-125-298 — an accepted "you may spend a buff" changes
+          // "while I'm buffed" static grants (e.g. [Ganking]); recalc statics
+          // now, unless the resumed item parked a follow-up prompt.
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
         }
         return;
       }
@@ -470,6 +567,7 @@ export const pendingChoiceMoves: Partial<
             ...(choice.boundTargets ? { boundTargets: choice.boundTargets } : {}),
           };
           executeEffect(picked as ExecutableEffect, effectCtx);
+          postChoiceCleanup(draft, context);
         }
         return;
       }
@@ -529,6 +627,7 @@ export const pendingChoiceMoves: Partial<
             ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
             boundTargets: pickedSoFar,
           });
+          postChoiceCleanup(draft, context);
           return;
         }
         if (!choice.options.includes(picked)) {
@@ -551,6 +650,12 @@ export const pendingChoiceMoves: Partial<
           boundTargets,
         };
         executeEffect(choice.effect as ExecutableEffect, effectCtx);
+        // rule-id: ogn-063-298 — recalc statics after the picked effect so a
+        // just-buffed unit picks up "friendly buffed units have [Deflect]".
+        // Skip while a re-prompt (split/assign) is still pending.
+        if (!draft.pendingChoice) {
+          postChoiceCleanup(draft, context);
+        }
         return;
       }
 
@@ -569,6 +674,8 @@ export const pendingChoiceMoves: Partial<
             targetZoneId: "mainDeck" as CoreZoneId,
           });
           draft.pendingChoice = undefined;
+          // rule-id: ogn-235-298 — the owner recycled a card to their Main Deck.
+          fireRecycleEvent(draft, context, choice.playerId, [choice.cardId as string]);
           return;
         }
         // Rule 323.6 / 355.2 / 355.4 (rule-id: unl-184-219-choose-destination-zone-id,
@@ -582,11 +689,40 @@ export const pendingChoiceMoves: Partial<
             : `battlefield-${zoneId}`;
         const fromZone =
           (context.zones.getCardZone?.(choice.cardId as CoreCardId) as string | undefined) ?? "";
-        context.zones.moveCard({
-          cardId: choice.cardId as CoreCardId,
-          targetZoneId: targetZoneId as CoreZoneId,
-        });
+        // rule-id: sfd-109-221 (rule 354.2 / 356.1.b.3 / 560) — finalizing a
+        // pending "play it, ignoring its cost": the card enters the board from
+        // off-board, so this is a play. Charge the optional additional cost if
+        // elected (and still payable) before the card moves.
+        const enteringPlay =
+          !choice.created &&
+          context.cards &&
+          typeof context.zones.getCardsInZone === "function" &&
+          fromZone !== "" &&
+          !isBoardZone(fromZone);
+        let paidAdditionalCost = false;
+        if (enteringPlay && context.params.paidAdditionalCost === true) {
+          const extra = pendingPlayOptionalCost(draft, choice, context);
+          if (extra) {
+            deductAbilityCost(draft, choice.playerId, extra, context.zones, context.counters);
+            paidAdditionalCost = true;
+          }
+        }
+        if (!(choice.created && fromZone === targetZoneId)) {
+          context.zones.moveCard({
+            cardId: choice.cardId as CoreCardId,
+            targetZoneId: targetZoneId as CoreZoneId,
+          });
+        }
         draft.pendingChoice = undefined;
+        // rule-id: ogs-015-024 (rule 439.2.a/.b.1) — a created token is placed,
+        // not moved: skip the `move` event and prompt for the next queued token.
+        if (choice.created) {
+          const [next, ...rest] = choice.queue ?? [];
+          if (next !== undefined) {
+            draft.pendingChoice = { ...choice, cardId: next, queue: rest };
+          }
+          return;
+        }
         // rule-id: unl-133-219 — a chosen-destination effect move is still a
         // move: emit the `move` event (owner / movedBy) so "When I move" /
         // "When you move an enemy unit" triggers fire. Guarded so unit-test
@@ -617,6 +753,24 @@ export const pendingChoiceMoves: Partial<
         // battlefield applies Contested so combat is staged.
         markContestedOnArrival(draft, targetZoneId, choice.playerId);
         draft.pendingChoice = undefined;
+        // rule-id: sfd-109-221 (rule 354.2 / 419.4.a) — a card played by an
+        // effect is still played: fire "When you play me" (carrying whether
+        // the optional additional cost was paid) and "when you play a card",
+        // and count it toward this turn's plays (rule 724), mirroring playUnit.
+        if (enteringPlay) {
+          const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+          const cardId = choice.cardId as string;
+          fireTriggers(
+            { cardId, paidAdditionalCost, playerId: choice.playerId, type: "play-self" },
+            trigCtx,
+          );
+          const cardType = getGlobalCardRegistry().get(cardId)?.cardType ?? "unit";
+          fireTriggers({ cardId, cardType, playerId: choice.playerId, type: "play-card" }, trigCtx);
+          if (draft.cardsPlayedThisTurn) {
+            draft.cardsPlayedThisTurn[choice.playerId] =
+              (draft.cardsPlayedThisTurn[choice.playerId] ?? 0) + 1;
+          }
+        }
         return;
       }
 
@@ -650,6 +804,10 @@ export const pendingChoiceMoves: Partial<
           }
         }
         draft.pendingChoice = undefined;
+        // rule-id: ogn-235-298 — declined pick still recycled the rest.
+        if (choice.onRest === "recycle") {
+          fireRecycleEvent(draft, context, choice.prompter, choice.revealed as readonly string[]);
+        }
         return;
       }
 
@@ -714,6 +872,7 @@ export const pendingChoiceMoves: Partial<
       }
 
       // Rule 435 (ogn-174-298): look/Vision recycles the unpicked cards.
+      const recycledIds: string[] = choice.onPicked === "recycle" ? [pickedCardId as string] : [];
       if (choice.onRest === "recycle") {
         for (const restId of choice.revealed) {
           if (restId === pickedCardId) continue;
@@ -722,11 +881,16 @@ export const pendingChoiceMoves: Partial<
             position: "bottom",
             targetZoneId: "mainDeck" as CoreZoneId,
           });
+          recycledIds.push(restId as string);
         }
       }
 
       // Clear the pending choice so play can resume.
       draft.pendingChoice = undefined;
+
+      // rule-id: ogn-235-298 — one `recycle` event for the whole batch
+      // (picked-to-recycle and/or recycled rest) so Karma's buff fires once.
+      fireRecycleEvent(draft, context, choice.prompter, recycledIds);
 
       // Resume the originating effect's `then` clause (e.g. discard 1 → draw 1).
       if (choice.then) {

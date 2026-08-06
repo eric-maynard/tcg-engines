@@ -53,6 +53,33 @@ export function findAmountReferenceTarget(
 }
 
 /**
+ * rule-id: ogn-254-298 (rule 355.8) — "Choose a unit. Kill it the next time it
+ * takes damage this turn": a single-fire (`duration:"next"`) `replacement`
+ * spell carries its caster-chosen unit on the nested `replacement.target`, not
+ * on the effect itself. Surface it so play-time gating and enumeration bind it.
+ * Turn-wide replacements ("When any unit takes damage this turn, kill it") are
+ * criteria, not caster choices, so only `next` lifts.
+ */
+export function findReplacementChosenTarget(
+  effect: SpellEffectTargetShape | undefined,
+): SpellEffectTargetDescriptor | undefined {
+  if (effect?.type !== "replacement" || effect.target !== undefined) return undefined;
+  const r = effect as {
+    duration?: string;
+    replacement?: { target?: SpellEffectTargetDescriptor } | string;
+  };
+  if (r.duration !== "next" || !r.replacement || typeof r.replacement === "string") {
+    return undefined;
+  }
+  const t = r.replacement.target;
+  if (!t || typeof t === "string") return undefined;
+  if (t.type === "self" || t.type === "pending-value" || t.type === "trigger-source") {
+    return undefined;
+  }
+  return t;
+}
+
+/**
  * rule-id: sfd-017-221 / ogn-213-298 (rule 355.8) — a `sequence` spell ("Kill a
  * unit at a battlefield. Its controller draws 2.") carries its caster-chosen
  * target on a sub-effect, not on the sequence itself. Surface that lead
@@ -233,6 +260,16 @@ export function spellEffectHasLegalTargets(
   if (effect.type === "for-each") {
     return true;
   }
+  // rule-id: unl-131-219 (rule 355.8) — "Counter a spell" targets a spell on
+  // the chain; with no un-countered spell pending there is no valid choice, so
+  // the play is illegal (the counter would otherwise silently no-op).
+  if (effect.type === "counter") {
+    const items = ctx.draft.interaction?.chain?.items ?? [];
+    const wantsSpell = effect.target === undefined || (effect.target as unknown) === "spell";
+    return items.some(
+      (item) => !item.countered && (!wantsSpell || item.type === "spell"),
+    );
+  }
   // Multi-target effects (swap-might etc.) carry target1/target2 alongside or
   // instead of `target`; every present descriptor must resolve non-empty.
   for (const tgt of [
@@ -241,6 +278,8 @@ export function spellEffectHasLegalTargets(
     effect.target2,
     effect.attacker,
     effect.defender,
+    // rule-id: ogn-254-298 — a "next time it…" replacement's chosen unit.
+    findReplacementChosenTarget(effect),
   ]) {
     if (!targetDescriptorIsSatisfiable(tgt, effect.player, ctx)) {
       return false;

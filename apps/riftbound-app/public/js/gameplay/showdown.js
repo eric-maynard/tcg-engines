@@ -1,12 +1,13 @@
 // showdown.js — W9 inline showdown UI per battlefield
 //
 // Renders a per-battlefield `.battlefield__showdown-panel` child when that
-// battlefield has an active showdown. Three explicit exits replace the
+// battlefield has an active showdown. Two explicit exits replace the
 // ambiguous "Dismiss" anti-pattern:
 //
 //   - Pass Focus (W)  — passShowdownFocus { playerId }
-//   - Conquer   (Q)   — conquerBattlefield { playerId, battlefieldId }
-//                       enabled only when all relevant players have passed
+//                       (rule 347.2.a / 348.2.a: once all relevant players
+//                       pass, the engine closes the showdown and establishes
+//                       control automatically — no manual Conquer step)
 //   - Cancel           — endShowdown (no params)
 //                       visible only to the initiator while nothing has been
 //                       contributed yet (passedPlayers.length === 0)
@@ -157,7 +158,7 @@ function renderBattlefieldShowdownPanel(battlefieldEl, battlefieldId, showdown) 
   const bannerText = choiceBlocking
     ? "Resolve your choice first"
     : readyToClose
-    ? "All passes registered — ready to conquer"
+    ? "All passes registered — showdown closing"
     : hasFocus
     ? "Showdown in progress — your focus"
     : `Waiting on ${focusName}...`;
@@ -171,10 +172,10 @@ function renderBattlefieldShowdownPanel(battlefieldEl, battlefieldId, showdown) 
   const passMove = hasFocus ? findShowdownMove("passShowdownFocus") : null;
   const passDisabled = !passMove;
 
-  // Conquer button — enabled only when all passes registered AND the move
-  // is legal for this viewer.
-  const conquerMove = readyToClose ? findShowdownMove("conquerBattlefield", battlefieldId) : null;
-  const conquerDisabled = !conquerMove;
+  // Rule 347.2.a / 348.2.a: when all Relevant Players pass, the Showdown
+  // Closes and the sole remaining player establishes Control (a Conquer per
+  // 348.2.a.1) automatically — the engine's passShowdownFocus handles this,
+  // so no manual "Conquer" button is offered here.
 
   // Cancel button — only the initiator can cancel, and only while nobody
   // has acted. Dispatches endShowdown.
@@ -204,13 +205,6 @@ function renderBattlefieldShowdownPanel(battlefieldEl, battlefieldId, showdown) 
         Pass Focus
         <span class="battlefield__showdown-hint">W</span>
       </button>
-      <button type="button"
-              class="battlefield__showdown-btn battlefield__showdown-btn--conquer"
-              ${conquerDisabled ? "disabled" : ""}
-              title="${conquerDisabled ? "Conquer (both sides must pass first)" : "Conquer (Q)"}">
-        Conquer
-        <span class="battlefield__showdown-hint">Q</span>
-      </button>
       ${cancelVisible
         ? `<button type="button"
                   class="battlefield__showdown-btn battlefield__showdown-btn--cancel"
@@ -231,13 +225,6 @@ function renderBattlefieldShowdownPanel(battlefieldEl, battlefieldId, showdown) 
   if (passBtn && passMove) {
     passBtn.addEventListener("click", () => {
       executeMove(passMove.moveId, passMove.params, passMove.playerId);
-    });
-  }
-
-  const conquerBtn = panel.querySelector(".battlefield__showdown-btn--conquer");
-  if (conquerBtn && conquerMove) {
-    conquerBtn.addEventListener("click", () => {
-      executeMove(conquerMove.moveId, conquerMove.params, conquerMove.playerId);
     });
   }
 

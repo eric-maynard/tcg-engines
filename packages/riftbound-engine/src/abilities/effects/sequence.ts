@@ -5,6 +5,7 @@ import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 import { findSpendableBuff } from "./spend-buff";
+import { canSpendXp } from "./spend-xp";
 import {
   collectSequenceTargetSlots,
   isRestatementOf,
@@ -78,6 +79,11 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // rule-id: ogn-147-298 — "spend a buff to buff me and ready me": the
       // spend-buff cost gates every remaining step, not just its own `then`.
       if (sub.type === "spend-buff" && !findSpendableBuff(sub, ctx)) {
+        break;
+      }
+      // rule-id: unl-119-219 — "spend 3 XP to deal damage": an unpayable
+      // spend-xp cost likewise gates every remaining step.
+      if (sub.type === "spend-xp" && !canSpendXp(sub, ctx)) {
         break;
       }
       const subTarget = (sub as { target?: SubTarget }).target;

@@ -10,7 +10,7 @@ import type {
 import type { RiftboundCardMeta } from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { TargetDescriptor } from "../target-resolver";
-import { resolveTarget } from "../target-resolver";
+import { boundBattlefieldZone, resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 
 export interface EffectHelpers {
@@ -33,10 +33,15 @@ export type EffectHandler = (
  * Resolve targets for an effect using the target resolver.
  */
 export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): string[] {
-  if (ctx.boundTargets) {
+  // rule-id: ogs-002-024 — "all enemy units at A battlefield": a bound
+  // battlefield id names the chosen LOCATION, not the affected cards; resolve
+  // the descriptor pinned to that battlefield's unit zone.
+  const battlefieldZone = boundBattlefieldZone(effect.target, ctx.boundTargets, ctx.draft);
+  if (ctx.boundTargets && battlefieldZone === undefined) {
     return [...ctx.boundTargets];
   }
   return resolveTarget(effect.target, {
+    battlefieldZone,
     cards: ctx.cards,
     draft: ctx.draft,
     playerId: ctx.playerId,
@@ -150,6 +155,31 @@ export function resolveAmount(
       zones: ctx.zones,
     }).length;
   }
+  if ("distinctTags" in amount) {
+    // rule-id: unl-046-219 (Friendship) — "+1 for each of the following tags
+    // among your units": count how many listed tags appear on at least one
+    // matched unit (OR across tags, distinct), not units carrying every tag.
+    const wanted = new Set((amount.distinctTags as readonly string[]).map((t) => t.toLowerCase()));
+    const among = { ...(amount.among as TargetDescriptor), quantity: "all" as const };
+    const ids = resolveTarget(among, {
+      cards: ctx.cards,
+      draft: ctx.draft,
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      sourceZone: ctx.sourceZone,
+      zones: ctx.zones,
+    });
+    const registry = getGlobalCardRegistry();
+    const present = new Set<string>();
+    for (const id of ids) {
+      const tags = (registry.get(id) as { tags?: readonly string[] } | undefined)?.tags ?? [];
+      for (const t of tags) {
+        const key = t.toLowerCase();
+        if (wanted.has(key)) present.add(key);
+      }
+    }
+    return present.size;
+  }
   if ("revealTop" in amount) {
     // rule-id: ogn-121-298 (Teemo, Strategist) — reveal the top N of your Main
     // Deck, count cards with the keyword, then recycle every revealed card.
@@ -169,6 +199,10 @@ export function resolveAmount(
           targetZoneId: "mainDeck" as CoreZoneId,
         });
       }
+      // rule-id: ogn-235-298 — revealed cards were recycled to your Main Deck.
+      if (topN.length > 0) {
+        ctx.fireTriggers?.({ cardIds: topN, playerId: ctx.playerId, type: "recycle" });
+      }
     }
     return hits;
   }
@@ -177,6 +211,42 @@ export function resolveAmount(
     // Store the chosen X value in ctx.variables.x and reference it here
     const name = amount.variable as string;
     return ctx.variables?.[name] ?? 0;
+  }
+  if ("cost" in amount) {
+    const costRef = amount.cost as TargetDescriptor | string | undefined;
+    const registry = getGlobalCardRegistry();
+    // rule-id: sfd-206-221 (Riposte) — "+Might equal to that spell's Energy
+    // cost": the referenced spell is the chain item directly beneath this one
+    // (the counter target), which stays on the chain until it resolves/fizzles.
+    if (costRef === "spell" || (typeof costRef === "object" && costRef?.type === "spell")) {
+      // rule-id: ogn-064-298 (rule 425.1.a) — a countered spell is cleared
+      // from the chain at once, so prefer the id the counter step recorded.
+      if (ctx.draft.lastCounterTargetId) {
+        return registry.getEnergyCost(ctx.draft.lastCounterTargetId);
+      }
+      const items = ctx.draft.interaction?.chain?.items ?? [];
+      for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        if (item && item.cardId !== ctx.sourceCardId && item.type === "spell") {
+          return registry.getEnergyCost(item.cardId);
+        }
+      }
+      return 0;
+    }
+    if (typeof costRef === "object" && costRef !== null) {
+      const refId =
+        ctx.boundTargets?.[0] ??
+        resolveTarget(costRef, {
+          cards: ctx.cards,
+          draft: ctx.draft,
+          playerId: ctx.playerId,
+          sourceCardId: ctx.sourceCardId,
+          sourceZone: ctx.sourceZone,
+          zones: ctx.zones,
+        })[0];
+      return refId ? registry.getEnergyCost(refId) : 0;
+    }
+    return 0;
   }
   return 0;
 }
@@ -305,10 +375,25 @@ export function evaluateEffectCondition(
         return dmg >= might;
       });
     }
+    case "while-empowered": {
+      // rule-id: ven-075-166 / rule 827 — "If this is [Empowered], ... instead."
+      const meta = ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      return meta?.empowered === true;
+    }
     case "paid-additional-cost": {
       // rule-id: ven-083-166 / rule 560 — playSpell records whether the
       // caster elected the optional additional cost; absent means unpaid.
       return ctx.draft.additionalCostsPaid?.[ctx.sourceCardId] === true;
+    }
+    case "legion": {
+      // rule-id: ogn-254-298 / rule 724 — "if you've played another card this
+      // turn". A spell resolving from the chain was itself already counted by
+      // playSpell, so it needs one play beyond its own.
+      const played = ctx.draft.cardsPlayedThisTurn?.[ctx.playerId] ?? 0;
+      const onChain = ctx.zones.getCardZone(ctx.sourceCardId as CoreCardId) === "chain";
+      return played >= (onChain ? 2 : 1);
     }
     default: {
       return true;

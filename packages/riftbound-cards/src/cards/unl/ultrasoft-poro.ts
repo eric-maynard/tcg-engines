@@ -13,4 +13,5 @@ export const ultrasoftPoro: UnitCard = {
   rulesText:
     "[Exhaust]: Play two [1] [Might] Bird unit tokens with [Deflect]. Use this ability only while I'm at a battlefield. (Opponents must pay [rainbow] to choose a [Deflect] unit with a spell or ability.)",
   setId: "UNL",
+  tags: ["Poro"], // rule-id: unl-046-219 — printed PORO tag (missing from set data)
 };

@@ -91,13 +91,28 @@ function renderPlayerInfo() {
       }
     }
 
+    // rule-id: unl-034-219 (XP) — surface player XP whenever the xpCounter
+    // toggle is on or any XP has actually been gained, so "gain N XP" effects
+    // are visible in the DOM.
+    const xp = player?.xp ?? 0;
+    const showXp = xp > 0 || (typeof window.getBoardToggles === "function" && window.getBoardToggles().xpCounter);
+    const xpHtml = showXp
+      ? `<div class="player-stat"><span class="stat-label">XP</span><span class="stat-value xp">${xp}</span></div>`
+      : "";
+
+    // rule-id: ogn-276-298 (Aspirant's Climb) — effective threshold is
+    // victoryScore + per-player victoryScoreModifier, matching the engine's
+    // getEffectiveVictoryScore.
+    const effectiveVictoryScore = (gameState.victoryScore ?? 0) + (player?.victoryScoreModifier ?? 0);
+
     document.getElementById(elemId).innerHTML = `
       <div class="player-avatar ${isActive ? "active" : ""}" title="${esc(pName(pid))}">${esc(initials(pName(pid)))}</div>
       <span class="player-name" title="${esc(pName(pid))}" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">${esc(pName(pid))}</span>
       <div class="player-stat">
         <span class="stat-label">VP</span>
-        <span class="stat-value vp">${player?.victoryPoints ?? 0} / ${gameState.victoryScore}</span>
+        <span class="stat-value vp">${player?.victoryPoints ?? 0} / ${effectiveVictoryScore}</span>
       </div>
+      ${xpHtml}
       <div class="player-stat">
         <span class="stat-label">Resources</span>
         <div class="resource-pips">${resourceHtml || (pool ? '<span style="color:#6a6288">Energy 0</span>' : '<span style="color:#6a6288">None</span>')}</div>

@@ -4,15 +4,23 @@ import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
 
 export function handle_predict(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
-  // Rule: Look at the top N cards of your Main Deck; you may recycle
-  // Any of them (put on bottom of deck). For headless/goldfish play,
-  // We auto-recycle every card we peeked at. This is observable
-  // Behavior: after Predict N on an ordered deck [A,B,C,D,...],
-  // The top N cards land at the bottom. Tests can assert on deck
-  // Order after Predict.
-  //
-  // A full interactive implementation would pause for a player
-  // Choice (look → optional recycle → resume) via pendingChoice.
+  // rule-id: unl-131-219-predict-look-optional-recycle — "Look at the top
+  // card of your Main Deck. You may recycle it." / Predict N: "look at the
+  // top N … Recycle any of them". This is a player decision, not an
+  // auto-recycle: surface the looked-at cards as an optional
+  // reveal-and-pick (recycle the pick, leave the rest on top). For N > 1
+  // the pick chains a Predict over the remaining cards so any subset can be
+  // recycled one at a time; declining ends the Predict.
+  const existing = ctx.draft.pendingChoice as { type?: string; then?: unknown } | undefined;
+  if (existing && existing.type === "reveal-and-pick") {
+    // Same deferral as `look`: never clobber an unresolved pick.
+    const prevThen = existing.then;
+    ctx.draft.pendingChoice = {
+      ...(existing as NonNullable<typeof ctx.draft.pendingChoice>),
+      then: prevThen ? { effects: [prevThen, effect], type: "sequence" } : effect,
+    } as NonNullable<typeof ctx.draft.pendingChoice>;
+    return;
+  }
   const rawPredictCount = effect.amount ?? 1;
   const predictCount =
     typeof rawPredictCount === "number" ? rawPredictCount : resolveAmount(rawPredictCount, ctx);
@@ -20,12 +28,19 @@ export function handle_predict(effect: ExecutableEffect, ctx: EffectContext, _h:
     "mainDeck" as CoreZoneId,
     ctx.playerId as CorePlayerId,
   );
-  const topN = deckCards.slice(0, Math.max(0, predictCount));
-  for (const cardId of topN) {
-    ctx.zones.moveCard({
-      cardId,
-      position: "bottom",
-      targetZoneId: "mainDeck" as CoreZoneId,
-    });
+  const topN = deckCards.slice(0, Math.max(0, predictCount)).map((c) => c as string);
+  if (topN.length === 0) {
+    return;
   }
+  const remaining = topN.length - 1;
+  ctx.draft.pendingChoice = {
+    onPicked: "recycle",
+    optional: true,
+    prompter: ctx.playerId,
+    revealed: topN,
+    revealer: ctx.playerId,
+    sourceCardId: ctx.sourceCardId,
+    ...(remaining > 0 ? { then: { amount: remaining, type: "predict" } } : {}),
+    type: "reveal-and-pick",
+  };
 }

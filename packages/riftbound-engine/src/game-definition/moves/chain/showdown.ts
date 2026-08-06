@@ -234,6 +234,12 @@ export const startShowdown: Defs["startShowdown"] = {
       attacker,
       defender,
     );
+    // rule-id: unl-079-219 (Rule 340): "When a showdown begins here" fires
+    // for combat and non-combat showdowns alike.
+    fireTriggers(
+      { battlefieldId, isCombat, playerId, type: "showdown-begin" },
+      { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+    );
   },
 };
 

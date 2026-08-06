@@ -30,6 +30,12 @@ export function parseCounterEffect(text: string): CounterEffect | undefined {
   if (!match) {
     return undefined;
   }
+  // rule-id: unl-131-219 — "Counter a spell. Return it to its owner's hand
+  // instead of putting it in their trash." overrides the countered spell's
+  // destination.
+  if (/return it to its owner'?s hand instead/i.test(text)) {
+    return { destination: "hand", type: "counter" } as CounterEffect;
+  }
   return { type: "counter" };
 }
 

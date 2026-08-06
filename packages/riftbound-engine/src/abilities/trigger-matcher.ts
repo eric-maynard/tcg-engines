@@ -88,6 +88,9 @@ const EVENT_MAP: Record<string, string> = {
   "play-self": "play-self",
   "play-spell": "play-spell",
   ready: "ready",
+  // rule-id: ogn-235-298 — recycle-to-main-deck trigger event.
+  recycle: "recycle",
+  "showdown-begin": "showdown-begin",
   "start-of-turn": "start-of-turn",
   stun: "stun",
   "take-damage": "take-damage",
@@ -172,9 +175,13 @@ function triggerMatchesEvent(
   const mapped = EVENT_MAP[event.type] ?? event.type;
   // Rule 515.2.a: "At the start of your Beginning Phase" (parser event
   // `beginning-phase`) is the same moment as `start-of-turn`.
+  // rule-id: ogn-235-298 — parser event `recycle-cards-to-deck` ("When you
+  // recycle one or more cards to your Main Deck") is the engine `recycle` event.
   const triggerEvents = trigger.event
     .split("-or-")
-    .map((e) => (e === "beginning-phase" ? "start-of-turn" : e));
+    .map((e) =>
+      e === "beginning-phase" ? "start-of-turn" : e === "recycle-cards-to-deck" ? "recycle" : e,
+    );
   if (!triggerEvents.includes(mapped)) {
     return false;
   }
@@ -235,6 +242,11 @@ function triggerMatchesEvent(
   } else if (on === "controller" || on === "controller-or-allies") {
     // Player-scoped event must be for this card's controller.
     if ("playerId" in event && event.playerId !== card.owner) {
+      return false;
+    }
+    // rule-id: ogn-202-298 — "When you discard one or more cards" triggers
+    // once per discard event, not once per card in a multi-card discard.
+    if (event.type === "discard" && (event.batchIndex ?? 0) > 0) {
       return false;
     }
   } else if (on === "opponent") {
@@ -350,8 +362,12 @@ export function findMatchingTriggers(
     // Rule ogn-006-298: for a discard event, the discarded card itself is
     // allowed to match from trash so "When you discard me" self-triggers fire.
     const isDiscardSubject = event.type === "discard" && event.cardId === card.id;
+    // rule-id: sfd-167-221 — Deathknell: the dying unit is already in trash
+    // when `die` fires; let it match its own death.
+    const isDieSubject = event.type === "die" && event.cardId === card.id;
     if (
       !isDiscardSubject &&
+      !isDieSubject &&
       card.zone !== "base" &&
       !card.zone.startsWith("battlefield") &&
       card.zone !== "legendZone"

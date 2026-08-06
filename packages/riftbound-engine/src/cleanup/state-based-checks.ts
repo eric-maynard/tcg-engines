@@ -170,7 +170,23 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       continue;
     }
 
-    if (damage >= baseMight) {
+    // rule-id: ogs-002-024 — lethal check compares damage against the unit's
+    // *effective* Might (base + buffs + modifiers + static + equipment), not
+    // the printed value, so a +2 Mech with 3 base Might survives 3 damage.
+    let equipBonus = 0;
+    for (const equipId of meta?.equippedWith ?? []) {
+      equipBonus += registry.getMightBonus(equipId as string);
+    }
+    const effectiveMight = Math.max(
+      0,
+      baseMight +
+        (meta?.buffed ? 1 : 0) +
+        (meta?.mightModifier ?? 0) +
+        (meta?.staticMightBonus ?? 0) +
+        equipBonus,
+    );
+
+    if (damage >= effectiveMight) {
       // rule-id: unl-007-219 — runtime die-replacements bound to this unit
       // (installed by a resolved spell: "If it would die this turn, banish it
       // instead") take precedence over the normal kill (rule 571-573).
@@ -189,6 +205,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
           ctx.zones.moveCard({ cardId, targetZoneId: "banishment" as CoreZoneId });
           ctx.cards.updateCardMeta(cardId, {
             buffed: false,
+            combatMightModifier: 0,
             combatRole: null,
             damage: 0,
             equippedWith: undefined,
@@ -256,6 +273,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       // Clear all temporary metadata (rule 170+: zone change clears all mods)
       ctx.cards.updateCardMeta(cardId, {
         buffed: false,
+        combatMightModifier: 0,
         combatRole: null,
         damage: 0,
         equippedWith: undefined,
@@ -437,9 +455,14 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     // Open State (no chain, no showdown; rule 190.4.c). Pending items keep
     // the chain closed so a unit banished-then-replayed by a spell keeps its
     // battlefield controlled through the sequence.
+    // rule-id: ogn-276-298-arcane-shift-replay-keeps-control — an outstanding
+    // pendingChoice (e.g. the replayed unit's choose-destination) means the
+    // last chain item has not finished resolving, so the state is still
+    // Closed even though the chain itself has emptied.
     const isOpenState =
       !ctx.draft.interaction?.chain?.active &&
-      (ctx.draft.interaction?.showdownStack?.length ?? 0) === 0;
+      (ctx.draft.interaction?.showdownStack?.length ?? 0) === 0 &&
+      !ctx.draft.pendingChoice;
     if (bf.controller && isOpenState) {
       const controllerHasUnit = unitsAtBf.some(
         (id) =>

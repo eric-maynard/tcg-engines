@@ -12,4 +12,5 @@ export const sinisterPoro: UnitCard = {
   rarity: "uncommon",
   rulesText: "When I attack, you may pay [1] to move an enemy unit here to its base.",
   setId: "UNL",
+  tags: ["Poro"], // rule-id: unl-046-219 — printed PORO tag (missing from set data)
 };

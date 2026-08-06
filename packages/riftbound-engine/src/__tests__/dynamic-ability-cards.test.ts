@@ -895,6 +895,82 @@ describe("Sudden Storm (sfd-017-221): target-attacking conditional damage", () =
 });
 
 // ============================================================================
+// Noxian Guillotine (ogn-254-298): [Legion] — kill it now instead
+// ============================================================================
+
+// rule-id: ogn-254-298
+describe("Noxian Guillotine (ogn-254-298): legion conditional kill", () => {
+  let registry: CardDefinitionRegistry;
+
+  beforeEach(() => {
+    registry = new CardDefinitionRegistry();
+    setGlobalCardRegistry(registry);
+  });
+
+  afterEach(() => {
+    clearGlobalCardRegistry();
+  });
+
+  const guillotineEffect = {
+    condition: { type: "legion" },
+    else: {
+      duration: "next",
+      replacement: { target: { type: "unit" }, type: "kill" },
+      replaces: "take-damage",
+      type: "replacement",
+    },
+    target: { type: "unit" },
+    then: { target: { type: "unit" }, type: "kill" },
+    type: "conditional",
+  } as unknown as ExecutableEffect;
+
+  function run(cardsPlayedByP1: number): { zone: string; replacements: number } {
+    registry.register("ng-1", { cardType: "spell", id: "ng-1", name: "Noxian Guillotine" });
+    registry.register("victim-1", { cardType: "unit", id: "victim-1", might: 5, name: "Victim" });
+    const state = createMockState({ cardsPlayedThisTurn: { p1: cardsPlayedByP1, p2: 0 } });
+    const harness = createHarness({
+      "ng-1": {
+        meta: { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false },
+        owner: "p1",
+        zone: "chain",
+      },
+      "victim-1": {
+        meta: { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false },
+        owner: "p2",
+        zone: "battlefield-bf-1",
+      },
+    });
+    const effectCtx: EffectContext = {
+      boundTargets: ["victim-1"],
+      cards: harness.cards as unknown as EffectContext["cards"],
+      counters: harness.counters,
+      draft: state,
+      playerId: "p1",
+      sourceCardId: "ng-1",
+      sourceZone: "chain",
+      zones: harness.zones as unknown as EffectContext["zones"],
+    } as EffectContext;
+    executeEffect(guillotineEffect, effectCtx);
+    return {
+      replacements: (state.activeReplacements ?? []).length,
+      zone: harness.cardStore.get("victim-1")!.zone,
+    };
+  }
+
+  test("only this spell played this turn: installs replacement, no kill", () => {
+    const r = run(1);
+    expect(r.zone).toBe("battlefield-bf-1");
+    expect(r.replacements).toBe(1);
+  });
+
+  test("another card played earlier this turn: kills it now", () => {
+    const r = run(2);
+    expect(r.zone).toBe("trash");
+    expect(r.replacements).toBe(0);
+  });
+});
+
+// ============================================================================
 // Crescent Strike (unl-072-219): 4 to chosen enemy unit, 1 to each OTHER
 // enemy unit at that battlefield only
 // ============================================================================

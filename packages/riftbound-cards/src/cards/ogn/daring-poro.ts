@@ -12,4 +12,5 @@ export const daringPoro: UnitCard = {
   rarity: "common",
   rulesText: "[Assault] (+1 [Might] while I'm an attacker.)",
   setId: "OGN",
+  tags: ["Poro"], // rule-id: unl-046-219 — printed PORO tag (missing from set data)
 };

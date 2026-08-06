@@ -12,4 +12,5 @@ export const plunderingPoro: UnitCard = {
   rarity: "common",
   rulesText: "When I conquer, play a Gold gear token exhausted.",
   setId: "SFD",
+  tags: ["Poro"], // rule-id: unl-046-219 — printed PORO tag (missing from set data)
 };

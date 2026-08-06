@@ -473,6 +473,11 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       return d;
     }
     case "choose-destination": {
+      // rule-id: sfd-109-221 (rule 356.1.b.3) — a pending play may offer the
+      // unit's optional additional cost; surface it as a "<zone>+pay" pick.
+      const payable = new Set(
+        flat.filter((m) => m.params.paidAdditionalCost === true).map((m) => String(m.params.pickedZoneId)),
+      );
       const d: PickDecision = {
         ...base,
         allowDecline: false,
@@ -480,7 +485,12 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         kind: "pick",
         max: 1,
         min: 1,
-        options: pc.options.map((z) => ({ key: z, label: z, zone: z })),
+        options: pc.options.flatMap((z) => [
+          { key: z, label: z, zone: z },
+          ...(payable.has(z)
+            ? [{ key: `${z}+pay`, label: `${z} (pay additional cost)`, value: { payOptional: true }, zone: z }]
+            : []),
+        ]),
         prompt: `Choose a destination for ${ctx.label(pc.cardId)}`,
         semantics: "destination",
         source: { cardId: pc.cardId, pendingChoiceType: pc.type },
@@ -649,7 +659,13 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
       if (k === undefined) {
         return err("ILLEGAL_ARGS", "A destination must be chosen");
       }
-      params.pickedZoneId = k;
+      // rule-id: sfd-109-221 — "<zone>+pay" elects the optional additional cost.
+      if (k.endsWith("+pay")) {
+        params.paidAdditionalCost = true;
+        params.pickedZoneId = k.slice(0, -"+pay".length);
+      } else {
+        params.pickedZoneId = k;
+      }
       break;
     }
     case "choose-mode": {

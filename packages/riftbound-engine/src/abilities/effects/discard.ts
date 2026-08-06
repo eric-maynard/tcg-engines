@@ -4,6 +4,13 @@ import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
 
 export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
+  // Rule unl-121-219: "They discard 1" — player:"opponent" must resolve
+  // against the opponent's hand (and the opponent picks), not the controller.
+  if (effect.player === "opponent") {
+    const oppId = Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId);
+    if (!oppId) return;
+    ctx = { ...ctx, playerId: oppId };
+  }
   // Rule ogn-201-298: "Each player discards their hand, then draws N" — fan
   // out per player, discard the whole hand (no choice needed), then run the
   // `then` effect for that same player even if their hand was empty.
@@ -19,7 +26,7 @@ export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: 
       const n = wholeHand ? phand.length : resolveAmount(effect.amount ?? 1, pctx);
       for (let i = 0; i < Math.min(n, phand.length); i++) {
         ctx.zones.moveCard({ cardId: phand[i] as CoreCardId, targetZoneId: "trash" as CoreZoneId });
-        ctx.fireTriggers?.({ cardId: phand[i], playerId: pid, type: "discard" });
+        ctx.fireTriggers?.({ batchIndex: i, cardId: phand[i], playerId: pid, type: "discard" });
       }
       if (then) h.executeEffect(then, pctx);
     }
@@ -48,7 +55,8 @@ export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: 
     for (let i = 0; i < Math.min(count, hand.length); i++) {
       ctx.zones.moveCard({ cardId: hand[i] as CoreCardId, targetZoneId: "trash" as CoreZoneId });
       // Rule ogn-006-298: emit the discard event for auto-discarded cards.
-      ctx.fireTriggers?.({ cardId: hand[i], playerId: ctx.playerId, type: "discard" });
+      // Rule ogn-202-298: tag batch position so "one or more" fires once.
+      ctx.fireTriggers?.({ batchIndex: i, cardId: hand[i], playerId: ctx.playerId, type: "discard" });
     }
   }
 }
