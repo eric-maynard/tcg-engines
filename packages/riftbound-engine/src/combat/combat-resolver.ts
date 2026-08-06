@@ -38,6 +38,12 @@ export interface CombatUnit {
    * for mandatory combat damage assignment and is never dealt lethal damage.
    */
   readonly immuneToDamage?: boolean;
+  /**
+   * rule 437.5.a — the unit's Prevent Value (a delayed "prevent the next N
+   * damage" shield). Lethal damage for assignment purposes is computed
+   * INCLUDING it, so a shielded Tank soaks Might + Prevent Value.
+   */
+  readonly preventValue?: number;
 }
 
 /**
@@ -102,7 +108,8 @@ function lethalThreshold(unit: CombatUnit, role?: "attacker" | "defender"): numb
   } else if (role === "attacker") {
     might += getKeywordValue(unit, "Assault");
   }
-  return Math.max(0, might);
+  // rule 437.5.a: lethal damage is computed including the unit's Prevent Value.
+  return Math.max(0, might) + Math.max(0, unit.preventValue ?? 0);
 }
 
 /**

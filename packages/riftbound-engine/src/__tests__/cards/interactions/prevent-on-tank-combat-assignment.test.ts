@@ -99,7 +99,7 @@ describe("Prevent on a Tank defender × combat damage assignment", () => {
     expect(game.zoneOf("react")).toBe("chain");
   });
 
-  test.failing("BUG: Case 1 — Ki Barrier (prevent 7) + 12-Might attacker: Guardian must be assigned 11 (4 Might + 7 prevent) and dies, vanilla takes only 1 and survives, attacker is recalled (465.2.c.3-5, 437.5.a). Engine ignores Prevent in combat assignment", async () => {
+  test("Case 1 — Ki Barrier (prevent 7) + 12-Might attacker: Guardian must be assigned 11 (4 Might + 7 prevent) and dies, vanilla takes only 1 and survives, attacker is recalled (465.2.c.3-5, 437.5.a). Engine ignores Prevent in combat assignment", async () => {
     // Expected: assignment 11/1; Guardian dealt 11-7=4 → dies; vanilla 1 → lives; P2 keeps bf1.
     // Actual: combat resolver assigns 4 to Guardian, 4 to vanilla (+4 overflow) — both die, P1 conquers.
     const game = await board(12, KI_BARRIER).build();
@@ -111,7 +111,7 @@ describe("Prevent on a Tank defender × combat damage assignment", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
   });
 
-  test.failing("BUG: Case 1b — Ki Barrier + 8-Might attacker: 8 < 11 so all 8 must stay on the Tank; Guardian takes 1 and survives, vanilla is assigned nothing; both defenders live (465.2.c.3, 465.2.c.6, 437.5.a)", async () => {
+  test("Case 1b — Ki Barrier + 8-Might attacker: 8 < 11 so all 8 must stay on the Tank; Guardian takes 1 and survives, vanilla is assigned nothing; both defenders live (465.2.c.3, 465.2.c.6, 437.5.a)", async () => {
     // Expected: Guardian dealt 8-7=1, survives; vanilla untouched; P2 keeps bf1 with both units.
     // Actual: 4 → Guardian, 4 → vanilla; both defenders die.
     const game = await board(8, KI_BARRIER).build();

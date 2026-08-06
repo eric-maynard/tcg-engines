@@ -321,20 +321,31 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     // __counters bag. Without this, spell/ability damage is invisible
     // and never kills a unit. Read the prior value BEFORE addCounter so
     // callers whose counter store aliases meta.damage don't double-apply.
-    const priorDamage =
-      (
-        ctx.cards.getCardMeta?.(targetId as CoreCardId) as
-          | Partial<RiftboundCardMeta>
-          | undefined
-      )?.damage ?? 0;
-    ctx.counters.addCounter(targetId as CoreCardId, "damage", amount);
+    const priorMeta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+      | (Partial<RiftboundCardMeta> & { damagePreventionShield?: number })
+      | undefined;
+    const priorDamage = priorMeta?.damage ?? 0;
+    // rule 437.4 / 437.7: a "prevent the next N damage" shield absorbs this
+    // damage first and is spent by the amount it absorbs.
+    const shield = Math.max(0, priorMeta?.damagePreventionShield ?? 0);
+    const prevented = amount > 0 ? Math.min(shield, amount) : 0;
+    if (prevented > 0) {
+      ctx.cards.updateCardMeta?.(targetId as CoreCardId, {
+        damagePreventionShield: shield - prevented,
+      } as unknown as Record<string, unknown>);
+    }
+    const dealt = amount - prevented;
+    if (prevented > 0 && dealt <= 0) {
+      continue;
+    }
+    ctx.counters.addCounter(targetId as CoreCardId, "damage", dealt);
     ctx.cards.updateCardMeta?.(
       targetId as CoreCardId,
       {
-        damage: priorDamage + amount,
+        damage: priorDamage + dealt,
         ...damageAttribution,
       } as unknown as Record<string, unknown>,
     );
-    if (amount > 0) reactAnyUnitDamaged(targetId);
+    if (dealt > 0) reactAnyUnitDamaged(targetId);
   }
 }
