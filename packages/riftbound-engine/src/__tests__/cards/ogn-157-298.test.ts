@@ -71,9 +71,7 @@ describe("Udyr, Wildman (ogn-157-298)", () => {
     expect(game.p1.energy()).toBe(6);
   });
 
-  test.failing("BUG: cost 'Spend my buff' — activating removes Udyr's buff (7 → 6 Might), and an unbuffed Udyr cannot activate (rule 702.2.b)", async () => {
-    // Expected: the buff counter is removed as the cost is paid; with no buff the ability is not legal.
-    // Actual: the `spend: "buff"` cost is ignored — the buff stays and an unbuffed Udyr can still activate.
+  test("cost 'Spend my buff' — activating removes Udyr's buff (7 → 6 Might), and an unbuffed Udyr cannot activate (rule 702.2.b)", async () => {
     const game = await board().build();
     expect(game.state("udyr")).toMatchObject({ isBuffed: true, might: 7 });
     await game.p1.activate("udyr");

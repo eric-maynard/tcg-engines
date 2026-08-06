@@ -76,9 +76,7 @@ describe("Possession (ogn-203-298)", () => {
     expect(game.state("victim").isReady).toBe(true);
   });
 
-  test.failing("BUG: the new controller can Standard-Move the stolen unit (move enumeration filters by owner, not controller)", async () => {
-    // Expected: on P1's next turn the ready, P1-controlled Victim may move base → bf1.
-    // Actual: standardMove only lists units whose OWNER is the mover, so no move is offered.
+  test("the new controller can Standard-Move the stolen unit", async () => {
     const game = await board().build();
     await game.p1.cast("pos", { targets: "victim" });
     await game.settle();

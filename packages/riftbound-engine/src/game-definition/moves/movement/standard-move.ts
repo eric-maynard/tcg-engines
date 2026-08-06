@@ -18,6 +18,21 @@ import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { getMoveEscalationSurcharge } from "./helpers";
 
+/**
+ * rule 350.1 / ogn-203-298 (Possession): moves are made by the unit's CURRENT
+ * controller, not its owner — a stolen unit moves for its new controller and
+ * no longer for the player who owns the card.
+ */
+function controllerOf(
+  cards: {
+    getCardOwner: (cardId: CoreCardId) => unknown;
+    getCardController?: (cardId: CoreCardId) => string | undefined;
+  },
+  cardId: CoreCardId,
+): string | undefined {
+  return cards.getCardController?.(cardId) ?? (cards.getCardOwner(cardId) as string | undefined);
+}
+
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
 /**
@@ -64,8 +79,7 @@ export const standardMove: Defs["standardMove"] = {
         return false;
       }
 
-      const owner = context.cards.getCardOwner(unitId as CoreCardId);
-      if ((owner as string) !== playerId) {
+      if (controllerOf(context.cards, unitId as CoreCardId) !== playerId) {
         return false;
       }
 
@@ -113,9 +127,10 @@ export const standardMove: Defs["standardMove"] = {
     }
 
     const registry = getGlobalCardRegistry();
-    const baseCards = context.zones.getCardsInZone(
-      "base" as CoreZoneId,
-      context.playerId as CorePlayerId,
+    // A stolen unit sits in its OWNER's base zone, so scan every player's base
+    // and keep the ones this player currently controls.
+    const baseCards = Object.keys(state.players).flatMap((pid) =>
+      context.zones.getCardsInZone("base" as CoreZoneId, pid as CorePlayerId),
     );
 
     const results: {
@@ -126,8 +141,7 @@ export const standardMove: Defs["standardMove"] = {
 
     const readyUnits: string[] = [];
     for (const cardId of baseCards) {
-      const owner = context.cards.getCardOwner(cardId);
-      if ((owner as string) !== (context.playerId as string)) {
+      if (controllerOf(context.cards, cardId) !== (context.playerId as string)) {
         continue;
       }
 
@@ -173,8 +187,7 @@ export const standardMove: Defs["standardMove"] = {
     for (const bfId of Object.keys(state.battlefields || {})) {
       const bfCards = context.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
       for (const cardId of bfCards) {
-        const owner = context.cards.getCardOwner(cardId);
-        if ((owner as string) !== (context.playerId as string)) {
+        if (controllerOf(context.cards, cardId) !== (context.playerId as string)) {
           continue;
         }
         const def = registry.get(cardId as string);

@@ -462,6 +462,17 @@ export const activateAbility: Defs["activateAbility"] = {
         }
       }
 
+      // rule 702.2.b.1 (ogn-164-298 Sett): a "Spend my buff" cost removes the
+      // host's buff — an unbuffed host cannot pay it.
+      if (cost.spend === "buff") {
+        const hostMeta = context.cards.getCardMeta(cardId as CoreCardId) as
+          | { buffed?: boolean }
+          | undefined;
+        if (hostMeta?.buffed !== true) {
+          return false;
+        }
+      }
+
       // Rule 357.2 / 422.3: a "Discard N" cost requires ≥N cards in hand
       // at activation time; the caller names which card via `discardId`.
       const discardCost = cost.discard as number | undefined;
@@ -740,6 +751,17 @@ export const activateAbility: Defs["activateAbility"] = {
               continue;
             }
           }
+
+          // rule 702.2.b.1 (ogn-164-298 Sett): "Spend my buff" needs a buff
+          // on the host to pay with.
+          if (cost.spend === "buff") {
+            const hostMeta = context.cards.getCardMeta(entry.hostCardId as CoreCardId) as
+              | { buffed?: boolean }
+              | undefined;
+            if (hostMeta?.buffed !== true) {
+              continue;
+            }
+          }
         }
 
         // Rule 357.2 / 422.3: a "Discard N" cost enumerates one activation
@@ -910,6 +932,16 @@ export const activateAbility: Defs["activateAbility"] = {
       // Source (Heimerdinger exhausts himself for an inherited ability).
       if (cost.exhaust) {
         context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
+      }
+
+      // rule 702.2.b (ogn-164-298 Sett): spending a buff removes it; Might
+      // readers look at top-level meta.buffed, so mirror the flag there.
+      if (cost.spend === "buff") {
+        context.counters.setFlag(cardId as CoreCardId, "buffed", false);
+        context.cards.updateCardMeta(
+          cardId as CoreCardId,
+          { buffed: false } as Partial<RiftboundCardMeta>,
+        );
       }
 
       // Rule 730.2: "Spend N XP" reduces the controlling player's XP.

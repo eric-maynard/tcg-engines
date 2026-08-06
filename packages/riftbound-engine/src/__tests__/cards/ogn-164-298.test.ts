@@ -61,9 +61,7 @@ describe("Sett, Brawler (ogn-164-298)", () => {
     expect(game.state("sett").might).toBe(5);
   });
 
-  test.failing("BUG: Spend my buff: removes the buff and gives +4 Might this turn (4 base → 8), back to 4 next turn", async () => {
-    // Expected (702.2.b): the buff is removed as the activation cost → 4 + 4 = 8 this turn.
-    // Actual: the `spend: buff` cost is ignored — the buff stays and Sett ends at 5 + 4 = 9.
+  test("Spend my buff: removes the buff and gives +4 Might this turn (4 base → 8), back to 4 next turn", async () => {
     const game = await scenario().unit(P1, "base", CARD, "sett", { buffed: true }).build();
     expect(game.state("sett").might).toBe(5);
     await game.p1.activate("sett", 1);
@@ -76,8 +74,7 @@ describe("Sett, Brawler (ogn-164-298)", () => {
     expect(game.state("sett").isBuffed).toBe(false);
   });
 
-  test.failing("BUG: Spend my buff is not available without a buff (702.2.b.1)", async () => {
-    // Expected: no buff → the cost can't be paid → activation illegal. Actual: it activates for free (+4).
+  test("Spend my buff is not available without a buff (702.2.b.1)", async () => {
     const game = await scenario().unit(P1, "base", CARD, "sett").build();
     const t = await game.p1.try((p) => p.activate("sett", 1));
     expect(t.ok).toBe(false);
