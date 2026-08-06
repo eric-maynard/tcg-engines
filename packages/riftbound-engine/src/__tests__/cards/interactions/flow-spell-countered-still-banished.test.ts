@@ -118,7 +118,7 @@ describe("Flow spell (Dredge Up) countered by Hard Bargain / Abandon — still b
 
   // ── (c) Abandon ─────────────────────────────────────────────────────────────────────────────
 
-  test.failing("BUG: (c) Abandon counters the Flowed Dredge Up — it is STILL banished; 'hand instead of trash' cannot beat Flow's leave-the-chain replacement (370.2, 372, 829.1.b.1)", async () => {
+  test("(c) Abandon counters the Flowed Dredge Up — it is STILL banished; 'hand instead of trash' cannot beat Flow's leave-the-chain replacement (370.2, 372, 829.1.b.1)", async () => {
     // Expected: whichever order the replacements apply, leaving the chain (to trash OR to hand) is
     // replaced by banishment; P1's hand does not gain Dredge Up. Actual: it returns to P1's hand.
     const game = await board("trash").build();

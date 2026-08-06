@@ -176,13 +176,16 @@ describe("Ruling 0167a87fe08432da — Smite vs Zhonya's Hourglass / Tactical Ret
     expect(game.zoneOf("retreat")).toBe("trash");
   });
 
-  test("Tactical Retreat — engine default (no ordering offered) coincides with the Smite-first branch: victim banished", async () => {
+  // rule 370.2 / 372: with no ordering prompt yet, the engine applies Retreat's shield first — the
+  // branch P2 would pick anyway. The death is fully replaced, so Smite's "banish instead" finds no
+  // death left to replace.
+  test("Tactical Retreat — engine default (no ordering offered) coincides with the Retreat-first branch: victim saved to base", async () => {
     const game = await retreatBoard().build();
     await smiteResolves(game, { retreat: true });
     if (game.decision()?.seat === P2 && game.decision()?.kind !== "action") {
-      await p2Applies(game, "smite");
+      await p2Applies(game, "retreat");
     }
-    expect(game.zoneOf("victim")).toBe("banishment");
+    expectSavedToBase(game);
     expect(game.zoneOf("retreat")).toBe("trash");
   });
 

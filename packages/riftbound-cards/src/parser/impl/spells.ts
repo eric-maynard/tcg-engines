@@ -199,8 +199,15 @@ export function parseSpellAbility(text: string): SpellAbility | undefined {
     // To raw text — this produces a structured replacement body.
     const replacementInner = parseReplacementAbility(effectText);
     if (replacementInner) {
+      // rule 355: the "Choose a friendly unit." preamble is a target of the
+      // spell — carry it onto the replacement rider so the installed
+      // replacement binds to the chosen unit instead of applying to nothing.
+      const inner =
+        chosenTarget && (replacementInner as { target?: unknown }).target === undefined
+          ? { ...replacementInner, target: chosenTarget }
+          : replacementInner;
       return {
-        effect: replacementInner as unknown as Effect,
+        effect: inner as unknown as Effect,
         timing: timingStr,
         type: "spell",
         ...flags,

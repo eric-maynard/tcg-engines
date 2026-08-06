@@ -54,7 +54,7 @@ describe("Highlander (ogs-020-024)", () => {
     expect(sd.p1.can("cast", "hl")).toBe(true);
   });
 
-  test.failing("BUG: must choose a FRIENDLY unit when played (enemy units not offered; no friendly unit → not playable); costs 4", async () => {
+  test("must choose a FRIENDLY unit when played (enemy units not offered; no friendly unit → not playable); costs 4", async () => {
     // Expected: a required `targets` choice listing only ally; with no friendly unit on the board the
     // spell is not castable. Actual: Highlander is offered with no target at all and always castable.
     const game = await board().build();
@@ -66,7 +66,7 @@ describe("Highlander (ogs-020-024)", () => {
     expect(lonely.p1.can("cast", "hl")).toBe(false);
   });
 
-  test.failing("BUG: the next time the chosen unit would die this turn it is instead healed, exhausted and recalled to base — once only", async () => {
+  test("the next time the chosen unit would die this turn it is instead healed, exhausted and recalled to base — once only", async () => {
     // Expected: after Highlander resolves on ally (3 Might at bf1), a 6-damage spell does not kill it:
     // ally ends in base, exhausted, damage 0, Highlander in trash. A SECOND lethal hit the same turn
     // then kills it ("the next time" = one replacement). Actual: no replacement is set up; ally dies.
@@ -84,7 +84,7 @@ describe("Highlander (ogs-020-024)", () => {
     expect(game.zoneOf("ally")).toBe("trash");
   });
 
-  test.failing("BUG: a combat death is replaced too — the attacker comes home exhausted and unhurt instead of dying", async () => {
+  test("a combat death is replaced too — the attacker comes home exhausted and unhurt instead of dying", async () => {
     // Expected: ally (3) attacks a 5-Might defender, would die → healed/exhausted/recalled to base;
     // the defender keeps bf1. Actual: ally goes to the trash.
     const game = await scenario()

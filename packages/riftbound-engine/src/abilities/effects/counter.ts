@@ -28,7 +28,15 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
         boundId !== undefined && items.some((it) => it && it.cardId === boundId);
       for (let i = items.length - 1; i >= 0; i--) {
         const item = items[i];
-        if (!isLegalCounterTarget(counterSpec, item, ctx.sourceCardId)) continue;
+        if (
+          !isLegalCounterTarget(counterSpec, item, ctx.sourceCardId, {
+            controllerOf: (id) =>
+              ctx.cards.getCardController?.(id as CoreCardId) ??
+              ctx.cards.getCardOwner(id as CoreCardId),
+            playerId: ctx.playerId,
+          })
+        )
+          continue;
         if (boundOnChain && item.cardId !== boundId) continue;
         targetItem = item;
         break;
@@ -44,7 +52,14 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
         // rule-id: unl-131-219 — "Return it to its owner's hand instead of
         // putting it in their trash": redirect where the countered spell
         // settles when it leaves the chain.
-        if ((effect as { destination?: string }).destination === "hand" && targetItem.type === "spell") {
+        // rule 829.1.b.1 / 370.2 / 372 — a spell played via [Flow] carries a
+        // delayed "banish it instead" replacement on leaving the chain; it wins
+        // over "to hand instead of trash" whichever order the two apply.
+        if (
+          (effect as { destination?: string }).destination === "hand" &&
+          targetItem.type === "spell" &&
+          targetItem.resolveTo !== "banishment"
+        ) {
           (targetItem as { resolveTo?: string }).resolveTo = "hand";
         }
         // rule-id: ogn-064-298 (rule 425.1.a / 425.1.a.1) — a countered card
