@@ -43,7 +43,7 @@ describe("Sprite (ogn-274-298)", () => {
     expect(onBoard(game)).not.toContain("sprite");
   });
 
-  test.failing("BUG: 'before scoring' — a battlefield held only by a Sprite does not score its controller a Hold point (rules 816.1.b, 190.4.c)", async () => {
+  test("'before scoring' — a battlefield held only by a Sprite does not score its controller a Hold point (rules 816.1.b, 190.4.c)", async () => {
     // Expected: the Sprite is killed first, P1 has no unit left at bf1, so no Hold point (0).
     // Actual: P1 is credited 1 point for holding bf1 and only then loses the Sprite.
     const game = await scenario()

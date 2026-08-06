@@ -23,6 +23,10 @@ import type {
   ZoneId as CoreZoneId,
   FlowDefinition,
 } from "@tcg/core";
+import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
+import { executeEffect } from "../../abilities/effect-executor";
+import type { ReplacementContext } from "../../abilities/replacement-effects";
+import { checkReplacement, markReplacementConsumed } from "../../abilities/replacement-effects";
 import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
@@ -79,6 +83,34 @@ function buildFlowTriggerContext(context: {
       getCardsInZone: context.zones.getCardsInZone,
       moveCard: context.zones.moveCard,
     },
+  };
+}
+
+/**
+ * rule 370.1 — replacement effects can run from the flow (the Beginning-Phase
+ * Temporary kill). The flow context carries no counter store, so back the
+ * counter API with card meta, which is what every reader consults.
+ */
+function buildFlowEffectContext(
+  context: Parameters<typeof buildFlowTriggerContext>[0] & {
+    cards: { updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void };
+  },
+): EffectContext {
+  const base = buildFlowTriggerContext(context) as unknown as EffectContext;
+  const setMeta = (cardId: CoreCardId, meta: Record<string, unknown>): void => {
+    context.cards.updateCardMeta?.(cardId, meta as Partial<RiftboundCardMeta>);
+  };
+  const noop = () => {};
+  return {
+    ...base,
+    counters: {
+      addCounter: noop,
+      clearCounter: (cardId: CoreCardId, counter: string) => setMeta(cardId, { [counter]: 0 }),
+      // heal writes the resulting damage through updateCardMeta itself.
+      removeCounter: noop,
+      setFlag: (cardId: CoreCardId, flag: string, value: boolean) =>
+        setMeta(cardId, { [flag]: value }),
+    } as unknown as EffectContext["counters"],
   };
 }
 
@@ -284,12 +316,16 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   tempKillCards.push(cardId);
                 }
               }
+              const battlefieldOfCard = new Map<string, string>();
               for (const bfId of Object.keys(context.state.battlefields)) {
                 const bfCards = context.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
                 for (const cardId of bfCards) {
                   tempKillCards.push(cardId);
+                  battlefieldOfCard.set(cardId as string, bfId);
                 }
               }
+              // Battlefields a Temporary permanent left during this step.
+              const vacatedBattlefields = new Set<string>();
 
               const tempRegistry = getGlobalCardRegistry();
               for (const cardId of tempKillCards) {
@@ -304,10 +340,63 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   (gk: { keyword: string }) => gk.keyword === "Temporary",
                 );
                 if (hasTemp || grantedTemp) {
+                  const fromBattlefield = battlefieldOfCard.get(cardId as string);
+                  if (fromBattlefield) {
+                    vacatedBattlefields.add(fromBattlefield);
+                  }
+                  // rule 370.1 / 371.2— the Temporary kill is a death like any
+                  // other, so a board "if a friendly unit would die, … instead"
+                  // replacement applies to it. Such a replacement has no "may",
+                  // so it is forced: no prompt, and the death never happens.
+                  const replacementMatch = checkReplacement(
+                    { cardId: cardId as string, owner: owner as string, type: "die" },
+                    {
+                      cards: context.cards as unknown as ReplacementContext["cards"],
+                      draft: context.state,
+                      zones: context.zones,
+                    },
+                  );
+                  if (replacementMatch) {
+                    markReplacementConsumed(context.state, replacementMatch);
+                    const repl = replacementMatch.replacement as ExecutableEffect | "prevent";
+                    if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
+                      executeEffect(repl, {
+                        ...buildFlowEffectContext(context),
+                        playerId: replacementMatch.sourceOwner,
+                        sourceCardId: replacementMatch.sourceCardId,
+                        triggerSourceId: cardId as string,
+                      });
+                    }
+                    continue;
+                  }
                   context.zones.moveCard({
                     cardId,
                     targetZoneId: "trash" as CoreZoneId,
                   });
+                }
+              }
+
+              // rule 323.6: control of a Battlefield is lost as soon as the
+              // controller has no Unit there. The Temporary kill (and any
+              // replacement that moves the unit off the Battlefield instead)
+              // happens before the scoring step, so re-check control now —
+              // otherwise a Hold would be scored for a Battlefield that is no
+              // longer controlled (rule 469.2).
+              for (const bfId of vacatedBattlefields) {
+                const bf = context.state.battlefields[bfId];
+                if (!bf?.controller) {
+                  continue;
+                }
+                const unitsAtBf = context.zones.getCardsInZone(
+                  `battlefield-${bfId}` as CoreZoneId,
+                );
+                const stillHolds = unitsAtBf.some(
+                  (id) =>
+                    context.cards.getCardOwner?.(id) === bf.controller &&
+                    getGlobalCardRegistry().getCardType(id as string) === "unit",
+                );
+                if (!stillHolds) {
+                  bf.controller = null;
                 }
               }
 
@@ -697,6 +786,11 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               // rule-id: ogn-026-298 — "can't play cards this turn" expires.
               if (context.state.cannotPlayCardsThisTurn) {
                 context.state.cannotPlayCardsThisTurn = undefined;
+              }
+              // rule-id: sfd-078-221 — an unused "next spell has [Repeat]"
+              // grant expires with the turn.
+              if (context.state.nextSpellRepeat) {
+                context.state.nextSpellRepeat = undefined;
               }
               // rule-id: unl-007-219 — expire "this turn" runtime replacements
               // (rule 517.2) so an unspent die→banish rider doesn't leak into

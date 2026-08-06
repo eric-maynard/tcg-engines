@@ -81,7 +81,7 @@ describe("Last Stand × Zhonya's Hourglass — Temporary death is replaced (forc
   // Expected: at P2's next Beginning Phase the Temporary kill is replaced by Zhonya's with no
   // prompt (no "may"): Zhonya's → trash, holder healed/exhausted/recalled to base.
   // Actual: Temporary is granted with duration "turn" and expires; nothing happens, Zhonya's stays.
-  test.failing("BUG: at P2's next Beginning Phase Zhonya's is FORCED to replace the Temporary death — no yes/no prompt, Hourglass killed, holder recalled to base (816.1.b, 370.1, 371.2)", async () => {
+  test("at P2's next Beginning Phase Zhonya's is FORCED to replace the Temporary death — no yes/no prompt, Hourglass killed, holder recalled to base (816.1.b, 370.1, 371.2)", async () => {
     const game = await castAndComeBackAround();
     // No optional-replacement prompt was raised on the way: we are sitting in P2's open main phase.
     expect(game.decision()).toMatchObject({ kind: "action", seat: P2, context: "main" });
@@ -93,7 +93,7 @@ describe("Last Stand × Zhonya's Hourglass — Temporary death is replaced (forc
 
   // Expected: Awaken readied everything BEFORE the Beginning Phase; Zhonya's then exhausts the
   // unit, so it is exhausted for this turn. Actual: unit never recalled; it sits ready at bf1.
-  test.failing("BUG: the saved unit is EXHAUSTED in base this turn (Awaken 315.1/415.3.a precedes the Beginning-Phase exhaust)", async () => {
+  test("the saved unit is EXHAUSTED in base this turn (Awaken 315.1/415.3.a precedes the Beginning-Phase exhaust)", async () => {
     const game = await castAndComeBackAround();
     expect(game.zoneOf("holder")).toBe("base");
     expect(game.state("holder").isExhausted).toBe(true);
@@ -101,7 +101,7 @@ describe("Last Stand × Zhonya's Hourglass — Temporary death is replaced (forc
 
   // Expected: recall is not a move to a non-board zone, so the (duration-less) Temporary grant
   // survives (124.1). Actual: Temporary was granted "this turn" and is already gone.
-  test.failing("BUG: after the Zhonya's recall the unit STILL has Temporary (124.1: board→board keeps temporary modifications)", async () => {
+  test("after the Zhonya's recall the unit STILL has Temporary (124.1: board→board keeps temporary modifications)", async () => {
     const game = await castAndComeBackAround();
     expect(game.zoneOf("holder")).toBe("base");
     expect(game.state("holder").keywords).toContain("Temporary");
@@ -109,7 +109,7 @@ describe("Last Stand × Zhonya's Hourglass — Temporary death is replaced (forc
 
   // Expected: the kill (→ recall) happens "before scoring", so P2 has no unit at bf1 when Hold is
   // checked and scores nothing (469.2). Actual: the unit never leaves and P2 scores the hold (1 pt).
-  test.failing("BUG: P2 does NOT score the hold on bf1 that turn — the unit left 'before scoring' (816.1.b, 469.2)", async () => {
+  test("P2 does NOT score the hold on bf1 that turn — the unit left 'before scoring' (816.1.b, 469.2)", async () => {
     const game = await castAndComeBackAround();
     expect(game.p2.points()).toBe(0);
     expect(game.p2.units("bf1")).toEqual([]);
@@ -117,7 +117,7 @@ describe("Last Stand × Zhonya's Hourglass — Temporary death is replaced (forc
 
   // Expected: one more round later Temporary triggers again with no Hourglass left → the unit
   // dies for real. Actual: the unit lives on at bf1 indefinitely.
-  test.failing("BUG: at P2's FOLLOWING Beginning Phase Temporary kills the unit for good (Zhonya's already spent)", async () => {
+  test("at P2's FOLLOWING Beginning Phase Temporary kills the unit for good (Zhonya's already spent)", async () => {
     const game = await castAndComeBackAround();
     expect(game.zoneOf("zh")).toBe("trash");
     await game.advanceTurn(); // → P1
