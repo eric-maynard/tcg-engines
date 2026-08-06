@@ -143,6 +143,16 @@ function buildReplacementEffectContext(
  */
 const RUNNING_DIE_REPLACEMENTS = new Set<string>();
 
+/**
+ * rule 124.1 — damage lives in BOTH the `damage` counter and the mirrored
+ * `meta.damage`; clearing only one leaves stale damage that follows the card
+ * through a zone change (a unit replayed from the trash came back pre-damaged).
+ */
+function clearDamage(ctx: CleanupContext, cardId: string): void {
+  ctx.cards.updateCardMeta(cardId as CoreCardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+  ctx.counters.clearCounter(cardId as CoreCardId, "damage");
+}
+
 export function applyDieReplacement(ctx: CleanupContext, cardId: string): boolean {
   if (RUNNING_DIE_REPLACEMENTS.has(cardId)) {
     return false;
@@ -156,7 +166,7 @@ export function applyDieReplacement(ctx: CleanupContext, cardId: string): boolea
     return false;
   }
   markReplacementConsumed(ctx.draft, match);
-  ctx.cards.updateCardMeta(cardId as CoreCardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+  clearDamage(ctx, cardId);
   const repl = match.replacement as ExecutableEffect | "prevent" | undefined;
   if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
     RUNNING_DIE_REPLACEMENTS.add(match.sourceCardId);
@@ -489,7 +499,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
             stunned: false,
           } as Partial<RiftboundCardMeta>);
         } else {
-          ctx.cards.updateCardMeta(cardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+          clearDamage(ctx, cardId as string);
           // rule 370.1.a.1 (ogn-023-298): run the replacement's own effect
           // ("heal it, exhaust it, and recall it") with this unit as "it".
           if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
@@ -535,7 +545,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         markReplacementConsumed(ctx.draft, replacementMatch);
         stateChanged = true;
         // Clear damage so it doesn't re-trigger next cleanup pass
-        ctx.cards.updateCardMeta(cardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+        clearDamage(ctx, cardId as string);
         const repl = replacementMatch.replacement as ExecutableEffect | "prevent" | undefined;
         if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
           executeEffect(repl, buildReplacementEffectContext(ctx, replacementMatch, cardId as string));
@@ -596,6 +606,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         mightModifier: 0,
         stunned: false,
       } as Partial<RiftboundCardMeta>);
+      ctx.counters.clearCounter(cardId, "damage");
 
       killed.push(cardId as string);
       stateChanged = true;
@@ -616,6 +627,43 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         } as Partial<RiftboundCardMeta>);
         stateChanged = true;
       }
+    }
+
+    // rule 464.2.c.3.a: a unit that becomes present at a battlefield during an
+    // ongoing combat gains Attacker/Defender at the next cleanup.
+    if (!isBattlefield) {
+      continue;
+    }
+    const bfId = (zoneId as string).slice("battlefield-".length);
+    const bf = ctx.draft.battlefields[bfId];
+    if (!bf?.contested || bf.showdownComplete || !bf.contestedBy) {
+      continue;
+    }
+    // Only while a combat showdown is actually running here — a contested flag
+    // alone can outlive the showdown that set it.
+    const combatRunning = (ctx.draft.interaction?.showdownStack ?? []).some(
+      (sd) => sd.active && sd.isCombatShowdown && sd.battlefieldId === bfId,
+    );
+    if (!combatRunning) {
+      continue;
+    }
+    const units = cardsInZone.filter((id) => registry.getCardType(id as string) === "unit");
+    const attackerSide = bf.contestedBy;
+    const bothSidesPresent =
+      units.some((id) => ctx.cards.getCardOwner(id) === attackerSide) &&
+      units.some((id) => ctx.cards.getCardOwner(id) !== attackerSide);
+    if (!bothSidesPresent) {
+      continue;
+    }
+    for (const cardId of units) {
+      const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
+      if (meta?.combatRole) {
+        continue;
+      }
+      ctx.cards.updateCardMeta(cardId, {
+        combatRole: ctx.cards.getCardOwner(cardId) === attackerSide ? "attacker" : "defender",
+      } as Partial<RiftboundCardMeta>);
+      stateChanged = true;
     }
   }
 
