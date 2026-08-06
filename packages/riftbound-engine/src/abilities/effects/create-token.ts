@@ -8,6 +8,22 @@ import { type EffectHelpers, resolveAmount, tokenEntersReadyFromStaticGrant } fr
 let tokenSeq = 0;
 
 /**
+ * rule 187.5: named tokens are defined by the rules, not by the card that plays
+ * them — a Gold gear token always has "[Reaction] Kill this, [Exhaust]: [Add]
+ * [rainbow]", whatever minted it. Keyed by token slug.
+ */
+const NAMED_TOKEN_ABILITIES: Record<string, readonly unknown[]> = {
+  gold: [
+    {
+      cost: { exhaust: true, kill: "self" },
+      effect: { power: ["rainbow"], type: "add-resource" },
+      timing: "reaction",
+      type: "activated",
+    },
+  ],
+};
+
+/**
  * rule 187.1: a unit token carries its name as a tag (a Recruit token has the
  * Recruit tag), so "non-Recruit unit" filters can exclude it.
  */
@@ -98,8 +114,11 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   // registered below for by-instance registry lookups).
   const tokenSlug = tokenDef.name.toLowerCase().replace(/\s+/g, "-");
   const tokenDefinitionId = `token-def-${tokenSlug}`;
+  // rule 187.5: a rules-defined token (Gold, …) carries its printed abilities.
+  const namedAbilities = NAMED_TOKEN_ABILITIES[tokenSlug];
   if (!registry.get(tokenDefinitionId)) {
     registry.register(tokenDefinitionId, {
+      abilities: namedAbilities ? ([...namedAbilities] as never) : undefined,
       cardType: tokenDef.type === "gear" ? "gear" : "unit",
       id: tokenDefinitionId,
       keywords: tokenDef.keywords ? [...tokenDef.keywords] : undefined,
@@ -160,6 +179,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
       });
     } else {
       registry.register(tokenId, {
+        abilities: namedAbilities ? ([...namedAbilities] as never) : undefined,
         cardType: tokenDef.type === "gear" ? "gear" : "unit",
         id: tokenId,
         keywords: tokenDef.keywords ? [...tokenDef.keywords] : undefined,

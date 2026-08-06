@@ -51,9 +51,7 @@ describe("Assembly Rig (sfd-019-221)", () => {
     expect(mechs(game.p1.units("base"))).toHaveLength(1);
   });
 
-  test.failing("BUG: 'Recycle a unit from your trash' is part of the cost — the trashed unit goes to the bottom of the main deck (403)", async () => {
-    // Expected: on activation `dead` leaves the trash and becomes the bottom card of P1's main deck
-    // (the non-unit `junk` is not eligible and stays). Actual: nothing is recycled; `dead` stays in trash.
+  test("'Recycle a unit from your trash' is part of the cost — the trashed unit goes to the bottom of the main deck (403)", async () => {
     const game = await board().build();
     await game.p1.activate("rig");
     if (game.decision()?.kind === "pick") {
@@ -66,9 +64,7 @@ describe("Assembly Rig (sfd-019-221)", () => {
     expect(mechs(game.p1.base())).toHaveLength(1);
   });
 
-  test.failing("BUG: not activatable with no UNIT in your trash (cost cannot be paid, 379.5)", async () => {
-    // Expected: only a spell in trash → the recycle cost is unpayable → no activate option.
-    // Actual: the engine ignores the recycle cost and offers the activation.
+  test("not activatable with no UNIT in your trash (cost cannot be paid, 379.5)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1, power: { fury: 1 } })
       .gear(P1, CARD, "rig")

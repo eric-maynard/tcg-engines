@@ -50,6 +50,43 @@ function abilityTimingClass(
 }
 
 /**
+ * rule 403 / 379.5 — normalize an activated ability's `recycle` cost. The parser
+ * emits a bare count for "Recycle N from your trash" and an object
+ * `{amount, from, cardType?}` for "Recycle a <noun> from your trash"
+ * (sfd-019-221 Assembly Rig). Hand/board recycle costs are paid elsewhere.
+ */
+function normalizeRecycleCost(raw: unknown): { amount: number; cardType?: string } | undefined {
+  if (typeof raw === "number") {
+    return raw > 0 ? { amount: raw } : undefined;
+  }
+  if (raw && typeof raw === "object") {
+    const spec = raw as { amount?: number; cardType?: string; from?: string };
+    if (spec.from !== undefined && spec.from !== "trash") {
+      return undefined;
+    }
+    const amount = spec.amount ?? 1;
+    return amount > 0 ? { amount, cardType: spec.cardType } : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * rule 379.5 — the cards in `trash` that can actually pay a recycle cost.
+ * "Recycle a unit from your trash" is only payable with units.
+ */
+function eligibleRecycleCards(
+  trash: readonly unknown[],
+  spec: { cardType?: string },
+): string[] {
+  const ids = trash as readonly string[];
+  if (!spec.cardType) {
+    return [...ids];
+  }
+  const registry = getGlobalCardRegistry();
+  return ids.filter((id) => registry.getCardType(id) === spec.cardType);
+}
+
+/**
  * rule-id: sfd-052-221 (rule 355.10.f / 355.14.b) — an activated ability's
  * single caster-chosen card target ("Give a unit +3 Might") is chosen when
  * the ability is finalized on the chain, not when it resolves. Returns that
@@ -525,20 +562,21 @@ export const activateAbility: Defs["activateAbility"] = {
       // rule-id: ogn-036-298 (rule 577.2 / 409) — a "Recycle N from your
       // trash" cost requires ≥N cards in the controller's trash; any named
       // `recycleIds` must all be in that trash.
-      const recycleCost = cost.recycle as number | undefined;
-      if (recycleCost && recycleCost > 0) {
+      const recycleSpec = normalizeRecycleCost(cost.recycle);
+      if (recycleSpec) {
         const trash = context.zones.getCardsInZone(
           "trash" as CoreZoneId,
           playerId as CorePlayerId,
         );
-        if (trash.length < recycleCost) {
+        const eligible = eligibleRecycleCards(trash, recycleSpec);
+        if (eligible.length < recycleSpec.amount) {
           return false;
         }
         const recycleIds = context.params.recycleIds as string[] | undefined;
         if (
           recycleIds &&
-          (recycleIds.length !== recycleCost ||
-            !recycleIds.every((id) => trash.includes(id as CoreCardId)))
+          (recycleIds.length !== recycleSpec.amount ||
+            !recycleIds.every((id) => eligible.includes(id)))
         ) {
           return false;
         }
@@ -833,15 +871,15 @@ export const activateAbility: Defs["activateAbility"] = {
 
         // rule-id: ogn-036-298 (rule 577.2) — a "Recycle N from your trash"
         // cost is unpayable with fewer than N cards in trash.
-        const recycleCost = (ability.cost as Record<string, unknown> | undefined)?.recycle as
-          | number
-          | undefined;
-        if (recycleCost && recycleCost > 0) {
+        const recycleSpec = normalizeRecycleCost(
+          (ability.cost as Record<string, unknown> | undefined)?.recycle,
+        );
+        if (recycleSpec) {
           const trash = context.zones.getCardsInZone(
             "trash" as CoreZoneId,
             playerId as CorePlayerId,
           );
-          if (trash.length < recycleCost) {
+          if (eligibleRecycleCards(trash, recycleSpec).length < recycleSpec.amount) {
             continue;
           }
         }
@@ -1022,20 +1060,21 @@ export const activateAbility: Defs["activateAbility"] = {
       // rule-id: ogn-036-298 (rule 577.2 / 409) — pay the "Recycle N from
       // your trash" cost: move N trash cards (caller-named via `recycleIds`,
       // else the top N) to the bottom of the main deck before chaining.
-      const recycleCost = cost.recycle as number | undefined;
-      if (recycleCost && recycleCost > 0) {
+      const recycleSpec = normalizeRecycleCost(cost.recycle);
+      if (recycleSpec) {
         const trash = context.zones.getCardsInZone(
           "trash" as CoreZoneId,
           playerId as CorePlayerId,
         );
-        if (trash.length < recycleCost) {
+        const eligible = eligibleRecycleCards(trash, recycleSpec);
+        if (eligible.length < recycleSpec.amount) {
           return;
         }
         const named = context.params.recycleIds as string[] | undefined;
         const toRecycle =
-          named && named.length === recycleCost
+          named && named.length === recycleSpec.amount
             ? named
-            : (trash.slice(0, recycleCost) as readonly string[]);
+            : (eligible.slice(0, recycleSpec.amount) as readonly string[]);
         for (const id of toRecycle) {
           context.zones.moveCard({
             cardId: id as CoreCardId,

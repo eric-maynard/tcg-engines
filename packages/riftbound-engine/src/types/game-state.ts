@@ -405,8 +405,21 @@ export interface RevealAndPickChoice {
    */
   readonly filter?: {
     readonly excludeCardTypes?: readonly string[];
+    /** rule-id: unl-139-219 — "choose a unit from it": allowed card types. */
+    readonly cardTypes?: readonly string[];
     readonly maxMight?: number;
   };
+
+  /**
+   * rule 419.3 / 811.1.c.1 (unl-139-219 Bone Skewer): "They play that unit to
+   * that battlefield, ignoring any and all costs" — the pick is played by its
+   * OWNER into this fixed zone (so control stays with them), and hiding it
+   * instead is never offered.
+   */
+  readonly playTo?: string;
+
+  /** rule 423 (unl-139-219): the forced play arrives stunned. */
+  readonly playStun?: boolean;
 
   /**
    * What to do with the picked card. `"recycle"` sends it to the bottom of
@@ -580,6 +593,12 @@ export interface ChooseDestinationChoice {
   readonly then?: unknown;
   /** Source card of `then` (the spell/ability that moved the unit). */
   readonly sourceCardId?: CardId;
+  /**
+   * rule-id: ogn-262-298 (rule 355.13) — "You MAY move a friendly unit to that
+   * enemy unit's battlefield": the mover may decline (`accept: false`), so the
+   * prompt stands even when only one destination is legal.
+   */
+  readonly optional?: true;
 }
 
 /**

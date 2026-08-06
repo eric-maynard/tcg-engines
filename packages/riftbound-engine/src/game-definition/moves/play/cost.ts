@@ -56,6 +56,7 @@ export function staticEnterReadyApplies(
   cardId: string,
   state: RiftboundGameState,
   playerId: string,
+  zones?: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
 ): boolean {
   const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
   for (const ability of abilities) {
@@ -69,7 +70,7 @@ export function staticEnterReadyApplies(
     if (effect?.type !== "enter-ready") {
       continue;
     }
-    if (!condition || evaluateEnterReadyCondition(condition, state, playerId) !== false) {
+    if (!condition || evaluateEnterReadyCondition(condition, state, playerId, cardId, zones) !== false) {
       return true;
     }
   }
@@ -80,13 +81,33 @@ function evaluateEnterReadyCondition(
   condition: Record<string, unknown>,
   state: RiftboundGameState,
   playerId: string,
+  cardId?: string,
+  zones?: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
 ): boolean | undefined {
   switch (condition.type) {
+    // rule 419.1 (rule-id: ven-013-166) — "if you have a card with my name in
+    // your trash": evaluated as the unit enters, so a card played OUT of the
+    // trash has already left it and never counts itself.
+    case "name-in-trash": {
+      if (!zones || !cardId) {
+        return undefined;
+      }
+      const registry = getGlobalCardRegistry();
+      const name = registry.get(cardId)?.name;
+      if (!name) {
+        return undefined;
+      }
+      return zones
+        .getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId)
+        .some((id) => id !== cardId && registry.get(id as string)?.name === name);
+    }
     case "not": {
       const inner = evaluateEnterReadyCondition(
         (condition.condition ?? {}) as Record<string, unknown>,
         state,
         playerId,
+        cardId,
+        zones,
       );
       return inner === undefined ? undefined : !inner;
     }
@@ -367,6 +388,41 @@ export function canPlayToOpenBattlefield(
  */
 export function canPlayToOccupiedEnemyBattlefield(cardId: string): boolean {
   return getPlayLocationPermission(cardId) === "an occupied enemy battlefield";
+}
+
+/**
+ * rule 355.2 (sfd-025-221, Rengar Pouncing) — "I can be played to a
+ * battlefield you're attacking" is modelled as a static grant-keyword
+ * `CanPlayToAttacked` on self; this is the engine hook that reads it.
+ */
+export function canPlayToAttackedBattlefield(cardId: string): boolean {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  for (const ability of abilities) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const effect = (ability as { effect?: { type?: string; keyword?: string } }).effect;
+    if (
+      (effect?.type === "grant-keyword" || effect?.type === "grant-keywords") &&
+      effect?.keyword === "CanPlayToAttacked"
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * rule 464.2.a — a player is attacking a battlefield for as long as their
+ * Standard Move contests it (the showdown/combat is still open).
+ */
+export function battlefieldIsAttackedBy(
+  state: RiftboundGameState,
+  bfId: string,
+  playerId: string,
+): boolean {
+  const bf = state.battlefields?.[bfId];
+  return bf?.contested === true && bf.contestedBy === playerId;
 }
 
 /**
@@ -1516,6 +1572,55 @@ function drainOnePowerPip(
 /**
  * Check if player can afford a card's cost from their rune pool.
  */
+/**
+ * rule 429.4 (ogs-014-024 Lux, Crownguard): how much of `playerId`'s Energy pool
+ * is earmarked "use only to play spells / gear" for a card type OTHER than the
+ * one being played — that much Energy cannot pay for this card.
+ */
+function getLockedEnergy(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+): number {
+  const entry = (
+    state as { restrictedEnergy?: Record<string, Record<string, number>> }
+  ).restrictedEnergy?.[playerId];
+  if (!entry) {
+    return 0;
+  }
+  const cardType = getGlobalCardRegistry().getCardType(cardId);
+  let locked = 0;
+  for (const [kind, amount] of Object.entries(entry)) {
+    if (kind !== cardType) {
+      locked += amount ?? 0;
+    }
+  }
+  return Math.min(locked, state.runePools[playerId]?.energy ?? 0);
+}
+
+/**
+ * rule 429.4: spending Energy on a card the earmark allows consumes the
+ * earmarked portion first, so it stops blocking later plays.
+ */
+function consumeRestrictedEnergy(
+  draft: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  spent: number,
+): void {
+  const entry = (
+    draft as { restrictedEnergy?: Record<string, Record<string, number>> }
+  ).restrictedEnergy?.[playerId];
+  if (!entry || spent <= 0) {
+    return;
+  }
+  const cardType = getGlobalCardRegistry().getCardType(cardId);
+  const current = entry[cardType as string];
+  if (current) {
+    entry[cardType as string] = Math.max(0, current - spent);
+  }
+}
+
 export function canAffordCard(
   state: RiftboundGameState,
   playerId: string,
@@ -1564,7 +1669,10 @@ export function canAffordCard(
 
   // Rule 357.1.a: ready runes can be exhausted for energy during Pay Costs,
   // so treat their yield as available when testing affordability.
-  const availableEnergy = pool.energy + potentialEnergy;
+  // rule 429.4: Energy earmarked "use only to play spells / gear" is invisible
+  // to a play of any other card type.
+  const availableEnergy =
+    Math.max(0, pool.energy - getLockedEnergy(state, playerId, cardId)) + potentialEnergy;
   // rule 356.1.b: "ignoring its Energy cost" skips only that component.
   if (!extras.ignoreEnergyCost && availableEnergy < adjustedEnergy) {
     return false;
@@ -1695,6 +1803,10 @@ export function deductCost(
   );
 
   // rule 356.1.b: "ignoring its Energy cost" skips only that component.
+  if (!extras.ignoreEnergyCost) {
+    // rule 429.4: earmarked Energy is spent first on the plays it allows.
+    consumeRestrictedEnergy(draft, playerId, cardId, Math.min(adjustedEnergy, pool.energy));
+  }
   pool.energy = extras.ignoreEnergyCost ? pool.energy : Math.max(0, pool.energy - adjustedEnergy);
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
   const basePower = reducePowerCost(cost.power, waivedPower(boardReduction, extras), pool.power);

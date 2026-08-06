@@ -55,9 +55,7 @@ describe("Lux, Crownguard (ogs-014-024)", () => {
     expect(game.zoneOf("spell")).toBe("chain");
   });
 
-  test.failing("BUG: 'Use only to play spells' — the added [2] cannot pay for a 2-cost unit (ordinary energy can)", async () => {
-    // Expected: Lux's 2 energy is spell-only, so with no other energy a 2-cost unit stays unplayable.
-    // Actual: the ability adds ordinary energy (`add-resource {energy: 2}` with no restriction) and the unit becomes playable.
+  test("'Use only to play spells' — the added [2] cannot pay for a 2-cost unit (ordinary energy can)", async () => {
     const game = await scenario().unit(P1, "base", CARD, "lux").hand(P1, TWO_DROP, "unit").build();
     await game.p1.activate("lux");
     expect(game.p1.energy()).toBe(2);

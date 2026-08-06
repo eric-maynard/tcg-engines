@@ -89,7 +89,16 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
     let cost: Cost = parseCost(leadingCostStr);
     cost = {
       ...cost,
-      recycle: { amount: 1, from: "trash", text: recyclePart.trim() },
+      recycle: {
+        amount: 1,
+        // rule 379.5: "Recycle a unit from your trash" is payable only with a
+        // card of that type — carry the noun so the engine can filter.
+        ...(recyclePart.match(/\b(unit|gear|spell|legend)\b/i)
+          ? { cardType: recyclePart.match(/\b(unit|gear|spell|legend)\b/i)?.[1].toLowerCase() }
+          : {}),
+        from: "trash",
+        text: recyclePart.trim(),
+      },
     } as Cost;
     if (trailingCostTokens) {
       const extraCost = parseCost(trailingCostTokens.replace(/^,\s*/, ""));
@@ -269,6 +278,18 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
     remaining = remaining.slice(0, remaining.length - earlyShowdown[0].length).trim();
   }
 
+  // rule 429.4 (ogs-014-024, sfd-189-221): "Use only to play
+  // spells / gear …" restricts what the added resources may pay for. Pre-strip
+  // it so it doesn't break the [Add] match below.
+  let addRestriction: "spell" | "gear" | undefined;
+  const useOnlyToPlay = remaining.match(
+    /\s*Use only to play (spells?|gear)\b[^.]*\.?(?:\s*\([^)]*\))?\s*$/i,
+  );
+  if (useOnlyToPlay) {
+    addRestriction = useOnlyToPlay[1].toLowerCase().startsWith("spell") ? "spell" : "gear";
+    remaining = remaining.slice(0, remaining.length - useOnlyToPlay[0].length).trim();
+  }
+
   // Check for [Add] resource pattern
   const addMatch = remaining.match(/^\[Add\]\s+(.+?)\.?\s*(?:\(.*\))?\.?\s*$/s);
   if (addMatch) {
@@ -326,6 +347,9 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
     }
 
     const resourceEffect = parseResourcePayload(resourceText);
+    if (addRestriction) {
+      (resourceEffect as { restriction?: string }).restriction = addRestriction;
+    }
     const ability: ActivatedAbility = { cost, effect: resourceEffect, type: "activated" };
     if (timing) {
       (ability as { timing: string }).timing = timing;

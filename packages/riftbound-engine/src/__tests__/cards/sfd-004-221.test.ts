@@ -121,9 +121,7 @@ describe("Bushwhack (sfd-004-221)", () => {
     expect(game.state(gear[0] as string)).toMatchObject({ isExhausted: true, isToken: true, name: "Gold" });
   });
 
-  test.failing("BUG: the Gold token is a real Gold gear (rule 187.5) — once ready, 'Kill this, [Exhaust]: [Add] [rainbow]' is activatable", async () => {
-    // Expected: next turn the (now ready) Gold token offers an activated ability that kills it and
-    // adds 1 rainbow power. Actual: ability-minted tokens are registered without abilities.
+  test("the Gold token is a real Gold gear (rule 187.5) — once ready, 'Kill this, [Exhaust]: [Add] [rainbow]' is activatable", async () => {
     const game = await board().build();
     await game.p1.cast("bw");
     await game.settle();
