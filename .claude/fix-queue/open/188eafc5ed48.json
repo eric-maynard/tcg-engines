@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-110-298",
+  "title": "BUG: [Deathknell] on a spell death — the trigger resolves by recycling him to the bottom of the main deck and readying all your runes",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-110-298.test.ts",
+    "testName": "BUG: [Deathknell] on a spell death — the trigger resolves by recycling him to the bottom of the main deck and readying all your runes"
+  },
+  "id": "188eafc5ed48",
+  "createdAt": "2026-08-06T17:15:21.551Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.551Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

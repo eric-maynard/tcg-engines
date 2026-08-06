@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-118-298",
+  "title": "BUG: a friendly unit dying (in combat) draws 1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-118-298.test.ts",
+    "testName": "BUG: a friendly unit dying (in combat) draws 1"
+  },
+  "id": "26327713e09f",
+  "createdAt": "2026-08-06T17:15:21.548Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.548Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

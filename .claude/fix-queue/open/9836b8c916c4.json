@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-108-298",
+  "title": "BUG: the caster chooses the friendly unit (and the reference unit) — only friendly units are offered",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-108-298.test.ts",
+    "testName": "BUG: the caster chooses the friendly unit (and the reference unit) — only friendly units are offered"
+  },
+  "id": "9836b8c916c4",
+  "createdAt": "2026-08-06T17:15:21.555Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.555Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-048-298",
+  "title": "BUG: declining the optional cost leaves friendly units ready and draws exactly 1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-048-298.test.ts",
+    "testName": "BUG: declining the optional cost leaves friendly units ready and draws exactly 1"
+  },
+  "id": "ffab62f6b34c",
+  "createdAt": "2026-08-06T17:15:21.548Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.548Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

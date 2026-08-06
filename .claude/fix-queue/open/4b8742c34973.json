@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-035-298",
+  "title": "BUG: enters exhausted when NO opponent controls a battlefield (rule 143.4)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-035-298.test.ts",
+    "testName": "BUG: enters exhausted when NO opponent controls a battlefield (rule 143.4)"
+  },
+  "id": "4b8742c34973",
+  "createdAt": "2026-08-06T17:15:21.550Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.550Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

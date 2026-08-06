@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-023-298",
+  "title": "BUG: when the chosen unit would die to a spell, you may pay [fury] → it is healed, exhausted and stays in base",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-023-298.test.ts",
+    "testName": "BUG: when the chosen unit would die to a spell, you may pay [fury] → it is healed, exhausted and stays in base"
+  },
+  "id": "691b1256ae5d",
+  "createdAt": "2026-08-06T17:15:21.548Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.548Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-080-298",
+  "title": "BUG: on resolution P1 gains control of the targeted spell (its chain item is now controlled by P1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-080-298.test.ts",
+    "testName": "BUG: on resolution P1 gains control of the targeted spell (its chain item is now controlled by P1)"
+  },
+  "id": "35b90b4ec027",
+  "createdAt": "2026-08-06T17:15:21.554Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.554Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

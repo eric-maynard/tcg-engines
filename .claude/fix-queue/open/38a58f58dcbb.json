@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-113-298",
+  "title": "BUG: [Action] timing — usable during a showdown on the opponent's turn once P1 holds Focus",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-113-298.test.ts",
+    "testName": "BUG: [Action] timing — usable during a showdown on the opponent's turn once P1 holds Focus"
+  },
+  "id": "38a58f58dcbb",
+  "createdAt": "2026-08-06T17:15:21.549Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.549Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

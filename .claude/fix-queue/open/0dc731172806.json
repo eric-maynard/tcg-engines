@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-069-298",
+  "title": "BUG: only FRIENDLY units are legal targets",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-069-298.test.ts",
+    "testName": "BUG: only FRIENDLY units are legal targets"
+  },
+  "id": "0dc731172806",
+  "createdAt": "2026-08-06T17:15:21.544Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.544Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

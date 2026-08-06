@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-039-298",
+  "title": "BUG: 'When I conquer' — another friendly unit conquering elsewhere must NOT draw (383.4.c.2)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-039-298.test.ts",
+    "testName": "BUG: 'When I conquer' — another friendly unit conquering elsewhere must NOT draw (383.4.c.2)"
+  },
+  "id": "d52443d0b9ab",
+  "createdAt": "2026-08-06T17:15:21.549Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.549Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

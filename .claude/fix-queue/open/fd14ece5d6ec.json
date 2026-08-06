@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-046-298",
+  "title": "BUG: +1 Might only when you control another unit at the same location (the extra +1 requires being alone there)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-046-298.test.ts",
+    "testName": "BUG: +1 Might only when you control another unit at the same location (the extra +1 requires being alone there)"
+  },
+  "id": "fd14ece5d6ec",
+  "createdAt": "2026-08-06T17:15:21.555Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.555Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

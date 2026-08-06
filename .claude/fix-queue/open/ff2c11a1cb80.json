@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-069-298",
+  "title": "BUG: doubles the unit's Might this turn (3 → 6) (rule 432.1.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-069-298.test.ts",
+    "testName": "BUG: doubles the unit's Might this turn (3 → 6) (rule 432.1.a)"
+  },
+  "id": "ff2c11a1cb80",
+  "createdAt": "2026-08-06T17:15:21.544Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.544Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

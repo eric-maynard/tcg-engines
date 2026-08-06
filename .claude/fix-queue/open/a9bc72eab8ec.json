@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-035-298",
+  "title": "BUG: Assault 3 also raises her own lethal threshold — attacking a 4-Might unit she survives (5 Might vs 4 damage) and conquers",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-035-298.test.ts",
+    "testName": "BUG: Assault 3 also raises her own lethal threshold — attacking a 4-Might unit she survives (5 Might vs 4 damage) and conquers"
+  },
+  "id": "a9bc72eab8ec",
+  "createdAt": "2026-08-06T17:15:21.550Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.550Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

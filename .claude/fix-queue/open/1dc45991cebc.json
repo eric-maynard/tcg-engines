@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-051-298",
+  "title": "BUG: the stun wears off at end of turn (423.1.a.2 / 317.2.c step 3d)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-051-298.test.ts",
+    "testName": "BUG: the stun wears off at end of turn (423.1.a.2 / 317.2.c step 3d)"
+  },
+  "id": "1dc45991cebc",
+  "createdAt": "2026-08-06T17:15:21.550Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.550Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

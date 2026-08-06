@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-063-298",
+  "title": "BUG: 'if they didn't already' — a buffed Pouty Poro keeps Deflect 1, so one extra power suffices",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-063-298.test.ts",
+    "testName": "BUG: 'if they didn't already' — a buffed Pouty Poro keeps Deflect 1, so one extra power suffices"
+  },
+  "id": "ad1e062cb50a",
+  "createdAt": "2026-08-06T17:15:21.551Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.551Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

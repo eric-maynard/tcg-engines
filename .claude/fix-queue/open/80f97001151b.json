@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-090-298",
+  "title": "BUG: timing — not activatable on the opponent's turn (rule 151.2: your Main Phase only)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-090-298.test.ts",
+    "testName": "BUG: timing — not activatable on the opponent's turn (rule 151.2: your Main Phase only)"
+  },
+  "id": "80f97001151b",
+  "createdAt": "2026-08-06T17:15:21.555Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.555Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

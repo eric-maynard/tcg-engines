@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-113-298",
+  "title": "BUG: a friendly GEAR is also a legal sacrifice for the cost",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-113-298.test.ts",
+    "testName": "BUG: a friendly GEAR is also a legal sacrifice for the cost"
+  },
+  "id": "fa1cd20625dc",
+  "createdAt": "2026-08-06T17:15:21.549Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.549Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

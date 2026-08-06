@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-020-298",
+  "title": "BUG: Legion discard is a choice — with 3 other cards in hand the player picks which 2 to discard, then draws 2",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-020-298.test.ts",
+    "testName": "BUG: Legion discard is a choice — with 3 other cards in hand the player picks which 2 to discard, then draws 2"
+  },
+  "id": "4a26e23d6de1",
+  "createdAt": "2026-08-06T17:15:21.553Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.553Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

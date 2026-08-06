@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-014-298",
+  "title": "BUG: reduced cost boundary — 2 energy with a 5-Might unit is not enough, 3 is (rule 356.4)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-014-298.test.ts",
+    "testName": "BUG: reduced cost boundary — 2 energy with a 5-Might unit is not enough, 3 is (rule 356.4)"
+  },
+  "id": "042255227237",
+  "createdAt": "2026-08-06T17:15:21.544Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.544Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

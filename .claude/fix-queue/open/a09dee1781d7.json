@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-033-298",
+  "title": "BUG: if the controller declines, the unit is dealt 6",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-033-298.test.ts",
+    "testName": "BUG: if the controller declines, the unit is dealt 6"
+  },
+  "id": "a09dee1781d7",
+  "createdAt": "2026-08-06T17:15:21.552Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.552Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

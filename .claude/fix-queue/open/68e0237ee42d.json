@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-037-298",
+  "title": "BUG: killing a unit with your spell should offer to pay [1][fury] and play Phoenix from trash",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-037-298.test.ts",
+    "testName": "BUG: killing a unit with your spell should offer to pay [1][fury] and play Phoenix from trash"
+  },
+  "id": "68e0237ee42d",
+  "createdAt": "2026-08-06T17:15:21.547Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.547Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

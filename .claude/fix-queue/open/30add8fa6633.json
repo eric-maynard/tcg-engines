@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: Discipline offers the ENEMY Ruin Runner as a target — 'can't be chosen by enemy spells' (rule 757) not enforced at target enumeration",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/ruin-runner-targeting.test.ts",
+    "testName": "BUG: Discipline offers the ENEMY Ruin Runner as a target — 'can't be chosen by enemy spells' (rule 757) not enforced at target enumeration"
+  },
+  "id": "30add8fa6633",
+  "createdAt": "2026-08-06T17:15:21.549Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.549Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

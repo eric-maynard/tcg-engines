@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-080-298",
+  "title": "BUG: 'You may make new choices for it' — P1 may retarget the stolen Cleave onto their own unit",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-080-298.test.ts",
+    "testName": "BUG: 'You may make new choices for it' — P1 may retarget the stolen Cleave onto their own unit"
+  },
+  "id": "fd85e1e2ab8c",
+  "createdAt": "2026-08-06T17:15:21.554Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.554Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

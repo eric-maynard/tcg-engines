@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-024-298",
+  "title": "BUG: [Action] timing — an Action spell is NOT playable in a showdown while the opponent holds Focus (rules 313.1, 347)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-024-298.test.ts",
+    "testName": "BUG: [Action] timing — an Action spell is NOT playable in a showdown while the opponent holds Focus (rules 313.1, 347)"
+  },
+  "id": "76dd3e734524",
+  "createdAt": "2026-08-06T17:15:21.555Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.555Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

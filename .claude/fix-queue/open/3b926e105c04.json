@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-075-298",
+  "title": "BUG: Deathknell also draws 1 (\\",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-075-298.test.ts",
+    "testName": "BUG: Deathknell also draws 1 (\\"
+  },
+  "id": "3b926e105c04",
+  "createdAt": "2026-08-06T17:15:21.545Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.545Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

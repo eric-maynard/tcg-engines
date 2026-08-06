@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-108-298",
+  "title": "BUG: increases the chosen unit's Might TO the other unit's Might; the other unit is unchanged",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-108-298.test.ts",
+    "testName": "BUG: increases the chosen unit's Might TO the other unit's Might; the other unit is unchanged"
+  },
+  "id": "26ceca17ec1e",
+  "createdAt": "2026-08-06T17:15:21.555Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.555Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

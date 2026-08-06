@@ -26,9 +26,11 @@ For EACH card in [${bucket.map(id=>`"${id}"`).join(', ')}]:
 3. Write \`<id>.test.ts\`: \`describe("<Name> (<id>)")\`, one \`test()\` per clause, built with \`scenario()\` (place the card + whatever board/enemy units/resources the clause needs; use real defIds for other cards, or FILLER units per README), act via seat verbs (play/cast/activate/move/tapRune/endTurn/answer/settle/advanceTurn), assert via state/zone/resources/chain/decision. Also include a cost test (correct energy+power deducted; unaffordable → not legal). Keep files focused (≤ ~120 lines).
 4. Run \`cd ${REPO} && bun test packages/riftbound-engine/src/__tests__/cards/<id>.test.ts\`. For any clause that fails because the ENGINE/CARD is wrong (not your test): keep the exact assertion but wrap that test as \`test.failing("BUG: <one-line what's wrong>", ...)\` so the suite stays green and flips when fixed. If it fails because your test is wrong, fix the test. Never weaken an assertion to make it pass; never edit engine/card source; only create files under __tests__/cards/.
 5. Final check per card: the file passes (\`0 fail\`).
-Use dangerouslyDisableSandbox:true for Bash. Return {results:[{cardId,file,clauses,passing,failingBugs:[...BUG lines],skipped?}]}.`,
+Return {results:[{cardId,file,clauses,passing,failingBugs:[...BUG lines],skipped?}]}.`,
  {label:`lane${lane} (${bucket.length})`, phase:'Write', schema:REPORT})))
 const results = out.filter(Boolean).flatMap(r=>r.results||[])
 const bugs = results.flatMap(r=>(r.failingBugs||[]).map(b=>({cardId:r.cardId,bug:b})))
 log(`${results.length} cards; ${results.filter(r=>!r.skipped).length} written; ${bugs.length} BUG clauses`)
+const enq = await agent(`Run \`bun /root/src/tcg/tcg-engines/.claude/fix-queue/fix-queue.ts enqueue-bugs\` and return its output line.`, {label:'enqueue BUG tests', phase:'Write'})
+log(`fix-queue: ${String(enq).slice(0,120)}`)
 return { written: results.filter(r=>!r.skipped).length, skipped: results.filter(r=>r.skipped).length, clauses: results.reduce((a,r)=>a+(r.clauses||0),0), bugClauses: bugs.length, bugs, results }

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-118-298",
+  "title": "BUG: 'each turn' resets — a friendly death on the following (opponent's) turn draws again",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-118-298.test.ts",
+    "testName": "BUG: 'each turn' resets — a friendly death on the following (opponent's) turn draws again"
+  },
+  "id": "736c7cbf8cfc",
+  "createdAt": "2026-08-06T17:15:21.549Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.549Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

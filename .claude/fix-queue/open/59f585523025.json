@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-041-298",
+  "title": "BUG: 5 damage may be split among several enemy units here (2 to a 2-Might unit, 3 to a 7-Might unit) — rule 355.14",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-041-298.test.ts",
+    "testName": "BUG: 5 damage may be split among several enemy units here (2 to a 2-Might unit, 3 to a 7-Might unit) — rule 355.14"
+  },
+  "id": "59f585523025",
+  "createdAt": "2026-08-06T17:15:21.546Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.546Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

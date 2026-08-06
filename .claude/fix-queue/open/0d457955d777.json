@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-104-298",
+  "title": "BUG: 'Its owner channels 1 rune exhausted' — P1's rune pool gains one exhausted rune from the rune deck",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-104-298.test.ts",
+    "testName": "BUG: 'Its owner channels 1 rune exhausted' — P1's rune pool gains one exhausted rune from the rune deck"
+  },
+  "id": "0d457955d777",
+  "createdAt": "2026-08-06T17:15:21.555Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.555Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

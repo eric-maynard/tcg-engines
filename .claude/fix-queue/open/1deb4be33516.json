@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-071-298",
+  "title": "BUG: no [Action] keyword — not playable during a showdown on the opponent's turn (rules 155, 159.2.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-071-298.test.ts",
+    "testName": "BUG: no [Action] keyword — not playable during a showdown on the opponent's turn (rules 155, 159.2.a)"
+  },
+  "id": "1deb4be33516",
+  "createdAt": "2026-08-06T17:15:21.542Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.542Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

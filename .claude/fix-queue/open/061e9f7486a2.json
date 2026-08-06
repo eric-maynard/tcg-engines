@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-105-298",
+  "title": "BUG: no [Action] keyword — Singularity cannot be cast during a showdown (rules 308.1.a, 313.1.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-105-298.test.ts",
+    "testName": "BUG: no [Action] keyword — Singularity cannot be cast during a showdown (rules 308.1.a, 313.1.a)"
+  },
+  "id": "061e9f7486a2",
+  "createdAt": "2026-08-06T17:15:21.539Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.539Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

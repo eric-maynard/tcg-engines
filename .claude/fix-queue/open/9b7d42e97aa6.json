@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-094-298",
+  "title": "BUG: played from facedown, the Sprite must be played at THAT battlefield — base is not a legal destination (Hidden rule)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-094-298.test.ts",
+    "testName": "BUG: played from facedown, the Sprite must be played at THAT battlefield — base is not a legal destination (Hidden rule)"
+  },
+  "id": "9b7d42e97aa6",
+  "createdAt": "2026-08-06T17:15:21.549Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.549Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

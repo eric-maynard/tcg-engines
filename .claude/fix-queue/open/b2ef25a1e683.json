@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-101-298",
+  "title": "BUG: an OPPONENT's facedown card does not satisfy 'you control a facedown card' (0 → 1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-101-298.test.ts",
+    "testName": "BUG: an OPPONENT's facedown card does not satisfy 'you control a facedown card' (0 → 1)"
+  },
+  "id": "b2ef25a1e683",
+  "createdAt": "2026-08-06T17:15:21.553Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.553Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

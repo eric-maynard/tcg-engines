@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-029-298",
+  "title": "BUG: second 'Deal 3 to a unit' — two different units can be chosen and each takes 3",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-029-298.test.ts",
+    "testName": "BUG: second 'Deal 3 to a unit' — two different units can be chosen and each takes 3"
+  },
+  "id": "18452bc3f4f9",
+  "createdAt": "2026-08-06T17:15:21.549Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.549Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

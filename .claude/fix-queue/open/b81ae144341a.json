@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-123-298",
+  "title": "BUG: no [Action] keyword — must NOT be castable during a showdown (rule 155)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-123-298.test.ts",
+    "testName": "BUG: no [Action] keyword — must NOT be castable during a showdown (rule 155)"
+  },
+  "id": "b81ae144341a",
+  "createdAt": "2026-08-06T17:15:21.543Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.543Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

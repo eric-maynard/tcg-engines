@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-034-298",
+  "title": "BUG: with fewer than 5 excess damage (8 into a 4-might defender) only the conquer point should be scored",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-034-298.test.ts",
+    "testName": "BUG: with fewer than 5 excess damage (8 into a 4-might defender) only the conquer point should be scored"
+  },
+  "id": "5ba3b82b6008",
+  "createdAt": "2026-08-06T17:15:21.551Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.551Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

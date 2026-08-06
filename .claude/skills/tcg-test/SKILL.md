@@ -58,3 +58,16 @@ For each systemic bug (affects a class of cards), spawn a fix agent → sync to 
 | **Total** | **~25-30 min** | **~3.7M** |
 
 Full 786-card coverage at 48/pass ≈ 16 passes ≈ 8 hours wall-clock, ~60M tokens.
+
+## Fix queue (decoupled fixing)
+
+Discovery no longer fixes inline. All sources append to `.claude/fix-queue/` (one JSON per item; `open/ → claimed/ → done/|failed/`):
+
+| Source | How it enqueues |
+|---|---|
+| `/tcg-test` pass (monkey, rulings, card playtest) | `Enqueue` phase → `fix-queue.ts enqueue-findings` (autoFix now defaults **off**; pass `autoFix:true` to restore inline fixing) |
+| Expert unit-test writer (`riftbound-card-unit-tests.js`) | every `test.failing("BUG: …")` → `fix-queue.ts enqueue-bugs` (repro = file + test name) |
+| Interaction-test writer (`riftbound-interaction-tests.js`) | same |
+| Humans | `bun .claude/fix-queue/fix-queue.ts enqueue-findings <json>` or write a `test.failing("BUG…")` test |
+
+The **standing fixer** (`.claude/workflows/riftbound-fixer.js`, args `{batch,lanes,rounds}`) loops: reap stale claims → rescan BUG tests → triage open items into root-cause clusters (same-file ⇒ same cluster) → one lane per cluster claims its ids atomically, fixes against the repro tests, flips `test.failing`→`test`, marks `done`/`fail` → Land step gates (engine+parser tests 0 fail, tracer) → commit → push → rsync+bounce → next round. `bun .claude/fix-queue/fix-queue.ts stats|list open` to inspect.
