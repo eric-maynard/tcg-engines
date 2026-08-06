@@ -730,7 +730,19 @@ function expandKeywordDoubling(
   return out;
 }
 
-export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
+export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): number {
+  // rule 359.2 / rule-id: sfd-195-221 — a `choose` event names the chooser but
+  // not the chosen card's side; stamp the subject's CURRENT controller here so
+  // "when you choose a friendly unit" descriptors have an owner to judge.
+  const event: GameEvent =
+    rawEvent.type === "choose" && rawEvent.owner === undefined
+      ? {
+          ...rawEvent,
+          owner:
+            ctx.cards.getCardController?.(rawEvent.cardId as CoreCardId) ??
+            (ctx.cards.getCardOwner(rawEvent.cardId as CoreCardId) as string | undefined),
+        }
+      : rawEvent;
   // rule-id: ogn-118-298 — tally every event (per type / player / card) before
   // matching so "the first time … each turn" restrictions can read the count.
   {
@@ -806,6 +818,26 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
       if (abilities.some(abilityFunctionsFromTrash)) {
         boardCards.push({ abilities, id: cardId as string, owner: playerId, zone: "trash" });
       }
+    }
+  }
+  // rule 323.5 / 808.1.d.2 — units that die together leave the board only
+  // AFTER their death triggers are queued, so a card dying in the same batch
+  // is still present for statics that shape those triggers ("your [Deathknell]
+  // effects trigger an additional time"). Listed with no abilities and a
+  // `dying` zone so it can never match a trigger itself.
+  if (event.type === "die") {
+    const dying = (ctx.draft as { dyingTogether?: readonly { cardId: string; owner: string }[] })
+      .dyingTogether;
+    const doubles = (cardId: string): boolean =>
+      ((getGlobalCardRegistry().getAbilities(cardId) ?? []) as readonly {
+        type?: string;
+        effect?: { type?: string };
+      }[]).some((a) => a.type === "static" && a.effect?.type === "trigger-double");
+    for (const dead of dying ?? []) {
+      if (boardCards.some((c) => c.id === dead.cardId) || !doubles(dead.cardId)) {
+        continue;
+      }
+      boardCards.push({ abilities: [], id: dead.cardId, owner: dead.owner, zone: "dying" });
     }
   }
   const allMatches = findMatchingTriggers(event, boardCards, ctx.draft);

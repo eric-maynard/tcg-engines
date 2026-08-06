@@ -94,7 +94,7 @@ describe("Ruling 0c137943f07300c0 — Blade Dancer readying Irelia, Fervent: +1 
   // Blade Dancer ends exhausted, the rainbow is spent, Irelia is ready.
   // Actual: Blade Dancer's "when you choose a friendly unit" trigger never fires (the choose event carries no
   // owner, so the {controller: friendly} matcher denies it) — no offer, Irelia stays exhausted at 7.
-  test.failing("BUG: ruling 0c137943f07300c0 — exhausted Irelia readied by Blade Dancer gets +1 from the ready only (ends 8, ready; legend exhausted, rainbow paid) (engine: Blade Dancer never triggers)", async () => {
+  test("ruling 0c137943f07300c0 — exhausted Irelia readied by Blade Dancer gets +1 from the ready only (ends 8, ready; legend exhausted, rainbow paid) (engine: Blade Dancer never triggers)", async () => {
     const game = await board({ ireliaExhausted: true }).build();
     await game.p1.cast("disc", { targets: "irelia" });
     const offers = await settleAcceptingBladeDancer(game);
@@ -110,7 +110,7 @@ describe("Ruling 0c137943f07300c0 — Blade Dancer readying Irelia, Fervent: +1 
   // Expected: if Irelia is already READY, Blade Dancer still triggers off the choice and P1 may pay, but "ready it"
   // does nothing to a ready unit (415.1.b/c) — no ready event, and Blade Dancer never chose her — so Irelia gets
   // no +1 from Blade Dancer at all: she ends at 7. Actual: Blade Dancer never triggers (no offer to assert on).
-  test.failing("BUG: ruling 0c137943f07300c0 — ready Irelia: Blade Dancer's ability (accepted) neither chooses nor readies her → no extra +1, she stays at 7 (engine: Blade Dancer never triggers)", async () => {
+  test("ruling 0c137943f07300c0 — ready Irelia: Blade Dancer's ability (accepted) neither chooses nor readies her → no extra +1, she stays at 7 (engine: Blade Dancer never triggers)", async () => {
     const game = await board({ ireliaExhausted: false }).build();
     expect(game.state("irelia").isReady).toBe(true);
     await game.p1.cast("disc", { targets: "irelia" });

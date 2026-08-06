@@ -88,7 +88,16 @@ export type GameEvent =
   | { type: "showdown-begin"; battlefieldId: string; playerId: string; isCombat: boolean }
   // rule-id: sfd-142-221 — `sourceType` distinguishes "choose me with a
   // spell" from ability-sourced choices (gear/unit activated or triggered).
-  | { type: "choose"; cardId: string; chooserId: string; sourceType?: "spell" | "ability" }
+  // rule-id: sfd-195-221 — `owner` is the CHOSEN card's current controller, so
+  // "when you choose a friendly unit" descriptors can judge the subject. It is
+  // stamped centrally in `fireTriggers`; emit sites need only supply `cardId`.
+  | {
+      type: "choose";
+      cardId: string;
+      chooserId: string;
+      owner?: string;
+      sourceType?: "spell" | "ability";
+    }
   | { type: "ready"; cardId: string; playerId: string }
   | { type: "hide"; cardId: string; playerId: string }
   | { type: "attach-equipment"; cardId: string; equipmentId: string; playerId: string }
@@ -96,4 +105,9 @@ export type GameEvent =
   // rule-id: ogn-235-298 — "When you recycle one or more cards to your Main
   // Deck": fired once per batch of cards a player recycles to the main deck.
   // `cardIds` (plural) so on:"self" unit triggers match by controller.
-  | { type: "recycle"; playerId: string; cardIds: string[] };
+  | { type: "recycle"; playerId: string; cardIds: string[] }
+  // rule 369.1 / 370.1 (ogn-194-298 Nocturne) — "as you look at or reveal me":
+  // a look/reveal that shows a card to its owner is an observable moment, fired
+  // once per shown card. Milling straight to the trash (Burn, rule 440.1) never
+  // looks at or reveals, so it must NOT fire this.
+  | { type: "reveal"; cardId: string; playerId: string; from?: string };
