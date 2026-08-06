@@ -206,6 +206,15 @@ function restrictionSatisfied(
       }
       return restriction.whose === "opponent" ? active !== card.owner : active === card.owner;
     }
+    case "min-cost": {
+      // rule 206: cost thresholds ("a spell that costs [5] or more") compare the
+      // PRINTED Energy cost of the played card — power pips don't count.
+      const subjectId = "cardId" in event ? event.cardId : undefined;
+      if (typeof subjectId !== "string") {
+        return false;
+      }
+      return getGlobalCardRegistry().getEnergyCost(subjectId) >= (restriction.count ?? 0);
+    }
     case "self-at-battlefield":
       return card.zone.startsWith("battlefield");
     case "non-token":

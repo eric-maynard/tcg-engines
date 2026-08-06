@@ -73,7 +73,7 @@ describe("Lux, Illuminated (ogs-006-024)", () => {
     expect(game.state("lux").might).toBe(5);
   });
 
-  test.failing("BUG: a spell costing less than [5] does NOT trigger her (4 energy, even with 2 power on top)", async () => {
+  test("a spell costing less than [5] does NOT trigger her (4 energy, even with 2 power on top)", async () => {
     // Expected: [5] is a printed-Energy threshold; a 2-cost spell and a 4-energy+2-power spell leave
     // Lux at 5 Might. Actual: the parsed trigger has no cost condition, so any spell gives +3.
     const game = await withLux(6).hand(P1, drawSpell(2), "cheap").hand(P1, drawSpell(4, ["mind", "mind"]), "four").build();

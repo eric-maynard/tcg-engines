@@ -267,6 +267,16 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       trigger.restrictions = tp.restrictions;
     }
 
+    // rule 206: "a spell that costs [N] or more" is a PRINTED Energy threshold —
+    // keep it as a restriction so the engine can compare the played spell's cost.
+    if (tp.event === "play-spell") {
+      const costGate = text.match(/costs\s*(?::rb_energy_(\d+):|(\d+))\s*or more/i);
+      if (costGate) {
+        const minCost = Number.parseInt(costGate[1] ?? costGate[2], 10);
+        trigger.restrictions = [...(trigger.restrictions ?? []), { count: minCost, type: "min-cost" }];
+      }
+    }
+
     const ability: TriggeredAbility = {
       effect,
       trigger: trigger as TriggeredAbility["trigger"],

@@ -211,7 +211,7 @@ export const TRIGGER_PATTERNS: {
   {
     event: "play-spell",
     on: "controller",
-    pattern: /^When you play a spell that costs (?::rb_energy_\d+:|\d+) or more,\s*/i,
+    pattern: /^When you play a spell that costs (?::rb_energy_(\d+):|(\d+)) or more,\s*/i,
   },
   // "When I move from a battlefield, ..."
   { event: "move-from-battlefield", on: "self", pattern: /^When I move from a battlefield,\s*/i },
