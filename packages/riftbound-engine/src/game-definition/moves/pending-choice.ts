@@ -751,6 +751,24 @@ export const pendingChoiceMoves: Partial<
             if (cost.exhaust === true) {
               context.counters.setFlag(choice.sourceCardId as CoreCardId, "exhausted", true);
             }
+            // rule 422.1.a (ogn-252-298): "you may discard N to …" — the
+            // paying player chooses the cards, so route the cost through the
+            // discard effect and hang the trigger's own effect off its `then`.
+            const discardCount = typeof cost.discard === "number" ? cost.discard : 0;
+            if (discardCount > 0) {
+              executeEffect(
+                {
+                  amount: discardCount,
+                  then: (choice.resolved as { effect?: unknown } | undefined)?.effect,
+                  type: "discard",
+                } as ExecutableEffect,
+                buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+              );
+              if (!draft.pendingChoice) {
+                postChoiceCleanup(draft, context);
+              }
+              return;
+            }
           }
           executeResolvedItem(
             choice.resolved as Parameters<typeof executeResolvedItem>[0],
@@ -1111,6 +1129,25 @@ export const pendingChoiceMoves: Partial<
           markContestedOnArrival(draft, targetZoneId, choice.playerId);
         }
         draft.pendingChoice = undefined;
+        // rule-id: ogn-258-298 (rule 387) — "Move an enemy unit. Then do this:
+        // …at its destination": the follow-up carried on the prompt resolves
+        // now, with the moved unit bound and its new zone as `same`.
+        if (choice.then && context.cards && context.counters) {
+          const thenCtx = {
+            ...buildEffectContext(
+              draft,
+              choice.playerId,
+              (choice.sourceCardId ?? choice.cardId) as string,
+              context,
+            ),
+            boundTargets: [choice.cardId as string],
+            sameZone: targetZoneId,
+          };
+          executeEffect(choice.then as ExecutableEffect, thenCtx);
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
+        }
         // rule-id: sfd-109-221 (rule 354.2 / 419.4.a) — a card played by an
         // effect is still played: fire "When you play me" (carrying whether
         // the optional additional cost was paid) and "when you play a card",

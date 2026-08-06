@@ -123,7 +123,15 @@ export function evaluateCondition(
       const baseMight = def?.might ?? 0;
       const buffBonus = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
       const mightMod = meta?.mightModifier ?? 0;
-      return baseMight + buffBonus + mightMod >= MIGHTY_THRESHOLD;
+      // rule 710 / 476.3 — Mighty reads CURRENT Might, so every layer that
+      // raises it counts: buffs, modifiers, other statics, and attached
+      // equipment (whose bonus lives on the gear, not on `staticMightBonus`).
+      const staticBonus = meta?.staticMightBonus ?? 0;
+      let equipBonus = 0;
+      for (const equipId of meta?.equippedWith ?? []) {
+        equipBonus += registry.getMightBonus(equipId as string);
+      }
+      return baseMight + buffBonus + mightMod + staticBonus + equipBonus >= MIGHTY_THRESHOLD;
     }
 
     case "while-buffed": {

@@ -109,7 +109,7 @@ describe("Fiora, Victorious × Block × Doran's Blade — Mighty/Shield layering
     expect(game.zoneOf("block")).toBe("trash");
   });
 
-  test.failing("BUG: (a) layered Might — Blocked defending Fiora fights at 8 (4 +3 Shield → Mighty → +1 own Shield): she survives a 7-might attacker and trades with an 8-might one (476.3, 814.1.c, 814.2)", async () => {
+  test("(a) layered Might — Blocked defending Fiora fights at 8 (4 +3 Shield → Mighty → +1 own Shield): she survives a 7-might attacker and trades with an 8-might one (476.3, 814.1.c, 814.2)", async () => {
     // Expected: 7-might attacker deals 7 < 8 → Fiora lives, attacker takes 8 → dies; an 8-might
     // attacker kills her but also takes 8 → dies. Actual: Fiora's "While I'm Mighty … Shield" is
     // never derived (equipment/Shield Might is ignored by the while-mighty check), so she fights at
@@ -210,7 +210,7 @@ describe("Fiora, Victorious × Block × Doran's Blade — Mighty/Shield layering
     expect(s.combatRole).toBeNull();
   });
 
-  test.failing("BUG: (c) equipped Fiora (6) is Mighty → has Ganking: she may standard-move battlefield→battlefield (810.1.b, 144.4.c.1)", async () => {
+  test("(c) equipped Fiora (6) is Mighty → has Ganking: she may standard-move battlefield→battlefield (810.1.b, 144.4.c.1)", async () => {
     // Expected: bf1→bf2 is a legal move for her (and not for the 2-might buddy). Actual: the
     // "While I'm Mighty" grant ignores equipment Might; no ganking move is offered.
     const game = await equipped().build();
@@ -220,7 +220,7 @@ describe("Fiora, Victorious × Block × Doran's Blade — Mighty/Shield layering
     expect(game.locationOf("fiora")).toBe("bf2");
   });
 
-  test.failing("BUG: (c) equipped Fiora (6) is Mighty → has Deflect: an enemy spell must pay an extra [rainbow] to choose her (476.3)", async () => {
+  test("(c) equipped Fiora (6) is Mighty → has Deflect: an enemy spell must pay an extra [rainbow] to choose her (476.3)", async () => {
     // Expected: with exactly Zap's [1] P2 may target the buddy but not Fiora; with 1 spare power
     // Fiora becomes targetable and the power is spent. Actual: no Deflect — Fiora is offered for [1].
     const offered = (g: Awaited<ReturnType<ReturnType<typeof equipped>["build"]>>) =>
@@ -238,7 +238,7 @@ describe("Fiora, Victorious × Block × Doran's Blade — Mighty/Shield layering
     expect(rich.p2.resources()).toEqual({ energy: 0, power: { fury: 0 } }); // Deflect surcharge paid
   });
 
-  test.failing("BUG: (c) equipped Fiora defending without Block fights at 7 (6 + her own Shield 1): a 6-might attacker dies and she survives (814.1.c, 476.3)", async () => {
+  test("(c) equipped Fiora defending without Block fights at 7 (6 + her own Shield 1): a 6-might attacker dies and she survives (814.1.c, 476.3)", async () => {
     // Expected: 6 < 7 → Fiora lives; attacker takes 7 ≥ 6 → dies; P1 keeps bf1. Actual: no Shield
     // is derived from being Mighty, she fights at 6 and trades with the attacker.
     const game = await scenario()

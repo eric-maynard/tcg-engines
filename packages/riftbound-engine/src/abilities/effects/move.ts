@@ -316,12 +316,18 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     if (options.length === 0) {
       return;
     }
+    // rule-id: ogn-258-298 (rule 387) — "Move an enemy unit. Then do this:
+    // …at its destination": the follow-up can only resolve once the
+    // destination is picked, so it rides on the prompt.
+    const thenAtDestination = (effect as unknown as { then?: ExecutableEffect }).then;
     ctx.draft.pendingChoice = {
       cardId,
       options,
       playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      then: thenAtDestination,
       type: "choose-destination",
-    };
+    } as RiftboundGameState["pendingChoice"];
     return;
   }
 

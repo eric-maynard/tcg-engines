@@ -60,9 +60,7 @@ describe("Dragon's Rage (ogn-258-298)", () => {
     expect(mine.p1.can("cast", "dr")).toBe(false);
   });
 
-  test.failing("BUG: the only play-time target is ONE ENEMY unit (friendly units are never a choice)", async () => {
-    // Expected: the targets field offers [mover] and [anvil] as single enemy targets. Actual: the card
-    // is modelled as Challenge — it demands a [friendly, enemy] pair.
+  test("the only play-time target is ONE ENEMY unit (friendly units are never a choice)", async () => {
     const game = await board().build();
     const targets = game.p1.option("cast", "dr")?.fields.find((f) => f.arg === "targets")?.options;
     expect(targets).toEqual(expect.arrayContaining([["mover"], ["anvil"]]));
@@ -76,10 +74,7 @@ describe("Dragon's Rage (ogn-258-298)", () => {
     expect(noFriendly.p1.can("cast", "dr")).toBe(true);
   });
 
-  test.failing("BUG: moves the enemy unit to the chosen destination, then it and ANOTHER enemy unit there deal their Mights to each other", async () => {
-    // Expected: Mover (3) is moved from bf1 to bf2; the reflexive trigger chooses Anvil (5) at bf2;
-    // Mover takes 5 and dies, Anvil takes 3 and survives; the friendly unit is untouched; spell to
-    // trash. Actual: cast is rejected without a friendly+enemy pair, and no move ever happens.
+  test("moves the enemy unit to the chosen destination, then it and ANOTHER enemy unit there deal their Mights to each other", async () => {
     const game = await board().build();
     // Destination / second enemy are pre-queued as P1's answers for whenever the engine asks.
     await game.p1.cast("dr", { answers: ["bf2", "anvil"], targets: "mover" });
@@ -92,8 +87,7 @@ describe("Dragon's Rage (ogn-258-298)", () => {
     expect(game.zoneOf("dr")).toBe("trash");
   });
 
-  test.failing("BUG: with no OTHER enemy unit at the destination the move still happens and no damage is dealt", async () => {
-    // Expected: Mover is simply relocated to (empty enemy) bf2 undamaged. Actual: see above.
+  test("with no OTHER enemy unit at the destination the move still happens and no damage is dealt", async () => {
     const game = await scenario()
       .resources(P1, { energy: 4, power: { calm: 1 } })
       .battlefield("bf1", { controller: P2 })

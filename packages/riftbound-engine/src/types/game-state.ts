@@ -550,6 +550,15 @@ export interface ChooseDestinationChoice {
    */
   readonly created?: true;
   readonly queue?: readonly CardId[];
+  /**
+   * rule-id: ogn-258-298 (rule 387) — "Move an enemy unit. Then do this: …"
+   * follow-up whose subject is the moved unit at its (only now known)
+   * destination. Executed after the move with the moved unit bound and
+   * `sameZone` set to the chosen zone.
+   */
+  readonly then?: unknown;
+  /** Source card of `then` (the spell/ability that moved the unit). */
+  readonly sourceCardId?: CardId;
 }
 
 /**

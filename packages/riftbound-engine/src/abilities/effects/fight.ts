@@ -28,6 +28,10 @@ export function handle_fight(effect: ExecutableEffect, ctx: EffectContext, h: Ef
         cards: ctx.cards,
         draft: ctx.draft,
         playerId: ctx.playerId,
+        // rule-id: ogn-258-298 (rule 387) — a reflexive fight scoped to "at its
+        // destination" needs `sameZone`, else `location:"same"` matches the
+        // whole board and picks a unit standing somewhere else.
+        sameZone: ctx.sameZone,
         sourceCardId: ctx.sourceCardId,
         sourceZone: ctx.sourceZone,
         zones: ctx.zones,

@@ -221,12 +221,20 @@ export function spellSupportsX(cardId: CardRef): boolean {
   if (!spell?.effect) {
     return false;
   }
+  // rule 204.3.b (ogn-268-298): a [rainbow] X is paid ON RESOLUTION, so it is
+  // not a play-time field at all.
+  if ((spell as { xCost?: unknown }).xCost === "power") {
+    return false;
+  }
   return JSON.stringify(spell.effect).includes('"variable":"x"');
 }
 
 function probeMaxX(ctx: DecisionContext, variant: FlatMove): number {
   const pool = ctx.state.runePools[variant.playerId];
-  const cap = Math.min(60, (pool?.energy ?? 0) + 1);
+  // rule 204.3.b: an X may be paid in [rainbow] Power rather than Energy, so
+  // the probe ceiling spans both pools.
+  const power = Object.values(pool?.power ?? {}).reduce<number>((a, b) => a + (b ?? 0), 0);
+  const cap = Math.min(60, (pool?.energy ?? 0) + power + 1);
   if (!ctx.canExecute) {
     return Math.max(0, cap - 1);
   }
@@ -266,7 +274,13 @@ function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[],
       distinct.delete("null");
       distinct.set("false", false);
     }
-    const options = [...distinct.values()];
+    let options = [...distinct.values()];
+    if (meta.kind === "int" && options.some((o) => typeof o === "number")) {
+      // An omitted numeric param ("no Repeat", "X = 0") is already expressed by
+      // `min`; leaving `undefined` in the list makes the offered instances
+      // unreadable.
+      options = options.filter((o) => o !== undefined && o !== null);
+    }
     if (meta.kind === "bool") {
       options.sort((a, b) => Number(a === true) - Number(b === true));
     }
@@ -531,6 +545,19 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       };
       return d;
     }
+    case "pay-x": {
+      // rule 204.3.b / 444.2 (ogn-268-298): name X now; 0 is always legal.
+      const d: IntegerDecision = {
+        ...base,
+        id: decisionId(ctx.seq, seat, "integer"),
+        kind: "integer",
+        max: pc.max,
+        min: 0,
+        prompt: `Pay any amount of [rainbow] for ${ctx.label(pc.sourceCardId)}`,
+        unit: "rainbow",
+      };
+      return d;
+    }
     case "opt-in": {
       // rule-id: sfd-119-221 — surface the "pay [N] to …" cost in the prompt.
       const cost = (
@@ -714,19 +741,28 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
       break;
     }
     case "choose-destination": {
-      const k = pickKey();
+      let k = pickKey();
       if (typeof k === "object") {
         return k;
       }
       if (k === undefined) {
         return err("ILLEGAL_ARGS", "A destination must be chosen");
       }
+      // A bare battlefield id ("bf2") is accepted for the zone id
+      // ("battlefield-bf2") so destination answers read like target answers.
+      if (!pc.options.includes(k) && pc.options.includes(`battlefield-${k}`)) {
+        k = `battlefield-${k}`;
+      }
+      // Destinations are ZONE ids (base / battlefield-<bfId>), but every other
+      // harness surface names a battlefield by its bare id — accept both.
+      const toZone = (z: string): string =>
+        pc.options.includes(z) || !pc.options.includes(`battlefield-${z}`) ? z : `battlefield-${z}`;
       // rule-id: sfd-109-221 — "<zone>+pay" elects the optional additional cost.
       if (k.endsWith("+pay")) {
         params.paidAdditionalCost = true;
-        params.pickedZoneId = k.slice(0, -"+pay".length);
+        params.pickedZoneId = toZone(k.slice(0, -"+pay".length));
       } else {
-        params.pickedZoneId = k;
+        params.pickedZoneId = toZone(k);
       }
       break;
     }
@@ -744,6 +780,13 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
         return err("ILLEGAL_ARGS", "A mode must be chosen");
       }
       params.pickedMode = Number(k);
+      break;
+    }
+    case "pay-x": {
+      if (answer.kind !== "integer") {
+        return err("WRONG_ANSWER_KIND", "pay-x needs an integer answer");
+      }
+      params.xAmount = answer.value;
       break;
     }
     case "opt-in": {
