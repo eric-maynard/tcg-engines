@@ -8,14 +8,19 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * "Starting with the next player, each player may return a unit to its
  *  owner's hand."
  *
- * Approximated as: return any unit to its owner's hand (optional).
- * Per-player looping isn't structurally representable in the effect union.
+ * Nothing is chosen when the spell is played; as it resolves each player, in
+ * turn order beginning with the one after the caster, may pick a unit of
+ * their choice (rule 355.2). `each-player-may` runs one declinable prompt per
+ * player and returns each pick to its OWNER's hand (rule 401).
  */
 const abilities: Ability[] = [
   {
     effect: {
-      target: { type: "unit" },
-      type: "return-to-hand",
+      effect: {
+        target: { type: "unit" },
+        type: "return-to-hand",
+      },
+      type: "each-player-may",
     },
     timing: "action",
     type: "spell",

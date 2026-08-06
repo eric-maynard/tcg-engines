@@ -35,6 +35,7 @@ import { handle_sequence } from "./sequence";
 import { handle_conditional } from "./conditional";
 import { handle_optional } from "./optional";
 import { handle_choice } from "./choice";
+import { handle_eachPlayerMay } from "./each-player-may";
 import { handle_forEach } from "./for-each";
 import { handle_doTimes } from "./do-times";
 import { handle_fight } from "./fight";
@@ -98,6 +99,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "conditional": handle_conditional,
   "optional": handle_optional,
   "choice": handle_choice,
+  "each-player-may": handle_eachPlayerMay,
   "for-each": handle_forEach,
   "do-times": handle_doTimes,
   "fight": handle_fight,

@@ -43,10 +43,13 @@ describe("Whirlwind (ogn-187-298)", () => {
     expect(game.p1.can("cast", "ww")).toBe(false);
   });
 
-  test("a unit returned this way goes to its OWNER's hand (engine's single-choice approximation), spell to trash", async () => {
+  test("a unit returned this way goes to its OWNER's hand, spell to trash", async () => {
     const game = await board().build();
-    await game.p1.cast("ww", { targets: "raider" });
+    await game.p1.cast("ww");
     expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0 } });
+    await game.settle();
+    await game.p2.decline();
+    await game.p1.pick("raider");
     await game.settle();
     expect(game.zoneOf("raider")).toBe("hand");
     expect(game.state("raider").owner).toBe(P2);
@@ -55,7 +58,7 @@ describe("Whirlwind (ogn-187-298)", () => {
     expect(game.zoneOf("ww")).toBe("trash");
   });
 
-  test.failing("BUG: nothing is chosen on cast; on resolution EACH player, starting with the next player, may return a unit of their choice", async () => {
+  test("nothing is chosen on cast; on resolution EACH player, starting with the next player, may return a unit of their choice", async () => {
     // Expected: cast needs no target; when it resolves P2 (the next player) is prompted first with an
     // optional pick over all units, then P1; each returned unit goes to its owner's hand. Actual: the
     // caster must pick exactly one unit as a play-time target and only that unit is returned.
@@ -76,7 +79,7 @@ describe("Whirlwind (ogn-187-298)", () => {
     expect(game.zoneOf("ww")).toBe("trash");
   });
 
-  test.failing("BUG: every player 'may' decline — with all players declining nothing moves", async () => {
+  test("every player 'may' decline — with all players declining nothing moves", async () => {
     // Expected: both prompts can be declined and the board is unchanged. Actual: see above — the
     // caster is forced to name one unit when casting.
     const game = await board().build();
