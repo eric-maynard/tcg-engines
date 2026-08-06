@@ -51,7 +51,7 @@ describe("Tibbers (ogs-018-024)", () => {
     );
   });
 
-  test.failing("BUG: 'all units at battlefields' is not a choice (355.5.a) — the trigger resolves without any target prompt", async () => {
+  test("'all units at battlefields' is not a choice (355.5.a) — the trigger resolves without any target prompt", async () => {
     // Expected: both players pass → the trigger resolves on its own, back to P1's open main phase.
     // Actual: on resolution the engine asks P1 to "Choose a target for Tibbers" (pick 1 unit).
     const game = await board().build();
@@ -61,7 +61,7 @@ describe("Tibbers (ogs-018-024)", () => {
     expect(game.chain()).toHaveLength(0);
   });
 
-  test.failing("BUG: deals 3 to EVERY unit at every battlefield (enemy and friendly); units in bases take nothing", async () => {
+  test("deals 3 to EVERY unit at every battlefield (enemy and friendly); units in bases take nothing", async () => {
     // Expected: bigFoe 3 dmg, smallFoe (3) dies, friendly ally at bf2 3 dmg; base units and Tibbers untouched.
     // Actual: the effect is turned into a single-target pick and no unit is damaged after settling.
     const game = await board().build();
