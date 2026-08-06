@@ -1,6 +1,6 @@
 // Effect handler: "detach"
-import type { CardId as CoreCardId } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { detachEquipment } from "./_attachment";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 
 export function handle_detach(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
@@ -9,6 +9,7 @@ export function handle_detach(effect: ExecutableEffect, ctx: EffectContext, _h: 
     ctx,
   );
   if (detachTargets[0]) {
-    ctx.counters.setFlag(detachTargets[0] as CoreCardId, "attachedTo", false);
+    // rule 435: clear both sides of the attachment link.
+    detachEquipment(ctx, detachTargets[0]);
   }
 }

@@ -370,6 +370,17 @@ export interface MoveEffect {
   readonly to: Location | "choose" | "target-battlefield";
   readonly from?: Location;
   /**
+   * rule-id: ogn-199-298 — "Move me to its location and it to my original
+   * location": the source and the chosen `partner` trade locations.
+   */
+  readonly swap?: boolean;
+  readonly partner?: AnyTarget;
+  /**
+   * rule-id: sfd-050-221 (rule 716) — after a swap, "if it's equipped, you may
+   * attach one of its Equipment to me".
+   */
+  readonly mayAttachPartnerEquipment?: boolean;
+  /**
    * rule-id: ogn-262-298 (rule 355.13) — "You may move …": the instruction
    * imposes no play-legality gate and does nothing without a legal unit.
    */
@@ -685,6 +696,19 @@ export interface AttachEffect {
 }
 
 /**
+ * Attach-or-detach effect (rules 434 / 435).
+ *
+ * "Choose a unit and an Equipment with the same controller. Attach that
+ * Equipment to that unit or detach that Equipment from that unit." The chosen
+ * pair selects the half that applies.
+ */
+export interface AttachOrDetachEffect {
+  readonly type: "attach-or-detach";
+  readonly equipment: AnyTarget;
+  readonly to: AnyTarget;
+}
+
+/**
  * Detach equipment effect
  */
 export interface DetachEffect {
@@ -919,6 +943,7 @@ export type Effect =
   | DelayedLoseControlEffect
   | PreventDamageEffect
   | AttachEffect
+  | AttachOrDetachEffect
   | DetachEffect
   | GainControlOfSpellEffect
   | ExtraTurnEffect

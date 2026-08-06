@@ -47,7 +47,7 @@ describe("Angle Shot (sfd-011-221)", () => {
     expect(game.chain().map((c) => c.cardId)).toEqual(["bolt", "shot"]);
   });
 
-  test.failing("BUG: attach mode — choosing a unit and an unattached Equipment you control attaches it (+2 might from Skyfall)", async () => {
+  test("attach mode — choosing a unit and an unattached Equipment you control attaches it (+2 might from Skyfall)", async () => {
     // Expected: the spell asks for a unit + an Equipment with the same controller and attaches
     // Skyfall to Squire (might 2 → 4). Actual: the parsed ability is only "draw 1"; no targets exist.
     const game = await board().build();
@@ -58,7 +58,7 @@ describe("Angle Shot (sfd-011-221)", () => {
     expect(game.zoneOf("shot")).toBe("trash");
   });
 
-  test.failing("BUG: detach mode — choosing a unit and the Equipment attached to it detaches it (rule 435)", async () => {
+  test("detach mode — choosing a unit and the Equipment attached to it detaches it (rule 435)", async () => {
     // Expected: Dirk detaches from Squire and stays on the board in base. Actual: no attach/detach
     // clause is implemented, the Dirk stays attached.
     const game = await scenario()
@@ -76,7 +76,7 @@ describe("Angle Shot (sfd-011-221)", () => {
     expect(game.zoneOf("dirk")).toBe("base");
   });
 
-  test.failing("BUG: works on an ENEMY unit + enemy Equipment pair ('same controller', not 'friendly')", async () => {
+  test("works on an ENEMY unit + enemy Equipment pair ('same controller', not 'friendly')", async () => {
     // Expected: P1 may detach P2's Skyfall from P2's unit (might 5 → 3). Actual: not implemented.
     const game = await scenario()
       .resources(P1, { energy: 2 })

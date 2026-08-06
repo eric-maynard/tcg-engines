@@ -881,6 +881,29 @@ export const playSpell: Defs["playSpell"] = {
             targets: t,
           });
         }
+      } else if (attachToggle) {
+        const units = resolveTarget(
+          { ...attachToggle.to, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+          resolverCtx,
+        ) as string[];
+        const equips = resolveTarget(
+          { ...attachToggle.equipment, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+          resolverCtx,
+        ) as string[];
+        const controllerOf = (id: string) =>
+          context.cards.getCardController?.(id as CoreCardId) ??
+          context.cards.getCardOwner(id as CoreCardId);
+        for (const u of units) {
+          for (const e of equips) {
+            // rule 434.1: the pair must share a controller (either player's).
+            if (controllerOf(u) !== controllerOf(e)) continue;
+            baseVariants.push({
+              cardId: cardId as string,
+              playerId: context.playerId as string,
+              targets: [u, e],
+            });
+          }
+        }
       } else if (!isCardTarget && fightAtk && fightDef) {
         const attackers = resolveTarget(
           { ...fightAtk, quantity: "all" } as Parameters<typeof resolveTarget>[0],
