@@ -56,7 +56,7 @@ describe("Portal Rescue (ogn-102-298)", () => {
     expect(game.p1.units("bf1")).toEqual([]);
   });
 
-  test.failing("BUG: banish-then-play makes it a freshly played unit — no damage, no buff, and it enters exhausted", async () => {
+  test("banish-then-play makes it a freshly played unit — no damage, no buff, and it enters exhausted", async () => {
     const game = await board().build();
     await game.p1.cast("rescue", { targets: "ally" });
     await game.settle({ policy: "first" });
