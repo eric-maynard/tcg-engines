@@ -69,7 +69,7 @@ describe("Gentlemen's Duel (ogs-008-024)", () => {
     expect(game.state("home").damage).toBeGreaterThan(0);
   });
 
-  test.failing("BUG: '+3 Might this turn' comes first — small (2→5) vs foe (4): foe takes 5 and dies, small takes 4 < 5 and lives", async () => {
+  test("'+3 Might this turn' comes first — small (2→5) vs foe (4): foe takes 5 and dies, small takes 4 < 5 and lives", async () => {
     // Expected: small is pumped to 5 before the exchange, kills the 4-Might foe and survives with
     // 4 damage; the +3 lasts until end of turn. Actual: no +3 is applied — small deals 2 and dies.
     const game = await board().build();
@@ -81,6 +81,20 @@ describe("Gentlemen's Duel (ogs-008-024)", () => {
     expect(game.zoneOf("foe")).toBe("trash");
     await game.advanceTurn();
     expect(game.state("small").might).toBe(2); // "this turn" only
+  });
+
+  test("rule 355.8: a raw playSpell with no targets (or a mismatched pair) is rejected — the units are caster-chosen", async () => {
+    const game = await board().build();
+    const noTargets = await game.p1.try((s) => s.do("playSpell", { cardId: "duel" }));
+    expect(noTargets.ok).toBe(false);
+    // roles are not interchangeable: [enemy, friendly] is not a legal pair
+    const swapped = await game.p1.try((s) => s.do("playSpell", { cardId: "duel", targets: ["foe", "big"] }));
+    expect(swapped.ok).toBe(false);
+    // and a friendly/friendly pair is illegal too
+    const bothFriendly = await game.p1.try((s) => s.do("playSpell", { cardId: "duel", targets: ["small", "big"] }));
+    expect(bothFriendly.ok).toBe(false);
+    expect(game.zoneOf("duel")).toBe("hand");
+    expect(game.p1.resources()).toEqual({ energy: 6, power: { body: 1 } });
   });
 
   test("[Action]: not playable on the opponent's turn outside a showdown; playable with Focus inside one", async () => {

@@ -721,8 +721,26 @@ export const playSpell: Defs["playSpell"] = {
         d.type !== "player" &&
         d.type !== "battlefield" &&
         (d.quantity === undefined || d.quantity === 1);
+      // rule 355.13 (rule-id: sfd-023-221) — "…, then deal 2 to up to one
+      // other unit": the second slot may be left unchosen, so it is offered
+      // alongside a lead-only Play.
+      const isOptionalSinglePick = (d: { type: string; quantity?: unknown }) => {
+        const q = d.quantity as { upTo?: number; atLeast?: number } | undefined;
+        return (
+          d.type !== "player" &&
+          d.type !== "battlefield" &&
+          typeof q === "object" &&
+          q !== null &&
+          q.upTo === 1 &&
+          q.atLeast === undefined
+        );
+      };
+      const secondOptional =
+        seqSlots?.length === 2 && isSinglePick(seqSlots[0]) && isOptionalSinglePick(seqSlots[1]);
       const secondTgt =
-        seqSlots?.length === 2 && isSinglePick(seqSlots[0]) && isSinglePick(seqSlots[1])
+        seqSlots?.length === 2 &&
+        isSinglePick(seqSlots[0]) &&
+        (isSinglePick(seqSlots[1]) || secondOptional)
           ? seqSlots[1]
           : undefined;
       const tgt =
@@ -759,6 +777,28 @@ export const playSpell: Defs["playSpell"] = {
         spellEffect?.type === "fight" && typeof spellEffect.defender === "object"
           ? spellEffect.defender
           : undefined;
+      // rule-id: sfd-011-221 (rule 355.8 / 434 / 435) — "Choose a unit and an
+      // Equipment with the same controller": an `attach-or-detach` effect names
+      // TWO caster-chosen targets, so enumerate one Play per same-controller
+      // [unit, equipment] pair. The effect may sit inside a sequence ("… Draw 1").
+      const attachToggle = ((): { equipment: object; to: object } | undefined => {
+        const subs: { type?: string }[] =
+          spellEffect?.type === "sequence" && Array.isArray(spellEffect.effects)
+            ? (spellEffect.effects as { type?: string }[])
+            : spellEffect
+              ? [spellEffect as { type?: string }]
+              : [];
+        const found = subs.find((e) => e?.type === "attach-or-detach") as
+          | { equipment?: unknown; to?: unknown }
+          | undefined;
+        return found &&
+          typeof found.equipment === "object" &&
+          found.equipment !== null &&
+          typeof found.to === "object" &&
+          found.to !== null
+          ? { equipment: found.equipment as object, to: found.to as object }
+          : undefined;
+      })();
       // rule-id: ogn-220-298 (Facebreaker) / rule 355.8 — "Stun a friendly
       // unit and an enemy unit at the same battlefield": a `sequence` whose
       // lead card target is followed by a `location:"same"` step names TWO
@@ -1034,6 +1074,14 @@ export const playSpell: Defs["playSpell"] = {
                     cardId: cardId as string,
                     playerId: context.playerId as string,
                     targets: [targetId as string, secId as string],
+                  });
+                }
+                // rule 355.13 — an "up to one" second slot may be skipped.
+                if (secondOptional) {
+                  baseVariants.push({
+                    cardId: cardId as string,
+                    playerId: context.playerId as string,
+                    targets: [targetId as string],
                   });
                 }
               } else if (!secondIsSame) {
