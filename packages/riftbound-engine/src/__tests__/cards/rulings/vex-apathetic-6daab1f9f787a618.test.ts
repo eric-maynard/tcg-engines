@@ -53,11 +53,9 @@ async function resolveVexTrigger(game: Game): Promise<Decision[]> {
 }
 
 describe("Ruling 6daab1f9f787a618 — Vex, Apathetic's stun is automatic, not targeted", () => {
-  // Expected: P2 plays Ruin Runner while Vex is at bf1 → Vex triggers and, with no choice made by anyone,
+  // P2 plays Ruin Runner while Vex is at bf1 → Vex triggers and, with no choice made by anyone,
   // the Runner is stunned; "can't be chosen" is irrelevant and P1 pays no [rainbow] (355.10.d, 809.1.d).
-  // Actual: the engine treats the stun as a targeted choice ("Choose a target for Vex") whose candidate set
-  // excludes the unchoosable Runner — leaving only Vex herself — so the Runner is never stunned.
-  test.failing("BUG: ruling 6daab1f9f787a618 — Ruin Runner ('can't be chosen') played under Vex is stunned automatically; no target prompt, no Deflect-style payment", async () => {
+  test("ruling 6daab1f9f787a618 — Ruin Runner ('can't be chosen') played under Vex is stunned automatically; no target prompt, no Deflect-style payment", async () => {
     const game = await board("bf1").hand(P2, RUIN_RUNNER, "runner").build();
     await game.p2.play("runner");
     expect(game.zoneOf("runner")).toBe("base");
@@ -71,9 +69,8 @@ describe("Ruling 6daab1f9f787a618 — Vex, Apathetic's stun is automatic, not ta
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P2 });
   });
 
-  // Expected: same for an ordinary unit — the just-played unit is stunned with no "choose a target" step.
-  // Actual: the engine asks P1 to pick a target (offering the played unit AND Vex herself).
-  test.failing("BUG: ruling 6daab1f9f787a618 — an ordinary unit played under Vex is stunned with no choice offered to anyone (engine prompts P1 to pick, even offering Vex)", async () => {
+  // Same for an ordinary unit — the just-played unit is stunned with no "choose a target" step.
+  test("ruling 6daab1f9f787a618 — an ordinary unit played under Vex is stunned with no choice offered to anyone", async () => {
     const game = await board("bf1").hand(P2, { energyCost: 2, might: 3, name: "Recruit" }, "recruit").build();
     await game.p2.play("recruit");
     const prompts = await resolveVexTrigger(game);
@@ -82,9 +79,9 @@ describe("Ruling 6daab1f9f787a618 — Vex, Apathetic's stun is automatic, not ta
     expect(game.state("vex").isStunned).toBe(false);
   });
 
-  // Expected: a unit with Deflect (here: P2's own Vex, Apathetic — Deflect 1) is stunned all the same and
-  // P1's rainbow pool is untouched, because Deflect only taxes CHOOSING (809.1.d). Actual: target prompt.
-  test.failing("BUG: ruling 6daab1f9f787a618 — a Deflect unit played under Vex is stunned and P1 pays no [rainbow]", async () => {
+  // A unit with Deflect (here: P2's own Vex, Apathetic — Deflect 1) is stunned all the same and
+  // P1's rainbow pool is untouched, because Deflect only taxes CHOOSING (809.1.d).
+  test("ruling 6daab1f9f787a618 — a Deflect unit played under Vex is stunned and P1 pays no [rainbow]", async () => {
     const game = await board("bf1").hand(P2, VEX, "theirVex").build();
     await game.p2.play("theirVex");
     expect(game.state("theirVex").keywords).toContain("Deflect");

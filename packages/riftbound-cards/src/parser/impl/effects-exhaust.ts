@@ -32,7 +32,9 @@ export function parseStunEffect(text: string): StunEffect | undefined {
     if (ref === "me") {
       return { target: "self" as AnyTarget, type: "stun" };
     }
-    return { target: { type: "unit" } as AnyTarget, type: "stun" };
+    // rule 355.10.d — "it" is the firing event's subject, determined
+    // automatically; nobody chooses, so it is not a target.
+    return { target: { type: "trigger-source" } as AnyTarget, type: "stun" };
   }
 
   const match = text.match(
