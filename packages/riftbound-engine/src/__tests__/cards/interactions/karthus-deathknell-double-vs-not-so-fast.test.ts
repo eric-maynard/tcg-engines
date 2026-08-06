@@ -121,7 +121,7 @@ describe("Karthus doubling Ruined Rex's Deathknell vs a single Not So Fast", () 
     expect(rexItems(game)[0]).toMatchObject({ controller: P1, type: "ability" });
   });
 
-  test.failing("BUG: no Karthus, no reaction — the single trigger resolves for exactly 4 to the chosen unit", async () => {
+  test("no Karthus, no reaction — the single trigger resolves for exactly 4 to the chosen unit", async () => {
     const game = await board({ karthus: false }).build();
     await killRexAndTarget(game, ["victimA"]);
     expect(rexItems(game)).toHaveLength(1);
@@ -156,7 +156,7 @@ describe("Karthus doubling Ruined Rex's Deathknell vs a single Not So Fast", () 
     expect(items[0]?.id).not.toBe(items[1]?.id);
   });
 
-  test.failing("BUG: (a) with Karthus and no reaction both triggers resolve — 4 + 4 = 8 total (4 to each chosen victim)", async () => {
+  test("(a) with Karthus and no reaction both triggers resolve — 4 + 4 = 8 total (4 to each chosen victim)", async () => {
     const game = await board({ karthus: true }).build();
     await killRexAndTarget(game, ["victimA", "victimB"]);
     expect(rexItems(game)).toHaveLength(2);
@@ -166,7 +166,7 @@ describe("Karthus doubling Ruined Rex's Deathknell vs a single Not So Fast", () 
     expect(totalDamage(game)).toBe(8);
   });
 
-  test.failing("BUG: (a) both triggers may choose the SAME unit — 8 to victimA kills it (5 Might), victimB untouched", async () => {
+  test("(a) both triggers may choose the SAME unit — 8 to victimA kills it (5 Might), victimB untouched", async () => {
     const game = await board({ karthus: true }).build();
     await killRexAndTarget(game, ["victimA", "victimA"]);
     expect(rexItems(game)).toHaveLength(2);
@@ -191,7 +191,7 @@ describe("Karthus doubling Ruined Rex's Deathknell vs a single Not So Fast", () 
     expect(totalDamage(game)).toBe(4);
   });
 
-  test.failing("BUG: Karthus doubles only DEATHKNELL effects — Final Spark is not doubled and Rex dies once: exactly two Rex items, one Rex in trash", async () => {
+  test("Karthus doubles only DEATHKNELL effects — Final Spark is not doubled and Rex dies once: exactly two Rex items, one Rex in trash", async () => {
     const game = await board({ karthus: true }).build();
     await killRexAndTarget(game, ["victimA", "victimB"]);
     expect(rexItems(game)).toHaveLength(2);

@@ -63,7 +63,7 @@ describe("Ruling 892bcd8cb9f72a4b — Rex's Deathknell target is chosen before F
     }
   });
 
-  test.failing("BUG: ruling 892bcd8cb9f72a4b — both Deathknells pend together; P1 is asked for Rex's target while NO Mech exists and is offered exactly the two bystanders (never a Mech); the pick takes 4, and the Mechs arrive later unharmed; engine never fires Rex's Deathknell", async () => {
+  test("ruling 892bcd8cb9f72a4b — both Deathknells pend together; P1 is asked for Rex's target while NO Mech exists and is offered exactly the two bystanders (never a Mech); the pick takes 4, and the Mechs arrive later unharmed; engine never fires Rex's Deathknell", async () => {
     // Expected: a P1 pick (Rex's "an enemy unit") with options {bysA, bysB} only, surfaced before Forerunner's
     // trigger has resolved (finalize-all-pending first, 337.3). Actual: Rex's Deathknell does not trigger at all.
     const game = await board().build();

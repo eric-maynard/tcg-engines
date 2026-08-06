@@ -78,7 +78,7 @@ describe("Ruling e574b44846512539 — Karthus doubling a Deathknell vs ONE Not S
   // Expected: Rex's death with Karthus out puts TWO independent Rex items on the chain (each P1's ability, each
   // choosing its own enemy unit). Actual: Ruined Rex's keyword-only Deathknell never triggers and Karthus's
   // "trigger-double" static is not applied — the chain is empty after Final Spark resolves.
-  test.failing("BUG: ruling e574b44846512539 — with Karthus, Rex dying yields two separate Deathknell chain items (engine: none)", async () => {
+  test("ruling e574b44846512539 — with Karthus, Rex dying yields two separate Deathknell chain items (engine: none)", async () => {
     const game = await rexBoard().build();
     await killOwn(game, "spark", "rex");
     await chooseRexTargets(game, ["victimA", "victimB"]);
@@ -131,7 +131,7 @@ describe("Ruling e574b44846512539 — Karthus doubling a Deathknell vs ONE Not S
 
   // Expected: Karthus doubles the Sentry's Deathknell too — two Sentry items, and after both resolve P1 has drawn 2.
   // Actual: only one item; P1 draws 1.
-  test.failing("BUG: ruling e574b44846512539 — Karthus doubles the Sentry's Deathknell: two chain items, P1 draws 2 (engine: one)", async () => {
+  test("ruling e574b44846512539 — Karthus doubles the Sentry's Deathknell: two chain items, P1 draws 2 (engine: one)", async () => {
     const game = await sentryBoard().build();
     const hand = game.p1.hand().length; // burn is still in hand here
     await killOwn(game, "burn", "sentry");

@@ -163,7 +163,7 @@ describe("Ruling edfd3defc2005bb9 — Baited Hook: killed unit's Deathknell reso
 
   // The premise of steps 1–2 for the ruling's own example. Expected: Rex in trash and one pending Rex item on
   // the chain when Hook's look-at-5 prompt appears. Actual: Rex dies but nothing is put on the chain.
-  test.failing("BUG: ruling edfd3defc2005bb9 — Ruined Rex killed by Hook puts its Deathknell on the chain before the look-at-5 (engine: Rex's Deathknell never triggers)", async () => {
+  test("ruling edfd3defc2005bb9 — Ruined Rex killed by Hook puts its Deathknell on the chain before the look-at-5 (engine: Rex's Deathknell never triggers)", async () => {
     const game = await board(RUINED_REX, CLOUD_DRAKE).build();
     await activateHook(game);
     expect(game.zoneOf("dk")).toBe("trash");

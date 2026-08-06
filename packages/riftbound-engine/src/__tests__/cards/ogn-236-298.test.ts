@@ -47,7 +47,7 @@ describe("Karthus, Eternal (ogn-236-298)", () => {
     expect(game.p1.hand()).toHaveLength(1); // burn left the hand, Deathknell drew 1
   });
 
-  test.failing("BUG: with Karthus on board your Deathknell triggers an additional time — the Sentry draws 2", async () => {
+  test("with Karthus on board your Deathknell triggers an additional time — the Sentry draws 2", async () => {
     // Expected: Sentry dies → its Deathknell fires twice → P1 ends with 2 cards in hand.
     // Actual: the "trigger-double" static is not applied by the trigger runner; only 1 card is drawn.
     const game = await board({ karthus: true }).build();

@@ -70,7 +70,7 @@ describe("Karthus × Kog'Maw × Watchful Sentry — doubled Deathknell on the ch
     expect(game.actingSeat()).toBe(P1);
   });
 
-  test.failing("BUG: (a) with Karthus on board Kog'Maw's Deathknell triggers TWICE — two independent chain items (808.2, Karthus static) — engine adds only one", async () => {
+  test("(a) with Karthus on board Kog'Maw's Deathknell triggers TWICE — two independent chain items (808.2, Karthus static) — engine adds only one", async () => {
     // Expected: chain = [Kog'Maw trigger, Kog'Maw trigger], both controlled by A.
     // Actual: Karthus's "trigger an additional time" static is not applied; one item.
     const game = await board({ karthusOnBoard: true }).build();

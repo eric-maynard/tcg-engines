@@ -144,7 +144,7 @@ describe("The Ruination × Ruined Rex × Ferrous Forerunner — Deathknell targe
   // triggers its Deathknell; P1 is asked to choose an ENEMY unit — the Mechs are offered, Rex's own side is
   // not — and the chosen 3-Might Mech takes 4 and dies (token ceases to exist). Actual: Ruined Rex's
   // Deathknell never triggers — no prompt, no damage; both Mechs survive.
-  test.failing("BUG: positive contrast — Mechs already exist when Rex dies alone: Rex's Deathknell lets P1 pick a Mech, deals 4 and kills it", async () => {
+  test("positive contrast — Mechs already exist when Rex dies alone: Rex's Deathknell lets P1 pick a Mech, deals 4 and kills it", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2 })
       .battlefield("bf1", { controller: P1 })

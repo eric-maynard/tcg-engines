@@ -40,6 +40,16 @@ const GRANTED_KEYWORD_TRIGGERS: Readonly<Record<string, TriggerableAbility>> = {
   },
 };
 
+/**
+ * rule 808.1 (Deathknell) / rule 729 (Vision): keywords that are pure trigger
+ * shorthand for "when <event> happens to me, get the attached effect".
+ * Mirrors the parser's `KEYWORD_TRIGGER_EVENTS`.
+ */
+const KEYWORD_SELF_TRIGGER_EVENTS: Readonly<Record<string, string>> = {
+  Deathknell: "die",
+  Vision: "play-self",
+};
+
 function grantedKeywordAbilities(
   meta: Partial<RiftboundCardMeta> | undefined,
 ): TriggerableAbility[] {
@@ -138,6 +148,35 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
           condition: { type: "legion" },
           effect: effect as never,
           trigger: { event: "play-self", on: "self" },
+          type: "triggered",
+        });
+      }
+    }
+    // rule-id: unl-067-219 — rule 808.1: "[Deathknell] — Deal 4 to an enemy
+    // unit." is a trigger shorthand. Card definitions that spell their
+    // abilities out by hand carry only `{type:"keyword", keyword, effect}`
+    // (explicit `abilities` bypass the parser's KEYWORD_TRIGGER_EVENTS
+    // expansion), so synthesise the self-trigger the keyword stands for.
+    if (a.type === "keyword") {
+      const kw = (a as { keyword?: string }).keyword;
+      const event = kw ? KEYWORD_SELF_TRIGGER_EVENTS[kw] : undefined;
+      const effect = (a as { effect?: unknown }).effect;
+      // A card whose parsed abilities already carry the expanded trigger must
+      // not fire twice, so only synthesise when no equivalent entry exists.
+      if (
+        event &&
+        effect &&
+        !abilities.some(
+          (other) =>
+            other.type === "triggered" &&
+            other.trigger?.event === event &&
+            JSON.stringify((other as { effect?: unknown }).effect) === JSON.stringify(effect),
+        )
+      ) {
+        result.push({
+          condition: (a as { condition?: unknown }).condition,
+          effect: effect as never,
+          trigger: { event, on: "self" },
           type: "triggered",
         });
       }
@@ -616,6 +655,80 @@ export function orderTriggers(
     .map((entry) => entry.match);
 }
 
+/**
+ * Which printed keyword a matched trigger stands for, if any. Keyword-derived
+ * triggers ([Deathknell] — …) are synthesised alongside the bare
+ * `{type:"keyword", keyword, effect}` ability they came from, so the effect
+ * identifies the pair.
+ */
+function keywordOfMatchedTrigger(
+  cardId: string,
+  ability: TriggerableAbility,
+): string | undefined {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  const effectJson = JSON.stringify(ability.effect);
+  for (const a of abilities as readonly { type?: string; keyword?: string; effect?: unknown }[]) {
+    if (a.type !== "keyword" || !a.keyword || a.effect === undefined) {
+      continue;
+    }
+    if (JSON.stringify(a.effect) === effectJson) {
+      return a.keyword;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * rule 383.3.d — "Your [X] effects trigger an additional time" is a
+ * controller-scoped static: count the doublers the trigger's controller has on
+ * the board (a card in the trash is not on the board and does not count).
+ */
+function extraTriggerCount(
+  keyword: string,
+  ownerId: string,
+  boardCards: readonly CardWithAbilities[],
+): number {
+  const registry = getGlobalCardRegistry();
+  let extra = 0;
+  for (const card of boardCards) {
+    if (card.owner !== ownerId || card.zone === "trash") {
+      continue;
+    }
+    for (const a of (registry.getAbilities(card.id) ?? []) as readonly {
+      type?: string;
+      effect?: { type?: string; keyword?: string };
+    }[]) {
+      if (a.type === "static" && a.effect?.type === "trigger-double" && a.effect.keyword === keyword) {
+        extra += 1;
+      }
+    }
+  }
+  return extra;
+}
+
+/**
+ * rule 808.2 — each instance of a keyword triggers separately, so a doubled
+ * Deathknell becomes two independent items rather than one doubled effect.
+ */
+function expandKeywordDoubling(
+  matches: readonly MatchedTrigger[],
+  boardCards: readonly CardWithAbilities[],
+): MatchedTrigger[] {
+  const out: MatchedTrigger[] = [];
+  for (const match of matches) {
+    out.push(match);
+    const keyword = keywordOfMatchedTrigger(match.cardId, match.ability);
+    if (!keyword) {
+      continue;
+    }
+    const extra = extraTriggerCount(keyword, match.cardOwner, boardCards);
+    for (let i = 0; i < extra; i += 1) {
+      out.push(match);
+    }
+  }
+  return out;
+}
+
 export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
   // rule-id: ogn-118-298 — tally every event (per type / player / card) before
   // matching so "the first time … each turn" restrictions can read the count.
@@ -711,12 +824,17 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
     ),
   );
 
+  // rule 808.2 / rule-id: ogn-236-298 (Karthus, Eternal) — "Your [Deathknell]
+  // effects trigger an additional time": each instance triggers separately, so
+  // the extra copies are independent chain items placed next to the original.
+  const expanded = expandKeywordDoubling(filtered, boardCards);
+
   // Rule 585: Order simultaneous triggers by (1) turn player first
   // (2) within the same owner, preserve scan order (controller-chosen
   // Order defaults to insertion order for goldfish compatibility).
   const turnPlayer = ctx.draft.turn?.activePlayer ?? "";
   const turnOrder = Object.keys(ctx.draft.players ?? {});
-  const matches = orderTriggers(filtered, turnPlayer, turnOrder);
+  const matches = orderTriggers(expanded, turnPlayer, turnOrder);
 
   // Rule 583.3: a Triggered Ability behaves like an Activated Ability and is
   // placed on the Chain — always, whether or not a chain already exists.

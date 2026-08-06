@@ -68,7 +68,7 @@ async function killRex(game: G) {
 }
 
 describe("Ruined Rex Deathknell × Navori Scout Deflect", () => {
-  test.failing("BUG: Rex dying puts its Deathknell on the chain as a triggered ability controlled by P1 (808.1.d.2, 383.3)", async () => {
+  test("Rex dying puts its Deathknell on the chain as a triggered ability controlled by P1 (808.1.d.2, 383.3)", async () => {
     // Expected: after the Bolt resolves, a triggered chain item sourced from Rex, controller P1.
     // Actual: Ruined Rex's keyword-only Deathknell is never synthesised into a trigger; chain stays empty.
     const game = await board({ power: 1 }).build();
@@ -89,7 +89,7 @@ describe("Ruined Rex Deathknell × Navori Scout Deflect", () => {
     expect(game.decision()).toMatchObject({ kind: "action", seat: P1, context: "main" });
   });
 
-  test.failing("BUG: (a)+(c) variant A with 1 power: Deflect taxes the triggered ability — P1 pays 1 power of any domain to choose the Scout (809.1.c, 809.1.c.1, 809.1.d)", async () => {
+  test("(a)+(c) variant A with 1 power: Deflect taxes the triggered ability — P1 pays 1 power of any domain to choose the Scout (809.1.c, 809.1.c.1, 809.1.d)", async () => {
     // Expected: the mind power is spent as the mandatory additional cost of finalizing the trigger.
     // Actual: no trigger fires (and even for triggers that do fire, no Deflect surcharge is charged).
     const game = await board({ power: 1 }).build();
@@ -99,7 +99,7 @@ describe("Ruined Rex Deathknell × Navori Scout Deflect", () => {
     expect(game.p1.power()).toBe(0);
   });
 
-  test.failing("BUG: (c) variant A with 1 power: on resolution Navori Scout takes 4 and, being 4 Might, dies", async () => {
+  test("(c) variant A with 1 power: on resolution Navori Scout takes 4 and, being 4 Might, dies", async () => {
     // Expected: Scout is dealt 4 → lethal → trash at cleanup. Actual: Deathknell never triggers; Scout undamaged.
     const game = await board({ power: 1 }).build();
     await killRex(game);
@@ -108,7 +108,7 @@ describe("Ruined Rex Deathknell × Navori Scout Deflect", () => {
     expect(game.p2.units("bf1")).not.toContain("scout");
   });
 
-  test.failing("BUG: (d) variant B, no power: P1 picks the vanilla unit — no Deflect cost incurred — it takes 4 and dies; Scout untouched", async () => {
+  test("(d) variant B, no power: P1 picks the vanilla unit — no Deflect cost incurred — it takes 4 and dies; Scout untouched", async () => {
     // Expected: target choice is P1's; choosing "grunt" costs nothing extra; 4 damage kills the 3-Might grunt.
     // Actual: Deathknell never triggers, grunt survives undamaged.
     const game = await board({ variantB: true }).script(P1, ["grunt"]).build();
@@ -121,7 +121,7 @@ describe("Ruined Rex Deathknell × Navori Scout Deflect", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: (d) variant B with 1 power: choosing the vanilla unit still spends no power (Deflect only taxes choosing the Scout)", async () => {
+  test("(d) variant B with 1 power: choosing the vanilla unit still spends no power (Deflect only taxes choosing the Scout)", async () => {
     // Expected: grunt dies, the mind power is still in P1's pool. Actual: no trigger at all.
     const game = await board({ power: 1, variantB: true }).script(P1, ["grunt"]).build();
     await killRex(game);
