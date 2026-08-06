@@ -61,8 +61,13 @@ describe("Zenith Blade (ogn-262-298)", () => {
   });
 
   test("the friendly unit is moved to the stunned unit's battlefield (not exhausted — it was moved by an effect)", async () => {
+    // The arrival contests bf1 and stages a showdown (323.9 / 460), so the
+    // board is inspected on arrival — before that combat is fought out.
     const game = await board().build();
-    await castAndResolve(game);
+    await game.p1.cast("zb", { targets: ["foe", "ally"] });
+    const stop = await game.settle();
+    expect(stop.reason).toBe("unanswered");
+    await game.p1.pick("battlefield-bf1");
     expect(game.locationOf("ally")).toBe("bf1");
     expect(game.state("ally").isExhausted).toBe(false);
     expect(game.gameState.battlefields.bf1?.contested).toBe(true);

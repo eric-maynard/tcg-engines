@@ -14,6 +14,8 @@ import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } 
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
 import { markContestedOnArrival } from "../../abilities/effects/move";
+import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
+import { resolveTarget } from "../../abilities/target-resolver";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { addToChain, createInteractionState } from "../../chain";
 import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
@@ -32,6 +34,62 @@ import { getCardEffectiveMight, getOptionalPlayCost, staticEnterReadyApplies } f
 import { isLegalMultiTargetSet } from "./play/targeting";
 
 const isBoardZone = (z: string): boolean => z === "base" || z.startsWith("battlefield-");
+
+/**
+ * rule 355.10 (sfd-039-221 Royal Entourage) — a modal ability's target belongs
+ * to the CHOSEN mode ("ready or exhaust a legend"), so it is declared right
+ * after the mode is picked. With two or more legal candidates the controller
+ * must choose; a single candidate binds itself and zero candidates fizzle.
+ * Returns true when a `choose-target` prompt was raised.
+ */
+function liftModalTarget(
+  draft: RiftboundGameState,
+  choice: { sourceCardId: string; playerId: string; controllerId?: string },
+  effect: ExecutableEffect,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): boolean {
+  const target = (effect as { target?: unknown }).target;
+  if (
+    typeof target !== "object" ||
+    target === null ||
+    typeof (target as { type?: unknown }).type !== "string"
+  ) {
+    return false;
+  }
+  const t = target as { type: string; quantity?: unknown };
+  if (
+    t.type === "self" ||
+    t.type === "trigger-source" ||
+    t.type === "player" ||
+    t.type === "battlefield" ||
+    t.quantity === "all"
+  ) {
+    return false;
+  }
+  const controller = choice.controllerId ?? choice.playerId;
+  const options = resolveTarget({ ...t, quantity: "all" }, {
+    cards: context.cards,
+    choosing: true,
+    draft,
+    playerId: controller,
+    sourceCardId: choice.sourceCardId,
+    sourceZone: context.zones.getCardZone(choice.sourceCardId as CoreCardId),
+    zones: context.zones,
+  } as Parameters<typeof resolveTarget>[1]);
+  if (options.length < 2) {
+    return false;
+  }
+  draft.pendingChoice = {
+    effect,
+    options,
+    playerId: controller,
+    remaining: 1,
+    sourceCardId: choice.sourceCardId,
+    type: "choose-target",
+  };
+  return true;
+}
 
 /**
  * rule 355.14.c/f/g (ogn-041-298): a split-damage allocation is legal when
@@ -228,6 +286,14 @@ export function isValidPendingPick(choice: PendingChoice, cardId: string): boole
       return false;
     }
   }
+  // rule-id: ogn-242-298 — "a unit … that has Might up to 1 more than the
+  // killed unit": a Might ceiling on the pick, read from printed Might.
+  const maxMight = choice.filter?.maxMight;
+  if (typeof maxMight === "number") {
+    if (getGlobalCardRegistry().getMight(cardId) > maxMight) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -247,6 +313,10 @@ export function pickDefaultForChoice(choice: PendingChoice): string | number | u
   }
   if (choice.type === "opt-in") {
     return undefined;
+  }
+  // rule 444.2 (ogn-268-298): paying 0 is always legal, so goldfish pays nothing.
+  if (choice.type === "pay-x") {
+    return 0;
   }
   if (choice.type === "weaponmaster-equip") {
     return undefined;
@@ -332,6 +402,17 @@ export const pendingChoiceMoves: Partial<
           choice.options.includes(pickedEquip) &&
           canPayWeaponmasterEquip(state, choice.playerId, pickedEquip, context)
         );
+      }
+      if (choice.type === "pay-x") {
+        // rule 204.3.b / 444.1 (ogn-268-298): X is Power paid at resolution.
+        if (choice.playerId !== context.params.playerId) {
+          return false;
+        }
+        const x = context.params.xAmount;
+        if (typeof x !== "number" || !Number.isInteger(x) || x < 0) {
+          return false;
+        }
+        return canAffordPower(state.runePools[choice.playerId]?.power ?? {}, { rainbow: x });
       }
       if (choice.type === "opt-in") {
         // Rule 583 (unl-021-219): controller may accept or decline.
@@ -449,6 +530,17 @@ export const pendingChoiceMoves: Partial<
             })),
           { accept: false, playerId: context.playerId as string },
         ];
+      }
+      if (choice.type === "pay-x") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        const pool = choice.playerId ? (state.runePools[choice.playerId]?.power ?? {}) : {};
+        const max = Object.values(pool).reduce<number>((a, b) => a + (b ?? 0), 0);
+        return Array.from({ length: max + 1 }, (_, x) => ({
+          playerId: context.playerId as string,
+          xAmount: x,
+        }));
       }
       if (choice.type === "opt-in") {
         if (choice.playerId !== (context.playerId as string)) {
@@ -597,6 +689,48 @@ export const pendingChoiceMoves: Partial<
         return;
       }
 
+      if (choice.type === "pay-x") {
+        // rule 204.3.b / 444.1-2 (ogn-268-298): remove X Power from the pool
+        // (any Domain pays a [rainbow] pip) and resume the resolution with
+        // `x` bound for `{ variable: "x" }` amounts.
+        const x = Math.max(0, (context.params.xAmount as number) ?? 0);
+        if (!canAffordPower(draft.runePools[choice.playerId]?.power ?? {}, { rainbow: x })) {
+          return;
+        }
+        draft.pendingChoice = undefined;
+        if (x > 0) {
+          deductAbilityCost(
+            draft,
+            choice.playerId,
+            { power: Array.from({ length: x }, () => "rainbow") },
+            context.zones,
+            context.counters,
+          );
+        }
+        const resolved = choice.resolved as {
+          cardId: string;
+          effect?: unknown;
+        };
+        const registry = getGlobalCardRegistry();
+        const baseEffect =
+          resolved.effect ??
+          (registry.getAbilities(resolved.cardId) ?? []).find((ab) => ab.type === "spell")?.effect;
+        executeResolvedItem(
+          {
+            ...resolved,
+            effect: baseEffect
+              ? { ...(baseEffect as Record<string, unknown>), _variables: { x } }
+              : baseEffect,
+          } as Parameters<typeof executeResolvedItem>[0],
+          draft,
+          context,
+        );
+        if (!draft.pendingChoice) {
+          postChoiceCleanup(draft, context);
+        }
+        return;
+      }
+
       if (choice.type === "opt-in") {
         // Rule 583 (unl-021-219): on accept, resume executeResolvedItem with
         // the optional flag cleared so target selection etc. proceeds normally;
@@ -661,6 +795,16 @@ export const pendingChoiceMoves: Partial<
           } as Partial<RiftboundCardMeta>);
         }
         if (picked) {
+          // rule 355.10 (sfd-039-221) — the picked mode's own caster-chosen
+          // target ("ready or exhaust A LEGEND") is declared now, by the
+          // ability's controller: with several candidates and nothing already
+          // bound, prompt instead of letting the handler take the first one.
+          if (
+            !choice.boundTargets &&
+            liftModalTarget(draft, choice, picked as ExecutableEffect, context)
+          ) {
+            return;
+          }
           // rule-id: sfd-091-221 — keep chain-bound targets for the picked mode.
           // rule 355.10.e (ogn-071-298): an opponent-picked mode resolves for the controller.
           const effectCtx = {
@@ -755,7 +899,19 @@ export const pendingChoiceMoves: Partial<
             }
           }
           draft.pendingChoice = undefined;
+          // rule 355.2 (ogn-187-298): a chained prompt ("starting with the next
+          // player, each player may …") continues whether or not this chooser
+          // declined, and the next prompt belongs to the SPELL's controller
+          // chain, not this chooser.
+          const chainedThen = (choice as { then?: unknown }).then as ExecutableEffect | undefined;
           if (pickedSoFar.length === 0) {
+            if (chainedThen) {
+              executeEffect(
+                chainedThen,
+                buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+              );
+              postChoiceCleanup(draft, context);
+            }
             return;
           }
           // Rule 359.2: "when you choose me" fires for each chosen target.
@@ -772,6 +928,12 @@ export const pendingChoiceMoves: Partial<
             ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
             boundTargets: pickedSoFar,
           });
+          if (chainedThen) {
+            executeEffect(
+              chainedThen,
+              buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+            );
+          }
           postChoiceCleanup(draft, context);
           return;
         }
@@ -924,9 +1086,30 @@ export const pendingChoiceMoves: Partial<
             { cards: context.cards, counters: context.counters, draft, zones: context.zones },
           );
         }
-        // rule-id: unl-144-219 — Rule 450: arriving at a non-controlled
-        // battlefield applies Contested so combat is staged.
-        markContestedOnArrival(draft, targetZoneId, choice.playerId);
+        // rule-id: ogn-173-298 — Rule 450 / 323.9 / 460: a unit arriving at a
+        // battlefield its controller doesn't control contests it AND stages the
+        // showdown (combat when opposing units stand there), exactly as a
+        // Standard Move does. Fall back to the bare Contested mark when the
+        // caller's context bags are stubbed (unit tests) or the card is no unit.
+        if (
+          targetZoneId.startsWith("battlefield-") &&
+          context.cards &&
+          context.counters &&
+          typeof context.zones.getCardsInZone === "function" &&
+          getGlobalCardRegistry().get(choice.cardId as string)?.cardType === "unit"
+        ) {
+          contestBattlefieldOnArrival({
+            arrivingUnitIds: [choice.cardId as string],
+            battlefieldId: targetZoneId.slice("battlefield-".length),
+            cards: context.cards,
+            counters: context.counters,
+            draft,
+            playerId: choice.playerId,
+            zones: context.zones,
+          });
+        } else {
+          markContestedOnArrival(draft, targetZoneId, choice.playerId);
+        }
         draft.pendingChoice = undefined;
         // rule-id: sfd-109-221 (rule 354.2 / 419.4.a) — a card played by an
         // effect is still played: fire "When you play me" (carrying whether

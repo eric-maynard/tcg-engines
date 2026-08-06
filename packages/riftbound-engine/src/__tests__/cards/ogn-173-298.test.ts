@@ -75,7 +75,7 @@ describe("Ride the Wind (ogn-173-298)", () => {
     expect(game.state("ally").isExhausted).toBe(false);
   });
 
-  test.failing("BUG: moving into the enemy-held bf1 stages a Combat that is fought once the spell has resolved (323.9, 460)", async () => {
+  test("moving into the enemy-held bf1 stages a Combat that is fought once the spell has resolved (323.9, 460)", async () => {
     // Expected: ally (3) arrives at bf1 facing foe (2) → combat: foe dies, ally holds and conquers bf1.
     // Actual: ally sits at bf1 next to the enemy unit with no showdown/combat; bf1 stays P2's.
     const game = await board().build();
