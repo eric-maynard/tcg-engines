@@ -44,7 +44,9 @@ import {
   getPotentialRuneEnergy,
   canAffordCard,
   deductCost,
+  discountOptionalPlayCost,
 } from "./cost";
+import type { CostExtras } from "./cost";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -59,6 +61,7 @@ function resolvePayableOptionalCost(
   state: RiftboundGameState,
   playerId: string,
   cardId: string,
+  board?: CostExtras["board"],
 ):
   | { kind: "accelerate" | "pay"; energy: number; power: readonly string[]; xp: number }
   | undefined {
@@ -73,10 +76,18 @@ function resolvePayableOptionalCost(
   // The discount rider is only honoured on the XP path (the reducer spends XP
   // before charging runes); rune-paid extras with a rider are not yet netted.
   const discount = xp > 0 ? (optional.energyDiscount ?? 0) : 0;
+  // rule 356.4.c (sfd-149-221): friendly "optional additional costs you pay
+  // cost [1] or [rainbow] less" statics shave this cost before it is paid.
+  const discounted = discountOptionalPlayCost(
+    state,
+    playerId,
+    { energy: optional.cost?.energy ?? 0, power: optional.cost?.power ?? [] },
+    board,
+  );
   return {
-    energy: (optional.cost?.energy ?? 0) - discount,
+    energy: (discounted?.energy ?? 0) - discount,
     kind: optional.kind,
-    power: optional.cost?.power ?? [],
+    power: discounted?.power ?? [],
     xp,
   };
 }
@@ -334,6 +345,7 @@ export const playUnit: Defs["playUnit"] = {
           state,
           context.params.playerId as string,
           context.params.cardId as string,
+          { cards: context.cards, zones: context.zones },
         )
       : undefined;
     // rule 356.2.b / 204.2 (ogn-002-298) — "you may discard N as an additional
@@ -498,7 +510,7 @@ export const playUnit: Defs["playUnit"] = {
       // play-cost, build the paid variant so callers can elect to pay it.
       // rule-id: unl-178-219 — an XP cost with an "I cost [N] less" rider can
       // make the paid variant affordable even when the unpaid play is not.
-      const payable = resolvePayableOptionalCost(state, context.playerId as string, cardId as string);
+      const payable = resolvePayableOptionalCost(state, context.playerId as string, cardId as string, board);
       // rule 356.2.b / 204.2 (ogn-002-298): offer one paid variant per other
       // card in hand for a "you may discard 1 as an additional cost" play.
       const discardCost = getOptionalPlayCost(cardId as string);
@@ -930,7 +942,9 @@ export const playUnit: Defs["playUnit"] = {
     if (paidAdditionalCost) {
       const pool = draft.runePools[playerId];
       if ((optional?.kind === "accelerate" || optional?.kind === "pay") && pool) {
-        const need = optional.cost ?? {};
+        // rule 356.4.c (sfd-149-221): pay the cost as discounted by friendly
+        // "optional additional costs you pay cost [1] or [rainbow] less" statics.
+        const need = discountOptionalPlayCost(draft, playerId, optional.cost, board) ?? {};
         const xpOk = (need.xp ?? 0) === 0 || xpPaid;
         const canPay =
           xpOk &&
