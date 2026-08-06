@@ -34,7 +34,7 @@ export function getUserIdFromRequest(req: Request): string | null {
   return null;
 }
 
-export async function handleAuthRoutes(req: Request, url: URL, _ctx: RouteCtx): RouteResult {
+export async function handleAuthRoutes(req: Request, url: URL, ctx: RouteCtx): RouteResult {
   const { pathname } = url;
 
   // POST /api/auth/register
@@ -92,8 +92,10 @@ export async function handleAuthRoutes(req: Request, url: URL, _ctx: RouteCtx): 
   if (pathname === "/api/auth/dev-credentials" && req.method === "GET") {
     const username = process.env.DEFAULT_USERNAME;
     const password = process.env.DEFAULT_PASSWORD;
-    const host = (req.headers.get("host") ?? "").split(":")[0];
-    const loopback = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+    // Loopback is decided from the socket's remote address (Bun server.requestIP),
+    // never from a client-supplied header.
+    const ip = ctx.server.requestIP(req)?.address ?? "";
+    const loopback = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
     if (!username || !password || !SANDBOX_ENABLED || !loopback) {
       return json({ available: false });
     }
