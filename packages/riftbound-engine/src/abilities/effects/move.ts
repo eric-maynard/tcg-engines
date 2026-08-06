@@ -30,6 +30,91 @@ export function markContestedOnArrival(
 }
 
 /**
+ * rule-id: unl-112-219 (Irresistible Faefolk) — rules 319.8 / 323.9 / 464.2.c:
+ * cleanup after an effect-driven move stages combat when opposing units now
+ * share a contested battlefield. The attacker is the player whose unit applied
+ * Contested (464.2.c.1), not whoever moved the unit; every other occupant
+ * defends (464.2.c.2). Idempotent — re-running on an already-staged combat is
+ * a no-op.
+ */
+export function stageCombatOnArrival(ctx: EffectContext, targetZoneId: string): void {
+  if (!targetZoneId.startsWith("battlefield-")) {
+    return;
+  }
+  const bfId = targetZoneId.slice("battlefield-".length);
+  const bf = ctx.draft.battlefields?.[bfId];
+  const attackingPlayer = bf?.contested === true ? bf.contestedBy : undefined;
+  if (!bf || typeof attackingPlayer !== "string") {
+    return;
+  }
+  const occupants = ctx.zones.getCardsInZone(targetZoneId as CoreZoneId).map((id) => id as string);
+  const ownerOf = (id: string): string | undefined =>
+    (ctx.cards.getCardController?.(id as CoreCardId) ??
+      ctx.cards.getCardOwner(id as CoreCardId)) as string | undefined;
+  const attackers = occupants.filter((id) => ownerOf(id) === attackingPlayer);
+  const defenders = occupants.filter((id) => {
+    const owner = ownerOf(id);
+    return owner !== undefined && owner !== attackingPlayer;
+  });
+  if (attackers.length === 0 || defenders.length === 0) {
+    return;
+  }
+  const alreadyStaged = defenders.every(
+    (id) => (ctx.cards.getCardMeta?.(id as CoreCardId) as { combatRole?: string } | undefined)?.combatRole === "defender",
+  );
+  const defendingPlayer = ownerOf(defenders[0] as string) as string;
+  bf.showdownComplete = false;
+  for (const id of attackers) {
+    ctx.cards.updateCardMeta?.(id as CoreCardId, { combatRole: "attacker" });
+  }
+  for (const id of defenders) {
+    ctx.cards.updateCardMeta?.(id as CoreCardId, { combatRole: "defender" });
+  }
+  // Reopen the battlefield's showdown as a combat showdown with the attacker
+  // holding Focus (rule 625.1.c). An in-flight showdown here is upgraded in
+  // place rather than stacked.
+  const interaction = ctx.draft.interaction;
+  const stack = interaction?.showdownStack;
+  if (stack && stack.length > 0) {
+    const top = stack[stack.length - 1] as {
+      battlefieldId?: string;
+      isCombatShowdown?: boolean;
+      attackingPlayer?: string;
+      defendingPlayer?: string;
+      focusPlayer?: string;
+      passedPlayers?: string[];
+      relevantPlayers?: string[];
+      active?: boolean;
+    };
+    if (top.battlefieldId === bfId) {
+      top.active = true;
+      top.isCombatShowdown = true;
+      top.attackingPlayer = attackingPlayer;
+      top.defendingPlayer = defendingPlayer;
+      top.relevantPlayers = [...new Set([attackingPlayer, defendingPlayer])];
+      if (!alreadyStaged) {
+        top.focusPlayer = attackingPlayer;
+        top.passedPlayers = [];
+      }
+    }
+  }
+  if (alreadyStaged) {
+    return;
+  }
+  for (const id of attackers) {
+    ctx.fireTriggers?.({ battlefieldId: bfId, cardId: id, owner: attackingPlayer, type: "attack" });
+  }
+  for (const id of defenders) {
+    ctx.fireTriggers?.({
+      battlefieldId: bfId,
+      cardId: id,
+      owner: ownerOf(id) as string,
+      type: "defend",
+    });
+  }
+}
+
+/**
  * rule-id: unl-133-219 — an effect-driven move is still a move: move a board
  * card and emit the `move` event (with the unit's controller as `owner` and
  * the effect's controller as `movedBy`) so "When I move" / "When you move an
@@ -185,6 +270,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     const destZone = `battlefield-${bfKey}`;
     moveCardWithEvent(ctx, unitId, destZone);
     markContestedOnArrival(ctx.draft, destZone, ctx.playerId);
+    stageCombatOnArrival(ctx, destZone);
     return;
   }
   const moveRef = (effect as unknown as { reference?: TargetDescriptor }).reference;
@@ -432,6 +518,14 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     }
     targetZone = ctx.triggerToZone;
   } else if (dest === "here" && ctx.sourceZone) {
+    // rule 359.3.f.2 / 359.3.e.6 (ruling cc1dfe2325b10a8d, sfd-177-221 Azir) —
+    // "here"/"this battlefield" is a referent read from the source card when the
+    // instruction executes, not a target. If the source has left the board by
+    // then (killed in response, banished, …) there is no such location and the
+    // move instruction is ignored rather than dragging units into the trash.
+    if (ctx.sourceZone !== "base" && !ctx.sourceZone.startsWith("battlefield-")) {
+      return;
+    }
     targetZone = ctx.sourceZone;
   } else if (dest && dest !== "here") {
     targetZone = dest;
@@ -446,6 +540,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     }
     moveCardWithEvent(ctx, targetId, targetZone);
   }
+  stageCombatOnArrival(ctx, targetZone);
 
   // rule-id: unl-124-219 (Isolate) — "Then, if there's an enemy unit alone at
   // that battlefield, …": "that battlefield" is the moved unit's origin, which

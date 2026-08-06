@@ -98,7 +98,7 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
   // Expected: with Azir in the trash, "this battlefield" has no referent — the Sand Soldier token stays
   // in P1's base (359.3.e.6). Actual: the engine resolves "here" to Azir's CURRENT zone (the trash) and
   // moves the token there, where — being a token — it ceases to exist.
-  test.failing("BUG: ruling cc1dfe2325b10a8d — Case A: after Hidden Blade kills Azir, his trigger moves nothing; the token stays in base (engine sends it to Azir's trash)", async () => {
+  test("ruling cc1dfe2325b10a8d — Case A: after Hidden Blade kills Azir, his trigger moves nothing; the token stays in base (engine sends it to Azir's trash)", async () => {
     const game = await bladeBoard().build();
     await game.p1.move("azir", "bf1");
     await game.p1.passPriority();
