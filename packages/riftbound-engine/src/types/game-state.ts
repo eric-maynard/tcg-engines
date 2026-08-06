@@ -393,6 +393,25 @@ export interface RevealAndPickChoice {
   readonly playEnergyReduction?: number;
 
   /**
+   * rule 356.1.b.1 (ogn-025-298 Blind Fury): "play it, ignoring its cost" —
+   * the play charges nothing at all, energy and power alike.
+   */
+  readonly playIgnoreCost?: boolean;
+
+  /**
+   * rule 356.1.b.1 (ogn-115-298 Promising Future): "playing it, ignoring its
+   * Energy cost" — Power pips are still paid in full.
+   */
+  readonly playIgnoreEnergy?: boolean;
+
+  /**
+   * rule 355.8 (ogn-008-298 Get Excited!): play-time targets chosen for the
+   * originating effect, handed to `then` so the follow-up acts on the card the
+   * caster chose rather than re-scanning the board.
+   */
+  readonly thenBoundTargets?: readonly CardId[];
+
+  /**
    * Rule 729 (ogn-235-298): "You may recycle it" — when set the prompter
    * may decline the pick entirely, leaving the revealed card(s) in place.
    */
@@ -489,6 +508,12 @@ export interface ChooseTargetChoice {
   readonly picked?: readonly CardId[];
   /** rule 355.13 (ogn-073-298): "up to N" — stop prompting once N are picked. */
   readonly maxPicks?: number;
+  /**
+   * rule 372: this prompt orders two replacement effects that both apply to
+   * the death of this card. The pick names the replacement's SOURCE card and
+   * is recorded on `replacementOrderChoices`; no effect is executed here.
+   */
+  readonly replacementOrderFor?: CardId;
 }
 
 /**
@@ -728,6 +753,13 @@ export interface RiftboundGameState {
    * The set is cleared at end of turn along with other turn-scoped state.
    */
   readonly consumedNextReplacements?: Record<string, true>;
+
+  /**
+   * rule 372: dying card id → source card id of the replacement effect its
+   * controller chose to apply when more than one applied to that death.
+   * Consumed (and cleared) by the next state-based check for that card.
+   */
+  readonly replacementOrderChoices?: Record<string, string>;
 
   /**
    * Replacement effects installed at runtime by an activated/triggered ability

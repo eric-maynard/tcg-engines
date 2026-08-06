@@ -52,6 +52,9 @@ export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: 
       revealer: ctx.playerId,
       sourceCardId: ctx.sourceCardId,
       then: (effect as { then?: unknown }).then,
+      // rule 355.8 (ogn-008-298): carry the caster's play-time pick so the
+      // `then` clause damages the chosen unit, not the first one on the board.
+      ...(ctx.boundTargets ? { thenBoundTargets: ctx.boundTargets } : {}),
       type: "reveal-and-pick",
       ...(n > 1 ? { remaining: n } : {}),
     };

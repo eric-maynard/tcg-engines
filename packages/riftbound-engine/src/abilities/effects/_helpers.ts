@@ -237,6 +237,12 @@ export function resolveAmount(
       }
       return 0;
     }
+    // rule 206 / rule-id: ogn-008-298 (Get Excited!) — "Deal its Energy cost as
+    // damage": "it" is the card the effect just acted on (the discarded card),
+    // never the damage target bound on this context.
+    if (typeof costRef === "object" && costRef?.type === "trigger-source") {
+      return ctx.triggerSourceId ? registry.getEnergyCost(ctx.triggerSourceId) : 0;
+    }
     if (typeof costRef === "object" && costRef !== null) {
       const refId =
         ctx.boundTargets?.[0] ??

@@ -72,7 +72,7 @@ describe("Reinforce (ogn-062-298)", () => {
     expect(game.p1.base()).not.toContain("fae");
   });
 
-  test.failing("BUG: the unit played via Reinforce enters the board exhausted (rule 143.4)", async () => {
+  test("the unit played via Reinforce enters the board exhausted (rule 143.4)", async () => {
     // Expected: Faefolk (Accelerate not paid — no calm power available) enters exhausted like any unit.
     // Actual: the look→play path puts it onto the board ready.
     const game = await board(7).build();
@@ -84,7 +84,7 @@ describe("Reinforce (ogn-062-298)", () => {
     expect(game.state("fae").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: the reduced cost must still be paid — with 0 energy left a 7-cost unit (2 after reduction) cannot be played for free (rules 356.4, 419.2.a)", async () => {
+  test("the reduced cost must still be paid — with 0 energy left a 7-cost unit (2 after reduction) cannot be played for free (rules 356.4, 419.2.a)", async () => {
     // Expected: after paying 5 for Reinforce, P1 has 0 energy, so Faefolk (cost 2 after the
     // discount) is either not offered or cannot end up on the board. Actual: it is played for 0.
     const game = await board(5).build();

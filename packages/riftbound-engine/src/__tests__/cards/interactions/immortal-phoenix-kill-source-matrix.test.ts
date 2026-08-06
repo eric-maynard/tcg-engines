@@ -128,7 +128,7 @@ describe("Immortal Phoenix — which kill sources count as 'you kill a unit with
       expect(game.violations()).toEqual([]);
     });
 
-    test.failing("BUG: the replayed Phoenix enters the board EXHAUSTED like any played unit (143.4)", async () => {
+    test("the replayed Phoenix enters the board EXHAUSTED like any played unit (143.4)", async () => {
       // Expected: isExhausted true after being played from trash. Actual: it arrives ready.
       const game = await ownPhoenixBoard().build();
       await game.p1.cast("sky", { targets: "phoenix" });

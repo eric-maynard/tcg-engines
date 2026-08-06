@@ -247,7 +247,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     expect(s.might).toBe(7);
   });
 
-  test.failing("BUG: (d) without Accelerate the replayed Watcher enters EXHAUSTED (143.4)", async () => {
+  test("(d) without Accelerate the replayed Watcher enters EXHAUSTED (143.4)", async () => {
     // Expected: exhausted. Actual: it comes back ready for free.
     const game = await ownBoard().build(); // P1 has no [mind] → cannot Accelerate
     await game.p1.cast("shift", { targets: ["ownWatcher", "victim"] });

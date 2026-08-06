@@ -19,7 +19,7 @@ const CARD = "ogn-025-298";
 const SKULKER = "ogn-175-298"; // vanilla 3-might unit
 
 describe("Blind Fury (ogn-025-298)", () => {
-  test.failing("BUG: castable with no permanents on the board (it targets nothing at play time); costs 4 energy + 2 fury", async () => {
+  test("castable with no permanents on the board (it targets nothing at play time); costs 4 energy + 2 fury", async () => {
     // Expected: legal with 4 energy + FF and an opponent deck; paying leaves the pool empty.
     // Actual: the engine treats the "banish" step as a caster-chosen board target, so with an
     // empty board the spell is not offered at all.
@@ -90,7 +90,7 @@ describe("Blind Fury (ogn-025-298)", () => {
     expect(game.p1.can("cast", "bf")).toBe(false);
   });
 
-  test.failing("BUG: with two opponents the unchosen revealed card is recycled to the bottom of its owner's deck", async () => {
+  test("with two opponents the unchosen revealed card is recycled to the bottom of its owner's deck", async () => {
     // Expected: P1 picks P2's card (played under P1), P3's revealed card goes to the bottom of P3's deck.
     // Actual: see above — the reveal/banish/play/recycle sequence never runs.
     const game = await scenario({ players: 3 })

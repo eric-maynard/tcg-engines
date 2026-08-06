@@ -76,7 +76,7 @@ describe("Get Excited! (ogn-008-298)", () => {
     expect(game.zoneOf("ge")).toBe("trash");
   });
 
-  test.failing("BUG: deals the discarded card's Energy cost (8 for Dr. Mundo) as damage to the chosen battlefield unit", async () => {
+  test("deals the discarded card's Energy cost (8 for Dr. Mundo) as damage to the chosen battlefield unit", async () => {
     // Expected: discarding Dr. Mundo (8 energy, 2 power ignored) deals 8 to `foe`.
     // Actual: the parsed ability only carries `discard 1`; no target is asked and no damage is dealt.
     const game = await board().build();
@@ -89,7 +89,7 @@ describe("Get Excited! (ogn-008-298)", () => {
     expect(game.state("home").damage).toBe(0);
   });
 
-  test.failing("BUG: targets only units at a battlefield — a unit in a base is not a legal choice and no battlefield unit means not castable (rule 355.8)", async () => {
+  test("targets only units at a battlefield — a unit in a base is not a legal choice and no battlefield unit means not castable (rule 355.8)", async () => {
     // Expected: `home` (in P2's base) is rejected; with no unit at any battlefield the spell cannot be played.
     // Actual: the spell has no target at all, so it is castable regardless of the board.
     const game = await board().build();

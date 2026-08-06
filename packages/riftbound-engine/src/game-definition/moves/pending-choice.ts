@@ -28,7 +28,7 @@ import type {
 import { buildEffectContext, executeResolvedItem } from "./chain-moves";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canAffordPower } from "./chain/effect-context";
-import { getCardEffectiveMight, getOptionalPlayCost } from "./play/cost";
+import { getCardEffectiveMight, getOptionalPlayCost, staticEnterReadyApplies } from "./play/cost";
 import { isLegalMultiTargetSet } from "./play/targeting";
 
 const isBoardZone = (z: string): boolean => z === "base" || z.startsWith("battlefield-");
@@ -664,6 +664,22 @@ export const pendingChoiceMoves: Partial<
 
       if (choice.type === "choose-target") {
         const picked = context.params.pickedCardId as string;
+        // rule 372: ordering two replacement effects on the same death. The
+        // pick names a replacement SOURCE card, not a target — record it and
+        // let the next state-based check apply that replacement.
+        if (choice.replacementOrderFor !== undefined) {
+          if (!choice.options.includes(picked)) {
+            return;
+          }
+          (draft as { replacementOrderChoices?: Record<string, string> }).replacementOrderChoices = {
+            ...((draft as { replacementOrderChoices?: Record<string, string> })
+              .replacementOrderChoices ?? {}),
+            [choice.replacementOrderFor as string]: picked,
+          };
+          draft.pendingChoice = undefined;
+          postChoiceCleanup(draft, context);
+          return;
+        }
         // rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": each
         // pick accumulates; remaining options are re-pruned against the
         // target's aggregate constraints (one battlefield, `totalMight` cap)
@@ -882,6 +898,14 @@ export const pendingChoiceMoves: Partial<
         if (enteringPlay) {
           const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
           const cardId = choice.cardId as string;
+          // rule 143.4: a unit entering the board is exhausted, however it was
+          // played — unless a static "enters ready" ability applies.
+          if (
+            getGlobalCardRegistry().get(cardId)?.cardType === "unit" &&
+            !staticEnterReadyApplies(cardId, draft, choice.playerId)
+          ) {
+            context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
+          }
           fireTriggers(
             { cardId, paidAdditionalCost, playerId: choice.playerId, type: "play-self" },
             trigCtx,
@@ -992,26 +1016,66 @@ export const pendingChoiceMoves: Partial<
       // 354.2/354.3) so its owner chooses a location when it finalizes.
       if (choice.onPicked === "play") {
         const pool = draft.runePools[choice.prompter];
-        if (pool) {
-          const cost = getGlobalCardRegistry().getCostToDeduct(pickedCardId as string);
-          const energy = Math.max(0, cost.energy - (choice.playEnergyReduction ?? 0));
-          pool.energy = Math.max(0, pool.energy - energy);
-          for (const [domain, amount] of Object.entries(cost.power)) {
-            const key = domain as keyof typeof pool.power;
-            pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - (amount ?? 0));
+        const raw = getGlobalCardRegistry().getCostToDeduct(pickedCardId as string);
+        // rule 356.1.b.1 (ogn-025-298): "ignoring its cost" waives the whole
+        // cost; rule-id ogn-115-298: "ignoring Energy costs" waives only the
+        // energy — Power pips are still paid.
+        const energy =
+          choice.playIgnoreCost || choice.playIgnoreEnergy
+            ? 0
+            : Math.max(0, raw.energy - (choice.playEnergyReduction ?? 0));
+        const power = choice.playIgnoreCost ? {} : raw.power;
+        // rule 356.4 / 419.2.a: a discount reduces the cost, it does not waive
+        // it — the reduced cost must still be payable in full, otherwise the
+        // card cannot be played and simply stays where the pick put it.
+        const affordable =
+          pool === undefined ||
+          (pool.energy >= energy &&
+            Object.entries(power).every(
+              ([domain, amount]) =>
+                (pool.power[domain as keyof typeof pool.power] ?? 0) +
+                  (pool.power.rainbow ?? 0) >=
+                (amount ?? 0),
+            ));
+        if (affordable) {
+          if (pool) {
+            pool.energy = Math.max(0, pool.energy - energy);
+            for (const [domain, amount] of Object.entries(power)) {
+              const key = domain as keyof typeof pool.power;
+              pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - (amount ?? 0));
+            }
+          }
+          draft.interaction = addToChain(
+            draft.interaction ?? createInteractionState(),
+            {
+              cardId: pickedCardId as string,
+              controller: choice.prompter,
+              effect: { target: pickedCardId as string, to: "choose", type: "move" },
+              triggered: true,
+              type: "ability",
+            },
+            Object.keys(draft.players),
+          );
+          // rule 356.1 / 145.2 (ogn-025-298 Blind Fury): the player who PLAYS
+          // a card controls it, even when another player owns it.
+          const owner = context.cards.getCardOwner(pickedCardId as CoreCardId);
+          if (owner !== undefined && owner !== choice.prompter) {
+            const metaNow = context.cards.getCardMeta(pickedCardId as CoreCardId) as
+              | Partial<RiftboundCardMeta>
+              | undefined;
+            context.cards.updateCardMeta(pickedCardId as CoreCardId, {
+              controlEffects: [
+                ...(metaNow?.controlEffects ?? []),
+                { controllerId: choice.prompter },
+              ],
+            } as Partial<RiftboundCardMeta>);
+            (
+              context.cards as {
+                setCardController?: (cardId: CoreCardId, controllerId: string) => void;
+              }
+            ).setCardController?.(pickedCardId as CoreCardId, choice.prompter);
           }
         }
-        draft.interaction = addToChain(
-          draft.interaction ?? createInteractionState(),
-          {
-            cardId: pickedCardId as string,
-            controller: choice.prompter,
-            effect: { target: pickedCardId as string, to: "choose", type: "move" },
-            triggered: true,
-            type: "ability",
-          },
-          Object.keys(draft.players),
-        );
       }
 
       // Rule 435 (ogn-174-298): look/Vision recycles the unpicked cards.
@@ -1041,6 +1105,8 @@ export const pendingChoiceMoves: Partial<
         // this: Empower it": the follow-up's "it" is the picked card.
         const effectCtx: EffectContext = {
           ...buildEffectContext(draft, choice.prompter, choice.sourceCardId ?? "", context),
+          // rule 355.8 (ogn-008-298): the caster's play-time target survives the prompt.
+          ...(choice.thenBoundTargets ? { boundTargets: [...choice.thenBoundTargets] } : {}),
           triggerSourceId: pickedCardId as string,
         };
         executeEffect(choice.then as ExecutableEffect, effectCtx);
