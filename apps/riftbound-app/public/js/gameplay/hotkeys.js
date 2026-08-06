@@ -263,6 +263,9 @@ function hotkeyEndTurn() {
     m => m.moveId === "endTurn"
   );
   if (endTurnMove) {
+    if (window.__rbTurnActionInFlight) return;
+    window.__rbTurnActionInFlight = true;
+    setTimeout(() => { window.__rbTurnActionInFlight = false; }, 1500);
     executeMove(endTurnMove.moveId, endTurnMove.params, endTurnMove.playerId);
   } else if (typeof showToast === "function") {
     showToast("Can't end turn right now");

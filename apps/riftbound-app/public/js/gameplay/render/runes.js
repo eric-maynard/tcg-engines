@@ -261,7 +261,8 @@ function renderRuneStacks(runes) {
     // Rule 133.5.a.1: every rune must be individually clickable to exhaust,
     // so render all cards (no STACK_MAX cap) — the count label still shows the total.
     const visibleCards = cards;
-    const stackHeight = 154 + (visibleCards.length - 1) * 26;
+    // Fixed footprint: size for a full 12-rune stack so the zone never resizes.
+    const stackHeight = 154 + (12 - 1) * 26;
     const label = DOMAIN_LABELS[domain] ?? domain[0].toUpperCase();
     const labelText = cards.length > 1 ? `${label} (${cards.length})` : label;
     html += `<div class="rune-stack" style="min-height:${stackHeight + 18}px;height:${stackHeight + 18}px;">`;

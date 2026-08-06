@@ -89,7 +89,7 @@ function connectWs() {
         availableMoves = msg.moves || [];
         if (msg.state?.playerNames) playerNames = msg.state.playerNames;
         preloadCardImages(msg.state);
-        resetInteractionSilent();
+        window.__rbTurnActionInFlight = false; resetInteractionSilent();
 
         // Check for pregame state
         if (msg.pregame && msg.pregame.phase) {
@@ -118,7 +118,7 @@ function connectWs() {
           reevaluateCostPayment();
         } else {
           detectAndShowResourceDeltas();
-          resetInteractionSilent();
+          window.__rbTurnActionInFlight = false; resetInteractionSilent();
           render();
         }
         break;
@@ -133,7 +133,7 @@ function connectWs() {
         // Detect combat results from state change
         detectCombatResult(previousGameState, gameState);
 
-        resetInteractionSilent();
+        window.__rbTurnActionInFlight = false; resetInteractionSilent();
         render();
         addLogEntry(`${pName(msg.playerId)}: ${LOG_MOVE_NAMES[msg.moveId] || msg.moveId}`);
         // Show channel banner when turn starts with channeling

@@ -20,7 +20,15 @@ document.addEventListener("keydown", (e) => {
 
   // Spacebar = Pass (most common action in Riftbound), or End Turn if no pass available
   if (e.key === " " || e.code === "Space") {
+    // A focused sidebar/modal button would ALSO receive Space as a click,
+    // producing a second move (e.g. two endTurns → goldfish turn in between →
+    // you skip a whole turn). Own the key: blur the button and handle once.
+    if (e.repeat) { e.preventDefault(); return; }
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === "BUTTON" || ae.getAttribute("role") === "button")) { ae.blur(); }
     e.preventDefault();
+    e.stopPropagation();
+    if (window.__rbTurnActionInFlight) return;
     const passMove = availableMoves.find(m => m.moveId === "passChainPriority" || m.moveId === "passShowdownFocus");
     if (passMove) {
       executeMove(passMove.moveId, passMove.params, passMove.playerId);
@@ -28,6 +36,8 @@ document.addEventListener("keydown", (e) => {
       // Fall back to End Turn if no pass move is available
       const endTurnMove = availableMoves.find(m => m.moveId === "endTurn");
       if (endTurnMove) {
+        window.__rbTurnActionInFlight = true;
+        setTimeout(() => { window.__rbTurnActionInFlight = false; }, 1500);
         executeMove(endTurnMove.moveId, endTurnMove.params, endTurnMove.playerId);
       }
     }

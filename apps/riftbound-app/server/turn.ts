@@ -97,6 +97,27 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
     const state = session.engine.getState();
     if (state.status !== "playing") {break;}
 
+    // Goldfish-owned start/end-of-turn triggers during the GOLDFISH's turn: the
+    // human technically receives priority to respond, but in solo practice that
+    // parks the goldfish turn in the beginning phase until the human presses
+    // Space (looks like a hang, and the eventual Space reads as "skipped a turn").
+    // If every chain item is a goldfish-controlled triggered ability and it is the
+    // goldfish's turn, pass on the human's behalf so the turn completes.
+    const chain = state.interaction?.chain;
+    const human = session.players.find((p) => p !== goldfish);
+    if (
+      chain?.active && human && chain.activePlayer === human &&
+      state.turn.activePlayer === goldfish &&
+      chain.items.length > 0 &&
+      chain.items.every((it: { controller?: string; triggered?: boolean }) => it.controller === goldfish && it.triggered)
+    ) {
+      const r = session.engine.executeMove("passChainPriority", {
+        params: { playerId: human },
+        playerId: human as PlayerId,
+      });
+      if (r.success) { acted = true; continue; }
+    }
+
     // Auto-pass chain priority if Goldfish has it
     if (state.interaction?.chain?.active && state.interaction.chain.activePlayer === goldfish) {
       const result = session.engine.executeMove("passChainPriority", {
