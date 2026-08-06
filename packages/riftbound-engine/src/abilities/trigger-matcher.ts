@@ -389,6 +389,11 @@ function triggerMatchesEvent(
     if (filters.includes("stunned") && event.type === "die" && event.wasStunned !== true) {
       return false;
     }
+    // rule 702 (ogn-228-298): "a BUFFED friendly unit dies" — the buff is read
+    // as the unit died, since the meta is wiped on the way to the trash.
+    if (filters.includes("buffed") && (event.type !== "die" || event.wasBuffed !== true)) {
+      return false;
+    }
     if (
       filters.includes("killed-by-spell") &&
       (event.type !== "die" || event.killSource !== "spell" || event.killedBy !== card.owner)

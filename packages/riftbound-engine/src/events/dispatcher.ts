@@ -280,10 +280,13 @@ export function dispatchUnitDied(
     | {
         cardId: string;
         owner?: string;
+        /** rule 428.1.a.1.b: zone occupied as it died. */
+        diedAt?: string;
         // rule 428.5: kill attribution forwarded onto the `die` event.
         killedBy?: string;
         killSource?: "spell" | "ability" | "combat";
         wasStunned?: boolean;
+        wasBuffed?: boolean;
       }
   )[],
 ): number {
@@ -316,9 +319,11 @@ export function dispatchUnitDied(
       typeof entry === "string"
         ? {}
         : {
+            ...(entry.diedAt !== undefined ? { diedAt: entry.diedAt } : {}),
             ...(entry.killedBy !== undefined ? { killedBy: entry.killedBy } : {}),
             ...(entry.killSource !== undefined ? { killSource: entry.killSource } : {}),
             ...(entry.wasStunned !== undefined ? { wasStunned: entry.wasStunned } : {}),
+            ...(entry.wasBuffed !== undefined ? { wasBuffed: entry.wasBuffed } : {}),
           };
     total += dispatchEvent(ctx, { cardId, owner, type: "die", ...attribution });
   }

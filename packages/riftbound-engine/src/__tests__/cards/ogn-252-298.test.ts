@@ -61,7 +61,7 @@ describe("Super Mega Death Rocket! (ogn-252-298)", () => {
     expect(low.p1.can("cast", "rocket")).toBe(false);
   });
 
-  test.failing("BUG: when you conquer with this in your trash, you may discard 1 to return it to your hand (rule 385.2)", async () => {
+  test("when you conquer with this in your trash, you may discard 1 to return it to your hand (rule 385.2)", async () => {
     // Expected: Runner conquers empty bf1 → trigger from trash → P1 says yes, discards junk →
     // rocket in hand, junk in trash. Actual: abilities of cards in the trash never trigger.
     const game = await conquerBoard().script(P1, ["junk"]).build();

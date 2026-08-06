@@ -7,18 +7,16 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *
  * "When you hold here, activate the conquer effects of units here."
  *
- * FIXME: "activate the conquer effects of units here" isn't directly
- * representable in the Effect union. We approximate via a grant-keyword of
- * "TriggerConquer" on all friendly units here — the engine can honor this
- * as a tag to re-fire conquer triggers when holding.
+ * rule 383.4.g.1: each unit here has its conquer effect activated — placed on
+ * the chain as if it had just triggered, with only the "conquer" part of the
+ * trigger condition treated as fulfilled. "Units here" is criteria-based
+ * (rule 355.5.a), so `quantity: "all"` — nothing is chosen.
  */
 const abilities: Ability[] = [
   {
     effect: {
-      duration: "turn",
-      keyword: "TriggerConquer",
-      target: { controller: "friendly", location: "here", type: "unit" },
-      type: "grant-keyword",
+      target: { controller: "friendly", location: "here", quantity: "all", type: "unit" },
+      type: "activate-conquer-effects",
     },
     trigger: { event: "hold", on: "self" },
     type: "triggered",

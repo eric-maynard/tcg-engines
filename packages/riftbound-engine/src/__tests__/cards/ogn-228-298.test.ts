@@ -75,7 +75,7 @@ describe("Vanguard Helm (ogn-228-298)", () => {
     expect(game.state("already").might).toBe(3);
   });
 
-  test.failing("BUG: only BUFFED friendly deaths count — an unbuffed friendly unit dying triggers nothing", async () => {
+  test("only BUFFED friendly deaths count — an unbuffed friendly unit dying triggers nothing", async () => {
     // Expected: victim has no buff → the Helm stays silent, P1 is back in an open main phase.
     // Actual: the trigger ignores the "buffed" condition and prompts for a target anyway.
     const game = await board(false).build();

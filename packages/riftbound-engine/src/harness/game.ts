@@ -439,11 +439,18 @@ export class Game {
     if (d.kind === "action" && !(value === "pass" || (isAnswerObject(value) && value.kind === "action"))) {
       return undefined;
     }
-    s.answers.shift();
     const coerced = coerceAnswer(d, value);
     if (!isAnswerObject(coerced)) {
+      // A shorthand of the wrong SHAPE for this decision targets a later
+      // prompt (a card key queued for a discard choice must not be swallowed
+      // by an intervening yes/no) — leave it queued and stop here instead.
+      if (coerced.code === "WRONG_ANSWER_KIND") {
+        return undefined;
+      }
+      s.answers.shift();
       throw new HarnessError({ ...coerced, message: `scripted answer for ${d.seat}: ${coerced.message}` });
     }
+    s.answers.shift();
     return coerced;
   }
 

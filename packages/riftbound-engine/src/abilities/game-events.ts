@@ -51,9 +51,13 @@ export type GameEvent =
       type: "die";
       cardId: string;
       owner: string;
+      /** rule 428.1.a.1.b: the zone the unit occupied as it died (last known information). */
+      diedAt?: string;
       killedBy?: string;
       killSource?: "spell" | "ability" | "combat";
       wasStunned?: boolean;
+      /** rule 702: the unit carried a buff as it died ("a buffed friendly unit dies"). */
+      wasBuffed?: boolean;
     }
   // rule-id: unl-133-219 — `owner` = moved unit's controller, `movedBy` = the
   // player whose action/effect moved it ("When you move an enemy unit").

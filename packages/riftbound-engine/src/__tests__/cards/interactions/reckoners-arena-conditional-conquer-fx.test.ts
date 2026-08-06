@@ -78,7 +78,7 @@ describe("Reckoner's Arena × Kai'Sa, Survivor / Tryndamere, Barbarian — 'acti
     expect(game.gameState.scoredThisTurn?.[P1]).toEqual(["arena"]);
   });
 
-  test.failing("BUG: 'units here' is criteria-based, not a choice — resolving the Arena's ability never asks P1 to pick a unit (355.5.a, 383.4.g.1)", async () => {
+  test("'units here' is criteria-based, not a choice — resolving the Arena's ability never asks P1 to pick a unit (355.5.a, 383.4.g.1)", async () => {
     // Expected: both players pass → the ability resolves against every unit here with no prompt.
     // Actual: the engine opens "Choose a target for Reckoner's Arena" (kaisa | trynd).
     const game = await board().build();
@@ -90,7 +90,7 @@ describe("Reckoner's Arena × Kai'Sa, Survivor / Tryndamere, Barbarian — 'acti
     expect(arenaPick).toBe(false);
   });
 
-  test.failing("BUG: Kai'Sa's 'When I conquer, draw 1' is activated by the Arena — P1 draws 1 on top of the draw-phase card (383.4.g.1)", async () => {
+  test("Kai'Sa's 'When I conquer, draw 1' is activated by the Arena — P1 draws 1 on top of the draw-phase card (383.4.g.1)", async () => {
     // Expected: hand grows by 2 across the turn start (1 rules draw + 1 from Kai'Sa), deck shrinks by 2.
     // Actual: the Arena only stamps an inert "TriggerConquer" keyword on one chosen unit; Kai'Sa never draws.
     const game = await board().build();
@@ -101,7 +101,7 @@ describe("Reckoner's Arena × Kai'Sa, Survivor / Tryndamere, Barbarian — 'acti
     expect(game.p1.deck()).toHaveLength(deck0 - 2);
   });
 
-  test.failing("BUG: Kai'Sa's activated conquer effect is placed on the chain 'as if it had just triggered' — a triggered item sourced from Kai'Sa appears after the Arena's ability resolves (383.4.g.1)", async () => {
+  test("Kai'Sa's activated conquer effect is placed on the chain 'as if it had just triggered' — a triggered item sourced from Kai'Sa appears after the Arena's ability resolves (383.4.g.1)", async () => {
     // Expected: Arena resolves → a new triggered chain item from kaisa (controller P1). Actual: nothing is queued.
     const game = await board().build();
     await game.p2.endTurn();

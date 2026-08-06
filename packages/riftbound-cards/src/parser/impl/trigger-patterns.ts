@@ -194,7 +194,11 @@ export const TRIGGER_PATTERNS: {
   // "When you buff me, ..."
   { event: "buff", on: "self", pattern: /^When you buff me,\s*/i },
   // "When a buffed friendly unit dies, ..."
-  { event: "die", on: "friendly-units", pattern: /^When a buffed friendly unit dies,\s*/i },
+  {
+    event: "die",
+    on: { controller: "friendly", filter: ["buffed"], type: "unit" },
+    pattern: /^When a buffed friendly unit dies,\s*/i,
+  },
   // "When a unit moves from here, ..."
   { event: "move-from-here", on: "any", pattern: /^When a unit moves from here,\s*/i },
   // "When you play a card from [Hidden], ..."

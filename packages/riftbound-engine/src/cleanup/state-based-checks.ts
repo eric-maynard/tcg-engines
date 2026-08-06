@@ -184,6 +184,8 @@ export interface CleanupDeath {
   readonly killedBy?: string;
   readonly killSource?: "spell" | "ability" | "combat";
   readonly wasStunned?: boolean;
+  /** rule 702: the unit carried a buff as it died. */
+  readonly wasBuffed?: boolean;
 }
 
 export interface CleanupResult {
@@ -576,6 +578,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         killSource: unitMeta?.lastDamageSource,
         killedBy: unitMeta?.lastDamagedBy,
         owner,
+        wasBuffed: unitMeta?.buffed === true,
         wasStunned: unitMeta?.stunned === true,
       });
 

@@ -58,10 +58,13 @@ import { handle_nameCard } from "./name-card";
 import { handle_removeRestriction } from "./remove-restriction";
 import { handle_turnStatic } from "./turn-static";
 import { handle_revealRuneBranch } from "./reveal-rune-branch";
+import { handle_activateConquerEffects } from "./activate-conquer-effects";
 
 export type { EffectHandler, EffectHelpers } from "./_helpers";
 
 export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
+  // rule 383.4.g.1 — ogn-286-298 Reckoner's Arena
+  "activate-conquer-effects": handle_activateConquerEffects,
   "draw": handle_draw,
   "damage": handle_damage,
   "kill": handle_kill,

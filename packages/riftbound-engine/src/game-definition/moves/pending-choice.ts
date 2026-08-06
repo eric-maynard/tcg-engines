@@ -835,6 +835,17 @@ export const pendingChoiceMoves: Partial<
             ...(choice.boundTargets ? { boundTargets: choice.boundTargets } : {}),
           };
           executeEffect(picked as ExecutableEffect, effectCtx);
+          // rule 820.2 (unl-182-219) — resume the suspended [Repeat] executions
+          // once this mode has resolved (each re-prompts for its own mode). If
+          // the picked mode parked its own prompt, hand the continuation to it.
+          if (choice.then) {
+            const nested = draft.pendingChoice as { then?: unknown } | undefined;
+            if (!nested) {
+              executeEffect(choice.then as ExecutableEffect, effectCtx);
+            } else if (nested.then === undefined) {
+              draft.pendingChoice = { ...(nested as object), then: choice.then } as typeof draft.pendingChoice;
+            }
+          }
           postChoiceCleanup(draft, context);
         }
         return;
@@ -842,6 +853,31 @@ export const pendingChoiceMoves: Partial<
 
       if (choice.type === "choose-target") {
         const picked = context.params.pickedCardId as string;
+        // rule 355.5 / 811.1.b (ogn-213-298): a play-time target choice — lock
+        // the pick onto the pending chain item and let priority proceed; the
+        // effect runs (or mistargets) later, when that item resolves.
+        if (choice.bindToChainItemId !== undefined) {
+          if (!choice.options.includes(picked)) {
+            return;
+          }
+          const items = draft.interaction?.chain?.items;
+          const idx = items?.findIndex((it) => it.id === choice.bindToChainItemId) ?? -1;
+          if (items && idx >= 0) {
+            items[idx] = { ...items[idx], targets: [picked] };
+          }
+          draft.pendingChoice = undefined;
+          fireTriggers(
+            {
+              cardId: picked,
+              chooserId: choice.playerId,
+              sourceType: "spell",
+              type: "choose",
+            },
+            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+          );
+          postChoiceCleanup(draft, context);
+          return;
+        }
         // rule 372: ordering two replacement effects on the same death. The
         // pick names a replacement SOURCE card, not a target — record it and
         // let the next state-based check apply that replacement.
