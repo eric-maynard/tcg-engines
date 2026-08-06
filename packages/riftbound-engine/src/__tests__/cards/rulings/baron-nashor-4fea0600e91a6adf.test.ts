@@ -25,7 +25,7 @@ function board() {
 }
 
 describe("Ruling 4fea0600e91a6adf — Baron Nashor enters the Baron Pit; that is not a move", () => {
-  test.failing("BUG: ruling 4fea0600e91a6adf — playing Baron creates the Baron Pit token battlefield and Baron ENTERS there (entry replaced, 446.2) with zero moves recorded; engine never creates the Pit", async () => {
+  test("ruling 4fea0600e91a6adf — playing Baron creates the Baron Pit token battlefield and Baron ENTERS there (entry replaced, 446.2) with zero moves recorded; engine never creates the Pit", async () => {
     // Expected: a new battlefield whose def is unl-t01 appears, Baron is located there (not in base), and
     // P1's units-moved count is still 0. Actual: "As you play me … I enter there" is unimplemented.
     const game = await board().build();

@@ -1,4 +1,5 @@
 import type { CardId, PlayerId, ZoneId } from "../types";
+import type { CardZoneConfig } from "../zones";
 
 /**
  * Zone Operations Interface
@@ -257,4 +258,13 @@ export interface ZoneOperations {
    * Optional for backward-compatibility with existing test stubs.
    */
   removeCardFromGame?(params: { cardId: CardId }): void;
+
+  /**
+   * Create an empty zone at runtime, for games whose board grows during play
+   * (e.g. a token battlefield added to the board mints its own unit and
+   * facedown zones). No-op when the zone already exists.
+   *
+   * Optional for backward-compatibility with existing test stubs.
+   */
+  createZone?(params: { zoneId: ZoneId; config?: Partial<CardZoneConfig> }): void;
 }

@@ -95,6 +95,24 @@ export const createZoneOperations = <TCardDef, TCardMeta>(
       }
     },
 
+    createZone: ({ zoneId, config }) => {
+      const id = zoneId as string;
+      if (state.zones[id]) {
+        return;
+      }
+      state.zones[id] = {
+        cardIds: [],
+        config: {
+          faceDown: false,
+          id: zoneId,
+          name: id,
+          ordered: false,
+          visibility: "public",
+          ...config,
+        },
+      };
+    },
+
     createDeck: ({ zoneId, playerId, cardCount, shuffle = false }) => {
       const createdCards: CardId[] = [];
 

@@ -75,7 +75,7 @@ describe("Ruling 6b3c43c67fc68be2 — Baron Nashor under Mageseeker Warden", () 
   // the play and Baron ENTERS THERE instead of base; Warden only limits the nominal play location, not
   // the entry replacement (135.2.b.3, 187.9, 369.3, 370.1.b). Actual: "As you play me … I enter there"
   // is not implemented — no Pit is created and Baron lands in base.
-  test.failing("BUG: ruling 6b3c43c67fc68be2 — Case 1 (no Pit): Baron played to base under Warden creates the Baron Pit and enters there", async () => {
+  test("ruling 6b3c43c67fc68be2 — Case 1 (no Pit): Baron played to base under Warden creates the Baron Pit and enters there", async () => {
     const game = await board().build();
     expect(pitIds(game)).toEqual([]);
     const before = game.battlefields().length;

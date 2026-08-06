@@ -79,7 +79,7 @@ describe("Baron Nashor × Mageseeker Warden — play location vs. 'I enter there
   // battlefield and Baron enters THERE instead (369.3 self-replacement; Warden only limits the play
   // location). Actual: the "As you play me … I enter there" text is not implemented — no Pit is
   // created and Baron simply lands in base.
-  test.failing("BUG: Case A (no Pit yet, Warden out) — Baron played to base adds the Baron Pit token and enters there instead (135.2.b.3, 187.9, 369.3)", async () => {
+  test("Case A (no Pit yet, Warden out) — Baron played to base adds the Baron Pit token and enters there instead (135.2.b.3, 187.9, 369.3)", async () => {
     const game = await board().build();
     const before = game.battlefields().length;
     await game.p1.play("baron", { to: "base" });
@@ -94,7 +94,7 @@ describe("Baron Nashor × Mageseeker Warden — play location vs. 'I enter there
 
   // Same as Case A but with no Warden at all: chosen location is irrelevant, Baron still enters the new Pit.
   // Actual: not implemented — Baron enters the chosen battlefield and no Pit exists.
-  test.failing("BUG: control (no Warden, no Pit) — Baron played to bf2 still creates the Pit and enters there, not bf2", async () => {
+  test("control (no Warden, no Pit) — Baron played to bf2 still creates the Pit and enters there, not bf2", async () => {
     const game = await board({ warden: false }).build();
     await game.p1.play("baron", { to: "bf2" });
     await game.settle();

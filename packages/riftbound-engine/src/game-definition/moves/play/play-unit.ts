@@ -21,6 +21,7 @@ import {
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { canPlayViaAmbush } from "../../../keywords/keyword-effects";
 import { contestBattlefieldOnArrival } from "../movement/contest-arrival";
+import { applyPlayBattlefieldToken } from "./battlefield-token";
 import {
   extractBattlefieldId,
   getBattlefieldZoneId,
@@ -965,9 +966,16 @@ export const playUnit: Defs["playUnit"] = {
       }
     }
 
+    // rule 135.2.b.3 / 369.3 (unl-147-219): an "as you play me, add the …
+    // battlefield token; if you do, I enter there" clause runs during the play
+    // and replaces where the unit enters (play-location restrictions do not
+    // apply to an entry replacement).
+    const entryZone =
+      applyPlayBattlefieldToken({ cardId, draft, playerId, zones: zones as never }) ?? location;
+
     zones.moveCard({
       cardId: cardId as CoreCardId,
-      targetZoneId: location as CoreZoneId,
+      targetZoneId: entryZone as CoreZoneId,
     });
 
     // Rule 143.4: units enter exhausted unless a static "I enter ready"
@@ -1017,8 +1025,8 @@ export const playUnit: Defs["playUnit"] = {
     // rule 190.3.a.1 / 323.11.a: a unit played to a battlefield its controller
     // doesn't control (e.g. "You may play me to an open battlefield") contests
     // it exactly as a Standard Move would, staging the showdown.
-    if (isBattlefieldZone(location)) {
-      const arrivedAt = extractBattlefieldId(location);
+    if (isBattlefieldZone(entryZone)) {
+      const arrivedAt = extractBattlefieldId(entryZone);
       if (arrivedAt) {
         contestBattlefieldOnArrival({
           arrivingUnitIds: [cardId],
