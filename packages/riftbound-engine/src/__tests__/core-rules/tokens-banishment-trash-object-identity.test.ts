@@ -264,7 +264,7 @@ describe("A token with its own Deathknell still resolves the trigger after ceasi
     expect(game.p1.trash()).toEqual(["ping"]);
   });
 
-  test.failing("BUG: 428.1.a.1 / 808.1.d.1 — a Kill INSTRUCTION is also a 'would die' event, so the board replacement must apply to it too (engine only replaces lethal-damage deaths)", async () => {
+  test("428.1.a.1 / 808.1.d.1 — a Kill INSTRUCTION is also a 'would die' event, so the board replacement must apply to it too (engine only replaces lethal-damage deaths)", async () => {
     // Expected: KILL on the token is replaced → token recalled to base exhausted, no Deathknell draw.
     // Actual: the kill effect trashes the unit directly, bypassing board `die` replacements.
     const game = await scenario()

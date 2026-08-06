@@ -59,7 +59,7 @@ describe("Ruling 6c4fbff634223b27 — Hidden Blade's draw survives a replaced ki
   // is killed instead (→ trash); the unit survives: healed to 0, exhausted, recalled to P2's base.
   // Actual: Zhonya's replacement does not intercept the spell's kill — the unit goes to the trash and
   // the Hourglass stays in base.
-  test.failing("BUG: ruling 6c4fbff634223b27 — Zhonya's in play replaces the kill: Hourglass → trash, unit survives in base healed + exhausted", async () => {
+  test("ruling 6c4fbff634223b27 — Zhonya's in play replaces the kill: Hourglass → trash, unit survives in base healed + exhausted", async () => {
     const game = await withZhonyasInPlay().build();
     expect(game.p2.gear()).toContain("zh");
     await game.p1.cast("blade", { targets: "victim" });

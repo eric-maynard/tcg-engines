@@ -126,6 +126,50 @@ function buildReplacementEffectContext(
 }
 
 /**
+ * Apply a board `die` replacement (Zhonya's Hourglass ogn-077-298) to a unit
+ * that is about to be killed outright — i.e. by an instruction rather than by
+ * lethal damage found in a cleanup pass.
+ *
+ * Returns true when the death was replaced; the caller must then NOT move the
+ * unit to the trash and must NOT fire its `die` triggers.
+ *
+ * rule 370.1.a.1 / 369.1 — the replacement is mandatory and the replaced death
+ * never happens, so the unit's Deathknell (808.1.d.1) never resolves.
+ */
+/**
+ * rule 370.1.b — a replacement effect applies only once to a given event, and
+ * the kill it performs itself ("kill this instead") is not replaced again by
+ * the same source. Tracks the sources whose replacement is currently running.
+ */
+const RUNNING_DIE_REPLACEMENTS = new Set<string>();
+
+export function applyDieReplacement(ctx: CleanupContext, cardId: string): boolean {
+  if (RUNNING_DIE_REPLACEMENTS.has(cardId)) {
+    return false;
+  }
+  const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? "";
+  const match = checkReplacement(
+    { cardId, owner, type: "die" },
+    { cards: ctx.cards, draft: ctx.draft, zones: ctx.zones },
+  );
+  if (!match || RUNNING_DIE_REPLACEMENTS.has(match.sourceCardId)) {
+    return false;
+  }
+  markReplacementConsumed(ctx.draft, match);
+  ctx.cards.updateCardMeta(cardId as CoreCardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+  const repl = match.replacement as ExecutableEffect | "prevent" | undefined;
+  if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
+    RUNNING_DIE_REPLACEMENTS.add(match.sourceCardId);
+    try {
+      executeEffect(repl, buildReplacementEffectContext(ctx, match, cardId));
+    } finally {
+      RUNNING_DIE_REPLACEMENTS.delete(match.sourceCardId);
+    }
+  }
+  return true;
+}
+
+/**
  * Result of running state-based checks.
  */
 /**
@@ -135,6 +179,8 @@ function buildReplacementEffectContext(
 export interface CleanupDeath {
   readonly cardId: string;
   readonly owner: string;
+  /** rule 428.1.a.1.b: zone occupied as it died. */
+  readonly diedAt?: string;
   readonly killedBy?: string;
   readonly killSource?: "spell" | "ability" | "combat";
   readonly wasStunned?: boolean;
@@ -514,6 +560,9 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         });
       }
 
+      // rule 428.1.a.1.b: remember where it died before the zone change.
+      const diedAt = ctx.zones.getCardZone?.(cardId) as string | undefined;
+
       // Kill this unit — move to trash
       ctx.zones.moveCard({
         cardId,
@@ -523,6 +572,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       // rule 428.5.c: snapshot kill attribution before the meta wipe below.
       deaths.push({
         cardId: cardId as string,
+        diedAt,
         killSource: unitMeta?.lastDamageSource,
         killedBy: unitMeta?.lastDamagedBy,
         owner,

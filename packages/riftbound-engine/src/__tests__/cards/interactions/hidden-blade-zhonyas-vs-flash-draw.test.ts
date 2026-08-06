@@ -90,7 +90,7 @@ describe("Hidden Blade × Zhonya's Hourglass / Flash — replaced kill vs. mista
   // Expected: the kill is replaced — Hourglass is killed instead (trash); the unit is healed,
   // exhausted and recalled to base (370.1.a.1). Actual: Zhonya's replacement never intercepts a
   // "kill" game action; the unit goes to the trash and the Hourglass stays in base.
-  test.failing("BUG: A — Zhonya's replaces the kill: Hourglass to trash, unit survives in base healed and exhausted (369.1, 370.1.a.1)", async () => {
+  test("A — Zhonya's replaces the kill: Hourglass to trash, unit survives in base healed and exhausted (369.1, 370.1.a.1)", async () => {
     const game = await withHiddenHourglass().build();
     await game.p1.cast("blade", { targets: "victim" });
     await game.p1.passPriority();

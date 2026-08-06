@@ -142,9 +142,19 @@ function replacementApplies(
   ctx: ReplacementContext,
 ): boolean {
   const { target, condition } = ability as {
-    target?: { controller?: string; excludeSelf?: boolean; location?: string };
+    target?: { controller?: string; excludeSelf?: boolean; location?: string; type?: string };
     condition?: { type?: string };
   };
+  // rule 369.2 — the replacement only sees events matching its own target
+  // description: "If a friendly UNIT would die" never applies to a gear or a
+  // rune (ogn-077-298 must not replace its own "kill this instead").
+  if ((target?.type === "unit" || target?.type === "gear") && event.cardId !== undefined) {
+    // Unknown/synthetic ids (no registry entry) are not filtered out.
+    const eventType = getGlobalCardRegistry().getCardType(event.cardId);
+    if (eventType !== undefined && eventType !== target.type) {
+      return false;
+    }
+  }
   if (target?.controller === "friendly") {
     if (event.owner && event.owner !== card.owner) {
       return false;
