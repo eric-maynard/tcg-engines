@@ -28,8 +28,28 @@ function onCardClick(cardId) {
   }
 
   // Targeting mode: clicking a legal target plays the pending move; anything else cancels.
+  // rule-id: sfd-080-221 (rule 355.13) — "up to N" spells carry multi-target
+  // variants: a pick that some variant can still extend keeps targeting open
+  // (Done confirms the current set); otherwise the exact variant plays.
   if (isChoosingTarget()) {
-    const move = pickTargetedMove(interaction.pendingMoves, cardId);
+    const chosen = interaction.chosenTargets || [];
+    if (!(interaction.validTargets || []).includes(cardId)) {
+      cancelInteraction();
+      showToast("Targeting cancelled");
+      return;
+    }
+    const next = [...chosen, cardId];
+    const extending = variantsExtending(interaction.pendingMoves, next);
+    if (extending.length > 0) {
+      interaction.chosenTargets = next;
+      interaction.validTargets = remainingTargetIds(extending, next);
+      render();
+      updateTargetBanner();
+      return;
+    }
+    const move = chosen.length === 0
+      ? pickTargetedMove(interaction.pendingMoves, cardId)
+      : exactTargetVariant(interaction.pendingMoves, next);
     if (move) {
       executeMove(move.moveId, move.params, move.playerId);
       cancelInteraction();
@@ -197,6 +217,42 @@ function pickTargetedMove(moves, targetId) {
     || matches[0];
 }
 
+/** All target ids a variant binds ([] for untargeted / zero-target plays). */
+function moveTargetList(m) {
+  const t = m?.params?.targets;
+  if (Array.isArray(t)) return t;
+  const c = m?.params?.chosenTargetId;
+  return c ? [c] : [];
+}
+
+function isBaseCostVariant(m) {
+  return !m.params?.paidAdditionalCost && !m.params?.repeatCount;
+}
+
+/** Variants whose target set strictly contains `chosen` (more picks possible). */
+function variantsExtending(moves, chosen) {
+  return (moves || []).filter(m => {
+    const t = moveTargetList(m);
+    return t.length > chosen.length && chosen.every(id => t.includes(id));
+  });
+}
+
+/** Variant binding exactly `chosen` (order-insensitive), preferring the base-cost play. */
+function exactTargetVariant(moves, chosen) {
+  const matches = (moves || []).filter(m => {
+    const t = moveTargetList(m);
+    return t.length === chosen.length && chosen.every(id => t.includes(id));
+  });
+  return matches.find(isBaseCostVariant) || matches[0] || null;
+}
+
+/** Ids that can still be added to `chosen` given the extending variants. */
+function remainingTargetIds(extending, chosen) {
+  const ids = new Set();
+  for (const m of extending) for (const id of moveTargetList(m)) if (!chosen.includes(id)) ids.add(id);
+  return [...ids];
+}
+
 /**
  * If `moves` (all for one source card / ability) carry per-target variants, enter
  * targeting mode and return true. Returns false when the caller should just play:
@@ -207,7 +263,10 @@ function beginTargetingIfNeeded(moves, sourceCardId) {
   if (targeted.length === 0) return false;
   const targetIds = [...new Set(targeted.map(moveTargetId))];
   if (targetIds.length === 1 && targetIds[0] === sourceCardId) return false;
-  enterAwaitTargetMode(targeted, sourceCardId);
+  // rule-id: sfd-080-221 (rule 355.13) — keep zero-target variants pending so
+  // "up to N" can be declined via the banner's "No target" button.
+  const zeroTarget = (moves || []).filter(m => Array.isArray(m.params?.targets) && m.params.targets.length === 0);
+  enterAwaitTargetMode([...targeted, ...zeroTarget], sourceCardId);
   return true;
 }
 
@@ -221,7 +280,7 @@ function beginTargetingOrPlay(moves, sourceCardId) {
 }
 
 function enterAwaitTargetMode(pendingMoves, sourceCardId) {
-  const targetIds = [...new Set(pendingMoves.map(moveTargetId))];
+  const targetIds = remainingTargetIds(pendingMoves, []);
   interaction = {
     mode: "awaitTarget",
     sourceCardId,
@@ -230,6 +289,7 @@ function enterAwaitTargetMode(pendingMoves, sourceCardId) {
     validTargets: targetIds,
     matchingMoves: pendingMoves,
     pendingMoves,
+    chosenTargets: [],
     pendingCardId: null,
     pendingCardCost: 0,
     enteredAt: performance.now(),
@@ -238,11 +298,32 @@ function enterAwaitTargetMode(pendingMoves, sourceCardId) {
   document.getElementById("actionBar")?.classList.add("hidden");
   if (typeof closeZoom === "function") closeZoom();
   render(); // re-applies .valid-target via applyValidTargetHighlights
-  const name = (findCard(sourceCardId)?.name || "this card").replace(/^player-[12]-/, "");
-  showTargetBanner(`Choose a target for ${name} — Esc to cancel`);
+  updateTargetBanner();
 }
 
-function showTargetBanner(text) {
+/**
+ * rule-id: sfd-080-221 (rule 355.13) — banner reflects multi-pick progress and
+ * offers "No target" (zero-target variant) / "Done" (confirm current subset).
+ */
+function updateTargetBanner() {
+  const name = (findCard(interaction.sourceCardId)?.name || "this card").replace(/^player-[12]-/, "");
+  const chosen = interaction.chosenTargets || [];
+  const buttons = [];
+  if (chosen.length === 0) {
+    const none = exactTargetVariant(interaction.pendingMoves, []);
+    if (none) buttons.push({ label: "No target", move: none });
+  } else {
+    const done = exactTargetVariant(interaction.pendingMoves, chosen);
+    if (done) buttons.push({ label: `Done (${chosen.length})`, move: done });
+  }
+  const chosenNames = chosen.map(id => (findCard(id)?.name || id).replace(/^player-[12]-/, ""));
+  const text = chosen.length === 0
+    ? `Choose a target for ${name} — Esc to cancel`
+    : `${name}: ${chosenNames.join(", ")} — pick another or Done · Esc to cancel`;
+  showTargetBanner(text, buttons);
+}
+
+function showTargetBanner(text, buttons) {
   let banner = document.getElementById("targetBanner");
   if (!banner) {
     banner = document.createElement("div");
@@ -251,11 +332,25 @@ function showTargetBanner(text) {
     document.body.appendChild(banner);
   }
   banner.textContent = text;
+  for (const b of buttons || []) {
+    const btn = document.createElement("button");
+    btn.className = "target-banner-btn";
+    btn.textContent = b.label;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      executeMove(b.move.moveId, b.move.params, b.move.playerId);
+      cancelInteraction();
+    });
+    banner.appendChild(btn);
+  }
   banner.classList.add("visible");
 }
 
 function hideTargetBanner() {
-  document.getElementById("targetBanner")?.classList.remove("visible");
+  const banner = document.getElementById("targetBanner");
+  if (!banner) return;
+  banner.classList.remove("visible");
+  banner.querySelectorAll(".target-banner-btn").forEach(b => b.remove());
 }
 
 /** Highlight every board/hand card that is a legal target of the pending moves. */

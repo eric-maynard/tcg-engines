@@ -7027,9 +7027,9 @@
         },
         {
           "effect": {
-            "description": "Friendly units may be played to open battlefields",
-            "effects": [],
-            "type": "sequence"
+            "allowedLocation": "an open battlefield",
+            "appliesTo": "friendly-units",
+            "type": "play-restriction"
           },
           "type": "static"
         }

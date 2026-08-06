@@ -90,6 +90,15 @@ export function buildEffectContext(
     cards: {
       getCardMeta: context.cards.getCardMeta as EffectContext["cards"]["getCardMeta"],
       getCardOwner: context.cards.getCardOwner,
+      // rule-id: unl-192-219 — thread the live controller so friendly/enemy
+      // target legality re-checks see control transfers.
+      getCardController: (
+        context.cards as { getCardController?: EffectContext["cards"]["getCardController"] }
+      ).getCardController,
+      // rule-id: sfd-109-221 — take-control needs to write the controller.
+      setCardController: (
+        context.cards as { setCardController?: EffectContext["cards"]["setCardController"] }
+      ).setCardController,
       updateCardMeta: context.cards.updateCardMeta as EffectContext["cards"]["updateCardMeta"],
     },
     counters: context.counters,
@@ -309,6 +318,28 @@ export function executeResolvedItem(
 }
 
 /**
+ * rule-id: unl-007-219 — a spell card stays in the "chain" zone while its
+ * chain item is pending; once it leaves the chain (resolved or countered)
+ * place it in the owner's trash (or banishment for [Flow] plays). If the
+ * spell's own effect already moved the card elsewhere, leave it there.
+ */
+export function settleResolvedSpellCard(
+  resolved: ChainItem,
+  context: Parameters<typeof buildEffectContext>[3],
+): void {
+  if (resolved.type !== "spell") {
+    return;
+  }
+  if (context.zones.getCardZone(resolved.cardId as CoreCardId) !== ("chain" as CoreZoneId)) {
+    return;
+  }
+  context.zones.moveCard({
+    cardId: resolved.cardId as CoreCardId,
+    targetZoneId: (resolved.resolveTo ?? "trash") as CoreZoneId,
+  });
+}
+
+/**
  * A resolved entry returned by `collectActivatedAbilities`.
  *
  * - `hostCardId` is the card whose cost will be paid (e.g., Heimerdinger,
@@ -389,6 +420,24 @@ function collectActivatedAbilities(
         sourceCardId: copiedFrom as string,
       });
     }
+  }
+
+  // rule-id: ven-142-166 — abilities granted by another card's effect
+  // ("give it '[rainbow][rainbow]: Ready me' this turn"). Host pays; the
+  // ability text lives on the granting card at `abilityIndex`.
+  for (const granted of hostMeta?.grantedAbilities ?? []) {
+    const ability = (registry.getAbilities(granted.sourceCardId as string) ?? [])[
+      granted.abilityIndex
+    ];
+    if (!ability || ability.type !== "activated") {
+      continue;
+    }
+    entries.push({
+      ability,
+      abilityIndex: granted.abilityIndex,
+      hostCardId,
+      sourceCardId: granted.sourceCardId as string,
+    });
   }
 
   // 3. Inherited exhaust abilities (Heimerdinger): scan every friendly
@@ -574,6 +623,7 @@ export const chainMoves: Partial<
 
         if (resolved) {
           executeResolvedItem(resolved, draft, context);
+          settleResolvedSpellCard(resolved, context);
 
           // Run state-based checks after resolution (rule 543.3/518)
           performCleanup({
@@ -624,6 +674,7 @@ export const chainMoves: Partial<
 
       if (resolved) {
         executeResolvedItem(resolved, draft, context);
+        settleResolvedSpellCard(resolved, context);
 
         performCleanup({
           cards: context.cards,
@@ -1260,6 +1311,12 @@ export const chainMoves: Partial<
             // the battlefield's showdown complete so startShowdown does not
             // re-stage the same battlefield this turn.
             bf.showdownComplete = true;
+            // Rule 348.2 / 181.4: a Non-Combat Showdown closing means no combat
+            // is pending here — the battlefield is no longer Contested. Leaving
+            // it set blocks endTurn and lets resolveFullCombat recall the
+            // mover's own units.
+            bf.contested = false;
+            bf.contestedBy = undefined;
             // Rule 348.2.a: Non-Combat Showdown close — if only one player's
             // units remain and they don't already control it, they establish
             // Control. 348.2.a.1: this is a Conquer if not yet scored.

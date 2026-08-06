@@ -4,19 +4,53 @@ let ws = null;
 let wsReconnectAttempts = 0;
 let _imagesPreloaded = false;
 
+// DESIGN.md §Performance + §Board layout (Legend/Champion always visible):
+// hidden-zone art (decks/trash) must not compete with on-board <img>s for
+// bandwidth, so board zones preload first at high priority and hidden zones
+// drip in afterwards with bounded concurrency.
+const DEFERRED_PRELOAD_ZONES = new Set(["mainDeck", "runeDeck", "trash", "banishment"]);
+const DEFERRED_PRELOAD_CONCURRENCY = 3;
+const DEFERRED_PRELOAD_DELAY_MS = 1500;
+
 function preloadCardImages(state) {
   if (_imagesPreloaded || !state?.zones) return;
   _imagesPreloaded = true;
   const seen = new Set();
-  for (const zoneCards of Object.values(state.zones)) {
-    if (!Array.isArray(zoneCards)) continue;
-    for (const c of zoneCards) {
-      const defId = (c?.definitionId || "").replace(/^player-[12]-/, "");
-      if (!defId || seen.has(defId)) continue;
-      seen.add(defId);
-      new Image().src = `/card-image/${defId}`;
+  const deferred = [];
+  const collect = (wantDeferred) => {
+    for (const [zoneName, zoneCards] of Object.entries(state.zones)) {
+      if (!Array.isArray(zoneCards)) continue;
+      if (DEFERRED_PRELOAD_ZONES.has(zoneName) !== wantDeferred) continue;
+      for (const c of zoneCards) {
+        const defId = (c?.definitionId || "").replace(/^player-[12]-/, "");
+        if (!defId || seen.has(defId)) continue;
+        seen.add(defId);
+        if (wantDeferred) {
+          deferred.push(defId);
+        } else {
+          const img = new Image();
+          img.fetchPriority = "high";
+          // [rule:design-no-blank-cards] once cached, renders skip the interim face.
+          img.onload = () => { if (typeof _loadedCardImgIds !== "undefined") _loadedCardImgIds.add(defId); };
+          img.src = `/card-image/${defId}`;
+        }
+      }
     }
-  }
+  };
+  collect(false);
+  collect(true);
+  if (!deferred.length) return;
+  const pump = () => {
+    const defId = deferred.shift();
+    if (!defId) return;
+    const img = new Image();
+    img.fetchPriority = "low";
+    img.onload = img.onerror = pump;
+    img.src = `/card-image/${defId}`;
+  };
+  setTimeout(() => {
+    for (let i = 0; i < DEFERRED_PRELOAD_CONCURRENCY; i++) pump();
+  }, DEFERRED_PRELOAD_DELAY_MS);
 }
 
 let wsReconnectTimer = null;

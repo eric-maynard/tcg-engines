@@ -1049,6 +1049,38 @@ function parseBanishEffect(text: string): BanishEffect | undefined {
 }
 
 /**
+ * rule-id: sfd-109-221 (Akshan) — "Move an enemy gear to your base. You
+ * control it until I leave the board. [REST]" The control clause rides on the
+ * moved card as a layered take-control that expires when the source leaves
+ * the board; without this the flexible move fallback swallowed the clause.
+ */
+function parseMoveAndTakeControlEffect(text: string): SequenceEffect | undefined {
+  const m = text.match(
+    /^(Move .+?)\.\s+You control (?:it|them) until I leave the board\.?(?:\s+(.+))?$/i,
+  );
+  if (!m) {
+    return undefined;
+  }
+  const move = parseMoveEffect(`${m[1]}.`);
+  if (!move) {
+    return undefined;
+  }
+  const effects: Effect[] = [
+    move,
+    {
+      duration: "until-leaves",
+      target: { type: "pending-value" } as unknown as AnyTarget,
+      type: "take-control",
+    } as Effect,
+  ];
+  const rest = m[2] ? (parseEffects(m[2]) ?? parseEffect(m[2])) : undefined;
+  if (rest) {
+    effects.push(rest);
+  }
+  return { effects, pendingValue: { source: 0 }, type: "sequence" } as SequenceEffect;
+}
+
+/**
  * Try to parse a move effect: "Move TARGET [to LOCATION]."
  */
 function parseMoveEffect(text: string): MoveEffect | undefined {
@@ -2530,6 +2562,7 @@ function parseEffect(text: string): Effect | undefined {
     parseHealEffect(cleaned) ??
     parseStunEffect(cleaned) ??
     parseBanishEffect(cleaned) ??
+    parseMoveAndTakeControlEffect(cleaned) ??
     parseMoveEffect(cleaned) ??
     parseReturnToHandEffect(cleaned) ??
     parseRecallEffect(cleaned) ??
@@ -2786,6 +2819,37 @@ function parseEffects(text: string): Effect | undefined {
       if (parsedOptions.length >= 2) {
         return { options: parsedOptions, type: "choice" } as ChoiceEffect;
       }
+    }
+  }
+
+  // rule-id: unl-007-219 (Smite) — "EFFECT. If it would die this turn, REPLACEMENT instead."
+  // The trailing sentence is a turn-scoped die-replacement rider bound to the
+  // same target as the leading effect. Emit a sequence whose second step is a
+  // runtime `replacement` effect; the sequence carries the head target so
+  // play-time targeting (rule 355.8) still enumerates the chosen unit.
+  const dieRiderMatch = cleaned.match(
+    /^(.+?\.)\s+If (?:it|they) would die this turn,\s*(.+?)\s+instead\.?$/i,
+  );
+  if (dieRiderMatch) {
+    const head = parseEffects(dieRiderMatch[1]);
+    const bodyText = `${dieRiderMatch[2].trim().replace(/\.$/, "")}.`;
+    const body = parseEffects(bodyText) ?? parseEffect(bodyText);
+    if (head && body) {
+      const headTarget = (head as { target?: unknown }).target;
+      return {
+        effects: [
+          head,
+          {
+            duration: "turn",
+            replacement: body,
+            replaces: "die",
+            ...(headTarget !== undefined ? { target: headTarget } : {}),
+            type: "replacement",
+          } as unknown as Effect,
+        ],
+        ...(headTarget !== undefined ? { target: headTarget } : {}),
+        type: "sequence",
+      } as unknown as SequenceEffect;
     }
   }
 
@@ -5467,6 +5531,81 @@ function parseLevelGatedAbilities(text: string): ParseAbilitiesResult | undefine
   return { abilities: allAbilities, success: true };
 }
 
+/**
+ * Rule 827 (rule-id: ven-136-166): `[Empowered][>] <ability>` lines function
+ * only while the host is Empowered. Non-gated lines parse normally; each gated
+ * line's abilities get a `while-empowered` condition. "I have [KW N]" becomes a
+ * conditional static grant-keyword (bare keyword abilities are read
+ * unconditionally by the engine).
+ */
+function parseEmpoweredGatedAbilities(text: string): ParseAbilitiesResult | undefined {
+  const gated: string[] = [];
+  const plain: string[] = [];
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+    const m = line.match(/^\[Empowered\]\s*[>.:\s]*/i);
+    if (m) {
+      gated.push(line.slice(m[0].length).trim());
+    } else {
+      plain.push(line);
+    }
+  }
+  if (gated.length === 0) {
+    return undefined;
+  }
+
+  const allAbilities: Ability[] = [];
+  if (plain.length > 0) {
+    const plainResult = parseAbilitiesInner(plain.join("\n"));
+    if (plainResult.success && plainResult.abilities) {
+      allAbilities.push(...plainResult.abilities);
+    }
+  }
+
+  const empoweredCond: unknown = { type: "while-empowered" };
+  for (const chunk of gated) {
+    const body = stripReminders(chunk).trim();
+    const haveMatch = body.match(
+      /^I have\s+((?:\[[\w-]+(?:\s+\d+)?\](?:\s*,?\s*(?:and\s+)?)?)+)\.?$/i,
+    );
+    if (haveMatch) {
+      const kwRe = /\[([\w-]+)(?:\s+(\d+))?\]/g;
+      let km: RegExpExecArray | null;
+      while ((km = kwRe.exec(haveMatch[1])) !== null) {
+        allAbilities.push({
+          condition: empoweredCond,
+          effect: {
+            keyword: km[1],
+            target: { type: "self" },
+            type: "grant-keyword",
+            ...(km[2] ? { value: Number.parseInt(km[2], 10) } : {}),
+          } as unknown as Effect,
+          type: "static",
+        } as Ability);
+      }
+      continue;
+    }
+    const chunkResult = parseAbilitiesInner(chunk);
+    if (chunkResult.success && chunkResult.abilities) {
+      for (const ab of chunkResult.abilities) {
+        const existing = (ab as unknown as { condition?: unknown }).condition;
+        const condition: unknown = existing
+          ? { conditions: [existing, empoweredCond], type: "and" }
+          : empoweredCond;
+        allAbilities.push({ ...(ab as object), condition } as Ability);
+      }
+    }
+  }
+
+  if (allAbilities.length === 0) {
+    return undefined;
+  }
+  return { abilities: allAbilities, success: true };
+}
+
 // ============================================================================
 // Main Multi-Ability Parser
 // ============================================================================
@@ -5511,6 +5650,14 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
     const levelResult = parseLevelGatedAbilities(trimmed);
     if (levelResult) {
       return levelResult;
+    }
+  }
+
+  // === Empowered-gated pre-pass (VEN set, rule 827) ===
+  if (/^\[Empowered\]/im.test(trimmed)) {
+    const empoweredResult = parseEmpoweredGatedAbilities(trimmed);
+    if (empoweredResult) {
+      return empoweredResult;
     }
   }
 

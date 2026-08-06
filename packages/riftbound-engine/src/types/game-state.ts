@@ -73,6 +73,9 @@ export interface RiftboundCardMeta {
   /** Battlefield ID where the card is hidden (if hidden) */
   hiddenAt?: CardId;
 
+  /** Turn number on which the card was hidden (rule 723.1.b — reveal only on a later turn) */
+  hiddenOnTurn?: number;
+
   /** Domain of the card (for runes) */
   domain?: Domain;
 
@@ -84,6 +87,14 @@ export interface RiftboundCardMeta {
 
   /** Keywords temporarily granted to this card (with duration tracking) */
   grantedKeywords?: GrantedKeyword[];
+
+  /**
+   * rule-id: ven-142-166 — activated abilities granted to this card by another
+   * card's effect ("give it '[rainbow][rainbow]: Ready me' this turn"). Each
+   * entry points at `registry.getAbilities(sourceCardId)[abilityIndex]`; the
+   * host pays the cost and is `self` for the effect (Svellsongur convention).
+   */
+  grantedAbilities?: GrantedAbility[];
 
   /** Temporary Might modifier from effects (added to base Might; reset per duration) */
   mightModifier?: number;
@@ -130,6 +141,14 @@ export interface RiftboundCardMeta {
   exiledByThis?: CardId[];
 
   /**
+   * rule-id: sfd-109-221 (Akshan) — layered control-changing effects on this
+   * permanent, oldest first. The latest entry whose source is still on the
+   * board (or that has no source, i.e. permanent) wins; with none left the
+   * card reverts to its owner. Re-evaluated by state-based cleanup.
+   */
+  controlEffects?: { controllerId: string; sourceCardId?: CardId }[];
+
+  /**
    * Optional free-form label attached to the card by a sandbox/meta action.
    *
    * Purely cosmetic — surfaced in the UI so players can mark a card with a
@@ -158,6 +177,16 @@ export interface GrantedKeyword {
   value?: number;
   /** When this keyword expires: "static" = recalculated each pass from passive abilities */
   duration: "turn" | "permanent" | "combat" | "static";
+}
+
+/**
+ * rule-id: ven-142-166 — an activated ability granted to a card by an effect.
+ * Resolved via `registry.getAbilities(sourceCardId)[abilityIndex]`.
+ */
+export interface GrantedAbility {
+  sourceCardId: CardId;
+  abilityIndex: number;
+  duration: "turn" | "permanent";
 }
 
 /**
@@ -331,8 +360,14 @@ export interface RevealAndPickChoice {
    * What to do with the picked card. `"recycle"` sends it to the bottom of
    * its owner's main deck, `"banish"` sends it to banishment, `"discard"`
    * sends it to the owner's trash, `"draw"` puts it in the prompter's hand.
+   * rule-id: ogn-062-298-look-banish-play — `"play"` banishes the pick and
+   * adds it to the chain as a play, charging its cost less
+   * `playEnergyReduction`.
    */
-  readonly onPicked: "recycle" | "banish" | "discard" | "draw";
+  readonly onPicked: "recycle" | "banish" | "discard" | "draw" | "play";
+
+  /** Energy discount applied when `onPicked === "play"`. */
+  readonly playEnergyReduction?: number;
 
   /**
    * Rule 729 (ogn-235-298): "You may recycle it" — when set the prompter

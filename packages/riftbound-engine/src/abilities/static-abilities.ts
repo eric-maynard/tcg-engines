@@ -171,6 +171,15 @@ export function evaluateCondition(
       return (meta?.equippedWith?.length ?? 0) > 0;
     }
 
+    // Rule 827 (rule-id: ven-136-166): `[Empowered][>]` abilities function
+    // only while the host is Empowered.
+    case "while-empowered": {
+      const meta = ctx.cards.getCardMeta(source.id as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      return meta?.empowered === true;
+    }
+
     case "control-battlefield": {
       const comparison = condition.count as { gte?: number; lte?: number; eq?: number } | undefined;
       let controlledCount = 0;
@@ -337,11 +346,27 @@ function applyStaticEffect(
   effect: Record<string, unknown>,
   targetIds: string[],
   ctx: StaticAbilityContext,
+  source?: BoardCard,
 ): void {
   const effectType = effect.type as string;
 
   if (effectType === "modify-might") {
-    const amount = (effect.amount as number) ?? 0;
+    let amount = 0;
+    const rawAmount = effect.amount;
+    if (typeof rawAmount === "number") {
+      amount = rawAmount;
+    } else if (rawAmount && typeof rawAmount === "object" && "cardsInTrash" in rawAmount) {
+      // rule-id: ogn-109-298 — dynamic static Might equal to cards in a player's trash.
+      const whose = (rawAmount as { cardsInTrash: string }).cardsInTrash;
+      const ownerId = source?.owner ?? "";
+      const pid =
+        whose === "opponent"
+          ? (Object.keys(ctx.draft.players).find((p) => p !== ownerId) ?? ownerId)
+          : ownerId;
+      amount = pid
+        ? ctx.zones.getCardsInZone("trash" as CoreZoneId, pid as CorePlayerId).length
+        : 0;
+    }
     for (const targetId of targetIds) {
       const meta = ctx.cards.getCardMeta(targetId as CoreCardId) as
         | Partial<RiftboundCardMeta>
@@ -508,7 +533,7 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
         const { affects } = ability as unknown as { affects?: string };
         const targetIds = resolveStaticTargets(affects, card, boardCards);
 
-        applyStaticEffect(effect, targetIds, ctx);
+        applyStaticEffect(effect, targetIds, ctx, card);
         anyApplied = true;
       }
     }

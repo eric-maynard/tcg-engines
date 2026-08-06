@@ -1250,9 +1250,45 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\n[Reaction] (Play on your turn or in showdowns.)\nChoose a battlefield you control and a unit you control at a different location. Move that unit to that battlefield and give it +2 [Might] this turn.",
+      "timing": "reaction",
       "abilities": [
-        null,
-        null
+        {
+          "keyword": "Hidden",
+          "type": "keyword"
+        },
+        {
+          "_rule": "rule-id: ven-034-166 — the chosen friendly unit is bound at play time (355.8); the move destination is a battlefield you control other than its current location, then +2 Might this turn.",
+          "effect": {
+            "effects": [
+              {
+                "target": {
+                  "controller": "friendly",
+                  "type": "unit"
+                },
+                "to": {
+                  "battlefield": "controlled"
+                },
+                "type": "move"
+              },
+              {
+                "amount": 2,
+                "duration": "turn",
+                "target": {
+                  "controller": "friendly",
+                  "type": "unit"
+                },
+                "type": "modify-might"
+              }
+            ],
+            "target": {
+              "controller": "friendly",
+              "type": "unit"
+            },
+            "type": "sequence"
+          },
+          "timing": "reaction",
+          "type": "spell"
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/1a625de128019d65d41dd0af4f8d189d5de530a5-744x1039.png?accountingTag=RB",
@@ -2536,8 +2572,50 @@
       "isChampion": false,
       "rulesText": "As you play this, you may pay [body] as an additional cost.\nChoose a friendly unit and an enemy unit. If you paid the additional cost, give the friendly unit +2 [Might] this turn. They deal damage equal to their Mights to each other.",
       "abilities": [
-        null,
-        null
+        {
+          "_rule": "rule-id: ven-083-166 — optional [body] additional cost (rule 560); playSpell enumerates a paidAdditionalCost variant from this static.",
+          "effect": {
+            "additionalCost": {
+              "power": [
+                "body"
+              ]
+            },
+            "optional": true,
+            "type": "additional-cost-option"
+          },
+          "type": "static"
+        },
+        {
+          "_rule": "rule-id: ven-083-166 — friendly attacker / enemy defender are bound at play time (355.8) as targets [attacker, defender]; the +2 Might applies to the attacker only when the additional cost was paid, before Might-based damage is exchanged.",
+          "effect": {
+            "attacker": {
+              "controller": "friendly",
+              "type": "unit"
+            },
+            "defender": {
+              "controller": "enemy",
+              "type": "unit"
+            },
+            "onAttacker": {
+              "condition": {
+                "type": "paid-additional-cost"
+              },
+              "then": {
+                "amount": 2,
+                "duration": "turn",
+                "target": {
+                  "controller": "friendly",
+                  "type": "unit"
+                },
+                "type": "modify-might"
+              },
+              "type": "conditional"
+            },
+            "type": "fight"
+          },
+          "timing": "action",
+          "type": "spell"
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3c85ae2c6bd5b2644651564fad0f86ad19c5709a-744x1039.png?accountingTag=RB",
@@ -4045,8 +4123,51 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nThis turn, double a unit's Might and give it &quot;[rainbow][rainbow]: Ready me.&quot;",
+      "timing": "action",
       "abilities": [
-        null
+        {
+          "_rule": "rule-id: ven-142-166 — the chosen unit is bound at play time (355.8); double its Might this turn and grant it abilities[1] ('[rainbow][rainbow]: Ready me') until end of turn.",
+          "effect": {
+            "effects": [
+              {
+                "duration": "turn",
+                "target": {
+                  "type": "unit"
+                },
+                "type": "double-might"
+              },
+              {
+                "abilityIndex": 1,
+                "duration": "turn",
+                "target": {
+                  "type": "unit"
+                },
+                "type": "grant-ability"
+              }
+            ],
+            "target": {
+              "type": "unit"
+            },
+            "type": "sequence"
+          },
+          "timing": "action",
+          "type": "spell"
+        },
+        {
+          "_rule": "rule-id: ven-142-166 — granted-only: exposed on the target unit via meta.grantedAbilities (host pays, host is 'me'); a spell is never on the board so this is never activatable on Dominus itself.",
+          "cost": {
+            "power": [
+              "rainbow",
+              "rainbow"
+            ]
+          },
+          "effect": {
+            "target": "self",
+            "type": "ready"
+          },
+          "timing": "action",
+          "type": "activated"
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/0d5ccc8bb0b70473add784a3f4c71e1e8635e2ce-744x1039.png?accountingTag=RB",

@@ -401,6 +401,11 @@ export function advanceTurn(
   }
 
   const after = engine.getState();
+  // rule-id: 517.1-end-of-turn-triggers — Ending Step holds while end-of-turn
+  // triggers are on the chain; the flow rotates on its own once it resolves.
+  if (after.turn.phase === "ending") {
+    return { next, success: true };
+  }
   // Rule 734: the flow's turn.onEnd may have redirected to an additional-turn
   // owner; treat the flow's activePlayer as authoritative.
   const actualNext = after.turn.activePlayer || next;

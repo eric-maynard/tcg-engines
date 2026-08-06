@@ -159,7 +159,11 @@ function triggerMatchesEvent(
   // Event type must match. Compound trigger events ("choose-or-ready",
   // "play-self-or-play-gear") match if the fired event is any of the parts.
   const mapped = EVENT_MAP[event.type] ?? event.type;
-  const triggerEvents = trigger.event.split("-or-");
+  // Rule 515.2.a: "At the start of your Beginning Phase" (parser event
+  // `beginning-phase`) is the same moment as `start-of-turn`.
+  const triggerEvents = trigger.event
+    .split("-or-")
+    .map((e) => (e === "beginning-phase" ? "start-of-turn" : e));
   if (!triggerEvents.includes(mapped)) {
     return false;
   }

@@ -186,7 +186,7 @@ describe("Rule 723.1.c.2: Hiding a card does not open a chain", () => {
     const engine = createMinimalGameState({
       currentPlayer: P1,
       phase: "main",
-      runePools: { [P1]: { energy: 5, power: {} } },
+      runePools: { [P1]: { energy: 5, power: { fury: 1 } } },
     });
     createBattlefield(engine, "bf-1", { controller: P1 });
     createCard(engine, "secret", {
@@ -213,6 +213,35 @@ describe("Rule 723.1.c.2: Hiding a card does not open a chain", () => {
 
     // Rule 723.1.c.2: hiding does NOT open a chain.
     expect(getState(engine).interaction?.chain?.active ?? false).toBe(false);
+
+    // Rule 723.1.b: hiding costs [C] — 1 Power was paid.
+    expect(getState(engine).runePools[P1]?.power.fury ?? 0).toBe(0);
+  });
+});
+
+describe("Rule 723.1.b: Hide costs [C] (1 Power)", () => {
+  it("hideCard is rejected when the player has no Power available", () => {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 5, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+    createCard(engine, "secret", {
+      cardType: "spell",
+      energyCost: 3,
+      keywords: ["Hidden"],
+      owner: P1,
+      zone: "hand",
+    });
+
+    const result = applyMove(engine, "hideCard", {
+      battlefieldId: "bf-1",
+      cardId: "secret",
+      playerId: P1,
+    });
+    expect(result.success).toBe(false);
+    expect(getCardZone(engine, "secret")).toBe("hand");
   });
 });
 
@@ -221,7 +250,7 @@ describe("Rule 723.1.c.3: Playing a card from facedown does open a chain", () =>
     const engine = createMinimalGameState({
       currentPlayer: P1,
       phase: "main",
-      runePools: { [P1]: { energy: 5, power: {} } },
+      runePools: { [P1]: { energy: 5, power: { fury: 1 } } },
     });
     createBattlefield(engine, "bf-1", { controller: P1 });
     createCard(engine, "secret", {
@@ -246,6 +275,17 @@ describe("Rule 723.1.c.3: Playing a card from facedown does open a chain", () =>
       playerId: P1,
     });
     expect(getCardMeta(engine, "secret")?.hidden).toBe(true);
+
+    // Rule 723.1.b: cannot reveal on the same turn it was hidden.
+    const sameTurn = applyMove(engine, "revealHidden", {
+      cardId: "secret",
+      playerId: P1,
+    });
+    expect(sameTurn.success).toBe(false);
+
+    // Simulate the hide having happened on an earlier turn.
+    const hiddenMeta = getCardMeta(engine, "secret") as { hiddenOnTurn?: number };
+    hiddenMeta.hiddenOnTurn = (hiddenMeta.hiddenOnTurn ?? 1) - 1;
 
     // Now reveal it — rule 723.1.c.3 says this opens a chain.
     const reveal = applyMove(engine, "revealHidden", {

@@ -28,6 +28,8 @@ import {
   createBattlefield,
   createCard,
   createMinimalGameState,
+  drainChain,
+  enumerateLegalMoves,
   getCardZone,
   getState,
   getZone,
@@ -597,6 +599,103 @@ describe("Rule 596.1 / 610.1 / 610.2 / 609.3.b: Movement definitions observed vi
       unitIds: ["u1"],
     });
     expect(getZone(engine, P1, "base")).not.toContain("u1");
+  });
+});
+
+// -----------------------------------------------------------------------------
+// rule-id: unl-107-219 (Stare Down) — Rule 612 / 355.8: a spell that chooses a
+// friendly reference unit and a battlefield, then moves every enemy unit there
+// with less Might than the reference to base.
+// -----------------------------------------------------------------------------
+
+describe("Rule 612 / 355.8 (unl-107-219): choose friendly unit + battlefield, move weaker enemies there to base", () => {
+  const stareDownAbilities = [
+    {
+      effect: {
+        effects: [
+          {
+            from: "chosen-battlefield",
+            reference: { controller: "friendly", type: "unit" },
+            target: { controller: "enemy", quantity: "all", type: "unit" },
+            to: "base",
+            type: "move",
+          },
+          { amount: 1, type: "gain-xp" },
+        ],
+        type: "sequence",
+      },
+      timing: "action",
+      type: "spell",
+    },
+  ] as unknown as Parameters<typeof createCard>[2]["abilities"];
+
+  function setup() {
+    const engine = createMinimalGameState({
+      currentPlayer: P1,
+      phase: "main",
+      runePools: { [P1]: { energy: 5, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: null });
+    createBattlefield(engine, "bf-2", { controller: null });
+    createCard(engine, "ref-big", { cardType: "unit", might: 4, owner: P1, zone: "base" });
+    createCard(engine, "ref-small", { cardType: "unit", might: 1, owner: P1, zone: "base" });
+    createCard(engine, "e-weak", { cardType: "unit", might: 2, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "e-equal", { cardType: "unit", might: 4, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "e-other-bf", { cardType: "unit", might: 1, owner: P2, zone: "battlefield-bf-2" });
+    createCard(engine, "stare-down", {
+      abilities: stareDownAbilities,
+      cardType: "spell",
+      energyCost: 2,
+      owner: P1,
+      zone: "hand",
+    });
+    return engine;
+  }
+
+  it("enumerates one play per friendly reference unit (caster-chosen at play time)", () => {
+    const engine = setup();
+    const plays = enumerateLegalMoves(engine, P1).filter(
+      (m) => m.moveId === "playSpell" && m.params?.cardId === "stare-down",
+    );
+    const refs = plays.map((m) => (m.params?.targets as string[] | undefined)?.[0]).sort();
+    expect(refs).toEqual(["ref-big", "ref-small"]);
+  });
+
+  it("moves only enemy units at the chosen battlefield with Might < reference; gains 1 XP", () => {
+    const engine = setup();
+    const r = applyMove(engine, "playSpell", {
+      cardId: "stare-down",
+      playerId: P1,
+      targets: ["ref-big", "bf-1"],
+    });
+    expect(r.success).toBe(true);
+    drainChain(engine);
+    expect(getState(engine).pendingChoice).toBeUndefined();
+    expect(getCardZone(engine, "e-weak")).toBe("base");
+    expect(getCardZone(engine, "e-equal")).toBe("battlefield-bf-1");
+    expect(getCardZone(engine, "e-other-bf")).toBe("battlefield-bf-2");
+    expect(getCardZone(engine, "ref-big")).toBe("base");
+    expect(getState(engine).players[P1]?.xp ?? 0).toBe(1);
+  });
+
+  it("prompts for the battlefield at resolution when only the reference was bound", () => {
+    const engine = setup();
+    applyMove(engine, "playSpell", {
+      cardId: "stare-down",
+      playerId: P1,
+      targets: ["ref-big"],
+    });
+    drainChain(engine);
+    const choice = getState(engine).pendingChoice as
+      | { type: string; options: string[] }
+      | undefined;
+    expect(choice?.type).toBe("choose-target");
+    expect([...(choice?.options ?? [])].sort()).toEqual(["bf-1", "bf-2"]);
+    const pick = applyMove(engine, "resolvePendingChoice", { pickedCardId: "bf-1", playerId: P1 });
+    expect(pick.success).toBe(true);
+    expect(getCardZone(engine, "e-weak")).toBe("base");
+    expect(getCardZone(engine, "e-equal")).toBe("battlefield-bf-1");
+    expect(getCardZone(engine, "e-other-bf")).toBe("battlefield-bf-2");
   });
 });
 

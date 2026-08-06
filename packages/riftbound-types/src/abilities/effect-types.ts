@@ -46,6 +46,12 @@ export interface RecycleEffect {
   readonly target?: Target;
   readonly amount?: number;
   readonly from?: "trash" | "board" | "hand" | "self";
+  /**
+   * Where in the owner's Main Deck the card lands. Defaults to `"bottom"`.
+   * `"owner-choice"` (unl-204-219 Keeper's Verdict) prompts the card's OWNER
+   * to pick top or bottom via a `choose-destination` pending choice.
+   */
+  readonly position?: "bottom" | "owner-choice";
 }
 
 /**
@@ -84,6 +90,18 @@ export interface LookEffect {
   readonly amount: number;
   readonly from: "deck" | "rune-deck" | "opponent-hand";
   readonly then?: LookThenEffect;
+  /** Restricts which looked-at card may be picked (e.g. "a unit from among them"). */
+  readonly filter?: {
+    readonly excludeCardTypes?: readonly string[];
+  };
+  /** "You may …" — the pick is declinable. */
+  readonly optional?: boolean;
+  /**
+   * rule-id: ogn-062-298-look-banish-play — what happens to the picked card.
+   * `"play"` banishes it then plays it (optionally at `reduceCost` less).
+   */
+  readonly onPicked?: "recycle" | "banish" | "discard" | "draw" | "play";
+  readonly reduceCost?: Cost;
 }
 
 /**
@@ -194,6 +212,12 @@ export interface FightEffect {
   readonly type: "fight";
   readonly attacker: AnyTarget;
   readonly defender: AnyTarget;
+  /**
+   * rule-id: ven-083-166 — optional effect applied to the chosen attacker
+   * (bound as its sole target) before damage is exchanged, e.g. Rampage's
+   * conditional "+2 Might this turn if you paid the additional cost".
+   */
+  readonly onAttacker?: Effect;
 }
 
 // ============================================================================
@@ -678,6 +702,9 @@ export type AmountExpression =
   | { readonly cardsInHand: "self" | "opponent" } // Cards in hand
   | { readonly cardsInTrash: "self" | "opponent" } // Cards in trash
   | { readonly runeCount: "self" | "opponent" } // Runes channeled
+  // rule-id: ogn-121-298 — reveal top N of your Main Deck, count those with
+  // `withKeyword`, then recycle all revealed cards.
+  | { readonly revealTop: number; readonly withKeyword: string; readonly then?: "recycle" }
   | { readonly variable: string }; // Named variable from context
 
 // ============================================================================

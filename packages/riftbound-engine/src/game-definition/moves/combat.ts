@@ -427,6 +427,24 @@ export const combatMoves: Partial<
         });
       }
 
+      // Rule 466.1.a.1 (Combat Cleanup step 3c): heal all surviving Units —
+      // combat damage does not persist on survivors past resolution.
+      const killedSet = new Set<string>(result.killed);
+      for (const unit of [...attackerUnits, ...defenderUnits]) {
+        if (killedSet.has(unit.id)) {
+          continue;
+        }
+        counters.clearCounter?.(unit.id as CoreCardId, "damage");
+        const survivorMeta = cards.getCardMeta(unit.id as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        if ((survivorMeta?.damage ?? 0) > 0) {
+          cards.updateCardMeta(unit.id as CoreCardId, {
+            damage: 0,
+          } as Partial<RiftboundCardMeta>);
+        }
+      }
+
       // Apply outcome based on winner
       if (result.winner === "attacker") {
         // Attacker conquers the battlefield

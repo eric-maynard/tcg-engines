@@ -48,12 +48,64 @@ function getPlayLocationPermission(cardId: string): string | undefined {
     if (ability?.type !== "static") {
       continue;
     }
-    const effect = (ability as { effect?: { type?: string; allowedLocation?: string } }).effect;
-    if (effect?.type === "play-restriction") {
+    const effect = (
+      ability as { effect?: { type?: string; allowedLocation?: string; appliesTo?: string } }
+    ).effect;
+    if (effect?.type === "play-restriction" && !effect.appliesTo) {
       return effect.allowedLocation;
     }
   }
   return undefined;
+}
+
+/**
+ * Rule ogn-193-298: a friendly unit on the board with static "Friendly units
+ * may be played to open battlefields" (play-restriction with
+ * `appliesTo: "friendly-units"`) extends the open-battlefield permission to
+ * every unit its controller plays.
+ */
+function hasFriendlyOpenBattlefieldGrant(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  playerId: string,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  const zoneIds = [
+    "base",
+    ...Object.keys(state.battlefields ?? {}).map((bfId) => getBattlefieldZoneId(bfId) as string),
+  ];
+  for (const zoneId of zoneIds) {
+    for (const unitId of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
+      for (const ability of registry.getAbilities(unitId as string) ?? []) {
+        if (ability?.type !== "static") {
+          continue;
+        }
+        const effect = (
+          ability as { effect?: { type?: string; allowedLocation?: string; appliesTo?: string } }
+        ).effect;
+        if (
+          effect?.type === "play-restriction" &&
+          effect.appliesTo === "friendly-units" &&
+          effect.allowedLocation === "an open battlefield"
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function canPlayToOpenBattlefield(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  cardId: string,
+  playerId: string,
+): boolean {
+  return (
+    getPlayLocationPermission(cardId) === "an open battlefield" ||
+    hasFriendlyOpenBattlefieldGrant(state, zones, playerId)
+  );
 }
 
 /**
@@ -328,6 +380,20 @@ interface CostExtras {
    * card's printed base cost.
    */
   viaFlow?: boolean;
+  /**
+   * rule-id: ven-083-166 — optional "you may pay [X] as an additional cost"
+   * (rule 560) elected by the caster; stacks on top of the base cost.
+   */
+  additionalCost?: { energy?: number; power?: readonly string[] };
+}
+
+/** Per-domain tally of an optional additional cost's power pips. */
+function additionalCostPower(extras: CostExtras): Partial<Record<string, number>> {
+  const out: Partial<Record<string, number>> = {};
+  for (const d of extras.additionalCost?.power ?? []) {
+    out[d] = (out[d] ?? 0) + 1;
+  }
+  return out;
 }
 
 /**
@@ -438,7 +504,10 @@ function canAffordCard(
   const xAmount = Math.max(0, extras.xAmount ?? 0);
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
   const adjustedEnergy =
-    Math.max(0, baseCost.energy + modifier - interactive) + xAmount + repeatSurcharge;
+    Math.max(0, baseCost.energy + modifier - interactive) +
+    xAmount +
+    repeatSurcharge +
+    (extras.additionalCost?.energy ?? 0);
 
   // Rule 357.1.a: ready runes can be exhausted for energy during Pay Costs,
   // so treat their yield as available when testing affordability.
@@ -450,10 +519,17 @@ function canAffordCard(
   // Check power (domain requirements are not affected by cost modifiers).
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
   const repeatPower = getRepeatPowerSurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
-  const powerDomains = new Set([...Object.keys(baseCost.power), ...Object.keys(repeatPower)]);
+  const extraPower = additionalCostPower(extras);
+  const powerDomains = new Set([
+    ...Object.keys(baseCost.power),
+    ...Object.keys(repeatPower),
+    ...Object.keys(extraPower),
+  ]);
   for (const domain of powerDomains) {
     const need =
-      (baseCost.power[domain as keyof typeof baseCost.power] ?? 0) + (repeatPower[domain] ?? 0);
+      (baseCost.power[domain as keyof typeof baseCost.power] ?? 0) +
+      (repeatPower[domain] ?? 0) +
+      (extraPower[domain] ?? 0);
     const available = pool.power[domain as keyof typeof pool.power] ?? 0;
     if (available < need) {
       return false;
@@ -468,6 +544,40 @@ function canAffordCard(
     }
   }
   return true;
+}
+
+/**
+ * Rule 723.1.b / 723.1.b.1: the Hide action costs [C] — one Power of any
+ * domain in the player's Domain Identity. Power in the pool is produced by
+ * the player's own runes, so any domain with Power available qualifies.
+ */
+const HIDE_POWER_COST = 1;
+
+function canAffordHide(state: RiftboundGameState, playerId: string): boolean {
+  const pool = state.runePools[playerId];
+  if (!pool) {
+    return false;
+  }
+  let total = 0;
+  for (const v of Object.values(pool.power)) {
+    total += typeof v === "number" && v > 0 ? v : 0;
+  }
+  return total >= HIDE_POWER_COST;
+}
+
+function deductHideCost(draft: RiftboundGameState, playerId: string): void {
+  const pool = draft.runePools[playerId];
+  if (!pool) {
+    return;
+  }
+  // Pay from whichever domain has the most Power left (mirrors [rainbow]
+  // payment in chain-moves).
+  const key = Object.entries(pool.power)
+    .filter(([, v]) => (v ?? 0) > 0)
+    .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0] as keyof typeof pool.power | undefined;
+  if (key !== undefined) {
+    pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - HIDE_POWER_COST);
+  }
 }
 
 /**
@@ -491,15 +601,25 @@ function deductCost(
   const xAmount = Math.max(0, extras.xAmount ?? 0);
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
   const adjustedEnergy =
-    Math.max(0, cost.energy + modifier - interactive) + xAmount + repeatSurcharge;
+    Math.max(0, cost.energy + modifier - interactive) +
+    xAmount +
+    repeatSurcharge +
+    (extras.additionalCost?.energy ?? 0);
 
   pool.energy = Math.max(0, pool.energy - adjustedEnergy);
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
   const repeatPower = getRepeatPowerSurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
-  const powerDomains = new Set([...Object.keys(cost.power), ...Object.keys(repeatPower)]);
+  const extraPower = additionalCostPower(extras);
+  const powerDomains = new Set([
+    ...Object.keys(cost.power),
+    ...Object.keys(repeatPower),
+    ...Object.keys(extraPower),
+  ]);
   for (const domain of powerDomains) {
     const amount =
-      (cost.power[domain as keyof typeof cost.power] ?? 0) + (repeatPower[domain] ?? 0);
+      (cost.power[domain as keyof typeof cost.power] ?? 0) +
+      (repeatPower[domain] ?? 0) +
+      (extraPower[domain] ?? 0);
     if (amount > 0) {
       const key = domain as keyof typeof pool.power;
       pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - amount);
@@ -524,7 +644,12 @@ export type SpellEffectTargetShape = {
   target?: SpellEffectTargetDescriptor;
   target1?: SpellEffectTargetDescriptor;
   target2?: SpellEffectTargetDescriptor;
+  // rule-id: ven-083-166 — `fight` effects carry attacker/defender descriptors.
+  attacker?: SpellEffectTargetDescriptor;
+  defender?: SpellEffectTargetDescriptor;
   amount?: { might?: SpellEffectTargetDescriptor | string };
+  /** rule-id: unl-107-219 — caster-chosen Might-reference unit for a criteria move. */
+  reference?: SpellEffectTargetDescriptor;
   player?: string;
   options?: { effect?: SpellEffectTargetShape }[];
   effects?: SpellEffectTargetShape[];
@@ -542,6 +667,9 @@ function findAmountReferenceTarget(
   if (!effect) return undefined;
   const ref = effect.amount?.might;
   if (ref && typeof ref !== "string") return ref;
+  // rule-id: unl-107-219 — an explicit `reference` descriptor (Might comparand
+  // for a criteria-based move) is likewise a caster-chosen play-time target.
+  if (effect.reference && typeof effect.reference !== "string") return effect.reference;
   if (effect.type === "sequence" && Array.isArray(effect.effects)) {
     for (const sub of effect.effects) {
       const found = findAmountReferenceTarget(sub);
@@ -617,7 +745,13 @@ export function spellEffectHasLegalTargets(
   }
   // Multi-target effects (swap-might etc.) carry target1/target2 alongside or
   // instead of `target`; every present descriptor must resolve non-empty.
-  for (const tgt of [effect.target, effect.target1, effect.target2]) {
+  for (const tgt of [
+    effect.target,
+    effect.target1,
+    effect.target2,
+    effect.attacker,
+    effect.defender,
+  ]) {
     if (!targetDescriptorIsSatisfiable(tgt, effect.player, ctx)) {
       return false;
     }
@@ -704,26 +838,37 @@ export const cardPlayMoves: Partial<
       const registry = getGlobalCardRegistry();
       const hasAmbush = registry.hasKeyword(context.params.cardId, "Ambush");
 
-      if (targetIsBattlefield && !hasAmbush) {
-        // Rule ogn-174-298: static play-restriction ("You may play me to an
-        // open battlefield") lets a non-Ambush unit be played to an
-        // uncontrolled battlefield at standard main-phase timing.
-        const allowed = getPlayLocationPermission(context.params.cardId as string);
-        const bfId = extractBattlefieldId(location ?? "");
-        const bf = bfId ? state.battlefields?.[bfId] : undefined;
-        if (allowed !== "an open battlefield" || !bf || bf.controller) {
-          return false;
-        }
-        if (state.turn.activePlayer !== context.params.playerId) {
-          return false;
-        }
-        if (state.turn.phase !== "main") {
-          return false;
-        }
-        const interaction = state.interaction ?? createInteractionState();
-        if (getTurnState(interaction) !== "neutral-open") {
-          return false;
-        }
+      const targetBfId = targetIsBattlefield ? extractBattlefieldId(location ?? "") : null;
+      const targetBf = targetBfId ? state.battlefields?.[targetBfId] : undefined;
+      // Rule 355.2.a: a Battlefield the controller controls is a default
+      // valid play location for any unit at standard main-phase timing.
+      const targetIsControlledBf =
+        Boolean(targetBf) && targetBf?.controller === (context.params.playerId as string);
+      const standardTimingOk =
+        state.turn.activePlayer === context.params.playerId &&
+        state.turn.phase === "main" &&
+        getTurnState(state.interaction ?? createInteractionState()) === "neutral-open";
+
+      if (targetIsBattlefield && targetIsControlledBf && standardTimingOk) {
+        // Rule 355.2.a: controlled battlefield — legal for any unit.
+      } else if (
+        targetIsBattlefield &&
+        targetBf &&
+        !targetBf.controller &&
+        standardTimingOk &&
+        canPlayToOpenBattlefield(
+          state,
+          context.zones,
+          context.params.cardId as string,
+          context.params.playerId as string,
+        )
+      ) {
+        // Rule ogn-174-298 / ogn-193-298: static play-restriction ("You may
+        // play me to an open battlefield"), or a friendly board unit granting
+        // "Friendly units may be played to open battlefields", lets a unit be
+        // played to an uncontrolled battlefield at standard main-phase timing.
+      } else if (targetIsBattlefield && !hasAmbush) {
+        return false;
       } else if (targetIsBattlefield) {
         // Ambush path: relax phase / active-player gating and permit the
         // Unit to be played directly to the target battlefield.
@@ -850,10 +995,39 @@ export const cardPlayMoves: Partial<
           playerId: context.playerId as string,
         });
 
-        // Rule ogn-174-298: offer open (uncontrolled) battlefields when the
-        // card carries a static play-restriction permitting it.
-        if (getPlayLocationPermission(cardId as string) === "an open battlefield") {
+        // Rule 355.2.a: a Battlefield the controller controls is a default
+        // valid play location.
+        for (const [bfId, bf] of Object.entries(state.battlefields ?? {})) {
+          if (bf.controller !== (context.playerId as string)) {
+            continue;
+          }
+          const bfZoneId = getBattlefieldZoneId(bfId) as string;
+          if (results.some((r) => r.cardId === (cardId as string) && r.location === bfZoneId)) {
+            continue;
+          }
+          results.push({
+            cardId: cardId as string,
+            location: bfZoneId,
+            playerId: context.playerId as string,
+          });
+        }
+
+        // Rule ogn-174-298 / ogn-193-298: offer open (uncontrolled)
+        // battlefields when the card carries a static play-restriction
+        // permitting it, or a friendly board unit grants it.
+        if (
+          canPlayToOpenBattlefield(
+            state,
+            context.zones,
+            cardId as string,
+            context.playerId as string,
+          )
+        ) {
           for (const [bfId, bf] of Object.entries(state.battlefields ?? {})) {
+            const bfZoneId = getBattlefieldZoneId(bfId) as string;
+            if (results.some((r) => r.cardId === (cardId as string) && r.location === bfZoneId)) {
+              continue;
+            }
             if (!bf.controller) {
               results.push({
                 cardId: cardId as string,
@@ -1226,12 +1400,25 @@ export const cardPlayMoves: Partial<
         }
       }
 
+      // rule-id: ven-083-166 — a spell's optional "you may pay [X] as an
+      // additional cost" (rule 560) is only legal when the card declares one
+      // and the caster can afford base + extra.
+      let spellAdditionalCost: CostExtras["additionalCost"];
+      if (context.params.paidAdditionalCost) {
+        const optional = getOptionalPlayCost(context.params.cardId);
+        if (optional?.kind !== "pay") {
+          return false;
+        }
+        spellAdditionalCost = optional.cost ?? {};
+      }
+
       if (
         !canAffordCard(
           state,
           context.params.playerId,
           context.params.cardId,
           {
+            additionalCost: spellAdditionalCost,
             repeatCount: reqRepeatCount,
             targets: context.params.targets,
             viaFlow,
@@ -1320,6 +1507,8 @@ export const cardPlayMoves: Partial<
         targets?: string[];
         repeatCount?: number;
         viaFlow?: boolean;
+        paidAdditionalCost?: boolean;
+        additionalCostSpec?: { energy?: number; power?: readonly string[] };
       }[] = [];
       for (const cardId of handCards) {
         const def = registry.get(cardId as string);
@@ -1375,9 +1564,46 @@ export const cardPlayMoves: Partial<
           tgt.type !== "battlefield" &&
           tgt.quantity !== "all";
         const baseVariants: { playerId: string; cardId: string; targets?: string[] }[] = [];
-        if (isCardTarget) {
+        // rule-id: ven-083-166 (Rampage) / rule 355.8 — "choose a friendly
+        // unit and an enemy unit": a `fight` effect names TWO caster-chosen
+        // targets (attacker + defender). Enumerate one Play per legal pair so
+        // both are locked on the chain item as targets [attacker, defender].
+        const fightAtk =
+          spellEffect?.type === "fight" && typeof spellEffect.attacker === "object"
+            ? spellEffect.attacker
+            : undefined;
+        const fightDef =
+          spellEffect?.type === "fight" && typeof spellEffect.defender === "object"
+            ? spellEffect.defender
+            : undefined;
+        if (!isCardTarget && fightAtk && fightDef) {
+          const attackers = resolveTarget(
+            { ...fightAtk, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+            resolverCtx,
+          );
+          const defenders = resolveTarget(
+            { ...fightDef, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+            resolverCtx,
+          );
+          for (const a of attackers) {
+            for (const d of defenders) {
+              if (a === d) continue;
+              baseVariants.push({
+                cardId: cardId as string,
+                playerId: context.playerId as string,
+                targets: [a as string, d as string],
+              });
+            }
+          }
+        } else if (isCardTarget) {
+          // rule-id: unl-107-219 — a Might-reference descriptor carries no
+          // quantity; surface EVERY legal reference so the caster picks which
+          // friendly unit is compared (resolveTarget defaults to the first).
+          // rule-id: unl-204-219 (rule 355.8) — same for a plain single-card
+          // target: the descriptor's quantity caps how many are CHOSEN, not the
+          // candidate pool, so enumerate every legal candidate.
           const validTargets = resolveTarget(
-            tgt as Parameters<typeof resolveTarget>[0],
+            { ...tgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
             resolverCtx,
           );
           // Rule 355.14.b/c / 355.15 (unl-192-219): when the enumerated target
@@ -1390,28 +1616,55 @@ export const cardPlayMoves: Partial<
             splitEffect?.target && typeof splitEffect.target !== "string"
               ? splitEffect.target
               : undefined;
-          for (const targetId of validTargets) {
-            if (splitDesc) {
-              const n = getCardEffectiveMight(targetId as string, (c) =>
-                context.cards.getCardMeta?.(c),
-              );
-              const splitPool = resolveTarget(
-                { ...splitDesc, quantity: "all" } as Parameters<typeof resolveTarget>[0],
-                resolverCtx,
-              );
-              for (const subset of enumerateSubsetsUpTo(splitPool, n)) {
-                baseVariants.push({
-                  cardId: cardId as string,
-                  playerId: context.playerId as string,
-                  targets: [targetId as string, ...subset],
-                });
+          // rule-id: sfd-080-221 (rule 355.13) — "up to N <units>": the caster
+          // picks 0..N targets at play time, so enumerate every subset (the
+          // empty one included) rather than one Play per single candidate.
+          // "at the same location" (location:"here" on a spell) constrains a
+          // multi-pick to units sharing one zone.
+          const qty = tgt.quantity;
+          const upToN =
+            !splitDesc && typeof qty === "object" && qty.upTo !== undefined && qty.atLeast === undefined
+              ? qty.upTo
+              : undefined;
+          if (upToN !== undefined) {
+            const sameLocation = (tgt as { location?: string }).location === "here";
+            for (const subset of enumerateSubsetsUpTo(validTargets as string[], upToN)) {
+              if (sameLocation && subset.length > 1) {
+                const zone = context.zones.getCardZone(subset[0] as CoreCardId);
+                if (!subset.every((id) => context.zones.getCardZone(id as CoreCardId) === zone)) {
+                  continue;
+                }
               }
-            } else {
               baseVariants.push({
                 cardId: cardId as string,
                 playerId: context.playerId as string,
-                targets: [targetId as string],
+                targets: subset,
               });
+            }
+          } else {
+            for (const targetId of validTargets) {
+              if (splitDesc) {
+                const n = getCardEffectiveMight(targetId as string, (c) =>
+                  context.cards.getCardMeta?.(c),
+                );
+                const splitPool = resolveTarget(
+                  { ...splitDesc, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+                  resolverCtx,
+                );
+                for (const subset of enumerateSubsetsUpTo(splitPool, n)) {
+                  baseVariants.push({
+                    cardId: cardId as string,
+                    playerId: context.playerId as string,
+                    targets: [targetId as string, ...subset],
+                  });
+                }
+              } else {
+                baseVariants.push({
+                  cardId: cardId as string,
+                  playerId: context.playerId as string,
+                  targets: [targetId as string],
+                });
+              }
             }
           }
         } else {
@@ -1421,6 +1674,34 @@ export const cardPlayMoves: Partial<
           });
         }
         results.push(...baseVariants);
+
+        // rule-id: ven-083-166 / rule 560 — "you may pay [X] as an additional
+        // cost": enumerate a paid variant per base play so the caster can
+        // elect it; the spell's `paid-additional-cost` conditional reads the
+        // outcome at resolution.
+        const optionalPay = getOptionalPlayCost(cardId as string);
+        if (optionalPay?.kind === "pay") {
+          const extra = optionalPay.cost ?? {};
+          const metaForPay = createMetaAccessor(context.cards);
+          for (const base of baseVariants) {
+            if (
+              canAffordCard(
+                state,
+                context.playerId as string,
+                cardId as string,
+                { additionalCost: extra, targets: base.targets },
+                metaForPay,
+                potential,
+              )
+            ) {
+              results.push({
+                ...base,
+                additionalCostSpec: { energy: extra.energy ?? 0, power: extra.power ?? [] },
+                paidAdditionalCost: true,
+              });
+            }
+          }
+        }
 
         // unl-182-219 [Repeat]: the additional cost is paid at cast time, so
         // enumerate one variant per affordable repeatCount alongside the base
@@ -1509,8 +1790,10 @@ export const cardPlayMoves: Partial<
           tgt.type !== "battlefield" &&
           tgt.quantity !== "all";
         if (isCardTarget) {
+          // rule-id: unl-204-219 (rule 355.8) — enumerate every legal
+          // candidate, not just the first (resolveTarget defaults count to 1).
           const validTargets = resolveTarget(
-            tgt as Parameters<typeof resolveTarget>[0],
+            { ...tgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
             resolverCtx,
           );
           for (const targetId of validTargets) {
@@ -1532,15 +1815,38 @@ export const cardPlayMoves: Partial<
       return results;
     },
     reducer: (draft, context) => {
-      const { cardId, playerId, targets, xAmount, repeatCount, viaFlow } = context.params;
+      const { cardId, playerId, targets, xAmount, repeatCount, viaFlow, paidAdditionalCost } =
+        context.params;
       const { zones } = context;
+
+      // rule-id: ven-083-166 / rule 560 — re-derive the optional additional
+      // cost from the card definition (never trust client-supplied specs) and
+      // record whether it was actually paid so the spell's
+      // `paid-additional-cost` conditional can read it at resolution.
+      let spellAdditionalCost: CostExtras["additionalCost"];
+      if (paidAdditionalCost) {
+        const optional = getOptionalPlayCost(cardId);
+        if (optional?.kind === "pay") {
+          spellAdditionalCost = optional.cost ?? {};
+        }
+      }
+      if (!draft.additionalCostsPaid) {
+        draft.additionalCostsPaid = {};
+      }
+      draft.additionalCostsPaid[cardId] = spellAdditionalCost !== undefined;
 
       const repeatN = Math.max(0, repeatCount ?? 0);
       deductCost(
         draft,
         playerId,
         cardId,
-        { repeatCount: repeatN, targets, viaFlow: viaFlow === true, xAmount },
+        {
+          additionalCost: spellAdditionalCost,
+          repeatCount: repeatN,
+          targets,
+          viaFlow: viaFlow === true,
+          xAmount,
+        },
         createMetaAccessor(context.cards),
       );
 
@@ -1577,7 +1883,16 @@ export const cardPlayMoves: Partial<
       const turnOrder = Object.keys(draft.players);
       draft.interaction = addToChain(
         interaction,
-        { cardId, controller: playerId, effect: effectToStore, targets, type: "spell" },
+        {
+          cardId,
+          controller: playerId,
+          effect: effectToStore,
+          // rule-id: ven-049-166 — a spell played via [Flow] from the trash is
+          // banished instead of returning to the trash.
+          resolveTo: viaFlow ? "banishment" : "trash",
+          targets,
+          type: "spell",
+        },
         turnOrder,
       );
 
@@ -1592,12 +1907,12 @@ export const cardPlayMoves: Partial<
         draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
       }
 
-      // Move spell to trash (it resolves from the chain later).
-      // rule-id: ven-049-166 — a spell played via [Flow] from the trash is
-      // banished instead of returning to the trash.
+      // rule-id: unl-007-219 — the spell card physically sits on the chain
+      // while pending; chain-moves places it in `resolveTo` when it leaves
+      // the chain (resolved or countered), not at play time.
       zones.moveCard({
         cardId: cardId as CoreCardId,
-        targetZoneId: (viaFlow ? "banishment" : "trash") as CoreZoneId,
+        targetZoneId: "chain" as CoreZoneId,
       });
     },
   },
@@ -1653,6 +1968,11 @@ export const cardPlayMoves: Partial<
         return false;
       }
 
+      // rule-id: ogn-121-298 — Rule 723.1.b: hiding costs [C] (1 Power).
+      if (!canAffordHide(state, context.params.playerId)) {
+        return false;
+      }
+
       return true;
     },
     enumerator: (state, context) => {
@@ -1661,6 +1981,10 @@ export const cardPlayMoves: Partial<
       }
       const interaction = state.interaction ?? createInteractionState();
       if (getTurnState(interaction) !== "neutral-open") {
+        return [];
+      }
+      // rule-id: ogn-121-298 — Rule 723.1.b: hiding costs [C] (1 Power).
+      if (!canAffordHide(state, context.playerId as string)) {
         return [];
       }
       const registry = getGlobalCardRegistry();
@@ -1702,6 +2026,9 @@ export const cardPlayMoves: Partial<
       const { cardId, battlefieldId } = context.params;
       const { zones, counters, cards } = context;
 
+      // rule-id: ogn-121-298 — Rule 723.1.b: pay [C] (1 Power) to hide.
+      deductHideCost(_draft, context.params.playerId);
+
       const facedownZoneId = getFacedownZoneId(battlefieldId);
 
       zones.moveCard({
@@ -1715,6 +2042,9 @@ export const cardPlayMoves: Partial<
         {
           hidden: true,
           hiddenAt: battlefieldId,
+          // rule-id: ogn-121-298 — Rule 723.1.b: stamp the hide turn so the
+          // card cannot be revealed until a later turn.
+          hiddenOnTurn: _draft.turn?.number,
         } as Partial<RiftboundCardMeta>,
       );
 
@@ -1751,6 +2081,13 @@ export const cardPlayMoves: Partial<
       if (owner !== context.params.playerId) {
         return false;
       }
+      // rule-id: ogn-121-298 — Rule 723.1.b: "Beginning on the next player's
+      // turn" — a hidden card cannot be revealed on the turn it was hidden.
+      if (meta.hiddenOnTurn !== undefined && state.turn?.number !== undefined) {
+        if (state.turn.number <= meta.hiddenOnTurn) {
+          return false;
+        }
+      }
       return true;
     },
     reducer: (draft, context) => {
@@ -1759,6 +2096,17 @@ export const cardPlayMoves: Partial<
 
       const meta = cards.getCardMeta(cardId as CoreCardId) as Partial<RiftboundCardMeta>;
       const battlefieldId = meta.hiddenAt;
+      const hiddenOnTurn = meta.hiddenOnTurn;
+
+      // rule-id: ogn-121-298 — Rule 723.1.b: defensive guard mirroring the
+      // condition — never reveal on the same turn the card was hidden.
+      if (
+        hiddenOnTurn !== undefined &&
+        draft.turn?.number !== undefined &&
+        draft.turn.number <= hiddenOnTurn
+      ) {
+        return;
+      }
 
       const registry = getGlobalCardRegistry();
       const def = registry.get(cardId);
@@ -1772,6 +2120,7 @@ export const cardPlayMoves: Partial<
         {
           hidden: false,
           hiddenAt: undefined,
+          hiddenOnTurn: undefined,
         } as Partial<RiftboundCardMeta>,
       );
 
@@ -1786,12 +2135,13 @@ export const cardPlayMoves: Partial<
         const turnOrder = Object.keys(draft.players);
         draft.interaction = addToChain(
           interaction,
-          { cardId, controller: playerId, effect: spellEffect, type: "spell" },
+          { cardId, controller: playerId, effect: spellEffect, resolveTo: "trash", type: "spell" },
           turnOrder,
         );
+        // rule-id: unl-007-219 — card sits on the chain until it resolves.
         zones.moveCard({
           cardId: cardId as CoreCardId,
-          targetZoneId: "trash" as CoreZoneId,
+          targetZoneId: "chain" as CoreZoneId,
         });
         fireTriggers({ cardId, playerId, type: "play-spell" }, { cards, counters, draft, zones });
         fireTriggers(
@@ -1813,6 +2163,15 @@ export const cardPlayMoves: Partial<
       }
 
       if (cardType === "unit") {
+        // rule-id: ogn-121-298 — Rule 143.4: units enter exhausted unless a
+        // static enter-ready effect or an enters-ready replacement applies
+        // (mirrors the normal playCard path).
+        const entersReady =
+          hasStaticEffect(cardId, "enter-ready") ||
+          consumeEntersReadyReplacement(draft, playerId);
+        if (!entersReady) {
+          counters.setFlag(cardId as CoreCardId, "exhausted", true);
+        }
         fireTriggers({ cardId, playerId, type: "play-self" }, { cards, counters, draft, zones });
         fireTriggers(
           { cardId, cardType: "unit", playerId, type: "play-card" },

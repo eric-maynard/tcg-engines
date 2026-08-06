@@ -86,6 +86,13 @@ const RESTRICTION_PATTERN = /^(While .+?),\s*(opponents can't .+|.+ can't .+)\.?
  */
 const PLAY_LOCATION_PATTERN = /^You may play me to (an? .+? battlefield)\.?$/i;
 
+/**
+ * Pattern for play-location grants to other friendly units (ogn-193-298):
+ * - "Friendly units may be played to open battlefields"
+ */
+const FRIENDLY_PLAY_LOCATION_PATTERN =
+  /^Friendly units may be played to (?:an? )?open battlefields?\.?$/i;
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -223,7 +230,8 @@ export function isStaticAbility(text: string): boolean {
     EQUIPMENT_GIVE_PATTERN.test(cleanText) ||
     EACH_TYPE_HAS_PATTERN.test(cleanText) ||
     RESTRICTION_PATTERN.test(cleanText) ||
-    PLAY_LOCATION_PATTERN.test(cleanText)
+    PLAY_LOCATION_PATTERN.test(cleanText) ||
+    FRIENDLY_PLAY_LOCATION_PATTERN.test(cleanText)
   );
 }
 
@@ -510,6 +518,23 @@ function parseStaticAbilityInner(
     }
   }
 
+  // Rule ogn-193-298: "Friendly units may be played to open battlefields" —
+  // a play-location grant that applies to every unit the controller plays.
+  if (FRIENDLY_PLAY_LOCATION_PATTERN.test(cleanText)) {
+    return {
+      ability: {
+        effect: {
+          allowedLocation: "an open battlefield",
+          appliesTo: "friendly-units",
+          type: "play-restriction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // Try play location: "You may play me to..."
   const playLocationMatch = PLAY_LOCATION_PATTERN.exec(cleanText);
   if (playLocationMatch) {
@@ -596,6 +621,26 @@ function parseStaticAbilityInner(
         effect: {
           amount,
           per: selfMightMatch[2],
+          target: "self" as AnyTarget,
+          type: "modify-might",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // rule-id: ogn-109-298 — "My Might is increased by the number of cards in your trash."
+  // Dynamic static self-might; amount resolved by the engine each recalculation.
+  const trashCountMightMatch = cleanText.match(
+    /^My Might is increased by the number of cards in your trash\.?$/i,
+  );
+  if (trashCountMightMatch) {
+    return {
+      ability: {
+        effect: {
+          amount: { cardsInTrash: "self" },
           target: "self" as AnyTarget,
           type: "modify-might",
         } as unknown as Effect,

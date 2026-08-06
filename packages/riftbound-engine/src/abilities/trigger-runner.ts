@@ -112,6 +112,8 @@ export function evaluateTriggerCondition(
   state: RiftboundGameState,
   controllerId: string,
   event: GameEvent,
+  ctx?: TriggerRunnerContext,
+  sourceCardId?: string,
 ): boolean {
   if (!condition || typeof condition !== "object") {
     return true;
@@ -126,7 +128,118 @@ export function evaluateTriggerCondition(
     // absent the enumeration hasn't run and the payoff must NOT fire for free.
     return (event as { paidAdditionalCost?: boolean }).paidAdditionalCost === true;
   }
+  if (c.type === "while-empowered") {
+    // Rule 827 (rule-id: ven-136-166): `[Empowered][>]` triggers fire only
+    // while the source is Empowered.
+    if (!ctx || !sourceCardId) {
+      return false;
+    }
+    return ctx.cards.getCardMeta(sourceCardId as CoreCardId)?.empowered === true;
+  }
+  if (c.type === "control" && ctx) {
+    // rule-id: ven-058-166 (Patched Porobot) / rule 383.2.a.1 — an "if you
+    // control N <thing>" clause is part of the trigger condition; with fewer
+    // than N matching permanents the ability must not be put on the chain.
+    return evaluateControlCondition(
+      (c as { target?: unknown }).target,
+      ctx,
+      controllerId,
+      sourceCardId,
+    );
+  }
   return true;
+}
+
+/**
+ * Count permanents on the board (base + battlefields) controlled by
+ * `controllerId` that match a parsed `ControlCondition.target`, and compare
+ * against `target.quantity.atLeast` (default 1).
+ */
+function evaluateControlCondition(
+  target: unknown,
+  ctx: TriggerRunnerContext,
+  controllerId: string,
+  sourceCardId?: string,
+): boolean {
+  if (!target || typeof target !== "object") {
+    return true;
+  }
+  const t = target as {
+    type?: string;
+    controller?: string;
+    excludeSelf?: boolean;
+    filter?: unknown;
+    quantity?: { atLeast?: number } | number;
+  };
+  const min =
+    typeof t.quantity === "number"
+      ? t.quantity
+      : typeof t.quantity === "object" && typeof t.quantity?.atLeast === "number"
+        ? t.quantity.atLeast
+        : 1;
+
+  const ids: string[] = [];
+  for (const playerId of Object.keys(ctx.draft.players ?? {})) {
+    ids.push(
+      ...ctx.zones
+        .getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)
+        .map((x) => x as string),
+    );
+  }
+  for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+    ids.push(
+      ...ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId).map((x) => x as string),
+    );
+  }
+
+  const registry = getGlobalCardRegistry();
+  const filters = t.filter === undefined ? [] : Array.isArray(t.filter) ? t.filter : [t.filter];
+  let count = 0;
+  for (const id of ids) {
+    if (t.excludeSelf && id === sourceCardId) {
+      continue;
+    }
+    const owner = ctx.cards.getCardOwner(id as CoreCardId) ?? "";
+    if (t.controller === "enemy") {
+      if (owner === controllerId || owner === "") {
+        continue;
+      }
+    } else if (owner !== controllerId) {
+      continue;
+    }
+    const def = registry.get(id) as
+      | { cardType?: string; tags?: readonly string[] }
+      | undefined;
+    const cardType = def?.cardType;
+    if (t.type === "unit" && cardType !== "unit") {
+      continue;
+    }
+    if (
+      (t.type === "gear" || t.type === "equipment") &&
+      cardType !== "gear" &&
+      cardType !== "equipment"
+    ) {
+      continue;
+    }
+    let ok = true;
+    for (const f of filters) {
+      if (f && typeof f === "object" && typeof (f as { tag?: unknown }).tag === "string") {
+        const tag = (f as { tag: string }).tag.toLowerCase();
+        if (!(def?.tags ?? []).some((x) => x.toLowerCase() === tag)) {
+          ok = false;
+          break;
+        }
+      }
+    }
+    if (!ok) {
+      continue;
+    }
+    count++;
+    if (count >= min) {
+      return true;
+    }
+  }
+  return count >= min;
 }
 
 /**
@@ -284,7 +397,14 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
   // Against the controller of the card (owner, since abilities cannot
   // Change controller separately today).
   const filtered = allMatches.filter((match) =>
-    evaluateTriggerCondition(match.ability.condition, ctx.draft, match.cardOwner, match.event),
+    evaluateTriggerCondition(
+      match.ability.condition,
+      ctx.draft,
+      match.cardOwner,
+      match.event,
+      ctx,
+      match.cardId,
+    ),
   );
 
   // Rule 585: Order simultaneous triggers by (1) turn player first
@@ -346,6 +466,10 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
       cards: {
         getCardMeta: ctx.cards.getCardMeta as EffectContext["cards"]["getCardMeta"],
         getCardOwner: ctx.cards.getCardOwner,
+        getCardController: (ctx.cards as { getCardController?: unknown })
+          .getCardController as EffectContext["cards"]["getCardController"],
+        setCardController: (ctx.cards as { setCardController?: unknown })
+          .setCardController as EffectContext["cards"]["setCardController"],
         updateCardMeta: (ctx.cards as { updateCardMeta?: unknown })
           .updateCardMeta as EffectContext["cards"]["updateCardMeta"],
       },

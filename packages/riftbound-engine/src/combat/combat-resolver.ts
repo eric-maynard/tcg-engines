@@ -66,6 +66,19 @@ function hasKeyword(unit: CombatUnit, keyword: string): boolean {
 }
 
 /**
+ * Might threshold for lethal-damage assignment and kill determination.
+ * Rule 726: Shield is "+X Might while I'm a defender" — Might is the unit's
+ * survival stat too, so a defending Shield unit needs base+Shield damage to die.
+ */
+function lethalThreshold(unit: CombatUnit, role?: "attacker" | "defender"): number {
+  let might = unit.baseMight;
+  if (role === "defender") {
+    might += getKeywordValue(unit, "Shield");
+  }
+  return Math.max(0, might);
+}
+
+/**
  * Calculate total Might for a side.
  * Assault adds +X for attackers (rule 719).
  * Shield adds +X for defenders (rule 726: "+X Might while defending").
@@ -91,9 +104,14 @@ export function calculateSideMight(units: CombatUnit[], isAttacker: boolean): nu
  *
  * @param units - Target units to distribute damage to
  * @param totalDamage - Total damage to distribute
+ * @param role - Combat role of the target units (defenders get Shield toward lethal, rule 726)
  * @returns Damage assigned to each unit
  */
-export function distributeDamage(units: CombatUnit[], totalDamage: number): Record<string, number> {
+export function distributeDamage(
+  units: CombatUnit[],
+  totalDamage: number,
+  role?: "attacker" | "defender",
+): Record<string, number> {
   const assignment: Record<string, number> = {};
   let remaining = totalDamage;
 
@@ -111,7 +129,7 @@ export function distributeDamage(units: CombatUnit[], totalDamage: number): Reco
     }
 
     // How much damage to make this unit lethal (accounting for existing damage)
-    const effectiveHealth = unit.baseMight - unit.currentDamage;
+    const effectiveHealth = lethalThreshold(unit, role) - unit.currentDamage;
     // Must assign at least lethal damage before moving to next unit
     const lethal = Math.max(0, effectiveHealth);
     const toAssign = Math.min(remaining, lethal);
@@ -153,25 +171,28 @@ export function resolveCombat(attackers: CombatUnit[], defenders: CombatUnit[]):
   const damageAssignment: Record<string, number> = {};
 
   // Step 2: Attackers deal their total Might to defenders (rule 626.1.b)
-  const attackerDamageToDefenders = distributeDamage(defenders, attackerTotal);
+  const attackerDamageToDefenders = distributeDamage(defenders, attackerTotal, "defender");
   Object.assign(damageAssignment, attackerDamageToDefenders);
 
   // Step 3: Defenders deal their total Might to attackers (rule 626.1.c)
-  const defenderDamageToAttackers = distributeDamage(attackers, defenderTotal);
+  const defenderDamageToAttackers = distributeDamage(attackers, defenderTotal, "attacker");
   for (const [id, dmg] of Object.entries(defenderDamageToAttackers)) {
     damageAssignment[id] = (damageAssignment[id] ?? 0) + dmg;
   }
 
-  // Step 4: Determine kills (units where total damage >= base Might)
+  // Step 4: Determine kills (units where total damage >= Might; rule 726 Shield counts for defenders)
   const killed: string[] = [];
-  const allUnits = [...attackers, ...defenders];
-  for (const unit of allUnits) {
-    const combatDamage = damageAssignment[unit.id] ?? 0;
-    const totalDamage = unit.currentDamage + combatDamage;
-    if (totalDamage >= unit.baseMight) {
-      killed.push(unit.id);
+  const checkKills = (units: CombatUnit[], role: "attacker" | "defender") => {
+    for (const unit of units) {
+      const combatDamage = damageAssignment[unit.id] ?? 0;
+      const totalDamage = unit.currentDamage + combatDamage;
+      if (totalDamage >= lethalThreshold(unit, role)) {
+        killed.push(unit.id);
+      }
     }
-  }
+  };
+  checkKills(attackers, "attacker");
+  checkKills(defenders, "defender");
 
   // Step 5: Determine outcome based on survivors (rule 627)
   const attackerSurvivors = attackers.filter((u) => !killed.includes(u.id));

@@ -42,6 +42,8 @@ export interface CleanupContext {
   readonly cards: {
     getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
     getCardOwner: (cardId: CoreCardId) => string | undefined;
+    getCardController?: (cardId: CoreCardId) => string | undefined;
+    setCardController?: (cardId: CoreCardId, controllerId: CorePlayerId) => void;
     updateCardMeta: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
   };
   readonly counters: {
@@ -63,6 +65,37 @@ export interface CleanupResult {
   readonly combatPending: string[];
   /** Whether any state changes occurred (may need to re-run) */
   readonly stateChanged: boolean;
+}
+
+interface ActiveDieReplacementEntry {
+  replaces?: string;
+  replacement?: unknown;
+  targetCardIds?: readonly string[];
+}
+
+/**
+ * rule-id: unl-007-219 — find and remove a runtime `die` replacement in
+ * `draft.activeReplacements` bound to `cardId`. These are installed by the
+ * effect executor when a spell resolves a targeted replacement rider; once
+ * the bound unit would die the replacement applies and is spent.
+ */
+function consumeActiveDieReplacement(
+  draft: RiftboundGameState,
+  cardId: string,
+): ActiveDieReplacementEntry | undefined {
+  const active = draft.activeReplacements as ActiveDieReplacementEntry[] | undefined;
+  if (!active || active.length === 0) {
+    return undefined;
+  }
+  for (let i = 0; i < active.length; i++) {
+    const entry = active[i];
+    if (entry?.replaces !== "die" || !entry.targetCardIds?.includes(cardId)) {
+      continue;
+    }
+    active.splice(i, 1);
+    return entry;
+  }
+  return undefined;
 }
 
 /**
@@ -107,6 +140,39 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
 
     if (damage >= baseMight) {
+      // rule-id: unl-007-219 — runtime die-replacements bound to this unit
+      // (installed by a resolved spell: "If it would die this turn, banish it
+      // instead") take precedence over the normal kill (rule 571-573).
+      const activeDie = consumeActiveDieReplacement(ctx.draft, cardId as string);
+      if (activeDie) {
+        const repl = activeDie.replacement as { type?: string } | "prevent" | undefined;
+        if (repl && repl !== "prevent" && repl.type === "banish") {
+          const unitMeta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
+          for (const equipId of unitMeta?.equippedWith ?? []) {
+            ctx.cards.updateCardMeta(
+              equipId as CoreCardId,
+              { attachedTo: undefined, copiedFromCardId: undefined } as Partial<RiftboundCardMeta>,
+            );
+            ctx.zones.moveCard({ cardId: equipId as CoreCardId, targetZoneId: "base" as CoreZoneId });
+          }
+          ctx.zones.moveCard({ cardId, targetZoneId: "banishment" as CoreZoneId });
+          ctx.cards.updateCardMeta(cardId, {
+            buffed: false,
+            combatRole: null,
+            damage: 0,
+            equippedWith: undefined,
+            exhausted: false,
+            grantedKeywords: undefined,
+            mightModifier: 0,
+            stunned: false,
+          } as Partial<RiftboundCardMeta>);
+        } else {
+          ctx.cards.updateCardMeta(cardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+        }
+        stateChanged = true;
+        continue;
+      }
+
       // Check for replacement effects ("instead of dying...") (rule 571-575)
       const owner = ctx.cards.getCardOwner(cardId) ?? "";
       const replacementMatch = checkReplacement(
@@ -290,6 +356,43 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         exiledByThis: undefined,
       } as Partial<RiftboundCardMeta>);
       stateChanged = true;
+    }
+  }
+
+  // Step 5c — rule-id: sfd-109-221 (Akshan "You control it until I leave the
+  // board"): re-layer control-changing effects. Entries whose source left the
+  // board expire; the latest surviving entry sets the controller, and with
+  // none left the permanent reverts to its owner.
+  if (ctx.cards.setCardController) {
+    const liveBoard = new Set<string>();
+    for (const zoneId of getBoardZoneIds(ctx)) {
+      for (const id of ctx.zones.getCardsInZone(zoneId as CoreZoneId)) {
+        liveBoard.add(id as string);
+      }
+    }
+    for (const id of liveBoard) {
+      const cardId = id as CoreCardId;
+      const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
+      const effects = meta?.controlEffects;
+      if (!effects || effects.length === 0) {
+        continue;
+      }
+      const surviving = effects.filter(
+        (e) => e.sourceCardId === undefined || liveBoard.has(e.sourceCardId),
+      );
+      if (surviving.length !== effects.length) {
+        ctx.cards.updateCardMeta(cardId, {
+          controlEffects: surviving.length > 0 ? surviving : undefined,
+        } as Partial<RiftboundCardMeta>);
+        stateChanged = true;
+      }
+      const desired =
+        surviving[surviving.length - 1]?.controllerId ?? ctx.cards.getCardOwner(cardId);
+      const current = ctx.cards.getCardController?.(cardId) ?? ctx.cards.getCardOwner(cardId);
+      if (desired && desired !== current) {
+        ctx.cards.setCardController(cardId, desired as CorePlayerId);
+        stateChanged = true;
+      }
     }
   }
 

@@ -692,6 +692,30 @@ describe("Rule 517: Ending phase clears conqueredThisTurn / scoredThisTurn track
   });
 });
 
+// rule-id: 517.1-end-of-turn-triggers (ogn-160-298 Dazzling Aurora)
+describe("Rule 517.1: 'At the end of your turn' triggers fire in the Ending Step", () => {
+  const END_OF_TURN_GEAR = {
+    abilities: [
+      {
+        effect: { amount: 1, from: "deck", type: "reveal", until: "unit" },
+        trigger: { event: "end-of-turn", on: "controller", timing: "at" },
+        type: "triggered",
+      },
+    ],
+    cardType: "gear" as const,
+    zone: "base" as const,
+  };
+
+  it("turn player's end-of-turn gear trigger is put on the chain by ending.onBegin", () => {
+    const engine = createMinimalGameState({ currentPlayer: P1, phase: "main" });
+    createCard(engine, "aurora-p1", { ...END_OF_TURN_GEAR, owner: P1 });
+    createCard(engine, "aurora-p2", { ...END_OF_TURN_GEAR, owner: P2 });
+    runPhaseHook(engine, "ending", "onBegin");
+    const items = getState(engine).interaction?.chain?.items ?? [];
+    expect(items.map((i: { cardId?: string }) => i.cardId)).toEqual(["aurora-p1"]);
+  });
+});
+
 // -----------------------------------------------------------------------------
 // Rule 503-510: Turn state invariants
 // -----------------------------------------------------------------------------

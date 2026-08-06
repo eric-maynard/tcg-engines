@@ -148,6 +148,28 @@ let _justPlayedCardIds = new Set();
 /** Last seen turn key (number + activePlayer) used to expire sickness */
 let _lastTurnKey = "";
 
+// [rule:design-no-blank-cards] DESIGN.md: no blank card frames after t+1s and
+// legend/champion always visible. While /card-image/ is still in flight (CDN
+// redirect on a cold cache) the card must read as name/cost, not an empty
+// frame — so the fallback face is shown until the <img> actually loads. Once
+// an art id has loaded it is served from cache, so later re-renders skip the
+// interim face to avoid a one-frame flicker.
+const _loadedCardImgIds = new Set();
+function _cardImgLoaded(img) {
+  const id = img?.dataset?.imgId;
+  if (id) _loadedCardImgIds.add(id);
+  const fb = img?.nextElementSibling;
+  if (fb && fb.classList?.contains("card-fallback")) fb.style.display = "";
+}
+/** Inline attrs for a card <img> + initial style for its .card-fallback sibling. */
+function _cardImgLoadAttrs(imgId) {
+  const pending = imgId && !_loadedCardImgIds.has(imgId);
+  return {
+    img: `data-img-id="${esc(imgId)}" onload="_cardImgLoaded(this)"`,
+    fallbackStyle: pending ? ' style="display:flex"' : "",
+  };
+}
+
 /** Returns true if a zone name represents an on-board zone where units sit. */
 function isBoardZone(zoneName) {
   if (!zoneName) return false;
@@ -670,6 +692,8 @@ function renderCardElement(card, isFacedown = false, zone = "") {
     ? `<div class="card-might" title="Effective Might">${effMight}</div>`
     : "";
 
+  const imgLoad = _cardImgLoadAttrs(imgId); // [rule:design-no-blank-cards]
+
   return `
     <div class="${classes.join(" ")}"
          data-card-id="${esc(card.id)}"
@@ -680,9 +704,9 @@ function renderCardElement(card, isFacedown = false, zone = "") {
          onmouseleave="hidePreview()"
          ondblclick="openZoom('${esc(card.id)}')"
          style="${isLegendZone && !isPlayable ? "cursor:default;" : ""}">
-      <img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(card.name)}"
+      <img class="card-img" src="/card-image/${esc(imgId)}" alt="${esc(card.name)}" ${imgLoad.img}
            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-      <div class="card-fallback">
+      <div class="card-fallback"${imgLoad.fallbackStyle}>
         <div class="fallback-cost">${card.energyCost != null ? esc(card.energyCost) : "&mdash;"}</div>
         <div class="fallback-name">${esc(card.name || "")}</div>
         <div class="fallback-type">${esc(card.cardType || "")}</div>
@@ -772,6 +796,7 @@ function renderZones() {
     const cardName = c.name || "";
     const inlineStyle = `top:${topOffset}px;z-index:${zIndex};border-color:${borderColor};`;
     const imgSrc = imgId ? `/card-image/${esc(imgId)}` : "";
+    const imgLoad = _cardImgLoadAttrs(imgId); // [rule:design-no-blank-cards]
 
     return `
       <div class="${classes.join(" ")}"
@@ -784,9 +809,9 @@ function renderZones() {
            onmouseleave="hidePreview()"
            ondblclick="openZoom('${esc(c.id)}')"
            title="${esc(cardName)} — click: exhaust (+1 energy) · right-click: recycle (taps first if ready)">
-        <img class="card-img" src="${imgSrc}" alt="${esc(cardName)}"
+        <img class="card-img" src="${imgSrc}" alt="${esc(cardName)}" ${imgLoad.img}
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="card-fallback">
+        <div class="card-fallback"${imgLoad.fallbackStyle}>
           <div class="fallback-name">${esc(cardName)}</div>
           <div class="fallback-type">rune</div>
         </div>
@@ -1019,6 +1044,7 @@ function renderActions() {
     const verb = pending.onPicked === "discard" ? "Discard a card"
       : pending.onPicked === "banish" ? "Banish a card"
       : pending.onPicked === "recycle" ? "Recycle a card"
+      : pending.onPicked === "play" ? "Choose a card to play"
       : pending.type === "choose-destination" ? "Choose a destination"
       : "Choose a card";
     html += `<div class="action-section-title" style="background:#3a2a4a;color:#ffd070;padding:6px;border-radius:3px;">
@@ -1139,7 +1165,7 @@ function renderActions() {
               <button class="action-btn ${highlighted ? "highlighted" : ""}"
                       data-play-cost-card="${esc(cid)}">
                 Play ${esc(name)}
-                <div class="action-detail">${variants.length} cost options…</div>
+                <div class="action-detail">${variants.length} play options…</div>
               </button>`;
           }
         }
@@ -1501,6 +1527,7 @@ function renderPendingChoiceModal() {
     : pending.onPicked === "banish" ? "Banish a card"
     : pending.onPicked === "recycle" ? "Recycle a card"
     : pending.onPicked === "draw" ? "Choose a card to draw"
+    : pending.onPicked === "play" ? "Choose a card to play"
     : pending.type === "name-card" ? "Name a card"
     : pending.type === "choose-destination" ? "Choose a destination"
     : pending.type === "choose-target" ? "Choose a target"
@@ -1554,8 +1581,14 @@ function renderPendingChoiceModal() {
 /** Build a human label for one play-variant of a card. */
 function describePlayVariant(m, card) {
   const baseCost = card?.energyCost ?? 0;
+  // Rule ogn-193-298: location-only variants (base vs open battlefield) must
+  // name their destination or they render as identical buttons.
+  const loc = m.params?.location;
+  const where = !loc || loc === "base"
+    ? "to base"
+    : `to ${getBattlefieldName(String(loc).replace(/^battlefield-/, ""))}`;
   if (!m.params?.paidAdditionalCost) {
-    return { label: "Play", detail: `${baseCost} energy` };
+    return { label: `Play ${where}`, detail: `${baseCost} energy` };
   }
   const spec = m.params.additionalCostSpec;
   if (m.params.sacrificeId) {
@@ -1580,9 +1613,11 @@ function describePlayVariant(m, card) {
  * (base vs paidAdditionalCost / sacrifice).
  */
 function openPlayCostModal(cardId) {
+  // Rule ogn-193-298: match the action-panel grouping key exactly so a
+  // cardId-less champion move doesn't leak into another card's modal.
   const variants = availableMoves.filter(m =>
     (m.moveId === "playUnit" || m.moveId === "playFromChampionZone") &&
-    (m.params?.cardId === cardId || (m.moveId === "playFromChampionZone" && !m.params?.cardId)),
+    (m.params?.cardId ?? "__champion") === cardId,
   );
   if (variants.length === 0) return;
   const card = findCard(cardId);
@@ -1593,7 +1628,7 @@ function openPlayCostModal(cardId) {
 
   const imgId = (card?.definitionId ?? cardId).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
   let html = `<div class="chain-title">Play ${esc(card?.name ?? cardId)}</div>`;
-  html += `<div class="chain-subtitle">Choose how to pay</div>`;
+  html += `<div class="chain-subtitle">Choose how to play</div>`;
   html += `<div class="choice-modal-cards"><img class="choice-modal-card" style="margin:0" src="/card-image/${esc(imgId)}" alt=""></div>`;
   html += `<div class="choice-modal-btns">`;
   for (let i = 0; i < variants.length; i++) {
@@ -1643,6 +1678,11 @@ function renderChainOverlay() {
   const isMyPriority = chain?.activePlayer === viewingPlayer;
   const hasChain = chain?.active && chain.items?.length > 0;
 
+  // [rule:no-console-errors] Legend/champion/battlefield instance ids are
+  // `${pid}-legend-${defId}` etc. (no index) — strip those too so
+  // /card-image/ gets a bare defId instead of 404ing.
+  const CHAIN_ID_PREFIX_RE = /^player-[12]-(?:(?:main|rune)-\d+|legend|champion|bf)-/;
+
   // Resolve card name helper
   function resolveChainCard(cardId) {
     if (!gameState?.zones) return cardId;
@@ -1650,7 +1690,7 @@ function renderChainOverlay() {
       const found = zoneCards.find(c => c.id === cardId);
       if (found) return found.name || cardId;
     }
-    const stripped = cardId.replace(/^player-[12]-(?:main|rune)-\d+-/, "");
+    const stripped = cardId.replace(CHAIN_ID_PREFIX_RE, "");
     for (const zoneCards of Object.values(gameState.zones)) {
       const found = zoneCards.find(c => c.definitionId === stripped);
       if (found) return found.name || cardId;
@@ -1673,7 +1713,7 @@ function renderChainOverlay() {
       const isTop = i === 0;
       const cardName = resolveChainCard(item.cardId);
       const controller = pName(item.controller);
-      const imgId = item.cardId.replace(/^player-[12]-(?:main|rune)-\d+-/, "");
+      const imgId = item.cardId.replace(CHAIN_ID_PREFIX_RE, "");
       html += `
         <div class="chain-item ${isTop ? "top-item" : ""}">
           <div class="ci-order">${isTop ? "Next" : items.length - i}</div>

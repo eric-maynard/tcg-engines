@@ -53,6 +53,12 @@ export interface ChainItem {
   readonly optional?: boolean;
   /** Whether this item was countered (skip execution on resolve) */
   readonly countered?: boolean;
+  /**
+   * rule-id: unl-007-219 — a spell card stays in the "chain" zone while
+   * pending and only moves to its final zone when it leaves the chain
+   * (resolved or countered). Defaults to "trash"; [Flow] plays banish.
+   */
+  readonly resolveTo?: "trash" | "banishment";
 }
 
 /**

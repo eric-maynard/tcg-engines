@@ -656,10 +656,30 @@ function buildGameSnapshot(session: GameSession, viewingPlayer?: string) {
     meta: RiftboundCardMeta;
   }[]> = {};
 
+  // rule-108.7.c / rule-128.4: hand is Private Information and decks are
+  // secret — outside sandbox (goldfish/hotseat) the viewing player must not
+  // receive identities of the opponent's cards in these zones. Card instance
+  // ids embed the definition id, so the id is replaced with an opaque one too.
+  const redactFor = !session.sandbox && viewingPlayer ? viewingPlayer : undefined;
+  const isPrivateZone = (zoneId: string) =>
+    zoneId === "hand" || zoneId === "mainDeck" || zoneId === "runeDeck";
+
   for (const [zoneId, zone] of Object.entries(internal.zones)) {
-    zones[zoneId] = zone.cardIds.map((cardId) => {
+    zones[zoneId] = zone.cardIds.map((cardId, idx) => {
       const cardInstance = internal.cards[cardId];
       const meta = internal.cardMetas[cardId];
+      const owner = cardInstance?.owner ?? "";
+      if (redactFor && isPrivateZone(zoneId) && owner !== redactFor) {
+        return {
+          cardType: "unknown",
+          controller: cardInstance?.controller ?? "",
+          definitionId: "",
+          id: `hidden-${zoneId}-${owner}-${idx}`,
+          meta: { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false } as RiftboundCardMeta,
+          name: "Hidden card",
+          owner,
+        };
+      }
       // rule-sfd-171-221: tokens minted in-game (definitionId `token-def-<slug>`)
       // are only registered in the engine's global registry, not the static set
       // registry — fall back so the snapshot carries name/type/might instead of
@@ -923,6 +943,17 @@ function savedDeckToDeckConfig(deck: FullDeck): DeckConfig | null {
         mainDeckCardIds.splice(i, 1);
       }
     }
+  }
+
+  // Rules 103.1.a / 111 / 112: setup requires a Champion Legend and a Chosen
+  // Champion — a deck without both cannot start a legal game.
+  if (!legendId) {
+    console.warn(`Saved deck "${deck.name}" (${deck.id}) has no legend`);
+    return null;
+  }
+  if (!championId) {
+    console.warn(`Saved deck "${deck.name}" (${deck.id}) has no chosen champion`);
+    return null;
   }
 
   return { battlefieldIds, championId, legendId, mainDeckCardIds, runeDeckCardIds };
@@ -1239,8 +1270,8 @@ function finalizePregame(session: GameSession): void {
  * Broadcast a pregame update to all connected clients.
  */
 function broadcastPregameUpdate(session: GameSession): void {
-  const snapshot = buildGameSnapshot(session);
   for (const [, client] of session.clients) {
+    const snapshot = buildGameSnapshot(session, client.playerId);
     const pregameData = buildPregamePayload(session, client.playerId);
     const moves = buildAvailableMoves(session, client.playerId);
     try {
@@ -1323,6 +1354,12 @@ function finalizeEndTurn(session: GameSession, nextPlayer: string): void {
   // Channel (rule 515.3 / 644.7) → draw (rule 515.4.b) → main. Nothing to
   // Reimplement here.
   const stateAfter = session.engine.getState();
+  // rule-id: 517.1-end-of-turn-triggers — the Ending Step holds while
+  // end-of-turn triggers sit on the chain; the flow finishes the rotation on
+  // its own once the chain resolves, so don't patch over it.
+  if (stateAfter.turn.phase === "ending") {
+    return;
+  }
   // Rule 734: turn.onEnd may have redirected to an additional-turn owner.
   const actualNext = stateAfter.turn.activePlayer || nextPlayer;
   if (stateAfter.turn.phase !== "main") {
@@ -2171,7 +2208,6 @@ const server = Bun.serve({
 
         // Broadcast to connected WebSocket clients so they stay in sync
         session.seq++;
-        const snapshot = buildGameSnapshot(session);
         const newPhase = session.engine.getState().turn.phase;
         const phaseChange = prevPhase !== newPhase
           ? { from: prevPhase, to: newPhase }
@@ -2186,13 +2222,13 @@ const server = Bun.serve({
               phaseChange,
               playerId: body.playerId,
               seq: session.seq,
-              state: snapshot,
+              state: buildGameSnapshot(session, client.playerId),
               type: "state_update",
             }));
           } catch { /* Disconnected */ }
         }
 
-        return json({ phaseChange, state: snapshot, success: true });
+        return json({ phaseChange, state: buildGameSnapshot(session, body.playerId), success: true });
       }
 
       // If endTurn failed, restore the current player on the flow manager
@@ -2928,7 +2964,7 @@ const server = Bun.serve({
             }
             // Broadcast final game state (no more pregame)
             for (const [, client] of session.clients) {
-              const snapshot = buildGameSnapshot(session);
+              const snapshot = buildGameSnapshot(session, client.playerId);
               const clientMoves = buildAvailableMoves(session, client.playerId);
               try {
                 client.ws.send(JSON.stringify({
@@ -2949,7 +2985,7 @@ const server = Bun.serve({
         // Don't process normal game moves during pregame
         if (msg.type === "move" || msg.type === "resync") {
           if (msg.type === "resync") {
-            const snapshot = buildGameSnapshot(session);
+            const snapshot = buildGameSnapshot(session, playerId);
             const moves = buildAvailableMoves(session, playerId);
             ws.send(JSON.stringify({
               moves,
@@ -3037,7 +3073,7 @@ const server = Bun.serve({
         }
 
         session.seq++;
-        const snapshot = buildGameSnapshot(session);
+        const snapshot = buildGameSnapshot(session, playerId);
 
         // Detect phase change for WebSocket messages
         const newPhase = session.engine.getState().turn.phase;
@@ -3070,7 +3106,7 @@ const server = Bun.serve({
               phaseChange,
               playerId,
               seq: session.seq,
-              state: snapshot,
+              state: buildGameSnapshot(session, client.playerId),
               type: "state_update",
             }));
           } catch { /* Disconnected */ }
@@ -3088,7 +3124,7 @@ const server = Bun.serve({
 
       if (msg.type === "resync") {
         // Client explicitly requests full state (e.g., after detecting gap in seq)
-        const snapshot = buildGameSnapshot(session);
+        const snapshot = buildGameSnapshot(session, playerId);
         const moves = buildAvailableMoves(session, playerId);
 
         ws.send(JSON.stringify({
@@ -3135,7 +3171,6 @@ const server = Bun.serve({
         // Detect and clear in-progress UI state on.
         session.log.push(makeLogEntry("Rewound their last action.", { rewindable: false }));
         session.seq++;
-        const snapshot = buildGameSnapshot(session);
         // Broadcast updated state to all clients
         for (const [, client] of session.clients) {
           const clientMoves = buildAvailableMoves(session, client.playerId);
@@ -3145,7 +3180,7 @@ const server = Bun.serve({
               moves: clientMoves,
               playerId,
               seq: session.seq,
-              state: snapshot,
+              state: buildGameSnapshot(session, client.playerId),
               type: "state_update",
             }));
           } catch { /* Disconnected */ }
@@ -3160,7 +3195,6 @@ const server = Bun.serve({
         }
         session.log.push(makeLogEntry("Move redone."));
         session.seq++;
-        const snapshot = buildGameSnapshot(session);
         for (const [, client] of session.clients) {
           const clientMoves = buildAvailableMoves(session, client.playerId);
           try {
@@ -3169,7 +3203,7 @@ const server = Bun.serve({
               moves: clientMoves,
               playerId,
               seq: session.seq,
-              state: snapshot,
+              state: buildGameSnapshot(session, client.playerId),
               type: "state_update",
             }));
           } catch { /* Disconnected */ }
@@ -3242,7 +3276,7 @@ const server = Bun.serve({
       gameLogger.logPlayerConnected(gameId, playerId, connId);
 
       // Send full state snapshot on connect (enables reconnection resync)
-      const snapshot = buildGameSnapshot(session);
+      const snapshot = buildGameSnapshot(session, playerId);
       const moves = buildAvailableMoves(session, playerId);
 
       ws.send(JSON.stringify({

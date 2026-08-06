@@ -14,6 +14,7 @@ import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } 
 import { executeEffect } from "../../abilities/effect-executor";
 import type { ExecutableEffect } from "../../abilities/effect-executor";
 import { fireTriggers } from "../../abilities/trigger-runner";
+import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type {
   PendingChoice,
@@ -72,11 +73,16 @@ export function pickDefaultForChoice(choice: PendingChoice): string | number | u
  * Returns the target zone a picked card is moved to based on the stored
  * `onPicked` action.
  */
-function onPickedTargetZone(action: "recycle" | "banish" | "discard" | "draw"): CoreZoneId {
+function onPickedTargetZone(
+  action: "recycle" | "banish" | "discard" | "draw" | "play",
+): CoreZoneId {
   switch (action) {
     case "recycle": {
       return "mainDeck" as CoreZoneId;
     }
+    // rule-id: ogn-062-298-look-banish-play — "banish … then play it": the
+    // pick goes to banishment first; the play is added to the chain after.
+    case "play":
     case "banish": {
       return "banishment" as CoreZoneId;
     }
@@ -362,9 +368,27 @@ export const pendingChoiceMoves: Partial<
         if (!choice.options.includes(zoneId)) {
           return;
         }
-        // Rule 323.6 / 355.4: options are battlefield ids (or "base"), not core
-        // zone ids — map to the battlefield-* zone so replay-to-same-bf resolves.
-        const targetZoneId = zoneId === "base" ? zoneId : `battlefield-${zoneId}`;
+        // rule-id: unl-204-219-owner-chooses-top-or-bottom — owner-choice
+        // recycle surfaces mainDeck-top / mainDeck-bottom as destinations.
+        if (zoneId === "mainDeck-top" || zoneId === "mainDeck-bottom") {
+          context.counters.clearAllCounters(choice.cardId as CoreCardId);
+          context.zones.moveCard({
+            cardId: choice.cardId as CoreCardId,
+            position: zoneId === "mainDeck-top" ? "top" : "bottom",
+            targetZoneId: "mainDeck" as CoreZoneId,
+          });
+          draft.pendingChoice = undefined;
+          return;
+        }
+        // Rule 323.6 / 355.2 / 355.4 (rule-id: unl-184-219-choose-destination-zone-id,
+        // sfd-200-221-choose-destination-battlefield):
+        // the move/to:"choose" executor already emits ZONE ids (base /
+        // battlefield-<bfId>); only prefix a bare battlefield id so we never
+        // produce battlefield-battlefield-<bfId>.
+        const targetZoneId =
+          zoneId === "base" || zoneId.startsWith("battlefield-")
+            ? zoneId
+            : `battlefield-${zoneId}`;
         context.zones.moveCard({
           cardId: choice.cardId as CoreCardId,
           targetZoneId: targetZoneId as CoreZoneId,
@@ -390,6 +414,18 @@ export const pendingChoiceMoves: Partial<
       // rule-id: ogn-235-298-vision-optional-recycle — declining leaves the
       // revealed card(s) where they are (on top of the deck for Vision).
       if (choice.optional && context.params.accept === false) {
+        // rule-id: ogn-062-298-look-decline-recycle — a declined look that
+        // says "Recycle the remaining cards" still recycles every revealed
+        // card; only Vision-like looks (no onRest) leave them on top.
+        if (choice.onRest === "recycle") {
+          for (const restId of choice.revealed) {
+            context.zones.moveCard({
+              cardId: restId as CoreCardId,
+              position: "bottom",
+              targetZoneId: "mainDeck" as CoreZoneId,
+            });
+          }
+        }
         draft.pendingChoice = undefined;
         return;
       }
@@ -423,6 +459,34 @@ export const pendingChoiceMoves: Partial<
         fireTriggers(
           { cardId: pickedCardId as string, playerId: choice.revealer, type: "discard" },
           { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        );
+      }
+
+      // rule-id: ogn-062-298-look-banish-play — "banish a unit from among
+      // them, then play it, reducing its cost by [N]": pay the discounted
+      // cost from the prompter's pool and add the play to the chain (rule
+      // 354.2/354.3) so its owner chooses a location when it finalizes.
+      if (choice.onPicked === "play") {
+        const pool = draft.runePools[choice.prompter];
+        if (pool) {
+          const cost = getGlobalCardRegistry().getCostToDeduct(pickedCardId as string);
+          const energy = Math.max(0, cost.energy - (choice.playEnergyReduction ?? 0));
+          pool.energy = Math.max(0, pool.energy - energy);
+          for (const [domain, amount] of Object.entries(cost.power)) {
+            const key = domain as keyof typeof pool.power;
+            pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - (amount ?? 0));
+          }
+        }
+        draft.interaction = addToChain(
+          draft.interaction ?? createInteractionState(),
+          {
+            cardId: pickedCardId as string,
+            controller: choice.prompter,
+            effect: { target: pickedCardId as string, to: "choose", type: "move" },
+            triggered: true,
+            type: "ability",
+          },
+          Object.keys(draft.players),
         );
       }
 

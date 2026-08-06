@@ -1701,6 +1701,19 @@
       transition: opacity 0.15s;
     }
     .target-banner.visible { opacity: 1; }
+    .target-banner-btn {
+      pointer-events: auto;
+      margin-left: 10px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid #ffd070;
+      background: #2a1a05;
+      color: #fff4d8;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .target-banner:not(.visible) .target-banner-btn { pointer-events: none; }
     /* Pending-choice prompts whose picks are board cards: let clicks through the backdrop */
     .chain-overlay.targeting {
       pointer-events: none;

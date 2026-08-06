@@ -288,10 +288,16 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 }
               }
 
-              // Scoring step (rule 515.2.b): Holding
-              // Score 1 point for each battlefield the turn player controls
+              // Beginning step (rule 515.2.a): "At the start of your Beginning
+              // Phase" / "At the start of your turn" triggers fire before the
+              // scoring step. `beginning-phase` triggers alias to this event in
+              // the trigger matcher.
               const playerId = context.getCurrentPlayer();
               const triggerCtx = buildFlowTriggerContext(context);
+              fireTriggers({ playerId: playerId as string, type: "start-of-turn" }, triggerCtx);
+
+              // Scoring step (rule 515.2.b): Holding
+              // Score 1 point for each battlefield the turn player controls
               for (const [bfId, bf] of Object.entries(context.state.battlefields)) {
                 if (bf.controller === playerId) {
                   const scored = context.state.scoredThisTurn[playerId] ?? [];
@@ -482,13 +488,30 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
            * Auto-advances to cleanup.
            */
           ending: {
-            endIf: () => true,
+            // rule-id: 517.1-end-of-turn-triggers (ogn-160-298 Dazzling Aurora):
+            // end-of-turn triggers go on the chain in onBegin; hold the Ending
+            // Step until that chain (and any choice it opens) has resolved so
+            // the turn doesn't rotate with the trigger still pending.
+            endIf: (context) =>
+              !(context.state as RiftboundGameState).interaction?.chain?.active &&
+              !(context.state as RiftboundGameState).pendingChoice,
             next: "cleanup",
             onBegin: (context) => {
               context.state.turn = {
                 ...context.state.turn,
                 phase: "ending",
               };
+
+              // Rule 517.1: "At the end of your turn" triggers fire for the
+              // turn player. Read turn.activePlayer, not getCurrentPlayer() —
+              // callers pre-rotate the flow's current player before endTurn.
+              const endingPlayer = context.state.turn.activePlayer;
+              if (endingPlayer) {
+                fireTriggers(
+                  { playerId: endingPlayer as string, type: "end-of-turn" },
+                  buildFlowTriggerContext(context),
+                );
+              }
 
               // Collect all board cards for cleanup
               const allBoardCards: CoreCardId[] = [];
@@ -529,6 +552,16 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   });
                 }
 
+                // rule-id: ven-142-166 — expire turn-scoped granted abilities (rule 517.2.b)
+                if (meta.grantedAbilities && meta.grantedAbilities.length > 0) {
+                  const remaining = meta.grantedAbilities.filter(
+                    (ga: { duration: string }) => ga.duration !== "turn",
+                  );
+                  context.cards.updateCardMeta(cardId, {
+                    grantedAbilities: remaining.length > 0 ? remaining : undefined,
+                  });
+                }
+
                 // Reset turn-scoped Might modifier (rule 517.2.b)
                 if (meta.mightModifier && meta.mightModifier !== 0) {
                   context.cards.updateCardMeta(cardId, { mightModifier: 0 });
@@ -554,6 +587,14 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               // Start fresh next turn.
               if (context.state.consumedNextReplacements) {
                 context.state.consumedNextReplacements = {};
+              }
+              // rule-id: unl-007-219 — expire "this turn" runtime replacements
+              // (rule 517.2) so an unspent die→banish rider doesn't leak into
+              // later turns.
+              if (context.state.activeReplacements) {
+                context.state.activeReplacements = (
+                  context.state.activeReplacements as { duration?: string }[]
+                ).filter((e) => e?.duration !== "turn" && e?.duration !== "next");
               }
             },
 

@@ -34,6 +34,9 @@ import {
   createBattlefield,
   createCard,
   createMinimalGameState,
+  drainChain,
+  enumerateLegalMoves,
+  getCardMeta,
   getCardZone,
   getCardsInZone,
   getChainItems,
@@ -92,6 +95,142 @@ describe("Rule 555: Play sequence overview", () => {
     expect(getCardsInZone(engine, "hand", P1)).not.toContain("burn");
     const items = getChainItems(engine);
     expect(items.map((i) => i.cardId)).toContain("burn");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Rule 355.2.a: Valid locations include the controller's Base or a
+// Battlefield the controller controls.
+// ---------------------------------------------------------------------------
+
+describe("Rule 355.2.a: a unit may be played to a battlefield its controller controls", () => {
+  it("non-Ambush unit can be played to a controlled battlefield and is enumerated there", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 2, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+    createCard(engine, "grunt", {
+      cardType: "unit",
+      energyCost: 2,
+      might: 2,
+      owner: P1,
+      zone: "hand",
+    });
+
+    const offered = enumerateLegalMoves(engine, P1).filter(
+      (m) => m.moveId === "playUnit" && m.params?.cardId === "grunt",
+    );
+    expect(offered.map((m) => m.params?.location)).toContain("battlefield-bf-1");
+
+    const result = applyMove(engine, "playUnit", {
+      cardId: "grunt",
+      location: "battlefield-bf-1",
+      playerId: P1,
+    });
+    expect(result.success).toBe(true);
+    expect(getCardZone(engine, "grunt")).toBe("battlefield-bf-1");
+  });
+
+  it("non-Ambush unit cannot be played to a battlefield the opponent controls", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 2, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: P2 });
+    createCard(engine, "grunt", {
+      cardType: "unit",
+      energyCost: 2,
+      might: 2,
+      owner: P1,
+      zone: "hand",
+    });
+    const result = applyMove(engine, "playUnit", {
+      cardId: "grunt",
+      location: "battlefield-bf-1",
+      playerId: P1,
+    });
+    expect(result.success).toBe(false);
+    expect(getCardZone(engine, "grunt")).toBe("hand");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rule-id: ogn-193-298 (Miss Fortune, Buccaneer) — "Friendly units may be
+// played to open battlefields": a board unit's static grant extends the
+// open-battlefield play location to every unit its controller plays.
+// ---------------------------------------------------------------------------
+
+describe("ogn-193-298: friendly board unit grants 'may be played to open battlefields'", () => {
+  const grant = [
+    {
+      effect: {
+        allowedLocation: "an open battlefield",
+        appliesTo: "friendly-units",
+        type: "play-restriction",
+      },
+      type: "static",
+    },
+  ] as unknown as Parameters<typeof createCard>[2]["abilities"];
+
+  it("plain unit is offered and allowed at an open battlefield while the granter is on board", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 2, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: null });
+    createCard(engine, "miss-fortune", {
+      abilities: grant,
+      cardType: "unit",
+      might: 4,
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "grunt", {
+      cardType: "unit",
+      energyCost: 2,
+      might: 2,
+      owner: P1,
+      zone: "hand",
+    });
+
+    const offered = enumerateLegalMoves(engine, P1).filter(
+      (m) => m.moveId === "playUnit" && m.params?.cardId === "grunt",
+    );
+    expect(offered.map((m) => m.params?.location)).toContain("battlefield-bf-1");
+
+    const result = applyMove(engine, "playUnit", {
+      cardId: "grunt",
+      location: "battlefield-bf-1",
+      playerId: P1,
+    });
+    expect(result.success).toBe(true);
+    expect(getCardZone(engine, "grunt")).toBe("battlefield-bf-1");
+  });
+
+  it("without the granter on board, a plain unit cannot be played to an open battlefield", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 2, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: null });
+    createCard(engine, "grunt", {
+      cardType: "unit",
+      energyCost: 2,
+      might: 2,
+      owner: P1,
+      zone: "hand",
+    });
+    const offered = enumerateLegalMoves(engine, P1).filter(
+      (m) => m.moveId === "playUnit" && m.params?.cardId === "grunt",
+    );
+    expect(offered.map((m) => m.params?.location)).not.toContain("battlefield-bf-1");
+    const result = applyMove(engine, "playUnit", {
+      cardId: "grunt",
+      location: "battlefield-bf-1",
+      playerId: P1,
+    });
+    expect(result.success).toBe(false);
   });
 });
 
@@ -334,6 +473,69 @@ describe("Rule 559.3: A unit-targeting spell with no legal targets cannot be pla
       playerId: P1,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// rule-id: sfd-080-221 (Bellows Breath) — Rule 355.13: "up to N" lets the
+// caster choose zero targets, and any subset up to N at the same location.
+describe("Rule 355.13: 'up to N units' enumerates 0..N target subsets", () => {
+  const bellows = {
+    abilities: [
+      {
+        effect: {
+          amount: 1,
+          target: { location: "here", quantity: { upTo: 3 }, type: "unit" },
+          type: "damage",
+        },
+        type: "spell",
+      },
+    ],
+    cardType: "spell" as const,
+    energyCost: 1,
+    owner: P1,
+    zone: "hand" as const,
+  };
+
+  it("offers a zero-target play alongside the single own-unit target", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 1, power: {} } },
+    });
+    createCard(engine, "recruit", { cardType: "unit", might: 1, owner: P1, zone: "base" });
+    createCard(engine, "bellows", bellows);
+
+    const targetSets = enumerateLegalMoves(engine, P1)
+      .filter((m) => m.moveId === "playSpell" && m.params?.cardId === "bellows")
+      .map((m) => m.params?.targets);
+    expect(targetSets).toContainEqual([]);
+    expect(targetSets).toContainEqual(["recruit"]);
+
+    // Zero-target play resolves without touching the caster's own unit.
+    const result = applyMove(engine, "playSpell", { cardId: "bellows", playerId: P1, targets: [] });
+    expect(result.success).toBe(true);
+    drainChain(engine);
+    expect(getCardMeta(engine, "recruit")?.damage ?? 0).toBe(0);
+    expect(getCardZone(engine, "recruit")).toBe("base");
+  });
+
+  it("enumerates multi-target subsets only among units sharing a location", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 1, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+    createCard(engine, "a", { cardType: "unit", might: 2, owner: P2, zone: "base" });
+    createCard(engine, "b", { cardType: "unit", might: 2, owner: P2, zone: "base" });
+    createCard(engine, "c", { cardType: "unit", might: 2, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "bellows", bellows);
+
+    const targetSets = enumerateLegalMoves(engine, P1)
+      .filter((m) => m.moveId === "playSpell" && m.params?.cardId === "bellows")
+      .map((m) => ((m.params?.targets as string[] | undefined) ?? []).slice().sort().join(","));
+    expect(targetSets).toContain("");
+    expect(targetSets).toContain("a,b");
+    expect(targetSets).not.toContain("a,c");
+    expect(targetSets).not.toContain("a,b,c");
   });
 });
 

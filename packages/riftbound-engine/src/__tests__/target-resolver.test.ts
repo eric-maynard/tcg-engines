@@ -130,6 +130,41 @@ describe("Target Resolver", () => {
     clearGlobalCardRegistry();
   });
 
+  // rule-id: unl-192-219 (359.3.e.12) — a unit whose control was transferred
+  // after being chosen is no longer "friendly" to its owner at resolution.
+  test("friendly/enemy track current controller over owner", () => {
+    const registry = new CardDefinitionRegistry();
+    registry.register("u1", { cardType: "unit", id: "u1", might: 2, name: "Stolen Unit" });
+    registry.register("u2", { cardType: "unit", id: "u2", might: 5, name: "Kept Unit" });
+    setGlobalCardRegistry(registry);
+
+    const base = mockCtx(
+      {
+        u1: { owner: "p1", zone: "base" },
+        u2: { owner: "p1", zone: "base" },
+      },
+      "p1",
+      "source",
+    );
+    const ctx: TargetResolverContext = {
+      ...base,
+      cards: {
+        ...base.cards,
+        getCardController: ((cardId: string) =>
+          cardId === "u1" ? "p2" : "p1") as unknown as NonNullable<
+          TargetResolverContext["cards"]["getCardController"]
+        >,
+      },
+    };
+
+    const friendly = resolveTarget({ controller: "friendly", quantity: "all", type: "unit" }, ctx);
+    expect(friendly).toEqual(["u2"]);
+    const enemy = resolveTarget({ controller: "enemy", quantity: "all", type: "unit" }, ctx);
+    expect(enemy).toEqual(["u1"]);
+
+    clearGlobalCardRegistry();
+  });
+
   test("excludes source card (unless self target)", () => {
     const registry = new CardDefinitionRegistry();
     registry.register("source", { cardType: "unit", id: "source", might: 3, name: "Source" });

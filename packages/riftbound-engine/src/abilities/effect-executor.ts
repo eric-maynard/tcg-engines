@@ -92,6 +92,8 @@ export interface EffectContext {
   };
   readonly cards: {
     getCardOwner: (cardId: CoreCardId) => string | undefined;
+    getCardController?: (cardId: CoreCardId) => string | undefined;
+    setCardController?: (cardId: CoreCardId, controllerId: CorePlayerId) => void;
     getCardMeta?: (cardId: CoreCardId) => Record<string, unknown> | undefined;
     updateCardMeta?: (cardId: CoreCardId, meta: Record<string, unknown>) => void;
   };
@@ -233,6 +235,28 @@ function resolveAmount(
       zones: ctx.zones,
     }).length;
   }
+  if ("revealTop" in amount) {
+    // rule-id: ogn-121-298 (Teemo, Strategist) — reveal the top N of your Main
+    // Deck, count cards with the keyword, then recycle every revealed card.
+    const n = (amount.revealTop as number) ?? 0;
+    const keyword = amount.withKeyword as string;
+    const registry = getGlobalCardRegistry();
+    const topN = ctx.zones
+      .getCardsInZone("mainDeck" as CoreZoneId, ctx.playerId as CorePlayerId)
+      .slice(0, n)
+      .map((c) => c as string);
+    const hits = topN.filter((id) => registry.hasKeyword(id, keyword)).length;
+    if ((amount.then ?? "recycle") === "recycle") {
+      for (const id of topN) {
+        ctx.zones.moveCard({
+          cardId: id as CoreCardId,
+          position: "bottom",
+          targetZoneId: "mainDeck" as CoreZoneId,
+        });
+      }
+    }
+    return hits;
+  }
   if ("variable" in amount) {
     // Named variable bound at effect entry — e.g., X-cost spells
     // Store the chosen X value in ctx.variables.x and reference it here
@@ -324,6 +348,11 @@ export function evaluateEffectCondition(
       if (!bound) return false;
       const owner = ctx.cards.getCardOwner(bound as CoreCardId) ?? "";
       return want === "friendly" ? owner === ctx.playerId : owner !== ctx.playerId;
+    }
+    case "paid-additional-cost": {
+      // rule-id: ven-083-166 / rule 560 — playSpell records whether the
+      // caster elected the optional additional cost; absent means unpaid.
+      return ctx.draft.additionalCostsPaid?.[ctx.sourceCardId] === true;
     }
     default: {
       return true;
@@ -770,9 +799,133 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "move": {
+      // rule-id: unl-107-219 (Stare Down) — Rule 355.8 / 355.2: "Choose a
+      // friendly unit and a battlefield. Move all enemy units at that
+      // battlefield with less Might than the chosen unit to their base." The
+      // `reference` unit travels as boundTargets[0] (bound at play time by the
+      // playSpell enumerator) and the chosen battlefield card id as
+      // boundTargets[1]; whichever is not yet bound is prompted via
+      // choose-target at resolution. The moved set is criteria-based, so it
+      // is resolved here rather than through getTargetIds/boundTargets.
+      const moveRef = (effect as unknown as { reference?: TargetDescriptor }).reference;
+      if (moveRef && (effect as unknown as { from?: unknown }).from === "chosen-battlefield") {
+        const resolverCtx = {
+          cards: ctx.cards,
+          draft: ctx.draft,
+          playerId: ctx.playerId,
+          sourceCardId: ctx.sourceCardId,
+          sourceZone: ctx.sourceZone,
+          zones: ctx.zones,
+        };
+        const refPool = resolveTarget({ ...moveRef, quantity: "all" }, resolverCtx);
+        let refId: string | undefined = ctx.boundTargets?.[0];
+        if (refId === undefined) {
+          if (refPool.length >= 2) {
+            ctx.draft.pendingChoice = {
+              type: "choose-target",
+              playerId: ctx.playerId,
+              sourceCardId: ctx.sourceCardId,
+              effect,
+              options: refPool,
+              remaining: 1,
+            } as RiftboundGameState["pendingChoice"];
+            break;
+          }
+          refId = refPool[0];
+          if (refId === undefined) {
+            break;
+          }
+        } else if (!refPool.includes(refId)) {
+          // Rule 359.3.e.2: the chosen reference left play / changed control →
+          // no Might referent, nothing moves.
+          break;
+        }
+        const bfPool = Object.keys(ctx.draft.battlefields);
+        let bfId: string | undefined = ctx.boundTargets?.[1];
+        if (bfId === undefined) {
+          if (bfPool.length >= 2) {
+            ctx.draft.pendingChoice = {
+              type: "choose-target",
+              playerId: ctx.playerId,
+              sourceCardId: ctx.sourceCardId,
+              effect,
+              options: bfPool,
+              remaining: 1,
+              boundTargets: [refId],
+              assign: true,
+            } as RiftboundGameState["pendingChoice"];
+            break;
+          }
+          bfId = bfPool[0];
+          if (bfId === undefined) {
+            break;
+          }
+        }
+        const bfZone = bfId.startsWith("battlefield-") ? bfId : `battlefield-${bfId}`;
+        const refMight = getEffectiveMight(refId, ctx);
+        const victims = resolveTarget(
+          { ...(effect.target as TargetDescriptor), quantity: "all" },
+          resolverCtx,
+        ).filter(
+          (id) =>
+            ctx.zones.getCardZone(id as CoreCardId) === bfZone &&
+            getEffectiveMight(id, ctx) < refMight,
+        );
+        for (const id of victims) {
+          ctx.zones.moveCard({ cardId: id as CoreCardId, targetZoneId: "base" as CoreZoneId });
+        }
+        break;
+      }
+
       const targets = getTargetIds(effect, ctx);
       const moveTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
-      const dest = (effect as unknown as { to?: string }).to;
+      const rawDest = (effect as unknown as { to?: string | { battlefield?: string } }).to;
+
+      // rule-id: ven-034-166 — BattlefieldLocation destination ({ battlefield:
+      // "controlled" | "enemy" | "open" | "contested" | "any" }): the controller
+      // picks a matching battlefield other than the unit's current location.
+      // Zero matches fizzles the move; a single match moves directly.
+      if (rawDest && typeof rawDest === "object" && typeof rawDest.battlefield === "string") {
+        const which = rawDest.battlefield;
+        for (const cardId of moveTargets) {
+          const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
+          const options = Object.entries(ctx.draft.battlefields)
+            .filter(([, bf]) => {
+              switch (which) {
+                case "controlled":
+                  return bf.controller === ctx.playerId;
+                case "enemy":
+                  return bf.controller !== null && bf.controller !== ctx.playerId;
+                case "open":
+                  return bf.controller === null;
+                case "contested":
+                  return bf.contested === true;
+                default:
+                  return true;
+              }
+            })
+            .map(([bfId]) => `battlefield-${bfId}`)
+            .filter((z) => z !== currentZone);
+          if (options.length === 0) {
+            continue;
+          }
+          if (options.length === 1 || ctx.draft.pendingChoice) {
+            ctx.zones.moveCard({
+              cardId: cardId as CoreCardId,
+              targetZoneId: options[0] as CoreZoneId,
+            });
+            continue;
+          }
+          ctx.draft.pendingChoice = {
+            cardId,
+            options,
+            playerId: ctx.playerId,
+            type: "choose-destination",
+          };
+        }
+        break;
+      }
+      const dest = rawDest as string | undefined;
 
       if (dest === "choose") {
         // Rule 355.4 — no stated destination: the controller chooses base or
@@ -844,6 +997,28 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       break;
     }
 
+    case "recycle": {
+      // rule-id: unl-204-219-owner-chooses-top-or-bottom — "Its owner places it
+      // on the top or bottom of their Main Deck." Only the owner-choice form is
+      // executed here; it prompts the target's OWNER via choose-destination
+      // with mainDeck-top / mainDeck-bottom options.
+      if ((effect as { position?: string }).position !== "owner-choice") {
+        break;
+      }
+      const [targetId] = getTargetIds(effect, ctx);
+      if (!targetId) {
+        break;
+      }
+      const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId;
+      ctx.draft.pendingChoice = {
+        cardId: targetId,
+        options: ["mainDeck-top", "mainDeck-bottom"],
+        playerId: owner,
+        type: "choose-destination",
+      };
+      break;
+    }
+
     case "return-to-hand": {
       const targets = getTargetIds(effect, ctx);
       // Only fall back to the source card when the ability has NO target
@@ -883,6 +1058,56 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
           } as unknown as Record<string, unknown>,
         );
         checkBecomesMighty(targetId, mightBefore, ctx);
+      }
+      break;
+    }
+
+    case "double-might": {
+      // rule-id: ven-142-166 — "double a unit's Might this turn": add the
+      // unit's current effective Might to its turn-scoped mightModifier
+      // (reset at Ending Step alongside other modify-might buffs).
+      const targets = getTargetIds(effect, ctx);
+      const dmTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
+      for (const targetId of dmTargets) {
+        const mightBefore = getEffectiveMight(targetId, ctx);
+        const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        ctx.cards.updateCardMeta?.(
+          targetId as CoreCardId,
+          {
+            mightModifier: (meta?.mightModifier ?? 0) + mightBefore,
+          } as unknown as Record<string, unknown>,
+        );
+        checkBecomesMighty(targetId, mightBefore, ctx);
+      }
+      break;
+    }
+
+    case "grant-ability": {
+      // rule-id: ven-142-166 — "give it '<cost>: <effect>' this turn": expose
+      // `registry.getAbilities(sourceCardId)[abilityIndex]` as an activated
+      // ability of the target (host pays, host is `self`) until it expires.
+      const ga = effect as unknown as { abilityIndex?: number; duration?: string };
+      if (typeof ga.abilityIndex !== "number") {
+        break;
+      }
+      const targets = getTargetIds(effect, ctx);
+      const duration = (ga.duration ?? "turn") as "turn" | "permanent";
+      for (const targetId of targets) {
+        const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        const existing = meta?.grantedAbilities ?? [];
+        ctx.cards.updateCardMeta?.(
+          targetId as CoreCardId,
+          {
+            grantedAbilities: [
+              ...existing,
+              { abilityIndex: ga.abilityIndex, duration, sourceCardId: ctx.sourceCardId },
+            ],
+          } as unknown as Record<string, unknown>,
+        );
       }
       break;
     }
@@ -968,9 +1193,22 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       // installs it into game state so future events can consult it. The
       // damage-bonus consumer wiring is TODO; this at least records intent.
       const active = ctx.draft.activeReplacements ?? [];
+      // rule-id: unl-007-219 — a die-replacement rider ("If it would die this
+      // turn, banish it instead") is bound to the specific unit(s) the effect
+      // targeted, so state-based checks can match it against the dying card.
+      const replEff = effect as unknown as { replaces?: string; target?: unknown };
+      const targetCardIds =
+        replEff.replaces === "die" && (replEff.target !== undefined || ctx.boundTargets)
+          ? getTargetIds(effect, ctx)
+          : undefined;
       (ctx.draft as { activeReplacements?: unknown[] }).activeReplacements = [
         ...active,
-        { ...effect, owner: ctx.playerId, sourceCardId: ctx.sourceCardId },
+        {
+          ...effect,
+          owner: ctx.playerId,
+          sourceCardId: ctx.sourceCardId,
+          ...(targetCardIds && targetCardIds.length > 0 ? { targetCardIds } : {}),
+        },
       ];
       break;
     }
@@ -1335,31 +1573,61 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       const attackerTarget = (effect as unknown as { attacker?: TargetDescriptor }).attacker;
       const defenderTarget = (effect as unknown as { defender?: TargetDescriptor }).defender;
       if (attackerTarget && defenderTarget) {
-        const attackers = resolveTarget(attackerTarget, {
-          cards: ctx.cards,
-          draft: ctx.draft,
-          playerId: ctx.playerId,
-          sourceCardId: ctx.sourceCardId,
-          sourceZone: ctx.sourceZone,
-          zones: ctx.zones,
-        });
-        const defenders = resolveTarget(defenderTarget, {
-          cards: ctx.cards,
-          draft: ctx.draft,
-          playerId: ctx.playerId,
-          sourceCardId: ctx.sourceCardId,
-          sourceZone: ctx.sourceZone,
-          zones: ctx.zones,
-        });
-        if (attackers[0] && defenders[0]) {
-          const reg = getGlobalCardRegistry();
-          const aMight = reg.getMight(attackers[0]);
-          const dMight = reg.getMight(defenders[0]);
+        // rule-id: ven-083-166 (Rampage) / rule 355.8 — the caster-chosen
+        // attacker/defender pair is locked at play time and travels in
+        // boundTargets as [attacker, defender]; only fall back to descriptor
+        // resolution when nothing was bound.
+        let attackerId: string | undefined = ctx.boundTargets?.[0];
+        let defenderId: string | undefined = ctx.boundTargets?.[1];
+        if (!attackerId || !defenderId) {
+          const resolverCtx = {
+            cards: ctx.cards,
+            draft: ctx.draft,
+            playerId: ctx.playerId,
+            sourceCardId: ctx.sourceCardId,
+            sourceZone: ctx.sourceZone,
+            zones: ctx.zones,
+          };
+          attackerId ??= resolveTarget(attackerTarget, resolverCtx)[0];
+          defenderId ??= resolveTarget(defenderTarget, resolverCtx).filter(
+            (id) => id !== attackerId,
+          )[0];
+        }
+        if (attackerId && defenderId) {
+          // rule-id: ven-083-166 (Rampage) — "If you paid the additional cost,
+          // give the friendly unit +2 Might this turn" resolves against the
+          // chosen attacker only, BEFORE damage is exchanged; run the optional
+          // `onAttacker` sub-effect with boundTargets narrowed to the attacker.
+          const onAttacker = (effect as unknown as { onAttacker?: ExecutableEffect }).onAttacker;
+          if (onAttacker) {
+            executeEffect(onAttacker, { ...ctx, boundTargets: [attackerId] });
+          }
+          // "Damage equal to their Mights" is current (effective) Might, so
+          // turn buffs like Rampage's +2 count.
+          const aMight = getEffectiveMight(attackerId, ctx);
+          const dMight = getEffectiveMight(defenderId, ctx);
+          // rule-id: ven-083-166 (Rampage) / rule 520 — mirror fight damage to
+          // meta.damage (as `case "damage"` does) so state-based death checks,
+          // end-of-turn clear, and UI see it. Read priors BEFORE addCounter so
+          // counter stores that alias meta.damage don't double-apply.
+          const readDamage = (id: string): number =>
+            (ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined)
+              ?.damage ?? 0;
+          const attackerPrior = readDamage(attackerId);
+          const defenderPrior = readDamage(defenderId);
           if (aMight > 0) {
-            ctx.counters.addCounter(defenders[0] as CoreCardId, "damage", aMight);
+            ctx.counters.addCounter(defenderId as CoreCardId, "damage", aMight);
+            ctx.cards.updateCardMeta?.(
+              defenderId as CoreCardId,
+              { damage: defenderPrior + aMight } as unknown as Record<string, unknown>,
+            );
           }
           if (dMight > 0) {
-            ctx.counters.addCounter(attackers[0] as CoreCardId, "damage", dMight);
+            ctx.counters.addCounter(attackerId as CoreCardId, "damage", dMight);
+            ctx.cards.updateCardMeta?.(
+              attackerId as CoreCardId,
+              { damage: attackerPrior + dMight } as unknown as Record<string, unknown>,
+            );
           }
         }
       }
@@ -1407,22 +1675,37 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
       // choice is recycle-to-bottom or leave-on-top, never draw. A bare look
       // (no `then`) is the Stacked-Deck shape: draw the pick, recycle the rest.
       const lookEff = effect as {
-        onPicked?: "recycle" | "banish" | "discard" | "draw";
+        onPicked?: "recycle" | "banish" | "discard" | "draw" | "play";
         onRest?: "recycle";
         then?: { recycle?: unknown };
+        filter?: { excludeCardTypes?: readonly string[] };
+        optional?: boolean;
+        reduceCost?: { energy?: number };
       };
       const visionLike = lookEff.then?.recycle !== undefined;
       const onPicked = lookEff.onPicked ?? (visionLike ? "recycle" : "draw");
       const onRest = lookEff.onRest ?? (visionLike ? undefined : "recycle");
+      const lookExcluded = lookEff.filter?.excludeCardTypes;
+      // rule-id: ogn-062-298-look-banish-play — "banish … then play it,
+      // reducing its cost by [N]" threads the discount to the pick resolver.
+      const playEnergyReduction =
+        onPicked === "play" ? (lookEff.reduceCost?.energy ?? 0) : undefined;
       // Rule 435 (ogn-174-298): must match the real RevealAndPickChoice
       // shape (prompter/revealer/revealed) — the previous playerId/options
       // shape made resolvePendingChoice unenumerable and softlocked play.
       ctx.draft.pendingChoice = {
         onPicked,
         ...(onRest ? { onRest } : {}),
+        ...(playEnergyReduction !== undefined ? { playEnergyReduction } : {}),
+        // rule-id: ogn-062-298-look-pick-filter — "banish a unit from among
+        // them" must restrict the pick; thread the effect's filter through so
+        // isValidPendingPick rejects non-matching revealed cards.
+        ...(lookExcluded && lookExcluded.length > 0
+          ? { filter: { excludeCardTypes: [...lookExcluded] } }
+          : {}),
         // rule-id: ogn-235-298-vision-optional-recycle — "You may recycle it"
         // means leave-on-top is a legal outcome; the pick must be declinable.
-        ...(visionLike ? { optional: true } : {}),
+        ...(visionLike || lookEff.optional ? { optional: true } : {}),
         prompter: ctx.playerId,
         revealed: topN,
         revealer: ctx.playerId,
@@ -1549,8 +1832,26 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     }
 
     case "take-control": {
-      // Change controller of a card — for now just note the intent
-      // Full implementation needs controller tracking in core
+      // rule-id: sfd-109-221 (Akshan) — record a layered control-changing
+      // effect on each target and apply it. `until-leaves` entries carry the
+      // source so state-based cleanup can drop them (and fall back to the
+      // next-latest effect, else the owner) once the source leaves the board.
+      const targets = getTargetIds(effect, ctx);
+      const untilLeaves = effect.duration === "until-leaves";
+      for (const targetId of targets) {
+        const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        const existing = meta?.controlEffects ?? [];
+        const entry = untilLeaves
+          ? { controllerId: ctx.playerId, sourceCardId: ctx.sourceCardId }
+          : { controllerId: ctx.playerId };
+        ctx.cards.updateCardMeta?.(
+          targetId as CoreCardId,
+          { controlEffects: [...existing, entry] } as unknown as Record<string, unknown>,
+        );
+        ctx.cards.setCardController?.(targetId as CoreCardId, ctx.playerId as CorePlayerId);
+      }
       break;
     }
 

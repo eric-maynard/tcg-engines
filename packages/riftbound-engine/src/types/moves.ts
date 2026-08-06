@@ -216,6 +216,14 @@ export interface RiftboundMoves {
      * banished instead of returning to the trash.
      */
     viaFlow?: boolean;
+    /**
+     * rule-id: ven-083-166 — `true` when the caster elects to pay the spell's
+     * optional "you may pay [X] as an additional cost" (rule 560). The extra
+     * cost is re-derived from the card definition; `additionalCostSpec` is
+     * informational for UIs only.
+     */
+    paidAdditionalCost?: boolean;
+    additionalCostSpec?: { energy?: number; power?: readonly string[] };
   };
 
   /** Place Hidden card facedown */

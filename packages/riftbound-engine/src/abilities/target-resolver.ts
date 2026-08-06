@@ -55,6 +55,7 @@ export interface TargetResolverContext {
   };
   readonly cards: {
     getCardOwner: (cardId: CoreCardId) => string | undefined;
+    getCardController?: (cardId: CoreCardId) => string | undefined;
     getCardMeta?: (cardId: CoreCardId) => Record<string, unknown> | undefined;
   };
 }
@@ -114,16 +115,19 @@ export function resolveTarget(
     });
   }
 
-  // Filter by controller
+  // Filter by controller. rule-id: unl-192-219 (359.3.e.12) — "friendly" /
+  // "enemy" track the CURRENT controller, so a unit whose control was
+  // transferred after being chosen is no longer a legal friendly referent.
+  const controllerOf = (id: string): string =>
+    ctx.cards.getCardController?.(id as CoreCardId) ??
+    ctx.cards.getCardOwner(id as CoreCardId) ??
+    "";
   if (target.controller === "friendly") {
-    filtered = filtered.filter((id) => {
-      const owner = ctx.cards.getCardOwner(id as CoreCardId) ?? "";
-      return owner === ctx.playerId;
-    });
+    filtered = filtered.filter((id) => controllerOf(id) === ctx.playerId);
   } else if (target.controller === "enemy") {
     filtered = filtered.filter((id) => {
-      const owner = ctx.cards.getCardOwner(id as CoreCardId) ?? "";
-      return owner !== ctx.playerId && owner !== "";
+      const controller = controllerOf(id);
+      return controller !== ctx.playerId && controller !== "";
     });
   }
 

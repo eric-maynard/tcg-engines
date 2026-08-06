@@ -444,6 +444,51 @@ describe("resolvePendingChoice move", () => {
     expect(state.pendingChoice).toBeUndefined();
   });
 
+  // rule-id: ogn-062-298-look-banish-play (Reinforce)
+  it("onPicked play: banishes the pick, pays cost less the reduction, and adds it to the chain", () => {
+    registry.register("rp-big-unit", {
+      cardType: "unit",
+      energyCost: 7,
+      id: "rp-big-unit",
+      name: "RP Big Unit",
+    });
+    const state = makeState(false);
+    (state as { runePools: unknown }).runePools = {
+      p1: { energy: 4, power: {} },
+    };
+    (state as { pendingChoice: unknown }).pendingChoice = {
+      onPicked: "play",
+      onRest: "recycle",
+      playEnergyReduction: 5,
+      prompter: "p1",
+      revealed: ["rp-spell", "rp-big-unit"],
+      revealer: "p1",
+      type: "reveal-and-pick",
+    };
+    const moves: { cardId: string; targetZoneId: string; position?: string }[] = [];
+    const context = {
+      cards: { getCardOwner: () => "p1" },
+      counters: { clearAllCounters: () => {} },
+      params: { pickedCardId: "rp-big-unit", playerId: "p1" },
+      zones: {
+        moveCard: (p: { cardId: string; targetZoneId: string; position?: string }) => {
+          moves.push(p);
+        },
+      },
+    };
+    // Biome-ignore lint/suspicious/noExplicitAny: reducer signature varies
+    const move = pendingChoiceMoves.resolvePendingChoice as any;
+    move.reducer(state, context);
+
+    expect(moves[0]).toMatchObject({ cardId: "rp-big-unit", targetZoneId: "banishment" });
+    expect(moves.some((m) => m.targetZoneId === "hand")).toBe(false);
+    expect(moves[1]).toMatchObject({ cardId: "rp-spell", position: "bottom", targetZoneId: "mainDeck" });
+    expect(state.runePools.p1?.energy).toBe(2);
+    const items = state.interaction?.chain?.items ?? [];
+    expect(items.some((i: { cardId?: string }) => i.cardId === "rp-big-unit")).toBe(true);
+    expect(state.pendingChoice).toBeUndefined();
+  });
+
   it("reducer moves the picked card to trash when onPicked is discard", () => {
     const state = makeState(false);
     if (state.pendingChoice) {
@@ -466,6 +511,75 @@ describe("resolvePendingChoice move", () => {
 
     expect(moves[0]?.targetZoneId).toBe("trash");
     expect(state.pendingChoice).toBeUndefined();
+  });
+
+  it("choose-destination: picking a battlefield zone id moves the card there (rule 355.2 / sfd-200-221)", () => {
+    // rule-id: sfd-200-221-choose-destination-battlefield — Arcane Shift's
+    // pending play offers ZONE ids (battlefield-<bfId>); the reducer must pass
+    // them through verbatim, never producing battlefield-battlefield-<bfId>.
+    const bfId = "player-1-bf-unl-205-219";
+    const { ctx, draft, zoneOf } = buildMockCtx();
+    (draft as { battlefields: Record<string, unknown> }).battlefields = {
+      [bfId]: { contested: false, controller: "p1", id: bfId },
+    };
+    zoneOf.set("rearguard", "banishment");
+    executeEffect(
+      { target: "rearguard", to: "choose", type: "move" } as unknown as ExecutableEffect,
+      { ...ctx, boundTargets: ["rearguard"] } as EffectContext,
+    );
+    expect(draft.pendingChoice?.type).toBe("choose-destination");
+    const options = (draft.pendingChoice as { options: string[] }).options;
+    expect(options).toContain(`battlefield-${bfId}`);
+
+    const moves: { cardId: string; targetZoneId: string }[] = [];
+    const context = {
+      params: { pickedZoneId: `battlefield-${bfId}`, playerId: "p1" },
+      zones: {
+        moveCard: (p: { cardId: string; targetZoneId: string }) => {
+          moves.push(p);
+        },
+      },
+    };
+    // Biome-ignore lint/suspicious/noExplicitAny: reducer signature varies
+    const move = pendingChoiceMoves.resolvePendingChoice as any;
+    expect(move.condition(draft, context)).toBe(true);
+    move.reducer(draft, context);
+    expect(moves).toEqual([{ cardId: "rearguard", targetZoneId: `battlefield-${bfId}` }]);
+    expect(draft.pendingChoice).toBeUndefined();
+  });
+
+  it("recycle position:owner-choice prompts the OWNER for top/bottom of Main Deck (unl-204-219)", () => {
+    // rule-id: unl-204-219-owner-chooses-top-or-bottom
+    const { ctx, draft } = buildMockCtx({ opponentHand: ["enemy-unit"] });
+    executeEffect(
+      { position: "owner-choice", type: "recycle" } as unknown as ExecutableEffect,
+      { ...ctx, boundTargets: ["enemy-unit"] } as EffectContext,
+    );
+    expect(draft.pendingChoice?.type).toBe("choose-destination");
+    const pc = draft.pendingChoice as { playerId: string; cardId: string; options: string[] };
+    expect(pc.playerId).toBe("p2");
+    expect(pc.cardId).toBe("enemy-unit");
+    expect(pc.options).toEqual(["mainDeck-top", "mainDeck-bottom"]);
+
+    const moves: { cardId: string; targetZoneId: string; position?: string }[] = [];
+    const context = {
+      counters: { clearAllCounters: () => {} },
+      params: { pickedZoneId: "mainDeck-top", playerId: "p2" },
+      zones: {
+        moveCard: (p: { cardId: string; targetZoneId: string; position?: string }) => {
+          moves.push(p);
+        },
+      },
+    };
+    // Biome-ignore lint/suspicious/noExplicitAny: reducer signature varies
+    const move = pendingChoiceMoves.resolvePendingChoice as any;
+    expect(move.condition(draft, { params: { pickedZoneId: "mainDeck-top", playerId: "p1" } })).toBe(
+      false,
+    );
+    expect(move.condition(draft, context)).toBe(true);
+    move.reducer(draft, context);
+    expect(moves).toEqual([{ cardId: "enemy-unit", position: "top", targetZoneId: "mainDeck" }]);
+    expect(draft.pendingChoice).toBeUndefined();
   });
 
   it("reducer is a no-op when the pick is invalid", () => {

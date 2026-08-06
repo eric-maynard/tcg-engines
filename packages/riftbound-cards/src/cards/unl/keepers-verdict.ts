@@ -8,12 +8,14 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * Choose an enemy unit at a battlefield. Its owner places it on the top
  * or bottom of their Main Deck.
  *
- * Approximated as a recycle-to-deck (bottom). Top-or-bottom choice is
- * not yet represented in the Effect DSL.
+ * rule-id: unl-204-219-owner-chooses-top-or-bottom — `position:
+ * "owner-choice"` prompts the unit's owner (choose-destination:
+ * mainDeck-top / mainDeck-bottom).
  */
 const abilities: Ability[] = [
   {
     effect: {
+      position: "owner-choice",
       target: {
         controller: "enemy",
         location: "battlefield",

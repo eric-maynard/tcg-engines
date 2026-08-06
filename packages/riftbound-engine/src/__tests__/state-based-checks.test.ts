@@ -320,6 +320,44 @@ describe("State-Based Checks: Death by Damage (rule 520)", () => {
 
     clearGlobalCardRegistry();
   });
+
+  // rule-id: unl-007-219 (Smite) — "If it would die this turn, banish it instead."
+  test("runtime die→banish replacement bound to the unit sends it to banishment, not trash", () => {
+    const registry = new CardDefinitionRegistry();
+    registry.register("unit-1", { cardType: "unit", id: "unit-1", might: 3, name: "Unit" });
+    registry.register("unit-2", { cardType: "unit", id: "unit-2", might: 3, name: "Other" });
+    setGlobalCardRegistry(registry);
+
+    const draft = createMockState({
+      activeReplacements: [
+        {
+          duration: "turn",
+          replacement: { type: "banish" },
+          replaces: "die",
+          targetCardIds: ["unit-1"],
+        },
+      ],
+      battlefields: { "bf-1": { contested: false, controller: "p1", id: "bf-1" } },
+    });
+
+    const cardData = {
+      "unit-1": { meta: { damage: 3 }, owner: "p2", zone: "battlefield-bf-1" },
+      "unit-2": { meta: { damage: 3 }, owner: "p2", zone: "battlefield-bf-1" },
+    };
+    const ctx = createMockContext(draft, cardData);
+
+    const result = performCleanup(ctx);
+
+    expect(cardData["unit-1"].zone).toBe("banishment");
+    expect(result.killed).not.toContain("unit-1");
+    // Unbound unit still dies normally.
+    expect(cardData["unit-2"].zone).toBe("trash");
+    expect(result.killed).toContain("unit-2");
+    // Replacement is spent.
+    expect(draft.activeReplacements).toHaveLength(0);
+
+    clearGlobalCardRegistry();
+  });
 });
 
 describe("State-Based Checks: Stale Combat Roles (rule 521)", () => {
