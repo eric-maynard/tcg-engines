@@ -1,0 +1,1863 @@
+{
+  "summary": "Rules-expert agents write one harness-based unit test file per card (one test per rules clause); engine bugs recorded as test.failing(\"BUG: ...\").",
+  "agentCount": 12,
+  "logs": [
+    "120 cards in 12 lanes",
+    "120 cards; 120 written; 136 BUG clauses"
+  ],
+  "result": {
+    "written": 120,
+    "skipped": 0,
+    "clauses": 638,
+    "bugClauses": 136,
+    "bugs": [
+      {
+        "cardId": "ogn-015-298",
+        "bug": "BUG: other friendly units at Farron's location have Assault (static grant, rule 719)"
+      },
+      {
+        "cardId": "ogn-015-298",
+        "bug": "BUG: in combat the ally's Assault counts — Farron (5) + a 2-might ally deal 8 and kill 5+3 defenders"
+      },
+      {
+        "cardId": "ogn-039-298",
+        "bug": "BUG: 'When I conquer' — another friendly unit conquering elsewhere must NOT draw (383.4.c.2)"
+      },
+      {
+        "cardId": "ogn-053-298",
+        "bug": "BUG: 'Buffs give an additional +1 Might to friendly units this turn' — every buffed friendly unit is +2 over base this turn, buffed enemies are not"
+      },
+      {
+        "cardId": "ogn-078-298",
+        "bug": "BUG: 'I can have any number of buffs' — a second activation on a later turn stacks a second buff (7 might)"
+      },
+      {
+        "cardId": "ogn-104-298",
+        "bug": "BUG: 'Its owner channels 1 rune exhausted' — P1's rune pool gains one exhausted rune from the rune deck"
+      },
+      {
+        "cardId": "ogn-116-298",
+        "bug": "BUG: Accelerate needs a SECOND [mind] on top of the base [mind] pip — with 8 energy + 1 mind the accelerated play is not legal"
+      },
+      {
+        "cardId": "ogn-116-298",
+        "bug": "BUG: 'enemy units' — ALL enemy units everywhere get -3 (min 1) with no target prompt; friendly units untouched"
+      },
+      {
+        "cardId": "ogn-002-298",
+        "bug": "BUG: discarding 1 as an additional cost reduces the cost by [2] — playable for 4 energy + a discard (rules 356.2.b, 204.2)"
+      },
+      {
+        "cardId": "ogn-016-298",
+        "bug": "BUG: Legion met — after playing another card this turn, playing me gives a chosen unit +2 Might this turn (rule 812.1.c)"
+      },
+      {
+        "cardId": "ogn-028-298",
+        "bug": "BUG: tracks the score continuously — scoring a hold point later raises Might again (rule 364 passive)"
+      },
+      {
+        "cardId": "ogn-079-298",
+        "bug": "BUG: 'to a minimum of 1 [Might]' — a stunned 5-Might enemy here becomes 1 Might, not 0"
+      },
+      {
+        "cardId": "ogn-105-298",
+        "bug": "BUG: no [Action] keyword — Singularity cannot be cast during a showdown (rules 308.1.a, 313.1.a)"
+      },
+      {
+        "cardId": "ogn-029-298",
+        "bug": "BUG: second 'Deal 3 to a unit' — two different units can be chosen and each takes 3"
+      },
+      {
+        "cardId": "ogn-029-298",
+        "bug": "BUG: choosing the same unit for both instructions deals 6 total (kills a 6-Might unit)"
+      },
+      {
+        "cardId": "ogn-041-298",
+        "bug": "BUG: 5 damage may be split among several enemy units here (2 to a 2-Might unit, 3 to a 7-Might unit) — rule 355.14"
+      },
+      {
+        "cardId": "ogn-041-298",
+        "bug": "BUG: with a single enemy unit here it is dealt exactly 5 (a 7-Might unit survives the trigger)"
+      },
+      {
+        "cardId": "ogn-055-298",
+        "bug": "BUG: no bonus outside combat — 2 Might at rest even when it is the only friendly unit there"
+      },
+      {
+        "cardId": "ogn-055-298",
+        "bug": "BUG: attacking together with another friendly unit: not alone → 2 Might, so 2 + 1 does not kill a 4-Might defender"
+      },
+      {
+        "cardId": "ogn-055-298",
+        "bug": "BUG: defending alongside another friendly unit: not alone → 2 Might"
+      },
+      {
+        "cardId": "ogn-068-298",
+        "bug": "BUG: assigned combat damage last (defending) — a 3-Might attacker must kill the other defender, Caitlyn takes nothing (465.2.c.6)"
+      },
+      {
+        "cardId": "ogn-068-298",
+        "bug": "BUG: assigned combat damage last (attacking) — the defender's 3 damage goes to the other attacker first (465.2.c.6)"
+      },
+      {
+        "cardId": "ogn-080-298",
+        "bug": "BUG: needs a spell to choose — not playable when no spell is on the chain (rule 355.6)"
+      },
+      {
+        "cardId": "ogn-080-298",
+        "bug": "BUG: on resolution P1 gains control of the targeted spell (its chain item is now controlled by P1)"
+      },
+      {
+        "cardId": "ogn-080-298",
+        "bug": "BUG: 'You may make new choices for it' — P1 may retarget the stolen Cleave onto their own unit"
+      },
+      {
+        "cardId": "ogn-094-298",
+        "bug": "BUG: the Sprite token is played READY"
+      },
+      {
+        "cardId": "ogn-094-298",
+        "bug": "BUG: played from facedown, the Sprite must be played at THAT battlefield — base is not a legal destination (Hidden rule)"
+      },
+      {
+        "cardId": "ogn-106-298",
+        "bug": "BUG: the Sprite token is played READY"
+      },
+      {
+        "cardId": "ogn-118-298",
+        "bug": "BUG: a friendly unit dying (in combat) draws 1"
+      },
+      {
+        "cardId": "ogn-118-298",
+        "bug": "BUG: only the FIRST friendly death each turn draws — a second death the same turn draws nothing"
+      },
+      {
+        "cardId": "ogn-118-298",
+        "bug": "BUG: two friendly units dying simultaneously is still one 'first time' → exactly 1 card"
+      },
+      {
+        "cardId": "ogn-118-298",
+        "bug": "BUG: 'each turn' resets — a friendly death on the following (opponent's) turn draws again"
+      },
+      {
+        "cardId": "ogn-018-298",
+        "bug": "BUG: an opponent's hidden card at the Saboteur's battlefield cannot be revealed (PreventReveal static not enforced by revealHidden)"
+      },
+      {
+        "cardId": "ogn-030-298",
+        "bug": "BUG: the discarding player chooses WHICH 2 cards to discard (rule 422.1.a) — engine auto-discards the first two hand cards with no prompt"
+      },
+      {
+        "cardId": "ogn-056-298",
+        "bug": "BUG: 'If you do, buff me' — killing the gear does not buff Adaptatron (follow-up misparsed as condition paid-additional-cost)"
+      },
+      {
+        "cardId": "ogn-069-298",
+        "bug": "BUG: doubles the unit's Might this turn (3 → 6) (rule 432.1.a) — no might change applied"
+      },
+      {
+        "cardId": "ogn-069-298",
+        "bug": "BUG: only FRIENDLY units are legal targets — enemy units are offered"
+      },
+      {
+        "cardId": "ogn-069-298",
+        "bug": "BUG: Temporary persists past this turn and kills the unit at the start of its controller's next Beginning Phase (rule 816.1.b) — granted with duration 'turn' so it expires and the unit survives"
+      },
+      {
+        "cardId": "ogn-107-298",
+        "bug": "BUG: accepting pays [mind] and plays the [Hidden] unit from hand HERE (at bf1), ignoring its cost — power is deducted but nothing is played"
+      },
+      {
+        "cardId": "ogn-019-298",
+        "bug": "BUG: 'discarded a card this turn' never expires — Assault/Ganking persist into later turns with no discard"
+      },
+      {
+        "cardId": "ogn-031-298",
+        "bug": "BUG: play trigger — the next spell this turn costs [5] less, and only that one (rule 356.4.b)"
+      },
+      {
+        "cardId": "ogn-031-298",
+        "bug": "BUG: the discount cannot take a spell below 0 — a 4-cost spell becomes free (rule 356.6)"
+      },
+      {
+        "cardId": "ogn-070-298",
+        "bug": "BUG: while the Warden is at a battlefield, opponents can only play units to their base"
+      },
+      {
+        "cardId": "ogn-070-298",
+        "bug": "BUG: while the Warden is at a battlefield, an opponent's spell can't ready enemy (their own) units and gear"
+      },
+      {
+        "cardId": "ogn-096-298",
+        "bug": "BUG: dying in combat also triggers Deathknell — the Sentry's controller draws 1 (rule 323.4)"
+      },
+      {
+        "cardId": "ogn-108-298",
+        "bug": "BUG: the caster chooses the friendly unit (and the reference unit) — only friendly units are offered"
+      },
+      {
+        "cardId": "ogn-108-298",
+        "bug": "BUG: increases the chosen unit's Might TO the other unit's Might; the other unit is unchanged"
+      },
+      {
+        "cardId": "ogn-008-298",
+        "bug": "BUG: deals the discarded card's Energy cost (8 for Dr. Mundo) as damage to the chosen battlefield unit"
+      },
+      {
+        "cardId": "ogn-008-298",
+        "bug": "BUG: targets only units at a battlefield — a unit in a base is not a legal choice and no battlefield unit means not castable (rule 355.8)"
+      },
+      {
+        "cardId": "ogn-020-298",
+        "bug": "BUG: with Legion (another card played earlier this turn) you discard 2, then draw 2"
+      },
+      {
+        "cardId": "ogn-020-298",
+        "bug": "BUG: Legion discard is a choice — with 3 other cards in hand the player picks which 2 to discard, then draws 2"
+      },
+      {
+        "cardId": "ogn-032-298",
+        "bug": "BUG: the next spell you play this turn deals 1 Bonus Damage (Hextech Ray deals 4 instead of 3)"
+      },
+      {
+        "cardId": "ogn-045-298",
+        "bug": "BUG: cannot counter a spell whose Energy cost is more than 4"
+      },
+      {
+        "cardId": "ogn-045-298",
+        "bug": "BUG: cannot counter a spell whose Power cost is more than 1"
+      },
+      {
+        "cardId": "ogn-058-298",
+        "bug": "BUG: [Reaction] does not allow play during an opponent's Neutral Open State (rules 316.5.b, 813.1.c)"
+      },
+      {
+        "cardId": "ogn-071-298",
+        "bug": "BUG: the OTHER player makes the Cards/Runes choice, not the caster"
+      },
+      {
+        "cardId": "ogn-071-298",
+        "bug": "BUG: Cards — you AND that player each draw 1"
+      },
+      {
+        "cardId": "ogn-071-298",
+        "bug": "BUG: Runes — you AND that player each channel 1 rune exhausted"
+      },
+      {
+        "cardId": "ogn-071-298",
+        "bug": "BUG: no [Action] keyword — not playable during a showdown on the opponent's turn (rules 155, 159.2.a)"
+      },
+      {
+        "cardId": "ogn-109-298",
+        "bug": "BUG: the Beginning Phase trigger recycles 3 cards from your trash (4 in trash → 1 left, 3 to the deck)"
+      },
+      {
+        "cardId": "ogn-033-298",
+        "bug": "BUG: on resolution the target's controller is asked whether to have the caster draw 2 (the 'unless' choice)"
+      },
+      {
+        "cardId": "ogn-033-298",
+        "bug": "BUG: if the controller declines, the unit is dealt 6"
+      },
+      {
+        "cardId": "ogn-033-298",
+        "bug": "BUG: if the controller has the caster draw 2, no damage is dealt"
+      },
+      {
+        "cardId": "ogn-046-298",
+        "bug": "BUG: +1 Might only when you control another unit at the same location (the extra +1 requires being alone there) — effect-level `while-alone` condition is never evaluated (defaults true), so every target gets +2"
+      },
+      {
+        "cardId": "ogn-059-298",
+        "bug": "BUG: choosing an already-stunned enemy unit does not stun it again, so the Herald must not trigger (rule 423.1.a.1) — stun handler fires the stun trigger unconditionally"
+      },
+      {
+        "cardId": "ogn-072-298",
+        "bug": "BUG: killing a stunned enemy unit (lethal spell damage, rule 428.5.c.1) offers 'exhaust this to draw 1'; accepting exhausts the Shrine and draws 1 — the parsed `kill-enemy` trigger event is never emitted by the engine"
+      },
+      {
+        "cardId": "ogn-072-298",
+        "bug": "BUG: 'you may' — the prompt is offered and declining leaves the Shrine ready and draws nothing"
+      },
+      {
+        "cardId": "ogn-072-298",
+        "bug": "BUG: killing a stunned enemy defender in combat also counts as 'you kill' (rule 428.5.c.2) and offers the draw"
+      },
+      {
+        "cardId": "ogn-110-298",
+        "bug": "BUG: [Deathknell] on a spell death — the trigger resolves by recycling him to the bottom of the main deck and readying all your runes (trigger goes on chain but on resolution Ekko stays in trash and runes stay exhausted)"
+      },
+      {
+        "cardId": "ogn-110-298",
+        "bug": "BUG: [Deathknell] also triggers when he dies in combat (rule 323.4 / 808) — no trigger created for combat deaths"
+      },
+      {
+        "cardId": "ogn-110-298",
+        "bug": "BUG: [Deathknell] readies only YOUR runes (nothing is readied at all)"
+      },
+      {
+        "cardId": "ogn-122-298",
+        "bug": "BUG: no [Action]/[Reaction] keyword — not playable during a showdown or onto a chain (rules 155, 308.1.a); card data declares `timing: \"action\"` so the engine offers it with Focus"
+      },
+      {
+        "cardId": "ogn-034-298",
+        "bug": "BUG: with fewer than 5 excess damage (8 into a 4-might defender) only the conquer point should be scored"
+      },
+      {
+        "cardId": "ogn-034-298",
+        "bug": "BUG: conquering an EMPTY enemy battlefield is not 'after an attack' (316.8.b.1) — only the conquer point should be scored"
+      },
+      {
+        "cardId": "ogn-047-298",
+        "bug": "BUG: costs [2] less (i.e. 1 energy) while an opponent is within 3 points of the Victory Score"
+      },
+      {
+        "cardId": "ogn-047-298",
+        "bug": "BUG: with 3 energy and an opponent at 7/8, casting deducts only 1 energy (cost reduction not applied)"
+      },
+      {
+        "cardId": "ogn-060-298",
+        "bug": "BUG: a friendly unit attacking ALONE gets +1 Might this turn (3 vs 3: attacker survives and conquers)"
+      },
+      {
+        "cardId": "ogn-060-298",
+        "bug": "BUG: a friendly unit DEFENDING alone gets +1 Might this turn (3-might defender holds against a 3-might attacker)"
+      },
+      {
+        "cardId": "ogn-073-298",
+        "bug": "BUG: readies friendly runes (3 exhausted → all 3 ready after the trigger resolves)"
+      },
+      {
+        "cardId": "ogn-073-298",
+        "bug": "BUG: 'up to 4' — with 5 exhausted runes exactly 4 become ready and 1 stays exhausted"
+      },
+      {
+        "cardId": "ogn-085-298",
+        "bug": "BUG: killing the lone defender during the showdown leaves the attacker to win the combat and conquer (466.3.a, 466.5)"
+      },
+      {
+        "cardId": "ogn-123-298",
+        "bug": "BUG: no [Action] keyword — must NOT be castable during a showdown (rule 155)"
+      },
+      {
+        "cardId": "ogn-011-298",
+        "bug": "BUG: with Magma Wurm on board, another friendly unit played from hand should enter ready (rules 143.4 / 369.3)"
+      },
+      {
+        "cardId": "ogn-023-298",
+        "bug": "BUG: when the chosen unit would die to a spell, you may pay [fury] → it is healed, exhausted and stays in base"
+      },
+      {
+        "cardId": "ogn-023-298",
+        "bug": "BUG: when the chosen unit would die in combat, paying [fury] recalls it to base healed and exhausted (rule 454)"
+      },
+      {
+        "cardId": "ogn-023-298",
+        "bug": "BUG: without [fury] to pay, the unit dies normally ('you may pay [fury] … instead')"
+      },
+      {
+        "cardId": "ogn-035-298",
+        "bug": "BUG: Assault 3 also raises her own lethal threshold — attacking a 4-Might unit she survives (5 Might vs 4 damage) and conquers"
+      },
+      {
+        "cardId": "ogn-035-298",
+        "bug": "BUG: enters exhausted when NO opponent controls a battlefield (rule 143.4)"
+      },
+      {
+        "cardId": "ogn-048-298",
+        "bug": "BUG: Reaction only adds Closed-state permission — not castable in a Neutral Open state on the opponent's turn (rules 316.5.b, 813.1.c.1)"
+      },
+      {
+        "cardId": "ogn-048-298",
+        "bug": "BUG: paying the optional cost exhausts the chosen friendly unit as you play it, then draws 2 (rules 355.1.a, 356.2)"
+      },
+      {
+        "cardId": "ogn-048-298",
+        "bug": "BUG: declining the optional cost leaves friendly units ready and draws exactly 1"
+      },
+      {
+        "cardId": "ogn-074-298",
+        "bug": "BUG: a friendly unit that moved to a battlefield with Taric defends with +1 Might from the granted Shield"
+      },
+      {
+        "cardId": "ogn-112-298",
+        "bug": "BUG: accepting lets you play a trash spell with Energy cost < points for free, and it is recycled afterwards"
+      },
+      {
+        "cardId": "ogn-012-298",
+        "bug": "BUG: Legion — after playing another card this turn Noxus Hopeful should cost 2 (rule 812 / 727.1)"
+      },
+      {
+        "cardId": "ogn-024-298",
+        "bug": "BUG: 'Draw 1' — the caster draws a card when Void Seeker resolves"
+      },
+      {
+        "cardId": "ogn-024-298",
+        "bug": "BUG: [Action] timing — an Action spell is NOT playable in a showdown while the opponent holds Focus (rules 313.1, 347)"
+      },
+      {
+        "cardId": "ogn-036-298",
+        "bug": "BUG: timing — a unit's non-[Action]/[Reaction] activated ability cannot be used on the opponent's turn (rule 145.2)"
+      },
+      {
+        "cardId": "ogn-050-298",
+        "bug": "BUG: a stunned defender deals no combat damage — a 2-might attacker survives against a stunned 5-might defender (rule 423.1.b)"
+      },
+      {
+        "cardId": "ogn-050-298",
+        "bug": "BUG: the stun ends during the end-of-turn Expiration Step (rules 423.1.a.2 / 317.2.c)"
+      },
+      {
+        "cardId": "ogn-062-298",
+        "bug": "BUG: the unit played via Reinforce enters the board exhausted (rule 143.4)"
+      },
+      {
+        "cardId": "ogn-062-298",
+        "bug": "BUG: the reduced cost must still be paid — with 0 energy left a 7-cost unit (2 after reduction) cannot be played for free (rules 356.4, 419.2.a)"
+      },
+      {
+        "cardId": "ogn-075-298",
+        "bug": "BUG: Deathknell also draws 1 (\"Channel 2 runes exhausted AND draw 1\")"
+      },
+      {
+        "cardId": "ogn-101-298",
+        "bug": "BUG: without any facedown card there is no extra draw (0 → 1, only the draw step)"
+      },
+      {
+        "cardId": "ogn-101-298",
+        "bug": "BUG: an OPPONENT's facedown card does not satisfy 'you control a facedown card' (0 → 1)"
+      },
+      {
+        "cardId": "ogn-113-298",
+        "bug": "BUG: activating kills the chosen friendly unit, exhausts Malzahar and adds 2 rainbow power immediately (rule 429.2.a)"
+      },
+      {
+        "cardId": "ogn-113-298",
+        "bug": "BUG: a friendly GEAR is also a legal sacrifice for the cost"
+      },
+      {
+        "cardId": "ogn-113-298",
+        "bug": "BUG: [Action] timing — usable during a showdown on the opponent's turn once P1 holds Focus"
+      },
+      {
+        "cardId": "ogn-025-298",
+        "bug": "BUG: castable with no permanents on the board (it targets nothing at play time); costs 4 energy + 2 fury"
+      },
+      {
+        "cardId": "ogn-025-298",
+        "bug": "BUG: the opponent's top card is banished then played by the caster for free (unit lands under P1's control)"
+      },
+      {
+        "cardId": "ogn-025-298",
+        "bug": "BUG: with two opponents the unchosen revealed card is recycled to the bottom of its owner's deck"
+      },
+      {
+        "cardId": "ogn-037-298",
+        "bug": "BUG: killing a unit with your spell should offer to pay [1][fury] and play Phoenix from trash"
+      },
+      {
+        "cardId": "ogn-037-298",
+        "bug": "BUG: declining the trigger leaves Phoenix in the trash and spends nothing extra"
+      },
+      {
+        "cardId": "ogn-051-298",
+        "bug": "BUG: a stunned defender deals no combat damage — 5-might attacker kills it and survives (423.1.b/c)"
+      },
+      {
+        "cardId": "ogn-051-298",
+        "bug": "BUG: the stun wears off at end of turn (423.1.a.2 / 317.2.c step 3d)"
+      },
+      {
+        "cardId": "ogn-063-298",
+        "bug": "BUG: 'if they didn't already' — a buffed Pouty Poro keeps Deflect 1, so one extra power suffices"
+      },
+      {
+        "cardId": "ogn-090-298",
+        "bug": "BUG: timing — not activatable on the opponent's turn (rule 151.2: your Main Phase only)"
+      },
+      {
+        "cardId": "ogn-090-298",
+        "bug": "BUG: timing — a gear ability without [Action] is not activatable during a showdown (rule 151.2)"
+      },
+      {
+        "cardId": "ogn-102-298",
+        "bug": "BUG: banish-then-play makes it a freshly played unit — no damage, no buff, and it enters exhausted"
+      },
+      {
+        "cardId": "ogn-114-298",
+        "bug": "BUG: without [Action] it is not castable during a showdown (rules 155 / 159.2.a.1)"
+      },
+      {
+        "cardId": "ogn-127-298",
+        "bug": "BUG: deals 2 to every enemy unit IN THE COMBAT only — not to enemies at other locations or in base"
+      },
+      {
+        "cardId": "ogn-127-298",
+        "bug": "BUG: outside combat it is still playable (nothing is targeted, 355.10.d) and damages nobody"
+      },
+      {
+        "cardId": "ogn-014-298",
+        "bug": "BUG: energy cost should be reduced by the highest Might among units you control (8 - 5 = 3; rule 356.4)"
+      },
+      {
+        "cardId": "ogn-014-298",
+        "bug": "BUG: a friendly unit with 8+ Might should reduce the energy cost to 0 with the power cost still due (rule 356.4.e)"
+      },
+      {
+        "cardId": "ogn-014-298",
+        "bug": "BUG: reduced cost boundary — 2 energy with a 5-Might unit is not enough, 3 is (rule 356.4)"
+      },
+      {
+        "cardId": "ogn-038-298",
+        "bug": "BUG: should draw 1 per friendly Mighty unit — Kadregrin + a 5 and a 6 = 3 cards (rules 708, 710)"
+      },
+      {
+        "cardId": "ogn-038-298",
+        "bug": "BUG: a buffed 4-Might ally (current Might 5) is Mighty and should add a draw (rule 710)"
+      },
+      {
+        "cardId": "ogn-065-298",
+        "bug": "BUG: 'while buffed' +1 must apply from board state alone (buffed Elder placed in play is 6 Might; rules 364, 519–522)"
+      },
+      {
+        "cardId": "ogn-077-298",
+        "bug": "BUG: lethal damage to a friendly unit should kill the Hourglass instead and heal, exhaust and recall that unit (rules 438, 370.1.a.1)"
+      },
+      {
+        "cardId": "ogn-077-298",
+        "bug": "BUG: the Hourglass is consumed by its first save, so a second lethal hit kills the unit"
+      },
+      {
+        "cardId": "ogn-077-298",
+        "bug": "BUG: a friendly unit dying in combat should be saved by the Hourglass (killed instead; unit healed, exhausted, recalled)"
+      },
+      {
+        "cardId": "ogn-091-298",
+        "bug": "BUG: playing a gear should ready an exhausted Pit Crew (trigger never fires)"
+      },
+      {
+        "cardId": "ogn-091-298",
+        "bug": "BUG: Pit Crew played this turn should be readied by a following gear play"
+      },
+      {
+        "cardId": "ogn-115-298",
+        "bug": "BUG: castable with an empty board (this spell has no targets)"
+      },
+      {
+        "cardId": "ogn-115-298",
+        "bug": "BUG: not an [Action] spell — must not be playable during a showdown"
+      },
+      {
+        "cardId": "ogn-115-298",
+        "bug": "BUG: each player picks one of their top 5 to banish and recycles the other four"
+      },
+      {
+        "cardId": "ogn-115-298",
+        "bug": "BUG: starting with the next player, each player plays the banished card ignoring its Energy cost"
+      }
+    ],
+    "results": [
+      {
+        "cardId": "ogn-001-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-001-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-015-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-015-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: other friendly units at Farron's location have Assault (static grant, rule 719)",
+          "BUG: in combat the ally's Assault counts — Farron (5) + a 2-might ally deal 8 and kill 5+3 defenders"
+        ]
+      },
+      {
+        "cardId": "ogn-027-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-027-298.test.ts",
+        "clauses": 8,
+        "passing": 8,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-039-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-039-298.test.ts",
+        "clauses": 7,
+        "passing": 6,
+        "failingBugs": [
+          "BUG: 'When I conquer' — another friendly unit conquering elsewhere must NOT draw (383.4.c.2)"
+        ]
+      },
+      {
+        "cardId": "ogn-053-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-053-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: 'Buffs give an additional +1 Might to friendly units this turn' — every buffed friendly unit is +2 over base this turn, buffed enemies are not"
+        ]
+      },
+      {
+        "cardId": "ogn-066-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-066-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-078-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-078-298.test.ts",
+        "clauses": 5,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: 'I can have any number of buffs' — a second activation on a later turn stacks a second buff (7 might)"
+        ]
+      },
+      {
+        "cardId": "ogn-092-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-092-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-104-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-104-298.test.ts",
+        "clauses": 5,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: 'Its owner channels 1 rune exhausted' — P1's rune pool gains one exhausted rune from the rune deck"
+        ]
+      },
+      {
+        "cardId": "ogn-116-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-116-298.test.ts",
+        "clauses": 6,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: Accelerate needs a SECOND [mind] on top of the base [mind] pip — with 8 energy + 1 mind the accelerated play is not legal",
+          "BUG: 'enemy units' — ALL enemy units everywhere get -3 (min 1) with no target prompt; friendly units untouched"
+        ]
+      },
+      {
+        "cardId": "ogn-002-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-002-298.test.ts",
+        "clauses": 4,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: discarding 1 as an additional cost reduces the cost by [2] — playable for 4 energy + a discard (rules 356.2.b, 204.2)"
+        ]
+      },
+      {
+        "cardId": "ogn-016-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-016-298.test.ts",
+        "clauses": 3,
+        "passing": 2,
+        "failingBugs": [
+          "BUG: Legion met — after playing another card this turn, playing me gives a chosen unit +2 Might this turn (rule 812.1.c)"
+        ]
+      },
+      {
+        "cardId": "ogn-028-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-028-298.test.ts",
+        "clauses": 4,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: tracks the score continuously — scoring a hold point later raises Might again (rule 364 passive)"
+        ]
+      },
+      {
+        "cardId": "ogn-040-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-040-298.test.ts",
+        "clauses": 4,
+        "passing": 4,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-054-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-054-298.test.ts",
+        "clauses": 4,
+        "passing": 4,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-067-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-067-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-079-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-079-298.test.ts",
+        "clauses": 5,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: 'to a minimum of 1 [Might]' — a stunned 5-Might enemy here becomes 1 Might, not 0"
+        ]
+      },
+      {
+        "cardId": "ogn-093-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-093-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-105-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-105-298.test.ts",
+        "clauses": 4,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: no [Action] keyword — Singularity cannot be cast during a showdown (rules 308.1.a, 313.1.a)"
+        ]
+      },
+      {
+        "cardId": "ogn-117-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-117-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-003-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-003-298.test.ts",
+        "clauses": 3,
+        "passing": 7,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-017-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-017-298.test.ts",
+        "clauses": 3,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-029-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-029-298.test.ts",
+        "clauses": 4,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: second 'Deal 3 to a unit' — two different units can be chosen and each takes 3",
+          "BUG: choosing the same unit for both instructions deals 6 total (kills a 6-Might unit)"
+        ]
+      },
+      {
+        "cardId": "ogn-041-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-041-298.test.ts",
+        "clauses": 3,
+        "passing": 6,
+        "failingBugs": [
+          "BUG: 5 damage may be split among several enemy units here (2 to a 2-Might unit, 3 to a 7-Might unit) — rule 355.14",
+          "BUG: with a single enemy unit here it is dealt exactly 5 (a 7-Might unit survives the trigger)"
+        ]
+      },
+      {
+        "cardId": "ogn-055-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-055-298.test.ts",
+        "clauses": 2,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: no bonus outside combat — 2 Might at rest even when it is the only friendly unit there",
+          "BUG: attacking together with another friendly unit: not alone → 2 Might, so 2 + 1 does not kill a 4-Might defender",
+          "BUG: defending alongside another friendly unit: not alone → 2 Might"
+        ]
+      },
+      {
+        "cardId": "ogn-068-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-068-298.test.ts",
+        "clauses": 4,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: assigned combat damage last (defending) — a 3-Might attacker must kill the other defender, Caitlyn takes nothing (465.2.c.6)",
+          "BUG: assigned combat damage last (attacking) — the defender's 3 damage goes to the other attacker first (465.2.c.6)"
+        ]
+      },
+      {
+        "cardId": "ogn-080-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-080-298.test.ts",
+        "clauses": 4,
+        "passing": 2,
+        "failingBugs": [
+          "BUG: needs a spell to choose — not playable when no spell is on the chain (rule 355.6)",
+          "BUG: on resolution P1 gains control of the targeted spell (its chain item is now controlled by P1)",
+          "BUG: 'You may make new choices for it' — P1 may retarget the stolen Cleave onto their own unit"
+        ]
+      },
+      {
+        "cardId": "ogn-094-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-094-298.test.ts",
+        "clauses": 5,
+        "passing": 6,
+        "failingBugs": [
+          "BUG: the Sprite token is played READY",
+          "BUG: played from facedown, the Sprite must be played at THAT battlefield — base is not a legal destination (Hidden rule)"
+        ]
+      },
+      {
+        "cardId": "ogn-106-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-106-298.test.ts",
+        "clauses": 4,
+        "passing": 6,
+        "failingBugs": [
+          "BUG: the Sprite token is played READY"
+        ]
+      },
+      {
+        "cardId": "ogn-118-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-118-298.test.ts",
+        "clauses": 3,
+        "passing": 2,
+        "failingBugs": [
+          "BUG: a friendly unit dying (in combat) draws 1",
+          "BUG: only the FIRST friendly death each turn draws — a second death the same turn draws nothing",
+          "BUG: two friendly units dying simultaneously is still one 'first time' → exactly 1 card",
+          "BUG: 'each turn' resets — a friendly death on the following (opponent's) turn draws again"
+        ]
+      },
+      {
+        "cardId": "ogn-005-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-005-298.test.ts",
+        "clauses": 4,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-018-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-018-298.test.ts",
+        "clauses": 3,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: an opponent's hidden card at the Saboteur's battlefield cannot be revealed (PreventReveal static not enforced by revealHidden)"
+        ]
+      },
+      {
+        "cardId": "ogn-030-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-030-298.test.ts",
+        "clauses": 4,
+        "passing": 6,
+        "failingBugs": [
+          "BUG: the discarding player chooses WHICH 2 cards to discard (rule 422.1.a) — engine auto-discards the first two hand cards with no prompt"
+        ]
+      },
+      {
+        "cardId": "ogn-043-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-043-298.test.ts",
+        "clauses": 3,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-056-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-056-298.test.ts",
+        "clauses": 4,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: 'If you do, buff me' — killing the gear does not buff Adaptatron (follow-up misparsed as condition paid-additional-cost)"
+        ]
+      },
+      {
+        "cardId": "ogn-069-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-069-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: doubles the unit's Might this turn (3 → 6) (rule 432.1.a) — no might change applied",
+          "BUG: only FRIENDLY units are legal targets — enemy units are offered",
+          "BUG: Temporary persists past this turn and kills the unit at the start of its controller's next Beginning Phase (rule 816.1.b) — granted with duration 'turn' so it expires and the unit survives"
+        ]
+      },
+      {
+        "cardId": "ogn-081-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-081-298.test.ts",
+        "clauses": 4,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-095-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-095-298.test.ts",
+        "clauses": 5,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-107-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-107-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: accepting pays [mind] and plays the [Hidden] unit from hand HERE (at bf1), ignoring its cost — power is deducted but nothing is played"
+        ]
+      },
+      {
+        "cardId": "ogn-119-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-119-298.test.ts",
+        "clauses": 6,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-006-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-006-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-019-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-019-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: 'discarded a card this turn' never expires — Assault/Ganking persist into later turns with no discard"
+        ]
+      },
+      {
+        "cardId": "ogn-031-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-031-298.test.ts",
+        "clauses": 4,
+        "passing": 2,
+        "failingBugs": [
+          "BUG: play trigger — the next spell this turn costs [5] less, and only that one (rule 356.4.b)",
+          "BUG: the discount cannot take a spell below 0 — a 4-cost spell becomes free (rule 356.6)"
+        ]
+      },
+      {
+        "cardId": "ogn-044-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-044-298.test.ts",
+        "clauses": 4,
+        "passing": 4,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-057-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-057-298.test.ts",
+        "clauses": 7,
+        "passing": 7,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-070-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-070-298.test.ts",
+        "clauses": 7,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: while the Warden is at a battlefield, opponents can only play units to their base",
+          "BUG: while the Warden is at a battlefield, an opponent's spell can't ready enemy (their own) units and gear"
+        ]
+      },
+      {
+        "cardId": "ogn-082-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-082-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-096-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-096-298.test.ts",
+        "clauses": 4,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: dying in combat also triggers Deathknell — the Sentry's controller draws 1 (rule 323.4)"
+        ]
+      },
+      {
+        "cardId": "ogn-108-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-108-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: the caster chooses the friendly unit (and the reference unit) — only friendly units are offered",
+          "BUG: increases the chosen unit's Might TO the other unit's Might; the other unit is unchanged"
+        ]
+      },
+      {
+        "cardId": "ogn-120-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-120-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-008-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-008-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: deals the discarded card's Energy cost (8 for Dr. Mundo) as damage to the chosen battlefield unit",
+          "BUG: targets only units at a battlefield — a unit in a base is not a legal choice and no battlefield unit means not castable (rule 355.8)"
+        ]
+      },
+      {
+        "cardId": "ogn-020-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-020-298.test.ts",
+        "clauses": 4,
+        "passing": 2,
+        "failingBugs": [
+          "BUG: with Legion (another card played earlier this turn) you discard 2, then draw 2",
+          "BUG: Legion discard is a choice — with 3 other cards in hand the player picks which 2 to discard, then draws 2"
+        ]
+      },
+      {
+        "cardId": "ogn-032-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-032-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: the next spell you play this turn deals 1 Bonus Damage (Hextech Ray deals 4 instead of 3)"
+        ]
+      },
+      {
+        "cardId": "ogn-045-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-045-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: cannot counter a spell whose Energy cost is more than 4",
+          "BUG: cannot counter a spell whose Power cost is more than 1"
+        ]
+      },
+      {
+        "cardId": "ogn-058-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-058-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: [Reaction] does not allow play during an opponent's Neutral Open State (rules 316.5.b, 813.1.c)"
+        ]
+      },
+      {
+        "cardId": "ogn-071-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-071-298.test.ts",
+        "clauses": 7,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: the OTHER player makes the Cards/Runes choice, not the caster",
+          "BUG: Cards — you AND that player each draw 1",
+          "BUG: Runes — you AND that player each channel 1 rune exhausted",
+          "BUG: no [Action] keyword — not playable during a showdown on the opponent's turn (rules 155, 159.2.a)"
+        ]
+      },
+      {
+        "cardId": "ogn-083-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-083-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-097-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-097-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-109-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-109-298.test.ts",
+        "clauses": 5,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: the Beginning Phase trigger recycles 3 cards from your trash (4 in trash → 1 left, 3 to the deck)"
+        ]
+      },
+      {
+        "cardId": "ogn-121-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-121-298.test.ts",
+        "clauses": 6,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-009-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-009-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-021-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-021-298.test.ts",
+        "clauses": 7,
+        "passing": 7,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-033-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-033-298.test.ts",
+        "clauses": 6,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: on resolution the target's controller is asked whether to have the caster draw 2 (the 'unless' choice)",
+          "BUG: if the controller declines, the unit is dealt 6",
+          "BUG: if the controller has the caster draw 2, no damage is dealt"
+        ]
+      },
+      {
+        "cardId": "ogn-046-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-046-298.test.ts",
+        "clauses": 5,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: +1 Might only when you control another unit at the same location (the extra +1 requires being alone there) — effect-level `while-alone` condition is never evaluated (defaults true), so every target gets +2"
+        ]
+      },
+      {
+        "cardId": "ogn-059-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-059-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: choosing an already-stunned enemy unit does not stun it again, so the Herald must not trigger (rule 423.1.a.1) — stun handler fires the stun trigger unconditionally"
+        ]
+      },
+      {
+        "cardId": "ogn-072-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-072-298.test.ts",
+        "clauses": 7,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: killing a stunned enemy unit (lethal spell damage, rule 428.5.c.1) offers 'exhaust this to draw 1'; accepting exhausts the Shrine and draws 1 — the parsed `kill-enemy` trigger event is never emitted by the engine",
+          "BUG: 'you may' — the prompt is offered and declining leaves the Shrine ready and draws nothing",
+          "BUG: killing a stunned enemy defender in combat also counts as 'you kill' (rule 428.5.c.2) and offers the draw"
+        ]
+      },
+      {
+        "cardId": "ogn-084-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-084-298.test.ts",
+        "clauses": 7,
+        "passing": 7,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-098-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-098-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-110-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-110-298.test.ts",
+        "clauses": 6,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: [Deathknell] on a spell death — the trigger resolves by recycling him to the bottom of the main deck and readying all your runes (trigger goes on chain but on resolution Ekko stays in trash and runes stay exhausted)",
+          "BUG: [Deathknell] also triggers when he dies in combat (rule 323.4 / 808) — no trigger created for combat deaths",
+          "BUG: [Deathknell] readies only YOUR runes (nothing is readied at all)"
+        ]
+      },
+      {
+        "cardId": "ogn-122-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-122-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: no [Action]/[Reaction] keyword — not playable during a showdown or onto a chain (rules 155, 308.1.a); card data declares `timing: \"action\"` so the engine offers it with Focus"
+        ]
+      },
+      {
+        "cardId": "ogn-010-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-010-298.test.ts",
+        "clauses": 6,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-022-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-022-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-034-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-034-298.test.ts",
+        "clauses": 6,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: with fewer than 5 excess damage (8 into a 4-might defender) only the conquer point should be scored",
+          "BUG: conquering an EMPTY enemy battlefield is not 'after an attack' (316.8.b.1) — only the conquer point should be scored"
+        ]
+      },
+      {
+        "cardId": "ogn-047-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-047-298.test.ts",
+        "clauses": 6,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: costs [2] less (i.e. 1 energy) while an opponent is within 3 points of the Victory Score",
+          "BUG: with 3 energy and an opponent at 7/8, casting deducts only 1 energy (cost reduction not applied)"
+        ]
+      },
+      {
+        "cardId": "ogn-060-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-060-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: a friendly unit attacking ALONE gets +1 Might this turn (3 vs 3: attacker survives and conquers)",
+          "BUG: a friendly unit DEFENDING alone gets +1 Might this turn (3-might defender holds against a 3-might attacker)"
+        ]
+      },
+      {
+        "cardId": "ogn-073-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-073-298.test.ts",
+        "clauses": 7,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: readies friendly runes (3 exhausted → all 3 ready after the trigger resolves)",
+          "BUG: 'up to 4' — with 5 exhausted runes exactly 4 become ready and 1 stays exhausted"
+        ]
+      },
+      {
+        "cardId": "ogn-085-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-085-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: killing the lone defender during the showdown leaves the attacker to win the combat and conquer (466.3.a, 466.5)"
+        ]
+      },
+      {
+        "cardId": "ogn-099-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-099-298.test.ts",
+        "clauses": 7,
+        "passing": 7,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-111-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-111-298.test.ts",
+        "clauses": 6,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-123-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-123-298.test.ts",
+        "clauses": 7,
+        "passing": 6,
+        "failingBugs": [
+          "BUG: no [Action] keyword — must NOT be castable during a showdown (rule 155)"
+        ]
+      },
+      {
+        "cardId": "ogn-011-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-011-298.test.ts",
+        "clauses": 5,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: with Magma Wurm on board, another friendly unit played from hand should enter ready (rules 143.4 / 369.3)"
+        ]
+      },
+      {
+        "cardId": "ogn-023-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-023-298.test.ts",
+        "clauses": 7,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: when the chosen unit would die to a spell, you may pay [fury] → it is healed, exhausted and stays in base",
+          "BUG: when the chosen unit would die in combat, paying [fury] recalls it to base healed and exhausted (rule 454)",
+          "BUG: without [fury] to pay, the unit dies normally ('you may pay [fury] … instead')"
+        ]
+      },
+      {
+        "cardId": "ogn-035-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-035-298.test.ts",
+        "clauses": 9,
+        "passing": 7,
+        "failingBugs": [
+          "BUG: Assault 3 also raises her own lethal threshold — attacking a 4-Might unit she survives (5 Might vs 4 damage) and conquers",
+          "BUG: enters exhausted when NO opponent controls a battlefield (rule 143.4)"
+        ]
+      },
+      {
+        "cardId": "ogn-048-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-048-298.test.ts",
+        "clauses": 6,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: Reaction only adds Closed-state permission — not castable in a Neutral Open state on the opponent's turn (rules 316.5.b, 813.1.c.1)",
+          "BUG: paying the optional cost exhausts the chosen friendly unit as you play it, then draws 2 (rules 355.1.a, 356.2)",
+          "BUG: declining the optional cost leaves friendly units ready and draws exactly 1"
+        ]
+      },
+      {
+        "cardId": "ogn-061-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-061-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-074-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-074-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: a friendly unit that moved to a battlefield with Taric defends with +1 Might from the granted Shield"
+        ]
+      },
+      {
+        "cardId": "ogn-086-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-086-298.test.ts",
+        "clauses": 6,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-100-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-100-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-112-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-112-298.test.ts",
+        "clauses": 4,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: accepting lets you play a trash spell with Energy cost < points for free, and it is recycled afterwards"
+        ]
+      },
+      {
+        "cardId": "ogn-124-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-124-298.test.ts",
+        "clauses": 6,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-012-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-012-298.test.ts",
+        "clauses": 4,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: Legion — after playing another card this turn Noxus Hopeful should cost 2 (rule 812 / 727.1)"
+        ]
+      },
+      {
+        "cardId": "ogn-024-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-024-298.test.ts",
+        "clauses": 8,
+        "passing": 6,
+        "failingBugs": [
+          "BUG: 'Draw 1' — the caster draws a card when Void Seeker resolves",
+          "BUG: [Action] timing — an Action spell is NOT playable in a showdown while the opponent holds Focus (rules 313.1, 347)"
+        ]
+      },
+      {
+        "cardId": "ogn-036-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-036-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: timing — a unit's non-[Action]/[Reaction] activated ability cannot be used on the opponent's turn (rule 145.2)"
+        ]
+      },
+      {
+        "cardId": "ogn-050-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-050-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: a stunned defender deals no combat damage — a 2-might attacker survives against a stunned 5-might defender (rule 423.1.b)",
+          "BUG: the stun ends during the end-of-turn Expiration Step (rules 423.1.a.2 / 317.2.c)"
+        ]
+      },
+      {
+        "cardId": "ogn-062-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-062-298.test.ts",
+        "clauses": 7,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: the unit played via Reinforce enters the board exhausted (rule 143.4)",
+          "BUG: the reduced cost must still be paid — with 0 energy left a 7-cost unit (2 after reduction) cannot be played for free (rules 356.4, 419.2.a)"
+        ]
+      },
+      {
+        "cardId": "ogn-075-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-075-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: Deathknell also draws 1 (\"Channel 2 runes exhausted AND draw 1\")"
+        ]
+      },
+      {
+        "cardId": "ogn-087-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-087-298.test.ts",
+        "clauses": 3,
+        "passing": 3,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-101-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-101-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: without any facedown card there is no extra draw (0 → 1, only the draw step)",
+          "BUG: an OPPONENT's facedown card does not satisfy 'you control a facedown card' (0 → 1)"
+        ]
+      },
+      {
+        "cardId": "ogn-113-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-113-298.test.ts",
+        "clauses": 6,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: activating kills the chosen friendly unit, exhausts Malzahar and adds 2 rainbow power immediately (rule 429.2.a)",
+          "BUG: a friendly GEAR is also a legal sacrifice for the cost",
+          "BUG: [Action] timing — usable during a showdown on the opponent's turn once P1 holds Focus"
+        ]
+      },
+      {
+        "cardId": "ogn-125-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-125-298.test.ts",
+        "clauses": 4,
+        "passing": 4,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-013-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-013-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-025-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-025-298.test.ts",
+        "clauses": 6,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: castable with no permanents on the board (it targets nothing at play time); costs 4 energy + 2 fury",
+          "BUG: the opponent's top card is banished then played by the caster for free (unit lands under P1's control)",
+          "BUG: with two opponents the unchosen revealed card is recycled to the bottom of its owner's deck"
+        ]
+      },
+      {
+        "cardId": "ogn-037-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-037-298.test.ts",
+        "clauses": 8,
+        "passing": 6,
+        "failingBugs": [
+          "BUG: killing a unit with your spell should offer to pay [1][fury] and play Phoenix from trash",
+          "BUG: declining the trigger leaves Phoenix in the trash and spends nothing extra"
+        ]
+      },
+      {
+        "cardId": "ogn-051-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-051-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: a stunned defender deals no combat damage — 5-might attacker kills it and survives (423.1.b/c)",
+          "BUG: the stun wears off at end of turn (423.1.a.2 / 317.2.c step 3d)"
+        ]
+      },
+      {
+        "cardId": "ogn-063-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-063-298.test.ts",
+        "clauses": 5,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: 'if they didn't already' — a buffed Pouty Poro keeps Deflect 1, so one extra power suffices"
+        ]
+      },
+      {
+        "cardId": "ogn-076-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-076-298.test.ts",
+        "clauses": 6,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-090-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-090-298.test.ts",
+        "clauses": 8,
+        "passing": 6,
+        "failingBugs": [
+          "BUG: timing — not activatable on the opponent's turn (rule 151.2: your Main Phase only)",
+          "BUG: timing — a gear ability without [Action] is not activatable during a showdown (rule 151.2)"
+        ]
+      },
+      {
+        "cardId": "ogn-102-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-102-298.test.ts",
+        "clauses": 5,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: banish-then-play makes it a freshly played unit — no damage, no buff, and it enters exhausted"
+        ]
+      },
+      {
+        "cardId": "ogn-114-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-114-298.test.ts",
+        "clauses": 5,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: without [Action] it is not castable during a showdown (rules 155 / 159.2.a.1)"
+        ]
+      },
+      {
+        "cardId": "ogn-127-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-127-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: deals 2 to every enemy unit IN THE COMBAT only — not to enemies at other locations or in base",
+          "BUG: outside combat it is still playable (nothing is targeted, 355.10.d) and damages nobody"
+        ]
+      },
+      {
+        "cardId": "ogn-014-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-014-298.test.ts",
+        "clauses": 7,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: energy cost should be reduced by the highest Might among units you control (8 - 5 = 3; rule 356.4)",
+          "BUG: a friendly unit with 8+ Might should reduce the energy cost to 0 with the power cost still due (rule 356.4.e)",
+          "BUG: reduced cost boundary — 2 energy with a 5-Might unit is not enough, 3 is (rule 356.4)"
+        ]
+      },
+      {
+        "cardId": "ogn-026-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-026-298.test.ts",
+        "clauses": 6,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-038-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-038-298.test.ts",
+        "clauses": 6,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: should draw 1 per friendly Mighty unit — Kadregrin + a 5 and a 6 = 3 cards (rules 708, 710)",
+          "BUG: a buffed 4-Might ally (current Might 5) is Mighty and should add a draw (rule 710)"
+        ]
+      },
+      {
+        "cardId": "ogn-052-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-052-298.test.ts",
+        "clauses": 5,
+        "passing": 5,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-065-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-065-298.test.ts",
+        "clauses": 6,
+        "passing": 5,
+        "failingBugs": [
+          "BUG: 'while buffed' +1 must apply from board state alone (buffed Elder placed in play is 6 Might; rules 364, 519–522)"
+        ]
+      },
+      {
+        "cardId": "ogn-077-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-077-298.test.ts",
+        "clauses": 7,
+        "passing": 4,
+        "failingBugs": [
+          "BUG: lethal damage to a friendly unit should kill the Hourglass instead and heal, exhaust and recall that unit (rules 438, 370.1.a.1)",
+          "BUG: the Hourglass is consumed by its first save, so a second lethal hit kills the unit",
+          "BUG: a friendly unit dying in combat should be saved by the Hourglass (killed instead; unit healed, exhausted, recalled)"
+        ]
+      },
+      {
+        "cardId": "ogn-091-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-091-298.test.ts",
+        "clauses": 5,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: playing a gear should ready an exhausted Pit Crew (trigger never fires)",
+          "BUG: Pit Crew played this turn should be readied by a following gear play"
+        ]
+      },
+      {
+        "cardId": "ogn-103-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-103-298.test.ts",
+        "clauses": 6,
+        "passing": 6,
+        "failingBugs": []
+      },
+      {
+        "cardId": "ogn-115-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-115-298.test.ts",
+        "clauses": 7,
+        "passing": 3,
+        "failingBugs": [
+          "BUG: castable with an empty board (this spell has no targets)",
+          "BUG: not an [Action] spell — must not be playable during a showdown",
+          "BUG: each player picks one of their top 5 to banish and recycles the other four",
+          "BUG: starting with the next player, each player plays the banished card ignoring its Energy cost"
+        ]
+      },
+      {
+        "cardId": "ogn-128-298",
+        "file": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-128-298.test.ts",
+        "clauses": 7,
+        "passing": 7,
+        "failingBugs": []
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Write"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "lane0 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "a6cbcdfd24ad80444",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032528071,
+      "queuedAt": 1786032526391,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786036046902,
+      "tokens": 237196,
+      "toolCalls": 105,
+      "durationMs": 3518831,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-001-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-001-298.test.ts\",\"clauses\":5,\"passing\":5,\"failingBugs\":[]},{\"cardId\":\"ogn-015-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-015-298.test.ts\",\"clauses\":5,\"passing\":3,\"failingBugs\":[\"BUG: other friendly units at Farron's location have Assa…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "lane1 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "af43b0e96d537dc7c",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032528692,
+      "queuedAt": 1786032526391,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786035171033,
+      "tokens": 232417,
+      "toolCalls": 72,
+      "durationMs": 2642341,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-002-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-002-298.test.ts\",\"clauses\":4,\"passing\":3,\"failingBugs\":[\"BUG: discarding 1 as an additional cost reduces the cost by [2] — playable for 4 energy + a discard (rules 356.2.b, 204.2)\"]},{\"cardId\":\"ogn-016-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "lane2 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "a0a497b2e07cd0f93",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032528606,
+      "queuedAt": 1786032526391,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786035275900,
+      "tokens": 205824,
+      "toolCalls": 69,
+      "durationMs": 2747294,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-003-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-003-298.test.ts\",\"clauses\":3,\"passing\":7,\"failingBugs\":[]},{\"cardId\":\"ogn-017-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-017-298.test.ts\",\"clauses\":3,\"passing\":6,\"failingBugs\":[]},{\"cardId\":\"ogn-029-298\",\"file\":\"/root/src/tcg/tcg-engi…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "lane3 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "a7b902b6f78a7337e",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032527860,
+      "queuedAt": 1786032526391,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786034845452,
+      "tokens": 199611,
+      "toolCalls": 74,
+      "durationMs": 2317591,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-005-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-005-298.test.ts\",\"clauses\":4,\"passing\":5,\"failingBugs\":[]},{\"cardId\":\"ogn-018-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-018-298.test.ts\",\"clauses\":3,\"passing\":4,\"failingBugs\":[\"BUG: an opponent's hidden card at the Saboteur's battlef…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "lane4 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "a51d49685ab9ed7c6",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032528351,
+      "queuedAt": 1786032526391,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786035859296,
+      "tokens": 235412,
+      "toolCalls": 92,
+      "durationMs": 3330945,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-006-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-006-298.test.ts\",\"clauses\":5,\"passing\":5,\"failingBugs\":[]},{\"cardId\":\"ogn-019-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-019-298.test.ts\",\"clauses\":6,\"passing\":5,\"failingBugs\":[\"BUG: 'discarded a card this turn' never expires — Assaul…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "lane5 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "a1cd0819b5f2540f0",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032533565,
+      "queuedAt": 1786032526391,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786035265901,
+      "tokens": 238268,
+      "toolCalls": 82,
+      "durationMs": 2732336,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-008-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-008-298.test.ts\",\"clauses\":5,\"passing\":3,\"failingBugs\":[\"BUG: deals the discarded card's Energy cost (8 for Dr. Mundo) as damage to the chosen battlefield unit\",\"BUG: targets only units at a battlefield — a unit in a base is not a legal choice and no battlefield unit means not ca…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "lane6 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "af6b9b8d534236658",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032527989,
+      "queuedAt": 1786032526391,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786035805528,
+      "tokens": 242189,
+      "toolCalls": 101,
+      "durationMs": 3277539,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-009-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-009-298.test.ts\",\"clauses\":5,\"passing\":5,\"failingBugs\":[]},{\"cardId\":\"ogn-021-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-021-298.test.ts\",\"clauses\":7,\"passing\":7,\"failingBugs\":[]},{\"cardId\":\"ogn-033-298\",\"file\":\"/root/src/tcg/tcg-engi…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "lane7 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "ac3792795368f6467",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032530374,
+      "queuedAt": 1786032526391,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786035402625,
+      "tokens": 241253,
+      "toolCalls": 87,
+      "durationMs": 2872251,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-010-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-010-298.test.ts\",\"clauses\":6,\"passing\":6,\"failingBugs\":[]},{\"cardId\":\"ogn-022-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-022-298.test.ts\",\"clauses\":5,\"passing\":5,\"failingBugs\":[]},{\"cardId\":\"ogn-034-298\",\"file\":\"/root/src/tcg/tcg-engi…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "lane8 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "a46a1e995d8065086",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032528980,
+      "queuedAt": 1786032526392,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786035933122,
+      "tokens": 261807,
+      "toolCalls": 99,
+      "durationMs": 3404142,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-011-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-011-298.test.ts\",\"clauses\":5,\"passing\":4,\"failingBugs\":[\"BUG: with Magma Wurm on board, another friendly unit played from hand should enter ready (rules 143.4 / 369.3)\"]},{\"cardId\":\"ogn-023-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-0…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "lane9 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "a4e1e82f035b80a00",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032528625,
+      "queuedAt": 1786032526392,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786035951072,
+      "tokens": 235843,
+      "toolCalls": 114,
+      "durationMs": 3422447,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-012-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-012-298.test.ts\",\"clauses\":4,\"passing\":3,\"failingBugs\":[\"BUG: Legion — after playing another card this turn Noxus Hopeful should cost 2 (rule 812 / 727.1)\"]},{\"cardId\":\"ogn-024-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-024-298.test.t…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 11,
+      "label": "lane10 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "a5741ccce3f8db118",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032528419,
+      "queuedAt": 1786032526392,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786036102035,
+      "tokens": 251930,
+      "toolCalls": 112,
+      "durationMs": 3573616,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-013-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-013-298.test.ts\",\"clauses\":5,\"passing\":5,\"failingBugs\":[]},{\"cardId\":\"ogn-025-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-025-298.test.ts\",\"clauses\":6,\"passing\":3,\"failingBugs\":[\"BUG: castable with no permanents on the board (it target…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 12,
+      "label": "lane11 (10)",
+      "phaseIndex": 1,
+      "phaseTitle": "Write",
+      "agentId": "af275f4bbd20d8344",
+      "model": "narwhal-v2-prod",
+      "state": "done",
+      "startedAt": 1786032528299,
+      "queuedAt": 1786032526392,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "You are a Riftbound RULES EXPERT writing engine unit tests. For each card below, write ONE test file using ONLY the agent harness API. Headless — no browser, no server.\n\nREAD FIRST (once): /root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/README.md (the harness guide + policy), and skim 2 existing tests in that dir (e.g. ogn-251-298.test.ts, unl-186-219.test.ts) for style. Ha…",
+      "lastProgressAt": 1786035513197,
+      "tokens": 251818,
+      "toolCalls": 92,
+      "durationMs": 2984898,
+      "resultPreview": "{\"results\":[{\"cardId\":\"ogn-014-298\",\"file\":\"/root/src/tcg/tcg-engines/packages/riftbound-engine/src/__tests__/cards/ogn-014-298.test.ts\",\"clauses\":7,\"passing\":4,\"failingBugs\":[\"BUG: energy cost should be reduced by the highest Might among units you control (8 - 5 = 3; rule 356.4)\",\"BUG: a friendly unit with 8+ Might should reduce the energy cost to 0 with the power cost still due (rule 356.4.e)\",\"…"
+    }
+  ],
+  "totalTokens": 2833568,
+  "totalToolCalls": 1099
+}
