@@ -58,10 +58,8 @@ describe("The Syren (ogn-184-298)", () => {
     expect(game.p1.can("activate", "syren")).toBe(false); // exhausted now
   });
 
-  test.failing("BUG: only a FRIENDLY unit AT A BATTLEFIELD is a legal choice — base units and enemy units are not offered", async () => {
-    // Expected: the only legal target is "away" (friendly, at bf1); "home" (in base) and "foe" (enemy)
-    // are excluded. Actual: the parsed target is {unit, friendly} with no battlefield restriction, so
-    // the friendly unit already in base is offered too.
+  test("only a FRIENDLY unit AT A BATTLEFIELD is a legal choice — base units and enemy units are not offered", async () => {
+    // rule 355.8: the only legal target is "away" (friendly, at bf1); "home" (in base) and "foe" (enemy) are excluded.
     const game = await board().build();
     const targets = game.p1.option("activate", "syren")?.fields.find((f) => f.arg === "targets")?.options;
     expect(targets).toEqual([["away"]]);

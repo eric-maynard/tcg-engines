@@ -76,6 +76,11 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
     if (state) {
       target.filter = state;
     }
+    // rule 355.8: "Move a unit FROM a battlefield" may only choose a unit that
+    // is already there — the origin restricts the target, not just the motion.
+    if (from === "battlefield" || from === "base" || from === "here") {
+      target.location = from;
+    }
     return { from, target: target as unknown as AnyTarget, to, type: "move" };
   }
 
@@ -166,14 +171,15 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
   //   "Move up to 2 friendly units to base."
   //   "Move up to one enemy unit from here to its base."
   const basicMatch = text.match(
-    /^Move (?:(another)\s+)?(a|an|up to (?:one|two|three|four|five|\d+))\s+(attacking enemy |attacking |friendly |enemy )?(units?)(?:\s+(?:at a battlefield|here|there))?(?:\s+from\s+(a battlefield|battlefield|here|its base|your base|base))?(?:\s+to\s+(base|here|its base|your base|their base|a battlefield|battlefield|this battlefield|the same battlefield|that battlefield|an open battlefield|a battlefield you control))?(?:\s+and ready (?:it|them))?\.?$/i,
+    /^Move (?:(another)\s+)?(a|an|up to (?:one|two|three|four|five|\d+))\s+(attacking enemy |attacking |friendly |enemy )?(units?)(?:\s+(at a battlefield|here|there))?(?:\s+from\s+(a battlefield|battlefield|here|its base|your base|base))?(?:\s+to\s+(base|here|its base|your base|their base|a battlefield|battlefield|this battlefield|the same battlefield|that battlefield|an open battlefield|a battlefield you control))?(?:\s+and ready (?:it|them))?\.?$/i,
   );
   if (basicMatch) {
     const another = basicMatch[1];
     const quantityStr = basicMatch[2].toLowerCase();
     const controllerStr = basicMatch[3]?.trim().toLowerCase();
-    const fromStr = basicMatch[5];
-    const destStr = basicMatch[6];
+    const atStr = basicMatch[5]?.toLowerCase();
+    const fromStr = basicMatch[6];
+    const destStr = basicMatch[7];
 
     const target: {
       type: "unit";
@@ -198,6 +204,14 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
       target.excludeSelf = true;
     }
 
+    // rule 355.8: "a friendly unit AT A BATTLEFIELD" restricts which units may be
+    // chosen — a unit already in a base is not a legal choice.
+    if (atStr === "at a battlefield") {
+      (target as { location?: Location }).location = "battlefield";
+    } else if (atStr === "here" || atStr === "there") {
+      (target as { location?: Location }).location = "here";
+    }
+
     const upToNumMatch = quantityStr.match(/^up to (one|two|three|four|five|\d+)$/);
     if (upToNumMatch) {
       target.quantity = { upTo: wordToNumber(upToNumMatch[1]) };
@@ -210,7 +224,12 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
 
     const effect: MoveEffect = { target: target as AnyTarget, to, type: "move" };
     if (fromStr) {
-      return { ...effect, from: parseLocationString(fromStr) } as MoveEffect;
+      const from = parseLocationString(fromStr);
+      // rule 355.8: the stated origin restricts which units may be chosen.
+      if (from === "battlefield" || from === "base" || from === "here") {
+        (target as { location?: Location }).location = from;
+      }
+      return { ...effect, from } as MoveEffect;
     }
     return effect;
   }

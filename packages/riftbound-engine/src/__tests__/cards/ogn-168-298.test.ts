@@ -48,7 +48,7 @@ describe("Fight or Flight (ogn-168-298)", () => {
     expect(game.p1.units("base")).toContain("scout");
   });
 
-  test.failing("BUG: targets only units AT A BATTLEFIELD — a unit in a base is never a legal choice", async () => {
+  test("targets only units AT A BATTLEFIELD — a unit in a base is never a legal choice", async () => {
     // Expected: "a unit from a battlefield" restricts the choice to invader/scout; the base-bound
     // Homebody is not offered. Actual: the parsed target is a bare `unit` (the `from: battlefield`
     // sits on the move effect only), so units in a base are offered too.

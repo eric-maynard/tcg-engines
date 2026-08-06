@@ -64,7 +64,7 @@ describe("Maddened Marauder (ogn-191-298)", () => {
     expect(game.locationOf("ebf")).toBe("bf1"); // untouched
   });
 
-  test.failing("BUG: only units AT A BATTLEFIELD are legal choices — base units (and the Marauder itself) must not be offered", async () => {
+  test("only units AT A BATTLEFIELD are legal choices — base units (and the Marauder itself) must not be offered", async () => {
     // Expected: options are exactly {ebf, mbf}. Actual: every unit on the board is listed,
     // including ehome and the Marauder sitting in base.
     const game = await board().build();
@@ -75,7 +75,7 @@ describe("Maddened Marauder (ogn-191-298)", () => {
     expect(offered).toEqual(["ebf", "mbf"]);
   });
 
-  test.failing("BUG: no unit at any battlefield — the trigger has nothing to choose and the game returns to the open main phase", async () => {
+  test("no unit at any battlefield — the trigger has nothing to choose and the game returns to the open main phase", async () => {
     // Expected: the trigger resolves with no legal unit; no prompt; board unchanged.
     // Actual: a mandatory pick over base units (ehome, the Marauder itself) is presented.
     const game = await scenario()

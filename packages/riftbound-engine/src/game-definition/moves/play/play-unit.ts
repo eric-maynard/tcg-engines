@@ -30,6 +30,7 @@ import {
   opponentsRestrictedToBase,
   playOnlyToConqueredBattlefield,
   consumeEntersReadyReplacement,
+  getBuffSpendCost,
   getOptionalPlayCost,
   createMetaAccessor,
   getPotentialRuneEnergy,
@@ -70,6 +71,48 @@ function resolvePayableOptionalCost(
     power: optional.cost?.power ?? [],
     xp,
   };
+}
+
+type BoardCards = { getCardMeta?: (cardId: CoreCardId) => unknown };
+type BoardZones = {
+  getCardsInZone: (zoneId: CoreZoneId, playerId: CorePlayerId) => readonly CoreCardId[];
+};
+
+/**
+ * rule-id: ogn-150-298 (rule 702.2.b) — friendly units on the board whose buff
+ * could be spent as an additional cost, in board order (base first).
+ */
+function friendlyBuffedUnits(
+  state: RiftboundGameState,
+  zones: BoardZones,
+  cards: BoardCards,
+  playerId: string,
+): string[] {
+  const zoneIds = ["base", ...Object.keys(state.battlefields ?? {}).map(getBattlefieldZoneId)];
+  const out: string[] = [];
+  for (const zoneId of zoneIds) {
+    for (const id of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
+      const meta = cards.getCardMeta?.(id as CoreCardId) as { buffed?: boolean } | undefined;
+      if (meta?.buffed === true) {
+        out.push(id as string);
+      }
+    }
+  }
+  return out;
+}
+
+/** Non-empty subsets of `ids`, smallest first. Capped so enumeration stays bounded. */
+function buffSpendSubsets(ids: readonly string[]): string[][] {
+  if (ids.length > 5) {
+    // Too many buffed units to offer every combination: fall back to prefixes.
+    return ids.map((_, i) => ids.slice(0, i + 1));
+  }
+  const subsets: string[][] = [];
+  for (let mask = 1; mask < 1 << ids.length; mask++) {
+    subsets.push(ids.filter((_, i) => (mask & (1 << i)) !== 0));
+  }
+  subsets.sort((a, b) => a.length - b.length);
+  return subsets;
 }
 
 /**
@@ -250,6 +293,39 @@ export const playUnit: Defs["playUnit"] = {
     // rule-id: ven-096-166 — board/trash access so self-scaled and friendly
     // static cost reductions (rule 466) apply to unit plays.
     const board = { cards: context.cards, zones: context.zones };
+
+    // rule 560 / 702.2.b (ogn-150-298) — "you may spend any number of buffs as
+    // an additional cost. Reduce my cost by [body] for each buff you spend":
+    // every named unit must be a friendly buffed unit, and the play is priced
+    // with that many pips waived.
+    const spentBuffIds = context.params.spentBuffIds as string[] | undefined;
+    if (spentBuffIds && spentBuffIds.length > 0) {
+      const buffCost = getBuffSpendCost(context.params.cardId as string);
+      if (!buffCost) {
+        return false;
+      }
+      const spendable = friendlyBuffedUnits(
+        state,
+        context.zones,
+        context.cards,
+        context.params.playerId as string,
+      );
+      const unique = new Set(spentBuffIds);
+      if (unique.size !== spentBuffIds.length) {
+        return false;
+      }
+      if (!spentBuffIds.every((id) => spendable.includes(id))) {
+        return false;
+      }
+      return canAffordCard(
+        state,
+        context.params.playerId,
+        context.params.cardId,
+        { board, waivePower: { [buffCost.domain]: spentBuffIds.length } },
+        createMetaAccessor(context.cards),
+        getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
+      );
+    }
     if (
       !canAffordCard(
         state,
