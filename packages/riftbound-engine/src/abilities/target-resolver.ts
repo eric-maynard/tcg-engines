@@ -178,8 +178,14 @@ export function resolveTarget(
     return all;
   }
 
-  // Collect candidate cards from the board
-  const candidates = getBoardCardIds(ctx);
+  // Collect candidate cards. rule 355.8 / rule-id: ogn-170-298 — "a unit from
+  // your trash" names an OFF-BOARD zone, so the candidate pool is that zone
+  // (per player), not the board. Absent an explicit controller, an off-board
+  // zone means the resolving player's own ("your trash", "your hand").
+  const zoneLocation = offBoardZoneFor(target.location);
+  const candidates = zoneLocation
+    ? getZoneCardIds(zoneLocation, ctx, target.controller)
+    : getBoardCardIds(ctx);
 
   // Filter by card type
   const registry = getGlobalCardRegistry();
@@ -340,6 +346,51 @@ function getBoardCardIds(ctx: TargetResolverContext): string[] {
   // Targeting effects. Champions must be played (paid for) from the champion
   // Zone to the base before they become targetable.
 
+  return ids;
+}
+
+/**
+ * rule-id: ogn-170-298 — target locations that name a per-player off-board
+ * zone rather than the board. Returns the engine zone id, or undefined for
+ * board/battlefield locations.
+ */
+function offBoardZoneFor(location: string | undefined): string | undefined {
+  switch (location) {
+    case "trash":
+      return "trash";
+    case "hand":
+      return "hand";
+    case "banishment":
+      return "banishment";
+    case "deck":
+    case "mainDeck":
+      return "mainDeck";
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Cards in a per-player off-board zone. With no explicit controller the zone
+ * is the resolving player's own ("a unit from your trash").
+ */
+function getZoneCardIds(
+  zoneId: string,
+  ctx: TargetResolverContext,
+  controller: string | undefined,
+): string[] {
+  const players =
+    controller === undefined || controller === "friendly"
+      ? [ctx.playerId]
+      : Object.keys(ctx.draft.players);
+  const ids: string[] = [];
+  for (const playerId of players) {
+    ids.push(
+      ...ctx.zones
+        .getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)
+        .map((c) => c as string),
+    );
+  }
   return ids;
 }
 

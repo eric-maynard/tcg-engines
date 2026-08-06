@@ -40,7 +40,7 @@ async function castReturning(game: Built, target: string) {
 }
 
 describe("Morbid Return (ogn-170-298)", () => {
-  test.failing("BUG: costs 2 energy; returns the chosen unit from your trash to your hand; spell goes to trash", async () => {
+  test("costs 2 energy; returns the chosen unit from your trash to your hand; spell goes to trash", async () => {
     // Expected: castable with only a dead unit in your trash; deadUnit ends in hand, Morbid Return in trash.
     // Actual: the engine looks for target units ON THE BOARD, so with an empty board the spell is not legal at all.
     const game = await board().build();
@@ -57,7 +57,7 @@ describe("Morbid Return (ogn-170-298)", () => {
     expect(game.p1.can("cast", "mr")).toBe(false);
   });
 
-  test.failing("BUG: only UNIT cards in YOUR TRASH are eligible — not spells, not the opponent's trash, not units on the board", async () => {
+  test("only UNIT cards in YOUR TRASH are eligible — not spells, not the opponent's trash, not units on the board", async () => {
     // Expected: the only legal choice is deadUnit. Actual: the legal "targets" are units on the board
     // (here: alive), and resolving it bounces that unit to hand instead.
     const game = await board().unit(P1, "base", { might: 2 }, "alive").build();
@@ -73,7 +73,7 @@ describe("Morbid Return (ogn-170-298)", () => {
     }
   });
 
-  test.failing("BUG: a unit on the board can never be 'returned' by Morbid Return", async () => {
+  test("a unit on the board can never be 'returned' by Morbid Return", async () => {
     // Expected: choosing a living unit is illegal (or, if the engine accepts the cast, the unit stays put).
     // Actual: the living unit is moved from the base to its owner's hand.
     const game = await board().unit(P1, "base", { might: 2 }, "alive").build();

@@ -44,7 +44,7 @@ async function castReturning(game: Game, wanted: string[]) {
 describe("Guerilla Warfare (ogn-264-298)", () => {
   test("costs 2 energy + 1 power; goes to trash after resolving; unaffordable short of either", async () => {
     const game = await board().build();
-    await game.p1.cast("gw");
+    await game.p1.cast("gw", { targets: [] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
     await game.settle();
     expect(game.zoneOf("gw")).toBe("trash");
@@ -54,7 +54,7 @@ describe("Guerilla Warfare (ogn-264-298)", () => {
     expect(lowEnergy.p1.can("cast", "gw")).toBe(false);
   });
 
-  test.failing("BUG: returns two chosen [Hidden] cards from your trash to your hand; the non-Hidden card stays", async () => {
+  test("returns two chosen [Hidden] cards from your trash to your hand; the non-Hidden card stays", async () => {
     // Expected: blade + fae → hand, junk stays in trash. Actual: the spell offers no trash choices at all
     // (only an empty target set) and resolves doing nothing.
     const game = await board().build();
@@ -65,7 +65,7 @@ describe("Guerilla Warfare (ogn-264-298)", () => {
     expect(game.zoneOf("gw")).toBe("trash");
   });
 
-  test.failing("BUG: 'up to two' — you may take just one", async () => {
+  test("'up to two' — you may take just one", async () => {
     // Expected: only blade returns; fae stays. Actual: nothing can be chosen (see above).
     const game = await board().build();
     await castReturning(game, ["blade"]);
@@ -77,7 +77,7 @@ describe("Guerilla Warfare (ogn-264-298)", () => {
     const game = await board().build();
     const atCast = game.p1.option("cast", "gw")?.fields.find((f) => f.arg === "targets")?.options ?? [];
     expect(atCast.flat()).not.toContain("junk");
-    await game.p1.cast("gw");
+    await game.p1.cast("gw", { targets: [] });
     await game.settle();
     const d = game.decision();
     const onResolve = d?.kind === "pick" ? d.options.map((o) => o.card) : [];
@@ -100,7 +100,7 @@ describe("Guerilla Warfare (ogn-264-298)", () => {
       .hand(P1, HIDDEN_BLADE, "blade")
       .hand(P1, CARD, "gw")
       .build();
-    await game.p1.cast("gw");
+    await game.p1.cast("gw", { targets: [] });
     await game.settle();
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
     expect(game.p1.can("hide", "fae")).toBe(true);

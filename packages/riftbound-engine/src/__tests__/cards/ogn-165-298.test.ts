@@ -41,7 +41,7 @@ describe("Cemetery Attendant (ogn-165-298)", () => {
     expect(lowEnergy.p1.can("play", "ca")).toBe(false);
   });
 
-  test.failing("BUG: the play trigger returns the chosen unit from your trash to your hand (it returns the Attendant itself today)", async () => {
+  test("the play trigger returns the chosen unit from your trash to your hand", async () => {
     // Expected: deadB moves trash → hand, the Attendant stays on the board.
     // Actual: return-to-hand resolves against the source card; the trash is untouched.
     const game = await board().build();
@@ -54,7 +54,7 @@ describe("Cemetery Attendant (ogn-165-298)", () => {
     expect(game.zoneOf("deadA")).toBe("trash");
   });
 
-  test.failing("BUG: only UNITS in YOUR trash are offered as choices — not spells, not the opponent's trash", async () => {
+  test("only UNITS in YOUR trash are offered as choices — not spells, not the opponent's trash", async () => {
     // Expected: a pick prompt for P1 listing exactly deadA/deadB. Actual: no prompt at all.
     const game = await board().build();
     await game.p1.play("ca");
@@ -72,7 +72,7 @@ describe("Cemetery Attendant (ogn-165-298)", () => {
     expect(game.zoneOf("theirs")).toBe("trash");
   });
 
-  test.failing("BUG: with no unit in your trash the Attendant still stays in play and nothing is returned", async () => {
+  test("with no unit in your trash the Attendant still stays in play and nothing is returned", async () => {
     // Expected: the trigger has no legal card and does nothing; Attendant remains in base.
     // Actual: the Attendant bounces itself back to hand.
     const game = await scenario()

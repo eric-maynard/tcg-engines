@@ -42,7 +42,7 @@ describe("Annie, Stubborn (ogs-010-024)", () => {
     expect(lowEnergy.p1.can("play", "annie")).toBe(false);
   });
 
-  test.failing("BUG: the play trigger returns the chosen spell from your trash to your hand (it returns Annie herself today)", async () => {
+  test("the play trigger returns the chosen spell from your trash to your hand", async () => {
     // Expected: spellB moves trash → hand and Annie stays on the board.
     // Actual: return-to-hand resolves against the source card; the trash is untouched.
     const game = await board().build();
