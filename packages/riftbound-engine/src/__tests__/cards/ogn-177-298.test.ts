@@ -16,6 +16,9 @@ const CARD = "ogn-177-298";
 
 /** Accept the Pursuer's "you may" however the engine surfaces it (yes/no or a single pick). */
 async function acceptFollow(game: Game) {
+  // The optional trigger sits on the chain (rule 419): settle passes priority
+  // until its opt-in prompt is the pending decision.
+  await game.settle();
   const d = game.decision();
   expect(d?.seat).toBe(P1);
   expect(["yes-no", "pick"]).toContain(d?.kind as string);
@@ -41,7 +44,7 @@ describe("Stealthy Pursuer (ogn-177-298)", () => {
     expect(low.p1.can("play", "sp")).toBe(false);
   });
 
-  test.failing("BUG: a friendly unit moving out of the Pursuer's location asks 'may be moved with it' and, on yes, the Pursuer follows", async () => {
+  test("a friendly unit moving out of the Pursuer's location asks 'may be moved with it' and, on yes, the Pursuer follows", async () => {
     // Expected: ally base→bf1 triggers the Pursuer (also in base); P1 accepts; Pursuer ends at bf1,
     // still ready (moved by an effect, not by its own Standard Move). Actual: no trigger fires at all.
     const game = await scenario()
@@ -51,6 +54,7 @@ describe("Stealthy Pursuer (ogn-177-298)", () => {
       .build();
     await game.p1.move("ally", "bf1");
     expect(game.locationOf("ally")).toBe("bf1");
+    await game.settle(); // the trigger sits on the chain until priority passes
     await acceptFollow(game);
     await game.settle();
     expect(game.locationOf("sp")).toBe("bf1");
@@ -58,7 +62,7 @@ describe("Stealthy Pursuer (ogn-177-298)", () => {
     expect(game.state("ally").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: 'I may' — declining leaves the Pursuer where it is", async () => {
+  test("'I may' — declining leaves the Pursuer where it is", async () => {
     // Expected: a prompt appears and P1 may say no. Actual: no prompt is ever offered.
     const game = await scenario()
       .battlefield("bf1", { controller: P1 })
@@ -66,6 +70,7 @@ describe("Stealthy Pursuer (ogn-177-298)", () => {
       .unit(P1, "base", { might: 2 }, "ally")
       .build();
     await game.p1.move("ally", "bf1");
+    await game.settle();
     const d = game.decision();
     expect(d?.seat).toBe(P1);
     expect(["yes-no", "pick"]).toContain(d?.kind as string);
@@ -75,7 +80,7 @@ describe("Stealthy Pursuer (ogn-177-298)", () => {
     expect(game.locationOf("ally")).toBe("bf1");
   });
 
-  test.failing("BUG: works from a battlefield too — ally retreats bf1→base and the Pursuer may go home with it", async () => {
+  test("works from a battlefield too — ally retreats bf1→base and the Pursuer may go home with it", async () => {
     // Expected: Pursuer at bf1 follows the ally to base. Actual: no trigger.
     const game = await scenario()
       .battlefield("bf1", { controller: P1 })
@@ -83,12 +88,13 @@ describe("Stealthy Pursuer (ogn-177-298)", () => {
       .unit(P1, "bf1", { might: 2 }, "ally")
       .build();
     await game.p1.move("ally", "base");
+    await game.settle(); // the trigger sits on the chain until priority passes
     await acceptFollow(game);
     await game.settle();
     expect(game.locationOf("sp")).toBe("base");
   });
 
-  test.failing("BUG: following into an enemy battlefield makes the Pursuer an attacker in that combat (4+2 vs 5 → defender dies)", async () => {
+  test("following into an enemy battlefield makes the Pursuer an attacker in that combat (4+2 vs 5 → defender dies)", async () => {
     // Expected: ally (2) attacks bf1 held by a 5-Might foe; Pursuer (4) tags along → 6 damage kills
     // the foe and P1 conquers bf1. Actual: Pursuer never moves; the ally dies alone.
     const game = await scenario()
@@ -98,6 +104,7 @@ describe("Stealthy Pursuer (ogn-177-298)", () => {
       .unit(P1, "base", { might: 2 }, "ally")
       .build();
     await game.p1.move("ally", "bf1");
+    await game.settle(); // the trigger sits on the chain until priority passes
     await acceptFollow(game);
     await game.settle();
     expect(game.zoneOf("foe")).toBe("trash");

@@ -358,7 +358,7 @@ function triggerMatchesEvent(
       controller?: "friendly" | "enemy" | "any";
       cardType?: string;
       type?: string;
-      location?: "here" | "battlefield" | "other-battlefield";
+      location?: "here" | "from-here" | "battlefield" | "other-battlefield";
       excludeSelf?: boolean;
       tag?: string;
       filter?: string | readonly string[];
@@ -439,6 +439,15 @@ function triggerMatchesEvent(
         return false;
       }
     }
+    // rule 383.4.d (ogn-177-298) — "when a friendly unit moves FROM my
+    // location": the subject's ORIGIN must be this card's zone. `here` reads
+    // the destination, which is the opposite moment.
+    if (desc.location === "from-here") {
+      const fromZone = "from" in event ? String(event.from) : undefined;
+      if (fromZone === undefined || fromZone !== card.zone) {
+        return false;
+      }
+    }
     if (desc.location === "here") {
       const evLoc =
         "battlefieldId" in event
@@ -504,8 +513,10 @@ function triggerMatchesEvent(
  */
 export function abilityFunctionsFromTrash(ability: TriggerableAbility): boolean {
   const eff = ability.effect as { type?: string; from?: unknown; target?: unknown } | undefined;
+  // rule 385.2 (ogn-252-298): "…return this from your trash to your hand" is
+  // likewise active only from the trash — `from: "trash"` marks it.
   return (
-    eff?.type === "play" &&
+    (eff?.type === "play" || eff?.type === "return-to-hand") &&
     eff.from === "trash" &&
     (eff.target === undefined || eff.target === "self")
   );

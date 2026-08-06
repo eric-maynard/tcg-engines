@@ -21,7 +21,8 @@ const abilities: Ability[] = [
         cardType: "unit",
         controller: "friendly",
         excludeSelf: true,
-        location: "here",
+        // "moves FROM my location": the move's origin is my zone (rule 383.4.d).
+        location: "from-here",
       },
     },
     type: "triggered",

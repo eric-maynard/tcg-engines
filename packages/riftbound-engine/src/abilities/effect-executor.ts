@@ -87,6 +87,12 @@ export interface EffectContext {
    */
   readonly triggerSourceId?: string;
   /**
+   * rule-id: ogn-177-298 — destination zone of the `move` event that fired
+   * this triggered ability, so "I may be moved WITH IT" (`to: "same"`) lands
+   * where the mover went.
+   */
+  readonly triggerToZone?: string;
+  /**
    * rule 811.1.d: zone id (`battlefield-<bfId>`) of the battlefield this
    * card was played from Hidden at — units it plays must be played there.
    */

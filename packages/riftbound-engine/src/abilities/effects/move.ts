@@ -263,7 +263,14 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   }
 
   let targetZone: string;
-  if (dest === "here" && ctx.sourceZone) {
+  // rule-id: ogn-177-298 — "I may be moved WITH IT": follow the triggering
+  // move to its destination. No such event → nothing to follow.
+  if (dest === "same") {
+    if (!ctx.triggerToZone) {
+      return;
+    }
+    targetZone = ctx.triggerToZone;
+  } else if (dest === "here" && ctx.sourceZone) {
     targetZone = ctx.sourceZone;
   } else if (dest && dest !== "here") {
     targetZone = dest;

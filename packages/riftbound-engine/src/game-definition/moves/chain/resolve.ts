@@ -2,7 +2,12 @@
  * Chain resolution: executeResolvedItem + passChainPriority / resolveChain moves (split from chain-moves.ts).
  */
 
-import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
+import type {
+  CardId as CoreCardId,
+  PlayerId as CorePlayerId,
+  ZoneId as CoreZoneId,
+  GameMoveDefinitions,
+} from "@tcg/core";
 import type { ChainItem } from "../../../chain";
 import {
   allPlayersPassed,
@@ -76,6 +81,18 @@ export function executeResolvedItem(
       !canSpendXp(leadEffect, buildEffectContext(draft, resolved.controller, resolved.cardId, context))
     ) {
       return;
+    }
+    // rule 422.3 (ogn-252-298): "you may discard N to …" with fewer than N
+    // cards in hand is an unpayable cost — no opt-in prompt at all.
+    const optDiscard = (resolved.optInCost as { discard?: unknown } | undefined)?.discard;
+    if (typeof optDiscard === "number" && optDiscard > 0) {
+      const hand = context.zones.getCardsInZone(
+        "hand" as CoreZoneId,
+        resolved.controller as CorePlayerId,
+      );
+      if (hand.length < optDiscard) {
+        return;
+      }
     }
     draft.pendingChoice = {
       type: "opt-in",
@@ -332,6 +349,8 @@ export function executeResolvedItem(
     ...(_variables ? { variables: _variables } : {}),
     ...(boundTargets ? { boundTargets } : {}),
     ...(triggerSourceId ? { triggerSourceId } : {}),
+    // rule-id: ogn-177-298 — where the triggering move went ("with it").
+    ...(typeof trigEvt?.to === "string" ? { triggerToZone: trigEvt.to } : {}),
     // rule 811.1.d.3: units played by a from-Hidden card go to that battlefield.
     ...(hiddenZone ? { hiddenZone } : {}),
   };
