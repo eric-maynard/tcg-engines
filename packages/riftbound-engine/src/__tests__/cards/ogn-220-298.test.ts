@@ -42,7 +42,7 @@ describe("Facebreaker (ogn-220-298)", () => {
     expect(poor.p1.can("cast", "fb")).toBe(false);
   });
 
-  test.failing("BUG: the enemy unit must be at the SAME battlefield as the friendly one (units in base / other battlefields are not legal)", async () => {
+  test("the enemy unit must be at the SAME battlefield as the friendly one (units in base / other battlefields are not legal)", async () => {
     // Expected: only the pair [mine, foe] is legal. Actual: [mine, far] (enemy at bf2) is offered too.
     const game = await board().build();
     const pairs = game.p1.option("cast", "fb")?.fields.find((f) => f.arg === "targets")?.options;

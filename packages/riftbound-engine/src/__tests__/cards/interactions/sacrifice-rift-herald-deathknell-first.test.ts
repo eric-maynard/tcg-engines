@@ -69,6 +69,9 @@ function board() {
 describe("Sacrifice × Rift Herald — the cost-kill's Deathknell resolves before Sacrifice draws", () => {
   test("Sacrifice's own resolution: costs 1 energy (no power); P1 draws 2 (the known deck top) and channels 1 rune exhausted; Sacrifice → trash", async () => {
     const game = await board().build();
+    // The cost-kill's Deathknell now resolves above Sacrifice; decline its
+    // optional play so this clause stays about Sacrifice's own resolution.
+    game.script(P1, ["decline"]);
     const runesBefore = game.p1.runes().length;
     const runeDeckBefore = game.p1.runeDeck().length;
     await castSacrifice(game, "herald");
@@ -91,7 +94,7 @@ describe("Sacrifice × Rift Herald — the cost-kill's Deathknell resolves befor
     expect(sacrificeOffered(game)).toEqual(["herald"]);
   });
 
-  test.failing("BUG: paying the cost kills Rift Herald DURING Sacrifice's play — before anyone gets priority Herald is in the trash and its Deathknell sits ABOVE Sacrifice on the chain (357.2, 428.1.a.1.b, 359.3.a/b)", async () => {
+  test("paying the cost kills Rift Herald DURING Sacrifice's play — before anyone gets priority Herald is in the trash and its Deathknell sits ABOVE Sacrifice on the chain (357.2, 428.1.a.1.b, 359.3.a/b)", async () => {
     // Expected: chain bottom→top = [Sacrifice, Rift Herald trigger]; herald in trash; P1 holds priority.
     // Actual: no kill happens; chain = [Sacrifice] and Herald stays in base.
     const game = await board().build();
@@ -107,7 +110,7 @@ describe("Sacrifice × Rift Herald — the cost-kill's Deathknell resolves befor
     expect(game.zoneOf("top1")).toBe("mainDeck");
   });
 
-  test.failing("BUG: ORDER — Herald's Deathknell resolves FIRST and can only play a unit from the PRE-DRAW hand (energy ignored, power paid); THEN Sacrifice draws 2 and channels 1 exhausted (340.1)", async () => {
+  test("ORDER — Herald's Deathknell resolves FIRST and can only play a unit from the PRE-DRAW hand (energy ignored, power paid); THEN Sacrifice draws 2 and channels 1 exhausted (340.1)", async () => {
     // Expected: after one round of passes the top item (Deathknell) resolves → P1 is asked which hand
     // unit to play: only "handUnit" is offered (top1/top2 are still in the deck). It enters base for 0
     // energy but 1 fury. Sacrifice is still on the chain; after the next passes it resolves → top1/top2
@@ -139,7 +142,7 @@ describe("Sacrifice × Rift Herald — the cost-kill's Deathknell resolves befor
     expect(game.chain()).toHaveLength(0);
   });
 
-  test.failing("BUG: Rift Herald's Deathknell in isolation (killed by Final Spark) asks P1 to play a unit from hand to base ignoring its Energy cost; engine puts the trigger on the chain but it resolves as a no-op", async () => {
+  test("Rift Herald's Deathknell in isolation (killed by Final Spark) asks P1 to play a unit from hand to base ignoring its Energy cost; engine puts the trigger on the chain but it resolves as a no-op", async () => {
     // Expected: Herald dies → Deathknell on chain → resolves → P1 picks "handUnit" (5 energy, has 0) →
     // it enters P1's base; 1 fury paid.
     // Actual: the trigger resolves without prompting; nothing is played.

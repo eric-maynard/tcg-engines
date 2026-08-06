@@ -42,11 +42,13 @@ import type { SpellEffectTargetShape } from "./targeting";
 import {
   collectIndependentTargetSlots,
   collectSequenceTargetSlots,
+  findAllAtOneBattlefieldTarget,
   findAmountReferenceTarget,
   findReplacementChosenTarget,
   findSequenceLeadTarget,
   findSplitDamageEffect,
   enumerateSubsetsUpTo,
+  offBoardPlayIsCasterChosen,
   offBoardPlayZone,
   spellEffectHasLegalTargets,
 } from "./targeting";
@@ -383,7 +385,7 @@ export const playSpell: Defs["playSpell"] = {
         t.length !== 1 ||
         !chainItems.some(
           (item) =>
-            item.cardId === t[0] &&
+            (item.cardId === t[0] || item.id === t[0]) &&
             isLegalCounterTarget(spellAbility?.effect as { target?: unknown }, item),
         )
       ) {
@@ -411,6 +413,93 @@ export const playSpell: Defs["playSpell"] = {
         return false;
       }
     }
+    // rule-id: ogn-206-298 (rule 355.8) — a numeric quantity ≥ 2 ("Give TWO
+    // friendly units each +2 Might") names that many DISTINCT legal targets;
+    // validate the whole supplied set, not just its first member.
+    if (
+      !isCounterSpell &&
+      spellTgt &&
+      typeof spellTgt !== "string" &&
+      typeof spellTgt.quantity === "number" &&
+      spellTgt.quantity >= 2 &&
+      context.params.targets?.length
+    ) {
+      const pool = resolveTarget(
+        { ...spellTgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+        conditionResolverCtx,
+      ) as string[];
+      const supplied = context.params.targets as string[];
+      if (
+        supplied.length > spellTgt.quantity ||
+        new Set(supplied).size !== supplied.length ||
+        !supplied.every((id) => pool.includes(id))
+      ) {
+        return false;
+      }
+    }
+    // rule-id: ogn-220-298 (rule 355.8) — "…at the same battlefield": when a
+    // sequence's second slot is `location:"same"`, the supplied pair must share
+    // one battlefield zone (a base unit or another battlefield is illegal).
+    {
+      const seqEffects = (spellAbility?.effect as { type?: string; effects?: unknown[] } | undefined)
+        ?.type === "sequence"
+        ? ((spellAbility?.effect as { effects?: unknown[] }).effects ?? [])
+        : [];
+      const hasSameSlot = seqEffects.some(
+        (e) =>
+          typeof (e as { target?: unknown })?.target === "object" &&
+          ((e as { target: { location?: string } }).target.location === "same"),
+      );
+      const supplied = context.params.targets ?? [];
+      if (hasSameSlot && supplied.length >= 2) {
+        const zone = context.zones.getCardZone(supplied[0] as CoreCardId);
+        if (
+          zone?.startsWith("battlefield-") !== true ||
+          context.zones.getCardZone(supplied[1] as CoreCardId) !== zone
+        ) {
+          return false;
+        }
+      }
+    }
+    // rule-id: ogs-008-024 (rule 355.8) — a `fight` spell names TWO
+    // caster-chosen targets, so the supplied set must be exactly
+    // [attacker, defender]: distinct, and each legal for its own descriptor.
+    // Without this a raw playSpell with no targets is legal, pays only the
+    // base cost (no Deflect surcharge, which is computed from the targets)
+    // and lets the fight handler silently auto-pick both units at resolution.
+    {
+      const fightEffect = spellAbility?.effect as
+        | { type?: string; attacker?: unknown; defender?: unknown }
+        | undefined;
+      if (
+        fightEffect?.type === "fight" &&
+        typeof fightEffect.attacker === "object" &&
+        fightEffect.attacker !== null &&
+        typeof fightEffect.defender === "object" &&
+        fightEffect.defender !== null
+      ) {
+        const supplied = (context.params.targets ?? []) as string[];
+        if (supplied.length !== 2 || supplied[0] === supplied[1]) {
+          return false;
+        }
+        const attackers = resolveTarget(
+          { ...(fightEffect.attacker as object), quantity: "all" } as Parameters<
+            typeof resolveTarget
+          >[0],
+          conditionResolverCtx,
+        ) as string[];
+        const defenders = resolveTarget(
+          { ...(fightEffect.defender as object), quantity: "all" } as Parameters<
+            typeof resolveTarget
+          >[0],
+          conditionResolverCtx,
+        ) as string[];
+        if (!attackers.includes(supplied[0]) || !defenders.includes(supplied[1])) {
+          return false;
+        }
+      }
+    }
+
     // rule-id: ogs-002-024 — "all enemy units at A battlefield": supplied
     // targets name the chosen battlefield and must be exactly one real one.
     if (isAllAtOneBattlefield(spellTgt) && context.params.targets?.length) {
@@ -649,7 +738,8 @@ export const playSpell: Defs["playSpell"] = {
         spellEffect?.type !== "counter" &&
         // rule-id: ogn-198-298 — an off-board play's card is chosen from the
         // trash/hand as the effect resolves, never as a play-time board target.
-        offBoardPlayZone(spellEffect) === undefined &&
+        (offBoardPlayZone(spellEffect) === undefined ||
+          offBoardPlayIsCasterChosen(spellEffect)) &&
         tgt !== undefined &&
         typeof tgt !== "string" &&
         tgt.type !== "self" &&
@@ -844,7 +934,23 @@ export const playSpell: Defs["playSpell"] = {
             : anyQty
               ? subsetPool.length
               : undefined;
-        if (upToN !== undefined) {
+        // rule-id: ogn-206-298 (rule 355.8) — "Give TWO friendly units each
+        // +2 Might": a numeric quantity ≥ 2 is a caster-chosen SET of that
+        // many DISTINCT units, all locked on the chain item at play time.
+        const exactN = !splitDesc && typeof qty === "number" && qty >= 2 ? qty : undefined;
+        if (exactN !== undefined) {
+          const size = Math.min(exactN, subsetPool.length);
+          for (const subset of enumerateSubsetsUpTo(subsetPool, size)) {
+            if (subset.length !== size) {
+              continue;
+            }
+            baseVariants.push({
+              cardId: cardId as string,
+              playerId: context.playerId as string,
+              targets: subset,
+            });
+          }
+        } else if (upToN !== undefined) {
           const loc = (tgt as { location?: string }).location;
           const sameLocation = loc === "here" || (anyQty && loc === "battlefield");
           for (const subset of enumerateSubsetsUpTo(subsetPool, upToN)) {
@@ -867,7 +973,25 @@ export const playSpell: Defs["playSpell"] = {
             });
           }
         } else {
+          // rule-id: ogn-250-298 (rule 355.8) — "Choose a friendly unit in your
+          // base. Deal damage equal to its Might to all enemy units at a
+          // battlefield": the Might reference AND the battlefield are both
+          // caster-chosen, so lock them together as targets [refUnit, bfId].
+          const refBattlefield =
+            refTgt !== undefined && tgt === refTgt && !splitDesc
+              ? findAllAtOneBattlefieldTarget(spellEffect)
+              : undefined;
           for (const targetId of validTargets) {
+            if (refBattlefield) {
+              for (const bfId of Object.keys(state.battlefields ?? {})) {
+                baseVariants.push({
+                  cardId: cardId as string,
+                  playerId: context.playerId as string,
+                  targets: [targetId as string, bfId],
+                });
+              }
+              continue;
+            }
             if (splitDesc) {
               const n = getCardEffectiveMight(targetId as string, (c) =>
                 context.cards.getCardMeta?.(c),
@@ -886,12 +1010,24 @@ export const playSpell: Defs["playSpell"] = {
             } else {
               // rule-id: sfd-200-221 (rule 355.8) — pair the lead with each
               // legal (distinct) second-slot candidate.
-              const seconds = secondTgt
-                ? resolveTarget(
-                    { ...secondTgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
-                    resolverCtx,
-                  ).filter((id) => id !== targetId)
-                : [];
+              // rule-id: ogn-220-298 (rule 355.8) — "…and an enemy unit at the
+              // SAME battlefield": the second slot is pinned to the lead's
+              // battlefield, so pair only within that zone.
+              const secondIsSame =
+                secondTgt !== undefined &&
+                (secondTgt as { location?: string }).location === "same";
+              const leadZone = context.zones.getCardZone(targetId as CoreCardId);
+              const secondsCtx =
+                secondIsSame && leadZone?.startsWith("battlefield-") === true
+                  ? { ...resolverCtx, sameZone: leadZone }
+                  : resolverCtx;
+              const seconds =
+                secondTgt === undefined || (secondIsSame && secondsCtx === resolverCtx)
+                  ? []
+                  : resolveTarget(
+                      { ...secondTgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+                      secondsCtx,
+                    ).filter((id) => id !== targetId);
               if (seconds.length > 0) {
                 for (const secId of seconds) {
                   baseVariants.push({
@@ -900,7 +1036,7 @@ export const playSpell: Defs["playSpell"] = {
                     targets: [targetId as string, secId as string],
                   });
                 }
-              } else {
+              } else if (!secondIsSame) {
                 baseVariants.push({
                   cardId: cardId as string,
                   playerId: context.playerId as string,
@@ -927,15 +1063,21 @@ export const playSpell: Defs["playSpell"] = {
         // counter is a caster-chosen target locked at play time. Enumerate one
         // Play per legal chain item so the caster picks when several are
         // pending (the handler reads it from boundTargets).
+        // rule 425.1 (sfd-045-221) — "an ability" is singular: two pending
+        // items sourced from the SAME card (a doubled Deathknell) are separate
+        // objects, so each is offered on its own. The card id names the item
+        // whenever it is unambiguous; further copies are named by chain-item id.
         const seen = new Set<string>();
         for (const item of interaction.chain?.items ?? []) {
           if (!isLegalCounterTarget(spellEffect, item)) continue;
-          if (seen.has(item.cardId)) continue;
+          const key = seen.has(item.cardId) ? item.id : item.cardId;
+          if (seen.has(key)) continue;
+          seen.add(key);
           seen.add(item.cardId);
           baseVariants.push({
             cardId: cardId as string,
             playerId: context.playerId as string,
-            targets: [item.cardId],
+            targets: [key],
           });
         }
       } else {
@@ -1125,7 +1267,8 @@ export const playSpell: Defs["playSpell"] = {
         spellEffect?.type !== "counter" &&
         // rule-id: ogn-198-298 — an off-board play's card is chosen from the
         // trash/hand as the effect resolves, never as a play-time board target.
-        offBoardPlayZone(spellEffect) === undefined &&
+        (offBoardPlayZone(spellEffect) === undefined ||
+          offBoardPlayIsCasterChosen(spellEffect)) &&
         tgt !== undefined &&
         typeof tgt !== "string" &&
         tgt.type !== "self" &&
@@ -1218,35 +1361,6 @@ export const playSpell: Defs["playSpell"] = {
       draft.additionalCostsPaid = {};
     }
     draft.additionalCostsPaid[cardId] = spellAdditionalCost !== undefined || exhaustCostPaid;
-
-    // rule 357.2 / 356.2.a.1 (unl-173-219) — the mandatory kill is paid as the
-    // spell is played, before it goes on the chain, and exactly once no matter
-    // how many Repeat instances are paid (135.2.b.3). It is a real death:
-    // replacements apply and `die` fires (see killAsCost).
-    if (sacrificeId && mandatoryKillCost(cardId)) {
-      // rule 428.1 / 370.1.a.1: it is a real kill, so Deathknell fires and a
-      // die-replacement (Zhonya's Hourglass) may apply; 357.2.a — the cost
-      // counts as paid either way.
-      executeEffect(
-        { target: { type: "unit" }, type: "kill" },
-        {
-          boundTargets: [sacrificeId as string],
-          cards: context.cards,
-          counters: context.counters,
-          draft,
-          fireTriggers: (event) =>
-            fireTriggers(event, {
-              cards: context.cards,
-              counters: context.counters,
-              draft,
-              zones: context.zones,
-            }),
-          playerId,
-          sourceCardId: cardId,
-          zones: context.zones,
-        },
-      );
-    }
 
     const repeatN = Math.max(0, repeatCount ?? 0);
     deductCost(
@@ -1353,6 +1467,36 @@ export const playSpell: Defs["playSpell"] = {
           trigCtx,
         );
       }
+    }
+
+    // rule 357.2 / 356.2.a.1 (unl-173-219) — the mandatory kill is paid while
+    // the spell is played, exactly once no matter how many Repeat instances
+    // are paid (135.2.b.3). rule 428.1.a.1.b / 359.3.a-b: the death happens
+    // after the spell has been placed on the chain, so the victim's Deathknell
+    // becomes a pending item ABOVE the spell and resolves first (340.1).
+    if (sacrificeId && mandatoryKillCost(cardId)) {
+      // rule 428.1 / 370.1.a.1: it is a real kill, so Deathknell fires and a
+      // die-replacement (Zhonya's Hourglass) may apply; 357.2.a — the cost
+      // counts as paid either way.
+      executeEffect(
+        { target: { type: "unit" }, type: "kill" },
+        {
+          boundTargets: [sacrificeId as string],
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          fireTriggers: (event) =>
+            fireTriggers(event, {
+              cards: context.cards,
+              counters: context.counters,
+              draft,
+              zones: context.zones,
+            }),
+          playerId,
+          sourceCardId: cardId,
+          zones: context.zones,
+        },
+      );
     }
   },
 };

@@ -1,7 +1,41 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * The Deathknell's play is unique to this card: it plays a unit out of HAND to
+ * the controller's base, waiving only the Energy cost (rule 356.1.b — Power
+ * pips are still paid). The parser has no pattern for that destination/cost
+ * pair, so the abilities are spelled out here.
+ */
+const playFromHand = {
+  from: "hand",
+  ignoreCost: "energy",
+  target: { type: "unit" },
+  toLocation: "base",
+  type: "play",
+} as const;
+
+const abilities: Ability[] = [
+  {
+    effect: { amount: 3, from: "deck", type: "look" },
+    trigger: { event: "move-to-battlefield", on: "self" },
+    type: "triggered",
+  },
+  {
+    effect: playFromHand,
+    keyword: "Deathknell",
+    type: "keyword",
+  },
+  {
+    effect: playFromHand,
+    trigger: { event: "die", on: "self" },
+    type: "triggered",
+  },
+] as unknown as Ability[];
+
 export const riftHerald: UnitCard = {
+  abilities,
   cardNumber: 179,
   cardType: "unit",
   domain: "order",

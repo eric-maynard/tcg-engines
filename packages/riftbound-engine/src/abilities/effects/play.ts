@@ -2,7 +2,12 @@
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import { canAffordCard, type CostExtras, deductCost } from "../../game-definition/moves/play/cost";
+import {
+  canAffordCard,
+  type CostExtras,
+  deductCost,
+  staticEnterReadyApplies,
+} from "../../game-definition/moves/play/cost";
 import { spellEffectHasLegalTargets, type SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
@@ -38,6 +43,18 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // path below: the card to play is already known.)
   if (from === "trash" && typeof (effect as { target?: unknown }).target === "object") {
     playFromTrash(effect, ctx);
+    return;
+  }
+  // rule-id: unl-179-219 (rule 356.1.b) — "play a unit from your hand to your
+  // base, ignoring its Energy cost": the hand is not a board zone, and the
+  // destination and remaining (Power) cost are both fixed, so the controller
+  // simply picks an affordable hand unit and it enters their base.
+  if (
+    from === "hand" &&
+    toLocation === "base" &&
+    (effect as { ignoreCost?: unknown }).ignoreCost !== undefined
+  ) {
+    playFromHandToBase(effect, ctx);
     return;
   }
   if (from === "hand" && !ctx.boundTargets) {
@@ -272,6 +289,49 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
 }
 
 /**
+ * rule-id: unl-179-219 — "play a unit from your hand to your base, ignoring
+ * its Energy cost. (You must still pay its Power cost.)". Rule 355.8: only
+ * hand cards whose remaining cost the controller can pay are legal choices;
+ * rule 355.10: the choice is theirs alone, so it is offered even with one
+ * candidate.
+ */
+function playFromHandToBase(effect: ExecutableEffect, ctx: EffectContext): void {
+  const ignoreCost = (effect as { ignoreCost?: unknown }).ignoreCost;
+  const extras: CostExtras = ignoreCost === true ? { ignoreBaseCost: true } : { ignoreEnergyCost: true };
+  const candidates = playCandidatesFromHand(effect, ctx).filter((id) =>
+    canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta),
+  );
+  // The prompt hands the pick back through `then` as the trigger source.
+  const fromPick = (effect as { pickedFromPrompt?: boolean }).pickedFromPrompt
+    ? ctx.triggerSourceId
+    : undefined;
+  let chosen = [fromPick, ...(ctx.boundTargets ?? [])].find(
+    (id): id is string => id !== undefined && candidates.includes(id),
+  );
+  if (chosen === undefined) {
+    if (candidates.length === 0 || ctx.draft.pendingChoice) {
+      return;
+    }
+    // The pick itself does nothing (the card is already in hand); the play
+    // happens in `then`, which receives the picked card as its trigger source.
+    ctx.draft.pendingChoice = {
+      onPicked: "draw",
+      optional: true,
+      prompter: ctx.playerId,
+      remaining: 1,
+      revealed: [...candidates],
+      revealer: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      then: { ...(effect as object), pickedFromPrompt: true },
+      type: "reveal-and-pick",
+    } as typeof ctx.draft.pendingChoice;
+    return;
+  }
+  deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
+  enterUnitFromEffect(chosen, "base", ctx);
+}
+
+/**
  * rule-id: ogn-107-298 — cards in the effect controller's hand matching the
  * play effect's target shape (`type` unit/spell/gear/card, `filter.keyword`).
  */
@@ -320,7 +380,12 @@ function enterUnitFromEffect(cardId: string, zoneId: string, ctx: EffectContext)
     mightModifier: 0,
     stunned: false,
   } as Record<string, unknown>);
-  ctx.counters.setFlag(cardId as CoreCardId, "exhausted", true);
+  // rule 143.4: a unit entering the board is exhausted however it was played,
+  // unless a static "I enter ready" applies (rule-id: ven-013-166 — its
+  // condition is checked here, after the card has left its origin zone).
+  if (!staticEnterReadyApplies(cardId, ctx.draft, ctx.playerId, ctx.zones)) {
+    ctx.counters.setFlag(cardId as CoreCardId, "exhausted", true);
+  }
   const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? ctx.playerId;
   ctx.fireTriggers?.({ cardId, paidAdditionalCost: false, playerId: owner, type: "play-self" });
   ctx.fireTriggers?.({ cardId, cardType: "unit", playerId: owner, type: "play-card" });

@@ -55,6 +55,26 @@ export function findAmountReferenceTarget(
 }
 
 /**
+ * rule-id: ogn-250-298 (rule 355.8) — "Deal damage equal to its Might to all
+ * enemy units at A BATTLEFIELD": alongside a Might-reference unit the spell
+ * also names a caster-chosen battlefield. Surface the all-at-one-battlefield
+ * descriptor (anywhere in a sequence) so enumeration can lock both.
+ */
+export function findAllAtOneBattlefieldTarget(
+  effect: SpellEffectTargetShape | undefined,
+): SpellEffectTargetDescriptor | undefined {
+  if (!effect) return undefined;
+  if (isAllAtOneBattlefield(effect.target)) return effect.target;
+  if (Array.isArray(effect.effects)) {
+    for (const sub of effect.effects) {
+      const found = findAllAtOneBattlefieldTarget(sub);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/**
  * rule-id: ogn-254-298 (rule 355.8) — "Choose a unit. Kill it the next time it
  * takes damage this turn": a single-fire (`duration:"next"`) `replacement`
  * spell carries its caster-chosen unit on the nested `replacement.target`, not
@@ -281,6 +301,20 @@ export function offBoardPlayZone(effect: SpellEffectTargetShape | undefined): st
 }
 
 /**
+ * rule 355.8 / 355.10.a (rule-id: ogn-198-298) — when the play descriptor
+ * itself names the off-board zone (`location:"trash"`), the card is a standard
+ * target chosen as the spell is PLAYED, not a selection made while it resolves.
+ * The board resolver already scans that zone for such a descriptor, so play-time
+ * enumeration can offer it.
+ */
+export function offBoardPlayIsCasterChosen(effect: SpellEffectTargetShape | undefined): boolean {
+  const zone = offBoardPlayZone(effect);
+  if (zone === undefined) return false;
+  const tgt = effect?.target as { location?: string } | undefined;
+  return tgt?.location === zone;
+}
+
+/**
  * rule 355.8 for an off-board play: legality is whether the controller's own
  * `from` zone holds a card matching the effect's descriptor.
  */
@@ -311,6 +345,11 @@ export function spellEffectHasLegalTargets(
   ctx: Parameters<typeof resolveTarget>[1],
 ): boolean {
   if (!effect) {
+    return true;
+  }
+  // rule-id: ogn-262-298 (rule 355.13) — a "You may …" instruction may always
+  // be declined, so its targets never gate whether the spell can be played.
+  if ((effect as { optional?: boolean }).optional === true) {
     return true;
   }
   // Rule 355.8: modal spells — at least one option must have a valid target set.

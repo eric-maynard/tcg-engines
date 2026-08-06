@@ -46,9 +46,7 @@ describe("Back to Back (ogn-206-298)", () => {
     expect(poor.p1.can("cast", "btb")).toBe(false);
   });
 
-  test.failing("BUG: TWO friendly units are chosen and each gets +2 Might", async () => {
-    // Expected: the spell takes two distinct friendly targets (a: 1→3, b: 2→4, c untouched).
-    // Actual: the play enumerator only accepts a single target and only that unit gets +2.
+  test("TWO friendly units are chosen and each gets +2 Might", async () => {
     const game = await board().build();
     const field = game.p1.option("cast", "btb")?.fields.find((f) => f.arg === "targets");
     expect(field?.max).toBe(2);
