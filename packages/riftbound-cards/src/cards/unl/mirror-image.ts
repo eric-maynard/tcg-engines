@@ -14,6 +14,11 @@ const abilities: Ability[] = [
     effect: {
       location: "base",
       ready: true,
+      // rule-id: unl-200-219 (rule 477.1.b.1) — "Choose a unit … It becomes a
+      // copy of that unit": the chosen unit is a caster-chosen play-time
+      // target and is what the CopyOnPlay token copies (any unit, friendly or
+      // enemy). Without it CopyOnPlay would fall back to the spell itself.
+      target: { type: "unit" },
       token: {
         keywords: ["CopyOnPlay", "Temporary"],
         might: 0,

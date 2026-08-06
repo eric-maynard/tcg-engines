@@ -118,10 +118,20 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   // spec carrying the `CopyOnPlay` marker registers each instance with the
   // source card's definition (name, Might, keywords, abilities) instead of
   // the literal token stats, so engine reads treat it as a copy.
+  // rule-id: unl-200-219 (rule 477.1.b.1) — Mirror Image style "Choose a unit
+  // … it becomes a copy of that unit": the caster-chosen unit (bound to the
+  // effect's own `target` descriptor) is the copy source. With no such
+  // descriptor the marker means "copies of me" (Keeper of Masks).
+  const copyTargetId =
+    (effect as { target?: unknown }).target !== undefined ? ctx.boundTargets?.[0] : undefined;
+  const copySourceId = copyTargetId ?? ctx.sourceCardId;
   const copySource =
-    tokenDef.keywords?.includes("CopyOnPlay") && ctx.sourceCardId
-      ? registry.get(ctx.sourceCardId)
+    tokenDef.keywords?.includes("CopyOnPlay") && copySourceId
+      ? registry.get(copySourceId)
       : undefined;
+  // rule 477.2.a: keywords the effect grants the token separately are NOT part
+  // of the copied traits — they survive on top of the copy (e.g. [Temporary]).
+  const grantedTokenKeywords = (tokenDef.keywords ?? []).filter((k) => k !== "CopyOnPlay");
   const createdIds: string[] = [];
   for (let i = 0; i < count; i++) {
     // A process-wide sequence keeps ids unique when two create-token effects
@@ -144,7 +154,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         ...copySource,
         abilities: copySource.abilities ? [...copySource.abilities] : undefined,
         id: tokenId,
-        keywords: copySource.keywords ? [...copySource.keywords] : undefined,
+        keywords: [...new Set([...(copySource.keywords ?? []), ...grantedTokenKeywords])],
         powerCost: copySource.powerCost ? [...copySource.powerCost] : undefined,
         tags: copySource.tags ? [...copySource.tags] : undefined,
       });

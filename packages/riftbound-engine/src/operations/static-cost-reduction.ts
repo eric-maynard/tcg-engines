@@ -189,14 +189,7 @@ export function computeStaticCostReduction(
         if ((ability as { type?: string }).type !== "static") {
           continue;
         }
-        const {effect} = (ability as { effect?: Record<string, unknown> });
-        if (
-          !effect ||
-          (effect as { type?: string }).type !== "cost-reduction"
-        ) {
-          continue;
-        }
-
+        for (const effect of costEffectsOf(ability, "cost-reduction")) {
         // Target-match filter: only count auras whose `target` matches the
         // Played card. `self` / no-target shapes do not match an external
         // Played card.
@@ -255,11 +248,153 @@ export function computeStaticCostReduction(
         if (minEnergy > maxMinimum) {
           maxMinimum = minEnergy;
         }
+        }
       }
     }
   }
 
   return { minimum: maxMinimum, power: totalPower, reduction: totalReduction };
+}
+
+/**
+ * rule 356.3 — a static cost modifier may be printed as one clause of a
+ * compound ability ("friendly spells cost … less, and enemy spells cost …
+ * more"), which the parser emits as a `sequence` of effects. Yield every
+ * effect of the requested kind, unwrapping one level of `sequence`.
+ */
+function costEffectsOf(
+  ability: unknown,
+  kind: "cost-reduction" | "cost-increase",
+): Record<string, unknown>[] {
+  const effect = (ability as { effect?: Record<string, unknown> }).effect;
+  if (!effect) {
+    return [];
+  }
+  const type = (effect as { type?: string }).type;
+  if (type === kind) {
+    return [effect];
+  }
+  if (type === "sequence") {
+    const inner = (effect as { effects?: unknown }).effects;
+    if (Array.isArray(inner)) {
+      return inner.filter(
+        (e): e is Record<string, unknown> =>
+          !!e && typeof e === "object" && (e as { type?: string }).type === kind,
+      );
+    }
+  }
+  return [];
+}
+
+/**
+ * rule 356.3 / 135.2.e.5.a — cost INCREASES imposed by OPPONENTS' permanents
+ * ("enemy spells cost [1][rainbow] more"). Mirrors
+ * `computeStaticCostReduction` but scans permanents controlled by other
+ * players and only honours statics whose target is declared `enemy`
+ * (i.e. enemy from the aura controller's point of view = the player who is
+ * paying). Increases apply on top of any reduction and are never floored.
+ */
+export function computeStaticCostIncrease(
+  ctx: CostReductionContext,
+  playerId: string,
+  playedCardId: string,
+): { energy: number; power: Partial<Record<string, number>> } {
+  const registry = getGlobalCardRegistry();
+  const playedDef = registry.get(playedCardId);
+  const total: { energy: number; power: Partial<Record<string, number>> } = {
+    energy: 0,
+    power: {},
+  };
+  if (!playedDef) {
+    return total;
+  }
+  const playedCardType = playedDef.cardType;
+  const playedKeywords = playedDef.keywords ?? [];
+  const playedTags = playedDef.tags ?? [];
+
+  const zonesToScan: string[] = [];
+  for (const other of Object.keys(ctx.draft.players ?? {})) {
+    if (other === playerId) {
+      continue;
+    }
+    for (const zoneId of PLAYER_BOARD_ZONES) {
+      zonesToScan.push(zoneId);
+    }
+  }
+  for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+    zonesToScan.push(`battlefield-${bfId}`);
+  }
+
+  const seen = new Set<string>();
+  for (const zoneId of zonesToScan) {
+    const isPerPlayer = PLAYER_BOARD_ZONES.includes(zoneId);
+    const ids: readonly CoreCardId[] = isPerPlayer
+      ? Object.keys(ctx.draft.players ?? {})
+          .filter((p) => p !== playerId)
+          .flatMap((p) =>
+            [...ctx.zones.getCardsInZone(zoneId as CoreZoneId, p as CorePlayerId)],
+          )
+      : ctx.zones.getCardsInZone(zoneId as CoreZoneId);
+    for (const permId of ids) {
+      if (seen.has(permId as string)) {
+        continue;
+      }
+      const controller =
+        ctx.cards.getCardController?.(permId as CoreCardId) ??
+        ctx.cards.getCardOwner(permId as CoreCardId);
+      if (!controller || controller === playerId) {
+        continue;
+      }
+      seen.add(permId as string);
+      for (const ability of registry.getAbilities(permId as string) ?? []) {
+        if ((ability as { type?: string }).type !== "static") {
+          continue;
+        }
+        for (const effect of costEffectsOf(ability, "cost-increase")) {
+          const target = (effect as { target?: unknown }).target as
+            | { controller?: string }
+            | undefined;
+          // Only "enemy spells cost more" auras hit the other player's plays.
+          if (!target || typeof target !== "object" || target.controller !== "enemy") {
+            continue;
+          }
+          if (!matchesCardShape(target, playedCardType, playedKeywords, playedTags)) {
+            continue;
+          }
+          const cond = (ability as { condition?: Record<string, unknown> }).condition;
+          if (cond) {
+            const sourceZone = findPermanentZone(ctx, permId as string) ?? zoneId;
+            const passes = evaluateCondition(
+              cond,
+              { id: permId as string, owner: controller, zone: sourceZone },
+              {
+                cards: {
+                  getCardMeta: ctx.cards.getCardMeta,
+                  getCardOwner: ctx.cards.getCardOwner,
+                  updateCardMeta: ctx.cards.updateCardMeta,
+                },
+                draft: ctx.draft,
+                zones: ctx.zones as unknown as Parameters<typeof evaluateCondition>[2]["zones"],
+              },
+            );
+            if (!passes) {
+              continue;
+            }
+          }
+          const rawAmt =
+            (effect as { by?: unknown }).by ??
+            (effect as { increase?: unknown }).increase ??
+            (effect as { amount?: unknown }).amount;
+          const amt = decodeCostAmount(rawAmt);
+          total.energy += Math.max(0, amt.energy);
+          for (const [d, n] of Object.entries(amt.power)) {
+            total.power[d] = (total.power[d] ?? 0) + (n ?? 0);
+          }
+        }
+      }
+    }
+  }
+  return total;
 }
 
 /**
@@ -346,6 +481,107 @@ export function computeGrantedSpellRepeatCost(
     }
   }
   return tiers;
+}
+
+/**
+ * rule-id: sfd-211-221 (rules 356.4.c, 356.6) — the energy reduction the
+ * player's permanents apply to EACH of a spell's [Repeat] costs ("While you
+ * control this battlefield, friendly [Repeat] costs cost [1] less"). Repeat
+ * costs are optional ADDITIONAL costs, so this reduction never touches the
+ * base cost, and a tier with no energy part ([rainbow] alone) has nothing to
+ * reduce (rule 356.6). Battlefield cards live in `battlefieldRow`, so that
+ * zone is scanned too — the battlefield's controller is its card controller.
+ */
+export function computeStaticRepeatCostReduction(
+  ctx: CostReductionContext,
+  playerId: string,
+): number {
+  const registry = getGlobalCardRegistry();
+  let total = 0;
+  const zonesToScan: string[] = [...PLAYER_BOARD_ZONES, "battlefieldRow"];
+  for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+    zonesToScan.push(`battlefield-${bfId}`);
+  }
+  const seen = new Set<string>();
+  for (const zoneId of zonesToScan) {
+    const isPerPlayer = PLAYER_BOARD_ZONES.includes(zoneId);
+    const ids = isPerPlayer
+      ? ctx.zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)
+      : ctx.zones.getCardsInZone(zoneId as CoreZoneId);
+    for (const permId of ids) {
+      if (seen.has(permId as string)) {
+        continue;
+      }
+      const controller =
+        ctx.cards.getCardController?.(permId as CoreCardId) ??
+        ctx.cards.getCardOwner(permId as CoreCardId);
+      if (controller !== playerId) {
+        continue;
+      }
+      seen.add(permId as string);
+      for (const ability of registry.getAbilities(permId as string) ?? []) {
+        if ((ability as { type?: string }).type !== "static") {
+          continue;
+        }
+        for (const effect of costEffectsOf(ability, "cost-reduction")) {
+          if (!targetsRepeatCost((effect as { target?: unknown }).target)) {
+            continue;
+          }
+          const cond = (ability as { condition?: Record<string, unknown> }).condition;
+          if (cond) {
+            const sourceZone = findPermanentZone(ctx, permId as string) ?? zoneId;
+            const passes = evaluateCondition(
+              cond,
+              { id: permId as string, owner: playerId, zone: sourceZone },
+              {
+                cards: {
+                  getCardMeta: ctx.cards.getCardMeta,
+                  getCardOwner: ctx.cards.getCardOwner,
+                  updateCardMeta: ctx.cards.updateCardMeta,
+                },
+                draft: ctx.draft,
+                zones: ctx.zones as unknown as Parameters<typeof evaluateCondition>[2]["zones"],
+              },
+            );
+            if (!passes) {
+              continue;
+            }
+          }
+          const rawAmt =
+            (effect as { by?: unknown }).by ??
+            (effect as { reduction?: unknown }).reduction ??
+            (effect as { amount?: unknown }).amount;
+          total += Math.max(0, decodeCostAmount(rawAmt).energy);
+        }
+      }
+    }
+  }
+  return total;
+}
+
+/**
+ * Does this cost-reduction target shape name [Repeat] costs rather than a
+ * card's own cost? The parser leaves the printed phrasing as a raw string
+ * ("friendly [Repeat]"); hand-authored abilities may use `{costKind:"repeat"}`
+ * or `{keyword:"Repeat"}` with no card `type`. Enemy-scoped shapes never help
+ * the payer.
+ */
+function targetsRepeatCost(target: unknown): boolean {
+  if (typeof target === "string") {
+    const t = target.toLowerCase();
+    return t.includes("repeat") && !t.includes("enemy");
+  }
+  if (!target || typeof target !== "object") {
+    return false;
+  }
+  const t = target as { controller?: string; costKind?: string; keyword?: string; type?: string };
+  if (t.controller === "enemy") {
+    return false;
+  }
+  if (t.costKind === "repeat") {
+    return true;
+  }
+  return t.keyword === "Repeat" && t.type === undefined;
 }
 
 /**
@@ -452,6 +688,24 @@ function matchesPlayedCard(
   if (t.controller === "enemy") {
     return false;
   }
+  return matchesCardShape(t, playedCardType, playedKeywords, playedTags);
+}
+
+/**
+ * Type / keyword / tag half of the aura match, shared by the reduction and
+ * increase scans (the controller half differs between them).
+ */
+function matchesCardShape(
+  t: {
+    type?: string;
+    keyword?: string;
+    tag?: string;
+    filter?: { tag?: string };
+  },
+  playedCardType: string | undefined,
+  playedKeywords: readonly string[],
+  playedTags: readonly string[] = [],
+): boolean {
   // Type filter (when present).
   if (t.type) {
     // `equipment` and `gear` are sometimes used interchangeably; treat

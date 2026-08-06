@@ -71,7 +71,7 @@ describe("Mirror Image × Peak Guardian — a copy takes printed traits only", (
     expect(s.controller).toBe(P2);
   });
 
-  test.failing("BUG: (a) Mirror Image says 'Choose a unit' — the ENEMY Peak Guardian (and P1's own ally) must be offered as choices. Engine asks for no target at all", async () => {
+  test("(a) Mirror Image says 'Choose a unit' — the ENEMY Peak Guardian (and P1's own ally) must be offered as choices. Engine asks for no target at all", async () => {
     // Expected: a `targets` field offering peak and ally. Actual: Mirror Image has no target step;
     // the token "copies" the spell itself.
     const game = await board().build();
@@ -108,7 +108,7 @@ describe("Mirror Image × Peak Guardian — a copy takes printed traits only", (
     expect(p.isBuffed).toBe(true);
   });
 
-  test.failing("BUG: (b) the Reflection becomes a READY, undamaged, unbuffed 5-Might unit named 'Peak Guardian' (cost 6, Order) with Temporary (477.1.b.1, 187.6, 702/704, 477.2.a). Engine copies the Mirror Image spell and enters the token exhausted without Temporary", async () => {
+  test("(b) the Reflection becomes a READY, undamaged, unbuffed 5-Might unit named 'Peak Guardian' (cost 6, Order) with Temporary (477.1.b.1, 187.6, 702/704, 477.2.a). Engine copies the Mirror Image spell and enters the token exhausted without Temporary", async () => {
     // Expected: printed traits only — name/type/cost/domain/rules text + printed Might 5; none of the
     // original's buff, +2-this-turn, damage or exhaustion; plus a separately granted Temporary.
     // Actual: token is cardType "spell" named "Mirror Image", 0 Might, exhausted, no Temporary.
@@ -146,7 +146,7 @@ describe("Mirror Image × Peak Guardian — a copy takes printed traits only", (
     expect(game.state("peak").might).toBe(8); // original not re-buffed / touched
   });
 
-  test.failing("BUG: (d) Mirror Imaging the Reflection copies its CURRENT copyable traits → a second 5-Might 'Peak Guardian' token with Temporary; the first keeps Temporary (477.1.b.1.b, 477.2.a)", async () => {
+  test("(d) Mirror Imaging the Reflection copies its CURRENT copyable traits → a second 5-Might 'Peak Guardian' token with Temporary; the first keeps Temporary (477.1.b.1.b, 477.2.a)", async () => {
     // Expected: two P1 tokens named Peak Guardian, 5 Might, both with Temporary.
     // Actual: no unit can be chosen at all; tokens are copies of the spell.
     const game = await board().build();
@@ -170,7 +170,7 @@ describe("Mirror Image × Peak Guardian — a copy takes printed traits only", (
     expect(game.findAll({ name: "Peak Guardian" })).toHaveLength(3);
   });
 
-  test.failing("BUG: Temporary — the Reflection is killed at the start of P1's next Beginning Phase (816.1.b) and, being a token, ceases to exist. Engine never grants Temporary so it survives", async () => {
+  test("Temporary — the Reflection is killed at the start of P1's next Beginning Phase (816.1.b) and, being a token, ceases to exist. Engine never grants Temporary so it survives", async () => {
     // Expected: after P2's turn, at the start of P1's turn the token dies (not on the board any more).
     // Actual: the token is still in P1's base on P1's next main phase.
     const game = await board().build();

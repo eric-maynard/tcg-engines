@@ -177,14 +177,14 @@ describe("Curtain Call × Marai Spire × Ezreal, Prodigy — three Repeat costs"
 
   // ---------------------------------------------------------------- you control Marai Spire
 
-  test.failing("BUG: you control Marai Spire — each Repeat cost is [1] less: [1]→0, [rainbow] stays, [1][rainbow]→[rainbow] ⇒ 4 energy + 2 power total (356.4.c, 356.6)", async () => {
+  test("you control Marai Spire — each Repeat cost is [1] less: [1]→0, [rainbow] stays, [1][rainbow]→[rainbow] ⇒ 4 energy + 2 power total (356.4.c, 356.6)", async () => {
     // Expected: 10→6 energy, 3→1 fury. Actual: Marai Spire's static is ignored; 6 energy are charged.
     const game = await board({ spire: "p1" }).build();
     await game.p1.cast("cc", { repeat: 3 });
     expect(game.p1.resources()).toEqual({ energy: 10 - 4, power: { fury: 3 - 2 } });
   });
 
-  test.failing("BUG: you control Marai Spire — with only 4 energy + 2 power all three Repeats can still be declared (a Repeat reduced to [0] is still paid, 356.4.f / 356.4.f.1)", async () => {
+  test("you control Marai Spire — with only 4 energy + 2 power all three Repeats can still be declared (a Repeat reduced to [0] is still paid, 356.4.f / 356.4.f.1)", async () => {
     // Expected: repeatCount 3 is legal and leaves the pool empty. Actual: only repeatCount 0 is offered.
     const game = await board({ spire: "p1", energy: 4, power: 2 }).build();
     expect(game.p1.option("cast", "cc")?.fields.find((f) => f.name === "repeatCount")?.max).toBe(3);

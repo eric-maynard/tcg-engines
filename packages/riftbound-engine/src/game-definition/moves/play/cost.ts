@@ -18,6 +18,7 @@ import {
   applyStaticCostReduction,
   computeGrantedSpellRepeatCost,
   computeStaticCostReduction,
+  computeStaticRepeatCostReduction,
   decodeCostAmount,
   reducePowerCost,
 } from "../../../operations/static-cost-reduction";
@@ -1066,7 +1067,14 @@ export function getEffectiveSpellRepeatCost(
   const granted = board
     ? computeGrantedSpellRepeatCost({ draft: state, ...board }, playerId, cardId)
     : [];
-  const tiers = [...intrinsic, ...granted];
+  let tiers: RepeatTiers = [...intrinsic, ...granted];
+  // rule-id: sfd-211-221 (rules 356.4.c, 356.6) — "friendly [Repeat] costs
+  // cost [1] less" discounts EVERY tier's energy part; a [rainbow]-only tier
+  // has no energy to reduce and stays as printed.
+  const perTier = board ? computeStaticRepeatCostReduction({ draft: state, ...board }, playerId) : 0;
+  if (perTier > 0) {
+    tiers = tiers.map((t) => ({ ...t, energy: Math.max(0, t.energy - perTier) }));
+  }
   return tiers.length > 0 ? tiers : undefined;
 }
 
