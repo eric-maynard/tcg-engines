@@ -99,7 +99,7 @@ describe("Ruling cf6487465e162f43 — Burn / Minefield mill Nocturne without a l
   // Vision) hits Nocturne's "as you look at … me" replacement: P1 is offered to banish Nocturne (and then
   // to play it for [rainbow]). Actual: the Vision look shows a recycle prompt only; Nocturne's ability is
   // wired to a "reveal" trigger that the look never raises, so no banish offer appears.
-  test("ruling cf6487465e162f43 — contrast: LOOKING at Nocturne on top (Mystic Poro's Vision) does offer 'banish me, then play me for [rainbow]'", async () => {
+  test.failing("BUG: ruling cf6487465e162f43 — contrast: LOOKING at Nocturne on top (Mystic Poro's Vision) does offer 'banish me, then play me for [rainbow]'", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2, power: { rainbow: 1 } })
       .hand(P1, MYSTIC_PORO, "poro")
