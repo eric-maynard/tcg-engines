@@ -35,13 +35,13 @@ function targetChoices(game: Game, alias: string): string[] {
 }
 
 describe("Ruling 272f1092ac8ca57e — Lacerate may choose a unit of any Might; the 3-or-less check is on resolution", () => {
-  test.failing("BUG: ruling 272f1092ac8ca57e — Lacerate's legal targets are ALL units regardless of Might (both the 5-Might and the 3-Might unit); engine offers no target at all (effect unimplemented)", async () => {
+  test("ruling 272f1092ac8ca57e — Lacerate's legal targets are ALL units regardless of Might (both the 5-Might and the 3-Might unit); engine offers no target at all (effect unimplemented)", async () => {
     const game = await board().build();
     expect(game.p1.can("cast", "lacerate")).toBe(true);
     expect(targetChoices(game, "lacerate")).toEqual(["big", "small"]);
   });
 
-  test.failing("BUG: ruling 272f1092ac8ca57e — cast on the 5-Might unit: legal, costs 2 + [order], resolves, and the unit survives because the 'kill it if ≤3 Might' condition fails at resolution; engine rejects the target", async () => {
+  test("ruling 272f1092ac8ca57e — cast on the 5-Might unit: legal, costs 2 + [order], resolves, and the unit survives because the 'kill it if ≤3 Might' condition fails at resolution; engine rejects the target", async () => {
     const game = await board().build();
     await game.p1.cast("lacerate", { targets: "big" });
     expect(game.p1.resources()).toEqual({ energy: 1, power: { order: 0 } });
@@ -54,7 +54,7 @@ describe("Ruling 272f1092ac8ca57e — Lacerate may choose a unit of any Might; t
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: ruling 272f1092ac8ca57e — cast on the 3-Might unit: same targeting, but now the resolution check passes and it is killed; engine resolves Lacerate as a no-op", async () => {
+  test("ruling 272f1092ac8ca57e — cast on the 3-Might unit: same targeting, but now the resolution check passes and it is killed; engine resolves Lacerate as a no-op", async () => {
     const game = await board().build();
     await game.p1.cast("lacerate", { targets: "small" });
     await game.settle();

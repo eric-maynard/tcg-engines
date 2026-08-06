@@ -3347,7 +3347,8 @@
         {
           "type": "triggered",
           "trigger": { "event": "play-self" },
-          "effect": { "type": "raw", "text": "[Burn 2]." }
+          "_rule": "440.1 - Burn 2: put the top 2 cards of your Main Deck into your trash",
+          "effect": { "type": "mill", "amount": 2 }
         },
         {
           "_rule": "829.1.b / 206 - grant a spell in your trash [Flow] equal to its PRINTED cost, this turn",

@@ -467,6 +467,21 @@ export function evaluateEffectCondition(
         | undefined;
       return meta?.stunned === true;
     }
+    case "target-might": {
+      // rule 355.9.a.1 (ven-127-166 Lacerate) — "Choose a unit … Then kill it
+      // if it has 3 Might or less": the Might test is a RESOLUTION check on
+      // the chosen (bound) target, not part of the target description.
+      const bound = ctx.boundTargets?.[0];
+      if (!bound) return false;
+      const cmp = condition.comparison as
+        | { lte?: number; gte?: number; eq?: number }
+        | undefined;
+      const might = getEffectiveMight(bound, ctx);
+      if (cmp?.lte !== undefined && might > cmp.lte) return false;
+      if (cmp?.gte !== undefined && might < cmp.gte) return false;
+      if (cmp?.eq !== undefined && might !== cmp.eq) return false;
+      return true;
+    }
     case "killed-might": {
       // rule-id: unl-186-219 — "Kill a unit… Then, if it had N [Might] or
       // less": compares the last-known Might snapshotted by the `kill` step.

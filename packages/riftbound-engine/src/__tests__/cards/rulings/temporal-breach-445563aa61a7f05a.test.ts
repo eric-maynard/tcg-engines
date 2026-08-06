@@ -86,7 +86,7 @@ describe("Ruling 445563aa61a7f05a — Temporal Breach into Rockfall Path: banish
   // Expected: banish happens; the replay to Rockfall Path is impossible and skipped (358.3.a) → the unit
   // remains in P2's banishment, is on no battlefield / base, and P2 paid nothing.
   // Actual: no-op — the unit is still sitting at bf1.
-  test.failing("BUG: ruling 445563aa61a7f05a — at Rockfall Path the unit ends in its owner's BANISHMENT (replay skipped); engine leaves it on the battlefield", async () => {
+  test("ruling 445563aa61a7f05a — at Rockfall Path the unit ends in its owner's BANISHMENT (replay skipped); engine leaves it on the battlefield", async () => {
     const game = await board(true).build();
     await breach(game);
     expect(game.zoneOf("victim")).toBe("banishment");

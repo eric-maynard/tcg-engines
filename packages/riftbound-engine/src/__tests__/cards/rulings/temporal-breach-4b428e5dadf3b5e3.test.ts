@@ -53,7 +53,7 @@ describe("Ruling 4b428e5dadf3b5e3 — Temporal Breach: the owner must PLAY the b
 
   // Expected: Temporal Breach must choose a unit when played (Pyke and the enemy Bystander are both
   // "a unit"). Actual: its effect is unparsed (raw text) — the cast offers no target at all.
-  test.failing("BUG: ruling 4b428e5dadf3b5e3 — casting Temporal Breach requires choosing a unit (Pyke is a legal choice); costs [2][mind]", async () => {
+  test("ruling 4b428e5dadf3b5e3 — casting Temporal Breach requires choosing a unit (Pyke is a legal choice); costs [2][mind]", async () => {
     const game = await board().build();
     const field = game.p1.option("cast", "breach")?.fields.find((f) => f.name === "targets");
     const offered = (field?.options ?? []).flatMap((v) => (Array.isArray(v) ? v : [v]) as string[]);
@@ -68,7 +68,7 @@ describe("Ruling 4b428e5dadf3b5e3 — Temporal Breach: the owner must PLAY the b
   // empty again, the spare [rainbow] is untouched and nothing is facedown at bf1. If the engine surfaces
   // any owner prompt along the way, none of its options is a hide/facedown alternative.
   // Actual: the spell resolves with no effect — Pyke never leaves bf1 (still carrying its 1 damage).
-  test.failing("BUG: ruling 4b428e5dadf3b5e3 — Breach on own Hidden unit: banished then PLAYED back to bf1 face up (fresh, 0 damage); never offered as a hide, nothing facedown, [rainbow] unspent", async () => {
+  test("ruling 4b428e5dadf3b5e3 — Breach on own Hidden unit: banished then PLAYED back to bf1 face up (fresh, 0 damage); never offered as a hide, nothing facedown, [rainbow] unspent", async () => {
     const game = await board().build();
     await game.p1.cast("breach", { targets: "pyke" });
     let sawBanished = false;
@@ -105,7 +105,7 @@ describe("Ruling 4b428e5dadf3b5e3 — Temporal Breach: the owner must PLAY the b
   // Expected: while the owner is being instructed to play the banished Pyke, "hide" is simply not an
   // available action for it (it is in banishment, 811.1.b) — the harness never lists `hide Pyke`.
   // Actual: Pyke is never banished (effect unimplemented), so the premise cannot be reached.
-  test.failing("BUG: ruling 4b428e5dadf3b5e3 — mid-resolution Pyke sits in banishment and `hide` is not a legal verb for it", async () => {
+  test("ruling 4b428e5dadf3b5e3 — mid-resolution Pyke sits in banishment and `hide` is not a legal verb for it", async () => {
     const game = await board().autoProcedures(false).build();
     await game.p1.cast("breach", { targets: "pyke" });
     // Step the chain manually until Pyke has left the battlefield.

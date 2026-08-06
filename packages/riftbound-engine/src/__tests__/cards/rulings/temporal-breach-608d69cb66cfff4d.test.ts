@@ -112,7 +112,7 @@ describe("Ruling 608d69cb66cfff4d — Temporal Breach under Brynhir Thundersong:
   // Contrast, no Brynhir. Expected: the unit is banished and immediately replayed by its OWNER to the SAME location,
   // ignoring cost (P2 has 0 energy) — it returns to bf1 as a fresh object: damage gone, and exhausted like any played
   // unit; nothing stays in banishment. Actual: raw stub — nothing happens (unit keeps its 1 damage, stays ready).
-  test.failing("BUG: ruling 608d69cb66cfff4d — contrast without Brynhir: banished then replayed free by P2 to bf1 as a fresh (undamaged, exhausted) unit (engine: effect unimplemented)", async () => {
+  test("ruling 608d69cb66cfff4d — contrast without Brynhir: banished then replayed free by P2 to bf1 as a fresh (undamaged, exhausted) unit (engine: effect unimplemented)", async () => {
     const game = await board(TEMPORAL_BREACH, { brynhir: false }).build();
     expect(game.state("victim")).toMatchObject({ damage: 1, isExhausted: false });
     await castBreachAtVictim(game);
