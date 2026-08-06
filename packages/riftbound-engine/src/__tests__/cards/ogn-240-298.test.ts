@@ -46,7 +46,7 @@ describe("Sett, Kingpin (ogn-240-298)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: +1 Might for EACH buffed friendly unit at his battlefield — two buffed allies there make him 7", async () => {
+  test("+1 Might for EACH buffed friendly unit at his battlefield — two buffed allies there make him 7", async () => {
     // Expected: after Sett moves to bf1 where two buffed friendly units stand, his Might is 5+2 = 7.
     // Actual: the static's `per` clause is ignored — the engine applies a flat +1 (and only once a
     // state-based recalculation happens), so he reads 5 or 6.
@@ -61,7 +61,7 @@ describe("Sett, Kingpin (ogn-240-298)", () => {
     expect(game.state("sett").might).toBe(7);
   });
 
-  test.failing("BUG: no bonus in base, from unbuffed allies, buffed units elsewhere, or buffed ENEMY units — he stays 5", async () => {
+  test("no bonus in base, from unbuffed allies, buffed units elsewhere, or buffed ENEMY units — he stays 5", async () => {
     // Expected: only buffed FRIENDLY units AT HIS battlefield count → 5 in every case here. Actual:
     // once statics are recalculated (any play does it) the engine adds an unconditional +1 → 6.
     const played = await scenario().resources(P1, { energy: 4, power: { order: 1 } }).unit(P1, "base", { might: 2 }, "homeBuffed", { buffed: true }).hand(P1, CARD, "sett").build();
@@ -84,7 +84,7 @@ describe("Sett, Kingpin (ogn-240-298)", () => {
     expect(game.state("sett").might).toBe(5);
   });
 
-  test.failing("BUG: the bonus matters in combat — defending beside two buffed 1-Might allies he is 7 and survives a 6-Might attacker", async () => {
+  test("the bonus matters in combat — defending beside two buffed 1-Might allies he is 7 and survives a 6-Might attacker", async () => {
     // Expected: Sett 5+2 = 7 > 6 damage (all on him via Tank) → he lives, allies untouched, the
     // attacker dies to 7+2+2. Actual: Sett fights at 5 and is killed.
     const game = await scenario()

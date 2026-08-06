@@ -520,6 +520,15 @@ function applyStaticEffect(
       amount = pid
         ? ctx.zones.getCardsInZone("trash" as CoreZoneId, pid as CorePlayerId).length
         : 0;
+    } else if (rawAmount && typeof rawAmount === "object" && "count" in rawAmount) {
+      // rule-id: ogn-240-298 — "+1 [Might] for each buffed friendly unit at my
+      // battlefield": a dynamic static amount counting the board cards matching
+      // a descriptor (scoped relative to the source), times an optional factor.
+      const spec = rawAmount as { count: unknown; multiplier?: number };
+      const counted = source
+        ? (resolveStaticTargetsFromDescriptor(spec.count, source, getAllBoardCards(ctx), ctx) ?? [])
+        : [];
+      amount = counted.length * (typeof spec.multiplier === "number" ? spec.multiplier : 1);
     } else if (rawAmount && typeof rawAmount === "object" && "score" in rawAmount) {
       // rule-id: ogn-028-298 — dynamic static Might equal to a player's points.
       const whose = (rawAmount as { score: string }).score;
