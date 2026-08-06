@@ -359,6 +359,31 @@ export function canPlayToOpenBattlefield(
 }
 
 /**
+ * rule 355.2.b (ogn-161-298) — "You may play me to an occupied enemy
+ * battlefield" adds enemy-controlled battlefields that hold at least one unit
+ * (rule 170.11.a: occupied = a unit is there) to this card's play locations.
+ */
+export function canPlayToOccupiedEnemyBattlefield(cardId: string): boolean {
+  return getPlayLocationPermission(cardId) === "an occupied enemy battlefield";
+}
+
+/**
+ * rule 170.11.a / 355.2.b: enemy-controlled AND holding at least one unit.
+ */
+export function battlefieldIsOccupiedEnemy(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player?: CorePlayerId) => readonly CoreCardId[] },
+  bfId: string,
+  playerId: string,
+): boolean {
+  const controller = state.battlefields?.[bfId]?.controller;
+  if (!controller || controller === playerId) {
+    return false;
+  }
+  return zones.getCardsInZone(getBattlefieldZoneId(bfId) as CoreZoneId).length > 0;
+}
+
+/**
  * rule 170.11.c: a battlefield is "open" only while it is BOTH uncontrolled and
  * unoccupied — an uncontrolled battlefield holding any unit (friendly or enemy)
  * is not a legal destination for "You may play me to an open battlefield".
@@ -529,7 +554,12 @@ export function takeNextPlayDiscount(
  */
 export interface OptionalPlayCost {
   /** `"accelerate"` (rule 717) enters the unit ready when paid. */
-  readonly kind: "accelerate" | "kill" | "pay" | "exhaust" | "discard";
+  readonly kind: "accelerate" | "kill" | "pay" | "exhaust" | "discard" | "spend-buff";
+  /**
+   * rule 356.5 (ogn-146-298 Wallop) — "If you do, ignore this spell's cost":
+   * paying the optional additional cost waives the base cost entirely.
+   */
+  readonly ignoresBaseCost?: boolean;
   /**
    * rule 356.2.b (ogn-002-298) — "you may discard N as an additional cost":
    * how many cards leave the hand when the cost is paid.
@@ -622,6 +652,13 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
       let discard = 0;
       const power: string[] = [];
       const raw = effect.additionalCost;
+      const ignoresBaseCost =
+        (effect.ifPaid as { type?: string } | undefined)?.type === "ignore-cost";
+      if (typeof raw === "string" && /^spend a buff$/i.test(raw.trim())) {
+        // rule 356.2.b (ogn-146-298) — "you may spend a buff as an additional
+        // cost": a buff counter on a friendly unit pays for the play.
+        return { kind: "spend-buff", ...(ignoresBaseCost ? { ignoresBaseCost } : {}) };
+      }
       if (typeof raw === "string") {
         // rule 356.2.b (ogn-002-298) — "discard N as an additional cost".
         const d = /^discard (\d+)$/.exec(raw.trim());
@@ -774,6 +811,38 @@ export function getCostModifier(
  * the effective cost. Includes base Might plus any equipment bonus,
  * buff counter, and runtime Might modifiers stored on meta.
  */
+/**
+ * rule 807.1.c (Assault) / rule 811.1.c (Shield): "While I'm an attacker /
+ * defender, I have +X [Might]". The bonus is part of the unit's current Might
+ * — not just its combat damage — for as long as the combat role is stamped.
+ */
+function getCombatRoleMightBonus(
+  cardId: string,
+  meta: Partial<RiftboundCardMeta> | undefined,
+): number {
+  const role = (meta as { combatRole?: string } | undefined)?.combatRole;
+  if (role !== "attacker" && role !== "defender") {
+    return 0;
+  }
+  const keyword = role === "attacker" ? "Assault" : "Shield";
+  const def = getGlobalCardRegistry().get(cardId);
+  let bonus = 0;
+  for (const ability of def?.abilities ?? []) {
+    if (ability.type === "keyword" && ability.keyword === keyword) {
+      bonus += (ability as { value?: number }).value ?? 1;
+    }
+  }
+  if (bonus === 0) {
+    bonus += (def?.keywords ?? []).filter((k) => k === keyword).length;
+  }
+  for (const granted of meta?.grantedKeywords ?? []) {
+    if (granted.keyword === keyword) {
+      bonus += granted.value ?? 1;
+    }
+  }
+  return bonus;
+}
+
 export function getCardEffectiveMight(
   cardId: string,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
@@ -784,6 +853,7 @@ export function getCardEffectiveMight(
     return 0;
   }
   const meta = getCardMeta?.(cardId as CoreCardId);
+  const roleBonus = getCombatRoleMightBonus(cardId, meta);
   const buffBonus = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
   const mightMod = meta?.mightModifier ?? 0;
   const staticBonus = meta?.staticMightBonus ?? 0;
@@ -791,7 +861,7 @@ export function getCardEffectiveMight(
   for (const equipId of meta?.equippedWith ?? []) {
     equipBonus += registry.getMightBonus(equipId);
   }
-  return Math.max(0, baseMight + buffBonus + mightMod + staticBonus + equipBonus);
+  return Math.max(0, baseMight + buffBonus + mightMod + staticBonus + equipBonus + roleBonus);
 }
 
 /**
@@ -852,6 +922,17 @@ export interface CostExtras {
    * cost carries an "I cost [N] less" rider; the total is clamped at 0.
    */
   additionalCost?: { energy?: number; power?: readonly string[] };
+  /**
+   * rule 356.5 (ogn-146-298) — the paid optional additional cost says to
+   * ignore the card's cost: nothing is paid at all.
+   */
+  ignoreBaseCost?: boolean;
+  /**
+   * rule-id: ogn-150-298 (rule 560) — power pips waived by a paid optional
+   * additional cost ("reduce my cost by [body] for each buff you spend"),
+   * keyed by domain. Waived exactly like a board static's power waiver.
+   */
+  waivePower?: Partial<Record<string, number>>;
   /**
    * rule-id: ven-055-166 — board accessors so friendly permanents' static
    * cost-reductions ("Your spells cost [1][rainbow] less, to a minimum of
@@ -1108,6 +1189,10 @@ export function canAffordCard(
   if (!pool) {
     return false;
   }
+  // rule 356.5 — the elected additional cost waives the card's cost entirely.
+  if (extras.ignoreBaseCost) {
+    return true;
+  }
 
   const modifier = getCostModifier(cardId, getCardMeta);
   const baseCost = getBaseCostForPlay(cardId, extras);
@@ -1231,6 +1316,10 @@ export function deductCost(
   const cost = getBaseCostForPlay(cardId, extras);
   const pool = draft.runePools[playerId];
   if (!pool) {
+    return;
+  }
+  // rule 356.5 — the elected additional cost waives the card's cost entirely.
+  if (extras.ignoreBaseCost) {
     return;
   }
 

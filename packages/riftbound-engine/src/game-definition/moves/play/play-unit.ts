@@ -24,6 +24,8 @@ import {
   staticEnterReadyApplies,
   boardEntersReadyGrantApplies,
   canPlayToOpenBattlefield,
+  canPlayToOccupiedEnemyBattlefield,
+  battlefieldIsOccupiedEnemy,
   battlefieldIsOpen,
   opponentsRestrictedToBase,
   playOnlyToConqueredBattlefield,
@@ -153,6 +155,20 @@ export const playUnit: Defs["playUnit"] = {
       // play me to an open battlefield"), or a friendly board unit granting
       // "Friendly units may be played to open battlefields", lets a unit be
       // played to an uncontrolled battlefield at standard main-phase timing.
+    } else if (
+      targetIsBattlefield &&
+      Boolean(targetBfId) &&
+      standardTimingOk &&
+      canPlayToOccupiedEnemyBattlefield(context.params.cardId as string) &&
+      battlefieldIsOccupiedEnemy(
+        state,
+        context.zones,
+        targetBfId as string,
+        context.params.playerId as string,
+      )
+    ) {
+      // rule 355.2.b (ogn-161-298): "You may play me to an occupied enemy
+      // battlefield" — the arrival contests it and stages combat (323.13).
     } else if (targetIsBattlefield && !hasAmbush) {
       return false;
     } else if (targetIsBattlefield) {
@@ -461,6 +477,26 @@ export const playUnit: Defs["playUnit"] = {
             results.push({
               cardId: cardId as string,
               location: getBattlefieldZoneId(bfId) as string,
+              playerId: context.playerId as string,
+            });
+          }
+        }
+      }
+
+      // rule 355.2.b (ogn-161-298): offer occupied enemy battlefields when the
+      // card carries the matching static play-restriction.
+      if (canPlayToOccupiedEnemyBattlefield(cardId as string)) {
+        for (const bfId of Object.keys(state.battlefields ?? {})) {
+          const bfZoneId = getBattlefieldZoneId(bfId) as string;
+          if (results.some((r) => r.cardId === (cardId as string) && r.location === bfZoneId)) {
+            continue;
+          }
+          if (
+            battlefieldIsOccupiedEnemy(state, context.zones, bfId, context.playerId as string)
+          ) {
+            results.push({
+              cardId: cardId as string,
+              location: bfZoneId,
               playerId: context.playerId as string,
             });
           }

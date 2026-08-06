@@ -79,10 +79,7 @@ describe("Deadbloom Predator (ogn-161-298)", () => {
     expect(to).not.toContain("battlefield-bf3");
   });
 
-  test.failing("BUG: may be played to an OCCUPIED ENEMY battlefield; combat then begins there (355.2.b, 323.13)", async () => {
-    // Expected: bf1 (enemy-controlled, has an enemy unit) is a legal play location; the Predator
-    // enters there and, with opposing units present, a combat is staged and resolves — the 3-Might
-    // guard dies and P1 conquers bf1. Actual: only base / own battlefields are offered.
+  test("may be played to an OCCUPIED ENEMY battlefield; combat then begins there (355.2.b, 323.13)", async () => {
     const game = await inHand().build();
     expect(playTargets(game)).toContain("battlefield-bf1");
     await game.p1.play("dp", { to: "bf1" });

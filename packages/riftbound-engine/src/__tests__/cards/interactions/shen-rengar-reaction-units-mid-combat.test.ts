@@ -92,7 +92,7 @@ describe("Rengar, Pouncing / Shen, Kinkou played into an ongoing combat", () => 
     expect(game.decision()).toMatchObject({ kind: "action", context: "showdown", seat: P2 });
   });
 
-  test.failing("BUG: (a) as an attacker Rengar's Assault 2 is real Might — he reads 5 (807.1.c)", async () => {
+  test("(a) as an attacker Rengar's Assault 2 is real Might — he reads 5 (807.1.c)", async () => {
     // Expected: 3 + Assault 2 = 5 while designated attacker. Actual (even via a normal move, which
     // does designate him): effective Might stays 3; Assault is only folded into the damage total.
     const game = await board().unit(P1, "base", RENGAR, "rengarOnBoard").build();
@@ -124,7 +124,7 @@ describe("Rengar, Pouncing / Shen, Kinkou played into an ongoing combat", () => 
     expect(game.state("shen").keywords).toEqual(expect.arrayContaining(["Shield", "Tank"]));
   });
 
-  test.failing("BUG: (b) as a defender Shen's Shield 2 is real Might — he reads 5 (814.1.c)", async () => {
+  test("(b) as a defender Shen's Shield 2 is real Might — he reads 5 (814.1.c)", async () => {
     // Same view gap as Rengar: Shield only enters the combat damage sum, not the unit's Might.
     const game = await board().unit(P2, "bf1", SHEN, "shenOnBoard").build();
     await game.p1.move("four", "bf1");

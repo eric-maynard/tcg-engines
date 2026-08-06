@@ -353,7 +353,16 @@ export function targetDescriptorIsSatisfiable(
     return true;
   }
   // Self / player / battlefield are not caster-chosen board targets.
-  if (tgt.type === "self" || tgt.type === "player" || tgt.type === "battlefield" || player) {
+  // rule-id: ogn-115-298 (rule 355.8) — a `pending-value` target names cards
+  // produced earlier in the same resolution (revealed/banished cards), not a
+  // board object chosen at play time, so it never gates castability.
+  if (
+    tgt.type === "self" ||
+    tgt.type === "player" ||
+    tgt.type === "battlefield" ||
+    tgt.type === "pending-value" ||
+    player
+  ) {
     return true;
   }
   // Rule 355.10.d: quantity:"all" selects programmatically — those objects are

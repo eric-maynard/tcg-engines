@@ -43,7 +43,7 @@ describe("Daring Poro (ogn-210-298)", () => {
     expect(game.zoneOf("poro")).toBe("trash"); // 3 back ≥ 3
   });
 
-  test.failing("BUG: Assault — while attacking its current Might reads 3 (807.1.c, cf. 432.1.a)", async () => {
+  test("Assault — while attacking its current Might reads 3 (807.1.c, cf. 432.1.a)", async () => {
     // Expected: once designated attacker the Poro's Might is 2+1 = 3.
     // Actual: effective Might ignores Assault/Shield entirely and stays 2.
     const game = await attacking(3).build();

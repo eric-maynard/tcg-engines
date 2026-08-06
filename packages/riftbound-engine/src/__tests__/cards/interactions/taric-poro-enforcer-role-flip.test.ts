@@ -74,7 +74,7 @@ describe("(a) Enforcer attacks into Taric + Poro", () => {
   // Expected: while designated, Assault/Shield ARE Might (807.1.c / 814.1.c): Enforcer 4, Taric 5, Poro 4.
   // Actual: the engine's effective-Might (used for targeting/might checks) ignores combat keywords and only
   // folds them in inside the combat resolver — Enforcer reads 2, Taric 4, Poro 2 during the showdown.
-  test.failing("BUG: Mights during the showdown — Enforcer 4 (Assault 2), Taric 5 (Shield), Poro 4 (Shield ×2)", async () => {
+  test("Mights during the showdown — Enforcer 4 (Assault 2), Taric 5 (Shield), Poro 4 (Shield ×2)", async () => {
     const game = await defendBoard().build();
     await game.p2.move("enf", "bf1");
     expect(game.state("enf").might).toBe(4);

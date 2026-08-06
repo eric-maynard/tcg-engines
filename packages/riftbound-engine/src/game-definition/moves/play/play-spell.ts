@@ -83,6 +83,35 @@ function exhaustCostCandidates(
 }
 
 /**
+ * rule 356.2.b / 702.2.b (ogn-146-298 Wallop) — friendly units carrying a buff
+ * counter, any one of which can be spent as an optional additional cost.
+ */
+function spendBuffCandidates(
+  state: RiftboundGameState,
+  context: {
+    cards: unknown;
+    zones: Parameters<typeof resolveTarget>[1]["zones"];
+    counters: { getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined };
+  },
+  playerId: string,
+  cardId: string,
+): string[] {
+  const ids = resolveTarget(
+    { controller: "friendly", quantity: "all", type: "unit" } as Parameters<
+      typeof resolveTarget
+    >[0],
+    {
+      cards: context.cards as Parameters<typeof resolveTarget>[1]["cards"],
+      draft: state,
+      playerId,
+      sourceCardId: cardId,
+      zones: context.zones,
+    },
+  ) as string[];
+  return ids.filter((id) => context.counters.getFlag(id as CoreCardId, "buffed") === true);
+}
+
+/**
  * Play a spell (rule 146-151)
  */
 export const playSpell: Defs["playSpell"] = {
@@ -145,9 +174,19 @@ export const playSpell: Defs["playSpell"] = {
     // additional cost" (rule 560) is only legal when the card declares one
     // and the caster can afford base + extra.
     let spellAdditionalCost: CostExtras["additionalCost"];
+    let ignoreBaseCost = false;
     if (context.params.paidAdditionalCost) {
       const optional = getOptionalPlayCost(context.params.cardId);
-      if (optional?.kind === "exhaust") {
+      if (optional?.kind === "spend-buff") {
+        // rule 356.2.b — the cost is only payable with a buff on the board.
+        if (
+          spendBuffCandidates(state, context, context.params.playerId, context.params.cardId)
+            .length === 0
+        ) {
+          return false;
+        }
+        ignoreBaseCost = optional.ignoresBaseCost === true;
+      } else if (optional?.kind === "exhaust") {
         // rule 356.2 — ogn-048-298: targets[0] names the ready friendly
         // permanent exhausted to pay the optional cost.
         const chosen = context.params.targets?.[0];
@@ -185,6 +224,7 @@ export const playSpell: Defs["playSpell"] = {
           additionalCost: spellAdditionalCost,
           // rule-id: ven-055-166 — friendly "your spells cost less" statics.
           board: { cards: context.cards, zones: context.zones },
+          ignoreBaseCost,
           repeatCount: reqRepeatCount,
           targets: context.params.targets,
           viaFlow,
