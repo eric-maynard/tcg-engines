@@ -116,8 +116,13 @@ export function executeResolvedItem(
   // `location: "move-to-or-from"` targets resolve against only the
   // battlefields the triggering move touched.
   const trigEvt = resolved.triggerEvent as
-    | { from?: string; to?: string; cardId?: string; fromHiddenAt?: string }
+    | { from?: string; to?: string; cardId?: string; fromHiddenAt?: string; diedAt?: string }
     | undefined;
+  // rule 428.1.a.1.b — a dies-trigger sees the board as it was: "here" / "at my
+  // battlefield" mean where the unit died, not the trash it now sits in.
+  if (typeof trigEvt?.diedAt === "string" && trigEvt.cardId === resolved.cardId) {
+    (baseCtx as { sourceZone?: string }).sourceZone = trigEvt.diedAt;
+  }
   const triggerZones = trigEvt
     ? [trigEvt.from, trigEvt.to].filter((z): z is string => typeof z === "string")
     : undefined;
@@ -168,7 +173,16 @@ export function executeResolvedItem(
   // damage to an enemy unit here") carries its caster-chosen target on a
   // sub-step; lift the single lead descriptor so the controller is prompted
   // instead of the step auto-picking the first candidate.
+  // rule-id: ogn-149-298 (rule 355.10) — "choose an enemy unit at a
+  // battlefield. We deal damage equal to our Mights to each other": a `fight`
+  // with a fixed attacker ("self") lets the controller choose only the
+  // defender, so lift that descriptor into the choose-target prompt.
+  const fightDefender =
+    effect.type === "fight" && typeof (effect as { attacker?: unknown }).attacker === "string"
+      ? ((effect as { defender?: unknown }).defender as TargetDescriptor | undefined)
+      : undefined;
   const target = (effect.target ??
+    fightDefender ??
     findSequenceLeadTarget(effect as unknown as SpellEffectTargetShape)) as
     | TargetDescriptor
     | string

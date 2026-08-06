@@ -366,6 +366,22 @@ export const pendingChoiceMoves: Partial<
         if (choice.anyNumber && context.params.accept === false) {
           return true;
         }
+        // rule 355.13 (ogn-141-298): "up to N" / "any number of" targets may
+        // be answered with several distinct picks at once, capped at N.
+        const multiTargets = context.params.pickedCardIds as string[] | undefined;
+        if (Array.isArray(multiTargets)) {
+          if (!choice.anyNumber || multiTargets.length === 0) {
+            return false;
+          }
+          if (new Set(multiTargets).size !== multiTargets.length) {
+            return false;
+          }
+          const cap = choice.maxPicks ?? choice.options.length;
+          if (multiTargets.length + (choice.picked?.length ?? 0) > cap) {
+            return false;
+          }
+          return multiTargets.every((id) => choice.options.includes(id));
+        }
         // rule 355.14.e (ogn-041-298): fixed-total split is answered with one allocation.
         if (choice.assign && typeof choice.total === "number") {
           return isLegalSplitAllocation(choice.options, choice.total, context.params.allocation);
@@ -703,10 +719,13 @@ export const pendingChoiceMoves: Partial<
         // and the prompt repeats until the chooser declines or none remain.
         if (choice.anyNumber) {
           const declined = context.params.accept === false;
-          if (!declined && !choice.options.includes(picked)) {
+          // rule 355.13 (ogn-141-298): several "up to N" picks in one answer.
+          const multiPicked = context.params.pickedCardIds as string[] | undefined;
+          const newPicks = declined ? [] : (multiPicked ?? [picked]);
+          if (!declined && newPicks.some((id) => !choice.options.includes(id))) {
             return;
           }
-          const pickedSoFar = declined ? [...(choice.picked ?? [])] : [...(choice.picked ?? []), picked];
+          const pickedSoFar = [...(choice.picked ?? []), ...newPicks];
           // rule 355.13 (ogn-073-298): "up to N" caps the accumulated picks.
           const capped = typeof choice.maxPicks === "number" && pickedSoFar.length >= choice.maxPicks;
           if (!declined && !capped) {
@@ -722,7 +741,8 @@ export const pendingChoiceMoves: Partial<
             };
             const remainingOptions = choice.options.filter(
               (id) =>
-                id !== picked && isLegalMultiTargetSet(tgt, [...pickedSoFar, id], legalityCtx),
+                !newPicks.includes(id) &&
+                isLegalMultiTargetSet(tgt, [...pickedSoFar, id], legalityCtx),
             );
             if (remainingOptions.length > 0) {
               draft.pendingChoice = {

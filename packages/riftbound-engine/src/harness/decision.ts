@@ -473,12 +473,18 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         };
         return d;
       }
+      // rule 355.13 (ogn-141-298): "up to N" / "any number of" targets take
+      // 0..N picks in one answer and may always be declined.
+      const alreadyPicked = pc.anyNumber ? (pc.picked?.length ?? 0) : 0;
+      const capacity = pc.anyNumber
+        ? Math.max(1, Math.min(pc.maxPicks ?? pc.options.length, pc.options.length + alreadyPicked) - alreadyPicked)
+        : 1;
       const d: PickDecision = {
         ...base,
-        allowDecline: false,
+        allowDecline: pc.anyNumber === true,
         id: decisionId(ctx.seq, seat, "pick"),
         kind: "pick",
-        max: 1,
+        max: capacity,
         min: 1,
         options: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
         prompt: pc.boundTargets ? "Choose a target to drop" : `Choose a target for ${source.cardId ? ctx.label(source.cardId) : "the effect"}`,
@@ -673,6 +679,18 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
           break;
         }
         return err("WRONG_ANSWER_KIND", "Distribute decision needs a distribute (or single pick) answer");
+      }
+      // rule 355.13 (ogn-141-298): an "up to N" / "any number of" target
+      // prompt accepts several picks in one answer.
+      if (
+        pc.type === "choose-target" &&
+        pc.anyNumber === true &&
+        answer.kind === "pick" &&
+        answer.keys.length > 1 &&
+        answer.keys.length <= (pc.maxPicks ?? pc.options.length)
+      ) {
+        params.pickedCardIds = [...answer.keys];
+        break;
       }
       // rule 422.1.a (ogn-030-298): a "discard N" prompt accepts up to `remaining` picks at once.
       if (

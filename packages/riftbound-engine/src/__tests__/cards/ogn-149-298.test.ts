@@ -70,10 +70,7 @@ describe("Carnivorous Snapvine (ogn-149-298)", () => {
     expect(game.zoneOf("target")).toBe("trash");
   });
 
-  test.failing("BUG: with several enemy units at battlefields the controller CHOOSES which one (only battlefield enemies offered)", async () => {
-    // Expected: a pick prompt for P1 listing exactly the two enemy units at battlefields (not the
-    // enemy in base, not the friendly unit). Actual: the engine silently auto-targets the first
-    // legal unit and resolves without ever asking.
+  test("with several enemy units at battlefields the controller CHOOSES which one (only battlefield enemies offered)", async () => {
     const game = await board(4).battlefield("bf2", { controller: P2 }).unit(P2, "bf2", { might: 7, name: "Big" }, "big").build();
     await game.p1.play("vine");
     await game.settle();

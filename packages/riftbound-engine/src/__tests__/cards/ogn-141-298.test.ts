@@ -62,9 +62,7 @@ describe("Kinkou Monk (ogn-141-298)", () => {
     expect(game.state("foe").isBuffed).toBe(false);
   });
 
-  test.failing("BUG: 'up to two' — two other friendly units can be chosen and both get buffed", async () => {
-    // Expected: the target prompt allows 0..2 picks; choosing a+b buffs both.
-    // Actual: the engine prompt is min 1 / max 1 ("accepts exactly one pick"), so only one unit can be buffed.
+  test("'up to two' — two other friendly units can be chosen and both get buffed", async () => {
     const game = await playToPrompt();
     const d = game.decision();
     expect(d?.kind === "pick" && d.max).toBe(2);
@@ -77,9 +75,7 @@ describe("Kinkou Monk (ogn-141-298)", () => {
     expect(game.state("c").isBuffed).toBe(false);
   });
 
-  test.failing("BUG: 'up to two' — choosing no unit at all is allowed", async () => {
-    // Expected: min 0 / decline allowed; declining buffs nobody and returns to the open main phase.
-    // Actual: the prompt is mandatory (min 1, allowDecline false) so decline is rejected.
+  test("'up to two' — choosing no unit at all is allowed", async () => {
     const game = await playToPrompt();
     const d = game.decision();
     expect(d?.kind === "pick" && (d.min === 0 || d.allowDecline)).toBe(true);

@@ -16,8 +16,13 @@ export function handle_fight(effect: ExecutableEffect, ctx: EffectContext, h: Ef
     // attacker/defender pair is locked at play time and travels in
     // boundTargets as [attacker, defender]; only fall back to descriptor
     // resolution when nothing was bound.
-    let attackerId: string | undefined = ctx.boundTargets?.[0];
-    let defenderId: string | undefined = ctx.boundTargets?.[1];
+    // rule-id: ogn-149-298 (rule 355.10) — with a FIXED attacker ("self") the
+    // only chosen card is the defender, so boundTargets carries just it.
+    const attackerFixed = typeof attackerTarget === "string";
+    let attackerId: string | undefined = attackerFixed ? undefined : ctx.boundTargets?.[0];
+    let defenderId: string | undefined = attackerFixed
+      ? ctx.boundTargets?.[0]
+      : ctx.boundTargets?.[1];
     if (!attackerId || !defenderId) {
       const resolverCtx = {
         cards: ctx.cards,
