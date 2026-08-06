@@ -3892,10 +3892,12 @@
         },
         {
           "type": "static",
-          "condition": { "type": "at-battlefield", "who": "self" },
+          "condition": { "type": "while-at-battlefield" },
           "effect": {
-            "type": "raw",
-            "text": "opponents can't play spells with that name."
+            "type": "restrict-play",
+            "who": "opponents",
+            "cardType": "spell",
+            "matchesNamedCard": true
           }
         }
       ],

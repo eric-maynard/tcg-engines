@@ -110,10 +110,9 @@ describe("Ruling 6bfd713032d974b1 — Fallen Feline does not stop a named spell 
     expect(game.zoneOf("feline")).toBe("battlefield-bf1");
   });
 
-  // Expected: once Feline (named "Stupefy") is at bf1, P2 can no longer PLAY a Stupefy — in the next
-  // reaction window `cast stupefy2` is not legal and is rejected. Actual: Feline's static "opponents can't
-  // play spells with that name" is unimplemented (parsed as raw text) — P2 may still cast Stupefy.
-  test.failing("BUG: ruling 6bfd713032d974b1 — contrast: with Feline at a battlefield, P2 cannot play a FURTHER Stupefy (engine still allows it)", async () => {
+  // Once Feline (named "Stupefy") is at bf1, P2 can no longer PLAY a Stupefy — in the next
+  // reaction window `cast stupefy2` is not legal and is rejected.
+  test("ruling 6bfd713032d974b1 — contrast: with Feline at a battlefield, P2 cannot play a FURTHER Stupefy", async () => {
     const game = await board().build();
     await felineNamesStupefy(game);
     await stupefyThenFelineArrives(game);

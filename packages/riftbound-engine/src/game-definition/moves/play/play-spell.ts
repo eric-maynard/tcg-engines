@@ -637,6 +637,16 @@ export const playSpell: Defs["playSpell"] = {
       if (!def || def.cardType !== "spell") {
         continue;
       }
+      // rule 419.1 — board statics that forbid playing this card (ven-132-166).
+      if (
+        playIsForbidden(
+          { cards: context.cards, draft: state, zones: context.zones },
+          context.playerId as string,
+          cardId as string,
+        )
+      ) {
+        continue;
+      }
       // rule 356.2.a.1 / 357.2 (unl-173-219) — a mandatory kill additional
       // cost: offer one variant per legal sacrifice, and nothing at all when
       // there is none to kill.
@@ -1297,6 +1307,16 @@ export const playSpell: Defs["playSpell"] = {
       }
       // rule-id: ven-113-166 — printed OR granted [Flow] offers the trash play.
       if (!getFlowCostForPlay(cardId as string, meta)) {
+        continue;
+      }
+      // rule 419.1 — board statics that forbid playing this card (ven-132-166).
+      if (
+        playIsForbidden(
+          { cards: context.cards, draft: state, zones: context.zones },
+          context.playerId as string,
+          cardId as string,
+        )
+      ) {
         continue;
       }
       if (

@@ -348,6 +348,20 @@ export interface TurnStaticEffect {
   readonly effect: ModifyMightEffect | GrantKeywordEffect | GrantKeywordsEffect;
 }
 
+/**
+ * rule 419.1 (ven-132-166 Fallen Feline): a static that forbids PLAYING cards
+ * — putting them on the chain. Items already on the chain are unaffected.
+ */
+export interface RestrictPlayEffect {
+  readonly type: "restrict-play";
+  /** Whose plays are forbidden, relative to the source's controller. */
+  readonly who: "opponents" | "all";
+  /** Restricted card type; omit or "card" for every type. */
+  readonly cardType?: "spell" | "unit" | "gear" | "rune" | "card";
+  /** Only cards whose name matches the source's recorded `namedCard` meta. */
+  readonly matchesNamedCard?: boolean;
+}
+
 // ============================================================================
 // Movement Effects
 // ============================================================================
@@ -968,6 +982,7 @@ export type StaticEffect =
   | IncreaseVictoryScoreEffect
   | IncreaseHiddenCapacityEffect
   | PreventScoreEffect
+  | RestrictPlayEffect
   | UnlimitedBuffsEffect;
 
 // ============================================================================
