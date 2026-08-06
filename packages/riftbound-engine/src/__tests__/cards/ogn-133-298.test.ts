@@ -30,7 +30,7 @@ function board() {
 }
 
 describe("Flurry of Blades (ogn-133-298)", () => {
-  test.failing("BUG: deals 1 to EVERY unit at EVERY battlefield (both sides) with no target choice", async () => {
+  test("deals 1 to EVERY unit at EVERY battlefield (both sides) with no target choice", async () => {
     // Expected: no `targets` field; after resolution mineBf1 and foeBf2 have 1 damage, weakBf2 dies.
     // Actual: the engine asks the caster to pick ONE battlefield and only damages units there.
     const game = await board().build();

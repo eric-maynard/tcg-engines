@@ -38,6 +38,9 @@ export type CardType =
   | "legend" // Legend cards
   | "rune" // Rune cards
   | "card" // Any card type
+  // rule-id: ogn-181-298 — a facedown (hidden) card on a battlefield; it has
+  // no visible printed type, so it is only ever matched by naming it.
+  | "facedown"
   | "permanent"; // Any permanent (unit, gear, legend)
 
 // ============================================================================
@@ -50,7 +53,11 @@ export type CardType =
 export type Location =
   | "base" // Player's base zone
   | "battlefield" // Any battlefield
+  // rule 355.8: "at battlefields" (plural) — EVERY battlefield at once, as
+  // opposed to "at a battlefield", which is one caster-chosen battlefield.
+  | "battlefields"
   | "here" // Same location as source
+  | "here-battlefield" // The battlefield the source is at ("my battlefield"); nothing when it is not at one
   | "trash" // Discard pile
   | "hand" // Player's hand
   | "deck" // Main deck

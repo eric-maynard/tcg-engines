@@ -2,6 +2,7 @@
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { canAffordCard, type CostExtras, deductCost } from "../../game-definition/moves/play/cost";
 import { spellEffectHasLegalTargets, type SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
@@ -29,6 +30,16 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // from the controller's hand and let them choose one (rule 355.10).
   let targets: string[];
   const from = (effect as { from?: unknown }).from;
+  // rule-id: ogn-196-298 (rule 356.1.b) — "play a unit from your trash,
+  // ignoring its Energy cost": the trash is not a board zone the target
+  // resolver scans, so gather the controller's own trash units that they can
+  // still pay the Power cost for and let them choose one (rule 355.10).
+  // ("play THIS from your trash" — a bare `self` target — keeps the generic
+  // path below: the card to play is already known.)
+  if (from === "trash" && typeof (effect as { target?: unknown }).target === "object") {
+    playFromTrash(effect, ctx);
+    return;
+  }
   if (from === "hand" && !ctx.boundTargets) {
     const candidates = playCandidatesFromHand(effect, ctx);
     if (candidates.length === 0) {
@@ -156,6 +167,65 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
   // Rule 724 (Legion): a replay is still a card played this turn.
   if (ctx.draft.cardsPlayedThisTurn) {
     ctx.draft.cardsPlayedThisTurn[ctx.playerId] = (ctx.draft.cardsPlayedThisTurn[ctx.playerId] ?? 0) + 1;
+  }
+}
+
+/**
+ * rule-id: ogn-196-298 — "play a unit from your trash, ignoring its Energy
+ * cost. (You must still pay its Power cost.)". Rule 356.1.b: ignoring one cost
+ * component leaves the others payable, so only trash cards whose remaining
+ * cost the controller can pay are legal choices (rule 355.8).
+ */
+function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
+  const registry = getGlobalCardRegistry();
+  const target = (effect as { target?: unknown }).target as { type?: string } | undefined;
+  const ignoreCost = (effect as { ignoreCost?: unknown }).ignoreCost;
+  const extras: CostExtras =
+    ignoreCost === true
+      ? { ignoreBaseCost: true }
+      : ignoreCost === "energy"
+        ? { ignoreEnergyCost: true }
+        : {};
+  const trash = ctx.zones.getCardsInZone(
+    "trash" as CoreZoneId,
+    ctx.playerId as CorePlayerId,
+  ) as readonly string[];
+  const candidates = trash.filter((id) => {
+    const cardType = registry.getCardType(id);
+    if (target?.type && target.type !== "card" && target.type !== cardType) {
+      return false;
+    }
+    return canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta);
+  });
+  // Board targets bound by the chain resolver are meaningless here (the card
+  // is in the trash): only a pick among the trash candidates counts.
+  let chosen = ctx.boundTargets?.find((id) => candidates.includes(id));
+  if (chosen === undefined) {
+    if (candidates.length === 0) {
+      return;
+    }
+    if (!ctx.draft.pendingChoice) {
+      // rule 355.10: the controller chooses which trash unit to play; the
+      // choice is theirs alone, so it is offered even with a single candidate.
+      ctx.draft.pendingChoice = {
+        onPicked: "play",
+        optional: true,
+        playIgnoreEnergy: extras.ignoreEnergyCost === true,
+        playIgnoreCost: extras.ignoreBaseCost === true,
+        prompter: ctx.playerId,
+        remaining: 1,
+        revealed: [...candidates],
+        revealer: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        type: "reveal-and-pick",
+      } as typeof ctx.draft.pendingChoice;
+      return;
+    }
+    chosen = candidates[0] as string;
+  }
+  deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
+  if (registry.getCardType(chosen) === "unit") {
+    enterUnitFromEffect(chosen, "base", ctx);
   }
 }
 

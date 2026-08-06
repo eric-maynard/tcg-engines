@@ -54,7 +54,7 @@ describe("Soulgorger (ogn-196-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0, fury: 1 } });
   });
 
-  test.failing("BUG: accepting lets you pick a UNIT from YOUR trash and plays it for 0 energy", async () => {
+  test("accepting lets you pick a UNIT from YOUR trash and plays it for 0 energy", async () => {
     // Expected: after "yes" P1 picks among their trash units only (skulker | wurm — not the spell, not
     // P2's unit); picking the Skulker plays it to base exhausted with P1's energy still 0.
     // Actual: the play-from-trash effect resolves as a no-op — no pick, the unit stays in the trash.
@@ -74,7 +74,7 @@ describe("Soulgorger (ogn-196-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0, fury: 1 } });
   });
 
-  test.failing("BUG: the Power cost must still be paid — Magma Wurm from trash costs its [fury] but no energy", async () => {
+  test("the Power cost must still be paid — Magma Wurm from trash costs its [fury] but no energy", async () => {
     // Expected: picking the Wurm plays it (8 energy ignored) and deducts the 1 fury. Actual: nothing is played.
     const game = await board().build();
     await game.p1.play("sg");
@@ -87,7 +87,7 @@ describe("Soulgorger (ogn-196-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { chaos: 0, fury: 0 } });
   });
 
-  test.failing("BUG: without the matching Power the Wurm cannot be played from trash (only the Skulker is offered)", async () => {
+  test("without the matching Power the Wurm cannot be played from trash (only the Skulker is offered)", async () => {
     // Expected: with no fury in the pool the Wurm is not a legal pick. Actual: no pick is offered at all.
     const game = await board({ chaos: 2 }).build();
     await game.p1.play("sg");

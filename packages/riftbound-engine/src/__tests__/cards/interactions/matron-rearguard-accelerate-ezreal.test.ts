@@ -97,7 +97,7 @@ describe("Spectral Matron → Legion Rearguard (Accelerate) × Ezreal, Prodigy",
     expect(game.p1.resources()).toEqual({ energy: 1, power: { fury: 1, order: 0 } });
   });
 
-  test.failing("BUG: declining Accelerate — Rearguard is played from trash for a total cost of 0 and enters EXHAUSTED (356.1.b.1, 143.4)", async () => {
+  test("declining Accelerate — Rearguard is played from trash for a total cost of 0 and enters EXHAUSTED (356.1.b.1, 143.4)", async () => {
     // Expected: Rearguard (cost 2 ≤ 3, Power 0) is offered, is played to base costing nothing, and
     // enters exhausted; the 5-cost unit is not offered. Actual: Matron's play-from-trash effect
     // resolves without ever offering/playing anything — Rearguard stays in the trash.
@@ -131,7 +131,7 @@ describe("Spectral Matron → Legion Rearguard (Accelerate) × Ezreal, Prodigy",
     expect(game.p1.power()).toBe(0);
   });
 
-  test.failing("BUG: an off-domain (Calm) power cannot pay the Fury pip (805.1.a.1) — Rearguard still comes back but EXHAUSTED, Calm untouched", async () => {
+  test("an off-domain (Calm) power cannot pay the Fury pip (805.1.a.1) — Rearguard still comes back but EXHAUSTED, Calm untouched", async () => {
     // Expected: with only [1] + a Calm power available, Accelerate is unaffordable, so even a
     // player who wants to accelerate gets an exhausted Rearguard and keeps the Calm power.
     // Actual: Rearguard is never played from the trash.

@@ -249,7 +249,8 @@ describe("Effect: Damage", () => {
           effect: expect.objectContaining({
             amount: 12,
             target: expect.objectContaining({
-              location: "battlefield",
+              // plural "at battlefields" = every battlefield, not one chosen one
+              location: "battlefields",
               quantity: "all",
               type: "unit",
             }),

@@ -59,9 +59,12 @@ export function parseCardTarget(targetText: string): {
   // qualifier and let the resolver treat it as any battlefield.
   if (lower.includes("i moved to or from") || lower.includes("i moved from or to")) {
     target.location = "move-to-or-from" as Location;
+  } else if (lower.includes("at battlefields")) {
+    // rule-id: ogn-133-298 / ogs-018-024 — "at battlefields" (plural) is every
+    // battlefield at once; only the singular "at a battlefield" is a choice.
+    target.location = "battlefields" as Location;
   } else if (
     lower.includes("at a battlefield") ||
-    lower.includes("at battlefields") ||
     lower.includes("at my battlefield")
   ) {
     target.location = "battlefield";

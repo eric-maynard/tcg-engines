@@ -37,7 +37,7 @@ describe("Pirate's Haven (ogn-143-298)", () => {
     expect(poor.p1.can("play", "haven")).toBe(false);
   });
 
-  test.failing("BUG: readying an exhausted friendly unit gives THAT UNIT +1 Might this turn only", async () => {
+  test("readying an exhausted friendly unit gives THAT UNIT +1 Might this turn only", async () => {
     // Expected: the readied unit goes 2 → 3 Might until end of turn. Actual: the trigger fires but
     // its modify-might targets the gear itself ("self"), so the unit stays at 2.
     const game = await board().build();
@@ -103,7 +103,7 @@ describe("Pirate's Haven (ogn-143-298)", () => {
     expect(game.state("theirs").might).toBe(2);
   });
 
-  test.failing("BUG: Awaken Phase readying (rule 415.3.a) is 'you ready' — exhausted friendly units should get +1 Might on your new turn", async () => {
+  test("Awaken Phase readying (rule 415.3.a) is 'you ready' — exhausted friendly units should get +1 Might on your new turn", async () => {
     // Expected: the exhausted unit readied by P1's Awaken step triggers Haven → 3 Might during
     // P1's turn; the already-ready one is not readied (415.1.c) → stays 2. Actual: the Awaken
     // readyAll does not fire "ready" triggers, so both stay at 2.

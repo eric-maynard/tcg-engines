@@ -16,9 +16,18 @@ export function handle_ready(effect: ExecutableEffect, ctx: EffectContext, _h: E
   for (const targetId of readied) {
     // rule-id: unl-144-219 — "I can't be readied." also blocks ready effects.
     const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
-      | { grantedKeywords?: { keyword: string }[]; exhausted?: boolean }
+      | {
+          grantedKeywords?: { keyword: string }[];
+          exhausted?: boolean;
+          __flags?: Record<string, boolean>;
+        }
       | undefined;
     if (registry.cantReady(targetId, meta?.grantedKeywords)) {
+      continue;
+    }
+    // rule 415.1.b/c: an object that is already ready cannot be readied, so
+    // nothing happens and no `ready` event is emitted for it.
+    if (meta?.__flags?.exhausted !== true && meta?.exhausted !== true) {
       continue;
     }
     // rule 466 (ogn-070-298) — an enemy permanent's continuous "spells and
