@@ -69,10 +69,9 @@ describe("Kraken Hunter (ogn-150-298)", () => {
     expect(game.zoneOf("atk")).toBe("trash");
   });
 
-  test.failing("BUG: spending one friendly buff reduces the cost by [body] — playable with 3 energy + 1 body", async () => {
-    // Expected: with a buffed friendly unit on board, P1 may spend that buff as an additional cost,
-    // reducing the power cost to a single [body]; the ally loses its buff. Actual: the
-    // BuffCostReduction helper keyword is never honoured, so the play is simply unaffordable.
+  test("spending one friendly buff reduces the cost by [body] — playable with 3 energy + 1 body", async () => {
+    // With a buffed friendly unit on board, P1 may spend that buff as an additional cost,
+    // reducing the power cost to a single [body]; the ally loses its buff.
     const game = await scenario()
       .resources(P1, { energy: 3, power: { body: 1 } })
       .unit(P1, "base", { might: 2 }, "ally", { buffed: true })
@@ -86,9 +85,8 @@ describe("Kraken Hunter (ogn-150-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { body: 0 } });
   });
 
-  test.failing("BUG: spending two buffs pays the whole power cost — playable with 3 energy and no body power", async () => {
-    // Expected: two buffs spent → cost is 3 energy + 0 power; both allies lose their buffs.
-    // Actual: not offered at all.
+  test("spending two buffs pays the whole power cost — playable with 3 energy and no body power", async () => {
+    // Two buffs spent → cost is 3 energy + 0 power; both allies lose their buffs.
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .unit(P1, "base", { might: 2 }, "a", { buffed: true })

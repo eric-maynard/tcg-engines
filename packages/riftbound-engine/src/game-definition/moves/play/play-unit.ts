@@ -420,6 +420,39 @@ export const playUnit: Defs["playUnit"] = {
           });
         }
       }
+      // rule 560 / 702.2.b (ogn-150-298): "spend any number of buffs … reduce
+      // my cost by [body] for each" — offer one variant per spendable set of
+      // friendly buffs whose waiver makes the play affordable.
+      const buffCost = standardTiming ? getBuffSpendCost(cardId as string) : undefined;
+      const buffVariants: RiftboundMoves["playUnit"][] = [];
+      if (buffCost) {
+        const spendable = friendlyBuffedUnits(
+          state,
+          context.zones,
+          context.cards,
+          context.playerId as string,
+        );
+        for (const subset of buffSpendSubsets(spendable)) {
+          if (
+            canAffordCard(
+              state,
+              context.playerId as string,
+              cardId as string,
+              { board, waivePower: { [buffCost.domain]: subset.length } },
+              metaForAfford,
+              potential,
+            )
+          ) {
+            buffVariants.push({
+              cardId: cardId as string,
+              location: "base",
+              paidAdditionalCost: true,
+              playerId: context.playerId as string,
+              spentBuffIds: subset,
+            });
+          }
+        }
+      }
       // rule 560 / 805.1.a: the optional cost is paid ON TOP of the base cost, so
       // affordability is the combined total (base [C] pip + Accelerate's [C] pip
       // needs two power), not the extra checked in isolation.
@@ -462,6 +495,7 @@ export const playUnit: Defs["playUnit"] = {
           results.push(paidVariant);
         }
         results.push(...discardVariants);
+        results.push(...buffVariants);
         continue;
       }
 
@@ -584,6 +618,7 @@ export const playUnit: Defs["playUnit"] = {
       // to pay it.
       const optional = discardCost;
       results.push(...discardVariants);
+      results.push(...buffVariants);
       if (paidVariant) {
         results.push(paidVariant);
       } else if (optional?.kind === "kill") {
@@ -620,7 +655,7 @@ export const playUnit: Defs["playUnit"] = {
     return results;
   },
   reducer: (draft, context) => {
-    const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId, discardId } =
+    const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId, discardId, spentBuffIds } =
       context.params;
     const { zones, counters } = context;
 
@@ -659,13 +694,50 @@ export const playUnit: Defs["playUnit"] = {
 
     // rule-id: ven-096-166 — board/trash access for static cost reductions.
     const board = { cards: context.cards, zones };
+
+    // rule 560 / 702.2.b (ogn-150-298) — spend the declared buffs: each one
+    // waives a pip of the card's power cost. Re-validate against the board
+    // rather than trusting the client-supplied ids.
+    const buffCost = getBuffSpendCost(cardId);
+    const spentBuffs: string[] = [];
+    if (buffCost && spentBuffIds && spentBuffIds.length > 0) {
+      const spendable = friendlyBuffedUnits(draft, zones, context.cards, playerId);
+      for (const id of spentBuffIds) {
+        if (spendable.includes(id as string) && !spentBuffs.includes(id as string)) {
+          spentBuffs.push(id as string);
+        }
+      }
+    }
+    const waivePower =
+      buffCost && spentBuffs.length > 0 ? { [buffCost.domain]: spentBuffs.length } : undefined;
+
     deductCost(
       draft,
       playerId,
       cardId,
-      energyDiscount > 0 ? { additionalCost: { energy: -energyDiscount }, board } : { board },
+      {
+        board,
+        ...(energyDiscount > 0 ? { additionalCost: { energy: -energyDiscount } } : {}),
+        ...(waivePower ? { waivePower } : {}),
+      },
       createMetaAccessor(context.cards),
     );
+
+    // rule 702.2.b: spending a buff removes it; Might readers look at
+    // top-level meta.buffed, so mirror the counter flag there.
+    for (const id of spentBuffs) {
+      counters.setFlag(id as CoreCardId, "buffed", false);
+      context.cards.updateCardMeta?.(
+        id as CoreCardId,
+        { buffed: false } as Partial<RiftboundCardMeta>,
+      );
+    }
+    if (spentBuffs.length > 0) {
+      fireTriggers(
+        { cardId, playerId, type: "spend-buff" },
+        { cards: context.cards, counters, draft, zones },
+      );
+    }
 
     let paidAccelerate = false;
     let paidAdditionalCostActual = discardPaid;

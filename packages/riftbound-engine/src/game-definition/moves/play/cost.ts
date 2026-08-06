@@ -928,6 +928,11 @@ export interface CostExtras {
    */
   ignoreBaseCost?: boolean;
   /**
+   * rule 356.1.b (ogn-196-298) — the play ignores only the card's Energy cost
+   * component ("ignoring its Energy cost"); its Power cost is still paid.
+   */
+  ignoreEnergyCost?: boolean;
+  /**
    * rule-id: ogn-150-298 (rule 560) — power pips waived by a paid optional
    * additional cost ("reduce my cost by [body] for each buff you spend"),
    * keyed by domain. Waived exactly like a board static's power waiver.
@@ -1197,6 +1202,18 @@ export function getBaseCostForPlay(
  * not "any Domain" like a true [rainbow] pip. Returns those Domains for a
  * multi-domain card, otherwise undefined.
  */
+/**
+ * rule 204.3.b / rule 135.2.e (rule-id: ogn-268-298): "Pay any amount of
+ * [rainbow]" — the variable X payment is Power of any Domain, never Energy.
+ * Spell abilities declare this with `xCost: "power"`.
+ */
+export function xCostIsPower(cardId: string): boolean {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  return abilities.some(
+    (a) => a?.type === "spell" && (a as { xCost?: unknown }).xCost === "power",
+  );
+}
+
 export function getHybridPipDomains(cardId: string): string[] | undefined {
   const domain = getGlobalCardRegistry().get(cardId)?.domain;
   return Array.isArray(domain) && domain.length > 1 ? domain : undefined;
@@ -1244,6 +1261,9 @@ export function canAffordCard(
   const baseCost = getBaseCostForPlay(cardId, extras);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
+  // rule 204.3.b / 135.2.e: an X paid in [rainbow] never touches Energy.
+  const xPower = xAmount > 0 && xCostIsPower(cardId) ? xAmount : 0;
+  const xEnergy = xAmount - xPower;
   const repeatN = Math.max(0, extras.repeatCount ?? 0);
   // rule-id: unl-146-219 — include board-granted Repeat instances.
   const repeatTiers =
@@ -1261,7 +1281,7 @@ export function canAffordCard(
   const adjustedEnergy = Math.max(
     0,
     Math.max(0, applyStaticCostReduction(Math.max(0, baseCost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlay) +
-      xAmount +
+      xEnergy +
       repeatSurcharge +
       (extras.additionalCost?.energy ?? 0),
   );
@@ -1269,7 +1289,8 @@ export function canAffordCard(
   // Rule 357.1.a: ready runes can be exhausted for energy during Pay Costs,
   // so treat their yield as available when testing affordability.
   const availableEnergy = pool.energy + potentialEnergy;
-  if (availableEnergy < adjustedEnergy) {
+  // rule 356.1.b: "ignoring its Energy cost" skips only that component.
+  if (!extras.ignoreEnergyCost && availableEnergy < adjustedEnergy) {
     return false;
   }
 
@@ -1288,7 +1309,7 @@ export function canAffordCard(
   // check named domains first, then cover rainbow from whatever is left.
   // Rule 721.1.c / 721.1.c.1 (unl-030-219): the Deflect surcharge is Power of
   // any Domain, so it joins the rainbow requirement rather than energy.
-  let rainbowNeed = getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards);
+  let rainbowNeed = getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards) + xPower;
   // Rule 135.2.e.6.c (rule-id: ven-150-166): a multi-domain card's printed
   // pips are hybrid — payable only from the card's own Domains.
   const hybridDomains = getHybridPipDomains(cardId);
@@ -1372,6 +1393,9 @@ export function deductCost(
   const modifier = getCostModifier(cardId, getCardMeta);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
+  // rule 204.3.b / 135.2.e: an X paid in [rainbow] never touches Energy.
+  const xPower = xAmount > 0 && xCostIsPower(cardId) ? xAmount : 0;
+  const xEnergy = xAmount - xPower;
   const repeatN = Math.max(0, extras.repeatCount ?? 0);
   // rule-id: unl-146-219 — include board-granted Repeat instances.
   const repeatTiers =
@@ -1389,12 +1413,13 @@ export function deductCost(
     0,
     // rule 356.4.e: floored board auras first, then unfloored discounts (see canAffordCard).
     Math.max(0, applyStaticCostReduction(Math.max(0, cost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlay) +
-      xAmount +
+      xEnergy +
       repeatSurcharge +
       (extras.additionalCost?.energy ?? 0),
   );
 
-  pool.energy = Math.max(0, pool.energy - adjustedEnergy);
+  // rule 356.1.b: "ignoring its Energy cost" skips only that component.
+  pool.energy = extras.ignoreEnergyCost ? pool.energy : Math.max(0, pool.energy - adjustedEnergy);
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
   const basePower = reducePowerCost(cost.power, waivedPower(boardReduction, extras), pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
@@ -1406,7 +1431,7 @@ export function deductCost(
   ]);
   // Rule 721.1.c / 721.1.c.1 (unl-030-219): Deflect surcharge is paid in
   // Power of any Domain, never energy.
-  let rainbowOwed = getDeflectSurcharge(draft, playerId, extras.targets, extras.board?.cards);
+  let rainbowOwed = getDeflectSurcharge(draft, playerId, extras.targets, extras.board?.cards) + xPower;
   // Rule 135.2.e.6.c (rule-id: ven-150-166): a multi-domain card's printed
   // pips are hybrid — paid only from the card's own Domains.
   const hybridDomains = getHybridPipDomains(cardId);

@@ -1,4 +1,5 @@
 import type { Ability } from "@tcg/riftbound-types";
+import type { Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
@@ -10,19 +11,20 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * As you play me, you may spend any number of buffs as an additional cost.
  * Reduce my cost by [body] for each buff you spend.
  *
- * The Accelerate and Assault keywords are standard. The custom cost
- * reduction via buffs is captured as a static helper keyword
- * `BuffCostReduction` that the engine's cost pipeline can honor later.
+ * The Accelerate and Assault keywords are standard. The buff-spending
+ * additional cost is a static `additional-cost-option` (rule 560); the play
+ * moves read `{spendBuff:"any", reducePower:"body"}` and waive one [body] pip
+ * per buff spent.
  */
 const abilities: Ability[] = [
   { cost: { energy: 1, power: ["body"] }, keyword: "Accelerate", type: "keyword" },
   { keyword: "Assault", type: "keyword", value: 1 },
   {
     effect: {
-      keyword: "BuffCostReduction",
-      target: "self",
-      type: "grant-keyword",
-    },
+      additionalCost: { reducePower: "body", spendBuff: "any" },
+      optional: true,
+      type: "additional-cost-option",
+    } as unknown as Effect,
     type: "static",
   },
 ];

@@ -175,6 +175,12 @@ export interface RiftboundMoves {
     sacrificeId?: CardId;
     /** rule 356.2.b — card discarded from hand as an optional additional cost. */
     discardId?: CardId;
+    /**
+     * rule 560 / 702.2.b (ogn-150-298) — friendly units whose buffs are spent
+     * as an optional additional cost ("reduce my cost by [body] for each buff
+     * you spend"). Each named unit loses its buff as the cost is paid.
+     */
+    spentBuffIds?: CardId[];
   };
 
   /**
