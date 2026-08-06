@@ -382,8 +382,16 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       }
 
       // Emit "conquer" event so triggered abilities fire
+      // rule-id: ogn-034-298 — this conquer happened after an attack, so it
+      // carries the excess damage the attackers assigned (rule 626.1.d.2).
       fireTriggers(
-        { battlefieldId, playerId: attackingPlayer, type: "conquer" },
+        {
+          afterAttack: true,
+          battlefieldId,
+          excessDamage,
+          playerId: attackingPlayer,
+          type: "conquer",
+        },
         { cards, counters, draft, zones },
       );
 

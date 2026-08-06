@@ -184,6 +184,14 @@ export function evaluateTriggerCondition(
     // absent the enumeration hasn't run and the payoff must NOT fire for free.
     return (event as { paidAdditionalCost?: boolean }).paidAdditionalCost === true;
   }
+  if (c.type === "excess-damage-assigned") {
+    // rule-id: ogn-034-298 (Tryndamere) / unl Trapping Grounds — rule 626.1.d.2:
+    // "if you assigned N or more excess damage" reads the excess the attackers
+    // assigned in the combat that produced this conquer. A conquer with no
+    // combat (empty battlefield, rule 316.8.b.1) assigned none, so it fails.
+    const needed = (c as { amount?: number }).amount ?? 1;
+    return ((event as { excessDamage?: number }).excessDamage ?? 0) >= needed;
+  }
   if (c.type === "while-empowered") {
     // Rule 827 (rule-id: ven-136-166): `[Empowered][>]` triggers fire only
     // while the source is Empowered.

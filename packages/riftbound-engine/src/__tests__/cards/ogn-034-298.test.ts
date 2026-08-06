@@ -52,7 +52,7 @@ describe("Tryndamere, Barbarian (ogn-034-298)", () => {
     expect(game.p1.points()).toBe(2);
   });
 
-  test.failing("BUG: with fewer than 5 excess damage (8 into a 4-might defender) only the conquer point should be scored", async () => {
+  test("with fewer than 5 excess damage (8 into a 4-might defender) only the conquer point should be scored", async () => {
     // Expected: 8 assigned vs lethal 4 → 4 excess → condition false → 1 point (conquer only).
     // Actual: evaluateTriggerCondition does not know `excess-damage-assigned` and is permissive,
     // so the trigger scores on every conquer (2 points).
@@ -78,7 +78,7 @@ describe("Tryndamere, Barbarian (ogn-034-298)", () => {
     expect(game.p1.points()).toBe(2);
   });
 
-  test.failing("BUG: conquering an EMPTY enemy battlefield is not 'after an attack' (316.8.b.1) — only the conquer point should be scored", async () => {
+  test("conquering an EMPTY enemy battlefield is not 'after an attack' (316.8.b.1) — only the conquer point should be scored", async () => {
     // Expected: no combat happened and 0 excess damage was assigned → 1 point.
     // Actual: the conquer trigger fires unconditionally → 2 points.
     const game = await scenario()
