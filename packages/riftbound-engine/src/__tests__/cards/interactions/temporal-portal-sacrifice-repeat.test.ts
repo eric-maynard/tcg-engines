@@ -78,7 +78,7 @@ describe("Temporal Portal × Sacrifice (Repeat equal to its cost) × Dunebreaker
     expect(game.zoneOf("squire")).toBe("base"); // the non-Mighty unit is never touched
   });
 
-  test.failing("BUG: without the Portal: playing Sacrifice kills the (only) friendly Mighty unit as a mandatory additional cost (204.2, 356.2.a.1, 357.2)", async () => {
+  test("without the Portal: playing Sacrifice kills the (only) friendly Mighty unit as a mandatory additional cost (204.2, 356.2.a.1, 357.2)", async () => {
     // Expected: Dunebreaker is killed while paying costs — it is already in the trash while
     // Sacrifice is still on the chain. Actual: playSpell ignores the parsed `additionalCost.kill`;
     // Dunebreaker stays in the base.
@@ -91,7 +91,7 @@ describe("Temporal Portal × Sacrifice (Repeat equal to its cost) × Dunebreaker
     expect(game.zoneOf("squire")).toBe("base");
   });
 
-  test.failing("BUG: Sacrifice cannot be played at all with no friendly Mighty unit to kill (356.2.a.1 — mandatory cost)", async () => {
+  test("Sacrifice cannot be played at all with no friendly Mighty unit to kill (356.2.a.1 — mandatory cost)", async () => {
     // Expected: no legal way to pay the additional cost → not castable. Actual: offered and castable.
     const game = await scenario()
       .resources(P1, { energy: 3 })

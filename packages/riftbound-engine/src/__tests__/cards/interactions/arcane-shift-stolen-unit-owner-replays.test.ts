@@ -101,7 +101,7 @@ function ownBoard(opts: { p1Mind?: number } = {}) {
 describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its owner plays it'", () => {
   // ------------------------------------------------------------------ (a) targeting
 
-  test.failing("BUG: (a) the stolen Watcher is a legal 'friendly unit' for P1's Arcane Shift — friendly means controlled-by (740.1.a)", async () => {
+  test("(a) the stolen Watcher is a legal 'friendly unit' for P1's Arcane Shift — friendly means controlled-by (740.1.a)", async () => {
     // Expected: [watcher, victim] is among the offered pairs and the cast is accepted.
     // Actual: friendliness is keyed on OWNER, so the P1-controlled / P2-owned Watcher is not offered.
     const game = await possessed();
@@ -125,7 +125,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
 
   // ------------------------------------------------------------------ (b) who replays / where / control
 
-  test.failing("BUG: (b) the Watcher is banished and its OWNER P2 — not P1 — is asked where to play it: P2's base or bf2 (a battlefield P2 controls), never P1's 'home' (124, 127.1, 355.2.a)", async () => {
+  test("(b) the Watcher is banished and its OWNER P2 — not P1 — is asked where to play it: P2's base or bf2 (a battlefield P2 controls), never P1's 'home' (124, 127.1, 355.2.a)", async () => {
     // Expected: after Arcane Shift resolves, a destination pick for seat P2 with {base, battlefield-bf2}.
     // Actual: the cast itself is rejected (see (a)).
     const game = await possessed();
@@ -136,7 +136,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     expect(game.p2.banishment()).toContain("watcher"); // waiting in its owner's banishment meanwhile
   });
 
-  test.failing("BUG: (b)+(c) ordering — by the time P2 is prompted, Arcane Shift has already dealt 3 to the victim and banished itself (354.3)", async () => {
+  test("(b)+(c) ordering — by the time P2 is prompted, Arcane Shift has already dealt 3 to the victim and banished itself (354.3)", async () => {
     const game = await possessed();
     const d = await shiftStolen(game);
     expect(d?.seat).toBe(P2);

@@ -40,7 +40,10 @@ function board() {
 async function castHeedless(game: Game): Promise<void> {
   const r = await game.p1.try((p) => p.cast("heedless", { sacrifice: "victim" }));
   if (!r.ok) {
-    await game.p1.cast("heedless", { targets: "victim" });
+    const t = await game.p1.try((p) => p.cast("heedless", { targets: "victim" }));
+    if (!t.ok) {
+      await game.p1.cast("heedless");
+    }
   }
   expect(game.chain().map((c) => c.cardId)).toEqual(["heedless"]);
 }

@@ -46,7 +46,7 @@ describe("The Harrowing (ogn-198-298)", () => {
     expect(oneChaos.p1.can("cast", "har")).toBe(false);
   });
 
-  test.failing("BUG: castable with a unit in your trash and an empty board; costs 6 energy + 2 chaos; choices are YOUR trash UNITS only", async () => {
+  test("castable with a unit in your trash and an empty board; costs 6 energy + 2 chaos; choices are YOUR trash UNITS only", async () => {
     // Expected: legal at 6+CC; the offered cards are skulker + vi (not the spell, not P2's trash).
     // Actual: the engine resolves "a unit from your trash" against friendly units on the BOARD,
     // so with an empty board the spell is not offered at all.
@@ -61,7 +61,7 @@ describe("The Harrowing (ogn-198-298)", () => {
     expect(game.zoneOf("har")).toBe("chain");
   });
 
-  test.failing("BUG: the chosen unit is played from the trash onto the board with no energy spent on it", async () => {
+  test("the chosen unit is played from the trash onto the board with no energy spent on it", async () => {
     // Expected: Shipyard Skulker leaves the trash and enters P1's base; energy stays 0 after paying 6 for the spell.
     // Actual: nothing in the trash is touched (see above).
     const game = await board().build();
@@ -73,7 +73,7 @@ describe("The Harrowing (ogn-198-298)", () => {
     expect(game.zoneOf("har")).toBe("trash");
   });
 
-  test.failing("BUG: '(You must still pay its Power cost.)' — bringing back Vi (2 + [fury]) spends the fury but no energy", async () => {
+  test("'(You must still pay its Power cost.)' — bringing back Vi (2 + [fury]) spends the fury but no energy", async () => {
     // Expected: with 1 fury available Vi enters the base; fury 1 → 0, energy untouched beyond the spell's own 6.
     // Actual: the play-from-trash never happens.
     const game = await board({ fury: 1 }).build();

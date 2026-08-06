@@ -84,7 +84,7 @@ describe("Sacrifice × Rift Herald — the cost-kill's Deathknell resolves befor
     expect(game.p1.runeDeck()).toHaveLength(runeDeckBefore - 1);
   });
 
-  test.failing("BUG: only FRIENDLY MIGHTY units are offered for the kill cost — Herald yes; the 2-Might ally and the enemy 6-Might brute no (356.7); engine asks for no unit at all", async () => {
+  test("only FRIENDLY MIGHTY units are offered for the kill cost — Herald yes; the 2-Might ally and the enemy 6-Might brute no (356.7); engine asks for no unit at all", async () => {
     // Expected: the cast option carries a kill-cost choice whose only legal value is "herald".
     // Actual: play-spell ignores `additionalCost.kill`; the option has no fields.
     const game = await board().build();
@@ -161,7 +161,7 @@ describe("Sacrifice × Rift Herald — the cost-kill's Deathknell resolves befor
     expect(game.p1.energy()).toBe(0); // energy ignored
   });
 
-  test.failing("BUG: negative — with no friendly Mighty unit (only a 4-Might ally) the additional cost cannot be paid, so Sacrifice is NOT a legal play (356.7); engine lets it be cast", async () => {
+  test("negative — with no friendly Mighty unit (only a 4-Might ally) the additional cost cannot be paid, so Sacrifice is NOT a legal play (356.7); engine lets it be cast", async () => {
     // Expected: can("cast") is false and an attempted cast is rejected; nothing drawn.
     // Actual: castable; resolves as plain "Draw 2, channel 1 exhausted".
     const game = await scenario()

@@ -54,7 +54,7 @@ describe("Ruling c765ee70b72b31fc — Sacrifice's cost-kill happens inside final
   // Expected (355.10.c, 357.2): choosing Big Ally IS paying the cost — it is killed during finalization, so
   // it is already in the trash before anyone (even P1) gets priority, and it never appears as a target
   // of the chain item. Actual: play-spell ignores `additionalCost.kill`; no unit is asked for or killed.
-  test.failing("BUG: ruling c765ee70b72b31fc — the chosen Mighty unit is dead (in the trash) the instant Sacrifice hits the chain, before any priority", async () => {
+  test("ruling c765ee70b72b31fc — the chosen Mighty unit is dead (in the trash) the instant Sacrifice hits the chain, before any priority", async () => {
     const game = await board().build();
     const offered = game.p1.option("cast", "sac")?.fields.find((f) => f.arg === "sacrifice" || f.name === "sacrificeId" || f.name === "targets");
     expect(offered?.options ?? []).toEqual(expect.arrayContaining([expect.anything()]));
@@ -68,7 +68,7 @@ describe("Ruling c765ee70b72b31fc — Sacrifice's cost-kill happens inside final
   // Expected: the first moment P2 can act at all is a normal priority window on Sacrifice — by then Big
   // Ally is in the trash, so P2's Stupefy cannot be aimed at it (only the surviving units are offered).
   // Actual: Big Ally is never killed, so it is still on the board and targetable when P2 gets priority.
-  test.failing("BUG: ruling c765ee70b72b31fc — when P2 first receives priority the unit is already gone: Stupefy cannot target Big Ally", async () => {
+  test("ruling c765ee70b72b31fc — when P2 first receives priority the unit is already gone: Stupefy cannot target Big Ally", async () => {
     const game = await board().build();
     await castSacrifice(game, "big");
     await game.p1.passPriority();

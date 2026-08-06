@@ -4,7 +4,8 @@
  */
 
 import { isAllAtOneBattlefield, resolveTarget } from "../../../abilities/target-resolver";
-import { isLegalCounterTarget } from "../../../chain/counter-target";
+import { type CounterTargetContext, isLegalCounterTarget } from "../../../chain/counter-target";
+import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 
 export type SpellEffectTargetDescriptor =
   | string
@@ -251,6 +252,56 @@ export function enumerateSubsetsUpTo(pool: string[], maxSize: number): string[][
 }
 
 /**
+ * rule 355.9.b (sfd-045-221) — a counter's "enemy spell … that chooses a
+ * friendly unit or gear" qualifiers are relative to the counter's controller.
+ */
+function counterCtx(ctx: Parameters<typeof resolveTarget>[1]): CounterTargetContext {
+  return {
+    controllerOf: (id) =>
+      ctx.cards.getCardController?.(id as never) ?? ctx.cards.getCardOwner(id as never),
+    playerId: ctx.playerId,
+  };
+}
+
+/**
+ * rule-id: ogn-198-298 (rule 355.10.a) — "Play a unit from your trash": a
+ * `play` effect with an off-board `from` zone names a card in that zone, not a
+ * board object. The board target resolver never sees it, so the choice happens
+ * as the effect resolves (`effects/play.ts playFromTrash`) rather than at play
+ * time. Returns the zone name when the effect is of that shape.
+ */
+export function offBoardPlayZone(effect: SpellEffectTargetShape | undefined): string | undefined {
+  if (effect?.type !== "play") return undefined;
+  const from = (effect as { from?: unknown }).from;
+  if (from !== "trash" && from !== "hand") return undefined;
+  const tgt = effect.target;
+  // "play THIS from your trash" (a bare `self`) names a known card.
+  if (tgt === undefined || typeof tgt === "string") return undefined;
+  return from;
+}
+
+/**
+ * rule 355.8 for an off-board play: legality is whether the controller's own
+ * `from` zone holds a card matching the effect's descriptor.
+ */
+function offBoardPlayHasCandidates(
+  effect: SpellEffectTargetShape,
+  zone: string,
+  ctx: Parameters<typeof resolveTarget>[1],
+): boolean {
+  const tgt = effect.target as { type?: string } | undefined;
+  const registry = getGlobalCardRegistry();
+  const cards = ctx.zones.getCardsInZone(
+    zone as Parameters<typeof ctx.zones.getCardsInZone>[0],
+    ctx.playerId as Parameters<typeof ctx.zones.getCardsInZone>[1],
+  ) as readonly string[];
+  return cards.some((id) => {
+    const cardType = registry.getCardType(id);
+    return !tgt?.type || tgt.type === "card" || tgt.type === cardType;
+  });
+}
+
+/**
  * Rule 355.8 / 419.2.a: a spell is a legal Play only if valid choices exist for
  * every caster-chosen target. For a modal (`choice`) effect the caster picks one
  * mode, so the spell is legal iff at least one mode's targets can be satisfied.
@@ -311,7 +362,7 @@ export function spellEffectHasLegalTargets(
   // the play is illegal (the counter would otherwise silently no-op).
   if (effect.type === "counter") {
     const items = ctx.draft.interaction?.chain?.items ?? [];
-    return items.some((item) => isLegalCounterTarget(effect, item));
+    return items.some((item) => isLegalCounterTarget(effect, item, undefined, counterCtx(ctx)));
   }
   // rule-id: ogn-080-298 (rule 355.6) — "Gain control of a spell" chooses a
   // spell on the chain; a spell exists as an object only there, so with no
@@ -319,6 +370,12 @@ export function spellEffectHasLegalTargets(
   if (effect.type === "gain-control-of-spell") {
     const items = ctx.draft.interaction?.chain?.items ?? [];
     return items.some((item) => item.type === "spell" && !item.countered);
+  }
+  // rule-id: ogn-198-298 (rule 355.10.a) — an off-board play ("play a unit
+  // from your trash") is gated on that zone, not on the board.
+  const offBoardZone = offBoardPlayZone(effect);
+  if (offBoardZone !== undefined) {
+    return offBoardPlayHasCandidates(effect, offBoardZone, ctx);
   }
   // Multi-target effects (swap-might etc.) carry target1/target2 alongside or
   // instead of `target`; every present descriptor must resolve non-empty.

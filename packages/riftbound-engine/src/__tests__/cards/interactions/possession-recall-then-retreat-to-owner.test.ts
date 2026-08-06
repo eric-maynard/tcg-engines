@@ -130,7 +130,7 @@ describe("Possession × Sett × Retreat — control vs ownership after a take-co
   // Expected (740.1.a, 127.1, 124.1, 705): Sett is friendly to P1 → a legal Retreat target for P1; it
   // returns to its OWNER's hand (P2), arriving as a fresh card (no buff, no damage). Actual: P1's Retreat
   // only offers owner-P1 units ("mine"); casting it at Sett is rejected.
-  test.failing("BUG: (c) P1's Retreat may choose Sett (friendly to P1) and returns it to P2's hand — not P1's — with buff and damage cleared", async () => {
+  test("(c) P1's Retreat may choose Sett (friendly to P1) and returns it to P2's hand — not P1's — with buff and damage cleared", async () => {
     const game = await possessed();
     expect(targetsOffered(game, P1, "p1Retreat").sort()).toEqual(["mine", "sett"]);
     const p1Hand0 = game.p1.hand().length;
@@ -147,7 +147,7 @@ describe("Possession × Sett × Retreat — control vs ownership after a take-co
 
   // Expected: "Its OWNER channels 1 rune exhausted" → P2's rune pool +1 (exhausted), P2's rune deck −1;
   // P1's runes unchanged. Actual: cast rejected (above); Retreat's channel clause is also unimplemented.
-  test.failing("BUG: (c) after P1 Retreats the possessed Sett, its OWNER P2 channels 1 rune exhausted — P1 channels nothing", async () => {
+  test("(c) after P1 Retreats the possessed Sett, its OWNER P2 channels 1 rune exhausted — P1 channels nothing", async () => {
     const game = await possessed();
     const p1Runes0 = game.p1.runes().length;
     const p2Runes0 = game.p2.runes().length;

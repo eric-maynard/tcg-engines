@@ -181,7 +181,7 @@ describe("Hostile Takeover × Peak Guardian × Rebuke / Possession — temporary
 
   // ---- (d) P2 re-steals it with Possession before end of turn -----------------------------------
 
-  test.failing("BUG: (d) Possession is legal for P2 — the P1-controlled Peak Guardian is an ENEMY unit from P2's perspective ('enemy' follows control, not ownership)", async () => {
+  test("(d) Possession is legal for P2 — the P1-controlled Peak Guardian is an ENEMY unit from P2's perspective ('enemy' follows control, not ownership)", async () => {
     // Expected: peak is among Possession's offered targets for P2. Actual: enemy-ness is keyed on the
     // owner, so only P1's scout is offered and the cast on peak is rejected.
     const game = await p2Window();
@@ -191,7 +191,7 @@ describe("Hostile Takeover × Peak Guardian × Rebuke / Possession — temporary
     expect(game.p2.resources()).toEqual({ energy: 0, power: { chaos: 0 } });
   });
 
-  test.failing("BUG: (d) after Possession P2 controls it in P2's base (later control timestamp wins, 480.3); at end of turn Hostile Takeover's clause changes nothing — it is still P2's, in base, buffed", async () => {
+  test("(d) after Possession P2 controls it in P2's base (later control timestamp wins, 480.3); at end of turn Hostile Takeover's clause changes nothing — it is still P2's, in base, buffed", async () => {
     // Expected as titled. Actual: fails at the cast — see the previous BUG (peak not offered to P2).
     const game = await p2Window();
     await game.p2.cast("possession", { targets: "peak" });

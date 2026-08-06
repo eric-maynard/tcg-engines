@@ -25,6 +25,7 @@ import {
 import type { TimingClass } from "../../../chain";
 import { isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { executeEffect } from "../../../abilities/effect-executor";
 import type { CostExtras } from "./cost";
 import {
   getOptionalPlayCost,
@@ -34,6 +35,7 @@ import {
   canAffordCard,
   deductCost,
   getEffectiveSpellRepeatCost,
+  xCostIsPower,
 } from "./cost";
 import type { SpellEffectTargetShape } from "./targeting";
 import {
@@ -44,6 +46,7 @@ import {
   findSequenceLeadTarget,
   findSplitDamageEffect,
   enumerateSubsetsUpTo,
+  offBoardPlayZone,
   spellEffectHasLegalTargets,
 } from "./targeting";
 
@@ -119,6 +122,38 @@ function spendBuffCandidates(
 }
 
 /**
+ * rule 356.2.a.1 / 204.2 (unl-173-219 Sacrifice) — a spell's MANDATORY
+ * "as an additional cost to play this, kill a friendly [Mighty] unit":
+ * the descriptor when the played spell has one, else undefined.
+ */
+function mandatoryKillCost(cardId: string): unknown | undefined {
+  const cost = getOptionalPlayCost(cardId);
+  return cost?.kind === "kill" && cost.mandatory ? cost.kill : undefined;
+}
+
+/** Legal sacrifices for that cost. Rule 357.2: with none, the spell is unplayable. */
+function mandatoryKillCandidates(
+  state: RiftboundGameState,
+  context: { cards: unknown; zones: Parameters<typeof resolveTarget>[1]["zones"] },
+  playerId: string,
+  cardId: string,
+  descriptor: unknown,
+): string[] {
+  return resolveTarget(
+    { ...(descriptor as Record<string, unknown>), quantity: "all" } as Parameters<
+      typeof resolveTarget
+    >[0],
+    {
+      cards: context.cards as Parameters<typeof resolveTarget>[1]["cards"],
+      draft: state,
+      playerId,
+      sourceCardId: cardId,
+      zones: context.zones,
+    },
+  ) as string[];
+}
+
+/**
  * Play a spell (rule 146-151)
  */
 export const playSpell: Defs["playSpell"] = {
@@ -154,6 +189,32 @@ export const playSpell: Defs["playSpell"] = {
     const owner = context.cards.getCardOwner(context.params.cardId as CoreCardId);
     if (owner !== context.params.playerId) {
       return false;
+    }
+
+    // rule 204.3.b (ogn-268-298): a "pay any amount of [rainbow]" X is paid
+    // within the instructions on resolution — never at play time.
+    if (xCostIsPower(context.params.cardId) && (context.params.xAmount ?? 0) > 0) {
+      return false;
+    }
+
+    // rule 356.2.a.1 / 357.2 (unl-173-219) — a MANDATORY kill additional cost
+    // must name a legal sacrifice; a caster with nothing to kill cannot play
+    // the spell at all.
+    const killDescriptor = mandatoryKillCost(context.params.cardId);
+    if (killDescriptor) {
+      const sacrificeId = context.params.sacrificeId as string | undefined;
+      if (
+        !sacrificeId ||
+        !mandatoryKillCandidates(
+          state,
+          context as never,
+          context.params.playerId,
+          context.params.cardId,
+          killDescriptor,
+        ).includes(sacrificeId)
+      ) {
+        return false;
+      }
     }
 
     // Rule: Repeat cost is only valid on spells that have a defined
@@ -270,6 +331,10 @@ export const playSpell: Defs["playSpell"] = {
     const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
     const conditionResolverCtx = {
       cards: {
+        // rule 740.1.a / 477.1.a: "friendly"/"enemy" track the CURRENT
+        // controller, so a possessed unit must be visible as friendly to its
+        // new controller when validating caster-chosen targets.
+        getCardController: (c: CoreCardId) => context.cards.getCardController?.(c),
         getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
         getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
       },
@@ -463,12 +528,30 @@ export const playSpell: Defs["playSpell"] = {
       viaFlow?: boolean;
       paidAdditionalCost?: boolean;
       additionalCostSpec?: { energy?: number; power?: readonly string[] };
+      sacrificeId?: string;
     }[] = [];
     for (const cardId of handCards) {
       const def = registry.get(cardId as string);
       if (!def || def.cardType !== "spell") {
         continue;
       }
+      // rule 356.2.a.1 / 357.2 (unl-173-219) — a mandatory kill additional
+      // cost: offer one variant per legal sacrifice, and nothing at all when
+      // there is none to kill.
+      const killDescriptor = mandatoryKillCost(cardId as string);
+      const killChoices = killDescriptor
+        ? mandatoryKillCandidates(
+            state,
+            context as never,
+            context.playerId as string,
+            cardId as string,
+            killDescriptor,
+          )
+        : undefined;
+      if (killChoices && killChoices.length === 0) {
+        continue;
+      }
+      const cardResultsStart = results.length;
       // rule 356.5 (ogn-146-298) — a spell whose optional additional cost says
       // "ignore this spell's cost" is playable with no resources at all, so
       // the base-cost gate must not filter it out.
@@ -507,6 +590,8 @@ export const playSpell: Defs["playSpell"] = {
       const spellEffect = spellAbility?.effect as SpellEffectTargetShape | undefined;
       const resolverCtx = {
         cards: {
+          // rule 740.1.a / 477.1.a — friendliness follows current control.
+          getCardController: (c: CoreCardId) => context.cards.getCardController?.(c),
           getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
           getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
         },
@@ -560,6 +645,9 @@ export const playSpell: Defs["playSpell"] = {
       // rule-id: ogn-045-298 — a counter's target is a chain item (own branch below).
       const isCardTarget =
         spellEffect?.type !== "counter" &&
+        // rule-id: ogn-198-298 — an off-board play's card is chosen from the
+        // trash/hand as the effect resolves, never as a play-time board target.
+        offBoardPlayZone(spellEffect) === undefined &&
         tgt !== undefined &&
         typeof tgt !== "string" &&
         tgt.type !== "self" &&
@@ -957,6 +1045,16 @@ export const playSpell: Defs["playSpell"] = {
           }
         }
       }
+
+      // rule 357.2 — the mandatory kill is paid once per play, so every
+      // variant of this card is offered once per legal sacrifice.
+      if (killChoices) {
+        const withKill = results
+          .slice(cardResultsStart)
+          .flatMap((base) => killChoices.map((sacrificeId) => ({ ...base, sacrificeId })));
+        results.length = cardResultsStart;
+        results.push(...withKill);
+      }
     }
 
     // rule-id: ven-049-166 — [Flow]: enumerate spells in the owner's trash
@@ -996,6 +1094,8 @@ export const playSpell: Defs["playSpell"] = {
       const spellEffect = spellAbility?.effect as SpellEffectTargetShape | undefined;
       const resolverCtx = {
         cards: {
+          // rule 740.1.a / 477.1.a — friendliness follows current control.
+          getCardController: (c: CoreCardId) => context.cards.getCardController?.(c),
           getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
           getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
         },
@@ -1020,6 +1120,9 @@ export const playSpell: Defs["playSpell"] = {
         findSequenceLeadTarget(spellEffect);
       const isCardTarget =
         spellEffect?.type !== "counter" &&
+        // rule-id: ogn-198-298 — an off-board play's card is chosen from the
+        // trash/hand as the effect resolves, never as a play-time board target.
+        offBoardPlayZone(spellEffect) === undefined &&
         tgt !== undefined &&
         typeof tgt !== "string" &&
         tgt.type !== "self" &&
@@ -1052,7 +1155,7 @@ export const playSpell: Defs["playSpell"] = {
     return results;
   },
   reducer: (draft, context) => {
-    const { cardId, playerId, xAmount, repeatCount, viaFlow, paidAdditionalCost } =
+    const { cardId, playerId, xAmount, repeatCount, viaFlow, paidAdditionalCost, sacrificeId } =
       context.params;
     let { targets } = context.params;
     const { zones } = context;
@@ -1113,6 +1216,35 @@ export const playSpell: Defs["playSpell"] = {
     }
     draft.additionalCostsPaid[cardId] = spellAdditionalCost !== undefined || exhaustCostPaid;
 
+    // rule 357.2 / 356.2.a.1 (unl-173-219) — the mandatory kill is paid as the
+    // spell is played, before it goes on the chain, and exactly once no matter
+    // how many Repeat instances are paid (135.2.b.3). It is a real death:
+    // replacements apply and `die` fires (see killAsCost).
+    if (sacrificeId && mandatoryKillCost(cardId)) {
+      // rule 428.1 / 370.1.a.1: it is a real kill, so Deathknell fires and a
+      // die-replacement (Zhonya's Hourglass) may apply; 357.2.a — the cost
+      // counts as paid either way.
+      executeEffect(
+        { target: { type: "unit" }, type: "kill" },
+        {
+          boundTargets: [sacrificeId as string],
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          fireTriggers: (event) =>
+            fireTriggers(event, {
+              cards: context.cards,
+              counters: context.counters,
+              draft,
+              zones: context.zones,
+            }),
+          playerId,
+          sourceCardId: cardId,
+          zones: context.zones,
+        },
+      );
+    }
+
     const repeatN = Math.max(0, repeatCount ?? 0);
     deductCost(
       draft,
@@ -1130,6 +1262,13 @@ export const playSpell: Defs["playSpell"] = {
       },
       createMetaAccessor(context.cards),
     );
+
+    // rule-id: sfd-078-221 — the grant applies to the NEXT spell only: consume
+    // it here (after the cost was computed with it) so a later spell this turn
+    // is offered no Repeat.
+    if (draft.nextSpellRepeat?.[playerId]) {
+      delete draft.nextSpellRepeat[playerId];
+    }
 
     // Look up spell effect from card definition
     const registry = getGlobalCardRegistry();
