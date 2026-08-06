@@ -64,7 +64,7 @@ describe("Miss Fortune, Captain (ogn-162-298)", () => {
     expect(game.state("mf").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: the first time she moves each turn, you may ready something else that's exhausted", async () => {
+  test("the first time she moves each turn, you may ready something else that's exhausted", async () => {
     // Expected: moving base → bf1 puts an optional trigger on the chain / asks yes-no; accepting and
     // picking the exhausted ally readies it. Actual: the `first-time-each-turn` trigger restriction is
     // hard-blocked in the trigger matcher, so nothing fires and the ally stays exhausted.
@@ -84,7 +84,7 @@ describe("Miss Fortune, Captain (ogn-162-298)", () => {
     expect(game.state("mf").isExhausted).toBe(true); // "something else": not herself
   });
 
-  test.failing("BUG: only the FIRST move each turn triggers — a second (ganking) move the same turn offers nothing", async () => {
+  test("only the FIRST move each turn triggers — a second (ganking) move the same turn offers nothing", async () => {
     // Expected: first move readies the ally (see above); after re-exhausting nothing, a second move
     // this turn creates no prompt/trigger. Actual: the first move never triggers either.
     const game = await moveBoard().unit(P1, "base", { might: 1 }, "other", EXHAUSTED).build();

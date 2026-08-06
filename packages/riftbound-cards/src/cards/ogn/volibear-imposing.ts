@@ -1,7 +1,24 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+// rule 144.4: a move to a BASE is not a move to a battlefield, and "other than
+// mine" excludes the battlefield Volibear occupies.
+const abilities: Ability[] = [
+  { keyword: "Shield", type: "keyword", value: 3 },
+  { keyword: "Tank", type: "keyword" },
+  {
+    effect: { amount: 1, type: "draw" },
+    trigger: {
+      event: "move",
+      on: { actor: "opponent", location: "other-battlefield" },
+    },
+    type: "triggered",
+  },
+];
+
 export const volibearImposing: UnitCard = {
+  abilities,
   cardNumber: 158,
   cardType: "unit",
   domain: "body",

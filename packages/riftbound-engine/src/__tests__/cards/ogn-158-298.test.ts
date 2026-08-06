@@ -79,7 +79,7 @@ describe("Volibear, Imposing (ogn-158-298)", () => {
     expect(game.zoneOf("atk")).toBe("trash");
   });
 
-  test.failing("BUG: an opponent moving to a battlefield OTHER than Volibear's → P1 draws 1 (and not when moving to his own)", async () => {
+  test("an opponent moving to a battlefield OTHER than Volibear's → P1 draws 1 (and not when moving to his own)", async () => {
     // Expected: P2's move into the open bf2 triggers Volibear and P1 draws 1; a move into bf1 does not.
     // Actual: the parsed trigger event "move-to-battlefield" is not in the trigger matcher's event
     // map, so the ability never fires and P1 draws nothing.
