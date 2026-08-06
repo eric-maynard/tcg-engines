@@ -34,10 +34,7 @@ describe("Promising Future (ogn-115-298)", () => {
     expect(game.zoneOf("pf")).toBe("chain");
   });
 
-  // Expected: the spell chooses no targets, so it is playable whatever is on the board. Actual: the
-  // parsed ability is only `play <pending "revealed">`, whose legality is derived from board units —
-  // with an empty board playSpell is not even enumerated.
-  test.failing("BUG: castable with an empty board (this spell has no targets)", async () => {
+  test("castable with an empty board (this spell has no targets)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 5, power: { mind: 1 } })
       .deck(P1, [U(1), U(2), U(3), U(4), U(5)])
@@ -71,7 +68,7 @@ describe("Promising Future (ogn-115-298)", () => {
   // Expected: on resolution each player is shown their own top 5, picks one to banish, and the
   // other four go to the bottom of that deck (a6 / b6 become the top cards). Actual: no prompt at all —
   // the spell "targets" a board unit and re-plays it to its owner's base; decks are untouched.
-  test.failing("BUG: each player picks one of their top 5 to banish and recycles the other four", async () => {
+  test("each player picks one of their top 5 to banish and recycles the other four", async () => {
     const game = await board().build();
     await game.p1.cast("pf");
     await game.settle();
@@ -93,7 +90,7 @@ describe("Promising Future (ogn-115-298)", () => {
 
   // Expected: starting with P2 (the next player) each player plays their banished card without
   // paying its 3 energy — both 3-cost units land on the board with pools untouched. Actual: see above.
-  test.failing("BUG: starting with the next player, each player plays the banished card ignoring its Energy cost", async () => {
+  test("starting with the next player, each player plays the banished card ignoring its Energy cost", async () => {
     const game = await board().build();
     await game.p1.cast("pf");
     await game.settle();

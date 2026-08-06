@@ -71,7 +71,7 @@ describe("Ruling 23c9277d071cd1f7 — a counterspell banished with Promising Fut
   // Expected: first pass — P1 (turn player) is shown a1..a5 and banishes Wind Wall; that choice is public, THEN
   // P2 is shown b1..b5 and chooses. The other four of each go to the bottom (a6 / b6 on top).
   // Actual: Promising Future resolves with no look/banish/recycle step at all (decks untouched).
-  test.failing("BUG: ruling 23c9277d071cd1f7 — first pass: P1 picks (Wind Wall → banishment) BEFORE P2 is asked; rest recycled; engine has no such step", async () => {
+  test("ruling 23c9277d071cd1f7 — first pass: P1 picks (Wind Wall → banishment) BEFORE P2 is asked; rest recycled; engine has no such step", async () => {
     const game = await board().build();
     await castToFirstPass(game);
     await game.p1.pick("windwall");

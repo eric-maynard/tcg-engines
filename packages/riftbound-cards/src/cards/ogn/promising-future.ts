@@ -1,7 +1,42 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { SpellCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Unique phrasing: a symmetric look/banish/recycle where each player then
+ * plays their banished card ignoring its Energy cost (rule 356.1.b.1). One
+ * `look` step per player; the second is deferred behind the first pick.
+ */
+const abilities: Ability[] = [
+  {
+    effect: {
+      effects: [
+        {
+          amount: 5,
+          from: "deck",
+          ignoreEnergyCost: true,
+          onPicked: "play",
+          onRest: "recycle",
+          type: "look",
+        },
+        {
+          amount: 5,
+          from: "deck",
+          ignoreEnergyCost: true,
+          onPicked: "play",
+          onRest: "recycle",
+          player: "opponent",
+          type: "look",
+        },
+      ],
+      type: "sequence",
+    },
+    type: "spell",
+  },
+] as unknown as Ability[];
+
 export const promisingFuture: SpellCard = {
+  abilities,
   cardNumber: 115,
   cardType: "spell",
   domain: "mind",

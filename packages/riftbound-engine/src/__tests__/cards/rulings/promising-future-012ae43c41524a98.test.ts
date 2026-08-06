@@ -113,7 +113,7 @@ describe("Ruling 012ae43c41524a98 — Brynhir Thundersong × Promising Future", 
   // Case 2 — Brynhir is P1's chosen card. Expected: both chosen cards are pending on the chain before Brynhir's
   // play effect exists; starting with P2, b2 is played (P2 picks its location), then Brynhir; her trigger
   // resolves afterwards and stops nothing already chosen — b2 IS on P2's board. Actual: see above.
-  test.failing("BUG: ruling 012ae43c41524a98 — Brynhir chosen WITH PF does not stop the opponent's chosen unit (engine: PF unimplemented)", async () => {
+  test("ruling 012ae43c41524a98 — Brynhir chosen WITH PF does not stop the opponent's chosen unit (engine: PF unimplemented)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 5, power: { mind: 1 } })
       .deck(P1, [BRYNHIR, U(2), U(3), U(4), U(5), U(6)], ["bryn", "a2", "a3", "a4", "a5", "a6"])
@@ -159,7 +159,7 @@ describe("Ruling 012ae43c41524a98 — Brynhir Thundersong × Promising Future", 
 
   // Premise shared by every case. Expected: Promising Future chooses no targets and, on resolution, asks EACH player
   // to pick one of their own top 5. Actual: the cast demands a board unit as "target" and never looks at a deck.
-  test.failing("BUG: ruling 012ae43c41524a98 — PF needs no target and prompts each player to banish one of their top 5 (engine: targets a board unit instead)", async () => {
+  test("ruling 012ae43c41524a98 — PF needs no target and prompts each player to banish one of their top 5 (engine: targets a board unit instead)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 5, power: { mind: 1 } })
       .deck(P1, [U(1), U(2), U(3), U(4), U(5), U(6)], ["a1", "a2", "a3", "a4", "a5", "a6"])

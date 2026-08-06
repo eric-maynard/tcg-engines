@@ -23,7 +23,13 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   const from = ((effect as { from?: string }).from ?? "deck") === "deck"
     ? "mainDeck"
     : (effect as { from?: string }).from!;
-  const deck = ctx.zones.getCardsInZone(from as CoreZoneId, ctx.playerId as CorePlayerId);
+  // rule-id: ogn-115-298 — "each player looks at the top 5 cards of THEIR Main
+  // Deck": a per-player look step names whose deck is looked at and who picks.
+  const looker =
+    (effect as { player?: string }).player === "opponent"
+      ? (Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId) ?? ctx.playerId)
+      : ctx.playerId;
+  const deck = ctx.zones.getCardsInZone(from as CoreZoneId, looker as CorePlayerId);
   const topN = deck.slice(0, n).map((c) => c as string);
   if (topN.length === 0) return;
   // Rule 729 (ogn-174-298 Vision): parser emits {then:{recycle:…}} — the
@@ -36,6 +42,7 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     filter?: { excludeCardTypes?: readonly string[] };
     optional?: boolean;
     reduceCost?: { energy?: number };
+    ignoreEnergyCost?: boolean;
     followUp?: unknown;
   };
   const visionLike = lookEff.then?.recycle !== undefined;
@@ -53,6 +60,8 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     onPicked,
     ...(onRest ? { onRest } : {}),
     ...(playEnergyReduction !== undefined ? { playEnergyReduction } : {}),
+    // rule-id: ogn-115-298 — "plays those cards, ignoring Energy costs".
+    ...(onPicked === "play" && lookEff.ignoreEnergyCost ? { playIgnoreEnergy: true } : {}),
     // rule-id: ogn-062-298-look-pick-filter — "banish a unit from among
     // them" must restrict the pick; thread the effect's filter through so
     // isValidPendingPick rejects non-matching revealed cards.
@@ -62,9 +71,9 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // rule-id: ogn-235-298-vision-optional-recycle — "You may recycle it"
     // means leave-on-top is a legal outcome; the pick must be declinable.
     ...(visionLike || lookEff.optional ? { optional: true } : {}),
-    prompter: ctx.playerId,
+    prompter: looker,
     revealed: topN,
-    revealer: ctx.playerId,
+    revealer: looker,
     sourceCardId: ctx.sourceCardId,
     // rule-id: ven-089-166-look-then-empower — "Then you may do this:
     // Empower it" runs after the pick; the resolver binds the picked card as
