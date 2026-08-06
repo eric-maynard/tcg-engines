@@ -68,9 +68,7 @@ describe("Mystic Reversal (ogn-080-298)", () => {
     expect(lowEnergy.p1.can("cast", "mr")).toBe(false);
   });
 
-  test.failing("BUG: needs a spell to choose — not playable when no spell is on the chain (rule 355.6)", async () => {
-    // Expected: with an empty chain there is no spell to gain control of, so the card is not a
-    // legal play. Actual: the engine offers playSpell:mr and lets it resolve doing nothing.
+  test("needs a spell to choose — not playable when no spell is on the chain (rule 355.6)", async () => {
     const game = await scenario().resources(P1, { energy: 4, power: { calm: 3 } }).hand(P1, MYSTIC_REVERSAL, "mr").build();
     expect(game.chain()).toEqual([]);
     expect(game.p1.can("cast", "mr")).toBe(false);

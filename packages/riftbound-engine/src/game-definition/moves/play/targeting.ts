@@ -313,6 +313,13 @@ export function spellEffectHasLegalTargets(
     const items = ctx.draft.interaction?.chain?.items ?? [];
     return items.some((item) => isLegalCounterTarget(effect, item));
   }
+  // rule-id: ogn-080-298 (rule 355.6) — "Gain control of a spell" chooses a
+  // spell on the chain; a spell exists as an object only there, so with no
+  // pending spell the play has no legal choice and is illegal.
+  if (effect.type === "gain-control-of-spell") {
+    const items = ctx.draft.interaction?.chain?.items ?? [];
+    return items.some((item) => item.type === "spell" && !item.countered);
+  }
   // Multi-target effects (swap-might etc.) carry target1/target2 alongside or
   // instead of `target`; every present descriptor must resolve non-empty.
   for (const tgt of [
