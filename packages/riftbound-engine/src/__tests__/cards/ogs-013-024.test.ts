@@ -88,7 +88,7 @@ describe("Garen, Commander (ogs-013-024)", () => {
     expect(game.state("field").might).toBe(2);
   });
 
-  test.failing("BUG: the static applies continuously — no chain resolution should be needed to see +1 (rule 476)", async () => {
+  test("the static applies continuously — no chain resolution should be needed to see +1 (rule 476)", async () => {
     // Expected: straight after setup / a move, allies at Garen's location read 3 Might.
     // Actual: staticMightBonus is only recomputed when a chain resolves, so they read 2.
     const game = await board("bf1").build();

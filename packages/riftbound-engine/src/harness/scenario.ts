@@ -11,6 +11,8 @@
  */
 
 import { RuleEngine } from "@tcg/core";
+import type { StaticAbilityContext } from "../abilities/static-abilities";
+import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { riftboundDefinition } from "../game-definition/definition";
 import { CardDefinitionRegistry, setGlobalCardRegistry, getGlobalCardRegistry } from "../operations/card-lookup";
 import type { GamePhase, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../types";
@@ -308,7 +310,36 @@ export function buildScenarioEngine(spec: ScenarioSpec, pool: CardPool): BuiltSc
     }
   }
 
+  // 6. Statics are continuous (rule 522) — the position a scenario describes
+  // must already show them, without waiting for a chain item to resolve.
+  applyStaticsToScenario(engine);
+
   return { engine, ids, spec };
+}
+
+/** Run one static-ability recalculation over the freshly placed board. */
+function applyStaticsToScenario(engine: HarnessEngine): void {
+  const internal = getInternalState(engine);
+  const ctx = {
+    cards: {
+      getCardMeta: (cardId: string) => internal.cardMetas[cardId],
+      getCardOwner: (cardId: string) => internal.cards[cardId]?.owner,
+      updateCardMeta: (cardId: string, meta: Partial<RiftboundCardMeta>) => {
+        internal.cardMetas[cardId] = {
+          ...(internal.cardMetas[cardId] ?? {}),
+          ...meta,
+        } as RiftboundCardMeta & Record<string, unknown>;
+      },
+    },
+    draft: peekCurrentState(engine),
+    zones: {
+      getCardsInZone: (zoneId: string, playerId?: string) => {
+        const ids = internal.zones[zoneId]?.cardIds ?? [];
+        return playerId === undefined ? ids : ids.filter((id) => internal.cards[id]?.owner === playerId);
+      },
+    },
+  };
+  recalculateStaticEffects(ctx as unknown as StaticAbilityContext);
 }
 
 // ---------------------------------------------------------------------------

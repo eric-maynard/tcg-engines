@@ -96,7 +96,7 @@ describe("Lee Sin, Centered (ogn-151-298)", () => {
     expect(game.state("buffedFoe").might).toBe(3);
   });
 
-  test.failing("BUG: static — 'at my battlefield': while Lee Sin sits in base, buffed allies in base must NOT get +2 (a base is not a battlefield)", async () => {
+  test("static — 'at my battlefield': while Lee Sin sits in base, buffed allies in base must NOT get +2 (a base is not a battlefield)", async () => {
     // Expected: with Lee Sin in base no unit anywhere gets the bonus.
     // Actual: the engine matches "same zone as the source", so buffed base-mates read 5.
     const game = await board("base").build();
@@ -105,7 +105,7 @@ describe("Lee Sin, Centered (ogn-151-298)", () => {
     expect(game.state("buffedHere").might).toBe(3);
   });
 
-  test.failing("BUG: static is continuous — a pre-buffed ally at his battlefield is 5 Might without any chain resolving first", async () => {
+  test("static is continuous — a pre-buffed ally at his battlefield is 5 Might without any chain resolving first", async () => {
     // Expected: statics are always-on, so the scenario position already shows 5.
     // Actual: staticMightBonus is only recomputed when a chain/trigger resolves, so it reads 3.
     const game = await board("bf1").build();

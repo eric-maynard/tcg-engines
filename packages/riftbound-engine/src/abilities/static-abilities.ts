@@ -434,6 +434,11 @@ function resolveStaticTargetsFromDescriptor(
   if (!isGroup) {
     return undefined;
   }
+  // rule 105.2 — a base is not a battlefield: "at my battlefield" addresses
+  // nobody while the source sits anywhere other than a battlefield.
+  if (t.location === "battlefield" && !source.zone.startsWith("battlefield-")) {
+    return [];
+  }
   const registry = getGlobalCardRegistry();
   return boardCards
     .filter((c) => {

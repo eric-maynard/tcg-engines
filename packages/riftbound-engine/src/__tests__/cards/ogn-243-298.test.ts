@@ -105,7 +105,7 @@ describe("Darius, Executioner (ogn-243-298)", () => {
     expect(game.state("darius").might).toBe(6);
   });
 
-  test.failing("BUG: the static is continuous — the bonus shows on the scenario position without any chain resolving", async () => {
+  test("the static is continuous — the bonus shows on the scenario position without any chain resolving", async () => {
     // Expected: statics are always-on, so Ally Field already reads 3. Actual: 2 until a chain resolves.
     const game = await staticBoard("bf1").build();
     expect(game.state("field").might).toBe(3);
