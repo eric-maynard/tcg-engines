@@ -29,7 +29,7 @@ describe("Herald of Scales (ogn-140-298)", () => {
     expect(poor.p1.can("play", "herald")).toBe(false);
   });
 
-  test.failing("BUG: a friendly Dragon's energy cost is reduced by 2 (5-cost Dragon playable for 3; rule 356.4)", async () => {
+  test("a friendly Dragon's energy cost is reduced by 2 (5-cost Dragon playable for 3; rule 356.4)", async () => {
     // Expected: with Herald on board, a 5-cost Dragon is legal with 3 energy and paying leaves 0.
     // Actual: the static is a hand-authored `CostReduction` grant the engine never applies, so the
     // Dragon still demands its printed 5.
@@ -46,7 +46,7 @@ describe("Herald of Scales (ogn-140-298)", () => {
     expect(game.zoneOf("dragon")).toBe("base");
   });
 
-  test.failing("BUG: the reduction bottoms out at 1 — a 2-cost Dragon costs 1, not 0 (rule 356.4.e)", async () => {
+  test("the reduction bottoms out at 1 — a 2-cost Dragon costs 1, not 0 (rule 356.4.e)", async () => {
     // Expected: 2 - 2 floors at 1, so playing the Whelp with 2 energy leaves 1; with 0 energy it is illegal.
     // Actual: full printed cost (2) is charged.
     const game = await scenario()

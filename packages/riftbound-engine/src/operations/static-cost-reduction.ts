@@ -148,6 +148,7 @@ export function computeStaticCostReduction(
   }
   const playedCardType = playedDef.cardType;
   const playedKeywords = playedDef.keywords ?? [];
+  const playedTags = playedDef.tags ?? [];
 
   let totalReduction = 0;
   let maxMinimum = 0;
@@ -200,7 +201,7 @@ export function computeStaticCostReduction(
         // Played card. `self` / no-target shapes do not match an external
         // Played card.
         const {target} = (effect as { target?: unknown });
-        if (!matchesPlayedCard(target, playedCardType, playedKeywords)) {
+        if (!matchesPlayedCard(target, playedCardType, playedKeywords, playedTags)) {
           continue;
         }
 
@@ -281,6 +282,7 @@ export function computeGrantedSpellRepeatCost(
   }
   const playedCardType = playedDef.cardType;
   const playedKeywords = playedDef.keywords ?? [];
+  const playedTags = playedDef.tags ?? [];
   const tiers: { energy: number; power: readonly string[] }[] = [];
 
   const zonesToScan: string[] = [...PLAYER_BOARD_ZONES];
@@ -309,7 +311,7 @@ export function computeGrantedSpellRepeatCost(
         if (effect?.type !== "grant-keyword" || effect.keyword !== "Repeat") {
           continue;
         }
-        if (!matchesPlayedCard(effect.target, playedCardType, playedKeywords)) {
+        if (!matchesPlayedCard(effect.target, playedCardType, playedKeywords, playedTags)) {
           continue;
         }
         const cond = (ability as { condition?: Record<string, unknown> }).condition;
@@ -427,6 +429,7 @@ function matchesPlayedCard(
   target: unknown,
   playedCardType: string | undefined,
   playedKeywords: readonly string[],
+  playedTags: readonly string[] = [],
 ): boolean {
   if (target === undefined || target === null) {
     return false;
@@ -442,6 +445,8 @@ function matchesPlayedCard(
     type?: string;
     keyword?: string;
     controller?: string;
+    tag?: string;
+    filter?: { tag?: string };
   };
   // Enemy-targeted reductions don't apply to your own plays.
   if (t.controller === "enemy") {
@@ -463,6 +468,13 @@ function matchesPlayedCard(
   }
   // Keyword filter (when present).
   if (t.keyword && !playedKeywords.includes(t.keyword)) {
+    return false;
+  }
+  // rule 356.4 — tag-scoped auras ("Your Dragons' Energy costs are reduced …").
+  // Tags are matched case-insensitively so a plural/singular mismatch in
+  // printed text ("Dragons") still lines up with the printed tag ("Dragon").
+  const wantTag = t.tag ?? t.filter?.tag;
+  if (wantTag && !playedTags.some((tag) => tag.toLowerCase() === wantTag.toLowerCase())) {
     return false;
   }
   return true;

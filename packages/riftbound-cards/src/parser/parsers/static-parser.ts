@@ -936,6 +936,28 @@ function parseStaticAbilityInner(
     };
   }
 
+  // rule 356.4 — "Your TAGs' Energy costs are reduced by COST[, to a minimum of MIN]."
+  // Tag-scoped friendly aura (e.g. "Your Dragons' Energy costs are reduced by [2],
+  // to a minimum of [1]."). The plural tag is singularized for target matching.
+  const yourTagCostReduceMatch = cleanText.match(
+    /^(?:Your|Friendly)\s+(.+?)s['’]?\s+Energy costs?\s+(?:is|are)\s+reduced by\s+(.+?)(?:,?\s*to a minimum of\s+(.+?))?\.?$/i,
+  );
+  if (yourTagCostReduceMatch && !/^spell/i.test(yourTagCostReduceMatch[1])) {
+    return {
+      ability: {
+        effect: {
+          by: yourTagCostReduceMatch[2],
+          ...(yourTagCostReduceMatch[3] ? { minimum: yourTagCostReduceMatch[3] } : {}),
+          target: { controller: "friendly", tag: yourTagCostReduceMatch[1] } as unknown as Target,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // "While CONDITION, TARGET costs cost COST less." - conditional cost reduction for others
   const whileCostMatch = cleanText.match(
     /^(While .+?),\s*(.+?)\s+costs?\s+cost\s+(.+?)\s+less\.?$/i,
