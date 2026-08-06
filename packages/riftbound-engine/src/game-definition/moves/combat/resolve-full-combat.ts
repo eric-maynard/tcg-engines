@@ -11,6 +11,7 @@ import type {
 import type { CombatUnit } from "../../../combat";
 import { PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE, resolveCombat } from "../../../combat";
 import { fireTriggers } from "../../../abilities/trigger-runner";
+import { findAllReplacements } from "../../../abilities/replacement-effects";
 import { createInteractionState, getTurnState } from "../../../chain";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
@@ -26,6 +27,7 @@ import { hasPlayerWon } from "../../win-conditions/victory";
 import {
   applyScoreReplacement,
   canPlayerScoreAtBattlefield,
+  finalPointConquerDrawsInstead,
 } from "../../../operations/scoring-rules";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -508,7 +510,12 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       // Blocked if a battlefield ability (e.g. Forgotten Monument) prevents
       // This player from scoring here right now.
       const scoringAllowed =
-        !alreadyScored && canPlayerScoreAtBattlefield(draft, attackingPlayer, battlefieldId);
+        !alreadyScored &&
+        canPlayerScoreAtBattlefield(draft, attackingPlayer, battlefieldId) &&
+        // rule 471.1.b.1: the Final Point by conquer requires every battlefield
+        // scored this turn; otherwise draw a card instead (and don't record it
+        // as scored).
+        !finalPointConquerDrawsInstead(draft, attackingPlayer, battlefieldId, { cards, zones });
       const player = draft.players[attackingPlayer];
       if (player && scoringAllowed) {
         draft.scoredThisTurn[attackingPlayer].push(battlefieldId);
@@ -545,12 +552,34 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       );
 
     } else if (winner === "defender") {
+      // rule 740.3.a — units of BOTH players still here in step 3d of the
+      // Combat Cleanup is a tie. rule-id: ogn-227-298 (Symbol of the Solari):
+      // a `combat-tie` replacement owned by the attacker replaces the
+      // attacker-only recall (466.1.a.2) with recalling ALL units here. It
+      // isn't a move, so nothing is exhausted and no `move` event fires; the
+      // emptied battlefield then becomes Uncontrolled (466.5.b).
+      const tieReplacement =
+        attackersLeft.length > 0 && defendersLeft.length > 0
+          ? findAllReplacements(
+              { owner: attackingPlayer, playerId: attackingPlayer, type: "combat-tie" },
+              { cards, draft, zones },
+            ).find(
+              (m) =>
+                m.sourceOwner === attackingPlayer &&
+                (m.replacement as { type?: string } | undefined)?.type === "recall",
+            )
+          : undefined;
       // Defenders hold the battlefield
       // rule 466.1.a.2: recall attackers still present to base (every
       // attacker-owned card here, so nothing lingers to re-contest).
       for (const survivorId of zones
         .getCardsInZone(battlefieldZoneId)
-        .filter((id) => cards.getCardOwner(id) === attackingPlayer)) {
+        .filter((id) =>
+          tieReplacement !== undefined
+            ? registry.getCardType(id as string) === "unit" ||
+              (registry.get(id as string)?.might ?? 0) > 0
+            : cards.getCardOwner(id) === attackingPlayer,
+        )) {
         zones.moveCard({
           cardId: survivorId as CoreCardId,
           targetZoneId: "base" as CoreZoneId,

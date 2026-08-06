@@ -672,7 +672,11 @@ describe("Bug 4: Conquer battlefield auto-awards VP (rule 630.1)", () => {
         [P1]: { id: P1, victoryPoints: 7, xp: 0 },
         [P2]: { id: P2, victoryPoints: 0, xp: 0 },
       },
-    });
+      // rule 471.1.b.1: the Final Point by conquer needs every battlefield
+      // scored this turn, so bf-2 must already be scored for bf-1's conquer
+      // to be the winning point.
+      scoredThisTurn: { [P1]: ["bf-2"], [P2]: [] },
+    } as Partial<RiftboundGameState>);
 
     let endGameCalled = false;
     const { context } = createMockContext(state, {

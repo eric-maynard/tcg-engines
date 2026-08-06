@@ -577,7 +577,7 @@ describe("471.1.a.1 / 471.1.b(.1) — the Final Point: a lone Conquer draws inst
 
   // Expected (472 / 323.1 / 194.2): 8 ≥ VS and more than P2 → P1 wins at the next cleanup; game over, winner P1.
   // Actual: the Beginning-Phase hold raises P1 to 8 but the game status never flips — play continues.
-  test.failing("BUG: 472 / 323.1 — reaching the Victory Score by Hold must end the game (winner P1); engine keeps playing", async () => {
+  test("472 / 323.1 — reaching the Victory Score by Hold must end the game (winner P1); engine keeps playing", async () => {
     const game = await holdAtSeven();
     await game.p2.endTurn();
     await game.settle();
@@ -678,7 +678,7 @@ describe("194.1.c / 471.1.a.1 / 383.4.c.2.c — a 'When I conquer, you gain 1 po
   // Expected: from 7 the conquer point is replaced by a draw (471.1.b.1) → 7 & hand +1; the trigger still goes on the
   // chain (383.4.c.2.c) and its ability point is NOT a Conquer point (471.1.a.1) → 8 → P1 wins after it resolves.
   // Actual: the conquer itself pays the 8th point and ends the game; no draw, trigger never resolves.
-  test.failing("BUG: 471.1.b.1 / 471.1.a.1 — run (a) from 7: draw instead of the conquer point, THEN the trigger's point wins it; engine wins on the conquer with no draw", async () => {
+  test("471.1.b.1 / 471.1.a.1 — run (a) from 7: draw instead of the conquer point, THEN the trigger's point wins it; engine wins on the conquer with no draw", async () => {
     const game = await ascendantBoard(7);
     const hand0 = game.p1.hand().length;
     await game.p1.move("asc", "A");
@@ -751,7 +751,7 @@ describe("194.3.a / 483.3.a — a raised Victory Score (9) shifts BOTH the win c
 
   // Expected: at 8 with VS 9 the lone conquer IS within one → draw 1 instead, stay 8, no win.
   // Actual: showdown-conquer path pays the point → 9 → win.
-  test.failing("BUG: 471.1.b.1 with VS 9 — (b) at 8 a lone conquer must draw instead (stay 8, no win); engine awards the 9th point", async () => {
+  test("471.1.b.1 with VS 9 — (b) at 8 a lone conquer must draw instead (stay 8, no win); engine awards the 9th point", async () => {
     const game = await nineBoard(8);
     const hand0 = game.p1.hand().length;
     await game.p1.move("scout", "A");
@@ -764,7 +764,7 @@ describe("194.3.a / 483.3.a — a raised Victory Score (9) shifts BOTH the win c
 
   // Expected: (c) at 8 holding A at the Scoring Step → 9 → wins at cleanup.
   // Actual: hold reaches 9 but status never flips (same defect as the VS-8 hold win).
-  test.failing("BUG: 472 with VS 9 — (c) at 8 a Hold reaches 9 and wins; engine reaches 9 but keeps playing", async () => {
+  test("472 with VS 9 — (c) at 8 a Hold reaches 9 and wins; engine reaches 9 but keeps playing", async () => {
     const game = await nineBoard(8, true);
     await game.p2.endTurn();
     await game.settle();
@@ -899,7 +899,7 @@ describe("194.2(.a/.b) / 323.1 / 472 — both players at the Victory Score is a 
 
   // Expected: P1 passes the turn at 8–8; P2's Scoring Step Holds B → 9 > 8 → P2 wins.
   // Actual: P2 reaches 9 but the hold path never ends the game.
-  test.failing("BUG: 472 — alternative ending: P1 ends the turn, P2 Holds B → 9 and wins; engine keeps playing", async () => {
+  test("472 — alternative ending: P1 ends the turn, P2 Holds B → 9 and wins; engine keeps playing", async () => {
     const game = await tieBoard();
     await game.p1.endTurn();
     await game.settle();

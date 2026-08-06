@@ -19,9 +19,103 @@ import {
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { hasPlayerWon } from "../../win-conditions/victory";
-import { applyScoreReplacement } from "../../../operations/scoring-rules";
+import {
+  applyScoreReplacement,
+  finalPointConquerDrawsInstead,
+} from "../../../operations/scoring-rules";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
+
+/** Minimal operation bag a reducer/cleanup context exposes. */
+interface ShowdownStagingContext {
+  cards: {
+    getCardOwner: (cardId: never) => unknown;
+    getCardController?: (cardId: never) => string | undefined;
+    updateCardMeta: (cardId: never, meta: Partial<RiftboundCardMeta>) => void;
+  };
+  counters: unknown;
+  zones: { getCardsInZone: (zoneId: never, playerId?: never) => unknown[] };
+}
+
+/**
+ * rules 319.8 → 323.13 / 320.1 — the Cleanup after a unit arrives at a
+ * Contested battlefield initiates its Showdown MANDATORILY; no discretionary
+ * action may intervene. A Standard Move opens it inline (standard-move.ts),
+ * but an effect-driven arrival (`effects/move.ts markContestedOnArrival`)
+ * happens during chain resolution, so its showdown is opened here as soon as
+ * the chain empties.
+ */
+export function openPendingContestedShowdown(
+  draft: RiftboundGameState,
+  context: ShowdownStagingContext,
+): void {
+  const interaction = draft.interaction ?? createInteractionState();
+  if (getTurnState(interaction) !== "neutral-open") {
+    return;
+  }
+  if (getActiveShowdown(interaction)?.active) {
+    return;
+  }
+  const pending = Object.entries(draft.battlefields ?? {}).find(
+    ([, bf]) => bf?.contested === true && bf.showdownComplete !== true,
+  );
+  if (!pending) {
+    return;
+  }
+  const [battlefieldId, bf] = pending;
+  const attacker = bf.contestedBy;
+  if (!attacker) {
+    return;
+  }
+  // rule 323.12 — the staged showdown is begun by the TURN player's cleanup
+  // step: one contested by the non-turn player (an off-turn Reaction move)
+  // stays staged for the turn player to begin.
+  if (attacker !== draft.turn.activePlayer) {
+    return;
+  }
+  const { cards, counters, zones } = context;
+  const ownerOf = (id: string): string | undefined =>
+    (cards.getCardController?.(id as never) ??
+      (cards.getCardOwner(id as never) as string | undefined)) ?? undefined;
+  const occupants = zones.getCardsInZone(`battlefield-${battlefieldId}` as never) as string[];
+  const isCombat = occupants.some((id) => ownerOf(id) !== undefined && ownerOf(id) !== attacker);
+  const playerIds = Object.keys(draft.players);
+  const defender = bf.controller ?? playerIds.find((p) => p !== attacker) ?? attacker;
+  draft.interaction = startShowdownState(
+    interaction,
+    battlefieldId,
+    attacker,
+    isCombat ? [...new Set([attacker, defender])] : playerIds,
+    isCombat,
+    attacker,
+    defender,
+  );
+  const triggerCtx = { cards, counters, draft, zones } as never;
+  fireTriggers({ battlefieldId, isCombat, playerId: attacker, type: "showdown-begin" }, triggerCtx);
+  if (!isCombat) {
+    return;
+  }
+  // rule 625.1.c.1 / 625.1.c.2 — opening a Combat Showdown assigns combat
+  // roles and fires "attack" / "defend".
+  for (const id of occupants) {
+    const owner = ownerOf(id);
+    if (owner === undefined) {
+      continue;
+    }
+    const role = owner === attacker ? "attacker" : "defender";
+    cards.updateCardMeta(id as never, { combatRole: role } as Partial<RiftboundCardMeta>);
+    fireTriggers(
+      {
+        alone: occupants.filter((o) => ownerOf(o) === owner).length === 1,
+        battlefieldId,
+        cardId: id,
+        owner,
+        type: role === "attacker" ? "attack" : "defend",
+      },
+      triggerCtx,
+    );
+  }
+}
 
 /**
  * Pass focus during a showdown (rule 553.4)
@@ -114,7 +208,12 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
                 type: "conquer",
               };
               const scored = draft.scoredThisTurn[solo] ?? [];
-              if (!scored.includes(before!.battlefieldId)) {
+              if (
+                !scored.includes(before!.battlefieldId) &&
+                // rule 471.1.b.1: the Final Point by conquer needs every
+                // battlefield scored this turn; otherwise draw instead.
+                !finalPointConquerDrawsInstead(draft, solo, before!.battlefieldId, context)
+              ) {
                 const p = draft.players[solo];
                 // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
                 if (p && !applyScoreReplacement(draft, solo, context)) p.victoryPoints += 1;

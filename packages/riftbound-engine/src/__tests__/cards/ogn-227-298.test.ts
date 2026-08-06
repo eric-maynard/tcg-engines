@@ -51,10 +51,9 @@ describe("Symbol of the Solari (ogn-227-298)", () => {
     expect(game.p1.points()).toBe(0);
   });
 
-  test.failing("BUG: with the Symbol, a tie where you attacked recalls ALL units — the defender goes home too and the battlefield empties", async () => {
+  test("with the Symbol, a tie where you attacked recalls ALL units — the defender goes home too and the battlefield empties", async () => {
     // Expected: Vilemaw → P1 base AND the surviving Guard Two → P2 base; bf1 has no units left, so
-    // it becomes uncontrolled (466.5.b); nobody scores. Actual: the combat-tie replacement is never
-    // consulted — only the attacker is recalled and P2 keeps the battlefield.
+    // it becomes uncontrolled (466.5.b); nobody scores.
     const game = await tieBoard(P1, P1).build();
     await game.p1.move("vile", "bf1");
     await game.settle();

@@ -64,7 +64,7 @@ describe("Ruling ccdaa4bfea95cac4 — the Baron Pit counts as a battlefield for 
   // Expected (471.1.b.1): P1 is on 7 having scored bf1; conquering bf2 would be the Final Point, but the
   // Baron Pit has not been scored this turn → P1 draws a card instead, stays on 7, game continues.
   // Actual: the showdown-conquer path awards the point unconditionally → 8 points, game over.
-  test.failing("BUG: ruling ccdaa4bfea95cac4 — at match point, conquering bf2 with the Pit unscored draws a card instead of winning; engine awards the winning point", async () => {
+  test("ruling ccdaa4bfea95cac4 — at match point, conquering bf2 with the Pit unscored draws a card instead of winning; engine awards the winning point", async () => {
     const game = await board({ pit: true, points: 6 }).build();
     await intoP1Turn(game);
     expect(game.p1.points()).toBe(7);
@@ -104,7 +104,7 @@ describe("Ruling ccdaa4bfea95cac4 — the Baron Pit counts as a battlefield for 
 
   // Expected: reaching the Victory Score by hold ends the game with P1 the winner.
   // Actual: the Beginning-Phase hold step raises P1 to 8 but never flips the game status — play continues.
-  test.failing("BUG: ruling ccdaa4bfea95cac4 — the hold win (8th point with the Pit unscored) ends the game; engine leaves status 'playing'", async () => {
+  test("ruling ccdaa4bfea95cac4 — the hold win (8th point with the Pit unscored) ends the game; engine leaves status 'playing'", async () => {
     const game = await board({ pit: true, points: 7 }).build();
     await game.p2.endTurn();
     await game.settle();

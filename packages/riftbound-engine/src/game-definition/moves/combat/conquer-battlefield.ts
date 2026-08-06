@@ -14,6 +14,7 @@ import { hasPlayerWon } from "../../win-conditions/victory";
 import {
   applyScoreReplacement,
   canPlayerScoreAtBattlefield,
+  finalPointConquerDrawsInstead,
 } from "../../../operations/scoring-rules";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -151,16 +152,23 @@ export const conquerBattlefield: Defs["conquerBattlefield"] = {
     // This player from scoring here right now.
     const scoringAllowed = canPlayerScoreAtBattlefield(draft, playerId, battlefieldId);
     const player = draft.players[playerId];
+    // rule 471.1.b.1: the Final Point by conquer requires every battlefield
+    // scored this turn; otherwise the player draws a card instead and the
+    // battlefield is NOT recorded as scored.
+    const drewInstead =
+      scoringAllowed && finalPointConquerDrawsInstead(draft, playerId, battlefieldId, context);
     // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
-    if (player && scoringAllowed && !applyScoreReplacement(draft, playerId, context)) {
+    if (player && scoringAllowed && !drewInstead && !applyScoreReplacement(draft, playerId, context)) {
       player.victoryPoints += 1;
     }
 
     // Track as scored this turn to prevent double-scoring
-    if (!draft.scoredThisTurn[playerId]) {
-      draft.scoredThisTurn[playerId] = [];
+    if (!drewInstead) {
+      if (!draft.scoredThisTurn[playerId]) {
+        draft.scoredThisTurn[playerId] = [];
+      }
+      draft.scoredThisTurn[playerId].push(battlefieldId);
     }
-    draft.scoredThisTurn[playerId].push(battlefieldId);
 
     // Emit "conquer" event so triggered abilities fire
     // (e.g. Blade Dancer's "When you conquer, pay 1 to ready me")

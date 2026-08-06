@@ -25,6 +25,50 @@ import type { PlayerId, RiftboundGameState } from "../types";
 import { getGlobalCardRegistry } from "./card-lookup";
 
 /**
+ * rule 471.1.b.1: a player at match point only takes the Final Point by
+ * conquering if they have scored EVERY battlefield on the board this turn —
+ * including any token battlefield such as the Baron Pit. Otherwise they draw a
+ * card instead of scoring. Winning by hold carries no such requirement
+ * (rule 471.1.a.1), so this gate is only consulted on conquer paths.
+ *
+ * Returns `true` when the point must NOT be awarded: the replacement draw has
+ * already happened, and the caller must also skip recording the battlefield in
+ * `scoredThisTurn` (it was conquered, not scored, so scoring it later this turn
+ * after the remaining battlefields is still legal).
+ */
+export function finalPointConquerDrawsInstead(
+  state: RiftboundGameState,
+  playerId: PlayerId,
+  battlefieldId: string,
+  io: ScoreReplacementIO,
+): boolean {
+  const player = state.players[playerId];
+  if (!player) {
+    return false;
+  }
+  // Same threshold as win-conditions/victory.getEffectiveVictoryScore, inlined
+  // to keep operations/ free of a game-definition/ import cycle.
+  const threshold = (state.victoryScore ?? 8) + (player.victoryScoreModifier ?? 0);
+  if (player.victoryPoints !== threshold - 1) {
+    return false;
+  }
+  const scored = state.scoredThisTurn[playerId] ?? [];
+  const allScored = Object.keys(state.battlefields ?? {}).every(
+    (bfId) => bfId === battlefieldId || scored.includes(bfId),
+  );
+  if (allScored) {
+    return false;
+  }
+  io.zones.drawCards({
+    count: 1,
+    from: "mainDeck" as CoreZoneId,
+    playerId: playerId as CorePlayerId,
+    to: "hand" as CoreZoneId,
+  });
+  return true;
+}
+
+/**
  * Engine surface needed to look up and apply a `score` replacement.
  */
 export interface ScoreReplacementIO {

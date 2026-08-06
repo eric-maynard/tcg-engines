@@ -14,6 +14,7 @@ import { hasPlayerWon } from "../../win-conditions/victory";
 import {
   applyScoreReplacement,
   canPlayerScoreAtBattlefield,
+  finalPointConquerDrawsInstead,
 } from "../../../operations/scoring-rules";
 import { areAllies, isTeamGame } from "../../../operations/teams";
 
@@ -119,31 +120,15 @@ export const scorePoint: Defs["scorePoint"] = {
       return;
     }
 
-    // Rule 632.1.b.2: If trying to score the Final Point via conquer, the
-    // Player must have scored EVERY battlefield this turn. Otherwise, they
-    // Draw a card INSTEAD of scoring. No VP, no score event, no scoredThisTurn
-    // Entry for this battlefield.
-    const victoryScore = draft.victoryScore ?? 8;
-    const isFinalPoint = player.victoryPoints === victoryScore - 1;
-    if (isFinalPoint && method === "conquer") {
-      const allBattlefieldIds = Object.keys(draft.battlefields ?? {});
-      const scoredForPlayer = draft.scoredThisTurn[playerId] ?? [];
-      const allScored = allBattlefieldIds.every(
-        (bfId) => bfId === battlefieldId || scoredForPlayer.includes(bfId),
-      );
-      if (!allScored) {
-        // Draw a card instead of scoring (rule 632.1.b.2).
-        zones.drawCards({
-          count: 1,
-          from: "mainDeck" as CoreZoneId,
-          playerId: playerId as CorePlayerId,
-          to: "hand" as CoreZoneId,
-        });
-        // Intentionally do NOT push to scoredThisTurn — the battlefield was
-        // Not scored, so a subsequent scorePoint this turn is still legal
-        // (e.g. after scoring other battlefields first).
-        return;
-      }
+    // rule 471.1.b.1 / 632.1.b.2: the Final Point via conquer requires EVERY
+    // battlefield scored this turn; otherwise draw a card instead. The
+    // battlefield is intentionally NOT pushed to scoredThisTurn — a later
+    // scorePoint this turn (after the others) is still legal.
+    if (
+      method === "conquer" &&
+      finalPointConquerDrawsInstead(draft, playerId, battlefieldId, { cards, zones })
+    ) {
+      return;
     }
 
     // Rule 630.1.a: In team-based modes, conquering a battlefield whose

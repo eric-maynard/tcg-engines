@@ -305,7 +305,7 @@ describe("469 / 470 / 471.1.b.1: 'Scored every battlefield' counts Hold and Conq
     expect(game.winner()).toBe(P1);
   });
 
-  test.failing("BUG: 472/323.1 — negative control: from 7, Hold A alone gives 8 and should win before the Main Phase (no conquer needed); engine keeps playing", async () => {
+  test("472/323.1 — negative control: from 7, Hold A alone gives 8 and should win before the Main Phase (no conquer needed); engine keeps playing", async () => {
     // Expected: game over (winner P1) right after the Scoring Step. Actual: P1 sits at 8 in an
     // open Main Phase.
     const game = await scenario()
@@ -428,7 +428,7 @@ describe("194.3.a / 483.3 / 471.1.b: the Final Point restriction is relative to 
     expect(game.winner()).toBeUndefined();
   });
 
-  test.failing("BUG: 471.1.b — Victory Score 9: at 8, a lone conquer (other battlefield unscored this turn) must draw instead and stay 8; engine awards 9 and the win", async () => {
+  test("471.1.b — Victory Score 9: at 8, a lone conquer (other battlefield unscored this turn) must draw instead and stay 8; engine awards 9 and the win", async () => {
     // Expected: draw 1, stay at 8, no winner. Actual: 9 points, game over.
     const game = await scenario()
       .victoryScore(9)
@@ -449,7 +449,7 @@ describe("194.3.a / 483.3 / 471.1.b: the Final Point restriction is relative to 
     expect(game.isOver()).toBe(false);
   });
 
-  test.failing("BUG: 472/323.1 — Victory Score 9: holding one battlefield at 8 gives 9 and should win at the cleanup; engine keeps playing", async () => {
+  test("472/323.1 — Victory Score 9: holding one battlefield at 8 gives 9 and should win at the cleanup; engine keeps playing", async () => {
     // Expected: over, winner P1 with 9. Actual: 9 points but status "playing".
     const game = await scenario()
       .turn(2)
@@ -475,7 +475,7 @@ describe("194.3.a / 483.3 / 471.1.b: the Final Point restriction is relative to 
 // ---------------------------------------------------------------------------
 
 describe("471.1.a.1 / 194.1.c / 340.1: ability points are not Conquer points; responses resolve newest-first", () => {
-  test.failing("BUG: 471.1.b.1 + 471.1.a.1 — Run 1: the conquer point is refused (draw) but CU's 'gain 1 point' trigger then takes P1 to 8 and wins at the post-resolution cleanup; engine instead awards the conquer point itself", async () => {
+  test("471.1.b.1 + 471.1.a.1 — Run 1: the conquer point is refused (draw) but CU's 'gain 1 point' trigger then takes P1 to 8 and wins at the post-resolution cleanup; engine instead awards the conquer point itself", async () => {
     // Expected: after combat P1 is still 7 (+1 card) with CU's trigger pending; P2 passes; the
     // trigger resolves → 8 → win at the 319.5 cleanup. Actual: the conquer already gives 8/win.
     const game = await scenario()
@@ -613,7 +613,7 @@ describe("321 / 321.1 / 319.5: no Cleanup (hence no win) while a chain item is r
 // ---------------------------------------------------------------------------
 
 describe("319.3 / 320 / 323.1 vs 370.1.c: a pending triggered 'punisher' cannot pre-empt the win; a passive replacement can", () => {
-  test.failing("BUG: 319.3/323.1 — Hold A takes P1 7→8; P2's 'when an opponent holds, that player loses 1 point' trigger is added as a Pending Item, whose cleanup finds 8 > 6 → P1 wins before the trigger resolves; engine never checks victory after a Hold", async () => {
+  test("319.3/323.1 — Hold A takes P1 7→8; P2's 'when an opponent holds, that player loses 1 point' trigger is added as a Pending Item, whose cleanup finds 8 > 6 → P1 wins before the trigger resolves; engine never checks victory after a Hold", async () => {
     // Expected: game over, winner P1 with 8; the punisher never resolves. Actual: game continues,
     // the trigger resolves (and its point loss lands on its own controller).
     const game = await scenario()

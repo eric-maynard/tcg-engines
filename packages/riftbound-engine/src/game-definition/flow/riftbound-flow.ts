@@ -444,6 +444,15 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 }
               }
 
+              // rule 471.1.a.1: a hold that reaches the Victory Score wins
+              // immediately — unlike conquer it has no "scored every
+              // battlefield" requirement. The scoring step runs outside any
+              // move reducer, so the win check must happen here.
+              if (hasPlayerWon(context.state, playerId)) {
+                context.state.status = "finished";
+                context.state.winner = playerId;
+              }
+
               // rule 364: passive abilities track game state continuously — the
               // scoring step changed points outside any move, so re-apply statics
               // (e.g. "My Might is increased by your points") now rather than
