@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-215-298",
+  "title": "BUG: Assault also raises its own lethal threshold — attacking a 5-Might defender it survives (6 vs 5 damage) and conquers",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-215-298.test.ts",
+    "testName": "BUG: Assault also raises its own lethal threshold — attacking a 5-Might defender it survives (6 vs 5 damage) and conquers"
+  },
+  "id": "5a812894b5f5",
+  "createdAt": "2026-08-06T17:51:09.022Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.022Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

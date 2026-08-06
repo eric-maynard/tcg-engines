@@ -83,7 +83,7 @@ describe("Unchecked Power (ogn-123-298)", () => {
     expect(game.p1.can("cast", "up")).toBe(false);
   });
 
-  test.failing("BUG: no [Action] keyword — must NOT be castable during a showdown (rule 155)", async () => {
+  test("no [Action] keyword — must NOT be castable during a showdown (rule 155)", async () => {
     // Expected: with Focus in a showdown the spell is not offered (plain spell timing).
     // Actual: the card definition carries `timing: "action"` although the rules text has no
     // [Action], so the engine offers it during showdowns.

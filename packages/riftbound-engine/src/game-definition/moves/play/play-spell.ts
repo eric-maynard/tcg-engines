@@ -16,6 +16,7 @@ import {
 } from "../../../abilities/target-resolver";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../../chain";
+import type { TimingClass } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { CostExtras } from "./cost";
 import {
@@ -141,9 +142,7 @@ export const playSpell: Defs["playSpell"] = {
     const interaction = state.interaction ?? createInteractionState();
     const turnState = getTurnState(interaction);
     const registry = getGlobalCardRegistry();
-    const timing = (registry.getSpellTiming(context.params.cardId) ?? "action") as
-      | "action"
-      | "reaction";
+    const timing = (registry.getSpellTiming(context.params.cardId) ?? "action") as TimingClass;
 
     if (!isLegalTiming(timing, turnState)) {
       return false;
@@ -152,7 +151,7 @@ export const playSpell: Defs["playSpell"] = {
     // Rule 530: in Neutral Open state, only the active player holds
     // Priority, so only they may play an Action-timed spell. Reaction
     // Spells can be played by any relevant player in a Closed state.
-    if (timing === "action" && turnState === "neutral-open") {
+    if (timing !== "reaction" && turnState === "neutral-open") {
       if (state.turn.activePlayer !== context.params.playerId) {
         return false;
       }
@@ -350,9 +349,7 @@ export const playSpell: Defs["playSpell"] = {
       }
 
       // Check spell timing is legal in current turn state (rule 553)
-      const timing = (registry.getSpellTiming(cardId as string) ?? "action") as
-        | "action"
-        | "reaction";
+      const timing = (registry.getSpellTiming(cardId as string) ?? "action") as TimingClass;
       if (!isLegalTiming(timing, turnState)) {
         continue;
       }
@@ -747,13 +744,11 @@ export const playSpell: Defs["playSpell"] = {
       ) {
         continue;
       }
-      const timing = (registry.getSpellTiming(cardId as string) ?? "action") as
-        | "action"
-        | "reaction";
+      const timing = (registry.getSpellTiming(cardId as string) ?? "action") as TimingClass;
       if (!isLegalTiming(timing, turnState)) {
         continue;
       }
-      if (timing === "action" && turnState === "neutral-open") {
+      if (timing !== "reaction" && turnState === "neutral-open") {
         if (state.turn.activePlayer !== (context.playerId as string)) {
           continue;
         }

@@ -98,6 +98,7 @@ export type SimpleFilter =
   | "equipped" // Has equipment attached
   | "attacking" // Is currently attacking
   | "defending" // Is currently defending
+  | "in-combat" // Has a combat designation (rule 740.2.c)
   | "alone" // Only unit at location
   | "facedown"; // Is face down (hidden)
 

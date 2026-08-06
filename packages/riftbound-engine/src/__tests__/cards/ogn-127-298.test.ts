@@ -41,7 +41,7 @@ describe("Cannon Barrage (ogn-127-298)", () => {
     expect(short.p1.can("cast", "barrage")).toBe(false);
   });
 
-  test.failing("BUG: deals 2 to every enemy unit IN THE COMBAT only — not to enemies at other locations or in base", async () => {
+  test("deals 2 to every enemy unit IN THE COMBAT only — not to enemies at other locations or in base", async () => {
     // Expected (740.2.c): only d1/d2 (defenders at bf1) take 2; "away" (bf2) and "home" (base) take 0.
     // Actual: the parsed effect has no in-combat restriction, so every enemy unit on the board takes 2.
     const game = await board().build();
@@ -104,7 +104,7 @@ describe("Cannon Barrage (ogn-127-298)", () => {
     expect(game.state("wall").damage).toBe(2);
   });
 
-  test.failing("BUG: outside combat it is still playable (nothing is targeted, 355.10.d) and damages nobody", async () => {
+  test("outside combat it is still playable (nothing is targeted, 355.10.d) and damages nobody", async () => {
     // Expected: legal to cast in Neutral Open with no combat; resolves with no enemy unit damaged.
     // Actual: castable, but it deals 2 to every enemy unit on the board.
     const game = await board().build();

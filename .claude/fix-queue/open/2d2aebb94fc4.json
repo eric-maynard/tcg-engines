@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-161-298",
+  "title": "BUG: may be played to an OCCUPIED ENEMY battlefield; combat then begins there (355.2.b, 323.13)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-161-298.test.ts",
+    "testName": "BUG: may be played to an OCCUPIED ENEMY battlefield; combat then begins there (355.2.b, 323.13)"
+  },
+  "id": "2d2aebb94fc4",
+  "createdAt": "2026-08-06T17:39:26.576Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.576Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

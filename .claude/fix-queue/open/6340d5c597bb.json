@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-187-298",
+  "title": "BUG: nothing is chosen on cast; on resolution EACH player, starting with the next player, may return a unit of their choice",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-187-298.test.ts",
+    "testName": "BUG: nothing is chosen on cast; on resolution EACH player, starting with the next player, may return a unit of their choice"
+  },
+  "id": "6340d5c597bb",
+  "createdAt": "2026-08-06T17:51:09.033Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.033Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

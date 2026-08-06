@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-152-298",
+  "title": "BUG: buffing a friendly unit asks 'you may'; yes → pay [body], exhaust Mistfall, the buffed unit is readied",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-152-298.test.ts",
+    "testName": "BUG: buffing a friendly unit asks 'you may'; yes → pay [body], exhaust Mistfall, the buffed unit is readied"
+  },
+  "id": "4a2ba0b24ffd",
+  "createdAt": "2026-08-06T17:39:26.568Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.568Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

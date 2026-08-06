@@ -72,7 +72,7 @@ describe("Leona, Zealot (ogn-079-298)", () => {
     expect(game.state("leona").might).toBe(6);
   });
 
-  test.failing("BUG: 'to a minimum of 1 [Might]' — a stunned 5-Might enemy here becomes 1 Might, not 0", async () => {
+  test("'to a minimum of 1 [Might]' — a stunned 5-Might enemy here becomes 1 Might, not 0", async () => {
     // Expected: 5 - 8 floors at the stated minimum of 1. Actual: the engine clamps the modified
     // Might at 0, ignoring the ability's `minimum: 1`.
     const game = await toPlay(0)

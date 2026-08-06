@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-212-298",
+  "title": "BUG: on resolution P1 picks up to 4 cards from ANY trash; each goes to the bottom of its owner's main deck",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-212-298.test.ts",
+    "testName": "BUG: on resolution P1 picks up to 4 cards from ANY trash; each goes to the bottom of its owner's main deck"
+  },
+  "id": "895b179fb379",
+  "createdAt": "2026-08-06T17:51:09.025Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.025Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

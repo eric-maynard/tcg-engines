@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-138-298",
+  "title": "BUG: with an empty rune deck nothing is channeled and you draw 1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-138-298.test.ts",
+    "testName": "BUG: with an empty rune deck nothing is channeled and you draw 1"
+  },
+  "id": "3bccbb47ac47",
+  "createdAt": "2026-08-06T17:39:26.574Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.574Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

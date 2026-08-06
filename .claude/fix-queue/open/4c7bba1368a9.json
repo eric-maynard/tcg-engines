@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: countered WITH Repeat paid: nothing resolves, Dunebreaker stays dead, and the [2] (base + Repeat) is not refunded (425.1.c, 425.1.c.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/temporal-portal-sacrifice-repeat.test.ts",
+    "testName": "BUG: countered WITH Repeat paid: nothing resolves, Dunebreaker stays dead, and the [2] (base + Repeat) is not refunded (425.1.c, 425.1.c.1)"
+  },
+  "id": "4c7bba1368a9",
+  "createdAt": "2026-08-06T17:51:09.031Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.031Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

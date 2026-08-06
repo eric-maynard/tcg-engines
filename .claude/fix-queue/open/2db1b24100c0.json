@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-242-298",
+  "title": "BUG: the chosen unit is banished then PLAYED ignoring its cost (ends on the board, no energy spent); the rest are recycled",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-242-298.test.ts",
+    "testName": "BUG: the chosen unit is banished then PLAYED ignoring its cost (ends on the board, no energy spent); the rest are recycled"
+  },
+  "id": "2db1b24100c0",
+  "createdAt": "2026-08-06T17:51:09.035Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.035Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

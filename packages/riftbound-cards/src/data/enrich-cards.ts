@@ -17,7 +17,8 @@ import { parseAbilities } from "../parser";
  * lets us opt out of the parser entirely for deferred cards by setting
  * `abilities: []` alongside a TODO comment.
  */
-function enrichCard(card: Card): Card {
+function enrichCard(raw: Card): Card {
+  const card = normalizeSpellTiming(raw);
   // Skip if the card declares an explicit abilities array (hand-authored opt-out)
   if (card.abilities !== undefined) {
     return card;
@@ -36,6 +37,25 @@ function enrichCard(card: Card): Card {
 
   // Return a new card object with abilities attached
   return { ...card, abilities } as Card;
+}
+
+/**
+ * rule 155 / 159.2.a.1: a spell's timing class comes from its printed
+ * [Action]/[Reaction] keyword; without one it is "standard" (no showdowns).
+ * The printed text is authoritative — card data historically only had
+ * action|reaction to choose from, so plain spells were filed as "action".
+ * Reminder text in parentheses is ignored (tokens can quote "[Reaction]").
+ */
+function normalizeSpellTiming(card: Card): Card {
+  if (card.cardType !== "spell" || !card.rulesText) {
+    return card;
+  }
+  const text = card.rulesText.replace(/\([^)]*\)/g, "");
+  const timing = /\[Reaction\]/i.test(text) ? "reaction" : /\[Action\]/i.test(text) ? "action" : "standard";
+  if (card.timing === timing) {
+    return card;
+  }
+  return { ...card, timing } as Card;
 }
 
 /**

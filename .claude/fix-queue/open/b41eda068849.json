@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: Case 1 — Ki Barrier (prevent 7) + 12-Might attacker: Guardian must be assigned 11 (4 Might + 7 prevent) and dies, vanilla takes only 1 and survives, attacker is recalled (465.2.c.3-5, 437.5.a). Engine ignores Prevent in combat assignment",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/prevent-on-tank-combat-assignment.test.ts",
+    "testName": "BUG: Case 1 — Ki Barrier (prevent 7) + 12-Might attacker: Guardian must be assigned 11 (4 Might + 7 prevent) and dies, vanilla takes only 1 and survives, attacker is recalled (465.2.c.3-5, 437.5.a). Engine ignores Prevent in combat assignment"
+  },
+  "id": "b41eda068849",
+  "createdAt": "2026-08-06T17:51:09.027Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.027Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

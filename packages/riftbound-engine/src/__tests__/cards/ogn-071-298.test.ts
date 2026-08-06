@@ -37,7 +37,7 @@ describe("Party Favors (ogn-071-298)", () => {
     expect(d && d.kind === "pick" ? d.options.map((o) => o.label) : []).toEqual(["Cards", "Runes"]);
   });
 
-  test.failing("BUG: the OTHER player makes the Cards/Runes choice, not the caster", async () => {
+  test("the OTHER player makes the Cards/Runes choice, not the caster", async () => {
     // Expected: P2 (the only other player) is the chooser. Actual: the caster P1 is asked.
     const game = await board().build();
     await game.p1.cast("pf");
@@ -46,7 +46,7 @@ describe("Party Favors (ogn-071-298)", () => {
     expect(game.actingSeat()).toBe(P2);
   });
 
-  test.failing("BUG: Cards — you AND that player each draw 1", async () => {
+  test("Cards — you AND that player each draw 1", async () => {
     // Expected: both hands grow by one. Actual: only the caster draws.
     const game = await board().build();
     await game.p1.cast("pf");
@@ -59,7 +59,7 @@ describe("Party Favors (ogn-071-298)", () => {
     expect(game.p1.runes()).toHaveLength(0);
   });
 
-  test.failing("BUG: Runes — you AND that player each channel 1 rune exhausted", async () => {
+  test("Runes — you AND that player each channel 1 rune exhausted", async () => {
     // Expected: each player gains one exhausted rune in their pool. Actual: only the caster channels.
     const game = await board().build();
     await game.p1.cast("pf");
@@ -89,7 +89,7 @@ describe("Party Favors (ogn-071-298)", () => {
     expect(runes.p1.runeDeck()).toHaveLength(11);
   });
 
-  test.failing("BUG: no [Action] keyword — not playable during a showdown on the opponent's turn (rules 155, 159.2.a)", async () => {
+  test("no [Action] keyword — not playable during a showdown on the opponent's turn (rules 155, 159.2.a)", async () => {
     // Expected: illegal in P2's Open State and still illegal once a showdown opens.
     // Actual: the engine treats every non-Reaction spell as [Action] and offers it in showdowns.
     const game = await board().active(P2).battlefield("bf1").unit(P2, "base", { might: 1 }, "u").build();

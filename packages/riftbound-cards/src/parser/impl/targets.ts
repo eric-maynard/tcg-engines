@@ -83,6 +83,13 @@ export function parseCardTarget(targetText: string): {
     target.filter = "mighty";
   }
 
+  // rule 740.2.c: "units in combat" — only units with a combat designation at
+  // the battlefield where combat is ongoing ("in combat with …" is a separate
+  // relational filter handled elsewhere).
+  if (/\bunits?\s+in combat\b(?!\s+with)/.test(lower)) {
+    target.filter = target.filter === undefined ? "in-combat" : [target.filter, "in-combat"].flat();
+  }
+
   // rule-id: ven-015-166 — "an enemy Calm unit": a domain adjective before
   // "unit(s)" restricts targets to that domain (normalize strips the "([calm])"
   // icon reminder, leaving the bare word).

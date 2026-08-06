@@ -58,10 +58,8 @@ describe("Singularity (ogn-105-298)", () => {
     expect(game.zoneOf("foe")).toBe("base");
   });
 
-  test.failing("BUG: no [Action] keyword — Singularity cannot be cast during a showdown (rules 308.1.a, 313.1.a)", async () => {
-    // Expected: with Focus in a showdown only Action/Reaction cards may be played, so Singularity is
-    // not legal. Actual: the card def carries `timing: "action"` (the engine default for every spell),
-    // which the engine treats as the [Action] permission, so it is offered in the showdown.
+  test("no [Action] keyword — Singularity cannot be cast during a showdown (rules 308.1.a, 313.1.a)", async () => {
+    // With Focus in a showdown only Action/Reaction cards may be played, so Singularity is not legal.
     const game = await board().unit(P1, "base", { might: 1 }, "scout").build();
     await game.p1.move("scout", "bf1");
     const d = game.decision() as ActionDecision;

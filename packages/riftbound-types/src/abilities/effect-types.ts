@@ -330,6 +330,7 @@ export interface ChannelEffect {
   readonly type: "channel";
   readonly amount: number;
   readonly exhausted?: boolean;
+  readonly player?: "self" | "opponent" | "each";
 }
 
 /**
@@ -479,6 +480,8 @@ export interface ChoiceEffect {
   readonly type: "choice";
   readonly options: ChoiceOption[];
   readonly notChosenThisTurn?: boolean; // "Choose one you've not chosen this turn"
+  /** Who picks the mode (rule 355.10.e: "each other player chooses"). Default: the controller. */
+  readonly player?: "self" | "opponent";
 }
 
 /**

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-189-298",
+  "title": "BUG: moved twice → immune in combat too: Kayn (6) into a 6-Might defender kills it and survives to conquer (465.2.c.10)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-189-298.test.ts",
+    "testName": "BUG: moved twice → immune in combat too: Kayn (6) into a 6-Might defender kills it and survives to conquer (465.2.c.10)"
+  },
+  "id": "531b48c190ad",
+  "createdAt": "2026-08-06T17:51:09.021Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.021Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

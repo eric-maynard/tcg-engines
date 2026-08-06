@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-158-298",
+  "title": "BUG: an opponent moving to a battlefield OTHER than Volibear's → P1 draws 1 (and not when moving to his own)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-158-298.test.ts",
+    "testName": "BUG: an opponent moving to a battlefield OTHER than Volibear's → P1 draws 1 (and not when moving to his own)"
+  },
+  "id": "0a7c55a3fee9",
+  "createdAt": "2026-08-06T17:39:26.570Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.570Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

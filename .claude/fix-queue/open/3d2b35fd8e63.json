@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-212-298",
+  "title": "BUG: 'up to 4' — the controller may recycle nothing at all",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-212-298.test.ts",
+    "testName": "BUG: 'up to 4' — the controller may recycle nothing at all"
+  },
+  "id": "3d2b35fd8e63",
+  "createdAt": "2026-08-06T17:51:09.025Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.025Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

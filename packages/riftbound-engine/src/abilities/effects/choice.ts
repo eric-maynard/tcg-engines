@@ -13,12 +13,19 @@ export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: E
   // pause via a `choose-mode` pending choice; `resolvePendingChoice` runs the
   // picked option. A single mode (or a nested prompt) resolves inline.
   if (options.length >= 2 && !ctx.draft.pendingChoice) {
+    // rule 355.10.e (ogn-071-298): "each other player chooses" — the opponent
+    // picks the mode as the spell resolves, but it still resolves for "you".
+    const chooser =
+      effect.player === "opponent"
+        ? (Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId) ?? ctx.playerId)
+        : ctx.playerId;
     ctx.draft.pendingChoice = {
       effect,
       options: options.map((_, i) => i),
-      playerId: ctx.playerId,
+      playerId: chooser,
       sourceCardId: ctx.sourceCardId,
       type: "choose-mode",
+      ...(chooser !== ctx.playerId ? { controllerId: ctx.playerId } : {}),
       ...(ctx.boundTargets ? { boundTargets: ctx.boundTargets } : {}),
     };
     return;

@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: (a) with Karthus on board Kog'Maw's Deathknell triggers TWICE — two independent chain items (808.2, Karthus static) — engine adds only one",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/karthus-kogmaw-double-deathknell-chain.test.ts",
+    "testName": "BUG: (a) with Karthus on board Kog'Maw's Deathknell triggers TWICE — two independent chain items (808.2, Karthus static) — engine adds only one"
+  },
+  "id": "9aa3dc78239b",
+  "createdAt": "2026-08-06T17:51:09.028Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.028Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

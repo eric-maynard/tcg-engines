@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-178-298",
+  "title": "BUG: with 3 cards in hand the controller chooses WHICH 2 to discard",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-178-298.test.ts",
+    "testName": "BUG: with 3 cards in hand the controller chooses WHICH 2 to discard"
+  },
+  "id": "f7d29a346570",
+  "createdAt": "2026-08-06T17:39:26.578Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.578Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

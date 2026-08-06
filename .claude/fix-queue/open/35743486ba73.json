@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: (d) variant B with 1 power: choosing the vanilla unit still spends no power (Deflect only taxes choosing the Scout)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/ruined-rex-deathknell-into-deflect.test.ts",
+    "testName": "BUG: (d) variant B with 1 power: choosing the vanilla unit still spends no power (Deflect only taxes choosing the Scout)"
+  },
+  "id": "35743486ba73",
+  "createdAt": "2026-08-06T17:51:09.029Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.029Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

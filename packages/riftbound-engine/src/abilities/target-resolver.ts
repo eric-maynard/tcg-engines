@@ -394,6 +394,9 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
         return meta?.combatRole === "attacker";
       case "defending":
         return meta?.combatRole === "defender";
+      // rule 740.2.c: "in combat" = has a combat designation (attacker or defender)
+      case "in-combat":
+        return meta?.combatRole === "attacker" || meta?.combatRole === "defender";
       case "mighty":
         return effectiveMight(def, meta) >= MIGHTY_THRESHOLD;
       case "damaged":

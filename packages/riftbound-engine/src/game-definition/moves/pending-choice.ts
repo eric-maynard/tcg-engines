@@ -562,8 +562,14 @@ export const pendingChoiceMoves: Partial<
         }
         if (picked) {
           // rule-id: sfd-091-221 — keep chain-bound targets for the picked mode.
+          // rule 355.10.e (ogn-071-298): an opponent-picked mode resolves for the controller.
           const effectCtx = {
-            ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+            ...buildEffectContext(
+              draft,
+              choice.controllerId ?? choice.playerId,
+              choice.sourceCardId,
+              context,
+            ),
             ...(choice.boundTargets ? { boundTargets: choice.boundTargets } : {}),
           };
           executeEffect(picked as ExecutableEffect, effectCtx);

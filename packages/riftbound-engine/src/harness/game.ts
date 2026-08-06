@@ -184,6 +184,12 @@ export class Game {
     return Game.attach(built.engine, { ...opts, origin: { kind: "scenario", spec }, players: spec.players, pool });
   }
 
+  /** Drive the LIVE web app through a browser (see harness/browser). Loaded lazily; needs Playwright at runtime. */
+  static async fromBrowser(opts: import("./browser/browser-backend").BrowserLaunchOptions = {}): Promise<Game> {
+    const mod = await import("./browser/game-browser");
+    return mod.launchBrowserGame(opts);
+  }
+
   // ---- accessors ------------------------------------------------------------
 
   /** Escape hatch. Prefer the harness API; needed only for engine-internal assertions. */
@@ -1024,7 +1030,8 @@ export class SeatHandle {
 
   /** Execute a raw engine move as this seat (bypasses menus; still records/invariants). */
   async do(moveId: string, params: Record<string, unknown> = {}): Promise<Extract<ActResult, { ok: true }>> {
-    const r = this.backend.raw(this.seat, moveId, params);
+    // `await` so a backend whose raw() is asynchronous (BrowserBackend) also works.
+    const r = await this.backend.raw(this.seat, moveId, params);
     if (!r.ok) {
       throw new HarnessError({ ...r.error, message: `do(${moveId}): ${r.error.message}` });
     }

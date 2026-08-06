@@ -173,15 +173,22 @@ export function getTurnState(interaction: TurnInteractionState): TurnStateType {
 /**
  * Check if a spell timing is legal in the current turn state.
  *
- * - Neutral Open: Action and Reaction
+ * - Neutral Open: Standard, Action and Reaction
  * - Neutral Closed: Reaction only (rule 535.1)
  * - Showdown Open: Action and Reaction (rule 546)
  * - Showdown Closed: Reaction only
  */
-export function isLegalTiming(timing: "action" | "reaction", turnState: TurnStateType): boolean {
+export type TimingClass = "standard" | "action" | "reaction";
+
+export function isLegalTiming(timing: TimingClass, turnState: TurnStateType): boolean {
   if (timing === "reaction") {
     return true;
   } // Always legal
+  if (timing === "standard") {
+    // rule 155: a spell without [Action]/[Reaction] is playable only in an
+    // Open State outside of Showdowns.
+    return turnState === "neutral-open";
+  }
   // Action is legal in open states
   return turnState === "neutral-open" || turnState === "showdown-open";
 }

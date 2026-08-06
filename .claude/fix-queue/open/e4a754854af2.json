@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-141-298",
+  "title": "BUG: 'up to two' — choosing no unit at all is allowed",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-141-298.test.ts",
+    "testName": "BUG: 'up to two' — choosing no unit at all is allowed"
+  },
+  "id": "e4a754854af2",
+  "createdAt": "2026-08-06T17:39:26.580Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.580Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

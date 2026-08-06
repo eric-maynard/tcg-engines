@@ -108,6 +108,23 @@ switch (cmd) {
     else for (const i of items) console.log(`${i.id}  [${i.source}${i.cardId ? " " + i.cardId : ""}] ${i.title.slice(0, 110)}${i.repro ? "  ⟶ " + i.repro.testFile.split("/").pop() : i.fileHint ? "  @ " + String(i.fileHint).split("/").pop() : ""}`);
     break;
   }
+  case "grab": {
+    // Atomically claim up to N open items, preferring items related to the oldest one
+    // (same cardId, same repro test file, same fileHint) so one worker gets a coherent batch.
+    const n = parseInt(flag("n", "6")!, 10); const by = flag("by", "worker")!;
+    const open = list("open").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const got: Item[] = [];
+    const tryClaim = (i: Item) => got.length < n && !got.find((g) => g.id === i.id) &&
+      move(i.id, "open", "claimed", (x) => ({ ...x, claimedBy: by, claimedAt: now(), history: [...(x.history ?? []), { at: now(), event: `grabbed:${by}` }] })) && got.push(i);
+    for (const seed of open) {
+      if (got.length >= n) break;
+      if (!tryClaim(seed) && !got.find((g) => g.id === seed.id)) continue;
+      const rel = (o: Item) => (seed.cardId && o.cardId === seed.cardId) || (seed.repro?.testFile && o.repro?.testFile === seed.repro?.testFile) || (seed.fileHint && o.fileHint && String(o.fileHint).split(":")[0] === String(seed.fileHint).split(":")[0]);
+      for (const o of open) if (rel(o)) tryClaim(o);
+    }
+    console.log(JSON.stringify(got.map((i) => ({ id: i.id, source: i.source, cardId: i.cardId, title: i.title, expected: i.expected, observed: i.observed, layer: i.layer, fileHint: i.fileHint, rule: i.rule, testFile: i.repro?.testFile, testName: i.repro?.testName }))));
+    break;
+  }
   case "claim": {
     const by = flag("by", "lane")!; const ids = argv.slice(1).filter((a) => !a.startsWith("--") && a !== by);
     const got = ids.filter((id) => move(id, "open", "claimed", (i) => ({ ...i, claimedBy: by, claimedAt: now(), history: [...(i.history ?? []), { at: now(), event: `claimed:${by}` }] })));

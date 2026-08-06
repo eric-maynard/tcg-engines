@@ -60,7 +60,7 @@ describe("Progress Day (ogn-114-298)", () => {
     expect(game.p1.can("cast", "pd")).toBe(false);
   });
 
-  test.failing("BUG: without [Action] it is not castable during a showdown (rules 155 / 159.2.a.1)", async () => {
+  test("without [Action] it is not castable during a showdown (rules 155 / 159.2.a.1)", async () => {
     // Expected: with a showdown open the plain-timed spell is off the menu even for the focus holder.
     // Actual: the card data/engine only distinguish action|reaction timing, so it is offered in showdowns.
     const game = await scenario()

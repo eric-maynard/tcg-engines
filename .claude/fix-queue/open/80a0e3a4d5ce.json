@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: X is not chosen or paid when Bullet Time is played — it goes on the chain with no X and the Power for X stays in the pool until resolution (204.3.b)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/bullet-time-vex-gold-x-payment.test.ts",
+    "testName": "BUG: X is not chosen or paid when Bullet Time is played — it goes on the chain with no X and the Power for X stays in the pool until resolution (204.3.b)"
+  },
+  "id": "80a0e3a4d5ce",
+  "createdAt": "2026-08-06T17:51:09.027Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.027Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

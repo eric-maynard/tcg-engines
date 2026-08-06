@@ -23,6 +23,7 @@ export type {
   ChainItem,
   ChainState,
   ShowdownState,
+  TimingClass,
   TurnInteractionState,
   TurnStateType,
 } from "./chain-state";

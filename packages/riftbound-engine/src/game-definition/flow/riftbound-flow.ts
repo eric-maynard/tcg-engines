@@ -23,6 +23,7 @@ import type {
   ZoneId as CoreZoneId,
   FlowDefinition,
 } from "@tcg/core";
+import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
@@ -347,6 +348,22 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                     }
                   }
                 }
+              }
+
+              // rule 364: passive abilities track game state continuously — the
+              // scoring step changed points outside any move, so re-apply statics
+              // (e.g. "My Might is increased by your points") now rather than
+              // waiting for the next move's cleanup pass.
+              if (context.cards.updateCardMeta) {
+                recalculateStaticEffects({
+                  cards: {
+                    getCardMeta: context.cards.getCardMeta,
+                    getCardOwner: context.cards.getCardOwner ?? (() => undefined),
+                    updateCardMeta: context.cards.updateCardMeta,
+                  },
+                  draft: context.state,
+                  zones: context.zones,
+                });
               }
             },
 

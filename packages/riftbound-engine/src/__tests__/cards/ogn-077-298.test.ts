@@ -84,7 +84,7 @@ describe("Zhonya's Hourglass (ogn-077-298)", () => {
   // Expected: Hourglass → trash; ally healed (0 damage), exhausted, in base. Actual: the die
   // replacement swallows the death but runs none of its effects — Hourglass stays in base and
   // the unit is left on the battlefield carrying lethal damage.
-  test.failing("BUG: lethal damage to a friendly unit should kill the Hourglass instead and heal, exhaust and recall that unit (rules 438, 370.1.a.1)", async () => {
+  test("lethal damage to a friendly unit should kill the Hourglass instead and heal, exhaust and recall that unit (rules 438, 370.1.a.1)", async () => {
     const game = await board().build();
     await game.p1.cast("bolt1", { targets: "ally" }); // 3 damage to a 2-Might unit = lethal
     await game.settle();
@@ -96,7 +96,7 @@ describe("Zhonya's Hourglass (ogn-077-298)", () => {
   });
 
   // Expected: first save consumes (kills) the Hourglass, second bolt kills the unit. Actual: see above.
-  test.failing("BUG: the Hourglass is consumed by its first save, so a second lethal hit kills the unit", async () => {
+  test("the Hourglass is consumed by its first save, so a second lethal hit kills the unit", async () => {
     const game = await board().build();
     await game.p1.cast("bolt1", { targets: "ally" });
     await game.settle();

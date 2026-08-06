@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-244-298",
+  "title": "BUG: each player keeps 2 runes; the rest are recycled to the bottom of their Rune Deck",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-244-298.test.ts",
+    "testName": "BUG: each player keeps 2 runes; the rest are recycled to the bottom of their Rune Deck"
+  },
+  "id": "9c3f092c19e7",
+  "createdAt": "2026-08-06T17:51:09.021Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.021Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

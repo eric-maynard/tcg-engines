@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-191-298",
+  "title": "BUG: only units AT A BATTLEFIELD are legal choices — base units (and the Marauder itself) must not be offered",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-191-298.test.ts",
+    "testName": "BUG: only units AT A BATTLEFIELD are legal choices — base units (and the Marauder itself) must not be offered"
+  },
+  "id": "5424feb46897",
+  "createdAt": "2026-08-06T17:51:09.034Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.034Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

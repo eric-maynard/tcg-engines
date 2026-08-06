@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: playing Cruel Patron asks for a FRIENDLY unit to kill — LeBlanc is a candidate, the enemy Bystander is not",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/cruel-patron-cost-kill-replaced-zhonyas.test.ts",
+    "testName": "BUG: playing Cruel Patron asks for a FRIENDLY unit to kill — LeBlanc is a candidate, the enemy Bystander is not"
+  },
+  "id": "0f8ffb6aa800",
+  "createdAt": "2026-08-06T17:51:09.029Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.029Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

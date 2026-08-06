@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-165-298",
+  "title": "BUG: with no unit in your trash the Attendant still stays in play and nothing is returned",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-165-298.test.ts",
+    "testName": "BUG: with no unit in your trash the Attendant still stays in play and nothing is returned"
+  },
+  "id": "752d011fb7d9",
+  "createdAt": "2026-08-06T17:39:26.570Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.570Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

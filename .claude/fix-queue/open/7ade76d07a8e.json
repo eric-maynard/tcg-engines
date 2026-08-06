@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-179-298",
+  "title": "BUG: each player selects which of THEIR OWN gear dies — P2 is the one asked about g2a/g2b",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-179-298.test.ts",
+    "testName": "BUG: each player selects which of THEIR OWN gear dies — P2 is the one asked about g2a/g2b"
+  },
+  "id": "7ade76d07a8e",
+  "createdAt": "2026-08-06T17:51:09.022Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.022Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-238-298",
+  "title": "BUG: a stunned defender deals no combat damage (423.1.b) — Leona (4) into the stunned 6-Might wall: both survive",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-238-298.test.ts",
+    "testName": "BUG: a stunned defender deals no combat damage (423.1.b) — Leona (4) into the stunned 6-Might wall: both survive"
+  },
+  "id": "902b6709b089",
+  "createdAt": "2026-08-06T17:39:26.572Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.572Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

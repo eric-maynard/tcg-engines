@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-186-298",
+  "title": "BUG: when it leaves the board (killed by its own ability) its controller draws 1 and channels 1 rune exhausted",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-186-298.test.ts",
+    "testName": "BUG: when it leaves the board (killed by its own ability) its controller draws 1 and channels 1 rune exhausted"
+  },
+  "id": "334094c1dc5f",
+  "createdAt": "2026-08-06T17:51:09.022Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.022Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

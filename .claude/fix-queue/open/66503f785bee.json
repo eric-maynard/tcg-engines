@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-208-298",
+  "title": "BUG: the additional cost is a real kill — sacrificing Watchful Sentry fires its Deathknell (draw 1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-208-298.test.ts",
+    "testName": "BUG: the additional cost is a real kill — sacrificing Watchful Sentry fires its Deathknell (draw 1)"
+  },
+  "id": "66503f785bee",
+  "createdAt": "2026-08-06T17:51:09.032Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.032Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

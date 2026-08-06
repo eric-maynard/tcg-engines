@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-199-298",
+  "title": "BUG: played from facedown at bf1, the swap partner may be a unit in base (811.1.d.2 example): Tideturner → base, Near → bf1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-199-298.test.ts",
+    "testName": "BUG: played from facedown at bf1, the swap partner may be a unit in base (811.1.d.2 example): Tideturner → base, Near → bf1"
+  },
+  "id": "47c78830b811",
+  "createdAt": "2026-08-06T17:51:09.035Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.035Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

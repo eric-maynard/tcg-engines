@@ -76,7 +76,7 @@ describe("Falling Star (ogn-029-298)", () => {
     expect(game.zoneOf("big")).toBe("trash");
   });
 
-  test("Action timing: castable with Focus in a showdown, not on the opponent's turn", async () => {
+  test("no [Action]/[Reaction] in printed text ⇒ standard timing (rule 155): NOT castable during a showdown, nor on the opponent's turn", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2, power: { fury: 2 } })
       .battlefield("bf1", { controller: P2 })
@@ -86,7 +86,7 @@ describe("Falling Star (ogn-029-298)", () => {
       .build();
     await game.p1.move("ally", "bf1");
     expect((game.decision() as ActionDecision).context).toBe("showdown");
-    expect(game.p1.can("cast", "fs")).toBe(true);
+    expect(game.p1.can("cast", "fs")).toBe(false);
 
     const oppTurn = await scenario().active(P2).resources(P1, { energy: 2, power: { fury: 2 } }).unit(P2, "base", { might: 5 }, "u").hand(P1, FALLING_STAR, "fs").build();
     expect(oppTurn.p1.can("cast", "fs")).toBe(false);

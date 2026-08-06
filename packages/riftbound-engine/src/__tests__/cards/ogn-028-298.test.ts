@@ -49,7 +49,7 @@ describe("Draven, Showboat (ogn-028-298)", () => {
     expect(onlyOpp.state("draven").might).toBe(3);
   });
 
-  test.failing("BUG: tracks the score continuously — scoring a hold point later raises Might again (rule 364 passive)", async () => {
+  test("tracks the score continuously — scoring a hold point later raises Might again (rule 364 passive)", async () => {
     // Expected: Draven played with 2 points is 5 Might; after P1 holds bf1 next turn (3 points) he is
     // 6 Might. Actual: the static bonus is computed when Draven enters/first ticks (+2) and is never
     // re-evaluated when the score changes, so he stays at 5.

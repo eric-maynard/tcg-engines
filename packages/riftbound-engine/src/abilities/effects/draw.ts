@@ -5,6 +5,14 @@ import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
 
 export function handle_draw(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+  // rule-id: ogn-071-298 — "you and that player each draw 1" / "each player
+  // draws N": `player: "each"` fans the draw out to every player's own deck.
+  if (effect.player === "each") {
+    for (const pid of Object.keys(ctx.draft.players)) {
+      handle_draw({ ...effect, player: "self" }, { ...ctx, playerId: pid }, _h);
+    }
+    return;
+  }
   const rawDrawCount = effect.amount ?? 1;
   const drawCount =
     typeof rawDrawCount === "number" ? rawDrawCount : resolveAmount(rawDrawCount, ctx);

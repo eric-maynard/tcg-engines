@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-173-298",
+  "title": "BUG: moving into the enemy-held bf1 stages a Combat that is fought once the spell has resolved (323.9, 460)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-173-298.test.ts",
+    "testName": "BUG: moving into the enemy-held bf1 stages a Combat that is fought once the spell has resolved (323.9, 460)"
+  },
+  "id": "963e733a5d99",
+  "createdAt": "2026-08-06T17:51:09.033Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.033Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

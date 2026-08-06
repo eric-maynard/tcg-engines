@@ -156,9 +156,10 @@ export interface UnitCard extends BaseCard {
 // ============================================================================
 
 /**
- * Spell timing
+ * Spell timing. "standard" = no [Action]/[Reaction] keyword (rule 155:
+ * Open State outside Showdowns on the controller's turn only).
  */
-export type SpellTiming = "action" | "reaction";
+export type SpellTiming = "standard" | "action" | "reaction";
 
 /**
  * Spell card - one-time effects

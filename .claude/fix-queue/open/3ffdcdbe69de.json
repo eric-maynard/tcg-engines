@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-194-298",
+  "title": "BUG: looking at Nocturne on top of your deck (Vision) offers 'you may banish me', then 'play me for [rainbow]'",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-194-298.test.ts",
+    "testName": "BUG: looking at Nocturne on top of your deck (Vision) offers 'you may banish me', then 'play me for [rainbow]'"
+  },
+  "id": "3ffdcdbe69de",
+  "createdAt": "2026-08-06T17:51:09.034Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.034Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

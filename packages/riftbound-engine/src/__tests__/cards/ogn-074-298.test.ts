@@ -88,7 +88,7 @@ describe("Taric, Protector (ogn-074-298)", () => {
     expect(game.state("taric").grantedKeywords.filter((k) => k.keyword === "Shield")).toEqual([]);
   });
 
-  test.failing("BUG: a friendly unit that moved to a battlefield with Taric defends with +1 Might from the granted Shield", async () => {
+  test("a friendly unit that moved to a battlefield with Taric defends with +1 Might from the granted Shield", async () => {
     // Foe 8 attacks Taric (Tank, 5 to kill) + a 3-Might ally: 3 damage is left for the ally, which needs 4 with
     // Shield → expected: ally survives and P1 keeps bf1. Actual: the "here" grant is never (re)applied after a
     // move / across turns, so the ally dies at 3 and the battlefield is emptied.

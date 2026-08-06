@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-179-298",
+  "title": "BUG: EACH player kills one of their gear — the opponent loses one as well (only one gear dies today)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-179-298.test.ts",
+    "testName": "BUG: EACH player kills one of their gear — the opponent loses one as well (only one gear dies today)"
+  },
+  "id": "12b8ef358f7a",
+  "createdAt": "2026-08-06T17:51:09.022Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.022Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

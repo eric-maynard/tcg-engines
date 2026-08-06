@@ -73,7 +73,7 @@ describe("Time Warp (ogn-122-298)", () => {
     expect(opp.p1.can("cast", "warp")).toBe(false);
   });
 
-  test.failing("BUG: no [Action]/[Reaction] keyword — not playable during a showdown or onto a chain (rules 155, 308.1.a)", async () => {
+  test("no [Action]/[Reaction] keyword — not playable during a showdown or onto a chain (rules 155, 308.1.a)", async () => {
     // Expected: Time Warp's text has no [Action], so it is illegal while a showdown is open.
     // Actual: the card data declares `timing: "action"`, so the engine offers it with Focus.
     const opp = await board().active(P2).build();

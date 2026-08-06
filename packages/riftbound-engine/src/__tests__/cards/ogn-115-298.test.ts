@@ -61,7 +61,7 @@ describe("Promising Future (ogn-115-298)", () => {
 
   // Expected: no [Action] in the rules text → not playable while a showdown is open. Actual: the
   // card data carries `timing: "action"`, so it is offered with Focus.
-  test.failing("BUG: not an [Action] spell — must not be playable during a showdown", async () => {
+  test("not an [Action] spell — must not be playable during a showdown", async () => {
     const game = await board().unit(P1, "base", { might: 1 }, "scout").build();
     await game.p1.move("scout", "bf1");
     expect(game.decision()?.kind).toBe("action");

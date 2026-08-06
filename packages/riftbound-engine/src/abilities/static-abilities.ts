@@ -501,6 +501,15 @@ function applyStaticEffect(
         }
         targetAmount += equipBase * (equipMultiplier - 1);
       }
+      // rule-id: ogn-079-298 — "-8 [Might], to a minimum of 1": a penalty can't
+      // take the unit's current Might below the stated floor (nor raise it).
+      if (typeof effect.minimum === "number" && targetAmount < 0) {
+        const reg = registry ?? getGlobalCardRegistry();
+        let cur = reg.getMight(targetId) + (meta?.buffed ? 1 : 0);
+        cur += (meta?.mightModifier ?? 0) + (meta?.staticMightBonus ?? 0);
+        for (const equipId of meta?.equippedWith ?? []) cur += reg.getMightBonus(equipId as string);
+        targetAmount = Math.min(0, Math.max(targetAmount, (effect.minimum as number) - cur));
+      }
       const current = meta?.staticMightBonus ?? 0;
       ctx.cards.updateCardMeta(
         targetId as CoreCardId,
@@ -580,6 +589,7 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   const boardCards = getAllBoardCards(ctx);
   const registry = getGlobalCardRegistry();
   let anyApplied = false;
+  if (process.env.W1DBG) console.error('W1DBG recalc', boardCards.map(c=>c.id+'@'+c.zone).join(','));
 
   // Step 1: Strip all static modifications
   for (const card of boardCards) {
@@ -680,6 +690,7 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
               ? (resolveStaticTargetsFromDescriptor(passEffect.target, card, boardCards, ctx) ??
                 defaultTargetIds)
               : defaultTargetIds;
+          if (process.env.W1DBG) console.error('W1DBG static', card.id, card.zone, JSON.stringify(passEffect), targetIds);
           applyStaticEffect(passEffect, targetIds, ctx, card);
         }
         anyApplied = true;

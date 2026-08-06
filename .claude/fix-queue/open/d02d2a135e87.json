@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-164-298",
+  "title": "BUG: Spend my buff is not available without a buff (702.2.b.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-164-298.test.ts",
+    "testName": "BUG: Spend my buff is not available without a buff (702.2.b.1)"
+  },
+  "id": "d02d2a135e87",
+  "createdAt": "2026-08-06T17:39:26.578Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.578Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

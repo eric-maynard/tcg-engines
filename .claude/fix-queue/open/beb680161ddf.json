@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-150-298",
+  "title": "BUG: spending one friendly buff reduces the cost by [body] — playable with 3 energy + 1 body",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-150-298.test.ts",
+    "testName": "BUG: spending one friendly buff reduces the cost by [body] — playable with 3 energy + 1 body"
+  },
+  "id": "beb680161ddf",
+  "createdAt": "2026-08-06T17:39:26.580Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.580Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

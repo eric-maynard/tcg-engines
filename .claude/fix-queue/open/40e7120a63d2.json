@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-208-298",
+  "title": "BUG: the kill is MANDATORY — with no other friendly unit Cruel Patron cannot be played (rule 356.2.a.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-208-298.test.ts",
+    "testName": "BUG: the kill is MANDATORY — with no other friendly unit Cruel Patron cannot be played (rule 356.2.a.1)"
+  },
+  "id": "40e7120a63d2",
+  "createdAt": "2026-08-06T17:51:09.032Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.032Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

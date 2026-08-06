@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-162-298",
+  "title": "BUG: only the FIRST move each turn triggers — a second (ganking) move the same turn offers nothing",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-162-298.test.ts",
+    "testName": "BUG: only the FIRST move each turn triggers — a second (ganking) move the same turn offers nothing"
+  },
+  "id": "344e6f303210",
+  "createdAt": "2026-08-06T17:39:26.574Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.574Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -487,8 +487,13 @@ export interface ChooseDestinationChoice {
  */
 export interface ChooseModeChoice {
   readonly type: "choose-mode";
-  /** Player who chooses the mode (the ability's controller). */
+  /** Player who chooses the mode (the ability's controller unless `controllerId` is set). */
   readonly playerId: PlayerId;
+  /**
+   * rule-id: ogn-071-298 (rule 355.10.e) — when another player picks the mode,
+   * the picked effect still resolves for the spell's controller ("you").
+   */
+  readonly controllerId?: PlayerId;
   /** Card that produced the effect (used as the effect's source). */
   readonly sourceCardId: CardId;
   /** The full choice effect (carries `options[]` so the reducer can execute the pick). */

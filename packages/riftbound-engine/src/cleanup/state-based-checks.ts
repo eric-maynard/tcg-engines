@@ -24,6 +24,8 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
+import type { EffectContext, ExecutableEffect } from "../abilities/effect-executor";
+import { executeEffect } from "../abilities/effect-executor";
 import { checkReplacement, markReplacementConsumed } from "../abilities/replacement-effects";
 import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
@@ -77,6 +79,45 @@ function sweepOffBoardTokens(ctx: CleanupContext): boolean {
     }
   }
   return removed;
+}
+
+/**
+ * Adapt the cleanup context into an EffectContext for running a board
+ * die-replacement's effect. Real move/flow contexts are structural supersets
+ * of CleanupContext, so optional operations are picked up when present and
+ * stubbed otherwise. The would-be-dying unit is exposed as `trigger-source`.
+ */
+function buildReplacementEffectContext(
+  ctx: CleanupContext,
+  match: { sourceCardId: string; sourceOwner: string },
+  dyingCardId: string,
+): EffectContext {
+  const zonesAny = ctx.zones as unknown as Partial<EffectContext["zones"]>;
+  const countersAny = ctx.counters as unknown as Partial<EffectContext["counters"]>;
+  const noop = () => {};
+  const getCardZone =
+    zonesAny.getCardZone ??
+    ((id: CoreCardId) =>
+      getBoardZoneIds(ctx).find((z) => ctx.zones.getCardsInZone(z as CoreZoneId).includes(id)));
+  return {
+    cards: ctx.cards as unknown as EffectContext["cards"],
+    counters: {
+      addCounter: countersAny.addCounter ?? noop,
+      clearCounter: ctx.counters.clearCounter,
+      removeCounter: countersAny.removeCounter ?? noop,
+      setFlag: ctx.counters.setFlag,
+    },
+    draft: ctx.draft,
+    playerId: match.sourceOwner,
+    sourceCardId: match.sourceCardId,
+    triggerSourceId: dyingCardId,
+    zones: {
+      drawCards: zonesAny.drawCards ?? noop,
+      getCardZone,
+      getCardsInZone: ctx.zones.getCardsInZone,
+      moveCard: ctx.zones.moveCard,
+    },
+  };
 }
 
 /**
@@ -228,20 +269,19 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         { cards: ctx.cards, draft: ctx.draft, zones: ctx.zones },
       );
       if (replacementMatch) {
-        // Replacement intercepted the death — skip normal kill
-        // The replacement effect itself (e.g., "kill this instead, recall that unit")
-        // Would be executed by the caller if needed.
-        // For "prevent", just skip the kill entirely.
-        if (replacementMatch.replacement !== "prevent") {
-          // Non-prevent replacements store an effect to execute
-          // For now, mark that a replacement occurred and skip the kill
-        }
+        // rule 572 / 370.1.a.1: the death never happens; the replacement's own
+        // effect (e.g. "kill this instead. Heal that unit, exhaust it, and
+        // recall it") runs in its place, with the would-be-dying unit as "it".
         // Consume single-fire "next"-duration death replacements so they
         // Don't re-trigger on subsequent deaths this turn.
         markReplacementConsumed(ctx.draft, replacementMatch);
         stateChanged = true;
         // Clear damage so it doesn't re-trigger next cleanup pass
         ctx.cards.updateCardMeta(cardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+        const repl = replacementMatch.replacement as ExecutableEffect | "prevent" | undefined;
+        if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
+          executeEffect(repl, buildReplacementEffectContext(ctx, replacementMatch, cardId as string));
+        }
         continue;
       }
 

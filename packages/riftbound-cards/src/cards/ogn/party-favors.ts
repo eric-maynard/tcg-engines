@@ -9,8 +9,8 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  Cards, you and that player each draw 1. For each player that chooses
  *  Runes, you and that player each channel 1 rune exhausted."
  *
- * Approximated as a choice between drawing (each) or channeling (each)
- * that the spell's controller resolves.
+ * Rule 355.10.e: the OTHER player picks the mode as the spell resolves; the
+ * picked mode then applies to both "you and that player".
  */
 const abilities: Ability[] = [
   {
@@ -21,10 +21,11 @@ const abilities: Ability[] = [
           label: "Cards",
         },
         {
-          effect: { amount: 1, exhausted: true, type: "channel" },
+          effect: { amount: 1, exhausted: true, player: "each", type: "channel" },
           label: "Runes",
         },
       ],
+      player: "opponent",
       type: "choice",
     },
     timing: "action",

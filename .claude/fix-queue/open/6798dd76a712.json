@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-193-298",
+  "title": "BUG: 'open' means uncontrolled AND unoccupied (170.11.c) — an uncontrolled battlefield with an enemy unit on it is not offered",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-193-298.test.ts",
+    "testName": "BUG: 'open' means uncontrolled AND unoccupied (170.11.c) — an uncontrolled battlefield with an enemy unit on it is not offered"
+  },
+  "id": "6798dd76a712",
+  "createdAt": "2026-08-06T17:51:09.035Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.035Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

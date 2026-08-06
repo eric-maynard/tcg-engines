@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-217-298",
+  "title": "BUG: Legion met — after playing another card this turn, Gloryseeker enters and buffs itself (2 → 3, rule 812.1.c)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-217-298.test.ts",
+    "testName": "BUG: Legion met — after playing another card this turn, Gloryseeker enters and buffs itself (2 → 3, rule 812.1.c)"
+  },
+  "id": "bdef0b5257ed",
+  "createdAt": "2026-08-06T17:51:09.020Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.020Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

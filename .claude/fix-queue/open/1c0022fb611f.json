@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-182-298",
+  "title": "BUG: 'When this is … killed, draw 1' — killed on the board (even by an opponent's spell) its controller draws 1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-182-298.test.ts",
+    "testName": "BUG: 'When this is … killed, draw 1' — killed on the board (even by an opponent's spell) its controller draws 1"
+  },
+  "id": "1c0022fb611f",
+  "createdAt": "2026-08-06T17:51:09.024Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.024Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

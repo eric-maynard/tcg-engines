@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: Portal + Sacrifice with Repeat paid: [2] energy total, ONE Dunebreaker killed, effect runs twice → draw 4, channel 2 runes exhausted (357.2, 820.1.d, 135.2.b.3, 820.3.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/temporal-portal-sacrifice-repeat.test.ts",
+    "testName": "BUG: Portal + Sacrifice with Repeat paid: [2] energy total, ONE Dunebreaker killed, effect runs twice → draw 4, channel 2 runes exhausted (357.2, 820.1.d, 135.2.b.3, 820.3.a)"
+  },
+  "id": "553108c33afd",
+  "createdAt": "2026-08-06T17:51:09.030Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.030Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

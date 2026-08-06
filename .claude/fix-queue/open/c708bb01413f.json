@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: after the countered Ray, Noxus Hopeful costs 2 — playable with 2 energy, enters base, A ends at 0 (812.1.c, 419.4.b)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/legion-active-after-countered-spell.test.ts",
+    "testName": "BUG: after the countered Ray, Noxus Hopeful costs 2 — playable with 2 energy, enters base, A ends at 0 (812.1.c, 419.4.b)"
+  },
+  "id": "c708bb01413f",
+  "createdAt": "2026-08-06T17:51:09.026Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.026Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -8,7 +8,7 @@ import type {
   GainControlOfSpellEffect,
   SequenceEffect,
 } from "@tcg/riftbound-types/abilities/effect-types";
-import type { AnyTarget, Location } from "@tcg/riftbound-types/targeting";
+import type { AnyTarget, Filter, Location } from "@tcg/riftbound-types/targeting";
 import { parseCost } from "../parsers/cost-parser";
 import { parseEffect } from "./effect";
 
@@ -35,6 +35,19 @@ export function parseCounterEffect(text: string): CounterEffect | undefined {
   // destination.
   if (/return it to its owner'?s hand instead/i.test(text)) {
     return { destination: "hand", type: "counter" } as CounterEffect;
+  }
+  // rule-id: ogn-045-298 (rule 206) — "Counter a spell that costs no more than
+  // [4] and no more than [rainbow]": printed Energy cost ≤ N and printed Power
+  // cost ≤ the number of rune pips listed.
+  const costCap = text.match(
+    /^Counter a spell that costs no more than :rb_energy_(\d+):(?:\s*and no more than ((?::rb_rune_\w+:\s*)+))?\.?$/i,
+  );
+  if (costCap) {
+    const filter: Filter[] = [{ energyCost: { lte: Number(costCap[1]) } }];
+    if (costCap[2]) {
+      filter.push({ powerCost: { lte: (costCap[2].match(/:rb_rune_\w+:/g) ?? []).length } });
+    }
+    return { target: { filter, type: "spell" }, type: "counter" } as CounterEffect;
   }
   return { type: "counter" };
 }

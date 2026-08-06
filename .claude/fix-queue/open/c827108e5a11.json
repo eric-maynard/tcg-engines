@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-181-298",
+  "title": "BUG: can return a friendly FACEDOWN card to its owner's hand",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-181-298.test.ts",
+    "testName": "BUG: can return a friendly FACEDOWN card to its owner's hand"
+  },
+  "id": "c827108e5a11",
+  "createdAt": "2026-08-06T17:51:09.025Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.025Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}
