@@ -66,7 +66,8 @@ Card def: \`python3 -c 'import json;c=json.load(open("${CARD_LIST}"));print(json
    - "Choose"/"target"? → was a prompt shown (pendingChoice or per-target moves)?
    Screenshot after: \`pw shot /tmp/card-<id>-after.png\`. Read it.
 
-4. **Report** for this card: played (bool), bugs[] (each: what/expected/observed/layer), notes (1 line).
+4. **Clause checklist (mandatory)**: split the rulesText into its separate clauses/sentences (keywords, "When/At…" triggers, "Then, if…" follow-ups, "you may … from your trash", activated "[cost]: effect", static "while/other units…"). For EACH clause decide: VERIFIED (you observed the engine do it — cite the state change), NOT_TRIGGERABLE (explain why goldfish can't reach the precondition after a genuine attempt: e.g. needs enemy units — try tutoring for player-2 via {"playerId":"player-2"} first), or FAILED (precondition met, effect absent/wrong → this is a bug; add it to bugs[]). Follow-up clauses ("Then…", "if it had…", replay-from-trash, optional payments) MUST be exercised when their precondition was met by your own earlier steps — check `pw moves`/pendingChoice for the prompt and try to take it. Put the per-clause verdict list in notes.
+5. **Report** for this card: played (bool), bugs[] (each: what/expected/observed/layer), notes (clause verdicts + 1 line). A card with any FAILED clause must have ≥1 bug; do not report bugs=[] unless every triggerable clause is VERIFIED.
 
 Do NOT report "could be better". Report "the rulesText says X and Y happened instead". If everything matched, bugs=[].
 
@@ -88,7 +89,7 @@ for (const b of bugs) {
 const findings = [...uniq.values()].sort((a,b)=>b.cards.length-a.cards.length)
 
 phase('Verify')
-const verified = await parallel(findings.slice(0,25).map(f=>()=>
+const verified = await parallel(findings.map(f=>()=>
   agent(
 `Verify. Default REFUTED without file:line.
 

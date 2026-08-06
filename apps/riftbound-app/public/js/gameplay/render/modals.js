@@ -41,7 +41,12 @@ function renderPendingChoiceModal() {
   overlay.classList.toggle("targeting", !!hasBoardPicks);
   if (typeof closeZoom === "function") closeZoom();
 
-  const title = pending.onPicked === "discard" ? "Discard a card"
+  // Rule ogn-067-298: opt-in ("you may …") triggers carry only {accept} —
+  // title names the source card and buttons read Yes/No instead of "—".
+  const optInSrc = pending.type === "opt-in" ? findCard(pending.sourceCardId) : null;
+  const title = pending.type === "opt-in"
+    ? `Use ${optInSrc?.name ?? "optional"} ability?`
+    : pending.onPicked === "discard" ? "Discard a card"
     : pending.onPicked === "banish" ? "Banish a card"
     : pending.onPicked === "recycle" ? "Recycle a card"
     : pending.onPicked === "draw" ? "Choose a card to draw"
@@ -72,7 +77,14 @@ function renderPendingChoiceModal() {
   if (otherPicks.length) {
     html += `<div class="choice-modal-btns">`;
     for (let i = 0; i < otherPicks.length; i++) {
-      const label = otherPicks[i].params?.pickedZoneId ?? otherPicks[i].params?.pickedName ?? "—";
+      // Rule ogn-102-298: humanize destination zone ids ("base" /
+      // "battlefield-<id>") the same way describePlayVariant does.
+      const zid = otherPicks[i].params?.pickedZoneId;
+      const accept = otherPicks[i].params?.accept;
+      const label = typeof accept === "boolean" ? (accept ? "Yes" : "No")  // Rule ogn-067-298
+        : zid != null
+        ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, "")))
+        : (otherPicks[i].params?.pickedName ?? "—");
       html += `<button class="choice-modal-btn" data-other-idx="${i}">${esc(String(label))}</button>`;
     }
     html += `</div>`;
@@ -186,6 +198,9 @@ function renderChainOverlay() {
   if (!chain || !chain.active) {
     overlay.classList.remove("visible");
     box.classList.remove("showdown-active");
+    // [rule:chain-overlay-stale-buttons] Clear the box so a stale Pass/Resolve
+    // button wired to a closed chain doesn't linger in the hidden overlay.
+    box.innerHTML = "";
     return;
   }
 

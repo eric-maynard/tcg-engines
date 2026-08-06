@@ -9,6 +9,27 @@ import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } fr
 
 export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
+  // rule-id: ogn-145-298 — a global "Prevent all spell and ability damage"
+  // (rule 437) installed in activeReplacements reduces every spell/ability
+  // damage instance to 0. This handler only ever deals spell/ability damage
+  // (combat damage is applied by the combat moves), so nothing is dealt.
+  const activeRepl = ctx.draft.activeReplacements as
+    | { replaces?: string; replacement?: unknown; global?: boolean; amount?: unknown; duration?: string }[]
+    | undefined;
+  const globalPreventIdx =
+    activeRepl?.findIndex(
+      (e) =>
+        e?.replaces === "take-damage" &&
+        e.replacement === "prevent" &&
+        e.global === true &&
+        e.amount === "all",
+    ) ?? -1;
+  if (activeRepl && globalPreventIdx >= 0) {
+    if (activeRepl[globalPreventIdx]?.duration === "next") {
+      activeRepl.splice(globalPreventIdx, 1);
+    }
+    return;
+  }
   // Rule 355.14.a-c / 355.15: split damage. The caster first chooses a
   // friendly reference unit as a standard target (raised via choose-target
   // when >1 candidate), then up to N enemy units as split targets where

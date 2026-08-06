@@ -65,6 +65,12 @@ export type Location =
  */
 export interface BattlefieldLocation {
   readonly battlefield: "controlled" | "enemy" | "open" | "contested" | "any";
+  /**
+   * rule-id: unl-144-219 (Maduli the Gatekeeper) — only battlefields with at
+   * least one enemy unit whose total enemy Might is less than the moving
+   * unit's Might qualify as a destination.
+   */
+  readonly requireSourceMightExceedsEnemyTotal?: boolean;
 }
 
 /**
@@ -100,6 +106,13 @@ export type SimpleFilter =
  */
 export interface TagFilter {
   readonly tag: string; // E.g., "Mech", "Dragon", "Sand Soldier"
+}
+
+/**
+ * Exclude-tag filter - matches cards WITHOUT a specific tag ("non-Dragon unit")
+ */
+export interface ExcludeTagFilter {
+  readonly excludeTag: string;
 }
 
 /**
@@ -161,6 +174,7 @@ export interface Comparison {
 export type Filter =
   | SimpleFilter
   | TagFilter
+  | ExcludeTagFilter
   | MightFilter
   | CostFilter
   | EnergyCostFilter

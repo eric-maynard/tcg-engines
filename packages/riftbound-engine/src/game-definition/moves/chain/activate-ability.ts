@@ -400,14 +400,11 @@ export const activateAbility: Defs["activateAbility"] = {
         }
       }
 
-      // "Spend N XP" costs (rule 728) require the host card to have ≥N XP
-      // counters at activation time.
+      // Rules 729-730: XP is a player resource; "Spend N XP" requires the
+      // controller to have ≥N XP at activation time.
       const xpCost = cost.xp as number | undefined;
       if (xpCost && xpCost > 0) {
-        const {getCounter} = (
-          context.counters as { getCounter?: (c: CoreCardId, t: string) => number }
-        );
-        const have = getCounter ? getCounter(cardId as CoreCardId, "xp") : 0;
+        const have = state.players[playerId]?.xp ?? 0;
         if (have < xpCost) {
           return false;
         }
@@ -623,14 +620,10 @@ export const activateAbility: Defs["activateAbility"] = {
             }
           }
 
+          // Rules 729-730: XP is a player resource, not a per-card counter.
           const xpCost = cost.xp as number | undefined;
           if (xpCost && xpCost > 0) {
-            const {getCounter} = (
-              context.counters as { getCounter?: (c: CoreCardId, t: string) => number }
-            );
-            const have = getCounter
-              ? getCounter(entry.hostCardId as CoreCardId, "xp")
-              : 0;
+            const have = state.players[playerId]?.xp ?? 0;
             if (have < xpCost) {
               continue;
             }
@@ -770,10 +763,13 @@ export const activateAbility: Defs["activateAbility"] = {
         context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
       }
 
-      // Handle "Spend N XP" cost — remove N XP counters from the host card.
+      // Rule 730.2: "Spend N XP" reduces the controlling player's XP.
       const xpCost = cost.xp as number | undefined;
       if (xpCost && xpCost > 0) {
-        context.counters.removeCounter(cardId as CoreCardId, "xp", xpCost);
+        const player = draft.players[playerId];
+        if (player) {
+          player.xp = Math.max(0, (player.xp ?? 0) - xpCost);
+        }
       }
 
       // Rule 357.2 / 422.3: pay the "Discard N" cost — the chosen hand

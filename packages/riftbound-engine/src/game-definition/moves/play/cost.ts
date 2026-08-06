@@ -9,7 +9,15 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
+import { type EffectContext, executeEffect } from "../../../abilities/effect-executor";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import {
+  type CostReductionContext,
+  type StaticCostReduction,
+  applyStaticCostReduction,
+  computeStaticCostReduction,
+  reducePowerCost,
+} from "../../../operations/static-cost-reduction";
 import { getBattlefieldZoneId } from "../../../zones/zone-configs";
 
 /**
@@ -110,7 +118,19 @@ export interface ActiveReplacementEntry {
   replaces?: string;
   duration?: string;
   owner?: string;
+  sourceCardId?: string;
   target?: { type?: string; controller?: string };
+  /** rule-id: unl-052-219 — also [Buff] the entering unit. */
+  buff?: boolean;
+}
+
+/**
+ * The unit entering play, so riders on the matched replacement (e.g. `buff`)
+ * can be applied to it.
+ */
+export interface EnteringUnit {
+  readonly cardId: string;
+  readonly ctx: Pick<EffectContext, "zones" | "cards" | "counters">;
 }
 
 /**
@@ -119,10 +139,15 @@ export interface ActiveReplacementEntry {
  * Scans `draft.activeReplacements` for a matching entry, removes it when
  * `duration:"next"`, and reports whether one applied so the caller can skip
  * the rule-143.4 exhaust flag.
+ *
+ * rule-id: unl-052-219 — when the matched entry carries `buff: true` ("the
+ * next time you play a unit this turn, ready it and Buff it") and `entering`
+ * is supplied, the entering unit is also buffed.
  */
 export function consumeEntersReadyReplacement(
   draft: RiftboundGameState,
   playerId: string,
+  entering?: EnteringUnit,
 ): boolean {
   const active = draft.activeReplacements as ActiveReplacementEntry[] | undefined;
   if (!active || active.length === 0) {
@@ -149,6 +174,18 @@ export function consumeEntersReadyReplacement(
     }
     if (entry.duration === "next") {
       active.splice(i, 1);
+    }
+    if (entry.buff && entering) {
+      executeEffect(
+        { type: "buff" },
+        {
+          ...entering.ctx,
+          boundTargets: [entering.cardId],
+          draft,
+          playerId,
+          sourceCardId: entry.sourceCardId ?? entering.cardId,
+        },
+      );
     }
     return true;
   }
@@ -373,6 +410,27 @@ export interface CostExtras {
    * (rule 560) elected by the caster; stacks on top of the base cost.
    */
   additionalCost?: { energy?: number; power?: readonly string[] };
+  /**
+   * rule-id: ven-055-166 — board accessors so friendly permanents' static
+   * cost-reductions ("Your spells cost [1][rainbow] less, to a minimum of
+   * [1]") apply at pay time (rule 466). Omitted → no board statics apply.
+   */
+  board?: Pick<CostReductionContext, "zones" | "cards">;
+}
+
+const NO_BOARD_REDUCTION: StaticCostReduction = { minimum: 0, power: {}, reduction: 0 };
+
+/** rule-id: ven-055-166 — friendly permanents' static cost-reduction for this play. */
+function getBoardCostReduction(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+): StaticCostReduction {
+  if (!extras.board) {
+    return NO_BOARD_REDUCTION;
+  }
+  return computeStaticCostReduction({ draft: state, ...extras.board }, playerId, cardId);
 }
 
 /** Per-domain tally of an optional additional cost's power pips. */
@@ -491,8 +549,9 @@ export function canAffordCard(
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  const boardReduction = getBoardCostReduction(state, playerId, cardId, extras);
   const adjustedEnergy =
-    Math.max(0, baseCost.energy + modifier - interactive) +
+    applyStaticCostReduction(Math.max(0, baseCost.energy + modifier - interactive), boardReduction) +
     xAmount +
     repeatSurcharge +
     (extras.additionalCost?.energy ?? 0);
@@ -504,18 +563,20 @@ export function canAffordCard(
     return false;
   }
 
-  // Check power (domain requirements are not affected by cost modifiers).
+  // Check power (domain requirements are not affected by cost modifiers,
+  // only by board statics that waive power pips).
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
+  const basePower = reducePowerCost(baseCost.power, boardReduction.power, pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
   const extraPower = additionalCostPower(extras);
   const powerDomains = new Set([
-    ...Object.keys(baseCost.power),
+    ...Object.keys(basePower),
     ...Object.keys(repeatPower),
     ...Object.keys(extraPower),
   ]);
   for (const domain of powerDomains) {
     const need =
-      (baseCost.power[domain as keyof typeof baseCost.power] ?? 0) +
+      (basePower[domain] ?? 0) +
       (repeatPower[domain] ?? 0) +
       (extraPower[domain] ?? 0);
     const available = pool.power[domain as keyof typeof pool.power] ?? 0;
@@ -554,24 +615,26 @@ export function deductCost(
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
+  const boardReduction = getBoardCostReduction(draft, playerId, cardId, extras);
   const adjustedEnergy =
-    Math.max(0, cost.energy + modifier - interactive) +
+    applyStaticCostReduction(Math.max(0, cost.energy + modifier - interactive), boardReduction) +
     xAmount +
     repeatSurcharge +
     (extras.additionalCost?.energy ?? 0);
 
   pool.energy = Math.max(0, pool.energy - adjustedEnergy);
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
+  const basePower = reducePowerCost(cost.power, boardReduction.power, pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
   const extraPower = additionalCostPower(extras);
   const powerDomains = new Set([
-    ...Object.keys(cost.power),
+    ...Object.keys(basePower),
     ...Object.keys(repeatPower),
     ...Object.keys(extraPower),
   ]);
   for (const domain of powerDomains) {
     const amount =
-      (cost.power[domain as keyof typeof cost.power] ?? 0) +
+      (basePower[domain] ?? 0) +
       (repeatPower[domain] ?? 0) +
       (extraPower[domain] ?? 0);
     if (amount > 0) {

@@ -911,6 +911,28 @@ function parseStaticAbilityInner(
     }
   }
 
+  // rule-id: ven-055-166 — "Your spells cost COST less[, to a minimum of MIN]."
+  // Unconditional friendly-spell aura; an [Empowered]/[Level N] gate wrapper
+  // attaches its own condition.
+  const yourSpellsCostMatch = cleanText.match(
+    /^(?:Your|Friendly) spells cost\s+(.+?)\s+less(?:,?\s*to a minimum of\s+(.+?))?\.?$/i,
+  );
+  if (yourSpellsCostMatch) {
+    return {
+      ability: {
+        effect: {
+          by: yourSpellsCostMatch[1],
+          ...(yourSpellsCostMatch[2] ? { minimum: yourSpellsCostMatch[2] } : {}),
+          target: { controller: "friendly", type: "spell" } as Target,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // "While CONDITION, TARGET costs cost COST less." - conditional cost reduction for others
   const whileCostMatch = cleanText.match(
     /^(While .+?),\s*(.+?)\s+costs?\s+cost\s+(.+?)\s+less\.?$/i,

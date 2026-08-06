@@ -15,7 +15,9 @@ export const TRIGGER_PATTERNS: {
   on?: string;
   restrictions?: readonly { type: string; count?: number }[];
 }[] = [
-  { event: "play-self", pattern: /^When you play (?:me|this)(?:\s+to a battlefield)?,\s*/i },
+  // rule-id: ogn-067-298 — "to a battlefield" is captured (group 1) so the
+  // parser can gate the trigger on a while-at-battlefield condition.
+  { event: "play-self", pattern: /^When you play (?:me|this)(\s+to a battlefield)?,\s*/i },
   { event: "become-mighty", on: "self", pattern: /^When I become \[Mighty\],\s*/i },
   { event: "attack", on: "self", pattern: /^When I attack,\s*/i },
   { event: "defend", on: "self", pattern: /^When I defend,\s*/i },

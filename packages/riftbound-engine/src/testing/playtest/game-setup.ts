@@ -412,6 +412,12 @@ export function advanceTurn(
   if (actualNext !== next) {
     engine.getFlowManager()?.setCurrentPlayer(actualNext as PlayerId);
   }
+  // rule-id: 515.2.a-beginning-step-triggers — Beginning Phase holds while
+  // start-of-turn triggers are on the chain; the flow cascades to main once
+  // it resolves, so don't patch the phase over it.
+  if (after.turn.phase === "beginning") {
+    return { next: actualNext, success: true };
+  }
   if (after.turn.activePlayer !== actualNext || after.turn.phase !== "main") {
     engine.applyPatches([
       { op: "replace", path: ["turn", "activePlayer"], value: actualNext },

@@ -373,10 +373,15 @@ export const playUnit: Defs["playUnit"] = {
     // effect (enter-ready) says otherwise (e.g. Eager Drakehound sfd-006-221),
     // Accelerate was paid (rule 717), or a runtime `enters-ready` replacement
     // (rule 571 — Sun Disc ogn-021-298) applies.
+    // rule-id: unl-052-219 — the "next unit you play" replacement is consumed
+    // by this unit regardless of other enter-ready sources, so evaluate it
+    // first (it may also carry a Buff rider for the entering unit).
+    const replacedReady = consumeEntersReadyReplacement(draft, playerId, {
+      cardId,
+      ctx: { cards: context.cards, counters, zones },
+    });
     const entersReady =
-      hasStaticEffect(cardId, "enter-ready") ||
-      paidAccelerate ||
-      consumeEntersReadyReplacement(draft, playerId);
+      replacedReady || hasStaticEffect(cardId, "enter-ready") || paidAccelerate;
     if (!entersReady) {
       counters.setFlag(cardId as CoreCardId, "exhausted", true);
     }

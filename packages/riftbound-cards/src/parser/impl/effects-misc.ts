@@ -18,13 +18,16 @@ export function parsePlayEffect(text: string): Effect | undefined {
   // Used as the second step of a sequence that first banishes/chooses/reveals a
   // Card (e.g., "Banish a friendly unit, then play it, ignoring its cost").
   const pendingItMatch = text.match(
-    /^(?:(?:its owner|you)\s+)?play(?:s)? it(?:\s+to (?:their|your) base)?(?:,?\s*ignoring (?:its|the)\s+(?:cost|energy cost|power cost))?\.?$/i,
+    /^(?:(?:its owner|you)\s+)?play(?:s)? it(\s+to (?:their|your) base)?(?:,?\s*ignoring (?:its|the)\s+(?:cost|energy cost|power cost))?\.?$/i,
   );
   if (pendingItMatch) {
+    // rule-id: ogn-102-298 — "plays it to their base" pins the destination;
+    // without it the owner chooses a location (rule 355.2).
     return {
       ignoreCost: true,
       target: { type: "pending-value" } as AnyTarget,
       type: "play",
+      ...(pendingItMatch[1] ? { toLocation: "base" } : {}),
     } as Effect;
   }
 

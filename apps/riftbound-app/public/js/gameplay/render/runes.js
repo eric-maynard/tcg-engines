@@ -193,9 +193,13 @@ function showResourceDelta(type, amount, label) {
   const boardEl = bar.closest(".board") || bar.parentElement;
   const boardRect = boardEl.getBoundingClientRect();
 
-  el.style.left = (barRect.left - boardRect.left + barRect.width / 2) + "px";
-  el.style.top = (barRect.top - boardRect.top - 8) + "px";
-  el.style.transform = "translateX(-50%)";
+  // [rule:ui-resource-delta-anchor] .board sits inside the scaled #game-scale-wrapper,
+  // so client-rect deltas are post-transform px; convert back to logical px.
+  const scale = (boardEl.offsetWidth > 0 ? boardRect.width / boardEl.offsetWidth : 1) || 1;
+  el.style.left = ((barRect.left - boardRect.left + barRect.width / 2) / scale) + "px";
+  el.style.top = ((barRect.top - boardRect.top) / scale - 8) + "px";
+  // Horizontal centering (-50%) lives in the resource-delta-float keyframe so the
+  // animation's transform doesn't clobber it.
 
   boardEl.style.position = "relative";
   boardEl.appendChild(el);

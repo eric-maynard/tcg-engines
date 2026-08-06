@@ -224,6 +224,30 @@ export const revealHidden: Defs["revealHidden"] = {
     }
     return true;
   },
+  // rule-id: sfd-017-221 — Rule 723.1.c.3: surface hidden cards as playable
+  // moves so enumerateMoves({ validOnly: true }) (the UI move list) offers
+  // revealHidden. Each candidate is re-checked against `condition`.
+  enumerator: (state, context) => {
+    if (state.status !== "playing" || state.pendingChoice) {
+      return [];
+    }
+    const playerId = context.playerId as string;
+    const results: { playerId: string; cardId: string }[] = [];
+    for (const bfId of Object.keys(state.battlefields)) {
+      const facedown = context.zones.getCardsInZone(getFacedownZoneId(bfId) as CoreZoneId);
+      for (const hid of facedown) {
+        if (context.cards.getCardOwner(hid) !== playerId) {
+          continue;
+        }
+        const meta = context.cards.getCardMeta(hid) as Partial<RiftboundCardMeta> | undefined;
+        if (!meta?.hidden) {
+          continue;
+        }
+        results.push({ cardId: hid as string, playerId });
+      }
+    }
+    return results;
+  },
   reducer: (draft, context) => {
     const { cardId, playerId } = context.params;
     const { zones, counters, cards } = context;
@@ -300,9 +324,13 @@ export const revealHidden: Defs["revealHidden"] = {
       // rule-id: ogn-121-298 — Rule 143.4: units enter exhausted unless a
       // static enter-ready effect or an enters-ready replacement applies
       // (mirrors the normal playCard path).
-      const entersReady =
-        hasStaticEffect(cardId, "enter-ready") ||
-        consumeEntersReadyReplacement(draft, playerId);
+      // rule-id: unl-052-219 — consume the "next unit you play" replacement
+      // first so its Buff rider (if any) lands on the entering unit.
+      const replacedReady = consumeEntersReadyReplacement(draft, playerId, {
+        cardId,
+        ctx: { cards, counters, zones },
+      });
+      const entersReady = replacedReady || hasStaticEffect(cardId, "enter-ready");
       if (!entersReady) {
         counters.setFlag(cardId as CoreCardId, "exhausted", true);
       }

@@ -14,7 +14,7 @@ import { executeEffect } from "../../../abilities/effect-executor";
 import type { TargetDescriptor } from "../../../abilities/target-resolver";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { performCleanup } from "../../../cleanup";
+import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { buildEffectContext } from "./effect-context";
@@ -246,13 +246,10 @@ export const passChainPriority: Defs["passChainPriority"] = {
         executeResolvedItem(resolved, draft, context);
         settleResolvedSpellCard(resolved, context);
 
-        // Run state-based checks after resolution (rule 543.3/518)
-        performCleanup({
-          cards: context.cards,
-          counters: context.counters,
-          draft,
-          zones: context.zones,
-        });
+        // Run state-based checks after resolution (rule 543.3/518).
+        // rule-id: ogn-246-298 — units reaped here must emit `die` so
+        // "when a friendly unit dies" / Deathknell triggers fire.
+        cleanupAndFireDeaths(draft, context);
       }
     }
   },
@@ -297,12 +294,8 @@ export const resolveChain: Defs["resolveChain"] = {
       executeResolvedItem(resolved, draft, context);
       settleResolvedSpellCard(resolved, context);
 
-      performCleanup({
-        cards: context.cards,
-        counters: context.counters,
-        draft,
-        zones: context.zones,
-      });
+      // rule-id: ogn-246-298 — SBA deaths after resolution emit `die`.
+      cleanupAndFireDeaths(draft, context);
     }
   },
 };

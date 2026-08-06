@@ -516,8 +516,17 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
         if (!effect) {
           continue;
         }
-        const effectType = effect.type as string | undefined;
-        if (!effectType || !allowedEffects.has(effectType)) {
+        // rule-id: ven-070-166 — a static "+N Might and [Keyword]" parses as a
+        // `sequence`; unwrap so each sub-effect lands in its proper pass.
+        const candidateEffects =
+          effect.type === "sequence" && Array.isArray(effect.effects)
+            ? (effect.effects as Record<string, unknown>[])
+            : [effect];
+        const passEffects = candidateEffects.filter((e) => {
+          const t = e?.type as string | undefined;
+          return !!t && allowedEffects.has(t);
+        });
+        if (passEffects.length === 0) {
           continue;
         }
 
@@ -533,7 +542,9 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
         const { affects } = ability as unknown as { affects?: string };
         const targetIds = resolveStaticTargets(affects, card, boardCards);
 
-        applyStaticEffect(effect, targetIds, ctx, card);
+        for (const passEffect of passEffects) {
+          applyStaticEffect(passEffect, targetIds, ctx, card);
+        }
         anyApplied = true;
       }
     }

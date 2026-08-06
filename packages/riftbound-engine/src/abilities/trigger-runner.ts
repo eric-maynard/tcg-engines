@@ -49,6 +49,7 @@ export interface TriggerRunnerContext {
   readonly cards: {
     getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
     getCardOwner: (cardId: CoreCardId) => string | undefined;
+    getCardController?: (cardId: CoreCardId) => string | undefined;
     updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
   };
   /**
@@ -135,6 +136,24 @@ export function evaluateTriggerCondition(
       return false;
     }
     return ctx.cards.getCardMeta(sourceCardId as CoreCardId)?.empowered === true;
+  }
+  if (c.type === "while-at-battlefield") {
+    // rule-id: ogn-067-298 (Blitzcrank, Impassive) — "When you play me to a
+    // battlefield" must not fire when the unit is played to base.
+    if (!ctx || !sourceCardId) {
+      return true;
+    }
+    const zone = ctx.zones.getCardZone?.(sourceCardId as CoreCardId);
+    if (zone !== undefined) {
+      return zone.startsWith("battlefield-");
+    }
+    for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+      const ids = ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
+      if (ids.some((id) => (id as string) === sourceCardId)) {
+        return true;
+      }
+    }
+    return false;
   }
   if (c.type === "control" && ctx) {
     // rule-id: ven-058-166 (Patched Porobot) / rule 383.2.a.1 — an "if you
@@ -248,6 +267,11 @@ function evaluateControlCondition(
  */
 export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
   const boardCards: CardWithAbilities[] = [];
+  // rule-id: sfd-109-221 (Akshan / Dazzling Aurora) — "your" on a permanent's
+  // trigger refers to its current CONTROLLER, not its owner, so a
+  // control-changed permanent triggers for whoever controls it now.
+  const controllerOf = (cardId: CoreCardId, fallback: string): string =>
+    ctx.cards.getCardController?.(cardId) ?? ctx.cards.getCardOwner(cardId) ?? fallback;
 
   // Get cards from all players' bases and legend zones
   for (const playerId of Object.keys(ctx.draft.players)) {
@@ -256,7 +280,7 @@ export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
       boardCards.push({
         abilities: toTriggerableAbilities(cardId as string),
         id: cardId as string,
-        owner: playerId,
+        owner: controllerOf(cardId, playerId),
         zone: "base",
       });
     }
@@ -280,7 +304,7 @@ export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
     const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
     const bfCards = ctx.zones.getCardsInZone(bfZoneId);
     for (const cardId of bfCards) {
-      const owner = ctx.cards.getCardOwner(cardId) ?? "";
+      const owner = controllerOf(cardId, "");
       boardCards.push({
         abilities: toTriggerableAbilities(cardId as string),
         id: cardId as string,

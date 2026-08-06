@@ -118,9 +118,14 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
           targetZoneId: location as CoreZoneId,
         });
 
+        // rule-id: unl-052-219 — consume the "next unit you play" replacement
+        // first so its Buff rider (if any) lands on the entering champion.
+        const replacedReady = consumeEntersReadyReplacement(draft, playerId, {
+          cardId: championId as string,
+          ctx: { cards: context.cards, counters, zones },
+        });
         const entersReady =
-          hasStaticEffect(championId as string, "enter-ready") ||
-          consumeEntersReadyReplacement(draft, playerId);
+          replacedReady || hasStaticEffect(championId as string, "enter-ready");
         if (!entersReady) {
           counters.setFlag(championId, "exhausted", true);
         }

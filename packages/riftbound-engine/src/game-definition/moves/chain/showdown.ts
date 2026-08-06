@@ -16,6 +16,7 @@ import {
   passFocus as passFocusState,
   startShowdown as startShowdownState,
 } from "../../../chain";
+import { fireTriggers } from "../../../abilities/trigger-runner";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { hasPlayerWon } from "../../win-conditions/victory";
 
@@ -71,6 +72,7 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
 
     // If showdown ended (all passed), clean up.
     if (isShowdownEnded(draft.interaction)) {
+      let conquerEvent: { type: "conquer"; playerId: string; battlefieldId: string } | undefined;
       const bf = before?.battlefieldId ? draft.battlefields[before.battlefieldId] : undefined;
       if (bf) {
         if (before?.isCombatShowdown) {
@@ -102,6 +104,14 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
               bf.controller = solo;
               if (!draft.conqueredThisTurn[solo]) draft.conqueredThisTurn[solo] = [];
               draft.conqueredThisTurn[solo].push(before!.battlefieldId);
+              // Rule 348.2.a.1: this is a Conquer — emit the "conquer" event
+              // (as conquerBattlefield / resolveFullCombat do) so [Hunt] and
+              // "When you conquer" triggers fire.
+              conquerEvent = {
+                battlefieldId: before!.battlefieldId,
+                playerId: solo,
+                type: "conquer",
+              };
               const scored = draft.scoredThisTurn[solo] ?? [];
               if (!scored.includes(before!.battlefieldId)) {
                 const p = draft.players[solo];
@@ -123,6 +133,14 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
         }
       }
       draft.interaction = endShowdownState(draft.interaction);
+      if (conquerEvent) {
+        fireTriggers(conquerEvent, {
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          zones: context.zones,
+        });
+      }
     }
   },
 };

@@ -6,6 +6,29 @@ import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight } from "./_helpers";
 
+/**
+ * rule-id: unl-144-219 — Rule 450 / 190.3.a: a unit arriving (by any means,
+ * including an ability's move effect) at a battlefield its controller does
+ * not control applies Contested. Cleanup (323.13) then stages the showdown /
+ * combat via the `startShowdown` move once the chain closes.
+ */
+export function markContestedOnArrival(
+  draft: RiftboundGameState,
+  targetZoneId: string,
+  playerId: string,
+): void {
+  if (!targetZoneId.startsWith("battlefield-")) {
+    return;
+  }
+  const bf = draft.battlefields[targetZoneId.slice("battlefield-".length)];
+  if (!bf || bf.controller === playerId || bf.contested) {
+    return;
+  }
+  bf.contested = true;
+  bf.contestedBy = playerId;
+  bf.showdownComplete = false;
+}
+
 export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // rule-id: unl-107-219 (Stare Down) — Rule 355.8 / 355.2: "Choose a
   // friendly unit and a battlefield. Move all enemy units at that
@@ -87,7 +110,11 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
 
   const targets = getTargetIds(effect, ctx);
   const moveTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
-  const rawDest = (effect as unknown as { to?: string | { battlefield?: string } }).to;
+  const rawDest = (
+    effect as unknown as {
+      to?: string | { battlefield?: string; requireSourceMightExceedsEnemyTotal?: boolean };
+    }
+  ).to;
 
   // rule-id: ven-034-166 — BattlefieldLocation destination ({ battlefield:
   // "controlled" | "enemy" | "open" | "contested" | "any" }): the controller
@@ -95,9 +122,42 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // Zero matches fizzles the move; a single match moves directly.
   if (rawDest && typeof rawDest === "object" && typeof rawDest.battlefield === "string") {
     const which = rawDest.battlefield;
+    // rule-id: unl-144-219 (Maduli the Gatekeeper) — "Move me to an occupied
+    // enemy battlefield if my Might is greater than the total Might of enemy
+    // units there": destination must hold >=1 enemy unit and the mover's
+    // Might must strictly exceed their summed Might.
+    const mightGate = rawDest.requireSourceMightExceedsEnemyTotal === true;
+    const enemyUnits = mightGate
+      ? resolveTarget(
+          { controller: "enemy", quantity: "all", type: "unit" } as TargetDescriptor,
+          {
+            cards: ctx.cards,
+            draft: ctx.draft,
+            playerId: ctx.playerId,
+            sourceCardId: ctx.sourceCardId,
+            sourceZone: ctx.sourceZone,
+            zones: ctx.zones,
+          },
+        )
+      : [];
     for (const cardId of moveTargets) {
       const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
+      const moverMight = mightGate ? getEffectiveMight(cardId, ctx) : 0;
       const options = Object.entries(ctx.draft.battlefields)
+        .filter(([bfId]) => {
+          if (!mightGate) {
+            return true;
+          }
+          const zone = `battlefield-${bfId}`;
+          const there = enemyUnits.filter(
+            (id) => ctx.zones.getCardZone(id as CoreCardId) === zone,
+          );
+          if (there.length === 0) {
+            return false;
+          }
+          const total = there.reduce((sum, id) => sum + getEffectiveMight(id, ctx), 0);
+          return moverMight > total;
+        })
         .filter(([, bf]) => {
           switch (which) {
             case "controlled":
@@ -122,6 +182,9 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
           cardId: cardId as CoreCardId,
           targetZoneId: options[0] as CoreZoneId,
         });
+        // rule-id: unl-144-219 — Rule 450: arriving at a non-controlled
+        // battlefield applies Contested so combat is staged.
+        markContestedOnArrival(ctx.draft, options[0] as string, ctx.playerId);
         continue;
       }
       ctx.draft.pendingChoice = {

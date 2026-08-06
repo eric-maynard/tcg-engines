@@ -27,7 +27,8 @@ function formatMoveDescription(moveId, params) {
   const bf = (v) => typeof v === "string" ? getBattlefieldName(v) : String(v ?? "");
   switch (moveId) {
     case "playUnit": return `${r(params.cardId)} to ${params.location ?? "base"}`;
-    case "playSpell": return `${r(params.cardId)}${params.targets?.length ? " → " + r(params.targets) : ""}`;
+    // [rule:sfd-122-221 Repeat] repeatCount / paidAdditionalCost variants must be distinguishable.
+    case "playSpell": return `${r(params.cardId)}${params.repeatCount ? ` (Repeat ×${params.repeatCount})` : ""}${params.paidAdditionalCost ? " (+ additional cost)" : ""}${params.targets?.length ? " → " + r(params.targets) : ""}`;
     case "playGear": return `${r(params.cardId)}${params.chosenTargetId ? " → " + r(params.chosenTargetId) : ""}`;
     case "exhaustRune": return `${r(params.runeId)}`;
     case "recycleRune": return `${r(params.runeId)}${params.domain ? " for " + params.domain : ""}`;
@@ -196,7 +197,10 @@ function renderActions() {
   const pending = gameState?.pendingChoice;
   if (pending) {
     const mine = (pending.prompter ?? pending.playerId) === viewingPlayer;
-    const verb = pending.onPicked === "discard" ? "Discard a card"
+    // Rule ogn-067-298: opt-in ("you may …") triggers get a Yes/No prompt.
+    const verb = pending.type === "opt-in"
+      ? `Decide: use ${findCard(pending.sourceCardId)?.name ?? "optional"} ability`
+      : pending.onPicked === "discard" ? "Discard a card"
       : pending.onPicked === "banish" ? "Banish a card"
       : pending.onPicked === "recycle" ? "Recycle a card"
       : pending.onPicked === "play" ? "Choose a card to play"
@@ -224,7 +228,13 @@ function renderActions() {
       for (const m of picks) {
         const cid = m.params?.pickedCardId ?? m.params?.pickedZoneId ?? m.params?.pickedName;
         const card = typeof cid === "string" ? findCard(cid) : null;
-        const label = card?.name ?? String(cid);
+        const accept = m.params?.accept;
+        const zid = m.params?.pickedZoneId;
+        const label = typeof accept === "boolean" ? (accept ? "Yes" : "No")  // Rule ogn-067-298
+          // Rule unl-144-219: humanize destination zone ids like the choice modal does.
+          : (!m.params?.pickedCardId && zid != null)
+          ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, "")))
+          : (card?.name ?? String(cid));
         html += `<button class="action-btn highlighted"
           onclick='executeMove("resolvePendingChoice", ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
           ${esc(label)}

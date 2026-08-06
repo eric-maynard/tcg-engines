@@ -53,6 +53,7 @@ function buildFlowTriggerContext(context: {
   cards: {
     getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta>;
     getCardOwner?: (cardId: CoreCardId) => string | undefined;
+    getCardController?: (cardId: CoreCardId) => string | undefined;
     updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
   };
 }): TriggerRunnerContext {
@@ -62,6 +63,7 @@ function buildFlowTriggerContext(context: {
       getCardMeta: context.cards.getCardMeta as TriggerRunnerContext["cards"]["getCardMeta"],
       getCardOwner: (context.cards.getCardOwner ??
         (() => undefined)) as TriggerRunnerContext["cards"]["getCardOwner"],
+      getCardController: context.cards.getCardController,
       updateCardMeta: context.cards
         .updateCardMeta as TriggerRunnerContext["cards"]["updateCardMeta"],
     },
@@ -207,7 +209,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               // Covers base, battlefields, and runePool in one pass.
               const playerId = context.getCurrentPlayer();
               const triggerCtx = buildFlowTriggerContext(context);
-              type Flagged = { __flags?: Record<string, boolean>; exhausted?: boolean };
+              const awakenRegistry = getGlobalCardRegistry();
+              type Flagged = {
+                __flags?: Record<string, boolean>;
+                exhausted?: boolean;
+                grantedKeywords?: { keyword: string }[];
+              };
               const exhausted = context.cards.queryCards((_id, meta) => {
                 const m = meta as Flagged;
                 return m.__flags?.exhausted === true || m.exhausted === true;
@@ -217,6 +224,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   continue;
                 }
                 const meta = context.cards.getCardMeta(cardId) as Flagged;
+                // rule-id: unl-144-219 — "I can't be readied." blocks the Awaken ready.
+                if (awakenRegistry.cantReady(cardId as string, meta?.grantedKeywords)) {
+                  continue;
+                }
                 context.cards.updateCardMeta(cardId, {
                   __flags: { ...(meta.__flags ?? {}), exhausted: false },
                   exhausted: false,
@@ -240,7 +251,13 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
            * Auto-advances to channel phase.
            */
           beginning: {
-            endIf: () => true,
+            // rule-id: 515.2.a-beginning-step-triggers (Loose Cannon): start-of-turn
+            // triggers go on the chain in onBegin; hold the Beginning Phase until
+            // that chain (and any choice it opens) resolves so Channel/Draw don't
+            // run with the trigger still pending.
+            endIf: (context) =>
+              !(context.state as RiftboundGameState).interaction?.chain?.active &&
+              !(context.state as RiftboundGameState).pendingChoice,
             next: "channel",
             onBegin: (context) => {
               context.state.turn = {

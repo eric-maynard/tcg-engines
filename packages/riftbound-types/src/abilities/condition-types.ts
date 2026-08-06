@@ -261,6 +261,14 @@ export interface TargetControllerCondition {
   readonly controller: "friendly" | "enemy";
 }
 
+/**
+ * If the effect's chosen (bound) target is currently attacking.
+ */
+// rule-id: sfd-017-221
+export interface TargetAttackingCondition {
+  readonly type: "target-attacking";
+}
+
 // ============================================================================
 // Location Conditions
 // ============================================================================
@@ -421,6 +429,7 @@ export type Condition =
   | ControlCondition
   | OpponentControlsCondition
   | TargetControllerCondition
+  | TargetAttackingCondition
 
   // Location conditions
   | AtLocationCondition

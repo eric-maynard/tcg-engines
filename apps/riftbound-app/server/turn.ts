@@ -58,7 +58,10 @@ export function finalizeEndTurn(session: GameSession, nextPlayer: string): void 
   }
   // Rule 734: turn.onEnd may have redirected to an additional-turn owner.
   const actualNext = stateAfter.turn.activePlayer || nextPlayer;
-  if (stateAfter.turn.phase !== "main") {
+  // rule-id: 515.2.a-beginning-step-triggers — the Beginning Phase holds
+  // while start-of-turn triggers sit on the chain; the flow cascades to main
+  // once the chain resolves, so don't patch the phase over it.
+  if (stateAfter.turn.phase !== "main" && stateAfter.turn.phase !== "beginning") {
     console.warn(
       `Flow state mismatch after endTurn: expected phase=main, ` +
       `got activePlayer=${stateAfter.turn.activePlayer} phase=${stateAfter.turn.phase}. ` +

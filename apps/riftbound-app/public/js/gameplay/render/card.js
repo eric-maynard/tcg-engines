@@ -189,12 +189,14 @@ function renderCardElement(card, isFacedown = false, zone = "") {
       onclick="event.stopPropagation(); toggleHideHandCard('${esc(card.id)}');">Hide</button>`;
   }
 
-  // rule-827 (ven-021-166): effective Might = base + mightModifier + staticMightBonus.
+  // rule-827 (ven-021-166): effective Might = base + mightModifier + staticMightBonus + buff.
   // Render a badge only when the effective value differs from the printed base so
   // Empower / modify-might effects are visible on the board card.
+  // rule-buff-might (unl-162-219): Buff is a separate +1 term (engine: `meta.buffed ? 1 : 0`),
+  // not folded into mightModifier, so it must be added here to show on the board.
   const baseMight = card.might;
   const effMight = baseMight != null
-    ? Math.max(0, baseMight + (card.meta?.mightModifier ?? 0) + (card.meta?.staticMightBonus ?? 0))
+    ? Math.max(0, baseMight + (card.meta?.mightModifier ?? 0) + (card.meta?.staticMightBonus ?? 0) + (card.meta?.buffed ? 1 : 0))
     : null;
   const mightBadge = (effMight != null && effMight !== baseMight)
     ? `<div class="card-might" title="Effective Might">${effMight}</div>`

@@ -13,6 +13,7 @@
 import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { ExecutableEffect } from "../../abilities/effect-executor";
+import { markContestedOnArrival } from "../../abilities/effects/move";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { addToChain, createInteractionState } from "../../chain";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
@@ -393,6 +394,9 @@ export const pendingChoiceMoves: Partial<
           cardId: choice.cardId as CoreCardId,
           targetZoneId: targetZoneId as CoreZoneId,
         });
+        // rule-id: unl-144-219 — Rule 450: arriving at a non-controlled
+        // battlefield applies Contested so combat is staged.
+        markContestedOnArrival(draft, targetZoneId, choice.playerId);
         draft.pendingChoice = undefined;
         return;
       }

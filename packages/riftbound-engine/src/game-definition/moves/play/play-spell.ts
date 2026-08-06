@@ -24,6 +24,7 @@ import {
 import type { SpellEffectTargetShape } from "./targeting";
 import {
   findAmountReferenceTarget,
+  findSequenceLeadTarget,
   findSplitDamageEffect,
   enumerateSubsetsUpTo,
   spellEffectHasLegalTargets,
@@ -95,6 +96,8 @@ export const playSpell: Defs["playSpell"] = {
         context.params.cardId,
         {
           additionalCost: spellAdditionalCost,
+          // rule-id: ven-055-166 — friendly "your spells cost less" statics.
+          board: { cards: context.cards, zones: context.zones },
           repeatCount: reqRepeatCount,
           targets: context.params.targets,
           viaFlow,
@@ -170,7 +173,11 @@ export const playSpell: Defs["playSpell"] = {
       context.counters,
       context.playerId as string,
     );
-    const affordPool = { energy: pool.energy + potential, power: pool.power };
+    // rule-id: ven-055-166 — friendly "your spells cost less" statics must be
+    // visible to the enumerator, so gate on canAffordCard with board access
+    // rather than the printed-cost-only registry.canAfford.
+    const board = { cards: context.cards, zones: context.zones };
+    const metaForAfford = createMetaAccessor(context.cards);
 
     const handCards = context.zones.getCardsInZone(
       "hand" as CoreZoneId,
@@ -191,7 +198,16 @@ export const playSpell: Defs["playSpell"] = {
       if (!def || def.cardType !== "spell") {
         continue;
       }
-      if (!registry.canAfford(cardId as string, affordPool)) {
+      if (
+        !canAffordCard(
+          state,
+          context.playerId as string,
+          cardId as string,
+          { board },
+          metaForAfford,
+          potential,
+        )
+      ) {
         continue;
       }
 
@@ -231,7 +247,9 @@ export const playSpell: Defs["playSpell"] = {
       // Rule 355.14.a: an amount:{might:<selector>} reference is also a
       // caster-chosen play-time target (unl-192-219).
       const refTgt = findAmountReferenceTarget(spellEffect);
-      const tgt = spellEffect?.target ?? refTgt;
+      // rule-id: sfd-017-221 (rule 355.8) — a `sequence` spell's caster-chosen
+      // target lives on its lead sub-effect; lift it so the caster picks.
+      const tgt = spellEffect?.target ?? refTgt ?? findSequenceLeadTarget(spellEffect);
       const isCardTarget =
         tgt !== undefined &&
         typeof tgt !== "string" &&
@@ -365,7 +383,7 @@ export const playSpell: Defs["playSpell"] = {
               state,
               context.playerId as string,
               cardId as string,
-              { additionalCost: extra, targets: base.targets },
+              { additionalCost: extra, board, targets: base.targets },
               metaForPay,
               potential,
             )
@@ -394,7 +412,7 @@ export const playSpell: Defs["playSpell"] = {
                 state,
                 context.playerId as string,
                 cardId as string,
-                { repeatCount: n, targets: base.targets },
+                { board, repeatCount: n, targets: base.targets },
                 meta,
                 potential,
               )
@@ -423,7 +441,7 @@ export const playSpell: Defs["playSpell"] = {
         continue;
       }
       if (
-        !canAffordCard(state, context.playerId as string, cardId as string, { viaFlow: true }, meta, potential)
+        !canAffordCard(state, context.playerId as string, cardId as string, { board, viaFlow: true }, meta, potential)
       ) {
         continue;
       }
@@ -457,7 +475,8 @@ export const playSpell: Defs["playSpell"] = {
       if (!spellEffectHasLegalTargets(spellEffect, resolverCtx)) {
         continue;
       }
-      const tgt = spellEffect?.target;
+      // rule-id: sfd-017-221 (rule 355.8) — lift a sequence's lead target.
+      const tgt = spellEffect?.target ?? findSequenceLeadTarget(spellEffect);
       const isCardTarget =
         tgt !== undefined &&
         typeof tgt !== "string" &&
@@ -518,6 +537,8 @@ export const playSpell: Defs["playSpell"] = {
       cardId,
       {
         additionalCost: spellAdditionalCost,
+        // rule-id: ven-055-166 — friendly "your spells cost less" statics.
+        board: { cards: context.cards, zones: context.zones },
         repeatCount: repeatN,
         targets,
         viaFlow: viaFlow === true,

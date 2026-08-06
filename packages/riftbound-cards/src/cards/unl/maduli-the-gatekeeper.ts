@@ -20,9 +20,11 @@ const abilities: Ability[] = [
   },
   {
     cost: { power: ["chaos"] },
+    // rule-id: unl-144-219 — destination gated on "occupied" + my Might >
+    // total enemy Might there.
     effect: {
       target: "self",
-      to: { battlefield: "enemy" },
+      to: { battlefield: "enemy", requireSourceMightExceedsEnemyTotal: true },
       type: "move",
     },
     type: "activated",

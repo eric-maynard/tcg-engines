@@ -133,6 +133,35 @@ export class CardDefinitionRegistry {
   }
 
   /**
+   * rule-id: unl-144-219 — "I can't be readied." True when the card carries
+   * the CantReady keyword: printed, granted (via `grantedKeywords` meta), or
+   * self-granted by an unconditional static (so it holds even before the
+   * static-ability recalc has stamped the meta).
+   */
+  cantReady(cardId: string, grantedKeywords?: readonly { keyword: string }[]): boolean {
+    if (this.hasKeyword(cardId, "CantReady")) {
+      return true;
+    }
+    if ((grantedKeywords ?? []).some((gk) => gk.keyword === "CantReady")) {
+      return true;
+    }
+    return (this.getAbilities(cardId) ?? []).some((a) => {
+      const ab = a as {
+        type?: string;
+        condition?: unknown;
+        effect?: { type?: string; keyword?: string; target?: unknown };
+      };
+      return (
+        ab.type === "static" &&
+        ab.condition === undefined &&
+        ab.effect?.type === "grant-keyword" &&
+        ab.effect.keyword === "CantReady" &&
+        (ab.effect.target === undefined || ab.effect.target === "self")
+      );
+    });
+  }
+
+  /**
    * Get a card's energy cost.
    */
   getEnergyCost(cardId: string): number {

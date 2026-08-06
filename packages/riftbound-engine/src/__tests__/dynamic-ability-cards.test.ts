@@ -834,3 +834,62 @@ describe("Malzahar, Fanatic (ogn-113-298): sacrifice cost", () => {
     expect(harness.cardStore.get("malzahar-1")!.meta.exhausted).toBe(true);
   });
 });
+
+// ============================================================================
+// Sudden Storm (sfd-017-221): "deal 4 instead" replaces, never stacks
+// ============================================================================
+
+// rule-id: sfd-017-221
+describe("Sudden Storm (sfd-017-221): target-attacking conditional damage", () => {
+  let registry: CardDefinitionRegistry;
+
+  beforeEach(() => {
+    registry = new CardDefinitionRegistry();
+    setGlobalCardRegistry(registry);
+  });
+
+  afterEach(() => {
+    clearGlobalCardRegistry();
+  });
+
+  const stormEffect = {
+    condition: { type: "target-attacking" },
+    else: { amount: 2, target: { location: "battlefield", type: "unit" }, type: "damage" },
+    target: { location: "battlefield", type: "unit" },
+    then: { amount: 4, target: { location: "battlefield", type: "unit" }, type: "damage" },
+    type: "conditional",
+  } as unknown as ExecutableEffect;
+
+  function run(combatRole: "attacker" | null): number {
+    registry.register("storm-1", { cardType: "spell", id: "storm-1", name: "Sudden Storm" });
+    registry.register("victim-1", { cardType: "unit", id: "victim-1", might: 5, name: "Victim" });
+    const state = createMockState();
+    const harness = createHarness({
+      "victim-1": {
+        meta: { buffed: false, combatRole, damage: 0, exhausted: false, hidden: false, stunned: false },
+        owner: "p2",
+        zone: "battlefield-bf-1",
+      },
+    });
+    const effectCtx: EffectContext = {
+      boundTargets: ["victim-1"],
+      cards: harness.cards as unknown as EffectContext["cards"],
+      counters: harness.counters,
+      draft: state,
+      playerId: "p1",
+      sourceCardId: "storm-1",
+      sourceZone: "trash",
+      zones: harness.zones as unknown as EffectContext["zones"],
+    } as EffectContext;
+    executeEffect(stormEffect, effectCtx);
+    return harness.cardStore.get("victim-1")!.meta.damage ?? 0;
+  }
+
+  test("non-attacking target takes exactly 2", () => {
+    expect(run(null)).toBe(2);
+  });
+
+  test("attacking target takes exactly 4", () => {
+    expect(run("attacker")).toBe(4);
+  });
+});

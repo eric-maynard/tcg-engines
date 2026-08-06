@@ -283,6 +283,12 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
     const tags = (def as { tags?: string[] } | undefined)?.tags;
     return tags?.includes(filter.tag) ?? false;
   }
+  // rule-id: ven-115-166 — "non-Dragon unit" excludes cards carrying the tag
+  if ("excludeTag" in filter && typeof filter.excludeTag === "string") {
+    const tags = (def as { tags?: string[] } | undefined)?.tags;
+    const ex = filter.excludeTag.toLowerCase();
+    return !(tags ?? []).some((t) => t.toLowerCase() === ex);
+  }
   if ("name" in filter && typeof filter.name === "string") {
     return def?.name === filter.name;
   }

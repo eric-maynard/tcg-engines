@@ -53,6 +53,37 @@ export function findAmountReferenceTarget(
 }
 
 /**
+ * rule-id: sfd-017-221 / ogn-213-298 (rule 355.8) — a `sequence` spell ("Kill a
+ * unit at a battlefield. Its controller draws 2.") carries its caster-chosen
+ * target on a sub-effect, not on the sequence itself. Surface that lead
+ * descriptor so play-time enumeration offers one Play per legal candidate.
+ * The sequence handler threads the bound choice to every step, so only lift
+ * when every other targeted step is an anaphoric restatement of the lead
+ * ("it": same keys, no conflicting values) or a `pending-value` back-reference.
+ */
+export function findSequenceLeadTarget(
+  effect: SpellEffectTargetShape | undefined,
+): SpellEffectTargetDescriptor | undefined {
+  if (effect?.type !== "sequence" || !Array.isArray(effect.effects)) return undefined;
+  let lead: Exclude<SpellEffectTargetDescriptor, string> | undefined;
+  for (const sub of effect.effects) {
+    const t = sub?.target;
+    if (t === undefined) continue;
+    if (typeof t === "string") return undefined;
+    if (t.type === "pending-value") continue;
+    if (!lead) {
+      lead = t;
+      continue;
+    }
+    const leadRec = lead as Record<string, unknown>;
+    for (const [k, v] of Object.entries(t as Record<string, unknown>)) {
+      if (JSON.stringify(leadRec[k]) !== JSON.stringify(v)) return undefined;
+    }
+  }
+  return lead;
+}
+
+/**
  * Rule 355.14.b/c / 355.15 (unl-192-219 Alpha Strike): a `damage` effect with
  * `split: true` names caster-chosen split targets that are locked at
  * finalization alongside the might-reference target. Surface the split

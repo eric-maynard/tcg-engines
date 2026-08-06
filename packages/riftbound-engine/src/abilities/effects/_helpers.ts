@@ -240,8 +240,21 @@ export function evaluateEffectCondition(
       if (target && (target as { type?: string }).type === "rune") {
         n = ctx.zones.getCardsInZone("runePool" as CoreZoneId, ctx.playerId as CorePlayerId)
           .length;
+      } else if (target && (target as { location?: string }).location === "hand") {
+        // rule-id: ogn-251-298 (Loose Cannon) / rule 383.2.a.1 — hand is not a
+        // board zone, so resolveTarget can't count it; count the zone directly.
+        const controller = (target as { controller?: string }).controller;
+        const pids =
+          controller === "enemy"
+            ? Object.keys(ctx.draft.players).filter((p) => p !== ctx.playerId)
+            : [ctx.playerId];
+        n = pids.reduce(
+          (sum, pid) =>
+            sum + ctx.zones.getCardsInZone("hand" as CoreZoneId, pid as CorePlayerId).length,
+          0,
+        );
       } else {
-        n = resolveTarget(target, {
+        n = resolveTarget({ quantity: "all", ...target } as TargetDescriptor, {
           cards: ctx.cards,
           draft: ctx.draft,
           playerId: ctx.playerId,
@@ -261,6 +274,16 @@ export function evaluateEffectCondition(
       if (!bound) return false;
       const owner = ctx.cards.getCardOwner(bound as CoreCardId) ?? "";
       return want === "friendly" ? owner === ctx.playerId : owner !== ctx.playerId;
+    }
+    case "target-attacking": {
+      // rule-id: sfd-017-221 — "If it's attacking" inspects the chosen
+      // (bound) target's combat role, not the source card.
+      const bound = ctx.boundTargets?.[0];
+      if (!bound) return false;
+      const meta = ctx.cards.getCardMeta?.(bound as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      return meta?.combatRole === "attacker";
     }
     case "paid-additional-cost": {
       // rule-id: ven-083-166 / rule 560 — playSpell records whether the

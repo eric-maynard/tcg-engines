@@ -1,4 +1,5 @@
 import type { Ability } from "@tcg/riftbound-types";
+import type { Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
@@ -9,11 +10,23 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * - When played, if paid, stun an enemy unit.
  * - When I hold, the next unit you play this turn enters ready with a buff.
  *
- * Modeled as two triggered abilities: the stun on play (gated on paid
- * additional cost) and a hold-trigger that installs a one-shot replacement
- * to ready+buff the next played friendly unit (approximation).
+ * Modeled as a static `additional-cost-option` ability (so the engine's
+ * getOptionalPlayCost offers the [calm] payment at play time) plus two
+ * triggered abilities: the stun on play (gated on paid additional cost) and
+ * a hold-trigger that installs a one-shot `enters-ready` replacement (with a
+ * Buff rider) applied to the next friendly unit played this turn.
  */
 const abilities: Ability[] = [
+  {
+    // Rule 560 — optional "you may pay [calm]" additional cost; without this
+    // the paid-additional-cost condition below can never be satisfied.
+    effect: {
+      additionalCost: { power: ["calm"] },
+      optional: true,
+      type: "additional-cost-option",
+    } as unknown as Effect,
+    type: "static",
+  },
   {
     condition: { type: "paid-additional-cost" },
     effect: {
@@ -24,19 +37,18 @@ const abilities: Ability[] = [
     type: "triggered",
   },
   {
+    // rule-id: unl-052-219 — "the next time you play a unit this turn, ready
+    // it and Buff it": install a single-fire `enters-ready` replacement with a
+    // Buff rider (consumed by consumeEntersReadyReplacement on the next
+    // friendly unit played — the installed entry is owner-scoped; expires at
+    // end of turn) instead of readying/buffing an existing unit immediately.
+    // No `target` so resolution never prompts to choose an existing unit.
     effect: {
-      effects: [
-        {
-          target: { controller: "friendly", type: "unit" },
-          type: "ready",
-        },
-        {
-          target: { controller: "friendly", type: "unit" },
-          type: "buff",
-        },
-      ],
-      type: "sequence",
-    },
+      buff: true,
+      duration: "next",
+      replaces: "enters-ready",
+      type: "replacement",
+    } as unknown as Effect,
     trigger: { event: "hold", on: "self" },
     type: "triggered",
   },

@@ -4,8 +4,21 @@ import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
 
 export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
-  // Rule 435: "Look at the top N cards … [put/recycle/…]". Show a
-  // reveal-and-pick pending choice with the top-N options.
+  // rule-id: sfd-122-221-repeat-look — a look that fires while an earlier
+  // reveal-and-pick is still unresolved (Repeat wraps the spell effect in a
+  // sequence) must not overwrite it; defer via the choice's `then` so it
+  // re-reads the deck after the first pick has drawn/recycled.
+  const existing = ctx.draft.pendingChoice as
+    | { type?: string; then?: unknown }
+    | undefined;
+  if (existing && existing.type === "reveal-and-pick") {
+    const prevThen = existing.then;
+    ctx.draft.pendingChoice = {
+      ...(existing as NonNullable<typeof ctx.draft.pendingChoice>),
+      then: prevThen ? { effects: [prevThen, effect], type: "sequence" } : effect,
+    } as NonNullable<typeof ctx.draft.pendingChoice>;
+    return;
+  }
   const n = resolveAmount((effect as { amount?: unknown }).amount ?? 1, ctx);
   const from = ((effect as { from?: string }).from ?? "deck") === "deck"
     ? "mainDeck"
@@ -51,6 +64,7 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     prompter: ctx.playerId,
     revealed: topN,
     revealer: ctx.playerId,
+    sourceCardId: ctx.sourceCardId,
     type: "reveal-and-pick",
   };
 }

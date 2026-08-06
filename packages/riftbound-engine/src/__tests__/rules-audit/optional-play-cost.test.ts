@@ -68,6 +68,29 @@ describe("Bug A: activeReplacements consumed by playUnit", () => {
     expect(getFlag(engine, "grunt-b", "exhausted")).toBe(true);
   });
 
+  // rule-id: unl-052-219 — Nami, Headstrong hold: next unit played this turn
+  // enters ready AND buffed; only the next one.
+  it("buff rider readies and buffs only the next unit played", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 4, power: {} } },
+    });
+    createCard(engine, "grunt-a", { cardType: "unit", energyCost: 1, might: 1, owner: P1, zone: "hand" });
+    createCard(engine, "grunt-b", { cardType: "unit", energyCost: 1, might: 1, owner: P1, zone: "hand" });
+    const internal = engine as unknown as { currentState: { activeReplacements?: unknown[] } };
+    internal.currentState.activeReplacements = [
+      { buff: true, duration: "next", owner: P1, replaces: "enters-ready", sourceCardId: "nami", type: "replacement" },
+    ];
+
+    expect(applyMove(engine, "playUnit", { cardId: "grunt-a", location: "base", playerId: P1 }).success).toBe(true);
+    expect(getFlag(engine, "grunt-a", "exhausted")).toBe(false);
+    expect(getFlag(engine, "grunt-a", "buffed")).toBe(true);
+
+    expect(applyMove(engine, "playUnit", { cardId: "grunt-b", location: "base", playerId: P1 }).success).toBe(true);
+    expect(getFlag(engine, "grunt-b", "exhausted")).toBe(true);
+    expect(getFlag(engine, "grunt-b", "buffed")).toBe(false);
+  });
+
   it("does not apply to another player's replacement", () => {
     const engine = createMinimalGameState({
       phase: "main",

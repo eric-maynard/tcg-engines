@@ -209,14 +209,19 @@ export function parseReturnToHandEffect(text: string): ReturnToHandEffect | unde
   // General pattern: "Return [another] [a/an] [friendly|enemy] unit/gear [at a battlefield|here]
   //                   [with N [Might] or less] to its owner's hand."
   // Also accepts "another unit" without "a/an" (bare "another").
+  // rule-id: ven-115-166 — optional "non-TAG" qualifier ("a non-Dragon unit") → excludeTag filter.
   const match = text.match(
-    /^Return (?:(another)\s+)?((?:(?:a|an)\s+)?(?:friendly|enemy)?\s*(?:unit|gear)(?:\s+(?:at a battlefield|here|there))?(?:\s+with\s+\d+\s*:rb_might:\s*or\s*less)?)\s+to\s+(?:its owner's|my owner's|your|their owner's)\s+hand\.?$/i,
+    /^Return (?:(another)\s+)?((?:(?:a|an)\s+)?(?:friendly|enemy)?\s*(?:non-(\w+)\s+)?(?:unit|gear)(?:\s+(?:at a battlefield|here|there))?(?:\s+with\s+\d+\s*:rb_might:\s*or\s*less)?)\s+to\s+(?:its owner's|my owner's|your|their owner's)\s+hand\.?$/i,
   );
   if (match) {
     const another = match[1];
     const targetStr = match[2];
+    const excludeTag = match[3];
     const mightMatch = targetStr.match(/with\s+(\d+)\s*:rb_might:\s*or\s*less/i);
     const target: Record<string, unknown> = { type: "unit" };
+    if (excludeTag) {
+      target.filter = { excludeTag: excludeTag.charAt(0).toUpperCase() + excludeTag.slice(1) };
+    }
 
     if (/\bgear\b/i.test(targetStr)) {
       target.type = "gear";
@@ -235,7 +240,8 @@ export function parseReturnToHandEffect(text: string): ReturnToHandEffect | unde
       target.excludeSelf = true;
     }
     if (mightMatch) {
-      target.filter = { might: { lte: Number.parseInt(mightMatch[1], 10) } };
+      const mightFilter = { might: { lte: Number.parseInt(mightMatch[1], 10) } };
+      target.filter = target.filter ? [target.filter, mightFilter] : mightFilter;
     }
 
     return { target: target as unknown as AnyTarget, type: "return-to-hand" };

@@ -93,7 +93,7 @@ Report ≤3 things that are WRONG (not "could be better"). For each: what happen
   log(`R${R}: ${flat.length} raw + ${invariants.length} inv → ${findings.length} unique`)
 
   phase('Verify')
-  const verified = await parallel(findings.slice(0,15).map(f=>()=>
+  const verified = await parallel(findings.map(f=>()=>
     agent(
 `Adversarially verify. Default REFUTED unless you find the exact source line.
 

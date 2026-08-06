@@ -1631,10 +1631,11 @@
     }
 
     /* Resource delta floating animation */
+    /* [rule:ui-resource-delta-anchor] keep translateX(-50%) centering inside the keyframe */
     @keyframes resource-delta-float {
-      0%   { opacity: 1; transform: translateY(0); }
+      0%   { opacity: 1; transform: translate(-50%, 0); }
       70%  { opacity: 1; }
-      100% { opacity: 0; transform: translateY(-32px); }
+      100% { opacity: 0; transform: translate(-50%, -32px); }
     }
     .resource-delta {
       position: absolute;

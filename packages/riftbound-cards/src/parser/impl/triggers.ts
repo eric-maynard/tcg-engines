@@ -56,6 +56,10 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
 
     let effectText = text.slice(match[0].length).trim();
 
+    // rule-id: ogn-067-298 — "When you play me to a battlefield, ..." only
+    // triggers when the unit was played to a battlefield (not to base).
+    const playedToBattlefield = tp.event === "play-self" && Boolean(match[1]);
+
     // Strip "Choose a/an <target>." targeting preamble — mirrors the spell
     // Parser's handling for effects like Solari Chief's "When you play me,
     // Choose an enemy unit. If it is stunned, kill it. Otherwise, stun it."
@@ -241,6 +245,12 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
     };
     if (optional) {
       (ability as { optional: boolean }).optional = optional;
+    }
+    if (playedToBattlefield) {
+      const atBf = { type: "while-at-battlefield" };
+      condition = condition
+        ? ({ conditions: [atBf, condition], type: "and" } as unknown as { type: string })
+        : atBf;
     }
     if (condition) {
       (ability as { condition: { type: string } }).condition = condition;

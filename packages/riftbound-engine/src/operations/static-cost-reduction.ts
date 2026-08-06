@@ -59,7 +59,8 @@ export interface CostReductionContext {
 /**
  * Returned shape: the total energy reduction the player's permanents apply
  * to a single play of `playedCardId`, plus the binding floor (max of all
- * matching statics' `minimum` values).
+ * matching statics' `minimum` values) and any waived power pips per domain
+ * (`rainbow` = a pip of any domain).
  *
  * Callers apply: `effective = max(printed - reduction, max(minimum, 0))`,
  * BUT must also never go below zero (energy costs can't be negative).
@@ -67,6 +68,49 @@ export interface CostReductionContext {
 export interface StaticCostReduction {
   readonly reduction: number;
   readonly minimum: number;
+  readonly power: Partial<Record<string, number>>;
+}
+
+const RUNE_TOKEN_RE = /:rb_rune_(fury|calm|mind|body|chaos|order|rainbow):|\[(fury|calm|mind|body|chaos|order|rainbow)\]/gi;
+const ENERGY_TOKEN_RE = /:rb_energy_(\d+):|\[(\d+)\]/g;
+
+/**
+ * rule-id: ven-055-166 — decode a parser-emitted cost amount. The parser
+ * keeps printed cost glyphs as a token string (`":rb_energy_1::rb_rune_rainbow:"`);
+ * hand-authored abilities may use a bare number or `{energy, power[]}`.
+ */
+function decodeCostAmount(raw: unknown): { energy: number; power: Partial<Record<string, number>> } {
+  const power: Partial<Record<string, number>> = {};
+  if (typeof raw === "number") {
+    return { energy: raw, power };
+  }
+  if (typeof raw === "string") {
+    let energy = 0;
+    for (const m of raw.matchAll(ENERGY_TOKEN_RE)) {
+      energy += Number.parseInt(m[1] ?? m[2], 10);
+    }
+    for (const m of raw.matchAll(RUNE_TOKEN_RE)) {
+      const d = (m[1] ?? m[2]).toLowerCase();
+      power[d] = (power[d] ?? 0) + 1;
+    }
+    if (energy === 0 && Object.keys(power).length === 0 && /^\d+$/.test(raw.trim())) {
+      energy = Number.parseInt(raw.trim(), 10);
+    }
+    return { energy, power };
+  }
+  if (raw && typeof raw === "object") {
+    const obj = raw as { energy?: unknown; power?: unknown };
+    const energy = typeof obj.energy === "number" ? obj.energy : 0;
+    if (Array.isArray(obj.power)) {
+      for (const d of obj.power) {
+        if (typeof d === "string") {
+          power[d] = (power[d] ?? 0) + 1;
+        }
+      }
+    }
+    return { energy, power };
+  }
+  return { energy: 0, power };
 }
 
 const PLAYER_BOARD_ZONES: readonly string[] = [
@@ -100,13 +144,14 @@ export function computeStaticCostReduction(
   const playedDef = registry.get(playedCardId);
   // Without a registered definition we can't match targets — bail to zero.
   if (!playedDef) {
-    return { minimum: 0, reduction: 0 };
+    return { minimum: 0, power: {}, reduction: 0 };
   }
   const playedCardType = playedDef.cardType;
   const playedKeywords = playedDef.keywords ?? [];
 
   let totalReduction = 0;
   let maxMinimum = 0;
+  const totalPower: Partial<Record<string, number>> = {};
 
   // Build the per-player scan zone list (base/legend/champion + every bf).
   const zonesToScan: string[] = [...PLAYER_BOARD_ZONES];
@@ -186,31 +231,34 @@ export function computeStaticCostReduction(
         }
 
         // Pull the reduction amount from any of the parser's emitted keys.
-        // Parser uses `by` / `reduction` / `amount` depending on phrasing.
-        // Multi-resource (`":rb_energy_2::rb_rune_calm:"`) is preserved as
-        // A string and contributes ZERO here (we only handle pure-energy
-        // Reductions in the play-cost path; the power-rune side is the
-        // Caller's responsibility).
+        // Parser uses `by` / `reduction` / `amount` depending on phrasing;
+        // rule-id: ven-055-166 — token strings (`":rb_energy_1::rb_rune_rainbow:"`)
+        // decode into an energy part and waived power pips.
         const rawAmt =
           (effect as { by?: unknown }).by ??
           (effect as { reduction?: unknown }).reduction ??
           (effect as { amount?: unknown }).amount;
-        const amt = typeof rawAmt === "number" ? rawAmt : 0;
-        if (amt <= 0) {
+        const amt = decodeCostAmount(rawAmt);
+        const powerPips = Object.values(amt.power).reduce((a: number, b) => a + (b ?? 0), 0);
+        if (amt.energy <= 0 && powerPips <= 0) {
           continue;
         }
-        totalReduction += amt;
+        totalReduction += Math.max(0, amt.energy);
+        for (const [d, n] of Object.entries(amt.power)) {
+          totalPower[d] = (totalPower[d] ?? 0) + (n ?? 0);
+        }
 
         // Track the max minimum across all matching reductions.
         const {minimum} = (effect as { minimum?: unknown });
-        if (typeof minimum === "number" && minimum > maxMinimum) {
-          maxMinimum = minimum;
+        const minEnergy = minimum === undefined ? 0 : decodeCostAmount(minimum).energy;
+        if (minEnergy > maxMinimum) {
+          maxMinimum = minEnergy;
         }
       }
     }
   }
 
-  return { minimum: maxMinimum, reduction: totalReduction };
+  return { minimum: maxMinimum, power: totalPower, reduction: totalReduction };
 }
 
 /**
@@ -222,9 +270,57 @@ export function applyStaticCostReduction(
   printedEnergy: number,
   reduction: StaticCostReduction,
 ): number {
+  if (reduction.reduction <= 0) {
+    return Math.max(printedEnergy, 0);
+  }
   const after = printedEnergy - reduction.reduction;
-  const floor = Math.max(reduction.minimum, 0);
+  // "to a minimum of [1]" floors the discount; it never raises a cheaper card.
+  const floor = Math.max(Math.min(reduction.minimum, printedEnergy), 0);
   return Math.max(after, floor);
+}
+
+/**
+ * rule-id: ven-055-166 — waive power pips from a play's per-domain power
+ * requirement. Domain-keyed waivers reduce that domain; `rainbow` waivers
+ * cover one pip of any domain, preferring a printed rainbow pip, then the
+ * domain the payer's pool is shortest on.
+ */
+export function reducePowerCost(
+  need: Partial<Record<string, number>>,
+  waived: Partial<Record<string, number>>,
+  available: Partial<Record<string, number>> = {},
+): Partial<Record<string, number>> {
+  const out: Partial<Record<string, number>> = { ...need };
+  let anyDomain = 0;
+  for (const [d, n] of Object.entries(waived)) {
+    if (!n || n <= 0) {
+      continue;
+    }
+    if (d === "rainbow") {
+      anyDomain += n;
+      continue;
+    }
+    if ((out[d] ?? 0) > 0) {
+      out[d] = Math.max(0, (out[d] ?? 0) - n);
+    }
+  }
+  while (anyDomain > 0) {
+    const owed = Object.keys(out).filter((d) => (out[d] ?? 0) > 0);
+    if (owed.length === 0) {
+      break;
+    }
+    owed.sort((a, b) => {
+      if (a === "rainbow") {return -1;}
+      if (b === "rainbow") {return 1;}
+      const shortA = (out[a] ?? 0) - (available[a] ?? 0);
+      const shortB = (out[b] ?? 0) - (available[b] ?? 0);
+      return shortB - shortA;
+    });
+    const pick = owed[0] as string;
+    out[pick] = (out[pick] ?? 0) - 1;
+    anyDomain--;
+  }
+  return out;
 }
 
 /**

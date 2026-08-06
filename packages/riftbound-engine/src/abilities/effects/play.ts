@@ -14,6 +14,10 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // move-choose effect and the card enters the board there (rule 337.2).
   const targets = getTargetIds(effect, ctx);
   const turnOrder = Object.keys(ctx.draft.players);
+  // rule-id: ogn-102-298 — an explicit "to their base" destination overrides
+  // the owner's free location choice.
+  const toLocation = (effect as unknown as { toLocation?: unknown }).toLocation;
+  const dest = toLocation === "base" ? "base" : "choose";
   for (const targetId of targets) {
     const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId;
     ctx.draft.interaction = addToChain(
@@ -21,7 +25,7 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
       {
         cardId: targetId,
         controller: owner,
-        effect: { target: targetId, to: "choose", type: "move" },
+        effect: { target: targetId, to: dest, type: "move" },
         triggered: true,
         type: "ability",
       },
