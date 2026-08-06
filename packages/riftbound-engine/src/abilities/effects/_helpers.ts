@@ -95,6 +95,34 @@ export function getEffectiveMight(cardId: string, ctx: EffectContext): number {
 }
 
 /**
+ * Sum every instance of a numeric keyword on a card (rule 807.2, 807.3):
+ * printed instances (flat `keywords` or `keyword` abilities) plus every granted
+ * instance on meta. A valueless instance counts as 1 (rule 807.1.b.3).
+ */
+export function getKeywordTotalValue(cardId: string, keyword: string, ctx: EffectContext): number {
+  const wanted = keyword.toLowerCase();
+  const def = getGlobalCardRegistry().get(cardId);
+  let total = 0;
+  for (const ability of def?.abilities ?? []) {
+    if (ability.type === "keyword" && (ability.keyword as string).toLowerCase() === wanted) {
+      total += (ability as { value?: number }).value ?? 1;
+    }
+  }
+  if (total === 0) {
+    total += (def?.keywords ?? []).filter((k) => String(k).toLowerCase() === wanted).length;
+  }
+  const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
+    | Partial<RiftboundCardMeta>
+    | undefined;
+  for (const granted of meta?.grantedKeywords ?? []) {
+    if (String(granted.keyword).toLowerCase() === wanted) {
+      total += granted.value ?? 1;
+    }
+  }
+  return total;
+}
+
+/**
  * Resolve an AmountExpression to a numeric value.
  *
  * Handles dynamic amounts like "equal to this unit's Might",
@@ -116,10 +144,21 @@ export function resolveAmount(
   }
 
   // Handle AmountExpression objects
+  if ("keywordValue" in amount) {
+    return getKeywordTotalValue(ctx.sourceCardId, String(amount.keywordValue), ctx);
+  }
   if ("might" in amount) {
     const mightRef = amount.might;
     if (mightRef === "self") {
       return getEffectiveMight(ctx.sourceCardId, ctx);
+    }
+    // rule-id: ogn-260-298 (rule 355.14.a) — "Ready a friendly unit. It deals
+    // damage equal to ITS Might": "its" names the unit an EARLIER sequence step
+    // acted on (the sequence's `pendingValue`), never this step's damage target.
+    if (mightRef === "pending-value") {
+      const pendingId = (ctx as { pendingSequenceValue?: readonly string[] })
+        .pendingSequenceValue?.[0];
+      return pendingId ? getEffectiveMight(pendingId, ctx) : 0;
     }
     // Rule 355.14.a: "damage equal to <a friendly unit>'s Might" — the amount
     // reference is a caster-chosen standard target. Prefer the bound choice

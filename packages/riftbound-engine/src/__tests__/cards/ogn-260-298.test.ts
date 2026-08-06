@@ -30,7 +30,7 @@ function board(power: Record<string, number> = { calm: 1, chaos: 1 }, energy = 3
 describe("Last Breath (ogn-260-298)", () => {
   test("costs 3 energy + 2 power payable with calm and/or chaos; not with off-domain power or 2 energy", async () => {
     const game = await board().build();
-    await game.p1.cast("lb", { targets: "ally" });
+    await game.p1.cast("lb", { targets: ["ally", "foe"] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0, chaos: 0 } });
     expect((await board({ calm: 2 }).build()).p1.can("cast", "lb")).toBe(true);
     expect((await board({ chaos: 2 }).build()).p1.can("cast", "lb")).toBe(true);
@@ -44,13 +44,13 @@ describe("Last Breath (ogn-260-298)", () => {
     const first = game.p1.option("cast", "lb")?.fields.find((f) => f.arg === "targets")?.options?.map((o) => (o as string[])[0]);
     expect(first).toEqual(["ally"]);
     expect(game.state("ally").isExhausted).toBe(true);
-    await game.p1.cast("lb", { targets: "ally" });
+    await game.p1.cast("lb", { targets: ["ally", "foe"] });
     await game.settle();
     expect(game.state("ally").isReady).toBe(true);
     expect(game.zoneOf("lb")).toBe("trash");
   });
 
-  test.failing("BUG: the readied unit deals damage equal to its Might (4) to an enemy unit at a battlefield", async () => {
+  test("the readied unit deals damage equal to its Might (4) to an enemy unit at a battlefield", async () => {
     // Expected: a second choice — an ENEMY unit AT A BATTLEFIELD (only "foe"; "homeFoe" is in a
     // base) — either as a second target at cast time or as a prompt on resolution; foe ends with 4
     // damage (5 Might, survives). Actual: only the "ready" half was parsed; no damage is ever dealt.
@@ -71,7 +71,7 @@ describe("Last Breath (ogn-260-298)", () => {
     expect(game.state("homeFoe").damage).toBe(0);
   });
 
-  test.failing("BUG: damage equal to Might is lethal — a 5-Might striker kills the 5-Might enemy at the battlefield", async () => {
+  test("damage equal to Might is lethal — a 5-Might striker kills the 5-Might enemy at the battlefield", async () => {
     // Expected: foe (5 Might) takes 5 → killed → trash. Actual: no damage clause, foe untouched.
     const game = await scenario()
       .resources(P1, { energy: 3, power: { chaos: 2 } })
@@ -96,7 +96,7 @@ describe("Last Breath (ogn-260-298)", () => {
     await game.p2.passFocus();
     expect(game.actingSeat()).toBe(P1);
     expect(game.p1.can("cast", "lb")).toBe(true);
-    await game.p1.cast("lb", { targets: "ally" });
+    await game.p1.cast("lb", { targets: ["ally", "foe"] });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "lb", controller: P1 })]);
     await game.settle();
     expect(game.state("ally").isReady).toBe(true);
