@@ -50,7 +50,7 @@ describe("Peak Guardian (ogn-223-298)", () => {
     expect(game.state("hereA").isBuffed).toBe(false);
   });
 
-  test.failing("BUG: played to a battlefield, it also buffs all OTHER FRIENDLY units THERE (only there, not enemies)", async () => {
+  test("played to a battlefield, it also buffs all OTHER FRIENDLY units THERE (only there, not enemies)", async () => {
     // Expected: pg buffed (6); hereA buffed (3); hereBuffed keeps its single buff (4); elsewhere/home/foe
     // untouched. Actual: the parsed ability only carries "buff me" — the conditional mass buff is missing.
     const game = await board().build();
