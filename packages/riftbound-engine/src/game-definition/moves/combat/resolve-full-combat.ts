@@ -14,6 +14,7 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { findAllReplacements } from "../../../abilities/replacement-effects";
 import { createInteractionState, getTurnState } from "../../../chain";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
+import { openPendingContestedShowdown } from "../chain/showdown";
 import type { PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { unitIgnoresDamage } from "../../../operations/damage-immunity";
@@ -362,8 +363,13 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // rule 466.2: chain items from the Combat Damage Step / Combat Cleanup
     // already resolved on an earlier pass — go straight to the result step.
     const damageAlreadyDone = battlefield.combatDamageDone === true;
+    // rule 466.1.a.2 — whether the attackers were recalled is decided during
+    // the Combat Cleanup, not at the Resolution Step; carry that fact across
+    // the deferral in 466.2.
+    let noDefendersAtCleanup = battlefield.combatNoDefendersAtCleanup === true;
     battlefield.combatDamageDone = undefined;
     battlefield.combatExcessDamage = undefined;
+    battlefield.combatNoDefendersAtCleanup = undefined;
     if (!damageAlreadyDone && attackerUnits.length > 0 && defenderUnits.length > 0) {
     // Run the combat resolver
     const result = resolveCombat(attackerUnits, defenderUnits);
@@ -456,6 +462,18 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     }
     cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
 
+    // rule 466.1.a.2: with no defending unit left here when the Combat Cleanup
+    // finished, the surviving attackers stay — nothing recalls them.
+    noDefendersAtCleanup =
+      zones
+        .getCardsInZone(battlefieldZoneId)
+        .filter(
+          (id) =>
+            cards.getCardOwner(id) !== attackingPlayer &&
+            (registry.getCardType(id as string) === "unit" ||
+              (registry.get(id as string)?.might ?? 0) > 0),
+        ).length === 0;
+
     // rule 466.2: resolve every chain item from combat damage and the Combat
     // Cleanup (Deathknell, "when a unit dies" …) BEFORE determining the combat
     // result — a Deathknell that kills the last attacker means no conquer.
@@ -464,6 +482,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     if (draft.interaction?.chain?.active === true) {
       battlefield.combatDamageDone = true;
       battlefield.combatExcessDamage = excessDamage;
+      battlefield.combatNoDefendersAtCleanup = noDefendersAtCleanup;
       return;
     }
     }
@@ -476,6 +495,27 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       .filter((id) => (registry.get(id as string)?.might ?? 0) > 0 || registry.getCardType(id as string) === "unit");
     const attackersLeft = unitsHereNow.filter((id) => cards.getCardOwner(id) === attackingPlayer);
     const defendersLeft = unitsHereNow.filter((id) => cards.getCardOwner(id) !== attackingPlayer);
+    // rule 466.3.d: both players have units here but the Combat Cleanup left no
+    // defender behind (a pending Deathknell put a fresh unit here afterwards) —
+    // the combat has No Result: nobody conquers, nobody is recalled, and
+    // rule 466.3.d.1 stages a new combat here immediately.
+    if (noDefendersAtCleanup && attackersLeft.length > 0 && defendersLeft.length > 0) {
+      for (const unitId of zones.getCardsInZone(battlefieldZoneId)) {
+        cards.updateCardMeta(unitId, { combatRole: null } as Partial<RiftboundCardMeta>);
+      }
+      expireCombatMight();
+      battlefield.showdownComplete = false;
+      battlefield.contested = true;
+      battlefield.contestedBy = attackingPlayer;
+      // rule 466.3.d.1 — the new combat is staged immediately, not offered as a
+      // discretionary action.
+      openPendingContestedShowdown(
+        draft,
+        context as unknown as Parameters<typeof openPendingContestedShowdown>[1],
+      );
+      return;
+    }
+
     let winner: "attacker" | "defender" | "tie";
     if (attackersLeft.length > 0 && defendersLeft.length === 0) {
       winner = "attacker";

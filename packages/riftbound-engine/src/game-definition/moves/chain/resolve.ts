@@ -31,11 +31,13 @@ import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getCardEffectiveMight, getDeflectSurcharge, xCostIsPower } from "../play/cost";
 import {
+  findAmountReferenceTarget,
   findSequenceLeadTarget,
   isLegalMultiTargetSet,
   type SpellEffectTargetShape,
 } from "../play/targeting";
 import { buildEffectContext } from "./effect-context";
+import { openPendingContestedShowdown } from "./showdown";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -178,6 +180,7 @@ export function executeResolvedItem(
     const registry = getGlobalCardRegistry();
     const abilities = registry.getAbilities(resolved.cardId) ?? [];
     const spellAbility = abilities.find((a) => a.type === "spell");
+    const fallbackPreLen = draft.interaction?.chain?.items.length ?? 0;
     if (spellAbility?.effect) {
       const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
       const effectCtx: EffectContext = resolved.targets
@@ -185,6 +188,10 @@ export function executeResolvedItem(
         : baseCtx;
       executeEffect(spellAbility.effect as ExecutableEffect, effectCtx);
     }
+    // rule 419.4.a: a spell with no stored chain effect (vanilla/registry
+    // lookup) still completes the act of being played — its play triggers
+    // must fire exactly as on the normal path.
+    firePlayedCardTriggers(resolved, draft, context, fallbackPreLen);
     return;
   }
 
@@ -262,9 +269,50 @@ export function executeResolvedItem(
       const zone = baseCtx.zones.getCardZone(id as CoreCardId);
       return typeof zone !== "string" || !OFF_BOARD_ZONES.includes(zone);
     };
+    // rule 359.3.e.5 (ogn-213-298 × ogs-011-024): a target chosen at play time
+    // that no longer satisfies the descriptor's LOCATION when the item resolves
+    // (a "unit at a battlefield" recalled to base) is an illegal target.
+    const lockedTarget = (effect.target ??
+      findSequenceLeadTarget(effect as unknown as SpellEffectTargetShape)) as
+      | { location?: unknown }
+      | string
+      | undefined;
+    const lockedLocation =
+      typeof lockedTarget === "object" && lockedTarget !== null
+        ? (lockedTarget as { location?: unknown }).location
+        : undefined;
+    // rule-id: ogn-250-298 — a Might-reference unit locked alongside the
+    // damage step's own target has its OWN location ("a friendly unit in your
+    // base"); judge it against that descriptor, not the damage step's.
+    const refDesc = findAmountReferenceTarget(effect as unknown as SpellEffectTargetShape);
+    const refLocation =
+      typeof refDesc === "object" && refDesc !== null
+        ? (refDesc as { location?: unknown }).location
+        : undefined;
+    const locationStillMatches = (id: string): boolean => {
+      if (lockedLocation !== "battlefield" && lockedLocation !== "base") {
+        return true;
+      }
+      if (refLocation !== undefined && refLocation !== lockedLocation) {
+        const zone = baseCtx.zones.getCardZone(id as CoreCardId);
+        if (refLocation === "base" ? zone === "base" : String(zone).startsWith("battlefield-")) {
+          return true;
+        }
+      }
+      // A bound battlefield id ("all enemy units at a battlefield") is a place,
+      // not a card in a zone — the location check does not apply to it.
+      if (draft.battlefields?.[id] !== undefined) {
+        return true;
+      }
+      const zone = baseCtx.zones.getCardZone(id as CoreCardId);
+      return lockedLocation === "base"
+        ? zone === "base"
+        : typeof zone === "string" && zone.startsWith("battlefield-");
+    };
     const legal = boundTargets.filter(
       (id) =>
         stillOnBoard(id) &&
+        locationStillMatches(id) &&
         !(
           controllerOf(id) !== resolved.controller &&
           (isUntargetable(id, resolverCtx) || isProtectedFromEnemyChoice(id, resolverCtx))
@@ -305,9 +353,14 @@ export function executeResolvedItem(
     target.type !== "player" &&
     target.type !== "battlefield" &&
     target.quantity !== "all" &&
-    // rule-id: ogn-107-298 — "play a card … from your hand": the hand is not
-    // a board zone the resolver scans; the play handler gathers candidates.
-    !(effect.type === "play" && (effect as { from?: unknown }).from === "hand") &&
+    // rule-id: ogn-107-298 / ogn-226-298 — "play a card … from your hand /
+    // your trash": neither zone is a board zone the resolver scans, so a
+    // board-wide prompt here would offer the wrong cards. The play handler
+    // gathers candidates from that private zone itself (rule 355.10).
+    !(
+      effect.type === "play" &&
+      ((effect as { from?: unknown }).from === "hand" || (effect as { from?: unknown }).from === "trash")
+    ) &&
     // rule 355.14 (ogn-041-298): split damage picks its targets together with
     // the distribution in the damage handler, not as a single-target prompt.
     !(effect.type === "damage" && (effect as { split?: boolean }).split === true)
@@ -415,6 +468,10 @@ export function executeResolvedItem(
         effect,
         options,
         remaining: 1,
+        // rule 359.3.f.3 (unl-112-219) — "move an enemy unit to THAT
+        // battlefield": the destination is fixed by the triggering move, so it
+        // must survive the target prompt.
+        ...(typeof trigEvt?.to === "string" ? { triggerToZone: trigEvt.to } : {}),
       };
       return;
     } else {
@@ -495,42 +552,54 @@ export function executeResolvedItem(
   if (!mistargeted) {
     executeEffect(effect, effectCtx);
   }
-  const postLen = draft.interaction?.chain?.items.length ?? 0;
+  firePlayedCardTriggers(resolved, draft, context, preLen);
+}
 
-  // Rule 419.4.a: abilities that trigger on playing a card fire when that
-  // act is completed by resolution — not when the card is placed on the
-  // chain, and never if the card was countered (425.1.b).
-  if (resolved.type === "spell") {
-    const trigCtx = {
-      cards: context.cards,
-      counters: context.counters,
-      draft,
-      zones: context.zones,
-    };
-    fireTriggers(
-      { cardId: resolved.cardId, playerId: resolved.controller, type: "play-spell" },
-      trigCtx,
-    );
-    fireTriggers(
-      {
-        cardId: resolved.cardId,
-        cardType: "spell",
-        playerId: resolved.controller,
-        type: "play-card",
-      },
-      trigCtx,
-    );
-    // Rule 354.2 / 383.2.c / 337.1.b: a pending play the resolving spell put on
-    // the chain (Thrill of the Hunt banish→play) must finalize BEFORE any
-    // trigger that becomes pending because the spell was played (Abandoned
-    // Hall). Lift the effect-added items back above the just-queued triggers so
-    // the replayed unit is on the board when the trigger's target is chosen.
-    const chain = draft.interaction?.chain;
-    if (chain && postLen > preLen && chain.items.length > postLen) {
-      const items = chain.items as ChainItem[];
-      const pendingPlays = items.splice(preLen, postLen - preLen);
-      items.push(...pendingPlays);
-    }
+/**
+ * Rule 419.4.a: abilities that trigger on playing a card fire when that act is
+ * completed by resolution — not when the card is placed on the chain, and
+ * never if the card was countered (425.1.b). `preLen` is the chain length
+ * captured before the spell's own effect ran.
+ */
+function firePlayedCardTriggers(
+  resolved: ChainItem,
+  draft: RiftboundGameState,
+  context: Parameters<typeof buildEffectContext>[3],
+  preLen: number,
+): void {
+  if (resolved.type !== "spell") {
+    return;
+  }
+  const postLen = draft.interaction?.chain?.items.length ?? 0;
+  const trigCtx = {
+    cards: context.cards,
+    counters: context.counters,
+    draft,
+    zones: context.zones,
+  };
+  fireTriggers(
+    { cardId: resolved.cardId, playerId: resolved.controller, type: "play-spell" },
+    trigCtx,
+  );
+  fireTriggers(
+    {
+      cardId: resolved.cardId,
+      cardType: "spell",
+      playerId: resolved.controller,
+      type: "play-card",
+    },
+    trigCtx,
+  );
+  // Rule 354.2 / 383.2.c / 337.1.b: a pending play the resolving spell put on
+  // the chain (Thrill of the Hunt banish→play) must finalize BEFORE any
+  // trigger that becomes pending because the spell was played (Abandoned
+  // Hall). Lift the effect-added items back above the just-queued triggers so
+  // the replayed unit is on the board when the trigger's target is chosen.
+  const chain = draft.interaction?.chain;
+  if (chain && postLen > preLen && chain.items.length > postLen) {
+    const items = chain.items as ChainItem[];
+    const pendingPlays = items.splice(preLen, postLen - preLen);
+    items.push(...pendingPlays);
   }
 }
 
@@ -604,6 +673,12 @@ export const passChainPriority: Defs["passChainPriority"] = {
         // rule-id: ogn-246-298 — units reaped here must emit `die` so
         // "when a friendly unit dies" / Deathknell triggers fire.
         cleanupAndFireDeaths(draft, context);
+        // rule-id: ogn-270-298 (rules 323.13 / 320.1) — open the showdown of a
+        // battlefield an effect-moved unit contested during this resolution.
+        openPendingContestedShowdown(
+          draft,
+          context as unknown as Parameters<typeof openPendingContestedShowdown>[1],
+        );
       }
     }
   },
@@ -650,6 +725,10 @@ export const resolveChain: Defs["resolveChain"] = {
 
       // rule-id: ogn-246-298 — SBA deaths after resolution emit `die`.
       cleanupAndFireDeaths(draft, context);
+      // rule-id: ogn-270-298 (rules 323.13 / 320.1) — a unit an effect moved
+      // into an enemy battlefield contested it; the Cleanup after the chain
+      // empties opens that showdown mandatorily.
+      openPendingContestedShowdown(draft, context as unknown as Parameters<typeof openPendingContestedShowdown>[1]);
     }
   },
 };

@@ -147,7 +147,7 @@ describe("Hidden Blade × Zhonya's Hourglass / Flash — replaced kill vs. mista
   // Expected: when Hidden Blade resolves its target is no longer "at a battlefield" → mistarget:
   // the kill is ignored and so is the linked draw (359.3.e.5, 359.3.e.14.a). Actual: the engine
   // does not re-check target legality on resolution — the unit is killed in base and a draw happens.
-  test.failing("BUG: B — the Flashed unit is no longer a legal target: Hidden Blade mistargets, the unit survives in base and nobody draws (359.3.e.5, 359.3.e.14.a)", async () => {
+  test("B — the Flashed unit is no longer a legal target: Hidden Blade mistargets, the unit survives in base and nobody draws (359.3.e.5, 359.3.e.14.a)", async () => {
     const game = await withFlash().build();
     const p1Hand = game.p1.hand().length;
     const p2Hand = game.p2.hand().length;

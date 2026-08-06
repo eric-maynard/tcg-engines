@@ -47,7 +47,7 @@ describe("Showstopper (ogn-270-298)", () => {
     expect(noEnergy.p1.can("cast", "show")).toBe(false);
   });
 
-  test.failing("BUG: targets only a FRIENDLY unit IN YOUR BASE — units at battlefields and enemy units are not offered", async () => {
+  test("targets only a FRIENDLY unit IN YOUR BASE — units at battlefields and enemy units are not offered", async () => {
     // Expected: only "star" is a legal target. Actual: the parsed target is `friendly unit`
     // (no base restriction), so the friendly unit at bf2 is offered as well.
     const game = await board().build();
@@ -64,7 +64,7 @@ describe("Showstopper (ogn-270-298)", () => {
     expect(game.zoneOf("show")).toBe("hand");
   });
 
-  test.failing("BUG: 'then move it to a battlefield' — after the buff the unit is moved to a battlefield of your choice", async () => {
+  test("'then move it to a battlefield' — after the buff the unit is moved to a battlefield of your choice", async () => {
     // Expected: after resolving, P1 picks a battlefield (bf2 here) and "star" ends up there, buffed.
     // Actual: only the buff clause was parsed; the unit stays in base and no destination is asked.
     const game = await board().build();
@@ -78,7 +78,7 @@ describe("Showstopper (ogn-270-298)", () => {
     expect(game.locationOf("star")).toBe("bf2");
   });
 
-  test.failing("BUG: moving it into an enemy-held battlefield contests it — combat follows and the buffed 3-Might unit beats a 2-Might defender", async () => {
+  test("moving it into an enemy-held battlefield contests it — combat follows and the buffed 3-Might unit beats a 2-Might defender", async () => {
     // Expected: star (2+1) is moved to bf1, combat opens, the 2-Might defender dies, P1 conquers bf1.
     // Actual: no move happens at all (see above), so nothing is contested.
     const game = await scenario()

@@ -1085,7 +1085,7 @@ describe("323.8 / 323.12 / 344: a spell-driven move contests the battlefield and
     expect(game.p2.can("cast", "B")).toBe(true);
   });
 
-  test.failing("BUG: 323.12 / 344.2 — when S0 resolves and the chain empties (Neutral Open), the cleanup BEGINS the staged showdown at bf1 automatically with Focus + Priority to P1; engine leaves it staged and instead offers manual startShowdown / even an immediate conquerBattlefield", async () => {
+  test("323.12 / 344.2 — when S0 resolves and the chain empties (Neutral Open), the cleanup BEGINS the staged showdown at bf1 automatically with Focus + Priority to P1; engine leaves it staged and instead offers manual startShowdown / even an immediate conquerBattlefield", async () => {
     // Expected: showdown active at bf1, focus P1, P1's decision context "showdown", and no way to
     // conquer yet. Actual: no showdown; P1's main-phase menu lists `startShowdown:bf1` AND
     // `conquerBattlefield:bf1` (which would skip P2's showdown window entirely).

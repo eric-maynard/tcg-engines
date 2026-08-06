@@ -38,7 +38,10 @@ export interface ReplacementEvent {
     | "score"
     | "enters-ready"
     | "deals-bonus-damage"
-    | "play-token";
+    | "play-token"
+    // rule 740.3.a — a combat that ends with units of both players still at
+    // the battlefield (ogn-227-298 "recall ALL units instead").
+    | "combat-tie";
   /** The card being affected (if applicable) */
   readonly cardId?: string;
   /** The player being affected (if applicable) */

@@ -59,7 +59,7 @@ describe("Ruling 4cbb5b4ce4e9ed4d — Hidden Blade on an illegal target: no kill
   // ignored (unit survives in base) AND the linked "Its controller draws 2" is ignored (nobody draws).
   // Actual: the engine does not re-check target legality at resolution — the unit is killed in its base
   // and 2 cards are still drawn (by the caster).
-  test.failing("BUG: ruling 4cbb5b4ce4e9ed4d — engine kills the Flashed unit in base and still draws 2; expected: illegal target ⇒ NOT killed and NOBODY draws (359.3.e.5, 359.3.e.14.a)", async () => {
+  test("ruling 4cbb5b4ce4e9ed4d — an illegal target ⇒ NOT killed and NOBODY draws (359.3.e.5, 359.3.e.14.a)", async () => {
     const game = await board().build();
     const p1Hand = game.p1.hand().length;
     const p2Hand = game.p2.hand().length;
