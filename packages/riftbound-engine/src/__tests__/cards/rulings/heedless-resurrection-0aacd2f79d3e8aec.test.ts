@@ -63,7 +63,7 @@ describe("Ruling 0aacd2f79d3e8aec — a countered Heedless Resurrection does not
   // is already in the trash while the spell is still sitting on the chain awaiting responses (425.1.c.1).
   // Actual: the engine does not model the "kill a friendly unit" additional cost; the victim stays in base
   // (it is merely offered as a `targets` choice) and no `sacrifice` argument exists.
-  test.failing("BUG: ruling 0aacd2f79d3e8aec — the friendly unit is killed as a COST, up front: victim is in the trash while Heedless is still on the chain", async () => {
+  test("ruling 0aacd2f79d3e8aec — the friendly unit is killed as a COST, up front: victim is in the trash while Heedless is still on the chain", async () => {
     const game = await board().build();
     const sac = game.p1.option("cast", "heedless")?.fields.find((f) => f.arg === "sacrifice");
     expect(sac?.options ?? []).toEqual(["victim"]); // only FRIENDLY units
@@ -76,7 +76,7 @@ describe("Ruling 0aacd2f79d3e8aec — a countered Heedless Resurrection does not
 
   // Expected: after Hard Bargain counters it, the victim is STILL in the trash (cost not refunded), the
   // corpse was never played, Heedless is in the trash. Actual: victim never died (see above) → in base.
-  test.failing("BUG: ruling 0aacd2f79d3e8aec — countered by Hard Bargain: the killed unit is NOT returned (stays in trash), nothing is resurrected", async () => {
+  test("ruling 0aacd2f79d3e8aec — countered by Hard Bargain: the killed unit is NOT returned (stays in trash), nothing is resurrected", async () => {
     const game = await board().build();
     await castHeedless(game);
     await counterIt(game);

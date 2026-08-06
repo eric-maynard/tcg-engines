@@ -132,6 +132,25 @@ export function parseSpellAbility(text: string): SpellAbility | undefined {
   const timingStr = match[1].toLowerCase() as "action" | "reaction";
   let effectText = match[2].trim();
 
+  // rule 356.2.a.1 — "As an additional cost to play this, kill a friendly
+  // unit.": a MANDATORY kill paid while the spell is played, not part of its
+  // resolve-time effect. Lift it onto the spell ability's `additionalCost`
+  // (what `getOptionalPlayCost` reads) and strip it from the effect text.
+  let killAdditionalCost: AnyTarget | undefined;
+  const killCostMatch =
+    /^As an additional cost to play (?:this|me),\s*kill\s+([^.]*?)\.\s*(?:_?\s*\([^)]*\)\s*_?\s*)?/i.exec(
+      effectText,
+    );
+  if (killCostMatch && !/\byou may\b/i.test(killCostMatch[1])) {
+    killAdditionalCost = parseTarget(stripReminders(killCostMatch[1]).trim());
+    if (killAdditionalCost) {
+      effectText = effectText.slice(killCostMatch[0].length).trim();
+    }
+  }
+  const additionalCostRider = killAdditionalCost
+    ? { additionalCost: { kill: killAdditionalCost } }
+    : {};
+
   // Strip any additional cost text at the start (e.g., "As you play this, you may spend...")
   effectText = effectText.replace(/^As you play this[^.]*\.\s*/i, "");
   // Strip "If you do, ..." preamble (follows "As you play this...")
@@ -186,7 +205,10 @@ export function parseSpellAbility(text: string): SpellAbility | undefined {
   if (uncounterable) {
     effectText = effectText.replace(UNCOUNTERABLE_RE, " ").trim();
   }
-  const flags: { uncounterable?: true } = uncounterable ? { uncounterable: true } : {};
+  const flags: { uncounterable?: true; additionalCost?: { kill: AnyTarget } } = {
+    ...additionalCostRider,
+    ...(uncounterable ? { uncounterable: true as const } : {}),
+  };
 
   // Try parsing the effect
   const parsedEffect = parseEffects(effectText);
