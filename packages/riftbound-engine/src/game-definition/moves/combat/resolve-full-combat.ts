@@ -227,6 +227,13 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         keywordValues: Object.keys(keywordValues).length > 0 ? keywordValues : undefined,
         keywords: allKeywords,
         owner,
+        // rule 437.5.a / 465.2.c.5: a "prevent the next N damage" shield is
+        // part of this unit's lethal-damage calculation at ASSIGNMENT time.
+        ...(((meta as { damagePreventionShield?: number } | undefined)?.damagePreventionShield ?? 0) > 0
+          ? {
+              preventValue: (meta as { damagePreventionShield?: number }).damagePreventionShield,
+            }
+          : {}),
         ...(killOnDamageIdx(cardId as string) >= 0 ? { diesOnAnyDamage: true } : {}),
         // rule 465.2.c.10 (ogn-189-298): "I don't take damage" — skipped for
         // damage assignment and never dealt lethal damage.
@@ -263,13 +270,26 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     excessDamage = result.attackerExcessDamage;
 
     // Apply damage to each unit from damageAssignment
-    for (const [unitId, dmg] of Object.entries(result.damageAssignment)) {
-      if (dmg > 0) {
+    for (const [unitId, assigned] of Object.entries(result.damageAssignment)) {
+      if (assigned > 0) {
+        // rule 437.4 / 437.7: a Prevent shield absorbs the assigned damage
+        // (fully prevented damage counts as not dealt) and is spent by it.
+        const existingMeta = cards.getCardMeta(unitId as CoreCardId) as
+          | (Partial<RiftboundCardMeta> & { damagePreventionShield?: number })
+          | undefined;
+        const shield = Math.max(0, existingMeta?.damagePreventionShield ?? 0);
+        const prevented = Math.min(shield, assigned);
+        const dmg = assigned - prevented;
+        if (prevented > 0) {
+          cards.updateCardMeta(unitId as CoreCardId, {
+            damagePreventionShield: shield - prevented,
+          } as unknown as Partial<RiftboundCardMeta>);
+        }
+        if (dmg <= 0) {
+          continue;
+        }
         counters.addCounter(unitId as CoreCardId, "damage", dmg);
         // Also update card meta damage for consistency
-        const existingMeta = cards.getCardMeta(unitId as CoreCardId) as
-          | Partial<RiftboundCardMeta>
-          | undefined;
         const existingDamage = existingMeta?.damage ?? 0;
         cards.updateCardMeta(
           unitId as CoreCardId,

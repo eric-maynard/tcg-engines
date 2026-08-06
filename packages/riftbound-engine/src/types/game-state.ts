@@ -268,6 +268,17 @@ export interface BattlefieldState {
   showdownComplete?: boolean;
 
   /**
+   * rule 466.2: the Combat Damage Step ran and put items on the chain (death
+   * triggers such as Deathknell). Those must resolve BEFORE the combat result
+   * is determined, so `resolveFullCombat` returns and re-runs once the chain
+   * drains, skipping straight to the Resolution Step.
+   */
+  combatDamageDone?: boolean;
+
+  /** rule-id: ogn-034-298 — excess damage carried into the deferred conquer event. */
+  combatExcessDamage?: number;
+
+  /**
    * Bonus to the number of cards a player may hide at this battlefield.
    *
    * Default hidden-capacity is 1 per player. Battlefields like Bandle Tree
