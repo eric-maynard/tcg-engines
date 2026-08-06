@@ -45,9 +45,7 @@ describe("Kadregrin the Infernal (ogn-038-298)", () => {
     expect(game.p1.hand()).toHaveLength(before - 1 + 1);
   });
 
-  // Expected: 3 friendly Mighty units (Kadregrin, 5, 6) → draw 3. Actual: the parsed amount
-  // `{count: {type: "unit"}}` carries no Mighty/friendly filter and resolves to a flat draw 1.
-  test.failing("BUG: should draw 1 per friendly Mighty unit — Kadregrin + a 5 and a 6 = 3 cards (rules 708, 710)", async () => {
+  test("should draw 1 per friendly Mighty unit — Kadregrin + a 5 and a 6 = 3 cards (rules 708, 710)", async () => {
     const game = await board()
       .unit(P1, "base", { might: 5 }, "five")
       .unit(P1, "bf1", { might: 6 }, "six")
@@ -58,8 +56,7 @@ describe("Kadregrin the Infernal (ogn-038-298)", () => {
     expect(game.p1.hand()).toHaveLength(3);
   });
 
-  // Expected: buffed 4 (=5 Might) ally + Kadregrin → draw 2. Actual: flat draw 1.
-  test.failing("BUG: a buffed 4-Might ally (current Might 5) is Mighty and should add a draw (rule 710)", async () => {
+  test("a buffed 4-Might ally (current Might 5) is Mighty and should add a draw (rule 710)", async () => {
     const game = await board().unit(P1, "base", { might: 4 }, "pumped", { buffed: true }).build();
     expect(game.state("pumped").might).toBe(5);
     await game.p1.play("kad");

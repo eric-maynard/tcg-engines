@@ -57,9 +57,6 @@ describe("Portal Rescue (ogn-102-298)", () => {
   });
 
   test.failing("BUG: banish-then-play makes it a freshly played unit — no damage, no buff, and it enters exhausted", async () => {
-    // Expected: the banished card is a new object when re-played (damage 0, unbuffed, 4 Might) and,
-    // like any played unit, enters exhausted. Actual: the engine relocates the same permanent to base
-    // keeping its 2 damage and buff, and leaves it ready.
     const game = await board().build();
     await game.p1.cast("rescue", { targets: "ally" });
     await game.settle({ policy: "first" });

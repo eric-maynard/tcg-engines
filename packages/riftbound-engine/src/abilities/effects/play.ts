@@ -68,9 +68,19 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     }
     return;
   }
+  // rule-id: ogn-102-298 — an explicit "to their base" destination fixes both
+  // location and payment, so the play finalizes right here (rule 354.3 →
+  // 355.2): the unit enters its owner's base as a newly played permanent.
+  if (toLocation === "base" && (effect as { ignoreCost?: unknown }).ignoreCost === true) {
+    for (const targetId of targets) {
+      if (getGlobalCardRegistry().getCardType(targetId) !== "unit") {
+        continue;
+      }
+      enterUnitFromEffect(targetId, "base", ctx);
+    }
+    return;
+  }
   const turnOrder = Object.keys(ctx.draft.players);
-  // rule-id: ogn-102-298 — an explicit "to their base" destination overrides
-  // the owner's free location choice.
   const dest = toLocation === "base" ? "base" : "choose";
   for (const targetId of targets) {
     const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId;
@@ -186,6 +196,18 @@ function playCandidatesFromHand(effect: ExecutableEffect, ctx: EffectContext): s
  */
 function enterUnitFromEffect(cardId: string, zoneId: string, ctx: EffectContext): void {
   ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: zoneId as CoreZoneId });
+  // rule 337.2: the played card is a new object — board state from its
+  // previous existence (damage, buffs, stun, granted keywords) is gone.
+  ctx.counters.setFlag(cardId as CoreCardId, "stunned", false);
+  ctx.counters.setFlag(cardId as CoreCardId, "buffed", false);
+  ctx.cards.updateCardMeta?.(cardId as CoreCardId, {
+    buffed: false,
+    combatRole: null,
+    damage: 0,
+    grantedKeywords: undefined,
+    mightModifier: 0,
+    stunned: false,
+  } as Record<string, unknown>);
   ctx.counters.setFlag(cardId as CoreCardId, "exhausted", true);
   const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? ctx.playerId;
   ctx.fireTriggers?.({ cardId, paidAdditionalCost: false, playerId: owner, type: "play-self" });

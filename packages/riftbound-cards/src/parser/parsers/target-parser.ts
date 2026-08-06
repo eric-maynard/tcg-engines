@@ -25,7 +25,13 @@ import type { AnyTarget, Quantity, Target, TargetController } from "@tcg/riftbou
  * // Returns: { type: "unit", controller: "enemy" }
  */
 export function parseTarget(text: string): AnyTarget {
-  const normalized = text.toLowerCase().trim();
+  // Bracketed keywords/states ("[Mighty] units") read as plain adjectives here.
+  const normalized = text
+    .toLowerCase()
+    .trim()
+    .replace(/\[([^\]]+)\]/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
 
   // Self reference
   if (normalized === "me" || normalized === "it" || normalized === "itself") {
@@ -48,7 +54,7 @@ export function parseTarget(text: string): AnyTarget {
 
   // Parse "[a/an/that/the] [another] [controller] [TAG] CARD_TYPE [here/at a battlefield]"
   const cardTypePattern =
-    /^(?:(a|an|that|the)\s+)?(?:(another)\s+)?(friendly\s+|enemy\s+)?((?:\w+\s+)*?)(unit|units|gear|gears|legend|legends|rune|runes|equipment|spell|card|permanent)(s?)(?:\s+(here|at a battlefield|there))?$/i;
+    /^(?:(a|an|that|the)\s+)?(?:(another)\s+)?(friendly\s+|enemy\s+|your\s+|my\s+)?((?:\w+\s+)*?)(unit|units|gear|gears|legend|legends|rune|runes|equipment|spell|card|permanent)(s?)(?:\s+(here|at a battlefield|there))?$/i;
   const match = normalized.match(cardTypePattern);
 
   if (match) {
@@ -85,9 +91,11 @@ export function parseTarget(text: string): AnyTarget {
       }
     }
 
-    // Handle tag (e.g., "Mech" in "another friendly Mech")
+    // Handle tag (e.g., "Mech" in "another friendly Mech") or a state adjective
+    // ("[Mighty] units" — rule 710) which is a filter, not a tribal tag.
     if (tagStr && tagStr.length > 0) {
-      result.filter = { tag: capitalizeTag(tagStr) };
+      const stateFilter = STATE_ADJECTIVE_FILTERS[tagStr];
+      result.filter = stateFilter ? stateFilter : { tag: capitalizeTag(tagStr) };
     }
 
     return result as Target;
@@ -123,6 +131,17 @@ export function parseTarget(text: string): AnyTarget {
   return { type: "unit" };
 }
 
+/** Adjectives that describe a unit's state rather than a tribal tag. */
+const STATE_ADJECTIVE_FILTERS: Record<string, string> = {
+  buffed: "buffed",
+  damaged: "damaged",
+  exhausted: "exhausted",
+  mighty: "mighty",
+  ready: "ready",
+  stunned: "stunned",
+  token: "token",
+};
+
 type CardTypeStr =
   | "unit"
   | "gear"
@@ -153,7 +172,7 @@ function parseController(controllerStr: string | undefined): TargetController | 
 
   const normalized = controllerStr.toLowerCase().trim();
 
-  if (normalized === "friendly") {
+  if (normalized === "friendly" || normalized === "your" || normalized === "my") {
     return "friendly";
   }
   if (normalized === "enemy") {
