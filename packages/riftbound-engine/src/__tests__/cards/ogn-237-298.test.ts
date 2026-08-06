@@ -50,7 +50,7 @@ describe("King's Edict (ogn-237-298)", () => {
     expect(r.ok).toBe(false);
   });
 
-  test.failing("BUG: the OTHER player chooses which unit dies — the caster picks nothing", async () => {
+  test("the OTHER player chooses which unit dies — the caster picks nothing", async () => {
     // Expected: casting needs no target from P1; on resolution P2 is asked to choose among
     // foeWeak/foeBig (units P1 doesn't control) and their pick dies.
     // Actual: the caster targets one enemy unit at play time and P2 is never asked.
@@ -62,7 +62,7 @@ describe("King's Edict (ogn-237-298)", () => {
     expect(game.zoneOf("foeBig")).toBe("base");
   });
 
-  test.failing("BUG: 3 players — each other player chooses a distinct unit, so two units are killed", async () => {
+  test("3 players — each other player chooses a distinct unit, so two units are killed", async () => {
     // Expected: P2 chooses first (say p3unit — any unit P1 doesn't control), then P3 must choose a
     // different one (p2unit); both die. Actual: exactly one caster-chosen enemy unit is killed.
     const game = await scenario({ players: 3 })

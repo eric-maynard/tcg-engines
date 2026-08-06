@@ -104,7 +104,74 @@ function isEachPlayersOwn(effect: ExecutableEffect): boolean {
   );
 }
 
+/**
+ * rule 355.16 (ogn-237-298) — "Starting with the next player, each other player
+ * chooses a unit you don't control that hasn't been chosen for this spell. Kill
+ * those units.": the caster picks nothing. Each opponent is asked in turn order,
+ * always from the units the CASTER doesn't control, minus everything already
+ * picked for this spell; the whole set dies at the end.
+ */
+function handleEachOtherChoosesKill(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  h: EffectHelpers,
+): void {
+  const pending = effect as {
+    eachRemaining?: readonly string[];
+    eachChosen?: readonly string[];
+  };
+  // The pool is always read relative to the caster, not the current chooser.
+  const caster = controllerOf(ctx.sourceCardId, ctx) || ctx.playerId;
+  const chosen = [...(pending.eachChosen ?? [])];
+  let queue: string[];
+  if (pending.eachRemaining === undefined) {
+    const order = Object.keys(ctx.draft.players);
+    const at = order.indexOf(caster);
+    queue = (at < 0 ? order : [...order.slice(at + 1), ...order.slice(0, at)]).filter(
+      (p) => p !== caster,
+    );
+  } else {
+    const picked = (ctx.boundTargets ?? [])[0];
+    if (picked !== undefined) {
+      chosen.push(picked);
+    }
+    queue = [...pending.eachRemaining];
+  }
+  while (queue.length > 0) {
+    const pid = queue.shift() as string;
+    const options = candidatesFor(
+      { ...effect, target: (effect as { chooserTarget?: unknown }).chooserTarget } as ExecutableEffect,
+      ctx,
+      caster,
+    ).filter((id) => !chosen.includes(id));
+    if (options.length === 0) {
+      continue;
+    }
+    if (options.length === 1) {
+      chosen.push(options[0] as string);
+      continue;
+    }
+    if (ctx.draft.pendingChoice) {
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      effect: { ...effect, eachChosen: chosen, eachRemaining: queue },
+      options: options as never,
+      playerId: pid as never,
+      remaining: 1,
+      sourceCardId: ctx.sourceCardId as never,
+      type: "choose-target",
+    };
+    return;
+  }
+  killUnits(chosen, { ...ctx, playerId: caster }, h);
+}
+
 export function handle_kill(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
+  if ((effect as { chooser?: string }).chooser === "each-other-player") {
+    handleEachOtherChoosesKill(effect, ctx, h);
+    return;
+  }
   if (isEachPlayersOwn(effect)) {
     handleEachPlayerKill(effect, ctx, h);
     return;

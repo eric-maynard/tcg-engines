@@ -170,8 +170,22 @@ export interface RevealHandEffect {
   readonly target: AnyTarget;
   readonly filter?: {
     readonly excludeCardTypes?: readonly string[];
+    /** Card types that ARE valid picks ("choose a unit from it"). */
+    readonly cardTypes?: readonly string[];
   };
-  readonly onPicked?: "recycle" | "banish" | "discard";
+  readonly onPicked?: "recycle" | "banish" | "discard" | "play";
+  /**
+   * rule 419.3 (unl-139-219 Bone Skewer): "Choose a battlefield. … They play
+   * that unit to that battlefield" — the effect's controller picks the
+   * destination battlefield before the hand is revealed.
+   */
+  readonly battlefield?: "choose";
+  /** rule 356.1.b.1 — the forced play ignores any and all costs. */
+  readonly playIgnoreCost?: boolean;
+  /** rule 423 — the played card arrives stunned. */
+  readonly playStun?: boolean;
+  /** "You MAY choose a card from it" — the pick is declinable (rule 729). */
+  readonly optional?: boolean;
 }
 
 /**
@@ -222,7 +236,7 @@ export interface HealEffect {
  */
 export interface KillEffect {
   readonly type: "kill";
-  readonly target: AnyTarget;
+  readonly target?: AnyTarget;
   readonly player?: "self" | "opponent" | "each";
   /**
    * rule 355.16 — "starting with the next player, each other player chooses …":
@@ -230,6 +244,11 @@ export interface KillEffect {
    * `target` describes relative to the CASTER, and no card may be picked twice.
    */
   readonly chooser?: "each-other-player";
+  /**
+   * The pool those other players pick from, described relative to the CASTER.
+   * Separate from `target` because nothing is chosen when the spell is played.
+   */
+  readonly chooserTarget?: AnyTarget;
 }
 
 /**

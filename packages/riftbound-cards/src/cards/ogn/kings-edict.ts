@@ -8,20 +8,18 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * Starting with the next player, each other player chooses a unit you
  * don't control that hasn't been chosen for this spell. Kill those units.
  *
- * Approximated as a spell that kills one enemy unit per opponent. The
- * full multi-player choose-and-kill flow requires multiplayer-aware
- * interactive targeting that the engine does not yet have; the spell
- * effect still correctly kills a set of enemy units.
- *
- * FIXME: Should pick one unit per opponent (not any N enemy units). The
- * engine's targeting system doesn't yet express "one unit controlled by
- * each opponent in turn order".
+ * rule 355.16 — the caster chooses nothing: each OTHER player, in turn order
+ * starting with the next one, picks a unit the caster doesn't control that no
+ * other player has already picked for this spell, and all picks are killed.
  */
 const abilities: Ability[] = [
   {
     effect: {
-      player: "each",
-      target: { controller: "enemy", quantity: 1, type: "unit" },
+      chooser: "each-other-player",
+      // The pool the OTHER players pick from, read relative to the caster. It
+      // is deliberately not `target`: nothing here is chosen when the spell is
+      // played, so no play-time target is offered.
+      chooserTarget: { controller: "enemy", quantity: 1, type: "unit" },
       type: "kill",
     },
     timing: "action",
