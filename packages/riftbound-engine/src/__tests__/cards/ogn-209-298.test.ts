@@ -37,9 +37,7 @@ describe("Cull the Weak (ogn-209-298)", () => {
     expect(game.zoneOf("cull")).toBe("trash");
   });
 
-  test.failing("BUG: EACH player kills one of their units — the opponent loses the unit they pick too", async () => {
-    // Expected: P1 kills myWeak and P2 (choosing for themselves) kills foeWeak; the big units survive.
-    // Actual: the spell is executed as "kill a unit" — only the caster's single pick dies.
+  test("EACH player kills one of their units — the opponent loses the unit they pick too", async () => {
     const game = await board().script(P2, ["foeWeak"]).build();
     await game.p1.cast("cull", { answers: ["myWeak"] });
     await game.settle();
@@ -53,9 +51,7 @@ describe("Cull the Weak (ogn-209-298)", () => {
     expect(game.zoneOf("foeBig")).toBe("base");
   });
 
-  test.failing("BUG: 'one of THEIR units' — the caster may only choose among units they control; the opponent chooses theirs", async () => {
-    // Expected: P1's choice is limited to myWeak/myBig, and P2 is the one asked about foeWeak/foeBig.
-    // Actual: the caster is offered all four units as a single target and P2 is never asked.
+  test("'one of THEIR units' — the caster may only choose among units they control; the opponent chooses theirs", async () => {
     const game = await board().build();
     const offered = (game.p1.option("cast", "cull")?.fields.find((f) => f.arg === "targets")?.options ?? []) as string[][];
     expect(offered.flat()).not.toContain("foeWeak");

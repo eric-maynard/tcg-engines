@@ -46,7 +46,7 @@ describe("Acceptable Losses (ogn-179-298)", () => {
     expect(game.zoneOf("g1a")).toBe("trash");
   });
 
-  test.failing("BUG: EACH player kills one of their gear — the opponent loses one as well (only one gear dies today)", async () => {
+  test("EACH player kills one of their gear — the opponent loses one as well (only one gear dies today)", async () => {
     // Expected: after resolution P1's only gear and exactly one of P2's two gear are in the trash.
     // Actual: the effect is a single caster-targeted kill, so only g1a dies.
     const game = await board().build();
@@ -58,7 +58,7 @@ describe("Acceptable Losses (ogn-179-298)", () => {
     expect(p2Dead).toHaveLength(1);
   });
 
-  test.failing("BUG: each player selects which of THEIR OWN gear dies — P2 is the one asked about g2a/g2b", async () => {
+  test("each player selects which of THEIR OWN gear dies — P2 is the one asked about g2a/g2b", async () => {
     // Expected: during resolution a pick decision for P2 over exactly {g2a, g2b}.
     // Actual: no decision is ever handed to P2.
     const game = await board().build();
@@ -79,7 +79,7 @@ describe("Acceptable Losses (ogn-179-298)", () => {
 
   test("a player with no gear is unaffected; the other player still kills one (caster has none here)", async () => {
     const game = await scenario().resources(P1, { energy: 1 }).gear(P2, GEAR("Theirs A"), "g2a").unit(P1, "base", { might: 2 }, "ally").hand(P1, CARD, "al").build();
-    await game.p1.cast("al", { targets: "g2a" });
+    await game.p1.cast("al");
     await game.settle();
     expect(game.zoneOf("g2a")).toBe("trash");
     expect(game.zoneOf("ally")).toBe("base"); // units are not gear
