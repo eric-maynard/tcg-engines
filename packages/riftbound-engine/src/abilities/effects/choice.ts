@@ -15,10 +15,24 @@ export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: E
   if (options.length >= 2 && !ctx.draft.pendingChoice) {
     // rule 355.10.e (ogn-071-298): "each other player chooses" — the opponent
     // picks the mode as the spell resolves, but it still resolves for "you".
+    // rule-id: ogn-033-298 (rule 355.10.e) — "Deal 6 to it unless its
+    // controller has you draw 2": the chosen unit's CONTROLLER decides.
+    const targetController = (): string | undefined => {
+      const targetId = ctx.boundTargets?.[0] ?? h.getTargetIds(effect, ctx)[0];
+      if (!targetId) {
+        return undefined;
+      }
+      const id = targetId as Parameters<typeof ctx.cards.getCardOwner>[0];
+      return ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id);
+    };
+    const anyOpponent = (): string =>
+      Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId) ?? ctx.playerId;
     const chooser =
       effect.player === "opponent"
-        ? (Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId) ?? ctx.playerId)
-        : ctx.playerId;
+        ? anyOpponent()
+        : (effect.player === "target-controller"
+          ? (targetController() ?? anyOpponent())
+          : ctx.playerId);
     ctx.draft.pendingChoice = {
       effect,
       options: options.map((_, i) => i),

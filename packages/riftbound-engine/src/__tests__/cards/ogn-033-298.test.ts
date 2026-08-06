@@ -72,7 +72,7 @@ describe("Shakedown (ogn-033-298)", () => {
     expect(game.chain()).toHaveLength(2);
   });
 
-  test.failing("BUG: on resolution the target's controller is asked whether to have the caster draw 2 (the 'unless' choice)", async () => {
+  test("on resolution the target's controller is asked whether to have the caster draw 2 (the 'unless' choice)", async () => {
     // Expected: after both pass, P2 (foe's controller) gets a prompt. Actual: the parsed
     // ability is a bare `damage 6`, so 6 is dealt with no choice offered.
     const game = await board().build();
@@ -82,7 +82,7 @@ describe("Shakedown (ogn-033-298)", () => {
     expect(["yes-no", "pick"]).toContain(game.decision()?.kind as string);
   });
 
-  test.failing("BUG: if the controller declines, the unit is dealt 6", async () => {
+  test("if the controller declines, the unit is dealt 6", async () => {
     // Expected: P2 refuses to let P1 draw → foe (7 Might) takes 6 and survives; P1 draws nothing.
     const game = await board().build();
     const handBefore = game.p1.hand().length; // includes sd
@@ -94,7 +94,7 @@ describe("Shakedown (ogn-033-298)", () => {
     expect(game.zoneOf("sd")).toBe("trash");
   });
 
-  test.failing("BUG: if the controller has the caster draw 2, no damage is dealt", async () => {
+  test("if the controller has the caster draw 2, no damage is dealt", async () => {
     // Expected: P2 opts to let P1 draw 2 → foe undamaged, P1 hand = before - sd + 2.
     const game = await board().build();
     const handBefore = game.p1.hand().length;
