@@ -224,6 +224,12 @@ export interface KillEffect {
   readonly type: "kill";
   readonly target: AnyTarget;
   readonly player?: "self" | "opponent" | "each";
+  /**
+   * rule 355.16 — "starting with the next player, each other player chooses …":
+   * the caster chooses nothing; each opponent picks in turn order from the pool
+   * `target` describes relative to the CASTER, and no card may be picked twice.
+   */
+  readonly chooser?: "each-other-player";
 }
 
 /**
@@ -337,8 +343,18 @@ export interface MoveEffect {
    * Destination. `"choose"` when the rules text names no destination
    * (rule 355.4 — the unit's controller chooses base or a battlefield).
    */
-  readonly to: Location | "choose";
+  /**
+   * rule-id: ogn-262-298 — `"target-battlefield"`: "move a friendly unit to
+   * THAT enemy unit's battlefield" — the destination is the battlefield of an
+   * earlier sequence step's chosen target, not a free choice.
+   */
+  readonly to: Location | "choose" | "target-battlefield";
   readonly from?: Location;
+  /**
+   * rule-id: ogn-262-298 (rule 355.13) — "You may move …": the instruction
+   * imposes no play-legality gate and does nothing without a legal unit.
+   */
+  readonly optional?: boolean;
 }
 
 /**
@@ -619,6 +635,18 @@ export interface TakeControlEffect {
 }
 
 /**
+ * rule 317.1 / 455 (sfd-202-221) — "Lose control of that unit and recall it at
+ * end of turn": marks the control change installed by an earlier `take-control`
+ * step so the Ending Step expires it.
+ */
+export interface DelayedLoseControlEffect {
+  readonly type: "delayed-lose-control";
+  readonly target?: AnyTarget;
+  /** Also recall the permanent to its controller's base when control reverts. */
+  readonly recall?: boolean;
+}
+
+/**
  * Prevent damage effect
  */
 export interface PreventDamageEffect {
@@ -787,6 +815,8 @@ export interface PredictEffect {
 export type AmountExpression =
   | { readonly count: Target; readonly multiplier?: number } // Count of matching targets, optionally times N
   | { readonly might: AnyTarget } // Might of a target
+  // rule 807.2/807.3 — summed value of a keyword ("my [Assault]"), printed + granted
+  | { readonly keywordValue: string; readonly of: "self" }
   | { readonly damage: AnyTarget } // Damage on a target
   | { readonly cost: AnyTarget } // Cost of a target
   | { readonly score: "self" | "opponent" } // Player's score
@@ -867,6 +897,7 @@ export type Effect =
   | ScoreEffect
   | CounterEffect
   | TakeControlEffect
+  | DelayedLoseControlEffect
   | PreventDamageEffect
   | AttachEffect
   | DetachEffect

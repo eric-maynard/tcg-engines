@@ -1,4 +1,5 @@
 import type { EffectHandler } from "./_helpers";
+import { handle_delayedLoseControl } from "./delayed-lose-control";
 import { handle_draw } from "./draw";
 import { handle_damage } from "./damage";
 import { handle_kill } from "./kill";
@@ -66,6 +67,8 @@ export type { EffectHandler, EffectHelpers } from "./_helpers";
 export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   // rule 383.4.g.1 — ogn-286-298 Reckoner's Arena
   "activate-conquer-effects": handle_activateConquerEffects,
+  // rule 317.1 / 455 — sfd-202-221 "…at end of turn" control expiry + recall
+  "delayed-lose-control": handle_delayedLoseControl,
   "draw": handle_draw,
   "damage": handle_damage,
   "kill": handle_kill,

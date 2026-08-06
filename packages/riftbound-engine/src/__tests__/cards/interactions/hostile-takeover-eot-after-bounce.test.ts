@@ -105,7 +105,7 @@ describe("Hostile Takeover × Peak Guardian × Rebuke / Possession — temporary
     expect(s.damage).toBe(0);
   });
 
-  test.failing("BUG: (a) 'Ready it.' — the stolen Peak Guardian is readied on resolution", async () => {
+  test("(a) 'Ready it.' — the stolen Peak Guardian is readied on resolution", async () => {
     // Expected: ready. Actual: the parsed effect is only `take-control`; the unit stays exhausted.
     const game = await taken();
     expect(game.state("peak").isReady).toBe(true);
@@ -122,7 +122,7 @@ describe("Hostile Takeover × Peak Guardian × Rebuke / Possession — temporary
 
   // ---- (b) end of turn, nothing else happens ----------------------------------------------------
 
-  test.failing("BUG: (b) at end of P1's turn P1 loses control and it is recalled to P2's base — still buffed, healed; A is left empty so P1 does not hold it (317.1, 455, 458.1, 323.7, 190.4.c)", async () => {
+  test("(b) at end of P1's turn P1 loses control and it is recalled to P2's base — still buffed, healed; A is left empty so P1 does not hold it (317.1, 455, 458.1, 323.7, 190.4.c)", async () => {
     // Expected as titled. Actual: Hostile Takeover's delayed 'lose control … recall it' clause is not
     // implemented — the unit stays P1-controlled at A into P2's turn.
     const game = await taken();
@@ -157,7 +157,7 @@ describe("Hostile Takeover × Peak Guardian × Rebuke / Possession — temporary
     expect(game.cardsAt("bfA")).toEqual([]);
   });
 
-  test.failing("BUG: (c) the bounced card is a new object — the temporary control change is cleared too, so in P2's hand it is P2's card in every respect (124.1)", async () => {
+  test("(c) the bounced card is a new object — the temporary control change is cleared too, so in P2's hand it is P2's card in every respect (124.1)", async () => {
     // Expected: controller reads P2 (no status survives the zone change). Actual: the card record in
     // P2's hand still carries controller = P1 from Hostile Takeover.
     const game = await p2Window();

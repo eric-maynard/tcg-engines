@@ -17,12 +17,22 @@ function bounceToHand(cardId: string, ctx: EffectContext): void {
   ctx.counters.setFlag(cardId as CoreCardId, "exhausted", false);
   ctx.counters.setFlag(cardId as CoreCardId, "stunned", false);
   ctx.counters.setFlag(cardId as CoreCardId, "buffed", false);
+  // rule 124.1 (sfd-202-221) — the card in hand is a new object: a temporary
+  // control change does not survive the zone change either.
+  const owner = ctx.cards.getCardOwner(cardId as CoreCardId);
+  if (owner !== undefined) {
+    ctx.cards.setCardController?.(cardId as CoreCardId, owner);
+  }
   ctx.cards.updateCardMeta?.(cardId as CoreCardId, {
     buffed: false,
+    controlEffects: undefined,
     combatRole: null,
     damage: 0,
     exhausted: false,
     grantedKeywords: undefined,
+    // rule-id: ogn-181-298 — a facedown card returned to hand stops being hidden.
+    hidden: false,
+    hiddenAt: undefined,
     mightModifier: 0,
     stunned: false,
   } as Partial<RiftboundCardMeta> as Record<string, unknown>);

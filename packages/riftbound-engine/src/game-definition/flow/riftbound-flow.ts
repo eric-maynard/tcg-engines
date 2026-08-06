@@ -750,6 +750,54 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 }
               }
 
+              // rule 317.1 / 455 (sfd-202-221 Hostile Takeover) — "…at end of
+              // turn" control changes expire now: the permanent re-layers to
+              // the next surviving control effect (else its owner) and, when
+              // the effect said so, is recalled to its controller's base.
+              // Recall is not a move (rule 458.1), so board state is kept.
+              for (const cardId of allBoardCards) {
+                const meta = context.cards.getCardMeta(cardId) as
+                  | Partial<RiftboundCardMeta>
+                  | undefined;
+                const effects = meta?.controlEffects;
+                if (!effects || effects.length === 0) {
+                  continue;
+                }
+                const expiring = effects.filter((e) => e.duration === "end-of-turn");
+                if (expiring.length === 0) {
+                  continue;
+                }
+                const surviving = effects.filter((e) => e.duration !== "end-of-turn");
+                context.cards.updateCardMeta(cardId, {
+                  controlEffects: surviving.length > 0 ? surviving : undefined,
+                } as Partial<RiftboundCardMeta>);
+                const owner = context.cards.getCardOwner?.(cardId);
+                const desired = surviving[surviving.length - 1]?.controllerId ?? owner;
+                if (desired) {
+                  context.cards.setCardController?.(cardId, desired as CorePlayerId);
+                }
+                if (expiring.some((e) => e.recallOnExpiry === true)) {
+                  const from = context.zones.getCardZone?.(cardId);
+                  context.zones.moveCard({ cardId, targetZoneId: "base" as CoreZoneId });
+                  // rule 323.6 / 190.4.c — a battlefield left without a unit
+                  // its controller controls is lost immediately (the Ending
+                  // Step is an Open State).
+                  if (from?.startsWith("battlefield-")) {
+                    const bf = context.state.battlefields[from.slice("battlefield-".length)];
+                    const stillThere = context.zones
+                      .getCardsInZone(from as CoreZoneId)
+                      .some(
+                        (id) =>
+                          (context.cards.getCardController?.(id) ??
+                            context.cards.getCardOwner?.(id)) === bf?.controller,
+                      );
+                    if (bf?.controller && !stillThere) {
+                      bf.controller = null;
+                    }
+                  }
+                }
+              }
+
               // rule-id: ven-113-166 (rule 517.2.b) — turn-scoped granted
               // [Flow] expires at end of turn. The card sits in the trash, not
               // on the board, so sweep every card that carries the grant.

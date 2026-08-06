@@ -177,7 +177,14 @@ export interface RiftboundCardMeta {
    * board (or that has no source, i.e. permanent) wins; with none left the
    * card reverts to its owner. Re-evaluated by state-based cleanup.
    */
-  controlEffects?: { controllerId: string; sourceCardId?: CardId }[];
+  controlEffects?: {
+    controllerId: string;
+    sourceCardId?: CardId;
+    /** rule 317.1 — expires in the Ending Step of the turn it was created. */
+    duration?: "end-of-turn";
+    /** rule 455 (sfd-202-221) — on expiry the permanent is also recalled. */
+    recallOnExpiry?: boolean;
+  }[];
 
   /**
    * Optional free-form label attached to the card by a sandbox/meta action.
@@ -690,6 +697,14 @@ export interface RiftboundGameState {
 
   /** Rune pools indexed by player ID */
   readonly runePools: Record<string, RunePool>;
+
+  /**
+   * rule 429.4 (ogs-014-024 Lux, Crownguard): Energy added by an ability that
+   * says "Use only to play spells / gear" is earmarked. Per player, how much of
+   * the current Energy pool may only pay for that card type; other plays must
+   * ignore it. Emptied with the pools at end of turn.
+   */
+  readonly restrictedEnergy?: Record<string, Partial<Record<string, number>>>;
 
   /** Battlefields conquered this turn (for scoring restrictions) */
   readonly conqueredThisTurn: Record<string, CardId[]>;
