@@ -17,6 +17,7 @@ import {
   type StaticCostReduction,
   applyStaticCostReduction,
   computeGrantedSpellRepeatCost,
+  computeOptionalAdditionalCostFlexReduction,
   computeStaticCostReduction,
   computeStaticRepeatCostReduction,
   decodeCostAmount,
@@ -967,7 +968,9 @@ function getBoardCostReduction(
   if (!extras.board) {
     return NO_BOARD_REDUCTION;
   }
-  return computeStaticCostReduction({ draft: state, ...extras.board }, playerId, cardId);
+  return computeStaticCostReduction({ draft: state, ...extras.board }, playerId, cardId, {
+    viaFlow: extras.viaFlow === true,
+  });
 }
 
 /**
@@ -1075,7 +1078,72 @@ export function getEffectiveSpellRepeatCost(
   if (perTier > 0) {
     tiers = tiers.map((t) => ({ ...t, energy: Math.max(0, t.energy - perTier) }));
   }
+  // rule-id: sfd-149-221 (rules 356.4.c, 356.4.c.1) — "Optional additional
+  // costs you pay cost [1] or [rainbow] less": each Repeat tier is an optional
+  // additional cost, and the payer chooses which half of the tier each
+  // reduction shaves off. Resolve that choice against the pool so a tier that
+  // could go either way is dropped from whichever resource is short.
+  const flex = board
+    ? computeOptionalAdditionalCostFlexReduction({ draft: state, ...board }, playerId)
+    : 0;
+  if (flex > 0) {
+    tiers = applyFlexibleRepeatReduction(tiers, flex, availablePowerForRepeats(state, playerId, cardId));
+  }
   return tiers.length > 0 ? tiers : undefined;
+}
+
+/** Power pips left over for [Repeat] costs once the printed cost is covered. */
+function availablePowerForRepeats(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+): number {
+  const pool = state.runePools[playerId];
+  if (!pool) {
+    return 0;
+  }
+  const have = Object.values(pool.power).reduce((a, b) => a + (b ?? 0), 0);
+  const printed = getGlobalCardRegistry().getPowerCost(cardId)?.length ?? 0;
+  return Math.max(0, have - printed);
+}
+
+/**
+ * rule 356.4.c.1 — apply `flex` "one Energy OR one Power pip less" reductions
+ * to every tier. A tier with only one kind of cost left has no choice; a tier
+ * with both defers to the pool: shave the Energy when the remaining pips are
+ * still payable, otherwise shave a pip.
+ */
+function applyFlexibleRepeatReduction(
+  tiers: RepeatTiers,
+  flex: number,
+  availablePower: number,
+): RepeatTiers {
+  const work = tiers.map((t) => ({ energy: t.energy, power: [...t.power] }));
+  const pending: number[] = [];
+  for (const [i, tier] of work.entries()) {
+    for (let n = 0; n < flex; n++) {
+      if (tier.energy > 0 && tier.power.length > 0) {
+        pending.push(i);
+      } else if (tier.energy > 0) {
+        tier.energy -= 1;
+      } else if (tier.power.length > 0) {
+        tier.power.pop();
+      }
+    }
+  }
+  let pips = work.reduce((a, t) => a + t.power.length, 0);
+  for (const i of pending) {
+    const tier = work[i] as { energy: number; power: string[] };
+    if (tier.energy > 0 && pips <= availablePower) {
+      tier.energy -= 1;
+    } else if (tier.power.length > 0) {
+      tier.power.pop();
+      pips -= 1;
+    } else if (tier.energy > 0) {
+      tier.energy -= 1;
+    }
+  }
+  return work;
 }
 
 /**
@@ -1105,6 +1173,15 @@ function getSelfScaledEnergyReduction(
       | { type?: string; target?: unknown; scope?: unknown; reduction?: unknown; amount?: unknown; by?: unknown }
       | undefined;
     if (effect?.type !== "cost-reduction" || effect.target !== "self") {
+      continue;
+    }
+    // rule 356.4 (rule-id: sfd-164-221) — "I cost [N] less to play from
+    // anywhere other than your hand": a flat self-discount gated on the play's
+    // origin zone. A [Flow] play always comes from the trash (rule 829.1.b).
+    if ((effect as { whenPlayedFrom?: unknown }).whenPlayedFrom === "not-hand") {
+      if (extras.viaFlow) {
+        total += Math.max(0, decodeCostAmount(effect.by ?? effect.reduction ?? effect.amount).energy);
+      }
       continue;
     }
     // rule 356.4 / rule-id: ogn-014-298 — "This spell's Energy cost is reduced
@@ -1155,6 +1232,136 @@ export function additionalCostPower(extras: CostExtras): Partial<Record<string, 
     out[d] = (out[d] ?? 0) + 1;
   }
   return out;
+}
+
+/**
+ * rule 805.1.a.1 / 135.2.e.5 — walk an optional additional cost's pips against
+ * a power pool. A named-domain pip is paid from that domain, falling back to
+ * pooled [rainbow] Power (rule 135.2.e.5.b); a [rainbow] pip is paid from any
+ * domain (rule 135.2.e.5.a). Returns the leftover pool, or undefined when the
+ * cost cannot be met.
+ */
+function walkOptionalPlayCostPower(
+  power: Partial<Record<string, number>>,
+  pips: readonly string[],
+): Record<string, number> | undefined {
+  const remaining: Record<string, number> = {};
+  for (const [d, v] of Object.entries(power)) {
+    if (typeof v === "number" && v > 0) {
+      remaining[d] = v;
+    }
+  }
+  for (const domain of pips) {
+    if (domain === "rainbow") {
+      const any = Object.keys(remaining).find((k) => (remaining[k] ?? 0) > 0);
+      if (any === undefined) {
+        return undefined;
+      }
+      remaining[any] -= 1;
+      continue;
+    }
+    if ((remaining[domain] ?? 0) > 0) {
+      remaining[domain] -= 1;
+      continue;
+    }
+    if ((remaining.rainbow ?? 0) > 0) {
+      remaining.rainbow -= 1;
+      continue;
+    }
+    return undefined;
+  }
+  return remaining;
+}
+
+/**
+ * rule 356.4.c / 356.4.c.1 (sfd-149-221 Ezreal, Prodigy) — apply `flex`
+ * "one Energy OR one Power pip less" reductions to an optional additional cost
+ * (e.g. [Accelerate]'s [1][fury]). The payer picks which half each reduction
+ * shaves, so resolve the choice against the pool: drop the Energy while the
+ * remaining pips stay payable, otherwise drop a pip.
+ */
+export function applyFlexibleOptionalCostReduction(
+  cost: { energy?: number; power?: readonly string[] },
+  flex: number,
+  pool: { energy: number; power: Partial<Record<string, number>> } | undefined,
+): { energy: number; power: readonly string[] } {
+  let energy = cost.energy ?? 0;
+  let pips = [...(cost.power ?? [])];
+  const payable = (list: readonly string[]): boolean =>
+    pool === undefined || walkOptionalPlayCostPower(pool.power, list) !== undefined;
+  for (let i = 0; i < flex; i++) {
+    if (energy > 0 && payable(pips)) {
+      energy -= 1;
+      continue;
+    }
+    if (pips.length > 0) {
+      // rule 356.4.c.1: drop whichever pip the pool cannot cover.
+      const drop = pips.findIndex((_, idx) => payable(pips.filter((__, j) => j !== idx)));
+      pips = pips.filter((_, idx) => idx !== (drop >= 0 ? drop : pips.length - 1));
+      continue;
+    }
+    if (energy > 0) {
+      energy -= 1;
+    }
+  }
+  return { energy, power: pips };
+}
+
+/**
+ * rule 356.4.c (sfd-149-221) — the optional additional cost `cost` as the
+ * player actually pays it, after friendly "optional additional costs you pay
+ * cost [1] or [rainbow] less" statics. Returns `cost` unchanged when no such
+ * static is on the board (or no board accessors were supplied).
+ */
+export function discountOptionalPlayCost(
+  state: RiftboundGameState,
+  playerId: string,
+  cost: { energy?: number; power?: readonly string[] } | undefined,
+  board: CostExtras["board"] | undefined,
+): { energy: number; power: readonly string[] } | undefined {
+  if (!cost || !board) {
+    return cost === undefined ? undefined : { energy: cost.energy ?? 0, power: cost.power ?? [] };
+  }
+  const flex = computeOptionalAdditionalCostFlexReduction({ draft: state, ...board }, playerId);
+  if (flex <= 0) {
+    return { energy: cost.energy ?? 0, power: cost.power ?? [] };
+  }
+  return applyFlexibleOptionalCostReduction(cost, flex, state.runePools[playerId]);
+}
+
+/** rule 356.1.b.3 / 805.1.a — can `pool` pay this optional additional cost right now? */
+export function canPayOptionalPlayCost(
+  pool: { energy: number; power: Partial<Record<string, number>> } | undefined,
+  cost: { energy?: number; power?: readonly string[] } | undefined,
+): boolean {
+  if (!pool) {
+    return false;
+  }
+  if (!cost) {
+    return true;
+  }
+  if (pool.energy < (cost.energy ?? 0)) {
+    return false;
+  }
+  return walkOptionalPlayCostPower(pool.power, cost.power ?? []) !== undefined;
+}
+
+/** rule 356.1.b.3 / 805.1.a — spend an optional additional cost from `pool`. */
+export function payOptionalPlayCost(
+  pool: { energy: number; power: Partial<Record<string, number>> },
+  cost: { energy?: number; power?: readonly string[] } | undefined,
+): void {
+  if (!cost) {
+    return;
+  }
+  pool.energy = Math.max(0, pool.energy - (cost.energy ?? 0));
+  const left = walkOptionalPlayCostPower(pool.power, cost.power ?? []);
+  if (!left) {
+    return;
+  }
+  for (const domain of Object.keys(pool.power)) {
+    (pool.power as Record<string, number>)[domain] = left[domain] ?? 0;
+  }
 }
 
 /**
@@ -1223,6 +1430,25 @@ export function getPotentialRuneEnergy(
 }
 
 /**
+ * rule-id: ven-113-166 (rule 829.1.b) — a card's [Flow] cost, whether printed
+ * as a keyword or granted this turn by an effect ("give a spell in your trash
+ * [Flow] equal to its cost"). Granted Flow is card meta, so every reader that
+ * offers or prices a play from the trash must consult it, not just the
+ * registry's printed keyword.
+ */
+export function getFlowCostForPlay(
+  cardId: string,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): { energy: number; power: readonly string[] } | undefined {
+  const printed = getGlobalCardRegistry().getSpellFlowCost(cardId);
+  if (printed) {
+    return printed;
+  }
+  const granted = getCardMeta?.(cardId as CoreCardId)?.grantedFlow;
+  return granted ? { energy: granted.energy, power: granted.power } : undefined;
+}
+
+/**
  * rule-id: ven-049-166 — resolve the base cost to charge for a play. Normally
  * the printed cost; when playing via [Flow] from the trash, the card's Flow
  * keyword cost replaces the printed cost.
@@ -1230,10 +1456,11 @@ export function getPotentialRuneEnergy(
 export function getBaseCostForPlay(
   cardId: string,
   extras: CostExtras,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
 ): { energy: number; power: Partial<Record<string, number>> } {
   const registry = getGlobalCardRegistry();
   if (extras.viaFlow) {
-    const flow = registry.getSpellFlowCost(cardId);
+    const flow = getFlowCostForPlay(cardId, getCardMeta);
     if (flow) {
       const power: Partial<Record<string, number>> = {};
       for (const domain of flow.power) {
@@ -1307,7 +1534,7 @@ export function canAffordCard(
   }
 
   const modifier = getCostModifier(cardId, getCardMeta);
-  const baseCost = getBaseCostForPlay(cardId, extras);
+  const baseCost = getBaseCostForPlay(cardId, extras, getCardMeta);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
   // rule 204.3.b / 135.2.e: an X paid in [rainbow] never touches Energy.
@@ -1429,7 +1656,7 @@ export function deductCost(
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
 ): void {
-  const cost = getBaseCostForPlay(cardId, extras);
+  const cost = getBaseCostForPlay(cardId, extras, getCardMeta);
   const pool = draft.runePools[playerId];
   if (!pool) {
     return;

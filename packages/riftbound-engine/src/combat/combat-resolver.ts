@@ -44,6 +44,11 @@ export interface CombatUnit {
    * INCLUDING it, so a shielded Tank soaks Might + Prevent Value.
    */
   readonly preventValue?: number;
+  /**
+   * rule 437.5.b (sfd-194-221) — a delayed "prevent the next damage instance"
+   * shield: its Prevent Value is All, so no assignment is ever lethal to it.
+   */
+  readonly preventsNextDamageInstance?: boolean;
 }
 
 /**
@@ -102,6 +107,12 @@ function hasKeyword(unit: CombatUnit, keyword: string): boolean {
  * attacking Assault unit needs base+Assault damage to die.
  */
 function lethalThreshold(unit: CombatUnit, role?: "attacker" | "defender"): number {
+  // rule 437.5.b: a Prevent Value of "All" means no amount of damage is ever
+  // lethal to this unit — but it is still assignable (465.2.c.10), so the
+  // mandatory assignment piles the whole side's damage onto it.
+  if (unit.preventsNextDamageInstance === true) {
+    return Number.MAX_SAFE_INTEGER;
+  }
   let might = unit.baseMight;
   if (role === "defender") {
     might += getKeywordValue(unit, "Shield");

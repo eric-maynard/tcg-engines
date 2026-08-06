@@ -65,6 +65,15 @@ export interface CostReductionContext {
  * Callers apply: `effective = max(printed - reduction, max(minimum, 0))`,
  * BUT must also never go below zero (energy costs can't be negative).
  */
+/**
+ * rule-id: ven-098-166 — how the card is being played, for auras whose scope
+ * names the play rather than the card ("spells … you play from your trash").
+ */
+export interface CostPlayContext {
+  /** The play uses a [Flow] cost from the trash (rule 829.1.b). */
+  readonly viaFlow?: boolean;
+}
+
 export interface StaticCostReduction {
   readonly reduction: number;
   readonly minimum: number;
@@ -139,6 +148,7 @@ export function computeStaticCostReduction(
   ctx: CostReductionContext,
   playerId: string,
   playedCardId: string,
+  playContext?: CostPlayContext,
 ): StaticCostReduction {
   const registry = getGlobalCardRegistry();
   const playedDef = registry.get(playedCardId);
@@ -194,7 +204,7 @@ export function computeStaticCostReduction(
         // Played card. `self` / no-target shapes do not match an external
         // Played card.
         const {target} = (effect as { target?: unknown });
-        if (!matchesPlayedCard(target, playedCardType, playedKeywords, playedTags)) {
+        if (!matchesPlayedCard(target, playedCardType, playedKeywords, playedTags, playContext)) {
           continue;
         }
 
@@ -492,12 +502,13 @@ export function computeGrantedSpellRepeatCost(
  * reduce (rule 356.6). Battlefield cards live in `battlefieldRow`, so that
  * zone is scanned too — the battlefield's controller is its card controller.
  */
-export function computeStaticRepeatCostReduction(
+function scanFriendlyCostReductionEffects(
   ctx: CostReductionContext,
   playerId: string,
-): number {
+  match: (target: unknown) => boolean,
+): unknown[] {
   const registry = getGlobalCardRegistry();
-  let total = 0;
+  const found: unknown[] = [];
   const zonesToScan: string[] = [...PLAYER_BOARD_ZONES, "battlefieldRow"];
   for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
     zonesToScan.push(`battlefield-${bfId}`);
@@ -524,7 +535,7 @@ export function computeStaticRepeatCostReduction(
           continue;
         }
         for (const effect of costEffectsOf(ability, "cost-reduction")) {
-          if (!targetsRepeatCost((effect as { target?: unknown }).target)) {
+          if (!match((effect as { target?: unknown }).target)) {
             continue;
           }
           const cond = (ability as { condition?: Record<string, unknown> }).condition;
@@ -547,16 +558,70 @@ export function computeStaticRepeatCostReduction(
               continue;
             }
           }
-          const rawAmt =
-            (effect as { by?: unknown }).by ??
-            (effect as { reduction?: unknown }).reduction ??
-            (effect as { amount?: unknown }).amount;
-          total += Math.max(0, decodeCostAmount(rawAmt).energy);
+          found.push(effect);
         }
       }
     }
   }
+  return found;
+}
+
+export function computeStaticRepeatCostReduction(
+  ctx: CostReductionContext,
+  playerId: string,
+): number {
+  let total = 0;
+  for (const effect of scanFriendlyCostReductionEffects(ctx, playerId, targetsRepeatCost)) {
+    const rawAmt =
+      (effect as { by?: unknown }).by ??
+      (effect as { reduction?: unknown }).reduction ??
+      (effect as { amount?: unknown }).amount;
+    total += Math.max(0, decodeCostAmount(rawAmt).energy);
+  }
   return total;
+}
+
+/**
+ * rule-id: sfd-149-221 (rules 356.4.c, 356.4.c.1) — how many FLEXIBLE
+ * reductions the player's permanents apply to EACH optional additional cost
+ * ("Optional additional costs you pay cost [1] or [rainbow] less"). Each one
+ * shaves either one Energy or one Power pip off every optional additional
+ * cost; the payer chooses which, so callers resolve the choice against the
+ * pool. A source that only ever reduces Energy is not flexible and is not
+ * counted here.
+ */
+export function computeOptionalAdditionalCostFlexReduction(
+  ctx: CostReductionContext,
+  playerId: string,
+): number {
+  let count = 0;
+  for (const effect of scanFriendlyCostReductionEffects(
+    ctx,
+    playerId,
+    targetsOptionalAdditionalCost,
+  )) {
+    const reduction = decodeCostAmount(
+      (effect as { by?: unknown }).by ?? (effect as { reduction?: unknown }).reduction,
+    );
+    const alternative = decodeCostAmount((effect as { alternative?: unknown }).alternative);
+    const pips = (r: { energy: number; power: Partial<Record<string, number>> }): number =>
+      r.energy + Object.values(r.power).reduce((a, b) => a + (b ?? 0), 0);
+    count += Math.max(pips(reduction), pips(alternative));
+  }
+  return count;
+}
+
+/** Does this target shape name optional ADDITIONAL costs (rule 356.4.c)? */
+function targetsOptionalAdditionalCost(target: unknown): boolean {
+  if (typeof target === "string") {
+    const t = target.toLowerCase();
+    return t.includes("optional additional") && !t.includes("enemy");
+  }
+  if (!target || typeof target !== "object") {
+    return false;
+  }
+  const t = target as { controller?: string; costKind?: string };
+  return t.controller !== "enemy" && t.costKind === "optional-additional";
 }
 
 /**
@@ -666,6 +731,7 @@ function matchesPlayedCard(
   playedCardType: string | undefined,
   playedKeywords: readonly string[],
   playedTags: readonly string[] = [],
+  playContext?: CostPlayContext,
 ): boolean {
   if (target === undefined || target === null) {
     return false;
@@ -681,6 +747,8 @@ function matchesPlayedCard(
     type?: string;
     keyword?: string;
     controller?: string;
+    costKind?: string;
+    fromZone?: string;
     tag?: string;
     filter?: { tag?: string };
   };
@@ -688,7 +756,22 @@ function matchesPlayedCard(
   if (t.controller === "enemy") {
     return false;
   }
-  return matchesCardShape(t, playedCardType, playedKeywords, playedTags);
+  // rule 356.4.c — a target naming a COST KIND ([Repeat], optional additional)
+  // discounts that cost, never the played card's own cost.
+  if (t.costKind !== undefined) {
+    return false;
+  }
+  // rule-id: ven-098-166 (rule 829.1.b) — "spells with [Flow] you play from
+  // your trash cost [2] less": an aura scoped to the Flow play matches only
+  // that play, and its [Flow] keyword may be GRANTED rather than printed, so
+  // the Flow play itself is the proof of the keyword.
+  const wantsFlowPlay = t.fromZone === "trash" || (t as { viaFlow?: boolean }).viaFlow === true;
+  if (wantsFlowPlay && playContext?.viaFlow !== true) {
+    return false;
+  }
+  const shape =
+    t.keyword === "Flow" && playContext?.viaFlow === true ? { ...t, keyword: undefined } : t;
+  return matchesCardShape(shape, playedCardType, playedKeywords, playedTags);
 }
 
 /**

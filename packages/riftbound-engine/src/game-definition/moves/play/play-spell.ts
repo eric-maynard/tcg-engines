@@ -35,6 +35,7 @@ import {
   canAffordCard,
   deductCost,
   getEffectiveSpellRepeatCost,
+  getFlowCostForPlay,
   xCostIsPower,
 } from "./cost";
 import type { SpellEffectTargetShape } from "./targeting";
@@ -178,7 +179,8 @@ export const playSpell: Defs["playSpell"] = {
       if (zone !== "trash") {
         return false;
       }
-      if (!getGlobalCardRegistry().getSpellFlowCost(context.params.cardId)) {
+      // rule-id: ven-113-166 — Flow may be GRANTED for the turn, not printed.
+      if (!getFlowCostForPlay(context.params.cardId, createMetaAccessor(context.cards))) {
         return false;
       }
     } else if (zone !== "hand") {
@@ -1013,9 +1015,9 @@ export const playSpell: Defs["playSpell"] = {
 
       // unl-182-219 [Repeat]: the additional cost is paid at cast time, so
       // enumerate one variant per affordable repeatCount alongside the base
-      // play. Skip when every tier is free of energy AND power to avoid an
-      // unbounded loop (rule 820.1.c.2 / 820.3 — canAffordCard bounds n
-      // once any tier charges a resource).
+      // rule 356.4.f.1 — a tier discounted all the way to [0] is still a cost
+      // the payer may pay, so offer every tier even when nothing is charged;
+      // n stays bounded by the number of tiers (rule 820.1.c.3).
       // rule-id: unl-146-219 — include board-granted Repeat instances.
       const repeatCost = getEffectiveSpellRepeatCost(
         state,
@@ -1023,7 +1025,7 @@ export const playSpell: Defs["playSpell"] = {
         cardId as string,
         board,
       );
-      if (repeatCost?.some((t) => t.energy > 0 || t.power.length > 0)) {
+      if (repeatCost && repeatCost.length > 0) {
         const meta = createMetaAccessor(context.cards);
         for (const base of baseVariants) {
           // rule-id: sfd-122-221 — Rule 820.1.c.3: each Repeat instance is
@@ -1069,7 +1071,8 @@ export const playSpell: Defs["playSpell"] = {
       if (!def || def.cardType !== "spell") {
         continue;
       }
-      if (!registry.getSpellFlowCost(cardId as string)) {
+      // rule-id: ven-113-166 — printed OR granted [Flow] offers the trash play.
+      if (!getFlowCostForPlay(cardId as string, meta)) {
         continue;
       }
       if (
