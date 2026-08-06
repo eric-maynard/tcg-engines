@@ -347,9 +347,9 @@ export function spellEffectHasLegalTargets(
   if (!effect) {
     return true;
   }
-  // rule-id: ogn-262-298 (rule 355.13) — a "You may …" instruction may always
-  // be declined, so its targets never gate whether the spell can be played.
-  if ((effect as { optional?: boolean }).optional === true) {
+  // rule-id: ogn-262-298 (rule 355.13) — a "You may move …" instruction may
+  // always be declined, so its target never gates whether the spell is playable.
+  if (effect.type === "move" && (effect as { optional?: boolean }).optional === true) {
     return true;
   }
   // Rule 355.8: modal spells — at least one option must have a valid target set.

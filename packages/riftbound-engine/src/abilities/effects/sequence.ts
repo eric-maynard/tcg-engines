@@ -86,6 +86,13 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       sourceZone: ctx.sourceZone,
       zones: ctx.zones,
     };
+    // rule-id: ogn-262-298 (rule 355.4) — "…move a friendly unit to THAT enemy
+    // unit's battlefield": the destination step's zone comes from an earlier
+    // step's chosen target, so capture that zone and thread it as `sameZone`.
+    const destRefIdx = seq.effects.findIndex(
+      (e) => (e as unknown as { to?: unknown }).to === "target-battlefield",
+    );
+    let destRefZone: string | undefined;
     let sameZone: string | undefined;
     let leadIds: string[] = [];
     let sameBound: string[] | undefined;
@@ -139,6 +146,15 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           isRestatementOf(s as { type: string }, subTarget as { type: string }),
         );
         const id = j >= 0 ? seqSlots.bound[j] : undefined;
+        // rule 355.13 (rule-id: sfd-023-221) — an "up to N" slot the caster
+        // left unchosen selects nothing; the step is skipped rather than
+        // re-resolved from the board.
+        if (j >= 0 && id === undefined) {
+          const q = (seqSlots.slots[j] as { quantity?: { upTo?: number } }).quantity;
+          if (typeof q === "object" && q !== null && q.upTo !== undefined) {
+            continue;
+          }
+        }
         const { boundTargets: _drop, ...rest } = subCtx;
         subCtx = id !== undefined ? { ...rest, boundTargets: [id] } : rest;
       } else if (seqSlots && sub.type === "sequence") {
@@ -218,6 +234,18 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           sameZone = leadId ? ctx.zones.getCardZone(leadId as CoreCardId) : undefined;
         }
       }
+      if (destRefIdx >= 0) {
+        if (i < destRefIdx) {
+          const refZone = getTargetIds(sub, subCtx)
+            .map((id) => ctx.zones.getCardZone(id as CoreCardId))
+            .find((z) => z?.startsWith("battlefield-") === true);
+          if (refZone) {
+            destRefZone = refZone;
+          }
+        } else if (i === destRefIdx) {
+          subCtx = { ...subCtx, sameZone: destRefZone } as EffectContext;
+        }
+      }
       // rule-id: ogn-056-298 — "you may kill a gear. If you do, buff me": a
       // following `paid-additional-cost` conditional is satisfied when the
       // preceding bare action step actually had something to act on.
@@ -241,6 +269,23 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         sub,
         { ...subCtx, pendingSequenceValue: pending } as EffectContext,
       );
+      // rule 355.8 / 820.2 (unl-182-219) — a step that parked a modal prompt
+      // suspends the rest of the sequence: the later Repeat executions must
+      // not run (and silently auto-pick modes) while the choice is pending.
+      // They resume from the prompt's `then` once the mode is picked.
+      const parked = ctx.draft.pendingChoice as
+        | { type?: string; then?: unknown }
+        | undefined;
+      if (parked?.type === "choose-mode" && parked.then === undefined) {
+        const rest = seq.effects.slice(i + 1);
+        if (rest.length > 0) {
+          ctx.draft.pendingChoice = {
+            ...(parked as object),
+            then: { effects: rest, type: "sequence" },
+          } as typeof ctx.draft.pendingChoice;
+        }
+        return;
+      }
     }
   }
 }

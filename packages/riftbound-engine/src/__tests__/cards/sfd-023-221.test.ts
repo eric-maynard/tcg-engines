@@ -49,17 +49,13 @@ describe("Piercing Light (sfd-023-221)", () => {
     expect(game.zoneOf("pl")).toBe("trash");
   });
 
-  test.failing("BUG: the first target is mandatory (rule 355.8) — casting with no target chosen must be refused", async () => {
-    // Expected: "a unit at a battlefield" is a required target; an empty target list is not a legal play.
-    // Actual: the parser folded the clause into a single "up to 1" target, so a targetless cast is offered.
+  test("the first target is mandatory (rule 355.8) — casting with no target chosen must be refused", async () => {
     const game = await board().build();
     const targets = game.p1.option("cast", "pl")?.fields.find((f) => f.arg === "targets")?.options ?? [];
     expect(targets).not.toContainEqual([]);
   });
 
-  test.failing("BUG: 'then deal 2 to up to one other unit' — a second, different unit (anywhere) may also take 2", async () => {
-    // Expected: targets [front, home] is legal (the second unit need not be at a battlefield) and both take 2.
-    // Actual: only one target slot exists; the second clause is not modelled.
+  test("'then deal 2 to up to one other unit' — a second, different unit (anywhere) may also take 2", async () => {
     const game = await board().build();
     await game.p1.cast("pl", { targets: ["front", "home"] });
     await game.settle();
