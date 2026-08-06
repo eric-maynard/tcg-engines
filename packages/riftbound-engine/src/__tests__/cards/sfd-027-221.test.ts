@@ -51,9 +51,7 @@ describe("Dunebreaker (sfd-027-221)", () => {
     expect(game.state("dune").isReady).toBe(true);
   });
 
-  test.failing("BUG: enters EXHAUSTED with three or more other cards in hand — the 'two or fewer' condition is ignored (rules 143.4, 364.3.a)", async () => {
-    // Expected: 4 other cards in hand → condition false → normal exhausted entry. Actual: the
-    // static enter-ready effect applies unconditionally, so Dunebreaker is ready.
+  test("enters EXHAUSTED with three or more other cards in hand (rules 143.4, 364.3.a)", async () => {
     const game = await inHand(4).build();
     await game.p1.play("dune");
     await game.settle();

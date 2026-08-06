@@ -50,9 +50,7 @@ describe("Bushwhack (sfd-004-221)", () => {
     expect(game.p2.gear()).toEqual([]);
   });
 
-  test.failing("BUG: 'Friendly units enter ready this turn' — a unit played after Bushwhack resolves enters ready (rule 143.4 override)", async () => {
-    // Expected: ally enters ready this turn. Actual: the clause is parsed as a static ability on a
-    // spell, which never applies once the spell has left the chain, so the unit enters exhausted.
+  test("'Friendly units enter ready this turn' — a unit played after Bushwhack resolves enters ready (rule 143.4 override)", async () => {
     const game = await board().build();
     await game.p1.cast("bw");
     await game.settle();

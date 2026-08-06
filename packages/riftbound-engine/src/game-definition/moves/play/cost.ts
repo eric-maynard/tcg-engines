@@ -101,6 +101,33 @@ function evaluateEnterReadyCondition(
         .getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId)
         .some((id) => id !== cardId && registry.get(id as string)?.name === name);
     }
+    // rule 143.4 / 364.3.a (rule-id: sfd-027-221) — "If you have two or fewer
+    // cards in your hand, I enter ready": the count is taken as the unit
+    // enters, by which time it has already left the hand.
+    case "has-at-most":
+    case "has-at-least": {
+      // Without zone access the hand cannot be counted; report "does not
+      // hold" rather than falling back to an unconditional entry.
+      if (!zones) {
+        return false;
+      }
+      const target = (condition.target ?? {}) as { location?: string; controller?: string };
+      if (target.location !== "hand") {
+        return undefined;
+      }
+      const whose =
+        target.controller === "enemy"
+          ? Object.keys(state.players).find((pid) => pid !== playerId)
+          : playerId;
+      if (!whose) {
+        return undefined;
+      }
+      const n = zones
+        .getCardsInZone("hand" as CoreZoneId, whose as CorePlayerId)
+        .filter((id) => id !== cardId).length;
+      const limit = (condition.count as number | undefined) ?? 0;
+      return condition.type === "has-at-most" ? n <= limit : n >= limit;
+    }
     case "not": {
       const inner = evaluateEnterReadyCondition(
         (condition.condition ?? {}) as Record<string, unknown>,
@@ -235,6 +262,43 @@ export function getPlayLocationPermission(cardId: string): string | undefined {
 }
 
 /**
+ * rule 419.1 / rule-id: ven-022-166 — a permanent this player controls that
+ * reads "You may play cards from your trash" extends the legal play zone: the
+ * trash becomes a play-from zone for its controller. Recognised either as an
+ * explicit `{type:"play-permission", from:"trash"}` static effect or from the
+ * printed clause when the card's text is still unparsed (`raw`).
+ */
+export function hasPlayFromTrashGrant(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  playerId: string,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  const zoneIds = [
+    "base",
+    ...Object.keys(state.battlefields ?? {}).map((bfId) => getBattlefieldZoneId(bfId) as string),
+  ];
+  for (const zoneId of zoneIds) {
+    for (const cardId of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
+      for (const ability of registry.getAbilities(cardId as string) ?? []) {
+        const effect = (ability as { effect?: { type?: string; from?: string; text?: string } })
+          ?.effect;
+        if (effect?.type === "play-permission" && effect.from === "trash") {
+          return true;
+        }
+        if (
+          typeof effect?.text === "string" &&
+          /you may play cards from your trash/i.test(effect.text)
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Rule ogn-193-298: a friendly unit on the board with static "Friendly units
  * may be played to open battlefields" (play-restriction with
  * `appliesTo: "friendly-units"`) extends the open-battlefield permission to
@@ -328,6 +392,13 @@ export function boardEntersReadyGrantApplies(
   cardId: string,
   playerId: string,
 ): boolean {
+  // rule 143.4 / 364.3.a (rule-id: sfd-027-221) — the played card's OWN
+  // conditional "I enter ready" static ("If you have two or fewer cards in
+  // your hand") can only be evaluated with zone access, and this is the
+  // enter-ready check that receives it.
+  if (staticEnterReadyApplies(cardId, state, playerId, zones)) {
+    return true;
+  }
   const registry = getGlobalCardRegistry();
   const zoneIds = [
     "base",
@@ -1264,13 +1335,21 @@ function getSelfScaledEnergyReduction(
     }
     const scope = effect.scope.toLowerCase();
     let count = 0;
+    // rule 419.1 (rule-id: ven-096-166) — playing a card puts it on the chain
+    // BEFORE its cost is determined, so a card played out of the trash never
+    // counts itself; only the other copies still there reduce the cost.
     if (scope.startsWith("for each card with my name in your trash")) {
       const name = registry.get(cardId)?.name;
       const trash = zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId);
-      count = name ? trash.filter((id) => registry.get(id as string)?.name === name).length : 0;
+      count = name
+        ? trash.filter((id) => (id as string) !== cardId && registry.get(id as string)?.name === name)
+            .length
+        : 0;
     } else if (scope.startsWith("for each card in your trash")) {
       // rule-id: ogn-195-298 — same shape, unfiltered trash count.
-      count = zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId).length;
+      count = zones
+        .getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId)
+        .filter((id) => (id as string) !== cardId).length;
     }
     if (count <= 0) {
       continue;
