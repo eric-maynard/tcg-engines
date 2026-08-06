@@ -29,7 +29,7 @@ function board() {
 }
 
 describe("Fading Memories (ogn-180-298)", () => {
-  test.failing("BUG: costs 4 energy + 1 chaos; castable on a unit at a battlefield; goes to trash", async () => {
+  test("costs 4 energy + 1 chaos; castable on a unit at a battlefield; goes to trash", async () => {
     // Expected: legal with 4 energy + 1 chaos and a battlefield unit; paying empties the pool.
     // Actual: no legal targets are ever found, so `cast` is not offered at all.
     const game = await board().build();
@@ -47,7 +47,7 @@ describe("Fading Memories (ogn-180-298)", () => {
     expect(lowEnergy.p1.can("cast", "fm")).toBe(false);
   });
 
-  test.failing("BUG: legal targets are units AT A BATTLEFIELD (either side) and any gear — not units in a base", async () => {
+  test("legal targets are units AT A BATTLEFIELD (either side) and any gear — not units in a base", async () => {
     // Expected: foe, mine, trinket offered; home (in base) rejected. Actual: nothing is offered.
     const game = await board().build();
     const targets = game.p1.option("cast", "fm")?.fields.find((f) => f.arg === "targets")?.options;
@@ -57,7 +57,7 @@ describe("Fading Memories (ogn-180-298)", () => {
     expect(t.ok).toBe(false);
   });
 
-  test.failing("BUG: the unit gains Temporary and is killed at the start of ITS CONTROLLER's next Beginning Phase (rule 816.1.b/c)", async () => {
+  test("the unit gains Temporary and is killed at the start of ITS CONTROLLER's next Beginning Phase (rule 816.1.b/c)", async () => {
     // Expected: foe (P2's) keeps Temporary through P1's turn and dies as P2's turn begins.
     // Actual: spell cannot be cast.
     const game = await board().build();
@@ -71,7 +71,7 @@ describe("Fading Memories (ogn-180-298)", () => {
     expect(game.zoneOf("mine")).toBe("battlefield-bf1");
   });
 
-  test.failing("BUG: a friendly Temporary unit survives the opponent's turn and dies only when YOUR Beginning Phase starts", async () => {
+  test("a friendly Temporary unit survives the opponent's turn and dies only when YOUR Beginning Phase starts", async () => {
     // Expected: mine (P1's) is untouched during P2's turn, killed when P1's next turn begins.
     const game = await board().build();
     await game.p1.cast("fm", { targets: "mine" });
@@ -84,7 +84,7 @@ describe("Fading Memories (ogn-180-298)", () => {
     expect(game.zoneOf("mine")).toBe("trash");
   });
 
-  test.failing("BUG: a gear can be given Temporary and is killed at the start of its controller's Beginning Phase", async () => {
+  test("a gear can be given Temporary and is killed at the start of its controller's Beginning Phase", async () => {
     // Expected: P2's Trinket goes to trash as P2's turn begins. Actual: spell cannot be cast.
     const game = await board().build();
     await game.p1.cast("fm", { targets: "trinket" });

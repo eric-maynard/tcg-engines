@@ -26,6 +26,18 @@ export function resolveGrantTarget(rawTargetStr: string): AnyTarget {
   const targetStr = rawTargetStr.trim();
   const lower = targetStr.toLowerCase();
 
+  // rule-id: ogn-180-298 (Fading Memories) — "a unit at a battlefield or a
+  // gear": two independent descriptors, each with its own location, so emit a
+  // union rather than letting the tail phrase be swallowed as a tag.
+  if (/\bor\b/i.test(targetStr) && !/^(?:it|them|me)$/i.test(lower)) {
+    const branches = targetStr.split(/\s+or\s+/i).map((s) => s.trim()).filter((s) => s.length > 0);
+    if (branches.length > 1) {
+      return {
+        anyOf: branches.map((b) => resolveGrantTarget(b) as Target),
+      } as unknown as AnyTarget;
+    }
+  }
+
   if (lower === "me") {
     return "self";
   }

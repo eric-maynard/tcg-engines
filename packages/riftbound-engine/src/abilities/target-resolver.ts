@@ -30,12 +30,19 @@ export interface TargetDescriptor {
   readonly type: string;
   /** rule-id: ven-150-166 — any-of card-type list ("units, gear, and/or runes"). */
   readonly types?: readonly string[];
+  /** rule-id: ogn-180-298 — union of alternative descriptors ("X or Y"). */
+  readonly anyOf?: readonly TargetDescriptor[];
   readonly controller?: "friendly" | "enemy" | "any";
   readonly location?: string;
   readonly filter?: TargetFilter | TargetFilter[];
   readonly quantity?: number | "all";
   /** Parser sets this for "another"/"other" wording. */
   readonly excludeSelf?: boolean;
+  /**
+   * rule-id: ogn-200-298 — "all OTHER …" relative to a preceding step's chosen
+   * target: re-resolve from the board and drop the already-bound ids.
+   */
+  readonly excludeBound?: boolean;
 }
 
 /** Single filter clause — string state literal or object predicate. */
@@ -135,6 +142,25 @@ export function resolveTarget(
   // string is a pre-resolved card ID (see getTargetIds in effect-executor).
   if (typeof target === "string") {
     return target === "self" ? [ctx.sourceCardId] : [target];
+  }
+
+  // rule-id: ogn-180-298 (Fading Memories) — "a unit at a battlefield or a
+  // gear": each branch carries its own location/controller, so resolve them
+  // independently and union the pools before applying this descriptor's
+  // quantity (rule 355.8 — every candidate must satisfy at least one branch).
+  if (target.anyOf && target.anyOf.length > 0) {
+    const seen = new Set<string>();
+    for (const branch of target.anyOf) {
+      for (const id of resolveTarget({ ...branch, quantity: "all" }, ctx)) {
+        seen.add(id);
+      }
+    }
+    const union = [...seen];
+    if (target.quantity === "all") {
+      return union;
+    }
+    const count = typeof target.quantity === "number" ? target.quantity : 1;
+    return union.slice(0, count);
   }
 
   // Self target
@@ -597,6 +623,11 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
   if ("might" in filter) {
     return matchesComparison(effectiveMight(def, meta), filter.might);
   }
+  // rule 206: "costing no more than [3] and no more than [rainbow]" compares
+  // the PRINTED cost, Energy and Power as two independent comparisons.
+  if ("energyCost" in filter || "powerCost" in filter) {
+    return matchesPrintedCostFilter(cardId, filter);
+  }
   if ("keyword" in filter && typeof filter.keyword === "string") {
     if (registry.hasKeyword(cardId, filter.keyword)) {
       return true;
@@ -688,6 +719,26 @@ function effectiveMight(
   const base = def?.might ?? 0;
   const buff = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
   return Math.max(0, base + buff + (meta?.mightModifier ?? 0) + (meta?.staticMightBonus ?? 0));
+}
+
+/**
+ * rule 206: a printed-cost comparison (`{energyCost}` / `{powerCost}`). Power
+ * is compared as a pip count, so "no more than [rainbow]" is `{lte: 1}`.
+ * Usable for cards outside the board zones the resolver scans (trash, hand).
+ */
+export function matchesPrintedCostFilter(cardId: string, filter: unknown): boolean {
+  if (typeof filter !== "object" || filter === null) {
+    return true;
+  }
+  const f = filter as { energyCost?: unknown; powerCost?: unknown };
+  const registry = getGlobalCardRegistry();
+  if ("energyCost" in f && !matchesComparison(registry.getEnergyCost(cardId), f.energyCost)) {
+    return false;
+  }
+  if ("powerCost" in f && !matchesComparison(registry.getPowerCost(cardId).length, f.powerCost)) {
+    return false;
+  }
+  return true;
 }
 
 function matchesComparison(value: number, cmp: unknown): boolean {

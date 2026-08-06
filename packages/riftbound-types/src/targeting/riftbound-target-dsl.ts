@@ -291,6 +291,14 @@ export interface Target {
    */
   readonly types?: readonly CardType[];
 
+  /**
+   * rule-id: ogn-180-298 (Fading Memories) — "a unit at a battlefield OR a
+   * gear": alternative descriptors whose candidate pools are unioned. Each
+   * branch keeps its own location/controller/filter, which `types` cannot
+   * express. When present it supersedes every other field on this descriptor.
+   */
+  readonly anyOf?: readonly Target[];
+
   /** Who controls the target */
   readonly controller?: TargetController;
 
@@ -305,6 +313,13 @@ export interface Target {
 
   /** Exclude the source card from targeting */
   readonly excludeSelf?: boolean;
+
+  /**
+   * rule-id: ogn-200-298 — "… and 1 to ALL OTHER enemy units here": the step
+   * names every card the earlier chosen target did NOT, so it re-resolves from
+   * the board and drops the ids already bound by the preceding step.
+   */
+  readonly excludeBound?: boolean;
 
   /** Optional targeting (player may choose not to target) */
   readonly optional?: boolean;
