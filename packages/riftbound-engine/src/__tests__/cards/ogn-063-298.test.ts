@@ -96,9 +96,7 @@ describe("Spirit's Refuge (ogn-063-298)", () => {
     expect(game.p2.power()).toBe(0);
   });
 
-  test.failing("BUG: 'if they didn't already' — a buffed Pouty Poro keeps Deflect 1, so one extra power suffices", async () => {
-    // Expected: the static grants nothing to a unit that already has Deflect, so P2 pays 1 energy + 1 power.
-    // Actual: the grant stacks with the printed keyword (Deflect 2) and the cast needs 2 power.
+  test("'if they didn't already' — a buffed Pouty Poro keeps Deflect 1, so one extra power suffices", async () => {
     const game = await playAndBuff(board().unit(P1, "base", POUTY_PORO, "poro"), "poro");
     expect(game.state("poro").isBuffed).toBe(true);
     await game.advanceTurn();

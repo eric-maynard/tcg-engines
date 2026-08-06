@@ -173,6 +173,8 @@ export interface RiftboundMoves {
     paidAdditionalCost?: boolean;
     additionalCostSpec?: { energy?: number; power?: readonly string[]; xp?: number };
     sacrificeId?: CardId;
+    /** rule 356.2.b — card discarded from hand as an optional additional cost. */
+    discardId?: CardId;
   };
 
   /**

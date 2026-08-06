@@ -44,10 +44,7 @@ describe("Brazen Buccaneer (ogn-002-298)", () => {
     expect(game.zoneOf("bb")).toBe("base");
   });
 
-  test.failing("BUG: discarding 1 as an additional cost reduces the cost by [2] — playable for 4 energy + a discard (rules 356.2.b, 204.2)", async () => {
-    // Expected: with 4 energy and another card in hand, Brazen Buccaneer is playable by opting into the
-    // discard; the fodder goes to trash and exactly 4 energy is spent. Actual: the parser emits
-    // `additionalCost: "discard 1"` which the engine does not recognise, so no discard variant exists.
+  test("discarding 1 as an additional cost reduces the cost by [2] — playable for 4 energy + a discard (rules 356.2.b, 204.2)", async () => {
     const game = await scenario().resources(P1, { energy: 4 }).hand(P1, CARD, "bb").hand(P1, FILLER, "fodder").build();
     expect(game.p1.can("play", "bb")).toBe(true);
     await game.p1.play("bb", { answers: ["fodder"], payOptional: true });

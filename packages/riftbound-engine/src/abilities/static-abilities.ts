@@ -558,7 +558,14 @@ function applyStaticEffect(
       return;
     }
     const value = effect.value as number | undefined;
+    // rule 809 (ogn-063-298) — "have [Keyword] if they didn't already": a card
+    // that already prints the keyword gets nothing, so values never sum.
+    const onlyIfMissing = effect.ifMissing === true;
+    const keywordRegistry = onlyIfMissing ? getGlobalCardRegistry() : undefined;
     for (const targetId of targetIds) {
+      if (keywordRegistry?.hasKeyword(targetId, keyword)) {
+        continue;
+      }
       const meta = ctx.cards.getCardMeta(targetId as CoreCardId) as
         | Partial<RiftboundCardMeta>
         | undefined;

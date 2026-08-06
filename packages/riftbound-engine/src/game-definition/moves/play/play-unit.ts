@@ -21,7 +21,9 @@ import {
 } from "../../../zones/zone-configs";
 import {
   staticEnterReadyApplies,
+  boardEntersReadyGrantApplies,
   canPlayToOpenBattlefield,
+  opponentsRestrictedToBase,
   playOnlyToConqueredBattlefield,
   consumeEntersReadyReplacement,
   getOptionalPlayCost,
@@ -113,6 +115,15 @@ export const playUnit: Defs["playUnit"] = {
       state.turn.phase === "main" &&
       getTurnState(state.interaction ?? createInteractionState()) === "neutral-open";
 
+    // rule 355.2 (ogn-070-298): an enemy static may confine this player's
+    // units to their own base — every battlefield destination is illegal.
+    if (
+      targetIsBattlefield &&
+      opponentsRestrictedToBase(state, context.zones, context.params.playerId as string)
+    ) {
+      return false;
+    }
+
     // Rule sfd-015-221: "Play me only to a battlefield you conquered this
     // turn" — base and any other battlefield are illegal destinations.
     if (playOnlyToConqueredBattlefield(context.params.cardId as string)) {
@@ -187,6 +198,35 @@ export const playUnit: Defs["playUnit"] = {
           context.params.cardId as string,
         )
       : undefined;
+    // rule 356.2.b / 204.2 (ogn-002-298) — "you may discard N as an additional
+    // cost. If you do, reduce my cost by [N]": the discarded card must be a
+    // different card in hand, and the rider nets against the base cost.
+    const discardCost = context.params.paidAdditionalCost
+      ? getOptionalPlayCost(context.params.cardId as string)
+      : undefined;
+    if (discardCost?.kind === "discard" && (discardCost.discard ?? 0) === 1) {
+      const discardId = context.params.discardId as string | undefined;
+      if (!discardId || discardId === (context.params.cardId as string)) {
+        return false;
+      }
+      if (context.zones.getCardZone(discardId as CoreCardId) !== "hand") {
+        return false;
+      }
+      if (context.cards.getCardOwner(discardId as CoreCardId) !== context.params.playerId) {
+        return false;
+      }
+      return canAffordCard(
+        state,
+        context.params.playerId,
+        context.params.cardId,
+        {
+          additionalCost: { energy: -(discardCost.energyDiscount ?? 0) },
+          board: { cards: context.cards, zones: context.zones },
+        },
+        createMetaAccessor(context.cards),
+        getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
+      );
+    }
     // rule-id: ven-096-166 — board/trash access so self-scaled and friendly
     // static cost reductions (rule 466) apply to unit plays.
     const board = { cards: context.cards, zones: context.zones };
@@ -254,6 +294,36 @@ export const playUnit: Defs["playUnit"] = {
       // rule-id: unl-178-219 — an XP cost with an "I cost [N] less" rider can
       // make the paid variant affordable even when the unpaid play is not.
       const payable = resolvePayableOptionalCost(state, context.playerId as string, cardId as string);
+      // rule 356.2.b / 204.2 (ogn-002-298): offer one paid variant per other
+      // card in hand for a "you may discard 1 as an additional cost" play.
+      const discardCost = getOptionalPlayCost(cardId as string);
+      const discardVariants: RiftboundMoves["playUnit"][] = [];
+      if (
+        standardTiming &&
+        discardCost?.kind === "discard" &&
+        (discardCost.discard ?? 0) === 1 &&
+        canAffordCard(
+          state,
+          context.playerId as string,
+          cardId as string,
+          { additionalCost: { energy: -(discardCost.energyDiscount ?? 0) }, board },
+          metaForAfford,
+          potential,
+        )
+      ) {
+        for (const fodder of handCards) {
+          if ((fodder as string) === (cardId as string)) {
+            continue;
+          }
+          discardVariants.push({
+            cardId: cardId as string,
+            discardId: fodder as string,
+            location: "base",
+            paidAdditionalCost: true,
+            playerId: context.playerId as string,
+          });
+        }
+      }
       // rule 560 / 805.1.a: the optional cost is paid ON TOP of the base cost, so
       // affordability is the combined total (base [C] pip + Accelerate's [C] pip
       // needs two power), not the extra checked in isolation.
@@ -295,6 +365,7 @@ export const playUnit: Defs["playUnit"] = {
         if (paidVariant && standardTiming) {
           results.push(paidVariant);
         }
+        results.push(...discardVariants);
         continue;
       }
 
@@ -394,7 +465,8 @@ export const playUnit: Defs["playUnit"] = {
       // Rule 560 / 717: when the unit declares an optional additional
       // play-cost, also enumerate the paid variant so callers can elect
       // to pay it.
-      const optional = getOptionalPlayCost(cardId as string);
+      const optional = discardCost;
+      results.push(...discardVariants);
       if (paidVariant) {
         results.push(paidVariant);
       } else if (optional?.kind === "kill") {
@@ -423,10 +495,15 @@ export const playUnit: Defs["playUnit"] = {
         }
       }
     }
+    // rule 355.2 (ogn-070-298): while an enemy Mageseeker Warden is at a
+    // battlefield, this player may only play units to their base.
+    if (opponentsRestrictedToBase(state, context.zones, context.playerId as string)) {
+      return results.filter((r) => !isBattlefieldZone(r.location));
+    }
     return results;
   },
   reducer: (draft, context) => {
-    const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId } =
+    const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId, discardId } =
       context.params;
     const { zones, counters } = context;
 
@@ -450,6 +527,18 @@ export const playUnit: Defs["playUnit"] = {
         energyDiscount = optional.energyDiscount ?? 0;
       }
     }
+    // rule 356.2.b / 204.2 (ogn-002-298) — discard the declared card from hand
+    // as the additional cost; "If you do, reduce my cost by [N]" then applies.
+    let discardPaid = false;
+    if (optional?.kind === "discard" && discardId) {
+      const owner = context.cards.getCardOwner(discardId as CoreCardId);
+      const inHand = zones.getCardZone(discardId as CoreCardId) === "hand";
+      if (owner === playerId && inHand && discardId !== cardId) {
+        zones.moveCard({ cardId: discardId as CoreCardId, targetZoneId: "trash" as CoreZoneId });
+        discardPaid = true;
+        energyDiscount = optional.energyDiscount ?? 0;
+      }
+    }
 
     // rule-id: ven-096-166 — board/trash access for static cost reductions.
     const board = { cards: context.cards, zones };
@@ -462,7 +551,7 @@ export const playUnit: Defs["playUnit"] = {
     );
 
     let paidAccelerate = false;
-    let paidAdditionalCostActual = false;
+    let paidAdditionalCostActual = discardPaid;
     if (paidAdditionalCost) {
       const pool = draft.runePools[playerId];
       if ((optional?.kind === "accelerate" || optional?.kind === "pay") && pool) {
@@ -521,8 +610,13 @@ export const playUnit: Defs["playUnit"] = {
     // rule-id: ven-091-166 — a conditional "I enter ready" static must have
     // its condition evaluated at play time (e.g. score not within 3 of the
     // Victory Score); an unconditional one always applies.
+    // rule 369.3 (rule-id: ogn-011-298): a friendly board static may also
+    // grant "enters ready" to the units its controller plays.
     const entersReady =
-      replacedReady || staticEnterReadyApplies(cardId, draft, playerId) || paidAccelerate;
+      replacedReady ||
+      staticEnterReadyApplies(cardId, draft, playerId) ||
+      boardEntersReadyGrantApplies(draft, zones, cardId, playerId) ||
+      paidAccelerate;
     if (!entersReady) {
       counters.setFlag(cardId as CoreCardId, "exhausted", true);
     }

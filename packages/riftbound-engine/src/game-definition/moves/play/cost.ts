@@ -249,6 +249,103 @@ export function hasFriendlyOpenBattlefieldGrant(
   return false;
 }
 
+/**
+ * rule 355.2 (rule-id: ogn-070-298 Mageseeker Warden): an ENEMY permanent at a
+ * battlefield may carry a static `play-restriction` with
+ * `appliesTo: "opponents"` — "opponents can only play units to their base".
+ * Only battlefield zones are scanned, which is exactly the
+ * `while-at-battlefield` condition such cards print.
+ */
+export function opponentsRestrictedToBase(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  playerId: string,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  for (const bfId of Object.keys(state.battlefields ?? {})) {
+    const zoneId = getBattlefieldZoneId(bfId) as CoreZoneId;
+    for (const otherId of Object.keys(state.players ?? {})) {
+      if (otherId === playerId) {
+        continue;
+      }
+      for (const cardId of zones.getCardsInZone(zoneId, otherId as CorePlayerId)) {
+        for (const ability of registry.getAbilities(cardId as string) ?? []) {
+          if (ability?.type !== "static") {
+            continue;
+          }
+          const effect = (
+            ability as { effect?: { type?: string; allowedLocation?: string; appliesTo?: string } }
+          ).effect;
+          if (
+            effect?.type === "play-restriction" &&
+            effect.appliesTo === "opponents" &&
+            effect.allowedLocation === "their base"
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * rule 143.4 / 369.3 (rule-id: ogn-011-298 Magma Wurm): a card already on a
+ * player's board may carry a static grant of the virtual `EntersReady`
+ * keyword to other friendly units ("Other friendly units enter ready").
+ * Static recalculation only stamps `grantedKeywords` after the unit is
+ * already on the board exhausted, so the play path must consult these grants
+ * up front — the same way `create-token` does via
+ * `tokenEntersReadyFromStaticGrant`.
+ */
+export function boardEntersReadyGrantApplies(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  cardId: string,
+  playerId: string,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  const zoneIds = [
+    "base",
+    "legendZone",
+    "championZone",
+    ...Object.keys(state.battlefields ?? {}).map((bfId) => getBattlefieldZoneId(bfId) as string),
+  ];
+  for (const zoneId of zoneIds) {
+    for (const sourceId of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
+      for (const ability of registry.getAbilities(sourceId as string) ?? []) {
+        if (ability?.type !== "static" || (ability as { condition?: unknown }).condition) {
+          continue;
+        }
+        const effect = (ability as { effect?: Record<string, unknown> }).effect;
+        if (effect?.type !== "grant-keyword" || effect.keyword !== "EntersReady") {
+          continue;
+        }
+        const target = effect.target as
+          | { controller?: string; type?: string; filter?: string; excludeSelf?: boolean }
+          | undefined;
+        if (target?.controller && target.controller !== "friendly") {
+          continue;
+        }
+        if (target?.type && target.type !== "unit") {
+          continue;
+        }
+        // A token-only grant (Renata sfd-171-221) never readies a played card.
+        if (target?.filter) {
+          continue;
+        }
+        // "Other friendly units" — a grant cannot ready its own source.
+        if (target?.excludeSelf && (sourceId as string) === cardId) {
+          continue;
+        }
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function canPlayToOpenBattlefield(
   state: RiftboundGameState,
   zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
@@ -415,7 +512,12 @@ export function takeNextPlayDiscount(
  */
 export interface OptionalPlayCost {
   /** `"accelerate"` (rule 717) enters the unit ready when paid. */
-  readonly kind: "accelerate" | "kill" | "pay" | "exhaust";
+  readonly kind: "accelerate" | "kill" | "pay" | "exhaust" | "discard";
+  /**
+   * rule 356.2.b (ogn-002-298) — "you may discard N as an additional cost":
+   * how many cards leave the hand when the cost is paid.
+   */
+  readonly discard?: number;
   /**
    * Extra energy/power to deduct when the cost is paid.
    * rule-id: unl-178-219 — `xp` is spent from the player's XP total.
@@ -500,9 +602,15 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
     ) {
       let energy = 0;
       let xp = 0;
+      let discard = 0;
       const power: string[] = [];
       const raw = effect.additionalCost;
       if (typeof raw === "string") {
+        // rule 356.2.b (ogn-002-298) — "discard N as an additional cost".
+        const d = /^discard (\d+)$/.exec(raw.trim());
+        if (d) {
+          discard = Number.parseInt(d[1], 10);
+        }
         for (const m of raw.matchAll(/:rb_energy_(\d+):/g)) {
           energy += Number.parseInt(m[1], 10);
         }
@@ -512,7 +620,13 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
           power.push(m[1]);
         }
       } else if (typeof raw === "object" && raw !== null) {
-        const obj = raw as { energy?: number; power?: readonly string[]; xp?: number; exhaust?: unknown };
+        const obj = raw as {
+          energy?: number;
+          power?: readonly string[];
+          xp?: number;
+          exhaust?: unknown;
+          discard?: number;
+        };
         // rule 356.2 — ogn-048-298: "you may exhaust a friendly unit" as an
         // additional cost; the unit is chosen and exhausted at pay time.
         if (obj.exhaust) {
@@ -520,7 +634,20 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
         }
         energy = obj.energy ?? 0;
         xp = obj.xp ?? 0;
+        discard = obj.discard ?? 0;
         if (obj.power) {power.push(...obj.power);}
+      }
+      // rule 356.2.b / 204.2 (ogn-002-298): the discarded card is the whole
+      // additional cost; an "If you do, reduce my cost by [N]" rider nets
+      // against the base cost.
+      if (discard > 0) {
+        return {
+          discard,
+          kind: "discard",
+          ...(ifPaidEnergyDiscount(effect.ifPaid) > 0
+            ? { energyDiscount: ifPaidEnergyDiscount(effect.ifPaid) }
+            : {}),
+        };
       }
       if (energy > 0 || power.length > 0 || xp > 0) {
         const energyDiscount = ifPaidEnergyDiscount(effect.ifPaid);

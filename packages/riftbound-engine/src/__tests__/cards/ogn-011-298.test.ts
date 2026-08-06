@@ -14,10 +14,7 @@ const CARD = "ogn-011-298";
 const SKULKER = "ogn-175-298"; // vanilla 3-might unit
 
 describe("Magma Wurm (ogn-011-298)", () => {
-  test.failing("BUG: with Magma Wurm on board, another friendly unit played from hand should enter ready (rules 143.4 / 369.3)", async () => {
-    // Expected: the static EntersReady grant replaces "enters exhausted" for the played ally.
-    // Actual: play-unit only consults the played card's own enter-ready static / Accelerate /
-    // one-shot replacements; the Wurm's grant is only honoured for created tokens.
+  test("with Magma Wurm on board, another friendly unit played from hand enters ready (rules 143.4 / 369.3)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 5 })
       .unit(P1, "base", CARD, "wurm")
