@@ -36,18 +36,27 @@ export function findSpendableBuff(effect: ExecutableEffect, ctx: EffectContext):
 }
 
 export function handle_spendBuff(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
-  const spent = findSpendableBuff(effect, ctx);
-  if (!spent) {
-    return;
-  }
-  ctx.counters.setFlag(spent as CoreCardId, "buffed", false);
-  // Mirror handle_buff: Might readers check top-level meta.buffed.
-  ctx.cards.updateCardMeta?.(
-    spent as CoreCardId,
-    { buffed: false } as unknown as Record<string, unknown>,
-  );
+  // rule-id: ogn-230-298 (rule 355.13) — "spend any number of buffs": the
+  // chooser's picks arrive as boundTargets (possibly none), and the nested
+  // `then` resolves once PER buff spent. Without bound targets this stays the
+  // single-buff cost of ogn-147-298.
+  const bound = ctx.boundTargets;
+  const hasBuff = (id: string): boolean =>
+    (ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined)
+      ?.buffed === true;
+  const spentIds = bound
+    ? bound.filter((id) => hasBuff(id as string)).map((id) => id as string)
+    : [findSpendableBuff(effect, ctx)].filter((id): id is string => id !== undefined);
   const then = (effect as { then?: ExecutableEffect }).then;
-  if (then) {
-    h.executeEffect(then, ctx);
+  for (const spent of spentIds) {
+    ctx.counters.setFlag(spent as CoreCardId, "buffed", false);
+    // Mirror handle_buff: Might readers check top-level meta.buffed.
+    ctx.cards.updateCardMeta?.(
+      spent as CoreCardId,
+      { buffed: false } as unknown as Record<string, unknown>,
+    );
+    if (then) {
+      h.executeEffect(then, ctx);
+    }
   }
 }

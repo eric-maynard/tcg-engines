@@ -58,7 +58,7 @@ describe("Albus Ferros (ogn-230-298)", () => {
     expect(game.p2.runes()).toHaveLength(0);
   });
 
-  test.failing("BUG: 'any number' — with two buffed allies you may spend BOTH and channel 2 exhausted runes (engine spends at most one)", async () => {
+  test("'any number' — with two buffed allies you may spend BOTH and channel 2 exhausted runes", async () => {
     // Expected: the resolution prompt lets P1 select both b0 and b1 → both buffs removed, pool +2 exhausted.
     // Actual: the hand-authored ability is a single-target spend-buff (max 1) that channels once.
     const game = await board(2).build();
@@ -77,7 +77,7 @@ describe("Albus Ferros (ogn-230-298)", () => {
     expect(game.p1.runes({ ready: false })).toHaveLength(2);
   });
 
-  test.failing("BUG: 'any number' includes zero — the player may keep the buff and channel nothing (engine auto-spends)", async () => {
+  test("'any number' includes zero — the player may keep the buff and channel nothing", async () => {
     // Expected: the which-buffs prompt can be declined / answered with none → b0 stays buffed, no rune.
     // Actual: the prompt is a mandatory min-1 pick (allowDecline false), so a buff is always spent.
     const game = await board(1).build();

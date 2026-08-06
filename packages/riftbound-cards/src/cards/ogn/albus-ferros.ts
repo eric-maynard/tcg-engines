@@ -8,13 +8,16 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * "When you play me, spend any number of buffs. For each buff spent,
  *  channel 1 rune exhausted."
  *
- * Approximated as: play-self trigger that spends a buff with a then that
- * channels 1 rune exhausted. "Any number" is simplified to a single use.
+ * Play-self trigger that spends any number of buffs on friendly units; each
+ * buff spent channels 1 rune exhausted.
+ *
+ * rule 355.13: `quantity: "any"` makes the resolution prompt a 0..N pick that
+ * may always be declined (702.2.b.2 — only friendly buffs may be spent).
  */
 const abilities: Ability[] = [
   {
     effect: {
-      target: { controller: "friendly", type: "unit" },
+      target: { controller: "friendly", filter: "buffed", quantity: "any", type: "unit" },
       then: { amount: 1, exhausted: true, type: "channel" },
       type: "spend-buff",
     },
