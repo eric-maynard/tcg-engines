@@ -58,7 +58,7 @@ describe("Dr. Mundo, Expert (ogn-109-298)", () => {
     expect(game.chain()).toHaveLength(0);
   });
 
-  test.failing("BUG: the Beginning Phase trigger recycles 3 cards from your trash (4 in trash → 1 left, 3 to the deck)", async () => {
+  test("the Beginning Phase trigger recycles 3 cards from your trash (4 in trash → 1 left, 3 to the deck)", async () => {
     // Expected: three trash cards move to the bottom of P1's main deck, shrinking Mundo to 6+1.
     // Actual: the trigger resolves with no effect — the trash still holds all four cards.
     const game = await scenario()

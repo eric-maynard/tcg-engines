@@ -142,6 +142,15 @@ export function parseEffects(text: string): Effect | undefined {
     return commaChainEffect;
   }
 
+  // Multi-sentence bodies ("Deal 4 to a unit at a battlefield. Draw 1.") must be
+  // split BEFORE the single-effect attempt: leaf parsers match the leading clause
+  // and silently drop every later sentence. Only accept the split when every
+  // sentence parses on its own, so ambiguous riders still fall through below.
+  const strictSentences = parseSentenceSequence(cleaned, true);
+  if (strictSentences) {
+    return strictSentences;
+  }
+
   // Try as a single effect
   const single = parseEffect(cleaned);
   if (single) {
@@ -170,6 +179,17 @@ export function parseEffects(text: string): Effect | undefined {
   }
 
   // Try splitting on sentence boundaries
+  return parseSentenceSequence(cleaned, false);
+}
+
+/**
+ * Split a body into sentences and parse each one into a sequence.
+ *
+ * `strict` requires every sentence to parse (used before the single-effect
+ * attempt, where a partial match would silently drop text); the lenient pass
+ * keeps whatever parsed, as a last resort.
+ */
+function parseSentenceSequence(cleaned: string, strict: boolean): Effect | undefined {
   const sentences = splitSentences(cleaned);
   if (sentences.length <= 1) {
     return undefined;
@@ -193,6 +213,8 @@ export function parseEffects(text: string): Effect | undefined {
     const eff = parseEffect(sentence.trim());
     if (eff) {
       effects.push(eff);
+    } else if (strict) {
+      return undefined;
     }
   }
 
@@ -200,7 +222,7 @@ export function parseEffects(text: string): Effect | undefined {
     return undefined;
   }
   if (effects.length === 1) {
-    return effects[0];
+    return strict ? undefined : effects[0];
   }
   return buildSequenceWithPendingValue(effects);
 }

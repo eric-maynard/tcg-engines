@@ -62,7 +62,7 @@ describe("Void Seeker (ogn-024-298)", () => {
     expect(none.p1.can("cast", "vs")).toBe(false);
   });
 
-  test.failing("BUG: 'Draw 1' — the caster draws a card when Void Seeker resolves", async () => {
+  test("'Draw 1' — the caster draws a card when Void Seeker resolves", async () => {
     // Expected: hand goes from 1 (Void Seeker) to 1 (the drawn card) after resolution.
     // Actual: the parsed ability only carries the damage clause; no draw happens.
     const game = await board().build();
@@ -102,8 +102,6 @@ describe("Void Seeker (ogn-024-298)", () => {
   });
 
   test.failing("BUG: [Action] timing — an Action spell is NOT playable in a showdown while the opponent holds Focus (rules 313.1, 347)", async () => {
-    // Expected: right after P2's move opens the showdown, P2 (attacker) has Focus, so P1 may only
-    // play Reactions. Actual: the engine offers and accepts P1's Void Seeker cast immediately.
     const game = await showdown().build();
     await game.p2.move("atk", "bf1");
     expect(game.actingSeat()).toBe(P2);

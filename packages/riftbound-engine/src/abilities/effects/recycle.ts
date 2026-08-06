@@ -1,9 +1,9 @@
 // Effect handler: "recycle"
-import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
+import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { RiftboundCardMeta } from "../../types";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { type EffectHelpers, getTargetIds } from "./_helpers";
+import { type EffectHelpers, getTargetIds, resolveAmount } from "./_helpers";
 
 /**
  * rule 416.1.a / rule-id: ogn-110-298 — recycle a specific card to the bottom
@@ -45,6 +45,39 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
       playerId: owner,
       type: "choose-destination",
     };
+    return;
+  }
+  // rule 416.1.a / rule-id: ogn-109-298 — counted recycle out of a zone
+  // ("recycle 3 from your trash"): the controller chooses which cards, so park
+  // a multi-pick prompt; when the zone holds no more than N there is no choice
+  // and every card is recycled.
+  const from = (effect as { from?: string }).from;
+  if ((effect as { amount?: unknown }).amount !== undefined && (from === "trash" || from === "hand")) {
+    const zoneId = from as CoreZoneId;
+    const pool = ctx.zones
+      .getCardsInZone(zoneId, ctx.playerId as CorePlayerId)
+      .map((id) => id as string);
+    const want = resolveAmount((effect as { amount?: unknown }).amount ?? 1, ctx);
+    const n = Math.min(want, pool.length);
+    if (n <= 0) {
+      return;
+    }
+    if (n < pool.length) {
+      ctx.draft.pendingChoice = {
+        onPicked: "recycle",
+        prompter: ctx.playerId,
+        revealed: pool,
+        revealer: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        type: "reveal-and-pick",
+        ...(n > 1 ? { remaining: n } : {}),
+      };
+      return;
+    }
+    for (const id of pool) {
+      recycleToDeckBottom(id, ctx);
+    }
+    ctx.fireTriggers?.({ cardIds: pool, playerId: ctx.playerId, type: "recycle" });
     return;
   }
   // rule 416.1.a / 383.3.b (ogn-110-298 "[Deathknell] — Recycle me …"): a
