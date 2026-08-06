@@ -86,6 +86,12 @@ function holdsChainPriority(state: RiftboundGameState, playerId: string): boolea
   return chain?.active === true && chain.activePlayer === playerId;
 }
 
+/** rule 813.1: the unit prints [Reaction] (timing class) or carries it as a keyword. */
+function unitHasReaction(cardId: string): boolean {
+  const registry = getGlobalCardRegistry();
+  return registry.getSpellTiming(cardId) === "reaction" || registry.hasKeyword(cardId, "Reaction");
+}
+
 type BoardCards = { getCardMeta?: (cardId: CoreCardId) => unknown };
 type BoardZones = {
   getCardsInZone: (zoneId: CoreZoneId, playerId: CorePlayerId) => readonly CoreCardId[];
@@ -200,7 +206,7 @@ export const playUnit: Defs["playUnit"] = {
     // rule 813.1.c.1: a [Reaction] unit may also be played while its
     // controller holds priority on a chain (Closed state, any player's turn).
     const reactionTimingOk =
-      registry.hasKeyword(context.params.cardId, "Reaction") &&
+      unitHasReaction(context.params.cardId as string) &&
       holdsChainPriority(state, context.params.playerId as string);
 
     // rule 355.2 (ogn-070-298): an enemy static may confine this player's
@@ -627,7 +633,7 @@ export const playUnit: Defs["playUnit"] = {
 
       // rule 813.1.c.1: a [Reaction] unit is offered to its 355.2.a defaults
       // (base / a controlled battlefield) while its controller holds priority.
-      const reactionPlay = reactionWindow && registry.hasKeyword(cardId as string, "Reaction");
+      const reactionPlay = reactionWindow && unitHasReaction(cardId as string);
       if (!standardTiming && !reactionPlay) {
         continue;
       }

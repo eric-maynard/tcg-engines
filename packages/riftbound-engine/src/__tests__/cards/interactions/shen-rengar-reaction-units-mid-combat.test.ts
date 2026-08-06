@@ -155,7 +155,7 @@ describe("Rengar, Pouncing / Shen, Kinkou played into an ongoing combat", () => 
     expect(destinationsOffered(game, P1, "p1shen")).toEqual(["base", "battlefield-bf2"]);
   });
 
-  test.failing("BUG: (c) P2 may play Shen while merely holding PRIORITY on P1's chain (not Focus) — Reaction works in any Closed state (813.1.c.1)", async () => {
+  test("(c) P2 may play Shen while merely holding PRIORITY on P1's chain (not Focus) — Reaction works in any Closed state (813.1.c.1)", async () => {
     // Expected: P1 (Focus) casts Discipline → chain; P1 passes priority → P2, holding priority, may
     // play Shen to bf1; it resolves at once (337.2) while Discipline is still on the chain.
     // Actual: no unit play is offered to P2 there.

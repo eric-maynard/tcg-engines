@@ -82,10 +82,24 @@ function mergeRepeatedSpellAbilities<T>(abilities: readonly T[]): T[] {
  * Reminder text in parentheses is ignored (tokens can quote "[Reaction]").
  */
 function normalizeSpellTiming(card: Card): Card {
-  if (card.cardType !== "spell" || !card.rulesText) {
+  if (!card.rulesText) {
     return card;
   }
   const text = card.rulesText.replace(/\([^)]*\)/g, "");
+  // rule 813.1 / 806.1: [Action] and [Reaction] are timing permissions on ANY
+  // card type — a unit or gear printing one keeps its own default timing
+  // otherwise (only spells fall back to "standard").
+  if (card.cardType !== "spell") {
+    const printed = /\[Reaction\]/i.test(text)
+      ? "reaction"
+      : /\[Action\]/i.test(text)
+        ? "action"
+        : undefined;
+    if (printed === undefined || card.timing === printed) {
+      return card;
+    }
+    return { ...card, timing: printed } as Card;
+  }
   const timing = /\[Reaction\]/i.test(text) ? "reaction" : /\[Action\]/i.test(text) ? "action" : "standard";
   if (card.timing === timing) {
     return card;
