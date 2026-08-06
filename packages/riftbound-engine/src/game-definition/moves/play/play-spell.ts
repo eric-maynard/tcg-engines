@@ -31,6 +31,7 @@ import {
 } from "./cost";
 import type { SpellEffectTargetShape } from "./targeting";
 import {
+  collectIndependentTargetSlots,
   collectSequenceTargetSlots,
   findAmountReferenceTarget,
   findReplacementChosenTarget,
@@ -529,7 +530,57 @@ export const playSpell: Defs["playSpell"] = {
           : -1;
       const sameLead = sameLeadIdx >= 0 ? seqSubs?.[sameLeadIdx]?.target : undefined;
       const sameDesc = sameStepIdx >= 0 ? seqSubs?.[sameStepIdx]?.target : undefined;
-      if (!isCardTarget && fightAtk && fightDef) {
+      // rule-id: ogn-029-298 (rule 355.8) — "Deal 3 to a unit. Deal 3 to a
+      // unit.": each instruction chooses its own target INDEPENDENTLY, and the
+      // same unit may be chosen for more than one of them (no "another"
+      // restriction). Enumerate one Play per pick tuple; a shorter tuple
+      // leaves the remaining instructions unchosen (they do nothing).
+      const indepSlots = collectIndependentTargetSlots(spellEffect);
+      if (indepSlots && indepSlots.length >= 2) {
+        const pools = indepSlots.map(
+          (s) =>
+            resolveTarget(
+              { ...s.target, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+              resolverCtx,
+            ) as string[],
+        );
+        let total = 0;
+        let running = 1;
+        for (const pool of pools) {
+          running *= pool.length;
+          total += running;
+        }
+        // Instructions naming the SAME descriptor are interchangeable, so only
+        // non-decreasing picks are distinct plays.
+        const uniform = indepSlots.every(
+          (s) => JSON.stringify(s.target) === JSON.stringify(indepSlots[0].target),
+        );
+        const tuples: string[][] = [];
+        if (total > 0 && total <= 400) {
+          const build = (depth: number, start: number, acc: string[]) => {
+            if (depth >= pools.length) return;
+            const pool = pools[depth] ?? [];
+            for (let k = uniform ? start : 0; k < pool.length; k++) {
+              const next = [...acc, pool[k] as string];
+              tuples.push(next);
+              build(depth + 1, k, next);
+            }
+          };
+          build(0, 0, []);
+        } else {
+          // Guard against combinatorial blow-up on many-instruction spells.
+          for (const id of pools[0] ?? []) {
+            tuples.push([id]);
+          }
+        }
+        for (const t of tuples) {
+          baseVariants.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: t,
+          });
+        }
+      } else if (!isCardTarget && fightAtk && fightDef) {
         const attackers = resolveTarget(
           { ...fightAtk, quantity: "all" } as Parameters<typeof resolveTarget>[0],
           resolverCtx,

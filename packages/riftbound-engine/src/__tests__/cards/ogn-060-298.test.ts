@@ -26,7 +26,7 @@ describe("Mask of Foresight (ogn-060-298)", () => {
     expect(poor.p1.can("playGear", "mask")).toBe(false);
   });
 
-  test.failing("BUG: a friendly unit attacking ALONE gets +1 Might this turn (3 vs 3: attacker survives and conquers)", async () => {
+  test("a friendly unit attacking ALONE gets +1 Might this turn (3 vs 3: attacker survives and conquers)", async () => {
     // Expected: ally becomes 4 might for the turn → deals lethal 4 to the 3-might foe, takes 3 (< 4),
     // survives, conquers bf1; the bonus lasts until end of turn. Actual: the `attack` event carries
     // no owner so the {controller:"friendly"} matcher never fires — both units trade and die.
@@ -65,7 +65,7 @@ describe("Mask of Foresight (ogn-060-298)", () => {
     expect(game.p1.points()).toBe(0);
   });
 
-  test.failing("BUG: a friendly unit DEFENDING alone gets +1 Might this turn (3-might defender holds against a 3-might attacker)", async () => {
+  test("a friendly unit DEFENDING alone gets +1 Might this turn (3-might defender holds against a 3-might attacker)", async () => {
     // Expected: P1's lone defender becomes 4 → kills the 3-might attacker and survives (3 < 4);
     // bf1 stays with P1. Actual: "defend-alone" is not a known trigger event, nothing fires,
     // both units die.

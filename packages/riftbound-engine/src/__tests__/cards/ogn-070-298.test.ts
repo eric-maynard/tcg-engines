@@ -50,7 +50,7 @@ describe("Mageseeker Warden (ogn-070-298)", () => {
     expect(to).toEqual(expect.arrayContaining(["base", "battlefield-bf2"]));
   });
 
-  test.failing("BUG: while the Warden is at a battlefield, opponents can only play units to their base", async () => {
+  test("while the Warden is at a battlefield, opponents can only play units to their base", async () => {
     // Expected: P2's only legal play location is "base" (bf2 is not offered / rejected).
     // Actual: the first static is not parsed at all; P2 may still play the unit to bf2.
     const game = await board("bf1").build();
@@ -68,7 +68,7 @@ describe("Mageseeker Warden (ogn-070-298)", () => {
     expect(game.state("trinket").isExhausted).toBe(false);
   });
 
-  test.failing("BUG: while the Warden is at a battlefield, an opponent's spell can't ready enemy (their own) units and gear", async () => {
+  test("while the Warden is at a battlefield, an opponent's spell can't ready enemy (their own) units and gear", async () => {
     // Expected: Acceleration Gate resolves but P2's exhausted unit and gear stay exhausted.
     // Actual: the restriction static is stored as free text and never enforced; both ready.
     const game = await board("bf1").build();

@@ -7,6 +7,7 @@ import { type EffectHelpers, getTargetIds } from "./_helpers";
 import { findSpendableBuff } from "./spend-buff";
 import { canSpendXp } from "./spend-xp";
 import {
+  collectIndependentTargetSlots,
   collectSequenceTargetSlots,
   isRestatementOf,
   type SpellEffectTargetShape,
@@ -56,8 +57,16 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     // per distinct card-descriptor slot ([friendly, enemy] for Arcane Shift),
     // each step receives only ITS slot's id instead of the whole list, and a
     // step whose slot was not locked re-resolves from the board.
+    // rule-id: ogn-029-298 (rule 355.8) — repeated instructions each own a
+    // POSITIONAL slot: identical descriptors must not be merged, and the same
+    // card may fill more than one slot. A slot with no locked pick was never
+    // chosen, so its instruction does nothing.
+    const indepSlots =
+      (seq as { independentTargets?: boolean }).independentTargets === true
+        ? collectIndependentTargetSlots(seq as unknown as SpellEffectTargetShape)
+        : undefined;
     let seqSlots = (ctx as { sequenceSlots?: SequenceSlots }).sequenceSlots;
-    if (!seqSlots && ctx.boundTargets && sameIdx < 0) {
+    if (!seqSlots && !indepSlots && ctx.boundTargets && sameIdx < 0) {
       const slots = collectSequenceTargetSlots(seq as unknown as SpellEffectTargetShape);
       // rule-id: ogn-266-298 (rule 355.8) — "Choose a battlefield. …friendly
       // units there… enemy units there…": every all-at-one-battlefield step
@@ -95,6 +104,17 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       }
       const subTarget = (sub as { target?: SubTarget }).target;
       let subCtx: EffectContext = ctx;
+      if (indepSlots) {
+        const k = indepSlots.findIndex((s) => s.index === i);
+        if (k >= 0) {
+          const id = ctx.boundTargets?.[k];
+          if (id === undefined) {
+            continue;
+          }
+          const { boundTargets: _drop, ...rest } = ctx;
+          subCtx = { ...rest, boundTargets: [id] };
+        }
+      }
       // rule-id: sfd-200-221 — "Banish this" / "…me": a self-referential step
       // never inherits the chain item's chosen targets.
       if (

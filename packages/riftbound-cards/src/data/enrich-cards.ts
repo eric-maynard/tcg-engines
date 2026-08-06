@@ -33,10 +33,45 @@ function enrichCard(raw: Card): Card {
   }
 
   // ParseAbilities returns Ability[] directly
-  const { abilities } = result;
+  const abilities = mergeRepeatedSpellAbilities(result.abilities);
 
   // Return a new card object with abilities attached
   return { ...card, abilities } as Card;
+}
+
+/**
+ * rule 355.8 (ogn-029-298 Falling Star, ogn-248-298) — a spell printed as the
+ * SAME instruction several times ("Deal 3 to a unit.\nDeal 3 to a unit.") is
+ * one spell with several independently-targeted instructions, not several
+ * spell abilities: the engine resolves exactly one spell ability per card.
+ * Collapse identical repeats into a single `sequence` flagged
+ * `independentTargets` so each step keeps its own caster-chosen target (the
+ * same unit may be picked twice — no "another" restriction). Spell abilities
+ * that differ (level gates, distinct instructions) are left alone.
+ */
+function mergeRepeatedSpellAbilities<T>(abilities: readonly T[]): T[] {
+  const spells = abilities.filter((a) => (a as { type?: string })?.type === "spell");
+  if (spells.length < 2 || spells.length !== abilities.length) {
+    return [...abilities];
+  }
+  const first = JSON.stringify(spells[0]);
+  if (!spells.every((a) => JSON.stringify(a) === first)) {
+    return [...abilities];
+  }
+  const lead = spells[0] as { effect?: unknown };
+  if (lead.effect === undefined) {
+    return [...abilities];
+  }
+  return [
+    {
+      ...(lead as Record<string, unknown>),
+      effect: {
+        effects: spells.map((a) => (a as { effect: unknown }).effect),
+        independentTargets: true,
+        type: "sequence",
+      },
+    } as T,
+  ];
 }
 
 /**

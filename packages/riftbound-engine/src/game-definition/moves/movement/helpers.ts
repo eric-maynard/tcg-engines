@@ -105,3 +105,17 @@ export function getMoveEscalationSurcharge(
   }
   return surcharge;
 }
+
+/**
+ * rule 740.2.a — a unit attacks or defends "alone" when no OTHER unit its
+ * controller controls is at the same battlefield. `unitsAtLocation` is the
+ * full occupancy of that battlefield after the move resolved.
+ */
+export function isAloneAtLocation(
+  unitId: string,
+  owner: string,
+  unitsAtLocation: readonly string[],
+  getOwner: (cardId: string) => string | undefined,
+): boolean {
+  return !unitsAtLocation.some((id) => id !== unitId && getOwner(id) === owner);
+}

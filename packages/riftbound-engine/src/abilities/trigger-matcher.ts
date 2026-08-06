@@ -46,6 +46,28 @@ export function turnEventCountKeys(event: GameEvent): string[] {
 }
 
 /**
+ * The `turnEventCounts` key a count-limited restriction ("the first/Nth time …
+ * each turn") reads: the scope the trigger names — any player ("a player …") →
+ * bare type; "I …" with a subject card → per card; otherwise ("you …", "a
+ * friendly unit …") → per subject/acting player.
+ */
+function turnEventCountKeyFor(
+  trigger: { readonly event: string; readonly on?: string },
+  event: GameEvent,
+  card: CardWithAbilities,
+): string {
+  const on = trigger.on ?? "self";
+  if (on === "any" || on === "any-player" || on === "any-unit") {
+    return event.type;
+  }
+  if (on === "self" && "cardId" in event && typeof event.cardId === "string") {
+    return `${event.type}|c:${event.cardId}`;
+  }
+  const pid = "owner" in event ? event.owner : "playerId" in event ? event.playerId : card.owner;
+  return `${event.type}|p:${pid}`;
+}
+
+/**
  * A simplified ability representation for trigger matching.
  * Avoids importing full riftbound-types to keep the boundary clean.
  */
@@ -105,6 +127,8 @@ const EVENT_MAP: Record<string, string> = {
   "main-phase": "main-phase",
   move: "move",
   "play-card": "play-card",
+  // rule-id: ogn-167-298 — rule 811.1.c.3.
+  "play-from-hidden": "play-from-hidden",
   "play-self": "play-self",
   "play-spell": "play-spell",
   ready: "ready",
@@ -138,10 +162,14 @@ function restrictionSatisfied(
         const prior = state?.cardsPlayedThisTurn?.[playerId] ?? 0;
         return prior + 1 === n;
       }
-      // TODO(nth-time-each-turn): event-specific counters for "draw" and
-      // "move" are not tracked yet — block the trigger rather than fire on
-      // every occurrence.
-      return false;
+      // rule-id: ogn-205-298 — "The third time I move in a turn": fireTriggers
+      // tallies the event before matching, so the Nth occurrence is exactly a
+      // count of N (later occurrences no longer satisfy the restriction).
+      const counts = state?.turnEventCounts;
+      if (!counts) {
+        return false;
+      }
+      return (counts[turnEventCountKeyFor(trigger, event, card)] ?? 0) === n;
     }
     case "first-time-each-turn": {
       // rule-id: ogn-118-298 — count this turn's occurrences of the event in
@@ -153,17 +181,7 @@ function restrictionSatisfied(
       if (!counts) {
         return false;
       }
-      const on = trigger.on ?? "self";
-      let key: string;
-      if (on === "any" || on === "any-player" || on === "any-unit") {
-        key = event.type;
-      } else if (on === "self" && "cardId" in event && typeof event.cardId === "string") {
-        key = `${event.type}|c:${event.cardId}`;
-      } else {
-        const pid = "owner" in event ? event.owner : "playerId" in event ? event.playerId : card.owner;
-        key = `${event.type}|p:${pid}`;
-      }
-      return (counts[key] ?? 0) === 1;
+      return (counts[turnEventCountKeyFor(trigger, event, card)] ?? 0) === 1;
     }
     case "once-each-turn":
       // TODO(once-each-turn): per-card fire tracking not yet implemented.
@@ -342,6 +360,15 @@ function triggerMatchesEvent(
     // rule 428.5: kill-attribution filters on `die` — "a STUNNED enemy unit"
     // reads the unit's state as it died; "kill a unit WITH A SPELL" needs the
     // kill attributed to a spell this card's controller was responsible for.
+    // rule 740.2.a (ogn-060-298) — "when a friendly unit attacks or defends
+    // ALONE": the emit site stamps `alone` on the attack/defend event; an
+    // event that doesn't carry it was not a solo designation.
+    if (
+      filters.includes("alone") &&
+      ((event.type !== "attack" && event.type !== "defend") || event.alone !== true)
+    ) {
+      return false;
+    }
     if (filters.includes("stunned") && event.type === "die" && event.wasStunned !== true) {
       return false;
     }
@@ -391,6 +418,18 @@ function triggerMatchesEvent(
             : undefined;
       const cardLoc = card.zone?.replace(/^battlefield-/, "");
       if (evLoc !== cardLoc && evLoc !== card.id) {
+        return false;
+      }
+    }
+    // rule 144.4 (ogn-158-298) — "moves to a battlefield other than mine":
+    // the destination must be a battlefield (bases don't count) and, for
+    // `other-battlefield`, must not be the battlefield this card occupies.
+    if (desc.location === "other-battlefield" || desc.location === "battlefield") {
+      const to = "to" in event ? String(event.to) : undefined;
+      if (to === undefined || !to.startsWith("battlefield-")) {
+        return false;
+      }
+      if (desc.location === "other-battlefield" && to === card.zone) {
         return false;
       }
     }

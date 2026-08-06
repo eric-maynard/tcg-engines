@@ -16,7 +16,7 @@ import {
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { getMoveEscalationSurcharge } from "./helpers";
+import { getMoveEscalationSurcharge, isAloneAtLocation } from "./helpers";
 
 /**
  * rule 350.1 / ogn-203-298 (Possession): moves are made by the unit's CURRENT
@@ -320,13 +320,22 @@ export const standardMove: Defs["standardMove"] = {
       // "When I attack/defend" triggers land on the initial chain.
       if (hasOpponentUnit) {
         const triggerCtx = { cards: context.cards, counters, draft, zones };
+        // rule 740.2.a — "alone" is judged against the battlefield's occupancy.
+        const ownerOf = (id: string) => context.cards.getCardOwner(id as CoreCardId) as string | undefined;
+        const occupants = allUnits as unknown as string[];
         for (const unitId of unitIds) {
           context.cards.updateCardMeta(
             unitId as CoreCardId,
             { combatRole: "attacker" } as Partial<RiftboundCardMeta>,
           );
           fireTriggers(
-            { battlefieldId: destination, cardId: unitId, owner: playerId, type: "attack" },
+            {
+              alone: isAloneAtLocation(unitId, playerId, occupants, ownerOf),
+              battlefieldId: destination,
+              cardId: unitId,
+              owner: playerId,
+              type: "attack",
+            },
             triggerCtx,
           );
         }
@@ -339,6 +348,7 @@ export const standardMove: Defs["standardMove"] = {
             );
             fireTriggers(
               {
+                alone: isAloneAtLocation(cardId as string, owner as string, occupants, ownerOf),
                 battlefieldId: destination,
                 cardId: cardId as string,
                 owner: owner as string,

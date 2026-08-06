@@ -63,7 +63,7 @@ describe("Ruling 6b3c43c67fc68be2 — Baron Nashor under Mageseeker Warden", () 
   // Expected: Warden at a battlefield ⇒ P1 may only play units to base; bf2 (P1-controlled) must not be
   // offered and an attempt to play there is rejected (355.2.a as restricted). Actual: Warden's static
   // restriction is not enforced — battlefield-bf2 is offered.
-  test.failing("BUG: ruling 6b3c43c67fc68be2 — under Warden, base is Baron's ONLY nominal play location (engine still offers bf2)", async () => {
+  test("ruling 6b3c43c67fc68be2 — under Warden, base is Baron's ONLY nominal play location", async () => {
     const game = await board().build();
     expect(playLocations(game, "baron")).toEqual(["base"]);
     const r = await game.p1.try((p) => p.play("baron", { to: "bf2" }));

@@ -51,7 +51,7 @@ describe("Falling Star (ogn-029-298)", () => {
     expect(game.state("atBf").damage).toBe(0);
   });
 
-  test.failing("BUG: second 'Deal 3 to a unit' — two different units can be chosen and each takes 3", async () => {
+  test("second 'Deal 3 to a unit' — two different units can be chosen and each takes 3", async () => {
     // Expected: the spell asks for two unit choices (one per instruction); picking atBf and
     // atBase deals 3 to each. Actual: the engine only resolves the first parsed spell ability,
     // offering a single target slot and dealing 3 once.
@@ -63,7 +63,7 @@ describe("Falling Star (ogn-029-298)", () => {
     expect(game.state("mine").damage).toBe(0);
   });
 
-  test.failing("BUG: choosing the same unit for both instructions deals 6 total (kills a 6-Might unit)", async () => {
+  test("choosing the same unit for both instructions deals 6 total (kills a 6-Might unit)", async () => {
     // Expected: "a unit" / "a unit" carry no "another" restriction, so the same unit may be
     // chosen twice and takes 3 + 3. Actual: only 3 damage is ever dealt.
     const game = await scenario()

@@ -10,7 +10,7 @@ import {
 } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { hasKeyword } from "./helpers";
+import { hasKeyword, isAloneAtLocation } from "./helpers";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -207,12 +207,21 @@ export const gankingMove: Defs["gankingMove"] = {
       // attack/defend triggers.
       if (hasOpponentUnit) {
         const triggerCtx = { cards: context.cards, counters, draft, zones };
+        // rule 740.2.a — "alone" = no other unit of the same controller here.
+        const ownerOf = (id: string) => context.cards.getCardOwner(id as CoreCardId) as string | undefined;
+        const occupants = allUnits as unknown as string[];
         context.cards.updateCardMeta(
           unitId as CoreCardId,
           { combatRole: "attacker" } as Partial<RiftboundCardMeta>,
         );
         fireTriggers(
-          { battlefieldId: toBattlefield, cardId: unitId, owner: playerId, type: "attack" },
+          {
+            alone: isAloneAtLocation(unitId, playerId, occupants, ownerOf),
+            battlefieldId: toBattlefield,
+            cardId: unitId,
+            owner: playerId,
+            type: "attack",
+          },
           triggerCtx,
         );
         for (const cardId of allUnits) {
@@ -224,6 +233,7 @@ export const gankingMove: Defs["gankingMove"] = {
             );
             fireTriggers(
               {
+                alone: isAloneAtLocation(cardId as string, owner as string, occupants, ownerOf),
                 battlefieldId: toBattlefield,
                 cardId: cardId as string,
                 owner: owner as string,

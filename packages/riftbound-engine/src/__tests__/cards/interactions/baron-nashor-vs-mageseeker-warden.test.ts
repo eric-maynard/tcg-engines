@@ -69,7 +69,7 @@ describe("Baron Nashor × Mageseeker Warden — play location vs. 'I enter there
 
   // Expected: with Warden at a battlefield P1 may only play units to base — bf2 (which P1 controls)
   // must not be offered / must be rejected. Actual: Warden's first static is not enforced; bf2 is offered.
-  test.failing("BUG: while Warden is at a battlefield, base is P1's ONLY legal play location for Baron (bf2 not offered, rejected)", async () => {
+  test("while Warden is at a battlefield, base is P1's ONLY legal play location for Baron (bf2 not offered, rejected)", async () => {
     const game = await board().build();
     expect(playLocations(game, "baron")).toEqual(["base"]);
     await expect(game.p1.play("baron", { to: "bf2" })).rejects.toThrow();

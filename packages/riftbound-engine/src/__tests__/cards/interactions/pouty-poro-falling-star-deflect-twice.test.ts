@@ -56,7 +56,7 @@ describe("Pouty Poro × Falling Star — Deflect is paid per choice", () => {
     expect(game.zoneOf("fs")).toBe("trash");
   });
 
-  test.failing("BUG: (a) enemy Poro chosen for BOTH instructions costs +2 power and takes 3+3 (engine exposes only one target slot for Falling Star)", async () => {
+  test("(a) enemy Poro chosen for BOTH instructions costs +2 power and takes 3+3 (engine exposes only one target slot for Falling Star)", async () => {
     // Expected (809.1.c "for each time they choose me"): two choices of the same Deflect unit = +2.
     // Actual: Falling Star's second "Deal 3 to a unit" is never offered, so a 2-tuple is rejected.
     const game = await board({ calm: 2 }).build();
@@ -68,7 +68,7 @@ describe("Pouty Poro × Falling Star — Deflect is paid per choice", () => {
     expect(game.zoneOf("myPoro")).toBe("base");
   });
 
-  test.failing("BUG: (b) enemy Poro for one instruction + vanilla for the other costs +1 power; each takes 3 (second instruction not implemented)", async () => {
+  test("(b) enemy Poro for one instruction + vanilla for the other costs +1 power; each takes 3 (second instruction not implemented)", async () => {
     // Expected: one Deflect choice = +1 calm; Poro (2 Might) dies, vanilla (3 Might) takes 3 and dies.
     // Actual: two-target cast is rejected — only the first instruction exists in the engine.
     const game = await board({ calm: 2 }).build();
@@ -88,7 +88,7 @@ describe("Pouty Poro × Falling Star — Deflect is paid per choice", () => {
     expect(game.zoneOf("myPoro")).toBe("trash");
   });
 
-  test.failing("BUG: (c) own Poro for BOTH instructions costs +0 and takes 6 (second instruction not implemented)", async () => {
+  test("(c) own Poro for BOTH instructions costs +0 and takes 6 (second instruction not implemented)", async () => {
     // Expected: no Deflect tax at all for the controller; both instructions hit myPoro.
     // Actual: the 2-tuple target is not a legal variant.
     const game = await board({}).build();
@@ -113,7 +113,7 @@ describe("Pouty Poro × Falling Star — Deflect is paid per choice", () => {
     expect(game.p1.resources()).toEqual({ energy: 2, power: { fury: 2 } });
   });
 
-  test.failing("BUG: (d) with exactly 2 fury, 'vanilla unit twice' is a legal casting (second instruction not implemented)", async () => {
+  test("(d) with exactly 2 fury, 'vanilla unit twice' is a legal casting (second instruction not implemented)", async () => {
     // Expected: no Deflect involved, base cost is exactly payable → legal; vanilla takes 6 and dies.
     // Actual: no 2-tuple variants are ever offered for Falling Star.
     const game = await board({}).build();
