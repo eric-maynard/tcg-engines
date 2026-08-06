@@ -22,6 +22,7 @@ import { handle_gainControlOfSpell } from "./gain-control-of-spell";
 import { handle_empower } from "./empower";
 import { handle_replacement } from "./replacement";
 import { handle_heal } from "./heal";
+import { handle_grantFlow } from "./grant-flow";
 import { handle_grantKeyword } from "./grant-keyword";
 import { handle_grantKeywords } from "./grant-keywords";
 import { handle_addResource } from "./add-resource";
@@ -89,6 +90,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "disempower": handle_empower,
   "replacement": handle_replacement,
   "heal": handle_heal,
+  "grant-flow": handle_grantFlow,
   "grant-keyword": handle_grantKeyword,
   "grant-keywords": handle_grantKeywords,
   "add-resource": handle_addResource,

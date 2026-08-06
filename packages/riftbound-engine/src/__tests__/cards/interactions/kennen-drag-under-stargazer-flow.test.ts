@@ -65,7 +65,7 @@ describe("Kennen, Storm of Shuriken × Drag Under × Stargazer — granted Flow 
   // Expected: the conquer trigger gives Drag Under (in trash) Flow [5][order] this turn, which is a
   // permission to play it from trash (829.1.b). Actual: Kennen's conquer ability is unimplemented
   // (raw text) — nothing is granted and the trash copy is never offered as a play.
-  test.failing("BUG: after Kennen conquers, Drag Under in the trash gains Flow and becomes castable from trash (829.1.b, 206)", async () => {
+  test("after Kennen conquers, Drag Under in the trash gains Flow and becomes castable from trash (829.1.b, 206)", async () => {
     const game = await board().build();
     expect(game.p1.can("cast", "duTrash")).toBe(false); // no Flow before the grant
     await conquerAndGrant(game);
@@ -75,7 +75,7 @@ describe("Kennen, Storm of Shuriken × Drag Under × Stargazer — granted Flow 
 
   // Expected: Flow base [5][order] → own "not from hand" -2 → [3] → Stargazer -2 (min 1) → [1][order].
   // Actual: not castable from trash at all.
-  test.failing("BUG: with Stargazer, playing Drag Under from trash via the granted Flow costs exactly [1] + one order power (356.4, 356.4.e)", async () => {
+  test("with Stargazer, playing Drag Under from trash via the granted Flow costs exactly [1] + one order power (356.4, 356.4.e)", async () => {
     const game = await board({ energy: 1, order: 1 }).build();
     await conquerAndGrant(game);
     expect(game.p1.can("cast", "duTrash")).toBe(true);
@@ -90,7 +90,7 @@ describe("Kennen, Storm of Shuriken × Drag Under × Stargazer — granted Flow 
 
   // Expected: without Stargazer only Drag Under's own -2 applies on top of the Flow cost → [3][order].
   // Actual: not castable from trash at all.
-  test.failing("BUG: without Stargazer the granted-Flow play from trash costs [3] + order (Flow [5] minus its own 'not from hand' [2])", async () => {
+  test("without Stargazer the granted-Flow play from trash costs [3] + order (Flow [5] minus its own 'not from hand' [2])", async () => {
     const enough = await board({ energy: 3, order: 1, stargazer: false }).build();
     await conquerAndGrant(enough);
     expect(enough.p1.can("cast", "duTrash")).toBe(true);
@@ -104,7 +104,7 @@ describe("Kennen, Storm of Shuriken × Drag Under × Stargazer — granted Flow 
 
   // Expected: resolves normally (kill a unit at a battlefield), then is banished instead of going
   // back to the trash (829.1.b.1). Actual: cannot be played from trash.
-  test.failing("BUG: Drag Under played from trash via Flow kills its target and is then banished, not trashed (829.1.b.1)", async () => {
+  test("Drag Under played from trash via Flow kills its target and is then banished, not trashed (829.1.b.1)", async () => {
     const game = await board().build();
     await conquerAndGrant(game);
     await game.p1.cast("duTrash", { flow: true, targets: "victim" });
@@ -116,7 +116,7 @@ describe("Kennen, Storm of Shuriken × Drag Under × Stargazer — granted Flow 
 
   // Expected: the grant lasts "this turn"; on P1's next turn the trash copy has no Flow again.
   // Actual: never castable (first assertion fails).
-  test.failing("BUG: the granted Flow expires at end of turn — castable from trash this turn, not on P1's next turn", async () => {
+  test("the granted Flow expires at end of turn — castable from trash this turn, not on P1's next turn", async () => {
     const game = await board().build();
     await conquerAndGrant(game);
     expect(game.p1.can("cast", "duTrash")).toBe(true);

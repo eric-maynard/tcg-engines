@@ -750,6 +750,18 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 }
               }
 
+              // rule-id: ven-113-166 (rule 517.2.b) — turn-scoped granted
+              // [Flow] expires at end of turn. The card sits in the trash, not
+              // on the board, so sweep every card that carries the grant.
+              const flowGrantCards = context.cards.queryCards(
+                (_id, m) => (m as Partial<RiftboundCardMeta>).grantedFlow?.duration === "turn",
+              );
+              for (const cardId of flowGrantCards) {
+                context.cards.updateCardMeta(cardId, {
+                  grantedFlow: undefined,
+                } as Partial<RiftboundCardMeta>);
+              }
+
               // rule-id: ogn-197-298 — "this turn" Might modifiers expire at
               // end of turn regardless of zone (rule 517.2.b). A unit that left
               // the board (hand / facedown / etc.) must not carry a stale

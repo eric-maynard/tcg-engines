@@ -106,6 +106,14 @@ export interface RiftboundCardMeta {
   grantedKeywords?: GrantedKeyword[];
 
   /**
+   * rule-id: ven-113-166 (rule 829.1.b / 206) — [Flow] granted to this card by
+   * an effect ("give a spell in your trash [Flow] equal to its cost this
+   * turn"). Read alongside the printed Flow keyword when a play from the trash
+   * is offered and priced; turn-scoped grants expire at end of turn (517.2.b).
+   */
+  grantedFlow?: { energy: number; power: string[]; duration: "turn" | "permanent" };
+
+  /**
    * rule-id: ven-142-166 — activated abilities granted to this card by another
    * card's effect ("give it '[rainbow][rainbow]: Ready me' this turn"). Each
    * entry points at `registry.getAbilities(sourceCardId)[abilityIndex]`; the
@@ -495,6 +503,12 @@ export interface ChooseTargetChoice {
   /** Number of targets still to choose (currently always 1). */
   readonly remaining: number;
   /**
+   * rule 355.5 / 811.1.b (ogn-213-298): a target chosen while the item is being
+   * PLAYED, not while it resolves. The pick is written onto the named chain
+   * item's `targets` instead of executing the effect immediately.
+   */
+  readonly bindToChainItemId?: string;
+  /**
    * Rule 355.14.h (unl-192-219): when set, the pick is a target to DROP —
    * the stored effect is re-executed with this list minus the picked id as
    * its bound targets, preserving the reference unit at index 0.
@@ -587,6 +601,11 @@ export interface ChooseModeChoice {
   readonly notChosenThisTurn?: boolean;
   /** rule-id: sfd-091-221 — targets bound at chain placement, re-threaded into the picked mode. */
   readonly boundTargets?: readonly string[];
+  /**
+   * rule 820.2 (unl-182-219) — remaining steps of the sequence that parked this
+   * prompt (the later [Repeat] executions); run after the picked mode resolves.
+   */
+  readonly then?: unknown;
 }
 
 /**
@@ -608,6 +627,21 @@ export interface OptInChoice {
    * (accept → the replacement heals/recalls it; decline → it dies).
    */
   readonly suspendedDeathCardId?: CardId;
+  /**
+   * rule 356.1.b.3 / 805.1.a (ogn-226-298 × ogn-010-298) — a unit being played
+   * from the trash whose [Accelerate] additional cost its controller may still
+   * pay. Accept → the cost is charged and the unit enters ready (rule 805.2.b);
+   * decline → it enters exhausted (rule 143.4).
+   */
+  readonly acceleratePlay?: {
+    readonly cardId: CardId;
+    readonly cost?: { readonly energy?: number; readonly power?: readonly string[] };
+    /**
+     * The unit already entered the board (a play finalized via
+     * choose-destination): accepting only flips it to ready.
+     */
+    readonly readyOnly?: boolean;
+  };
 }
 
 /**
