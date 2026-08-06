@@ -56,7 +56,7 @@ describe("Miss Fortune, Buccaneer (ogn-193-298)", () => {
     expect(r.ok).toBe(false);
   });
 
-  test.failing("BUG: 'open' means uncontrolled AND unoccupied (170.11.c) — an uncontrolled battlefield with an enemy unit on it is not offered", async () => {
+  test("'open' means uncontrolled AND unoccupied (170.11.c) — an uncontrolled battlefield with an enemy unit on it is not offered", async () => {
     // Expected: "occupied" (no controller, but an enemy unit sits there) is not an open battlefield,
     // so it is not a legal destination. Actual: the engine treats any uncontrolled battlefield as open.
     const game = await board().battlefield("occupied", { controller: null }).unit(P2, "occupied", { might: 1 }, "squatter").build();
@@ -64,10 +64,7 @@ describe("Miss Fortune, Buccaneer (ogn-193-298)", () => {
     expect(destinations(game, "p1", "mf")).toContain("battlefield-open");
   });
 
-  test.failing("BUG: playing her to an open battlefield contests it and, after the showdown, you control it and score (190.3.a.1, 344.2, 190.4)", async () => {
-    // Expected: MF applies Contested to "open"; the next cleanup opens a non-combat showdown; when it
-    // closes P1 controls "open" and scores 1 for conquering. Actual: the battlefield stays
-    // uncontrolled/uncontested and no point is scored.
+  test("playing her to an open battlefield contests it and, after the showdown, you control it and score (190.3.a.1, 344.2, 190.4)", async () => {
     const game = await board().build();
     await game.p1.play("mf", { to: "open" });
     await game.settle();

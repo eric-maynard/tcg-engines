@@ -77,7 +77,7 @@ describe("Sai Scout (ogn-174-298)", () => {
     expect(game.zoneOf("sai")).toBe("battlefield-open");
   });
 
-  test.failing("BUG: 'open' means unoccupied AND uncontrolled (170.11.c) — an uncontrolled battlefield holding an enemy unit is not offered", async () => {
+  test("'open' means unoccupied AND uncontrolled (170.11.c) — an uncontrolled battlefield holding an enemy unit is not offered", async () => {
     // Expected: a battlefield nobody controls but where an enemy unit sits is occupied, hence not
     // open, hence not a legal play location. Actual: the engine offers every uncontrolled battlefield.
     const game = await inHand().battlefield("squatted", { controller: null }).unit(P2, "squatted", { might: 2 }, "squatter").build();
@@ -86,10 +86,7 @@ describe("Sai Scout (ogn-174-298)", () => {
     expect(to).not.toContain("battlefield-squatted");
   });
 
-  test.failing("BUG: after entering an open battlefield alone, a showdown is staged and — unopposed — P1 conquers it and scores 1 (323.11.a, 469.1)", async () => {
-    // Expected: same outcome as moving a unit to an open battlefield (which the engine does handle):
-    // controller becomes P1, +1 point. Actual: the battlefield stays uncontrolled and a manual
-    // "conquerBattlefield" main-phase action is offered instead of the automatic cleanup/showdown flow.
+  test("after entering an open battlefield alone, a showdown is staged and — unopposed — P1 conquers it and scores 1 (323.11.a, 469.1)", async () => {
     const game = await inHand().build();
     await game.p1.play("sai", { to: "open" });
     await game.settle();

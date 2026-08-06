@@ -14,6 +14,7 @@ import { resolveTarget } from "../../../abilities/target-resolver";
 import { createInteractionState, getTurnState, isLegalTiming } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { canPlayViaAmbush } from "../../../keywords/keyword-effects";
+import { contestBattlefieldOnArrival } from "../movement/contest-arrival";
 import {
   extractBattlefieldId,
   getBattlefieldZoneId,
@@ -23,6 +24,7 @@ import {
   staticEnterReadyApplies,
   boardEntersReadyGrantApplies,
   canPlayToOpenBattlefield,
+  battlefieldIsOpen,
   opponentsRestrictedToBase,
   playOnlyToConqueredBattlefield,
   consumeEntersReadyReplacement,
@@ -136,7 +138,9 @@ export const playUnit: Defs["playUnit"] = {
     } else if (
       targetIsBattlefield &&
       targetBf &&
-      !targetBf.controller &&
+      Boolean(targetBfId) &&
+      // rule 170.11.c: open = uncontrolled AND unoccupied
+      battlefieldIsOpen(state, context.zones, targetBfId as string) &&
       standardTimingOk &&
       canPlayToOpenBattlefield(
         state,
@@ -447,12 +451,13 @@ export const playUnit: Defs["playUnit"] = {
           context.playerId as string,
         )
       ) {
-        for (const [bfId, bf] of Object.entries(state.battlefields ?? {})) {
+        for (const bfId of Object.keys(state.battlefields ?? {})) {
           const bfZoneId = getBattlefieldZoneId(bfId) as string;
           if (results.some((r) => r.cardId === (cardId as string) && r.location === bfZoneId)) {
             continue;
           }
-          if (!bf.controller) {
+          // rule 170.11.c: open = uncontrolled AND unoccupied
+          if (battlefieldIsOpen(state, context.zones, bfId)) {
             results.push({
               cardId: cardId as string,
               location: getBattlefieldZoneId(bfId) as string,
@@ -638,6 +643,24 @@ export const playUnit: Defs["playUnit"] = {
     // Can satisfy their Legion conditions. Runes are NOT counted.
     if (draft.cardsPlayedThisTurn) {
       draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
+    }
+
+    // rule 190.3.a.1 / 323.11.a: a unit played to a battlefield its controller
+    // doesn't control (e.g. "You may play me to an open battlefield") contests
+    // it exactly as a Standard Move would, staging the showdown.
+    if (isBattlefieldZone(location)) {
+      const arrivedAt = extractBattlefieldId(location);
+      if (arrivedAt) {
+        contestBattlefieldOnArrival({
+          arrivingUnitIds: [cardId],
+          battlefieldId: arrivedAt,
+          cards: context.cards,
+          counters,
+          draft,
+          playerId,
+          zones,
+        });
+      }
     }
 
     // rule-id: ven-041-166-weaponmaster-on-play-equip

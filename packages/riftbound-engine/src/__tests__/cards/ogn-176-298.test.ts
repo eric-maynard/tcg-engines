@@ -59,7 +59,7 @@ describe("Sneaky Deckhand (ogn-176-298)", () => {
     expect(game.zoneOf("sd")).toBe("hand");
   });
 
-  test.failing("BUG: an uncontrolled battlefield that has units on it is not 'open' (170.11.c) and must not be offered", async () => {
+  test("an uncontrolled battlefield that has units on it is not 'open' (170.11.c) and must not be offered", async () => {
     // Expected: "open" = unoccupied AND uncontrolled, so an uncontrolled battlefield holding an enemy
     // unit is not a legal destination. Actual: the engine only checks "uncontrolled" and offers it.
     const game = await scenario()
@@ -74,10 +74,7 @@ describe("Sneaky Deckhand (ogn-176-298)", () => {
     expect(t.ok).toBe(false);
   });
 
-  test.failing("BUG: playing it to an open battlefield contests it — after the showdown P1 controls it and scores 1 (190.3.a.1, 466.5)", async () => {
-    // Expected: the Deckhand arriving at an uncontrolled battlefield applies Contested; a showdown
-    // opens in the next cleanup; with no opposition P1 establishes control (a conquer → 1 point).
-    // Actual: the battlefield stays uncontrolled and uncontested; no showdown, no point.
+  test("playing it to an open battlefield contests it — after the showdown P1 controls it and scores 1 (190.3.a.1, 466.5)", async () => {
     const game = await board().build();
     await game.p1.play("sd", { to: "openBf" });
     await game.settle();

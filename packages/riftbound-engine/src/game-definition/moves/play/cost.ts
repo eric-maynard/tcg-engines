@@ -359,6 +359,23 @@ export function canPlayToOpenBattlefield(
 }
 
 /**
+ * rule 170.11.c: a battlefield is "open" only while it is BOTH uncontrolled and
+ * unoccupied — an uncontrolled battlefield holding any unit (friendly or enemy)
+ * is not a legal destination for "You may play me to an open battlefield".
+ */
+export function battlefieldIsOpen(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player?: CorePlayerId) => readonly CoreCardId[] },
+  bfId: string,
+): boolean {
+  if (state.battlefields?.[bfId]?.controller) {
+    return false;
+  }
+  const bfZoneId = getBattlefieldZoneId(bfId) as CoreZoneId;
+  return zones.getCardsInZone(bfZoneId).length === 0;
+}
+
+/**
  * rule-id: sfd-015-221 — "Play me only to a battlefield you conquered this
  * turn." True when the card self-grants the `PlayOnlyToConqueredBattlefield`
  * keyword (printed or via an unconditional static).
