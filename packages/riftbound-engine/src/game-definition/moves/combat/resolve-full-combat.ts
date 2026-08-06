@@ -42,6 +42,95 @@ type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCar
  * - Defender wins: Recall surviving attackers to base, defenders keep battlefield
  * - Tie: All dead, clear contested, no control change
  */
+/** rule 708 / 710 — a unit is Mighty while its current Might is 5 or more. */
+const MIGHTY_THRESHOLD = 5;
+
+/**
+ * rule 476.3 — continuous effects are re-applied until the result is stable, and
+ * Mighty reads CURRENT Might (708). A combat-only bonus (Shield while defending,
+ * rule 814.1.c; Assault while attacking, 719.1.c) can push a unit to 5+ Might,
+ * which turns on its own "While I'm [Mighty]" grants — and a Shield gained that
+ * way stacks with the one that made it Mighty (814.2). Board-level static recalc
+ * cannot see combat-only Might, so those layers are closed here.
+ *
+ * Grants already applied on the board (`duration: "static"` in grantedKeywords)
+ * are skipped so they are not counted twice.
+ */
+function applyMightyCombatLayers(
+  unit: CombatUnit,
+  role: "attacker" | "defender",
+  abilities: readonly unknown[],
+  staticGranted: ReadonlySet<string>,
+): CombatUnit {
+  const grants: { keyword: string; value: number }[] = [];
+  for (const raw of abilities) {
+    const ability = raw as {
+      type?: string;
+      condition?: { type?: string };
+      effect?: {
+        type?: string;
+        keyword?: string;
+        keywords?: string[];
+        value?: number;
+        target?: unknown;
+      };
+    };
+    if (ability.type !== "static" || ability.condition?.type !== "while-mighty") {
+      continue;
+    }
+    const effect = ability.effect;
+    const target = effect?.target as { type?: string } | string | undefined;
+    const selfTargeted =
+      target === undefined ||
+      target === "self" ||
+      (typeof target === "object" && target?.type === "self");
+    if (!selfTargeted) {
+      continue;
+    }
+    if (effect?.type === "grant-keyword" && effect.keyword) {
+      grants.push({ keyword: effect.keyword, value: effect.value ?? 1 });
+    } else if (effect?.type === "grant-keywords" && Array.isArray(effect.keywords)) {
+      for (const keyword of effect.keywords) {
+        grants.push({ keyword, value: 1 });
+      }
+    }
+  }
+  if (grants.length === 0) {
+    return unit;
+  }
+
+  const keywords = [...unit.keywords];
+  const keywordValues: Record<string, number> = { ...(unit.keywordValues ?? {}) };
+  const valueOf = (keyword: string): number =>
+    keywordValues[keyword] ?? keywords.filter((k) => k === keyword).length;
+  const roleKeyword = role === "defender" ? "Shield" : "Assault";
+  const applied = new Set<number>();
+
+  for (let pass = 0; pass <= grants.length; pass++) {
+    if (unit.baseMight + valueOf(roleKeyword) < MIGHTY_THRESHOLD) {
+      break;
+    }
+    let changed = false;
+    for (const [index, grant] of grants.entries()) {
+      if (applied.has(index) || staticGranted.has(grant.keyword)) {
+        continue;
+      }
+      applied.add(index);
+      keywordValues[grant.keyword] = valueOf(grant.keyword) + grant.value;
+      keywords.push(grant.keyword);
+      changed = true;
+    }
+    if (!changed) {
+      break;
+    }
+  }
+
+  if (applied.size === 0) {
+    return unit;
+  }
+  return { ...unit, keywordValues, keywords };
+}
+
 export const resolveFullCombat: Defs["resolveFullCombat"] = {
   condition: (state, context) => {
     if (state.pendingChoice) {
@@ -234,6 +323,10 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
               preventValue: (meta as { damagePreventionShield?: number }).damagePreventionShield,
             }
           : {}),
+        ...((meta as { preventNextDamageInstance?: boolean } | undefined)
+          ?.preventNextDamageInstance === true
+          ? { preventsNextDamageInstance: true }
+          : {}),
         ...(killOnDamageIdx(cardId as string) >= 0 ? { diesOnAnyDamage: true } : {}),
         // rule 465.2.c.10 (ogn-189-298): "I don't take damage" — skipped for
         // damage assignment and never dealt lethal damage.
@@ -245,10 +338,15 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           : {}),
       };
 
-      if (owner === attackingPlayer) {
-        attackerUnits.push(unit);
+      const role = owner === attackingPlayer ? "attacker" : "defender";
+      const staticGranted = new Set(
+        grantedKeywords.filter((gk) => gk.duration === "static").map((gk) => gk.keyword),
+      );
+      const layered = applyMightyCombatLayers(unit, role, def?.abilities ?? [], staticGranted);
+      if (role === "attacker") {
+        attackerUnits.push(layered);
       } else {
-        defenderUnits.push(unit);
+        defenderUnits.push(layered);
       }
     }
 
@@ -275,8 +373,19 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         // rule 437.4 / 437.7: a Prevent shield absorbs the assigned damage
         // (fully prevented damage counts as not dealt) and is spent by it.
         const existingMeta = cards.getCardMeta(unitId as CoreCardId) as
-          | (Partial<RiftboundCardMeta> & { damagePreventionShield?: number })
+          | (Partial<RiftboundCardMeta> & {
+              damagePreventionShield?: number;
+              preventNextDamageInstance?: boolean;
+            })
           | undefined;
+        // rule 437.2.a / 437.4 (sfd-194-221): a "prevent it" shield replaces the
+        // whole assigned instance with 0 and is spent by it.
+        if (existingMeta?.preventNextDamageInstance === true) {
+          cards.updateCardMeta(unitId as CoreCardId, {
+            preventNextDamageInstance: false,
+          } as unknown as Partial<RiftboundCardMeta>);
+          continue;
+        }
         const shield = Math.max(0, existingMeta?.damagePreventionShield ?? 0);
         const prevented = Math.min(shield, assigned);
         const dmg = assigned - prevented;
