@@ -40,10 +40,7 @@ describe("Confront (ogn-129-298)", () => {
     expect(game.p1.can("cast", "confront")).toBe(false);
   });
 
-  test.failing("BUG: 'Units you play this turn enter ready' — a unit played after Confront resolves enters ready (143.4 / 369.3)", async () => {
-    // Expected: after Confront resolves, Shipyard Skulker played from hand enters the base ready.
-    // Actual: the parser only produced the `draw 1` clause; the enter-ready replacement is missing,
-    // so the unit enters exhausted.
+  test("'Units you play this turn enter ready' — a unit played after Confront resolves enters ready (143.4 / 369.3)", async () => {
     const game = await board().build();
     await game.p1.cast("confront");
     await game.settle();
