@@ -148,7 +148,7 @@ describe("Rengar, Pouncing / Shen, Kinkou played into an ongoing combat", () => 
     expect(game.zoneOf("p1shen")).toBe("hand");
   });
 
-  test.failing("BUG: (c) …but P1 CAN play his Shen during the showdown as a Reaction — just only to base or bf2 (813.1.c.1, 813.3.a)", async () => {
+  test("(c) …but P1 CAN play his Shen during the showdown as a Reaction — just only to base or bf2 (813.1.c.1, 813.3.a)", async () => {
     // Expected: offered with destinations base + battlefield-bf2. Actual: not offered at all.
     const game = await attack();
     expect(game.p1.can("play", "p1shen")).toBe(true);

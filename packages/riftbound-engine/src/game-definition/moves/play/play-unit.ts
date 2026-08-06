@@ -12,7 +12,12 @@ import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../.
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { executeEffect } from "../../../abilities/effect-executor";
 import { resolveTarget } from "../../../abilities/target-resolver";
-import { createInteractionState, getTurnState, isLegalTiming } from "../../../chain";
+import {
+  createInteractionState,
+  getTurnState,
+  hasShowdownPermission,
+  isLegalTiming,
+} from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { canPlayViaAmbush } from "../../../keywords/keyword-effects";
 import { contestBattlefieldOnArrival } from "../movement/contest-arrival";
@@ -84,6 +89,27 @@ function resolvePayableOptionalCost(
 function holdsChainPriority(state: RiftboundGameState, playerId: string): boolean {
   const chain = (state.interaction ?? createInteractionState()).chain;
   return chain?.active === true && chain.activePlayer === playerId;
+}
+
+/**
+ * rule 813.1.c / rule 807: [Reaction] means "play any time". The unit's
+ * controller may play it whenever they may act at all:
+ *  - a Closed state (chain on the stack) → only the priority holder;
+ *  - a Showdown Open state → only the Focus holder (rule 347);
+ *  - a Neutral Open state → either player, on anyone's turn (the turn-player
+ *    gate is a standard-timing restriction the Reaction permission lifts).
+ */
+function reactionWindowOpen(state: RiftboundGameState, playerId: string): boolean {
+  if (holdsChainPriority(state, playerId)) {
+    return true;
+  }
+  const interaction = state.interaction ?? createInteractionState();
+  const turnState = getTurnState(interaction);
+  if (turnState === "neutral-closed" || turnState === "showdown-closed") {
+    // A chain exists and this player does not hold priority.
+    return false;
+  }
+  return hasShowdownPermission(interaction, playerId);
 }
 
 /** rule 813.1: the unit prints [Reaction] (timing class) or carries it as a keyword. */
@@ -203,11 +229,12 @@ export const playUnit: Defs["playUnit"] = {
       state.turn.activePlayer === context.params.playerId &&
       state.turn.phase === "main" &&
       getTurnState(state.interaction ?? createInteractionState()) === "neutral-open";
-    // rule 813.1.c.1: a [Reaction] unit may also be played while its
-    // controller holds priority on a chain (Closed state, any player's turn).
+    // rule 813.1.c.1 / 813.1.c: a [Reaction] unit may also be played in any
+    // window where its controller may act — priority on a chain, Focus in a
+    // showdown, or a Neutral Open state on either player's turn.
     const reactionTimingOk =
       unitHasReaction(context.params.cardId as string) &&
-      holdsChainPriority(state, context.params.playerId as string);
+      reactionWindowOpen(state, context.params.playerId as string);
 
     // rule 355.2 (ogn-070-298): an enemy static may confine this player's
     // units to their own base — every battlefield destination is illegal.
@@ -436,9 +463,10 @@ export const playUnit: Defs["playUnit"] = {
       state.turn.activePlayer === (context.playerId as string) &&
       state.turn.phase === "main" &&
       getTurnState(interaction) === "neutral-open";
-    // rule 813.1.c.1: [Reaction] units are also offered while their controller
-    // holds priority on a chain (any Closed state, any player's turn).
-    const reactionWindow = holdsChainPriority(state, context.playerId as string);
+    // rule 813.1.c.1 / 813.1.c: [Reaction] units are offered in any window
+    // where their controller may act (chain priority, showdown Focus, or a
+    // Neutral Open state on either player's turn).
+    const reactionWindow = reactionWindowOpen(state, context.playerId as string);
 
     const registry = getGlobalCardRegistry();
     const pool = state.runePools[context.playerId as string];

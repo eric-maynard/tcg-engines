@@ -58,7 +58,7 @@ describe("Shen, Kinkou (ogn-241-298)", () => {
     expect(game.locationOf("shen")).toBe("bf1");
   });
 
-  test.failing("BUG: [Reaction] — playable on the opponent's turn (to base)", async () => {
+  test("[Reaction] — playable on the opponent's turn (to base)", async () => {
     // Expected: with P2 as turn player and nothing happening, P1 may still play Shen.
     // Actual: the Reaction keyword is not parsed for this unit; play is refused off-turn.
     const game = await defence(3).build();
@@ -69,7 +69,7 @@ describe("Shen, Kinkou (ogn-241-298)", () => {
     expect(game.turnPlayer()).toBe(P2);
   });
 
-  test.failing("BUG: [Reaction] into a showdown at your battlefield — Shen arrives as a Shield-2 Tank defender and saves the 1-Might ally", async () => {
+  test("[Reaction] into a showdown at your battlefield — Shen arrives as a Shield-2 Tank defender and saves the 1-Might ally", async () => {
     // Expected: P2's 3-Might attacker moves in; P1 reacts by playing Shen to bf1. Tank forces the 3
     // damage onto Shen (5 Might as defender) → nobody on P1's side dies; attacker takes 1+3 and dies.
     // Actual: Shen cannot be played during the opponent's showdown at all.
