@@ -61,7 +61,7 @@ describe("Alpha Wildclaw × Rebuke / Discipline — protected set is 'less Might
   // Expected: "small" (2 < 7) is untargetable by the enemy Rebuke, so it is not offered and a cast at it
   // is rejected. Actual: Wildclaw's static `untargetable-by-enemy-spells-abilities` restriction is not
   // consulted at target enumeration — Rebuke offers all three P1 units and returns "small" to hand.
-  test.failing("BUG: enemy Rebuke must NOT be offered the 2-Might ally under Alpha Wildclaw (2 < 7) and casting at it must be rejected (757/758, 355.9.b)", async () => {
+  test("enemy Rebuke must NOT be offered the 2-Might ally under Alpha Wildclaw (2 < 7) and casting at it must be rejected (757/758, 355.9.b)", async () => {
     const game = await board().build();
     const offered = targetsOffered(game, P2, "rebuke");
     expect(offered).not.toContain("small");
@@ -131,7 +131,7 @@ describe("Alpha Wildclaw × Rebuke / Discipline — protected set is 'less Might
   // Expected: after Discipline makes Wildclaw 9, "big" (7 < 9) joins the protected set, so the enemy
   // Rebuke mistargets on resolution and "big" stays at bf1. Actual: the restriction is never re-checked
   // at resolution (nor at play time) — Rebuke returns "big" to hand.
-  test.failing("BUG: after Discipline → Wildclaw (9) the pending enemy Rebuke on the 7-Might ally must mistarget — ally stays on bf1, Rebuke to trash (758.1, 758.2.a, 359.3.e.5)", async () => {
+  test("after Discipline → Wildclaw (9) the pending enemy Rebuke on the 7-Might ally must mistarget — ally stays on bf1, Rebuke to trash (758.1, 758.2.a, 359.3.e.5)", async () => {
     const game = await board().build();
     await game.p2.cast("rebuke", { targets: "big" });
     await game.p2.passPriority();

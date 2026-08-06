@@ -14,7 +14,12 @@ import { executeEffect } from "../../../abilities/effect-executor";
 import { findSpendableBuff } from "../../../abilities/effects/spend-buff";
 import { canSpendXp } from "../../../abilities/effects/spend-xp";
 import type { TargetDescriptor } from "../../../abilities/target-resolver";
-import { isAllAtOneBattlefield, resolveTarget } from "../../../abilities/target-resolver";
+import {
+  isAllAtOneBattlefield,
+  isProtectedFromEnemyChoice,
+  isUntargetable,
+  resolveTarget,
+} from "../../../abilities/target-resolver";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
@@ -129,6 +134,36 @@ export function executeResolvedItem(
   // exists, pause and ask via a `choose-target` pending choice; the effect
   // runs from `resolvePendingChoice` once the pick is made.
   let boundTargets = resolved.targets;
+  // rule 758.1 / 758.2.a (unl-057-219 × ogn-172-298): a target that became
+  // untargetable for this controller AFTER being chosen is an illegal target on
+  // resolution. Drop it; if nothing legal is left the item still resolves but
+  // does nothing (rule 359.3.e.5).
+  let mistargeted = false;
+  if (boundTargets && boundTargets.length > 0) {
+    const resolverCtx = {
+      cards: baseCtx.cards,
+      draft,
+      playerId: resolved.controller,
+      sourceCardId: resolved.cardId,
+      sourceZone: baseCtx.sourceZone,
+      zones: baseCtx.zones,
+    };
+    const controllerOf = (id: string): string =>
+      baseCtx.cards.getCardController?.(id as CoreCardId) ??
+      baseCtx.cards.getCardOwner(id as CoreCardId) ??
+      "";
+    const legal = boundTargets.filter(
+      (id) =>
+        !(
+          controllerOf(id) !== resolved.controller &&
+          (isUntargetable(id, resolverCtx) || isProtectedFromEnemyChoice(id, resolverCtx))
+        ),
+    );
+    if (legal.length !== boundTargets.length) {
+      boundTargets = legal;
+      mistargeted = legal.length === 0;
+    }
+  }
   // rule-id: unl-119-219 (rule 355.10) — a `sequence` ("spend 3 XP, then deal
   // damage to an enemy unit here") carries its caster-chosen target on a
   // sub-step; lift the single lead descriptor so the controller is prompted
@@ -305,7 +340,9 @@ export function executeResolvedItem(
     }
   }
   const preLen = draft.interaction?.chain?.items.length ?? 0;
-  executeEffect(effect, effectCtx);
+  if (!mistargeted) {
+    executeEffect(effect, effectCtx);
+  }
   const postLen = draft.interaction?.chain?.items.length ?? 0;
 
   // Rule 419.4.a: abilities that trigger on playing a card fire when that

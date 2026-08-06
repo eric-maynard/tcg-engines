@@ -306,7 +306,11 @@ export function resolveTarget(
   // Programmatic `quantity:"all"` selections ("all enemy units") don't choose.
   if (target.quantity !== "all" || ctx.choosing) {
     filtered = filtered.filter(
-      (id) => !(controllerOf(id) !== ctx.playerId && isUntargetable(id, ctx)),
+      (id) =>
+        !(
+          controllerOf(id) !== ctx.playerId &&
+          (isUntargetable(id, ctx) || isProtectedFromEnemyChoice(id, ctx))
+        ),
     );
   }
 
@@ -446,6 +450,94 @@ export function isUntargetable(cardId: string, ctx: Pick<TargetResolverContext, 
 }
 
 /**
+ * rule 757 / 758.2.a (unl-057-219 Alpha Wildclaw) — "Your units here with less
+ * Might than me can't be chosen by enemy spells and abilities": the protected
+ * SET is described by ANOTHER permanent's static and is re-evaluated live, so
+ * it must be read off the board rather than off the last static recalculation.
+ * Only the chooser-relative call sites consult this (enemy choices only).
+ */
+export function isProtectedFromEnemyChoice(cardId: string, ctx: TargetResolverContext): boolean {
+  const registry = getGlobalCardRegistry();
+  const controllerOf = (id: string): string =>
+    ctx.cards.getCardController?.(id as CoreCardId) ??
+    ctx.cards.getCardOwner(id as CoreCardId) ??
+    "";
+  const zoneOf = (id: string): string =>
+    (ctx.zones.getCardZone(id as CoreCardId) as string | undefined) ?? "";
+  const mightOf = (id: string): number =>
+    effectiveMight(registry.get(id), ctx.cards.getCardMeta?.(id as CoreCardId));
+
+  const targetController = controllerOf(cardId);
+  const targetZone = zoneOf(cardId);
+
+  for (const sourceId of getBoardCardIds(ctx)) {
+    if (sourceId === cardId) {
+      continue;
+    }
+    const abilities = (registry.getAbilities(sourceId) ?? []) as readonly {
+      type?: string;
+      effect?: { type?: string; restriction?: string; target?: TargetDescriptor };
+    }[];
+    for (const ability of abilities) {
+      const effect = ability.effect;
+      if (
+        ability.type !== "static" ||
+        effect?.type !== "restriction" ||
+        effect.restriction !== "untargetable-by-enemy-spells-abilities"
+      ) {
+        continue;
+      }
+      const t = effect.target;
+      if (!t || typeof t !== "object") {
+        continue;
+      }
+      if (t.type === "unit" && registry.get(cardId)?.cardType !== "unit") {
+        continue;
+      }
+      if (t.controller === "friendly" && controllerOf(sourceId) !== targetController) {
+        continue;
+      }
+      if (t.controller === "enemy" && controllerOf(sourceId) === targetController) {
+        continue;
+      }
+      if (
+        (t.location === "here" || t.location === "battlefield") &&
+        zoneOf(sourceId) !== targetZone
+      ) {
+        continue;
+      }
+      const filters = t.filter === undefined ? [] : Array.isArray(t.filter) ? t.filter : [t.filter];
+      const matches = filters.every((f) => {
+        if (
+          typeof f === "object" &&
+          f !== null &&
+          (f as { mightLessThanSelf?: boolean }).mightLessThanSelf === true
+        ) {
+          return mightOf(cardId) < mightOf(sourceId);
+        }
+        return matchesFilter(cardId, f, ctx);
+      });
+      if (matches) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * `exhausted` / `stunned` live in the engine's flag store (`counters.setFlag` →
+ * `meta.__flags`); seeded positions and mirrors use the top-level meta field.
+ * Both representations mean the same status, so read either.
+ */
+function metaFlag(meta: Partial<RiftboundCardMeta> | undefined, key: "exhausted" | "stunned"): boolean {
+  if ((meta as { [k: string]: unknown } | undefined)?.[key] === true) {
+    return true;
+  }
+  return (meta as { __flags?: Record<string, boolean> } | undefined)?.__flags?.[key] === true;
+}
+
+/**
  * Evaluate a single target-descriptor filter against a card (rule 355.8).
  * Unknown filter shapes pass through (return true) so newly-emitted parser
  * filters degrade to the previous "match any" behaviour rather than silently
@@ -478,13 +570,13 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
       case "damaged":
         return (meta?.damage ?? 0) > 0;
       case "stunned":
-        return meta?.stunned === true;
+        return metaFlag(meta, "stunned");
       case "buffed":
         return meta?.buffed === true;
       case "ready":
-        return meta?.exhausted !== true;
+        return !metaFlag(meta, "exhausted");
       case "exhausted":
-        return meta?.exhausted === true;
+        return metaFlag(meta, "exhausted");
       case "equipped":
         return (meta?.equippedWith?.length ?? 0) > 0;
       case "attached":
