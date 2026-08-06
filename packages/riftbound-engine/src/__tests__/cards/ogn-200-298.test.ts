@@ -71,7 +71,7 @@ describe("Twisted Fate, Gambler (ogn-200-298)", () => {
     expect(game.p1.hand()).toHaveLength(0);
   });
 
-  test.failing("BUG: [mind] on top — the rune is revealed and recycled to the bottom, and P1 draws 1 with no choice to make", async () => {
+  test("[mind] on top — the rune is revealed and recycled to the bottom, and P1 draws 1 with no choice to make", async () => {
     // Expected: no prompt at all (the domain decides); hand 0 → 1; rune deck top becomes the next
     // rune and the Mind rune is now at the bottom. Actual: the engine asks for an arbitrary unit
     // "target", then lets the player CHOOSE the mode, and never recycles the rune.
@@ -84,7 +84,7 @@ describe("Twisted Fate, Gambler (ogn-200-298)", () => {
     expect(game.state(deck[deck.length - 1] as string).name).toBe("Mind Rune");
   });
 
-  test.failing("BUG: [fury] on top — 2 damage to the chosen enemy unit here, 1 to each other enemy unit here, none elsewhere", async () => {
+  test("[fury] on top — 2 damage to the chosen enemy unit here, 1 to each other enemy unit here, none elsewhere", async () => {
     // Expected: the only prompt is WHICH enemy unit here takes 2 (big | mid); then big=2, mid=1,
     // home=0, TF undamaged, no card drawn. Actual: bogus target prompt (incl. TF and the base
     // unit) followed by a free mode choice.
@@ -102,7 +102,7 @@ describe("Twisted Fate, Gambler (ogn-200-298)", () => {
     expect(game.p1.hand()).toHaveLength(0);
   });
 
-  test.failing("BUG: [order] on top — stun an enemy unit (any location), nothing is damaged or drawn", async () => {
+  test("[order] on top — stun an enemy unit (any location), nothing is damaged or drawn", async () => {
     // Expected: prompt for an ENEMY unit (big | mid | home); picking home stuns it. Actual: see above.
     const game = await board(ORDER_RUNE).build();
     await attackAndResolveTrigger(game);

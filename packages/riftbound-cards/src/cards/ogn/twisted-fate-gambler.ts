@@ -17,65 +17,45 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  */
 const abilities: Ability[] = [
   {
+    // rule-id: ogn-200-298 — the domain of the revealed rune dictates the
+    // branch (no player choice); the rune is recycled to the bottom of the
+    // rune deck first.
     effect: {
-      effects: [
-        {
-          amount: 1,
-          from: "rune-deck",
-          type: "look",
-        },
-        {
-          from: "board",
-          target: { type: "rune" },
-          type: "recycle",
-        },
-        {
-          options: [
+      branches: {
+        fury: {
+          effects: [
             {
-              effect: {
-                effects: [
-                  {
-                    amount: 2,
-                    target: {
-                      controller: "enemy",
-                      location: "here",
-                      quantity: 1,
-                      type: "unit",
-                    },
-                    type: "damage",
-                  },
-                  {
-                    amount: 1,
-                    target: {
-                      controller: "enemy",
-                      excludeSelf: true,
-                      location: "here",
-                      quantity: "all",
-                      type: "unit",
-                    },
-                    type: "damage",
-                  },
-                ],
-                type: "sequence",
+              amount: 2,
+              target: {
+                controller: "enemy",
+                location: "here",
+                quantity: 1,
+                type: "unit",
               },
-              label: "fury",
+              type: "damage",
             },
             {
-              effect: { amount: 1, type: "draw" },
-              label: "mind",
-            },
-            {
-              effect: {
-                target: { controller: "enemy", type: "unit" },
-                type: "stun",
+              amount: 1,
+              target: {
+                controller: "enemy",
+                excludeBound: true,
+                excludeSelf: true,
+                location: "here",
+                quantity: "all",
+                type: "unit",
               },
-              label: "order",
+              type: "damage",
             },
           ],
-          type: "choice",
+          type: "sequence",
         },
-      ],
-      type: "sequence",
+        mind: { amount: 1, type: "draw" },
+        order: {
+          target: { controller: "enemy", type: "unit" },
+          type: "stun",
+        },
+      },
+      type: "reveal-rune-branch",
     },
     trigger: { event: "attack", on: "self" },
     type: "triggered",

@@ -130,7 +130,10 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         seqSlots &&
         typeof subTarget === "object" &&
         subTarget.type !== "pending-value" &&
-        subTarget.type !== "self"
+        subTarget.type !== "self" &&
+        // rule-id: ogn-200-298 — "all OTHER …" owns no slot of its own: it
+        // keeps the earlier step's picks so it can exclude them.
+        (subTarget as { excludeBound?: boolean }).excludeBound !== true
       ) {
         const j = seqSlots.slots.findIndex((s) =>
           isRestatementOf(s as { type: string }, subTarget as { type: string }),

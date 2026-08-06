@@ -41,10 +41,15 @@ export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): stri
   // chosen target threaded through an enclosing conditional/sequence.
   const tgt = effect.target as unknown;
   const isSelf = tgt === "self" || (typeof tgt === "object" && tgt !== null && (tgt as { type?: string }).type === "self");
-  if (ctx.boundTargets && battlefieldZone === undefined && !isSelf) {
+  // rule-id: ogn-200-298 — "… and 1 to ALL OTHER enemy units here": the step
+  // names every card the earlier chosen target did NOT, so it must re-resolve
+  // from the board and drop the bound ids instead of inheriting them.
+  const excludeBound =
+    typeof tgt === "object" && tgt !== null && (tgt as { excludeBound?: boolean }).excludeBound === true;
+  if (ctx.boundTargets && battlefieldZone === undefined && !isSelf && !excludeBound) {
     return [...ctx.boundTargets];
   }
-  return resolveTarget(effect.target, {
+  const resolved = resolveTarget(effect.target, {
     battlefieldZone,
     cards: ctx.cards,
     draft: ctx.draft,
@@ -55,6 +60,9 @@ export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): stri
     triggerSourceId: ctx.triggerSourceId,
     zones: ctx.zones,
   });
+  return excludeBound && ctx.boundTargets
+    ? resolved.filter((id) => !ctx.boundTargets?.includes(id))
+    : resolved;
 }
 
 /** Mighty threshold — units with Might >= 5 are "Mighty" */
@@ -150,14 +158,25 @@ export function resolveAmount(
   if ("count" in amount) {
     // Count matching targets
     const target = amount.count as TargetDescriptor;
-    return resolveTarget(target, {
-      cards: ctx.cards,
-      draft: ctx.draft,
-      playerId: ctx.playerId,
-      sourceCardId: ctx.sourceCardId,
-      sourceZone: ctx.sourceZone,
-      zones: ctx.zones,
-    }).length;
+    // rule-id: sfd-001-221 — "for each enemy unit there" is a tally, not a
+    // choice: enumerate every match unless the descriptor pins its own quantity
+    // (an unpinned descriptor otherwise defaults to the FIRST match, i.e. 1).
+    const counted = resolveTarget(
+      target?.quantity === undefined ? { ...target, quantity: "all" } : target,
+      {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sameZone: ctx.sameZone,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      },
+    ).length;
+    // "+2 Might for EACH enemy unit there": the count variant carries a
+    // per-match multiplier (rule 466 — the amount is N × the tally).
+    const multiplier = typeof amount.multiplier === "number" ? amount.multiplier : 1;
+    return counted * multiplier;
   }
   if ("distinctTags" in amount) {
     // rule-id: unl-046-219 (Friendship) — "+1 for each of the following tags

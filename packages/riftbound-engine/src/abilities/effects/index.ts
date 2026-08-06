@@ -56,6 +56,7 @@ import { handle_addRestriction } from "./add-restriction";
 import { handle_nameCard } from "./name-card";
 import { handle_removeRestriction } from "./remove-restriction";
 import { handle_turnStatic } from "./turn-static";
+import { handle_revealRuneBranch } from "./reveal-rune-branch";
 
 export type { EffectHandler, EffectHelpers } from "./_helpers";
 
@@ -120,4 +121,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "remove-restriction": handle_removeRestriction,
   // rule 364.3 (ogn-053-298) — turn-scoped continuous (static-like) effect.
   "turn-static": handle_turnStatic,
+  // rule 416.1.a (ogn-200-298) — reveal the top rune, recycle it, then take
+  // the branch dictated by its domain (never a controller choice).
+  "reveal-rune-branch": handle_revealRuneBranch,
 };
