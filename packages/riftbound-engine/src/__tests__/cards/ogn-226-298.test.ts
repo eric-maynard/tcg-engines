@@ -61,7 +61,7 @@ describe("Spectral Matron (ogn-226-298)", () => {
     }
   });
 
-  test.failing("BUG: accepting offers exactly the units in YOUR trash with Energy ≤ 3 and Power ≤ 1", async () => {
+  test("accepting offers exactly the units in YOUR trash with Energy ≤ 3 and Power ≤ 1", async () => {
     // Expected: pick prompt listing skulker + fae only (sarge costs 4, kraken needs 2 power, cleave is
     // a spell, theirSkulker is in the opponent's trash). Actual: no prompt — the effect re-"plays" the
     // Matron herself into base and the trash is never consulted.
@@ -74,7 +74,7 @@ describe("Spectral Matron (ogn-226-298)", () => {
     expect(d?.kind === "pick" && d.options.map((o) => o.card).sort()).toEqual(["fae", "skulker"]);
   });
 
-  test.failing("BUG: the chosen unit is played from trash for free — it enters the board exhausted; the Matron stays where she was", async () => {
+  test("the chosen unit is played from trash for free — it enters the board exhausted; the Matron stays where she was", async () => {
     // Expected: skulker leaves the trash and is on the board (base or a battlefield P1 controls),
     // exhausted, with P1's empty pool untouched; Matron still at bf1. Actual: skulker stays in the
     // trash and the Matron herself is moved to base.

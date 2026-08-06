@@ -8,9 +8,8 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * When you play me, you may play a unit costing no more than [3] and no
  * more than [rainbow] from your trash, ignoring its cost.
  *
- * Approximated as play-from-trash with energyCost <= 3 filter (the
- * [rainbow] (1 power) upper bound is omitted — engine cost filter doesn't
- * yet express power-cost maxes).
+ * rule 206: the cost bounds compare the printed cost — Energy <= 3 AND at
+ * most one Power pip ([rainbow]).
  */
 const abilities: Ability[] = [
   {
@@ -19,7 +18,7 @@ const abilities: Ability[] = [
       ignoreCost: true,
       target: {
         controller: "friendly",
-        filter: { energyCost: { lte: 3 } },
+        filter: [{ energyCost: { lte: 3 } }, { powerCost: { lte: 1 } }],
         type: "unit",
       },
       type: "play",

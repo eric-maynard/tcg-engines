@@ -171,6 +171,37 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
 }
 
 /**
+ * rule 206 — a printed-cost bound on a play target ("costing no more than [3]
+ * and no more than [rainbow]"). Energy and Power are independent comparisons
+ * and Power is counted in pips, so "[rainbow]" is `{ lte: 1 }`. Cards in the
+ * trash / hand are outside the zones the target resolver scans, so the check
+ * reads the registry directly.
+ */
+function matchesPrintedCostFilter(cardId: string, filter: unknown): boolean {
+  if (typeof filter !== "object" || filter === null) {
+    return true;
+  }
+  const f = filter as { energyCost?: Record<string, number>; powerCost?: Record<string, number> };
+  const registry = getGlobalCardRegistry();
+  const cmp = (value: number, c: Record<string, number> | undefined): boolean => {
+    if (!c) return true;
+    if (c.eq !== undefined && value !== c.eq) return false;
+    if (c.lt !== undefined && !(value < c.lt)) return false;
+    if (c.lte !== undefined && !(value <= c.lte)) return false;
+    if (c.gt !== undefined && !(value > c.gt)) return false;
+    if (c.gte !== undefined && !(value >= c.gte)) return false;
+    return true;
+  };
+  if ("energyCost" in f && !cmp(registry.getEnergyCost(cardId), f.energyCost)) {
+    return false;
+  }
+  if ("powerCost" in f && !cmp(registry.getPowerCost(cardId).length, f.powerCost)) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * rule-id: ogn-196-298 — "play a unit from your trash, ignoring its Energy
  * cost. (You must still pay its Power cost.)". Rule 356.1.b: ignoring one cost
  * component leaves the others payable, so only trash cards whose remaining
@@ -190,9 +221,19 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
     "trash" as CoreZoneId,
     ctx.playerId as CorePlayerId,
   ) as readonly string[];
+  // rule 206 (ogn-226-298): "a unit costing no more than [3] and no more than
+  // [rainbow]" — printed-cost bounds on the descriptor gate the candidates.
+  const costFilters = Array.isArray((target as { filter?: unknown } | undefined)?.filter)
+    ? ((target as { filter: readonly unknown[] }).filter as readonly unknown[])
+    : (target as { filter?: unknown } | undefined)?.filter !== undefined
+      ? [(target as { filter: unknown }).filter]
+      : [];
   const candidates = trash.filter((id) => {
     const cardType = registry.getCardType(id);
     if (target?.type && target.type !== "card" && target.type !== cardType) {
+      return false;
+    }
+    if (!costFilters.every((f) => matchesPrintedCostFilter(id, f))) {
       return false;
     }
     return canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta);
