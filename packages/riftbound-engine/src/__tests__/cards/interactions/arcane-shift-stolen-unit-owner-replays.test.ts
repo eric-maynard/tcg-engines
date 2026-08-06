@@ -145,7 +145,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: (b) P2 plays it to bf2 without Accelerate: it arrives exhausted, undamaged, controlled AND owned by P2 — Possession's control change is gone (143.4, 124.1, 191.1)", async () => {
+  test("(b) P2 plays it to bf2 without Accelerate: it arrives exhausted, undamaged, controlled AND owned by P2 — Possession's control change is gone (143.4, 124.1, 191.1)", async () => {
     const game = await possessed();
     await shiftStolen(game);
     await game.p2.pick("battlefield-bf2");
@@ -193,7 +193,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
 
   // ------------------------------------------------------------------ (c) whose units the play trigger hits
 
-  test.failing("BUG: (c) the replayed Watcher's 'When you play me' is P2's trigger: ALL of P1's units get -3 Might (min 1); P2's units are untouched (191.3.d)", async () => {
+  test("(c) the replayed Watcher's 'When you play me' is P2's trigger: ALL of P1's units get -3 Might (min 1); P2's units are untouched (191.3.d)", async () => {
     const game = await possessed();
     await shiftStolen(game);
     await game.p2.pick("base");
@@ -232,7 +232,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     expect(game.state("ownWatcher").owner).toBe(P1);
   });
 
-  test.failing("BUG: (d) the replayed Watcher is a NEW object: damage cleared, stun cleared, buff gone → plain 7 Might (124.1, 705)", async () => {
+  test("(d) the replayed Watcher is a NEW object: damage cleared, stun cleared, buff gone → plain 7 Might (124.1, 705)", async () => {
     // Expected: 0 damage, not stunned, not buffed, might 7. Actual: it keeps 2 damage, the stun and the buff (8 Might).
     const game = await ownBoard().build();
     await game.p1.cast("shift", { targets: ["ownWatcher", "victim"] });

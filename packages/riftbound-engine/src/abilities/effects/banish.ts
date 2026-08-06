@@ -26,9 +26,37 @@ export function handle_banish(effect: ExecutableEffect, ctx: EffectContext, _h: 
     );
   }
   for (const targetId of targets) {
+    const from = ctx.zones.getCardZone?.(targetId as CoreCardId) as string | undefined;
     ctx.zones.moveCard({
       cardId: targetId as CoreCardId,
       targetZoneId: "banishment" as CoreZoneId,
     });
+    // rule 124.1: a card leaving the board for banishment becomes a NEW
+    // object — damage, buffs, stun and granted keywords are gone, and any
+    // control-changing effect on it ends, so it reverts to its owner
+    // (rule 191.1). Matters when it is replayed from banishment
+    // (sfd-200-221 Arcane Shift: "then its owner plays it").
+    if (from !== "base" && !(from ?? "").startsWith("battlefield-")) {
+      continue;
+    }
+    ctx.counters?.setFlag?.(targetId as CoreCardId, "stunned", false);
+    ctx.counters?.setFlag?.(targetId as CoreCardId, "buffed", false);
+    ctx.counters?.setFlag?.(targetId as CoreCardId, "exhausted", false);
+    ctx.cards.updateCardMeta?.(targetId as CoreCardId, {
+      buffed: false,
+      combatMightModifier: 0,
+      combatRole: null,
+      controlEffects: undefined,
+      damage: 0,
+      grantedKeywords: undefined,
+      mightModifier: 0,
+      stunned: false,
+    } as unknown as Record<string, unknown>);
+    const owner = ctx.cards.getCardOwner(targetId as CoreCardId);
+    if (owner) {
+      ctx.cards.setCardController?.(targetId as CoreCardId, owner as Parameters<
+        NonNullable<typeof ctx.cards.setCardController>
+      >[1]);
+    }
   }
 }

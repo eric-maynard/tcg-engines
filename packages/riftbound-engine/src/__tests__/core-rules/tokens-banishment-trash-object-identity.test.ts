@@ -432,7 +432,7 @@ describe("Banish from the board goes directly to Banishment: public, not a kill,
     expect(game.gameState.battlefields.bf1?.controller).toBeNull();
   });
 
-  test.failing("BUG: 124.1 / 705 — the banished card is a new object: 2 damage, the buff and the granted [Tank] must be wiped (engine keeps damage/buff on the card in banishment)", async () => {
+  test("124.1 / 705 — the banished card is a new object: 2 damage, the buff and the granted [Tank] must be wiped (engine keeps damage/buff on the card in banishment)", async () => {
     // Expected: U in banishment reads damage 0, not buffed, no granted keywords, might = printed 4.
     // Actual: damage 2 and buffed=true persist on the banished card.
     const game = await banishBoard().build();
