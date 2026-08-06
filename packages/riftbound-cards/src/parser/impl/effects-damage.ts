@@ -1,0 +1,212 @@
+/**
+ * Effect parsers: damage / kill / fight / prevent-damage.
+ */
+
+import type {
+  DamageEffect,
+  FightEffect,
+  KillEffect,
+  PreventDamageEffect,
+  SequenceEffect,
+} from "@tcg/riftbound-types/abilities/effect-types";
+import type { AnyTarget } from "@tcg/riftbound-types/targeting";
+import { parseTarget } from "../parsers/target-parser";
+import { parseEffect } from "./effect";
+import { parseCardTarget } from "./targets";
+import { wordToNumber } from "./tokens";
+
+/**
+ * Try to parse a damage effect: "Deal N to TARGET."
+ */
+export function parseDamageEffect(text: string): DamageEffect | undefined {
+  // Handle "deal N damage split among" pattern
+  const splitMatch = text.match(/^Deal (\d+) damage split among (.+?)\.?$/i);
+  if (splitMatch) {
+    const amount = Number.parseInt(splitMatch[1], 10);
+    const target = parseCardTarget(splitMatch[2]);
+    return { amount, split: true, target: target as AnyTarget, type: "damage" } as DamageEffect;
+  }
+
+  // Handle "deal damage equal to my/its Might/[Assault]/[keyword] to TARGET" pattern
+  const mightDamageMatch = text.match(
+    /^Deal damage equal to (?:my|its|his|her)\s+(?:Might|\[\w+(?:-\w+)?\])\s+to\s+(.+?)\.?$/i,
+  );
+  if (mightDamageMatch) {
+    const target = parseCardTarget(mightDamageMatch[1]);
+    return {
+      amount: { might: "self" },
+      target: target as AnyTarget,
+      type: "damage",
+    } as DamageEffect;
+  }
+
+  // rule-id: ven-041-166 — "Deal N to TARGET for each COUNT" scales the amount by the
+  // count expression; must not fall through to the generic matcher below (parseCardTarget
+  // would see "each " in "for each Equipment" and emit quantity:"all", turning single-target
+  // per-attachment damage into flat AoE).
+  const forEachMatch = text.match(/^Deal (\d+) to (.+?) for each (.+?)\.?$/i);
+  if (forEachMatch) {
+    const per = Number.parseInt(forEachMatch[1], 10);
+    const target = parseCardTarget(forEachMatch[2]);
+    const countText = forEachMatch[3].trim();
+    const count = /^equipment attached to (?:me|it|this)$/i.test(countText)
+      ? ({ attachedTo: "self", quantity: "all", type: "equipment" } as unknown as AnyTarget)
+      : ({ ...parseCardTarget(countText), quantity: "all" } as unknown as AnyTarget);
+    return {
+      amount: { count, ...(per !== 1 ? { multiplier: per } : {}) },
+      target: target as AnyTarget,
+      type: "damage",
+    } as DamageEffect;
+  }
+
+  // Handle "Deal N to TARGET" pattern
+  const match = text.match(/^Deal (\d+) to (.+?)\.?$/i);
+  if (match) {
+    const amount = Number.parseInt(match[1], 10);
+    const target = parseCardTarget(match[2]);
+    return { amount, target: target as AnyTarget, type: "damage" };
+  }
+
+  return undefined;
+}
+
+/**
+ * Try to parse a kill effect: "Kill TARGET."
+ *
+ * Handles:
+ * - "Kill me." / "Kill this." (self-kill)
+ * - "Kill a/an/all [filter] [controller] unit/gear [location] [with ...]." (targeted kill)
+ * - "Kill up to N gear." (quantity kill)
+ * - "Each player kills one of their units/gear." (symmetric each-player kill)
+ * - "Kill me to EFFECT." (self-sacrifice sequence)
+ */
+export function parseKillEffect(text: string): KillEffect | SequenceEffect | undefined {
+  // Handle "kill me/this to EFFECT" as a sequence: kill self, then another effect
+  const killToMatch = text.match(/^Kill (me|this) to (.+?)\.?$/i);
+  if (killToMatch) {
+    const killSelf: KillEffect = { target: "self" as AnyTarget, type: "kill" };
+    const thenText = killToMatch[2].trim();
+    // Capitalize first letter for the sub-effect parser
+    const normalizedThen = thenText.charAt(0).toUpperCase() + thenText.slice(1);
+    const thenEffect = parseEffect(normalizedThen);
+    if (thenEffect) {
+      return { effects: [killSelf, thenEffect], type: "sequence" };
+    }
+    // If the "then" part can't be parsed, fall through to treat as simple kill
+  }
+
+  // Handle self-kill: "Kill me." / "Kill this."
+  if (/^Kill (me|this)\.?$/i.test(text)) {
+    return { target: "self" as AnyTarget, type: "kill" };
+  }
+
+  // Handle pronoun-referential kill: "Kill it."
+  // Used inside replacement bodies and chained sequences where the subject
+  // Was bound by an earlier step (e.g., "When any unit takes damage this
+  // Turn, kill it"). The resolver treats this as a generic unit target.
+  if (/^Kill (it|them)\.?$/i.test(text)) {
+    return { target: { type: "unit" } as AnyTarget, type: "kill" };
+  }
+
+  // Handle "Each player [must] kills/kill one of their units/gear."
+  const eachPlayerMatch = text.match(
+    /^Each player (?:must\s+)?kills?\s+one of their (units?|gear)\.?$/i,
+  );
+  if (eachPlayerMatch) {
+    const cardType = eachPlayerMatch[1].replace(/s$/, "") as "unit" | "gear";
+    return {
+      player: "each",
+      target: { type: cardType } as unknown as AnyTarget,
+      type: "kill",
+    };
+  }
+
+  // Handle kill with filters/conditions: "kill all damaged enemy units here."
+  // Also handles: "Kill a friendly [Mighty] unit.", "Kill an enemy unit here.",
+  // "Kill up to one gear.", "Kill up to N units."
+  const richMatch = text.match(
+    /^Kill ((?:a|an|all|any number of|up to (?:one|two|three|four|five|\d+))\s+(?:damaged\s+|stunned\s+|\[Mighty\]\s+)?(?:friendly\s+|enemy\s+)?(?:\[Mighty\]\s+)?(?:unit|units|gear)(?:\s+(?:at a battlefield|here|there))?)(\s+with\s+.+?)?\.?$/i,
+  );
+  if (richMatch) {
+    const targetStr = richMatch[1];
+    const withClause = richMatch[2];
+    // Check if it looks like a gear target
+    if (/gear/i.test(targetStr)) {
+      const gearTarget: {
+        type: "gear";
+        controller?: "friendly" | "enemy";
+        quantity?: "all" | { upTo: number };
+      } = {
+        type: "gear" as const,
+      };
+      if (/enemy/i.test(targetStr)) {
+        gearTarget.controller = "enemy";
+      } else if (/friendly/i.test(targetStr)) {
+        gearTarget.controller = "friendly";
+      }
+      if (/all/i.test(targetStr)) {
+        gearTarget.quantity = "all";
+      }
+      const upToGearMatch = targetStr.match(/up to (\w+)/i);
+      if (upToGearMatch) {
+        gearTarget.quantity = { upTo: wordToNumber(upToGearMatch[1]) };
+      }
+      return { target: gearTarget as unknown as AnyTarget, type: "kill" };
+    }
+    // Use parseCardTarget for unit targets (handles controller, location, quantity, filter)
+    const target = parseCardTarget(targetStr);
+    // rule-id: sfd-158-221 — preserve "with N [Might] or less" constraint on kill targets
+    const mightLteMatch = withClause?.match(/with\s+(\d+)\s*:rb_might:\s*or\s*less/i);
+    if (mightLteMatch) {
+      (target as { filter?: unknown }).filter = {
+        might: { lte: Number.parseInt(mightLteMatch[1], 10) },
+      };
+    }
+    return { target: target as AnyTarget, type: "kill" };
+  }
+
+  return undefined;
+}
+
+/**
+ * Try to parse a fight effect
+ */
+export function parseFightEffect(text: string): FightEffect | undefined {
+  if (!/deal damage equal to their Mights to each other\.?$/i.test(text)) {
+    return undefined;
+  }
+  // rule-id: unl-110-219-fight-targets-any — derive attacker/defender from the
+  // leading "Choose …" clause instead of hardcoding friendly/enemy so
+  // controller-agnostic wordings ("Choose two units") stay controller-agnostic.
+  let attacker: AnyTarget = { controller: "friendly", type: "unit" } as AnyTarget;
+  let defender: AnyTarget = { controller: "enemy", type: "unit" } as AnyTarget;
+  const twoMatch = text.match(/^Choose two ((?:[\w-]+ )*?units?)\b/i);
+  const pairMatch = text.match(/^Choose ((?:a|an|another) [^.]+?) and ((?:a|an|another) [^.]+?)\./i);
+  if (twoMatch) {
+    const t = parseTarget(twoMatch[1]);
+    attacker = t;
+    defender = t;
+  } else if (pairMatch) {
+    attacker = parseTarget(pairMatch[1]);
+    defender = parseTarget(pairMatch[2]);
+  }
+  return { attacker, defender, type: "fight" };
+}
+
+/**
+ * Try to parse a prevent-damage effect
+ */
+export function parsePreventDamageEffect(text: string): PreventDamageEffect | undefined {
+  const match = text.match(/^Prevent (all|the next)\s*(?:(\w+(?:\s+and\s+\w+)?)\s+)?damage/i);
+  if (!match) {
+    return undefined;
+  }
+  const effect: { type: "prevent-damage"; amount?: "all"; duration?: "turn" | "next" } = {
+    type: "prevent-damage",
+  };
+  if (match[1].toLowerCase() === "all") {
+    effect.amount = "all";
+  }
+  effect.duration = text.toLowerCase().includes("this turn") ? "turn" : "next";
+  return effect as PreventDamageEffect;
+}

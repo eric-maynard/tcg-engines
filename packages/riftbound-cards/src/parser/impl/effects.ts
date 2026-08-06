@@ -1,0 +1,193 @@
+/**
+ * Multi-effect parser (parseEffects).
+ */
+
+import type {
+  ChoiceEffect,
+  Effect,
+  SequenceEffect,
+} from "@tcg/riftbound-types/abilities/effect-types";
+import { parseEffect } from "./effect";
+import {
+  parseChoiceEffect,
+  parseCommaPronounChain,
+  parseIfElseEffect,
+  parseIfYouDoEffect,
+} from "./effects-conditional";
+import { parseReturnToHandEffect } from "./effects-return";
+import { buildSequenceWithPendingValue, parseAndCompoundEffect } from "./effects-sequence";
+import { normalizeTokens, stripReminders } from "./normalize";
+import { splitOnThen, splitSentences } from "./split";
+
+/**
+ * Parse multiple sequential effects from text, returning a sequence if more than one.
+ * Splits on sentence boundaries (". ") and tries to parse each.
+ */
+export function parseEffects(text: string): Effect | undefined {
+  const cleaned = normalizeTokens(stripReminders(text)).trim();
+  if (!cleaned) {
+    return undefined;
+  }
+
+  // Try "X. If you do, Y" pattern BEFORE any other splitting.
+  // This must run before splitOnThen because "If you do" is a conditional,
+  // Not a sequence.
+  const ifYouDoEffect = parseIfYouDoEffect(cleaned);
+  if (ifYouDoEffect) {
+    return ifYouDoEffect;
+  }
+
+  // Try "If <cond>, A. Otherwise, B" — a pure if/else conditional that
+  // Belongs in a single effect slot. Used by cards like Solari Chief:
+  // "If it is stunned, kill it. Otherwise, stun it."
+  const ifElseEffect = parseIfElseEffect(cleaned);
+  if (ifElseEffect) {
+    return ifElseEffect;
+  }
+
+  // Try "Choose one — OPTION1.OPTION2." pattern
+  const chooseOneMatch = cleaned.match(/^Choose one\s*—\s*(.+)$/is);
+  if (chooseOneMatch) {
+    const optionsText = chooseOneMatch[1];
+    // For choose-one, split on any period followed by an uppercase letter (options are sentences)
+    const options = optionsText
+      .split(/\.(?=[A-Z])/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (options.length >= 2) {
+      const parsedOptions: { effect: Effect }[] = [];
+      for (const opt of options) {
+        const eff = parseEffect(opt.trim());
+        if (eff) {
+          parsedOptions.push({ effect: eff });
+        } else {
+          parsedOptions.push({ effect: { text: opt.trim(), type: "raw" } as unknown as Effect });
+        }
+      }
+      if (parsedOptions.length >= 2) {
+        return { options: parsedOptions, type: "choice" } as ChoiceEffect;
+      }
+    }
+  }
+
+  // rule-id: unl-007-219 (Smite) — "EFFECT. If it would die this turn, REPLACEMENT instead."
+  // The trailing sentence is a turn-scoped die-replacement rider bound to the
+  // same target as the leading effect. Emit a sequence whose second step is a
+  // runtime `replacement` effect; the sequence carries the head target so
+  // play-time targeting (rule 355.8) still enumerates the chosen unit.
+  const dieRiderMatch = cleaned.match(
+    /^(.+?\.)\s+If (?:it|they) would die this turn,\s*(.+?)\s+instead\.?$/i,
+  );
+  if (dieRiderMatch) {
+    const head = parseEffects(dieRiderMatch[1]);
+    const bodyText = `${dieRiderMatch[2].trim().replace(/\.$/, "")}.`;
+    const body = parseEffects(bodyText) ?? parseEffect(bodyText);
+    if (head && body) {
+      const headTarget = (head as { target?: unknown }).target;
+      return {
+        effects: [
+          head,
+          {
+            duration: "turn",
+            replacement: body,
+            replaces: "die",
+            ...(headTarget !== undefined ? { target: headTarget } : {}),
+            type: "replacement",
+          } as unknown as Effect,
+        ],
+        ...(headTarget !== undefined ? { target: headTarget } : {}),
+        type: "sequence",
+      } as unknown as SequenceEffect;
+    }
+  }
+
+  // Try "X or Y" choice pattern before single-effect parse (e.g., "draw 1 or channel 1 rune exhausted")
+  const choiceEffect = parseChoiceEffect(cleaned);
+  if (choiceEffect) {
+    return choiceEffect;
+  }
+
+  // Compound return-to-hand: "Return X and Y to their owners' hands."
+  // Split the shared "to their owners' hands" suffix across two targets.
+  const compoundReturnMatch = cleaned.match(
+    /^Return (?:(another)\s+)?((?:(?:a|an)\s+)?(?:friendly|enemy)?\s*(?:unit|gear)(?:\s+(?:at a battlefield|here|there))?)\s+and\s+((?:(?:a|an)\s+)?(?:friendly|enemy)?\s*(?:unit|gear)(?:\s+(?:at a battlefield|here|there))?)\s+to\s+their owners'?\s+hands?\.?$/i,
+  );
+  if (compoundReturnMatch) {
+    const another = compoundReturnMatch[1];
+    const leftRaw = compoundReturnMatch[2].trim();
+    const rightRaw = compoundReturnMatch[3].trim();
+    // Ensure each target starts with a/an for the per-effect parser.
+    const normalize = (s: string) => (/^(?:a|an)\s/i.test(s) ? s : `a ${s}`);
+    const leftEff = parseReturnToHandEffect(
+      `Return ${another ? "another " : ""}${normalize(leftRaw)} to its owner's hand.`,
+    );
+    const rightEff = parseReturnToHandEffect(`Return ${normalize(rightRaw)} to its owner's hand.`);
+    if (leftEff && rightEff) {
+      return { effects: [leftEff, rightEff], type: "sequence" } as SequenceEffect;
+    }
+  }
+
+  // Try splitting on " and " as a sequence separator BEFORE single-effect parse
+  // So that "buff me and draw 1" produces a sequence instead of just a buff
+  const andEffect = parseAndCompoundEffect(cleaned);
+  if (andEffect) {
+    return andEffect;
+  }
+
+  // Try splitting on comma-joined pronoun-chained effects:
+  // "heal it, exhaust it, and recall it" / "heal it, exhaust it and recall it"
+  // Only kicks in when every clause starts with a verb and refers to "it" / "me" / "them".
+  const commaChainEffect = parseCommaPronounChain(cleaned);
+  if (commaChainEffect) {
+    return commaChainEffect;
+  }
+
+  // Try as a single effect
+  const single = parseEffect(cleaned);
+  if (single) {
+    return single;
+  }
+
+  // Try splitting on "then" connectors (". Then ", ", then ", " Then ")
+  // Before generic sentence splitting. This handles compound effects like
+  // "Exhaust all friendly units, then deal 12 to ALL units at battlefields."
+  const thenParts = splitOnThen(cleaned);
+  if (thenParts && thenParts.length >= 2) {
+    const thenEffects: Effect[] = [];
+    let allParsed = true;
+    for (const part of thenParts) {
+      const eff = parseEffects(part);
+      if (eff) {
+        thenEffects.push(eff);
+      } else {
+        allParsed = false;
+        break;
+      }
+    }
+    if (allParsed && thenEffects.length >= 2) {
+      return buildSequenceWithPendingValue(thenEffects);
+    }
+  }
+
+  // Try splitting on sentence boundaries
+  const sentences = splitSentences(cleaned);
+  if (sentences.length <= 1) {
+    return undefined;
+  }
+
+  const effects: Effect[] = [];
+  for (const sentence of sentences) {
+    const eff = parseEffect(sentence.trim());
+    if (eff) {
+      effects.push(eff);
+    }
+  }
+
+  if (effects.length === 0) {
+    return undefined;
+  }
+  if (effects.length === 1) {
+    return effects[0];
+  }
+  return buildSequenceWithPendingValue(effects);
+}

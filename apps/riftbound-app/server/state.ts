@@ -1,0 +1,202 @@
+/**
+ * In-memory server state: lobby + game session maps, their types, cleanup
+ * timers, and small broadcast helpers.
+ */
+
+import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "@tcg/riftbound";
+import type { RuleEngine } from "@tcg/core";
+import type { Server, ServerWebSocket } from "bun";
+import type { LogEntry } from "../src/narrator";
+
+export type Engine = RuleEngine<RiftboundGameState, RiftboundMoves, unknown, RiftboundCardMeta>;
+
+/** Context passed to every route handler. */
+export interface RouteCtx {
+  server: Server;
+}
+
+/**
+ * A route handler resolves to a Response, or `null` if the route is not its
+ * own. (WebSocket upgrade handlers resolve to `undefined` after a successful
+ * upgrade, matching what Bun.serve's fetch expects — so callers must test
+ * `!== null`, not truthiness.)
+ */
+export type RouteResult = Promise<Response | null>;
+export type RouteHandler = (req: Request, url: URL, ctx: RouteCtx) => RouteResult;
+
+// ========================================
+// Lobby System
+// ========================================
+
+export interface LobbyPlayer {
+  name: string;
+  connId: string;
+  ws: ServerWebSocket<WsData> | null;
+  deckId: string | null; // Selected deck ID or "preset" for auto-generated
+  ready: boolean;
+}
+
+export interface Lobby {
+  id: string;
+  code: string; // Short joinable code
+  host: LobbyPlayer;
+  guest: LobbyPlayer | null;
+  status: "waiting" | "ready" | "started";
+  gameId: string | null; // Set when game starts
+  sandbox: boolean; // Hot-seat mode — host controls both players
+  gameMode: "duel" | "match"; // Bo1 duel or Bo3 match
+  /** D20 roll result: both rolls, who won, and who they chose to go first */
+  coinFlip: { winner: string; firstPlayer: string; p1Roll: number; p2Roll: number } | null;
+  createdAt: number;
+}
+
+export const lobbies = new Map<string, Lobby>(); // Keyed by lobby ID
+export const lobbyByCode = new Map<string, string>(); // Code → lobby ID
+
+export function generateLobbyCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // No I/O/0/1 to avoid confusion
+  let code = "";
+  for (let i = 0; i < 4; i++) {code += chars[Math.floor(Math.random() * chars.length)];}
+  // Ensure unique
+  if (lobbyByCode.has(code)) {return generateLobbyCode();}
+  return code;
+}
+
+export function broadcastLobby(lobby: Lobby) {
+  const state = {
+    lobby: {
+      code: lobby.code,
+      coinFlip: lobby.coinFlip,
+      gameId: lobby.gameId,
+      gameMode: lobby.gameMode,
+      guest: lobby.guest ? { hasDeck: Boolean(lobby.guest.deckId), name: lobby.guest.name, ready: lobby.guest.ready } : null,
+      host: { hasDeck: Boolean(lobby.host.deckId), name: lobby.host.name, ready: lobby.host.ready },
+      id: lobby.id,
+      sandbox: lobby.sandbox,
+      status: lobby.status,
+    },
+    type: "lobby_update",
+  };
+  const data = JSON.stringify(state);
+  try { lobby.host.ws?.send(data); } catch { /* */ }
+  try { lobby.guest?.ws?.send(data); } catch { /* */ }
+}
+
+// Clean up stale lobbies every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, lobby] of lobbies) {
+    if (now - lobby.createdAt > 30 * 60 * 1000 && lobby.status !== "started") {
+      lobbyByCode.delete(lobby.code);
+      lobbies.delete(id);
+    }
+  }
+}, 5 * 60 * 1000);
+
+// Clean up game sessions with no connected clients for 10+ minutes
+export const sessionLastActivity = new Map<string, number>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, session] of gameSessions) {
+    if (session.clients.size === 0) {
+      const lastActive = sessionLastActivity.get(id) ?? now;
+      if (now - lastActive > 10 * 60 * 1000) {
+        gameSessions.delete(id);
+        sessionLastActivity.delete(id);
+      }
+    } else {
+      sessionLastActivity.set(id, now);
+    }
+  }
+}, 60 * 1000);
+
+// ========================================
+// Game Engine Sessions
+// ========================================
+
+export interface PregameState {
+  phase: "battlefield_select" | "mulligan" | "ready";
+  gameMode: "duel" | "match";
+  firstPlayer: string;
+  secondPlayer: string;
+  /** Each player's available battlefield definition IDs (from their deck) */
+  battlefieldOptions: Record<string, string[]>;
+  /** Each player's selected battlefield card ID (once chosen) */
+  battlefieldSelections: Record<string, string>;
+  /** Players who have completed their mulligan decision */
+  mulliganComplete: Set<string>;
+  /** Whether this is a sandbox (hotseat) game */
+  sandbox: boolean;
+}
+
+export interface GameSession {
+  engine: Engine;
+  players: [string, string];
+  /** Display names keyed by player ID */
+  playerNames: Record<string, string>;
+  log: LogEntry[];
+  /** Connected WebSocket clients for this game, keyed by a connection ID */
+  clients: Map<string, { ws: ServerWebSocket<WsData>; playerId: string }>;
+  /** Monotonic sequence number for ordering messages */
+  seq: number;
+  /** Pregame state — present until game transitions to "playing" */
+  pregame?: PregameState;
+  /** Whether this is a sandbox (goldfish) game */
+  sandbox: boolean;
+}
+
+/** Data attached to each WebSocket connection */
+export interface WsData {
+  gameId: string;
+  playerId: string;
+  connId: string;
+  /** If this is a lobby connection rather than a game connection */
+  lobbyId?: string;
+  lobbyRole?: "host" | "guest";
+}
+
+/** Deck configuration for creating a game */
+export interface DeckConfig {
+  /** Card definition IDs for the main deck (40 cards) */
+  mainDeckCardIds: string[];
+  /** Card definition IDs for the rune deck (12 runes) */
+  runeDeckCardIds: string[];
+  /** Battlefield card definition IDs (2-3) */
+  battlefieldIds: string[];
+  /** Card definition ID for the Champion Legend (placed in Legend Zone) */
+  legendId?: string;
+  /** Card definition ID for the Chosen Champion (placed in Champion Zone) */
+  championId?: string;
+}
+
+export const gameSessions = new Map<string, GameSession>();
+
+/** Broadcast a message to all WebSocket clients in a game session */
+export function broadcast(session: GameSession, msg: Record<string, unknown>, exclude?: string) {
+  const data = JSON.stringify(msg);
+  for (const [connId, client] of session.clients) {
+    if (connId !== exclude) {
+      try { client.ws.send(data); } catch { /* Client may have disconnected */ }
+    }
+  }
+}
+
+/** Send a message to a specific WebSocket client */
+export function sendTo(session: GameSession, connId: string, msg: Record<string, unknown>) {
+  const client = session.clients.get(connId);
+  if (client) {
+    try { client.ws.send(JSON.stringify(msg)); } catch { /* Ignore */ }
+  }
+}
+
+/** Get zone/card data from engine's internal state */
+export function getInternalSnapshot(engine: Engine) {
+  // Access private internalState for zone/card rendering
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private field for UI rendering
+  const internal = (engine as unknown as Record<string, unknown>).internalState as {
+    zones: Record<string, { config: unknown; cardIds: string[] }>;
+    cards: Record<string, { definitionId: string; owner: string; controller: string; zone: string; position?: number }>;
+    cardMetas: Record<string, RiftboundCardMeta>;
+  };
+  return internal;
+}

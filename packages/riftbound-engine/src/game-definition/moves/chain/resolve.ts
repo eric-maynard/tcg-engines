@@ -1,0 +1,308 @@
+/**
+ * Chain resolution: executeResolvedItem + passChainPriority / resolveChain moves (split from chain-moves.ts).
+ */
+
+import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
+import type { ChainItem } from "../../../chain";
+import {
+  allPlayersPassed,
+  passPriority as passPriorityState,
+  resolveTopItem,
+} from "../../../chain";
+import type { EffectContext, ExecutableEffect } from "../../../abilities/effect-executor";
+import { executeEffect } from "../../../abilities/effect-executor";
+import type { TargetDescriptor } from "../../../abilities/target-resolver";
+import { resolveTarget } from "../../../abilities/target-resolver";
+import { fireTriggers } from "../../../abilities/trigger-runner";
+import { performCleanup } from "../../../cleanup";
+import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
+import { buildEffectContext } from "./effect-context";
+
+type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
+
+/**
+ * Execute a resolved chain item's effect.
+ * Skips execution if the item was countered (rule 543).
+ */
+export function executeResolvedItem(
+  resolved: ChainItem,
+  draft: RiftboundGameState,
+  context: Parameters<typeof buildEffectContext>[3],
+): void {
+  // Countered items don't execute their effects
+  if (resolved.countered) {
+    return;
+  }
+
+  // Rule 583 (unl-021-219): a "you may …" trigger reaches resolution but its
+  // effect runs only if the controller opts in. Pause via an `opt-in` pending
+  // choice; on accept the reducer re-enters here with `optional` cleared.
+  if (resolved.optional) {
+    draft.pendingChoice = {
+      type: "opt-in",
+      playerId: resolved.controller,
+      sourceCardId: resolved.cardId,
+      resolved: { ...resolved, optional: false },
+    };
+    return;
+  }
+
+  const rawEffect = resolved.effect as
+    | (ExecutableEffect & { _variables?: Record<string, number> })
+    | undefined;
+  if (!rawEffect) {
+    // No stored effect — try to look up from card registry (fallback for spells)
+    const registry = getGlobalCardRegistry();
+    const abilities = registry.getAbilities(resolved.cardId) ?? [];
+    const spellAbility = abilities.find((a) => a.type === "spell");
+    if (spellAbility?.effect) {
+      const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+      const effectCtx: EffectContext = resolved.targets
+        ? { ...baseCtx, boundTargets: resolved.targets }
+        : baseCtx;
+      executeEffect(spellAbility.effect as ExecutableEffect, effectCtx);
+    }
+    return;
+  }
+
+  // Strip any bound variables (e.g., X-cost value) before executing — they
+  // Are threaded into the EffectContext so `{ variable: "x" }` expressions
+  // Can resolve to the chosen X amount during spell resolution.
+  const { _variables, ...effectRest } = rawEffect;
+  const effect = effectRest as ExecutableEffect;
+
+  const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+
+  // rule-id: ven-021-166 — expose the firing event's from/to zones so
+  // `location: "move-to-or-from"` targets resolve against only the
+  // battlefields the triggering move touched.
+  const trigEvt = resolved.triggerEvent as { from?: string; to?: string } | undefined;
+  const triggerZones = trigEvt
+    ? [trigEvt.from, trigEvt.to].filter((z): z is string => typeof z === "string")
+    : undefined;
+
+  // Rule 355.10: for a resolved effect that targets a caster-chosen single
+  // card ("give a unit X"), the controller picks which card. When targets
+  // were not bound at chain-placement time and more than one legal option
+  // exists, pause and ask via a `choose-target` pending choice; the effect
+  // runs from `resolvePendingChoice` once the pick is made.
+  let boundTargets = resolved.targets;
+  const target = effect.target as TargetDescriptor | string | undefined;
+  if (
+    !boundTargets &&
+    target &&
+    // ogn-122-298: bare-string target ("self" / instanceId) is already fully
+    // specified — never route through the choose-target prompt.
+    typeof target !== "string" &&
+    target.type !== "self" &&
+    target.type !== "player" &&
+    target.type !== "battlefield" &&
+    target.quantity !== "all"
+  ) {
+    const options = resolveTarget(
+      { ...target, quantity: "all" },
+      {
+        cards: baseCtx.cards,
+        draft,
+        playerId: resolved.controller,
+        sourceCardId: resolved.cardId,
+        sourceZone: baseCtx.sourceZone,
+        triggerZones,
+        zones: baseCtx.zones,
+      },
+    );
+    if (options.length >= 2) {
+      draft.pendingChoice = {
+        type: "choose-target",
+        playerId: resolved.controller,
+        sourceCardId: resolved.cardId,
+        effect,
+        options,
+        remaining: 1,
+      };
+      return;
+    }
+    boundTargets = options;
+  }
+
+  const effectCtx: EffectContext = {
+    ...baseCtx,
+    ...(_variables ? { variables: _variables } : {}),
+    ...(boundTargets ? { boundTargets } : {}),
+  };
+  // Rule 359.2: "when you choose me" triggers fire when a spell/ability's
+  // controller picks a card as a target.
+  if (boundTargets && boundTargets.length > 0) {
+    const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+    for (const targetId of boundTargets) {
+      fireTriggers({ cardId: targetId, chooserId: resolved.controller, type: "choose" }, trigCtx);
+    }
+  }
+  const preLen = draft.interaction?.chain?.items.length ?? 0;
+  executeEffect(effect, effectCtx);
+  const postLen = draft.interaction?.chain?.items.length ?? 0;
+
+  // Rule 419.4.a: abilities that trigger on playing a card fire when that
+  // act is completed by resolution — not when the card is placed on the
+  // chain, and never if the card was countered (425.1.b).
+  if (resolved.type === "spell") {
+    const trigCtx = {
+      cards: context.cards,
+      counters: context.counters,
+      draft,
+      zones: context.zones,
+    };
+    fireTriggers(
+      { cardId: resolved.cardId, playerId: resolved.controller, type: "play-spell" },
+      trigCtx,
+    );
+    fireTriggers(
+      {
+        cardId: resolved.cardId,
+        cardType: "spell",
+        playerId: resolved.controller,
+        type: "play-card",
+      },
+      trigCtx,
+    );
+    // Rule 354.2 / 383.2.c / 337.1.b: a pending play the resolving spell put on
+    // the chain (Thrill of the Hunt banish→play) must finalize BEFORE any
+    // trigger that becomes pending because the spell was played (Abandoned
+    // Hall). Lift the effect-added items back above the just-queued triggers so
+    // the replayed unit is on the board when the trigger's target is chosen.
+    const chain = draft.interaction?.chain;
+    if (chain && postLen > preLen && chain.items.length > postLen) {
+      const items = chain.items as ChainItem[];
+      const pendingPlays = items.splice(preLen, postLen - preLen);
+      items.push(...pendingPlays);
+    }
+  }
+}
+
+/**
+ * rule-id: unl-007-219 — a spell card stays in the "chain" zone while its
+ * chain item is pending; once it leaves the chain (resolved or countered)
+ * place it in the owner's trash (or banishment for [Flow] plays). If the
+ * spell's own effect already moved the card elsewhere, leave it there.
+ */
+export function settleResolvedSpellCard(
+  resolved: ChainItem,
+  context: Parameters<typeof buildEffectContext>[3],
+): void {
+  if (resolved.type !== "spell") {
+    return;
+  }
+  if (context.zones.getCardZone(resolved.cardId as CoreCardId) !== ("chain" as CoreZoneId)) {
+    return;
+  }
+  context.zones.moveCard({
+    cardId: resolved.cardId as CoreCardId,
+    targetZoneId: (resolved.resolveTo ?? "trash") as CoreZoneId,
+  });
+}
+
+/**
+ * Pass priority during a chain (rule 540.4)
+ *
+ * The active player passes. If all relevant players pass,
+ * the top item on the chain resolves and its effect executes.
+ */
+export const passChainPriority: Defs["passChainPriority"] = {
+  condition: (state, context) => {
+    if (state.pendingChoice) {
+      return false;
+    }
+    if (!state.interaction?.chain?.active) {
+      return false;
+    }
+    return state.interaction.chain.activePlayer === context.params.playerId;
+  },
+  enumerator: (state, context) => {
+    if (state.pendingChoice) {
+      return [];
+    }
+    if (!state.interaction?.chain?.active) {
+      return [];
+    }
+    if (state.interaction.chain.activePlayer !== (context.playerId as string)) {
+      return [];
+    }
+    return [{ playerId: context.playerId as string }];
+  },
+  reducer: (draft, context) => {
+    if (!draft.interaction) {
+      return;
+    }
+
+    draft.interaction = passPriorityState(draft.interaction);
+
+    // If all passed, auto-resolve the top item
+    if (allPlayersPassed(draft.interaction)) {
+      const { resolved, newState } = resolveTopItem(draft.interaction);
+      draft.interaction = newState;
+
+      if (resolved) {
+        executeResolvedItem(resolved, draft, context);
+        settleResolvedSpellCard(resolved, context);
+
+        // Run state-based checks after resolution (rule 543.3/518)
+        performCleanup({
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          zones: context.zones,
+        });
+      }
+    }
+  },
+};
+
+/**
+ * Manually resolve the top item on the chain (rule 543)
+ *
+ * Called after all players have passed priority.
+ */
+export const resolveChain: Defs["resolveChain"] = {
+  condition: (state) => {
+    if (state.pendingChoice) {
+      return false;
+    }
+    if (!state.interaction?.chain?.active) {
+      return false;
+    }
+    return allPlayersPassed(state.interaction);
+  },
+  enumerator: (state) => {
+    if (state.pendingChoice) {
+      return [];
+    }
+    if (!state.interaction?.chain?.active) {
+      return [];
+    }
+    if (!allPlayersPassed(state.interaction)) {
+      return [];
+    }
+    return [{}];
+  },
+  reducer: (draft, context) => {
+    if (!draft.interaction) {
+      return;
+    }
+
+    const { resolved, newState } = resolveTopItem(draft.interaction);
+    draft.interaction = newState;
+
+    if (resolved) {
+      executeResolvedItem(resolved, draft, context);
+      settleResolvedSpellCard(resolved, context);
+
+      performCleanup({
+        cards: context.cards,
+        counters: context.counters,
+        draft,
+        zones: context.zones,
+      });
+    }
+  },
+};

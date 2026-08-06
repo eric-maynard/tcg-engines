@@ -1,0 +1,281 @@
+// render/modals.js — Choice modals (pending choice, play-cost) and the chain
+// overlay. Classic script: everything is global. Split out of renderer.js.
+
+// Choice Modals — shared Arena-style overlay for pending choices and
+// optional-cost play prompts.
+
+function ensureChoiceOverlay() {
+  let overlay = document.getElementById("choiceOverlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "choiceOverlay";
+    overlay.className = "chain-overlay";
+    overlay.innerHTML = '<div class="chain-box choice-modal" id="choiceBox"></div>';
+    document.body.appendChild(overlay);
+  }
+  return { overlay, box: document.getElementById("choiceBox") };
+}
+
+function closeChoiceModal() {
+  const overlay = document.getElementById("choiceOverlay");
+  if (overlay) overlay.classList.remove("visible");
+}
+
+function renderPendingChoiceModal() {
+  const pending = gameState?.pendingChoice;
+  const mine = pending && (pending.prompter ?? pending.playerId) === viewingPlayer;
+  const { overlay, box } = ensureChoiceOverlay();
+
+  if (!pending || !mine) {
+    // Don't stomp a play-cost modal that's currently open.
+    if (overlay.dataset.mode === "pending") closeChoiceModal();
+    overlay.classList.remove("targeting");
+    return;
+  }
+  overlay.dataset.mode = "pending";
+  // Card picks are mirrored as board glows (applyPendingChoiceHighlights); let
+  // clicks reach the board by making the backdrop pass-through for those prompts.
+  const hasBoardPicks = pending.type === "choose-target" || availableMoves.some(m =>
+    m.moveId === "resolvePendingChoice" && m.params?.pickedCardId &&
+    document.querySelector(`#game-scale-wrapper [data-card-id="${CSS.escape(m.params.pickedCardId)}"]`));
+  overlay.classList.toggle("targeting", !!hasBoardPicks);
+  if (typeof closeZoom === "function") closeZoom();
+
+  const title = pending.onPicked === "discard" ? "Discard a card"
+    : pending.onPicked === "banish" ? "Banish a card"
+    : pending.onPicked === "recycle" ? "Recycle a card"
+    : pending.onPicked === "draw" ? "Choose a card to draw"
+    : pending.onPicked === "play" ? "Choose a card to play"
+    : pending.type === "name-card" ? "Name a card"
+    : pending.type === "choose-destination" ? "Choose a destination"
+    : pending.type === "choose-target" ? "Choose a target"
+    : "Choose a card";
+
+  let html = `<div class="chain-title">${esc(title)}</div>`;
+  html += `<div class="chain-subtitle">Play is paused until you choose</div>`;
+
+  const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
+  const cardPicks = picks.filter(m => m.params?.pickedCardId);
+  const otherPicks = picks.filter(m => !m.params?.pickedCardId);
+
+  if (cardPicks.length) {
+    html += `<div class="choice-modal-cards">`;
+    for (let i = 0; i < cardPicks.length; i++) {
+      const cid = cardPicks[i].params.pickedCardId;
+      const card = findCard(cid);
+      const imgId = (card?.definitionId ?? cid).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
+      html += `<img class="choice-modal-card" data-pick-idx="${i}" src="/card-image/${esc(imgId)}"
+        alt="${esc(card?.name ?? cid)}" title="${esc(card?.name ?? cid)}">`;
+    }
+    html += `</div>`;
+  }
+  if (otherPicks.length) {
+    html += `<div class="choice-modal-btns">`;
+    for (let i = 0; i < otherPicks.length; i++) {
+      const label = otherPicks[i].params?.pickedZoneId ?? otherPicks[i].params?.pickedName ?? "—";
+      html += `<button class="choice-modal-btn" data-other-idx="${i}">${esc(String(label))}</button>`;
+    }
+    html += `</div>`;
+  }
+
+  box.innerHTML = html;
+  // Attach handlers via delegation instead of inline onclick — avoids
+  // interpolating server-derived params into an HTML attribute.
+  box.querySelectorAll(".choice-modal-card").forEach(el => {
+    el.addEventListener("click", () => {
+      const m = cardPicks[Number(el.dataset.pickIdx)];
+      if (m) executeMove("resolvePendingChoice", m.params, m.playerId);
+    });
+  });
+  box.querySelectorAll(".choice-modal-btn").forEach(el => {
+    el.addEventListener("click", () => {
+      const m = otherPicks[Number(el.dataset.otherIdx)];
+      if (m) executeMove("resolvePendingChoice", m.params, m.playerId);
+    });
+  });
+  overlay.classList.add("visible");
+}
+
+/** Build a human label for one play-variant of a card. */
+function describePlayVariant(m, card) {
+  const baseCost = card?.energyCost ?? 0;
+  // Rule ogn-193-298: location-only variants (base vs open battlefield) must
+  // name their destination or they render as identical buttons.
+  const loc = m.params?.location;
+  const where = !loc || loc === "base"
+    ? "to base"
+    : `to ${getBattlefieldName(String(loc).replace(/^battlefield-/, ""))}`;
+  if (!m.params?.paidAdditionalCost) {
+    return { label: `Play ${where}`, detail: `${baseCost} energy` };
+  }
+  const spec = m.params.additionalCostSpec;
+  if (m.params.sacrificeId) {
+    const sac = findCard(m.params.sacrificeId);
+    return {
+      label: `Play + sacrifice ${sac?.name ?? m.params.sacrificeId}`,
+      detail: `${baseCost} energy — kill ${sac?.name ?? "a permanent"} as an additional cost`,
+    };
+  }
+  const parts = [];
+  if (spec?.energy) parts.push(`${spec.energy} energy`);
+  if (spec?.power?.length) parts.push(spec.power.join(" + "));
+  const extra = parts.length ? parts.join(" + ") : "additional cost";
+  return {
+    label: `Play + Accelerate`,
+    detail: `${baseCost} + ${extra} — enters ready`,
+  };
+}
+
+/**
+ * Open the Arena-style play-cost modal for a card that has ≥2 play variants
+ * (base vs paidAdditionalCost / sacrifice).
+ */
+function openPlayCostModal(cardId) {
+  // Rule ogn-193-298: match the action-panel grouping key exactly so a
+  // cardId-less champion move doesn't leak into another card's modal.
+  const variants = availableMoves.filter(m =>
+    (m.moveId === "playUnit" || m.moveId === "playFromChampionZone") &&
+    (m.params?.cardId ?? "__champion") === cardId,
+  );
+  if (variants.length === 0) return;
+  const card = findCard(cardId);
+  const { overlay, box } = ensureChoiceOverlay();
+  overlay.dataset.mode = "playCost";
+  overlay.classList.remove("targeting");
+  if (typeof closeZoom === "function") closeZoom();
+
+  const imgId = (card?.definitionId ?? cardId).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
+  let html = `<div class="chain-title">Play ${esc(card?.name ?? cardId)}</div>`;
+  html += `<div class="chain-subtitle">Choose how to play</div>`;
+  html += `<div class="choice-modal-cards"><img class="choice-modal-card" style="margin:0" src="/card-image/${esc(imgId)}" alt=""></div>`;
+  html += `<div class="choice-modal-btns">`;
+  for (let i = 0; i < variants.length; i++) {
+    const { label, detail } = describePlayVariant(variants[i], card);
+    html += `<button class="choice-modal-btn" data-variant-idx="${i}">
+      ${esc(label)}<small>${esc(detail)}</small>
+    </button>`;
+  }
+  html += `</div>`;
+  html += `<button class="choice-modal-cancel">Cancel</button>`;
+
+  box.innerHTML = html;
+  box.querySelectorAll(".choice-modal-btn[data-variant-idx]").forEach(el => {
+    el.addEventListener("click", () => {
+      const m = variants[Number(el.dataset.variantIdx)];
+      closeChoiceModal();
+      if (m) executeMove(m.moveId, m.params, m.playerId);
+    });
+  });
+  box.querySelector(".choice-modal-cancel")?.addEventListener("click", closeChoiceModal);
+  overlay.classList.add("visible");
+}
+
+// Chain / Showdown Overlay
+
+function renderChainOverlay() {
+  const overlay = document.getElementById("chainOverlay");
+  const box = document.getElementById("chainBox");
+  if (!overlay || !box) return;
+
+  const interaction_state = gameState?.interaction;
+  const chain = interaction_state?.chain;
+
+  // W9: showdown rendering has moved to the per-battlefield inline panel
+  // (see showdown.js + renderBattlefields). The chain overlay now only
+  // reacts to the spell chain itself.
+  if (!chain || !chain.active) {
+    overlay.classList.remove("visible");
+    box.classList.remove("showdown-active");
+    return;
+  }
+
+  if (!overlay.classList.contains("visible") && typeof closeZoom === "function") closeZoom();
+  overlay.classList.add("visible");
+  box.classList.remove("showdown-active");
+
+  const isMyPriority = chain?.activePlayer === viewingPlayer;
+  const hasChain = chain?.active && chain.items?.length > 0;
+
+  // [rule:no-console-errors] Legend/champion/battlefield instance ids are
+  // `${pid}-legend-${defId}` etc. (no index) — strip those too so
+  // /card-image/ gets a bare defId instead of 404ing.
+  const CHAIN_ID_PREFIX_RE = /^player-[12]-(?:(?:main|rune)-\d+|legend|champion|bf)-/;
+
+  // Resolve card name helper
+  function resolveChainCard(cardId) {
+    if (!gameState?.zones) return cardId;
+    for (const zoneCards of Object.values(gameState.zones)) {
+      const found = zoneCards.find(c => c.id === cardId);
+      if (found) return found.name || cardId;
+    }
+    const stripped = cardId.replace(CHAIN_ID_PREFIX_RE, "");
+    for (const zoneCards of Object.values(gameState.zones)) {
+      const found = zoneCards.find(c => c.definitionId === stripped);
+      if (found) return found.name || cardId;
+    }
+    return cardId;
+  }
+
+  let html = "";
+
+  // ---- Chain active ----
+  // W9: showdown-specific DOM was removed from this overlay. Per-battlefield
+  // inline panels (showdown.js) own all showdown UI now.
+  if (hasChain) {
+    html += `<div class="chain-title">The Chain</div>`;
+    html += `<div class="chain-subtitle">Spells and abilities resolving — play reactions or pass</div>`;
+
+    html += `<div class="chain-stack">`;
+    const items = [...(chain.items || [])].reverse();
+    items.forEach((item, i) => {
+      const isTop = i === 0;
+      const cardName = resolveChainCard(item.cardId);
+      const controller = pName(item.controller);
+      const imgId = item.cardId.replace(CHAIN_ID_PREFIX_RE, "");
+      html += `
+        <div class="chain-item ${isTop ? "top-item" : ""}">
+          <div class="ci-order">${isTop ? "Next" : items.length - i}</div>
+          <img class="ci-img" src="/card-image/${esc(imgId)}" alt="" onerror="this.style.display='none'">
+          <div class="ci-info">
+            <div class="ci-name">${esc(cardName)}</div>
+            <div class="ci-detail">${esc(controller)} — ${esc(item.type)}${item.countered ? " (Countered)" : ""}</div>
+          </div>
+        </div>
+      `;
+    });
+    html += `</div>`;
+
+    html += `<div class="chain-priority">`;
+    if (isMyPriority) {
+      html += `<span class="priority-player">${esc(pName(chain.activePlayer))} has Priority</span> — play a reaction spell or pass`;
+    } else if (chain.activePlayer) {
+      const name = pName(chain.activePlayer);
+      html += `<span class="priority-waiting">${esc(name)} has Priority</span> — waiting...`;
+    } else {
+      html += `All players passed — resolving top item`;
+    }
+    html += `</div>`;
+  }
+
+  // ---- Action buttons ----
+  // W9: showdown-focus passing is handled by the per-battlefield inline
+  // panel; this block now only offers chain-priority passing / resolving.
+  html += `<div class="chain-actions">`;
+  if (isMyPriority) {
+    const passMove = availableMoves.find(m => m.moveId === "passChainPriority");
+    if (passMove) {
+      const passParams = JSON.stringify(passMove.params).replace(/'/g, "\\'");
+      html += `<button class="chain-pass-btn" onclick='executeMove("${passMove.moveId}", ${passParams}, "${passMove.playerId}")'>Pass (Space)</button>`;
+      html += `<div class="chain-hint">Press Space to pass</div>`;
+    }
+
+    const resolveMove = availableMoves.find(m => m.moveId === "resolveChain");
+    if (resolveMove) {
+      const resolveParams = JSON.stringify(resolveMove.params).replace(/'/g, "\\'");
+      html += `<button class="chain-resolve-btn" onclick='executeMove("${resolveMove.moveId}", ${resolveParams}, "${resolveMove.playerId}")'>Resolve</button>`;
+    }
+  }
+  html += `</div>`;
+
+  box.innerHTML = html;
+}
