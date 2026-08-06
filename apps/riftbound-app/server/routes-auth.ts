@@ -3,6 +3,7 @@
  */
 
 import { authenticateUser, createUser, getUserById } from "../src/db/user-repo";
+import { SANDBOX_ENABLED } from "./config";
 import { corsHeaders, json } from "./http";
 import type { RouteCtx, RouteResult } from "./state";
 
@@ -84,14 +85,29 @@ export async function handleAuthRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     return json({ user });
   }
 
-  // GET /api/auth/dev-credentials — auto-login for local dev
+  // GET /api/auth/dev-credentials — dev auto-login. Never discloses the
+  // password: when DEFAULT_USERNAME/DEFAULT_PASSWORD are set AND sandbox mode is
+  // on AND the request comes from loopback, the server performs the login itself
+  // and returns {available, token, user, username} with the session cookie set.
   if (pathname === "/api/auth/dev-credentials" && req.method === "GET") {
     const username = process.env.DEFAULT_USERNAME;
     const password = process.env.DEFAULT_PASSWORD;
-    if (username && password) {
-      return json({ available: true, password, username });
+    const host = (req.headers.get("host") ?? "").split(":")[0];
+    const loopback = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+    if (!username || !password || !SANDBOX_ENABLED || !loopback) {
+      return json({ available: false });
     }
-    return json({ available: false });
+    const user = authenticateUser(username, password);
+    if (!user) {return json({ available: false });}
+    const token = generateToken(user.id);
+    return new Response(JSON.stringify({ available: true, token, user, username }), {
+      headers: {
+        "Content-Type": "application/json",
+        "Set-Cookie": `rb_token=${token}; Path=/; Max-Age=${30 * 86_400}; SameSite=Lax`,
+        ...corsHeaders,
+      },
+      status: 200,
+    });
   }
 
   return null;

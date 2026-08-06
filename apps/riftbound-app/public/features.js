@@ -50,10 +50,11 @@ async function tryDevAutoLogin() {
     if (!cr.ok) return;
     const creds = await cr.json();
     if (!creds || !creds.username) return;
+        if (creds.token) { return { json: () => Promise.resolve({ token: creds.token, user: creds.user }) }; }
     const lr = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: creds.username, password: creds.password })
+      body: JSON.stringify({ username: creds.username, password: creds.password || '' })
     });
     const data = await lr.json();
     if (data && data.token) {

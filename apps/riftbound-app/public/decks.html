@@ -543,8 +543,9 @@
         const cr = await fetch('/api/auth/dev-credentials');
         if (cr.ok) {
           const creds = await cr.json();
-          if (creds && creds.username) {
-            const lr = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: creds.username, password: creds.password }) });
+          if (creds && creds.token) { document.cookie = 'rb_token=' + creds.token + ';path=/;max-age=' + (30*86400) + ';SameSite=Lax'; try{localStorage.setItem('rb_token', creds.token);}catch{} if (typeof showUser==='function' && creds.user) { showUser(creds.user.displayName || creds.user.username); return; } if (location.pathname==='/login') { location.href='/'; return; } }
+      if (creds && creds.username && !creds.token) {
+            const lr = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: creds.username, password: creds.password || '' }) });
             const data = await lr.json();
             if (data && data.token) {
               localStorage.setItem('rb_token', data.token);

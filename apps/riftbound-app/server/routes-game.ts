@@ -35,7 +35,7 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     const deck1 = body.deck1 ?? buildDefaultDeck();
     const deck2 = body.deck2 ?? buildDefaultDeck();
     const gameId = crypto.randomUUID();
-    const session = createGameFromDecks(deck1, deck2, body.seed, { gameMode: "duel" });
+    const session = createGameFromDecks(deck1, deck2, body.seed, { gameMode: "duel", sandbox: (body.sandbox ?? false) && SANDBOX_ENABLED });
     gameSessions.set(gameId, session);
     gameLogger.logGameCreated(gameId, session.players, "duel", body.seed ?? "random", {
       sandbox: body.sandbox ?? false,
@@ -58,6 +58,10 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     const playerId = url.searchParams.get("player") ?? "player-1";
     const session = gameSessions.get(gameId);
     if (!session) {return json({ error: "Game not found" }, 404);}
+    // REST move surface is a sandbox/test hook only: there is no user→seat
+    // binding on this path (body.playerId / ?player= are caller-supplied), so
+    // host/join games must use the authenticated WebSocket path instead.
+    if (!session.sandbox) {return json({ error: "REST moves are sandbox-only; use the game WebSocket" }, 403);}
 
     const moves = buildAvailableMoves(session, playerId);
     return json(moves);
@@ -68,6 +72,10 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     const gameId = pathname.split("/")[3];
     const session = gameSessions.get(gameId);
     if (!session) {return json({ error: "Game not found" }, 404);}
+    // REST move surface is a sandbox/test hook only: there is no user→seat
+    // binding on this path (body.playerId / ?player= are caller-supplied), so
+    // host/join games must use the authenticated WebSocket path instead.
+    if (!session.sandbox) {return json({ error: "REST moves are sandbox-only; use the game WebSocket" }, 403);}
 
     const body = (await req.json()) as { moveId: string; playerId: string; params: Record<string, unknown> };
 
@@ -164,6 +172,10 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     const gameId = pathname.split("/")[3];
     const session = gameSessions.get(gameId);
     if (!session) {return json({ error: "Game not found" }, 404);}
+    // REST move surface is a sandbox/test hook only: there is no user→seat
+    // binding on this path (body.playerId / ?player= are caller-supplied), so
+    // host/join games must use the authenticated WebSocket path instead.
+    if (!session.sandbox) {return json({ error: "REST moves are sandbox-only; use the game WebSocket" }, 403);}
 
     const state = session.engine.getState();
     if (state.status !== "playing") {
@@ -186,6 +198,10 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     const gameId = pathname.split("/")[3];
     const session = gameSessions.get(gameId);
     if (!session) {return json({ error: "Game not found" }, 404);}
+    // REST move surface is a sandbox/test hook only: there is no user→seat
+    // binding on this path (body.playerId / ?player= are caller-supplied), so
+    // host/join games must use the authenticated WebSocket path instead.
+    if (!session.sandbox) {return json({ error: "REST moves are sandbox-only; use the game WebSocket" }, 403);}
 
     const success = session.engine.redo();
     if (!success) {return json({ error: "Nothing to redo" }, 400);}

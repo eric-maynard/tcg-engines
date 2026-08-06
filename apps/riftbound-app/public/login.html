@@ -110,10 +110,11 @@
       .then(r => r.ok ? r.json() : null)
       .then(creds => {
         if (!creds || !creds.username) return;
+        if (creds.token) { return { json: () => Promise.resolve({ token: creds.token, user: creds.user }) }; }
         return fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: creds.username, password: creds.password })
+          body: JSON.stringify({ username: creds.username, password: creds.password || '' })
         });
       })
       .then(r => r ? r.json() : null)
