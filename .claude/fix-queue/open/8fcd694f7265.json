@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: A — Zhonya's replaces the kill: Hourglass to trash, unit survives in base healed and exhausted (369.1, 370.1.a.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/hidden-blade-zhonyas-vs-flash-draw.test.ts",
+    "testName": "BUG: A — Zhonya's replaces the kill: Hourglass to trash, unit survives in base healed and exhausted (369.1, 370.1.a.1)"
+  },
+  "id": "8fcd694f7265",
+  "createdAt": "2026-08-06T18:35:08.347Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.347Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

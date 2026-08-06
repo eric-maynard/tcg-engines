@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-182-298",
+  "title": "'When this is played ... draw 1' does not trigger",
+  "expected": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/ogn/scrapheap.ts:4-14 defines Scrapheap with only rulesText (\"When this is played, discarded, or killed, draw 1.\") and no `abilities` field. The engine only executes structured `abilities[]` (compare bandle-tree.ts:16,27 which sets `abilities`); coverage-check.ts:129 explicitly flags this class (\"cards PLAYED with rulesText but NO abilities[] (effect never fires)\"). So no triggered ability is registered on play, matching the observed hand 5 / deck 35.",
+  "observed": "playGear resolved ('dev equipped Scrapheap'), no chain item/trigger, hand 5, deck 35 unchanged",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/ogn/scrapheap.ts:4",
+  "id": "8765584a5941",
+  "createdAt": "2026-08-06T20:43:38.883Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.883Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

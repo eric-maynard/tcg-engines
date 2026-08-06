@@ -34,7 +34,7 @@ describe("Wielder of Water (ogn-055-298)", () => {
     expect(poor.p1.can("play", "ww")).toBe(false);
   });
 
-  test.failing("BUG: no bonus outside combat — 2 Might at rest even when it is the only friendly unit there", async () => {
+  test("no bonus outside combat — 2 Might at rest even when it is the only friendly unit there", async () => {
     // Expected: neither attacking nor defending → printed 2 Might. Actual: the +2 is applied
     // unconditionally (might reads 4) once statics are evaluated.
     const game = await warm(await scenario().battlefield("bf1", { controller: P1 }).unit(P1, "bf1", WIELDER, "ww").hand(P1, TICK, "tick").build());
@@ -60,7 +60,7 @@ describe("Wielder of Water (ogn-055-298)", () => {
     expect(game.zoneOf("foe")).toBe("trash");
   });
 
-  test.failing("BUG: attacking together with another friendly unit: not alone → 2 Might, so 2 + 1 does not kill a 4-Might defender", async () => {
+  test("attacking together with another friendly unit: not alone → 2 Might, so 2 + 1 does not kill a 4-Might defender", async () => {
     // Expected: ww (2) + pal (1) = 3 < 4, foe survives. Actual: ww counts 4 → foe dies.
     const game = await warm(
       await scenario()
@@ -97,7 +97,7 @@ describe("Wielder of Water (ogn-055-298)", () => {
     expect(game.zoneOf("ww")).toBe("battlefield-bf1");
   });
 
-  test.failing("BUG: defending alongside another friendly unit: not alone → 2 Might", async () => {
+  test("defending alongside another friendly unit: not alone → 2 Might", async () => {
     // Expected: printed 2 Might (a friendly unit shares the battlefield). Actual: 4.
     const game = await warm(
       await scenario()

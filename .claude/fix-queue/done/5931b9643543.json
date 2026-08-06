@@ -1,0 +1,32 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: Dunebreaker + Apprentice at a battlefield → player-optimal order gives [0][fury]: castable with 0 energy, only the fury pip is spent (356.4.c.1 / 356.4.e)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/sky-splitter-apprentice-discount-order.test.ts",
+    "testName": "BUG: Dunebreaker + Apprentice at a battlefield → player-optimal order gives [0][fury]: castable with 0 energy, only the fury pip is spent (356.4.c.1 / 356.4.e)"
+  },
+  "id": "5931b9643543",
+  "createdAt": "2026-08-06T17:51:09.031Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.031Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T19:41:10.630Z",
+      "event": "done(unclaimed)",
+      "note": "fixed by w1-i1 with 5fc0297a057b: Sky Splitter self discount + rule 356.4.e ordering (floored auras first) in cost.ts; test flipped"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "fixed by w1-i1 with 5fc0297a057b: Sky Splitter self discount + rule 356.4.e ordering (floored auras first) in cost.ts; test flipped",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
+      "packages/riftbound-engine/src/__tests__/cards/interactions/sky-splitter-apprentice-discount-order.test.ts"
+    ],
+    "at": "2026-08-06T19:41:10.630Z"
+  }
+}

@@ -93,7 +93,7 @@ describe("Volibear, Furious (ogn-041-298)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: 5 damage may be split among several enemy units here (2 to a 2-Might unit, 3 to a 7-Might unit) — rule 355.14", async () => {
+  test("5 damage may be split among several enemy units here (2 to a 2-Might unit, 3 to a 7-Might unit) — rule 355.14", async () => {
     // Expected: a distribute prompt totalling 5 over the enemy units here; a dies, b has 3 damage
     // before combat. Actual: the engine asks for a single target, then "Assign 1 damage".
     const game = await scenario()
@@ -115,9 +115,8 @@ describe("Volibear, Furious (ogn-041-298)", () => {
     expect(game.zoneOf("b")).toBe("battlefield-bf1");
   });
 
-  test.failing("BUG: with a single enemy unit here it is dealt exactly 5 (a 7-Might unit survives the trigger)", async () => {
-    // Expected: b takes 5 and is still at bf1 when the showdown continues. Actual: b is killed
-    // outright by the trigger (7 damage recorded).
+  test("with a single enemy unit here it is dealt exactly 5 (a 7-Might unit survives the trigger)", async () => {
+    // b takes 5 and is still at bf1 when the showdown continues.
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P1, "base", VOLIBEAR, "voli")

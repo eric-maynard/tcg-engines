@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-077-298",
+  "title": "BUG: the Hourglass is consumed by its first save, so a second lethal hit kills the unit",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-077-298.test.ts",
+    "testName": "BUG: the Hourglass is consumed by its first save, so a second lethal hit kills the unit"
+  },
+  "id": "dba49cc260b0",
+  "createdAt": "2026-08-06T17:15:21.542Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.542Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T17:51:17.845Z",
+      "event": "grabbed:w3-i1"
+    },
+    {
+      "at": "2026-08-06T18:32:13.683Z",
+      "event": "done",
+      "note": "Hourglass kills itself via executed replacement, so it is gone for the second lethal hit"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i1",
+  "claimedAt": "2026-08-06T17:51:17.845Z",
+  "resolution": {
+    "note": "Hourglass kills itself via executed replacement, so it is gone for the second lethal hit",
+    "files": [
+      "packages/riftbound-engine/src/cleanup/state-based-checks.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-077-298.test.ts"
+    ],
+    "at": "2026-08-06T18:32:13.683Z"
+  }
+}

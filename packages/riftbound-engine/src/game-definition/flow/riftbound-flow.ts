@@ -162,6 +162,11 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           if (context.state.unitsMovedThisTurn) {
             context.state.unitsMovedThisTurn[currentPlayer] = 0;
           }
+          // rule-id: ogn-019-298 — "this turn" event log (discards, …) is per turn
+          // for every player, not just the turn player.
+          (context.state as { turnEvents?: Record<string, string[]> }).turnEvents = {};
+          // rule-id: ogn-118-298 — "the first time … each turn" tallies reset every turn.
+          context.state.turnEventCounts = {};
           if (context.state.cardsPlayedThisTurn) {
             // Rule 724 (Legion): reset main-deck cards-played counter at
             // The start of the turn player's turn so Legion conditions
@@ -595,9 +600,14 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   context.cards.updateCardMeta(cardId, { damage: 0 });
                 }
 
-                // Clear stun at Ending Step (rule 599.1.a.2)
-                if (meta.stunned) {
-                  context.cards.updateCardMeta(cardId, { stunned: false });
+                // Clear stun at Ending Step (rule 423.1.a.2) — the stun effect writes
+                // counters.setFlag → __flags.stunned; seeds/mirrors use top-level stunned.
+                const stunFlags = (meta as { __flags?: Record<string, boolean> }).__flags;
+                if (meta.stunned || stunFlags?.stunned === true) {
+                  context.cards.updateCardMeta(cardId, {
+                    __flags: { ...(stunFlags ?? {}), stunned: false },
+                    stunned: false,
+                  } as Partial<RiftboundCardMeta>);
                 }
 
                 // Expire turn-scoped granted keywords (rule 517.2.b)
@@ -674,6 +684,11 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 context.state.activeReplacements = (
                   context.state.activeReplacements as { duration?: string }[]
                 ).filter((e) => e?.duration !== "turn" && e?.duration !== "next");
+              }
+              // rule 517.2.b (ogn-053-298) — "this turn" continuous effects expire;
+              // the next static pass drops their Might/keyword contributions.
+              if (context.state.turnStatics) {
+                context.state.turnStatics = undefined;
               }
             },
 

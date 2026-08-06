@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-241-298",
+  "title": "BUG: [Reaction] — playable on the opponent's turn (to base)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-241-298.test.ts",
+    "testName": "BUG: [Reaction] — playable on the opponent's turn (to base)"
+  },
+  "id": "a81dc29915dc",
+  "createdAt": "2026-08-06T18:35:08.337Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.337Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

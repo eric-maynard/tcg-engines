@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-106-298",
+  "title": "BUG: the Sprite token is played READY",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-106-298.test.ts",
+    "testName": "BUG: the Sprite token is played READY"
+  },
+  "id": "3acc43ac7742",
+  "createdAt": "2026-08-06T17:15:21.553Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.553Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:55:38.146Z",
+      "event": "grabbed:w2-i2"
+    },
+    {
+      "at": "2026-08-06T20:09:00.581Z",
+      "event": "done",
+      "note": "create-token honours effect.ready===true for unit tokens (rule 184.1)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i2",
+  "claimedAt": "2026-08-06T19:55:38.146Z",
+  "resolution": {
+    "note": "create-token honours effect.ready===true for unit tokens (rule 184.1)",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/create-token.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-106-298.test.ts"
+    ],
+    "at": "2026-08-06T20:09:00.581Z"
+  }
+}

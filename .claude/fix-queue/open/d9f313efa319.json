@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: paying Accelerate on the free Rearguard costs exactly [1][fury] and it enters READY (356.1.b.3, 805.2.b)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/matron-rearguard-accelerate-ezreal.test.ts",
+    "testName": "BUG: paying Accelerate on the free Rearguard costs exactly [1][fury] and it enters READY (356.1.b.3, 805.2.b)"
+  },
+  "id": "d9f313efa319",
+  "createdAt": "2026-08-06T18:35:08.344Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.344Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

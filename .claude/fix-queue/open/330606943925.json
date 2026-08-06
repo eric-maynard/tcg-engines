@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 323.12 / 344.2 — once the chain has resolved and the turn is Neutral Open, the staged showdown at A must BEGIN as part of cleanup; engine leaves it staged behind a manual `startShowdown` while P1 may take unrelated discretionary actions",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/scoring-hold-and-conquer.test.ts",
+    "testName": "BUG: 323.12 / 344.2 — once the chain has resolved and the turn is Neutral Open, the staged showdown at A must BEGIN as part of cleanup; engine leaves it staged behind a manual `startShowdown` while P1 may take unrelated discretionary actions"
+  },
+  "id": "330606943925",
+  "createdAt": "2026-08-06T20:50:12.439Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.439Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

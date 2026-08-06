@@ -1,0 +1,33 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-139-298",
+  "title": "BUG: already buffed — a second unit play leaves Cithria at exactly one buff (2 Might); trigger never fires today",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-139-298.test.ts",
+    "testName": "BUG: already buffed — a second unit play leaves Cithria at exactly one buff (2 Might); trigger never fires today"
+  },
+  "id": "e11631175348",
+  "createdAt": "2026-08-06T17:39:26.579Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.579Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:42:53.844Z",
+      "event": "done(unclaimed)",
+      "note": "fixed by typed play-card trigger mapping (w5-i2)"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "fixed by typed play-card trigger mapping (w5-i2)",
+    "files": [
+      "packages/riftbound-engine/src/abilities/trigger-matcher.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-139-298.test.ts"
+    ],
+    "at": "2026-08-06T19:42:53.844Z"
+  }
+}

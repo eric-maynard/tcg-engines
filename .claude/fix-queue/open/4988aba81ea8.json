@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 485.7 — after P1's additional turn, game turn 3 is P2's FIRST turn and P2 must channel 3; the engine keys the bonus to absolute turn number 2 (firstTurnNumber[P2] === 2) and P2 only channels 2",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
+    "testName": "BUG: 485.7 — after P1's additional turn, game turn 3 is P2's FIRST turn and P2 must channel 3; the engine keys the bonus to absolute turn number 2 (firstTurnNumber[P2] === 2) and P2 only channels 2"
+  },
+  "id": "4988aba81ea8",
+  "createdAt": "2026-08-06T20:50:12.432Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.432Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

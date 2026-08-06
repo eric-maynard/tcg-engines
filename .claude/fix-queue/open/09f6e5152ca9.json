@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 24995e96f6e7c30f — the friendly unit to kill is declared at finalization, before P2's reaction window (engine asks only on resolution)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/baited-hook-24995e96f6e7c30f.test.ts",
+    "testName": "BUG: ruling 24995e96f6e7c30f — the friendly unit to kill is declared at finalization, before P2's reaction window (engine asks only on resolution)"
+  },
+  "id": "09f6e5152ca9",
+  "createdAt": "2026-08-06T20:06:58.324Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.324Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

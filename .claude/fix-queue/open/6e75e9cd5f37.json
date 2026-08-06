@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 321/323.1 — 'You gain 1 point. Then each opponent gains 1 point.' at 7–7: P1 is momentarily 8 vs 7 mid-resolution but the cleanup runs after the spell leaves the chain (8–8) → no winner; engine finishes the game between the two instructions",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/victory-and-final-point.test.ts",
+    "testName": "BUG: 321/323.1 — 'You gain 1 point. Then each opponent gains 1 point.' at 7–7: P1 is momentarily 8 vs 7 mid-resolution but the cleanup runs after the spell leaves the chain (8–8) → no winner; engine finishes the game between the two instructions"
+  },
+  "id": "6e75e9cd5f37",
+  "createdAt": "2026-08-06T20:50:12.439Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.439Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

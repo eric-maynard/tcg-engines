@@ -65,7 +65,7 @@ describe("Ride the Wind (ogn-173-298)", () => {
     expect(game.locationOf("foe")).toBe("bf1");
   });
 
-  test.failing("BUG: '...and ready it' — the moved unit ends up ready (415)", async () => {
+  test("'...and ready it' — the moved unit ends up ready (415)", async () => {
     // Expected: ally was exhausted, is moved to bf2 and readied by the same spell.
     // Actual: the move happens but the ready step never applies to the moved unit; it stays exhausted.
     const game = await board().build();

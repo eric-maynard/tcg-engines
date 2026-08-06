@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 471.1.b.1 — run (b) LONE CONQUER at 7 must draw instead of taking the Final Point (trigger still fires, A scored, game continues); engine awards the win",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts",
+    "testName": "BUG: 471.1.b.1 — run (b) LONE CONQUER at 7 must draw instead of taking the Final Point (trigger still fires, A scored, game continues); engine awards the win"
+  },
+  "id": "f93a4155e16c",
+  "createdAt": "2026-08-06T20:50:12.435Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.435Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

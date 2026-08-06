@@ -53,6 +53,7 @@ import { handle_predict } from "./predict";
 import { handle_addRestriction } from "./add-restriction";
 import { handle_nameCard } from "./name-card";
 import { handle_removeRestriction } from "./remove-restriction";
+import { handle_turnStatic } from "./turn-static";
 
 export type { EffectHandler, EffectHelpers } from "./_helpers";
 
@@ -113,4 +114,6 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "add-restriction": handle_addRestriction,
   "name-card": handle_nameCard,
   "remove-restriction": handle_removeRestriction,
+  // rule 364.3 (ogn-053-298) — turn-scoped continuous (static-like) effect.
+  "turn-static": handle_turnStatic,
 };

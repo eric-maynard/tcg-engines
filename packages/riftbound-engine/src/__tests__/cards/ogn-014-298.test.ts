@@ -35,9 +35,8 @@ describe("Sky Splitter (ogn-014-298)", () => {
     expect(game.zoneOf("sky")).toBe("trash");
   });
 
-  // BUG: the parser dropped the self-discount clause; the engine always charges the printed 8.
-  // Expected: 3 energy + 1 fury is enough with a 5-Might friendly unit. Actual: not playable.
-  test.failing("BUG: energy cost should be reduced by the highest Might among units you control (8 - 5 = 3; rule 356.4)", async () => {
+  // 3 energy + 1 fury is enough with a 5-Might friendly unit.
+  test("energy cost should be reduced by the highest Might among units you control (8 - 5 = 3; rule 356.4)", async () => {
     const game = await board(3)
       .unit(P1, "base", { might: 2 }, "small")
       .unit(P1, "base", { might: 5 }, "big")
@@ -49,8 +48,8 @@ describe("Sky Splitter (ogn-014-298)", () => {
     expect(game.state("foe").damage).toBe(5);
   });
 
-  // Expected: 9-Might friendly unit → energy cost 0, only [fury] due. Actual: full 8 energy demanded.
-  test.failing("BUG: a friendly unit with 8+ Might should reduce the energy cost to 0 with the power cost still due (rule 356.4.e)", async () => {
+  // 9-Might friendly unit → energy cost 0, only [fury] due.
+  test("a friendly unit with 8+ Might should reduce the energy cost to 0 with the power cost still due (rule 356.4.e)", async () => {
     const game = await board(0).unit(P1, "base", { might: 9 }, "giant").build();
     expect(game.p1.can("cast", "sky")).toBe(true);
     await game.p1.cast("sky", { targets: "foe" });
@@ -65,8 +64,8 @@ describe("Sky Splitter (ogn-014-298)", () => {
     expect(noPower.p1.can("cast", "sky")).toBe(false);
   });
 
-  // Expected: 2 energy is short of the reduced cost 3, 3 energy is enough. Actual: never playable below 8.
-  test.failing("BUG: reduced cost boundary — 2 energy with a 5-Might unit is not enough, 3 is (rule 356.4)", async () => {
+  // 2 energy is short of the reduced cost 3, 3 energy is enough.
+  test("reduced cost boundary — 2 energy with a 5-Might unit is not enough, 3 is (rule 356.4)", async () => {
     const game = await board(2).unit(P1, "base", { might: 5 }, "big").build();
     expect(game.p1.can("cast", "sky")).toBe(false);
     await game.p1.do("addResources", { energy: 1 });

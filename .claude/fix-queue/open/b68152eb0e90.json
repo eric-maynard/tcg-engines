@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-029-221",
+  "title": "BUG: static — a friendly unit played from facedown (not from hand) has Accelerate and may pay [1][fury] to enter ready",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-029-221.test.ts",
+    "testName": "BUG: static — a friendly unit played from facedown (not from hand) has Accelerate and may pay [1][fury] to enter ready"
+  },
+  "id": "b68152eb0e90",
+  "createdAt": "2026-08-06T19:03:47.623Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:03:47.623Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

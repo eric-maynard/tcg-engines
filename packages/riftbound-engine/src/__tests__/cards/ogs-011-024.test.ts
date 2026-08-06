@@ -80,7 +80,7 @@ describe("Flash (ogs-011-024)", () => {
     expect(game.chain().map((c) => c.cardId)).toEqual(["cleave"]);
   });
 
-  test.failing("BUG: [Reaction] in a showdown — flashing the lone defender home leaves the attacker alone, so it wins the combat and conquers (rules 466.3.a, 466.5)", async () => {
+  test("[Reaction] in a showdown — flashing the lone defender home leaves the attacker alone, so it wins the combat and conquers (rules 466.3.a, 466.5)", async () => {
     // Expected: Flash is castable with Focus mid-showdown (this part works); the defender reaches base
     // undamaged and, with only the attacker remaining, P2 establishes control of bf1 and scores the
     // conquer point. Actual: the engine recalls the attacker to base and bf1 stays with P1.

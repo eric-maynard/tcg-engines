@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-011-221",
+  "title": "BUG: attach mode — choosing a unit and an unattached Equipment you control attaches it (+2 might from Skyfall)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-011-221.test.ts",
+    "testName": "BUG: attach mode — choosing a unit and an unattached Equipment you control attaches it (+2 might from Skyfall)"
+  },
+  "id": "e73e2873132b",
+  "createdAt": "2026-08-06T19:03:47.638Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:03:47.638Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

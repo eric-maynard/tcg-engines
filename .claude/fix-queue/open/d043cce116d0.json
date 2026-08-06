@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "unl-164-219",
+  "title": "'Each player must kill one of their units' resolves as a single choose-target prompt for the controller over ALL units (friendly and enemy), killing exactly one unit total.",
+  "expected": "Parser emits {type:\"kill\", player:\"each\", target:{type:\"unit\"}} (riftbound-cards/src/parser/impl/effects-damage.ts:139-150). The engine never honours player:\"each\" for kill: game-definition/moves/chain/resolve.ts:160-241 builds a single choose-target for resolved.controller with options = resolveTarget({type:\"unit\", quantity:\"all\"}) — no controller filter, so all friendly+enemy units — and remaining:1; abilities/effects/kill.ts handle_kill (lines 8-37) just kills the bound target(s) with no per-player fan-out (unlike discard.ts:18/draw.ts:10/channel.ts:13 which do branch on player===\"each\"). Result: controller picks one unit from any side, one kill total; opponent never kills their own unit.",
+  "observed": "pendingChoice {type:choose-target, playerId:player-1, remaining:1, options:[Gem Jammer(p1), Safety Inspector(p1), Recruit token(p2)]}. After p1 picked Gem Jammer, effect ended: p2's Recruit survived, no prompt/auto-kill for player-2. In a second run p1 was able to pick and kill p2's Recruit token instead.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain/resolve.ts:232",
+  "id": "d043cce116d0",
+  "createdAt": "2026-08-06T20:43:38.885Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.885Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

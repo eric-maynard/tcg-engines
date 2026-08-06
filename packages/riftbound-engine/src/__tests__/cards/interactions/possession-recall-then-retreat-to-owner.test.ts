@@ -119,7 +119,7 @@ describe("Possession × Sett × Retreat — control vs ownership after a take-co
 
   // Expected: P2 no longer controls Sett, so P2 cannot spend its buff / activate its ability. Actual: the
   // engine still lists `activateAbility:sett#1` for P2 (owner-based check) and lets it resolve.
-  test.failing("BUG: (b) P2 (owner, no longer controller) can NOT activate Sett's ability (702.2.b.2)", async () => {
+  test("(b) P2 (owner, no longer controller) can NOT activate Sett's ability (702.2.b.2)", async () => {
     const game = await possessed();
     expect(game.p2.can("activate", "sett")).toBe(false);
     const r = await game.p2.try((p) => p.activate("sett", 1));
@@ -186,7 +186,7 @@ describe("Possession × Sett × Retreat — control vs ownership after a take-co
   // Expected (740.1.a): Sett is an ENEMY unit to P2 now, so P2's Retreat ("a friendly unit") has no legal
   // target among {sett} → with Sett as P2's only owned unit, P2 cannot cast Retreat at all. Actual: P2's
   // Retreat offers Sett (owner-based friendliness) and would return it to P2's hand.
-  test.failing("BUG: (d) P2 cannot Retreat the possessed Sett — it is not friendly to P2 any more", async () => {
+  test("(d) P2 cannot Retreat the possessed Sett — it is not friendly to P2 any more", async () => {
     const game = await possessed();
     expect(targetsOffered(game, P2, "p2Retreat")).not.toContain("sett");
     expect(game.p2.can("cast", "p2Retreat")).toBe(false);

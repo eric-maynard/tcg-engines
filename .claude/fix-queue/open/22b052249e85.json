@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 124 / 124.1 / 705 — U (might 3): exhausted, 2 damage, buffed, +2 this turn, granted Tank → killed → played back from trash the same turn → must be a fresh unit: might exactly 3, 0 damage, no buff/Tank/+2 (engine brings it back with damage 2, buffed, Might 4+)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/tokens-banishment-trash-object-identity.test.ts",
+    "testName": "BUG: 124 / 124.1 / 705 — U (might 3): exhausted, 2 damage, buffed, +2 this turn, granted Tank → killed → played back from trash the same turn → must be a fresh unit: might exactly 3, 0 damage, no buff/Tank/+2 (engine brings it back with damage 2, buffed, Might 4+)"
+  },
+  "id": "22b052249e85",
+  "createdAt": "2026-08-06T20:50:12.438Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.438Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

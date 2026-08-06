@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 116 — the opening draw happens once: a second drawInitialHand(P1) must be refused (or be a no-op); the engine draws 4 more (hand 8)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
+    "testName": "BUG: 116 — the opening draw happens once: a second drawInitialHand(P1) must be refused (or be a no-op); the engine draws 4 more (hand 8)"
+  },
+  "id": "d749ab375aaf",
+  "createdAt": "2026-08-06T20:50:12.432Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.432Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

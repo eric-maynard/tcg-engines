@@ -239,6 +239,20 @@ describe("Spell: Action", () => {
 
       expect(result.success).toBe(true);
       expect(result.abilities).toHaveLength(1);
+      // rule 432.1.a: "Double" is its own effect on the friendly unit; Temporary follows on "it".
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({
+          effect: {
+            effects: [
+              { duration: "turn", target: { controller: "friendly", type: "unit" }, type: "double-might" },
+              expect.objectContaining({ keyword: "Temporary", type: "grant-keyword" }),
+            ],
+            type: "sequence",
+          },
+          timing: "action",
+          type: "spell",
+        }),
+      );
     });
   });
 
@@ -447,7 +461,16 @@ describe("Spell: Action", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      // rule 356.4: the spell effect plus its self static cost-reduction rider.
+      expect(result.abilities).toHaveLength(2);
+      expect(result.abilities?.[0]).toMatchObject({
+        effect: { amount: 5, type: "damage" },
+        type: "spell",
+      });
+      expect(result.abilities?.[1]).toMatchObject({
+        effect: { target: "self", type: "cost-reduction" },
+        type: "static",
+      });
     });
   });
 });

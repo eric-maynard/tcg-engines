@@ -9,10 +9,22 @@
 /**
  * Patterns for triggered abilities
  */
+/**
+ * Object-shaped trigger subject emitted verbatim (see TriggerSubjectQuery).
+ * rule 428.5: `actor: "controller"` on a `die` event = "When YOU kill …".
+ */
+export interface TriggerPatternSubject {
+  readonly controller?: "friendly" | "enemy" | "any";
+  readonly type?: string;
+  readonly actor?: "controller" | "opponent" | "any";
+  readonly filter?: string | readonly string[];
+  readonly excludeSelf?: boolean;
+}
+
 export const TRIGGER_PATTERNS: {
   pattern: RegExp;
   event: string;
-  on?: string;
+  on?: string | TriggerPatternSubject;
   restrictions?: readonly { type: string; count?: number }[];
 }[] = [
   // rule-id: ogn-067-298 — "to a battlefield" is captured (group 1) so the
@@ -64,15 +76,28 @@ export const TRIGGER_PATTERNS: {
     on: "controller",
     pattern: /^When you recycle one or more cards to your Main Deck,\s*/i,
   },
+  // rule 428.5: "When you kill a [stunned] enemy unit [with a spell]" = an
+  // enemy unit's death attributed to you (optionally: stunned as it died /
+  // the kill source was a spell).
   {
-    event: "kill-enemy-with-spell",
-    on: "controller",
-    pattern: /^When you kill (?:a|an) (?:stunned\s+)?enemy unit with a spell,\s*/i,
+    event: "die",
+    on: { actor: "controller", controller: "enemy", filter: ["stunned", "killed-by-spell"], type: "unit" },
+    pattern: /^When you kill (?:a|an) stunned enemy unit with a spell,\s*/i,
   },
   {
-    event: "kill-enemy",
-    on: "controller",
-    pattern: /^When you kill (?:a|an) (?:stunned\s+)?enemy unit,\s*/i,
+    event: "die",
+    on: { actor: "controller", controller: "enemy", filter: "killed-by-spell", type: "unit" },
+    pattern: /^When you kill (?:a|an) enemy unit with a spell,\s*/i,
+  },
+  {
+    event: "die",
+    on: { actor: "controller", controller: "enemy", filter: "stunned", type: "unit" },
+    pattern: /^When you kill (?:a|an) stunned enemy unit,\s*/i,
+  },
+  {
+    event: "die",
+    on: { actor: "controller", controller: "enemy", type: "unit" },
+    pattern: /^When you kill (?:a|an) enemy unit,\s*/i,
   },
   { event: "hold", on: "controller-here", pattern: /^When you hold here,\s*/i },
   { event: "hold", on: "controller", pattern: /^When you hold,\s*/i },

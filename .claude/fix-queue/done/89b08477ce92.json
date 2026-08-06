@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-028-298",
+  "title": "BUG: tracks the score continuously — scoring a hold point later raises Might again (rule 364 passive)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-028-298.test.ts",
+    "testName": "BUG: tracks the score continuously — scoring a hold point later raises Might again (rule 364 passive)"
+  },
+  "id": "89b08477ce92",
+  "createdAt": "2026-08-06T17:15:21.543Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.543Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T17:51:17.846Z",
+      "event": "grabbed:w3-i1"
+    },
+    {
+      "at": "2026-08-06T18:32:13.604Z",
+      "event": "done",
+      "note": "beginning phase re-applies statics after the hold scoring step (rule 364) so score-based Might tracks points"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i1",
+  "claimedAt": "2026-08-06T17:51:17.846Z",
+  "resolution": {
+    "note": "beginning phase re-applies statics after the hold scoring step (rule 364) so score-based Might tracks points",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-028-298.test.ts"
+    ],
+    "at": "2026-08-06T18:32:13.604Z"
+  }
+}

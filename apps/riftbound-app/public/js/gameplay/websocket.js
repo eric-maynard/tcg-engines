@@ -80,6 +80,8 @@ function connectWs() {
   ws.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
+    // Test-harness hook (read-only): lets an external driver await move_accepted/move_rejected deterministically.
+    try { window.__rbLastFrame = { type: msg.type, seq: msg.seq, requestId: msg.requestId, error: msg.error, errorCode: msg.errorCode, moveId: msg.moveId, at: Date.now() }; } catch {}
 
     switch (msg.type) {
       case "sync":

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-011-221",
+  "title": "BUG: works on an ENEMY unit + enemy Equipment pair ('same controller', not 'friendly')",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-011-221.test.ts",
+    "testName": "BUG: works on an ENEMY unit + enemy Equipment pair ('same controller', not 'friendly')"
+  },
+  "id": "f5a60bb6db05",
+  "createdAt": "2026-08-06T19:03:47.638Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:03:47.638Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

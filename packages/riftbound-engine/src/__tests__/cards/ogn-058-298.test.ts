@@ -62,7 +62,7 @@ describe("Discipline (ogn-058-298)", () => {
     expect(empty.p1.can("cast", "disc")).toBe(false);
   });
 
-  test.failing("BUG: [Reaction] does not allow play during an opponent's Neutral Open State (rules 316.5.b, 813.1.c)", async () => {
+  test("[Reaction] does not allow play during an opponent's Neutral Open State (rules 316.5.b, 813.1.c)", async () => {
     // Expected: with no chain and no showdown on P2's turn only P2 may play spells, so Discipline
     // is not legal for P1. Actual: the engine offers (and accepts) the play in the free menu.
     const game = await board().active(P2).build();

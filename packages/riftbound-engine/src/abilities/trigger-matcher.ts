@@ -23,6 +23,26 @@ export interface TriggerRestriction {
 export interface TriggerMatcherState {
   readonly cardsPlayedThisTurn?: Record<string, number>;
   readonly turn?: { readonly activePlayer?: string };
+  readonly turnEventCounts?: Record<string, number>;
+}
+
+/**
+ * rule-id: ogn-118-298 — tally keys for one fired event: the bare event type,
+ * the type scoped to the subject/acting player, and the type scoped to the
+ * subject card. `fireTriggers` bumps every key BEFORE matching, so "the first
+ * time X each turn" is satisfied when the relevant key's count is exactly 1
+ * (two simultaneous deaths are two events → only the first is "the first").
+ */
+export function turnEventCountKeys(event: GameEvent): string[] {
+  const keys = [event.type];
+  const pid = "owner" in event ? event.owner : "playerId" in event ? event.playerId : undefined;
+  if (typeof pid === "string") {
+    keys.push(`${event.type}|p:${pid}`);
+  }
+  if ("cardId" in event && typeof event.cardId === "string") {
+    keys.push(`${event.type}|c:${event.cardId}`);
+  }
+  return keys;
 }
 
 /**
@@ -123,10 +143,28 @@ function restrictionSatisfied(
       // every occurrence.
       return false;
     }
-    case "first-time-each-turn":
-      // TODO(first-time-each-turn): per-event first-time tracking not yet
-      // implemented — block rather than fire every time.
-      return false;
+    case "first-time-each-turn": {
+      // rule-id: ogn-118-298 — count this turn's occurrences of the event in
+      // the scope the trigger names: any player ("a player …") → bare type;
+      // "I …" with a subject card → per card; otherwise ("you …", "a friendly
+      // unit …") → per subject/acting player. The current event is already
+      // tallied, so "first" means a count of exactly 1. No tally → deny.
+      const counts = state?.turnEventCounts;
+      if (!counts) {
+        return false;
+      }
+      const on = trigger.on ?? "self";
+      let key: string;
+      if (on === "any" || on === "any-player" || on === "any-unit") {
+        key = event.type;
+      } else if (on === "self" && "cardId" in event && typeof event.cardId === "string") {
+        key = `${event.type}|c:${event.cardId}`;
+      } else {
+        const pid = "owner" in event ? event.owner : "playerId" in event ? event.playerId : card.owner;
+        key = `${event.type}|p:${pid}`;
+      }
+      return (counts[key] ?? 0) === 1;
+    }
     case "once-each-turn":
       // TODO(once-each-turn): per-card fire tracking not yet implemented.
       return false;
@@ -182,7 +220,12 @@ function triggerMatchesEvent(
     .map((e) =>
       e === "beginning-phase" ? "start-of-turn" : e === "recycle-cards-to-deck" ? "recycle" : e,
     );
-  if (!triggerEvents.includes(mapped)) {
+  // rule-id: ogn-091-298 — a typed play trigger ("When you play a gear /
+  // unit") is the `play-card` event narrowed by the played card's type. Spells
+  // already get a dedicated `play-spell` event on resolution — don't double-fire.
+  const typedPlay =
+    event.type === "play-card" && event.cardType !== "spell" ? `play-${event.cardType}` : undefined;
+  if (!triggerEvents.includes(mapped) && !(typedPlay && triggerEvents.includes(typedPlay))) {
     return false;
   }
 
@@ -200,9 +243,11 @@ function triggerMatchesEvent(
       if (event.battlefieldId !== card.id) {
         return false;
       }
-    } else if (mapped === "hold" && "battlefieldId" in event && !("cardId" in event)) {
+    } else if ((mapped === "hold" || mapped === "conquer") && "battlefieldId" in event && !("cardId" in event)) {
       // Rule 383.4.d.2.a: a unit's self-hold trigger requires the unit to be
       // present at the held battlefield — a unit at base never "holds".
+      // rule 383.4.c.2: likewise "When I conquer" needs THIS unit present at
+      // the conquered battlefield, not merely a conquer by its controller.
       if (card.zone !== `battlefield-${event.battlefieldId}`) {
         return false;
       }
@@ -232,9 +277,27 @@ function triggerMatchesEvent(
       if (on === "friendly-other-units" && event.cardId === card.id) {
         return false;
       }
+    } else if (event.type === "play-card") {
+      // "When YOU play a unit": the playing player must be this card's controller.
+      if (event.playerId !== card.owner) {
+        return false;
+      }
+      if (on === "friendly-other-units" && event.cardId === card.id) {
+        return false;
+      }
+    }
+  } else if (on === "another-friendly-units" && event.type === "play-card") {
+    // "When you play another unit": friendly play, excluding this card itself.
+    if (event.playerId !== card.owner || event.cardId === card.id) {
+      return false;
     }
   } else if (on === "any-unit" || on === "any" || on === "any-player") {
-    // Match any subject — no additional filter required.
+    // Match any subject — except a battlefield's "When a player plays a unit
+    // HERE": play-card carries no location, so deny rather than fire for
+    // plays anywhere (rule 383.4.d).
+    if (event.type === "play-card" && card.zone === "battlefieldRow") {
+      return false;
+    }
   } else if (on === "enemy-units") {
     if ("owner" in event && event.owner === card.owner) {
       return false;
@@ -276,6 +339,18 @@ function triggerMatchesEvent(
     if (filters.includes("spell") && event.type === "choose" && event.sourceType !== "spell") {
       return false;
     }
+    // rule 428.5: kill-attribution filters on `die` — "a STUNNED enemy unit"
+    // reads the unit's state as it died; "kill a unit WITH A SPELL" needs the
+    // kill attributed to a spell this card's controller was responsible for.
+    if (filters.includes("stunned") && event.type === "die" && event.wasStunned !== true) {
+      return false;
+    }
+    if (
+      filters.includes("killed-by-spell") &&
+      (event.type !== "die" || event.killSource !== "spell" || event.killedBy !== card.owner)
+    ) {
+      return false;
+    }
     const subjectOwner = "owner" in event ? event.owner : "playerId" in event ? event.playerId : undefined;
     if (desc.controller === "friendly" && subjectOwner !== undefined && subjectOwner !== card.owner) {
       return false;
@@ -292,9 +367,11 @@ function triggerMatchesEvent(
           ? event.movedBy
           : "chooserId" in event
             ? event.chooserId
-            : "playerId" in event
-              ? event.playerId
-              : undefined;
+            : "killedBy" in event
+              ? event.killedBy // rule 428.5: "When YOU kill …"
+              : "playerId" in event
+                ? event.playerId
+                : undefined;
       if (actorId === undefined) {
         return false;
       }
@@ -350,6 +427,21 @@ function triggerMatchesEvent(
  * @param boardCards - All cards currently on the board with their abilities
  * @returns Array of matched triggers to execute
  */
+/**
+ * rule-id: ogn-037-298 (Immortal Phoenix) — rule 385.2 / 383.2.c.1: a
+ * triggered ability that is active in a non-board zone ("…play me from your
+ * trash") self-describes that zone. A triggered ability whose effect plays its
+ * own source card from the trash is live while that card sits in the trash.
+ */
+export function abilityFunctionsFromTrash(ability: TriggerableAbility): boolean {
+  const eff = ability.effect as { type?: string; from?: unknown; target?: unknown } | undefined;
+  return (
+    eff?.type === "play" &&
+    eff.from === "trash" &&
+    (eff.target === undefined || eff.target === "self")
+  );
+}
+
 export function findMatchingTriggers(
   event: GameEvent,
   boardCards: CardWithAbilities[],
@@ -365,9 +457,12 @@ export function findMatchingTriggers(
     // rule-id: sfd-167-221 — Deathknell: the dying unit is already in trash
     // when `die` fires; let it match its own death.
     const isDieSubject = event.type === "die" && event.cardId === card.id;
+    // rule-id: ogn-037-298 — a trash card matches only via trash-functioning abilities.
+    const trashOnly = card.zone === "trash" && !isDiscardSubject && !isDieSubject;
     if (
       !isDiscardSubject &&
       !isDieSubject &&
+      !trashOnly &&
       card.zone !== "base" &&
       !card.zone.startsWith("battlefield") &&
       card.zone !== "legendZone"
@@ -377,6 +472,13 @@ export function findMatchingTriggers(
 
     for (const ability of card.abilities) {
       if (ability.type !== "triggered") {
+        continue;
+      }
+      if (trashOnly && !abilityFunctionsFromTrash(ability)) {
+        continue;
+      }
+      // rule 385.2 (ogn-037-298): a trash-only ability is inert while its card is on the board.
+      if (card.zone !== "trash" && abilityFunctionsFromTrash(ability)) {
         continue;
       }
 

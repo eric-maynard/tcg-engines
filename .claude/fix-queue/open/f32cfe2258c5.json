@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-209-298",
+  "title": "BUG: 'one of THEIR units' — the caster may only choose among units they control; the opponent chooses theirs",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-209-298.test.ts",
+    "testName": "BUG: 'one of THEIR units' — the caster may only choose among units they control; the opponent chooses theirs"
+  },
+  "id": "f32cfe2258c5",
+  "createdAt": "2026-08-06T18:35:08.336Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.336Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

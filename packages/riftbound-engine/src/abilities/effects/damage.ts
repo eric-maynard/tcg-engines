@@ -4,6 +4,7 @@ import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
 import { checkReplacement, markReplacementConsumed } from "../replacement-effects";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
+import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
 
@@ -30,6 +31,14 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     }
     return;
   }
+  // rule 428.5.c / 428.5.d: stamp the dealer on the damaged unit so a lethal
+  // cleanup kill is attributed to this effect's controller (spell vs ability
+  // by the source card's type — a spell's reflexive trigger still counts as the spell).
+  const damageAttribution: Partial<RiftboundCardMeta> = {
+    lastDamagedBy: ctx.playerId,
+    lastDamageSource:
+      getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "spell" ? "spell" : "ability",
+  };
   // rule-id: ogn-221-298 (Imperial Decree) — "When any unit takes damage this
   // turn, kill it": a turn-wide, unbound take-damage entry in
   // activeReplacements is a criteria reaction, not a per-unit choice. After a
@@ -65,7 +74,12 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       zones: ctx.zones,
     };
     const rawMight = (effect.amount as { might?: unknown } | undefined)?.might;
-    let refId: string | undefined = ctx.boundTargets?.[0];
+    // rule 355.14 (ogn-041-298): a fixed amount ("deal 5 damage split among…")
+    // has no reference unit — every bound target is a split target. Only a
+    // Might-referencing amount carries its reference unit at boundTargets[0].
+    const hasRef = typeof rawMight === "object" && rawMight !== null;
+    const splitFrom = hasRef ? 1 : 0;
+    let refId: string | undefined = hasRef ? ctx.boundTargets?.[0] : undefined;
     // Rule 359.3.e.2 / 359.3.e.12 (unl-192-219): the reference unit was
     // chosen at play time; if it left the board, changed controller, or
     // stopped being a unit before resolution it is now an illegal target
@@ -107,6 +121,25 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
           resolverCtx,
         )
       : [];
+    // rule 355.14.c/e/f (ogn-041-298): a fixed amount "split among any number
+    // of <units>" with nothing bound yet is ONE controller decision — which
+    // units and how much each (≥1, summing to N). Raised as a `total`
+    // choose-target; the answer re-enters here encoded in boundTargets.
+    if (!hasRef && !ctx.boundTargets) {
+      if (n > 0 && legalPool.length > 0) {
+        ctx.draft.pendingChoice = {
+          type: "choose-target",
+          playerId: ctx.playerId,
+          sourceCardId: ctx.sourceCardId,
+          effect,
+          options: legalPool,
+          remaining: n,
+          assign: true,
+          total: n,
+        } as RiftboundGameState["pendingChoice"];
+      }
+      return;
+    }
     // Rule 355.14.b/c / 355.15: split targets are caster-chosen at
     // finalization and travel in boundTargets after the reference unit
     // at index 0. Rule 359.3.e.2 drops any that became illegal.
@@ -115,9 +148,9 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     // encode surplus damage the caster has already assigned to it.
     let splitTargets: string[];
     const assigned: Record<string, number> = {};
-    if (ctx.boundTargets && ctx.boundTargets.length > 1) {
+    if (ctx.boundTargets && (hasRef ? ctx.boundTargets.length > 1 : true)) {
       splitTargets = ctx.boundTargets
-        .slice(1)
+        .slice(splitFrom)
         .filter((id) => legalPool.includes(id));
       for (const id of splitTargets) {
         assigned[id] = (assigned[id] ?? 0) + 1;
@@ -127,7 +160,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       // resolution-time Might is now less than the chosen split-target
       // count, the controller drops exactly (count − Might) targets — no
       // more — so every remaining target can receive its mandatory ≥1.
-      if (uniqueTargets.length > n && refId !== undefined) {
+      if (uniqueTargets.length > n) {
         ctx.draft.pendingChoice = {
           type: "choose-target",
           playerId: ctx.playerId,
@@ -135,7 +168,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
           effect,
           options: uniqueTargets,
           remaining: uniqueTargets.length - n,
-          boundTargets: [refId, ...uniqueTargets],
+          boundTargets: refId !== undefined ? [refId, ...uniqueTargets] : uniqueTargets,
         } as RiftboundGameState["pendingChoice"];
         return;
       }
@@ -151,8 +184,8 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     // Rule 355.14.e/f/g (unl-192-219): the caster distributes surplus
     // damage at resolution — one choose-target pick per surplus point,
     // each appended to boundTargets so re-entry sees it as +1 assigned.
-    if (surplus > 0 && splitTargets.length > 1 && refId !== undefined) {
-      const encoded: string[] = [refId];
+    if (surplus > 0 && splitTargets.length > 1 && (refId !== undefined || !hasRef)) {
+      const encoded: string[] = refId !== undefined ? [refId] : [];
       for (const id of splitTargets) {
         for (let i = 0; i < assigned[id]; i++) encoded.push(id);
       }
@@ -183,7 +216,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       ctx.counters.addCounter(targetId as CoreCardId, "damage", dmg);
       ctx.cards.updateCardMeta?.(
         targetId as CoreCardId,
-        { damage: priorDamage + dmg } as unknown as Record<string, unknown>,
+        { damage: priorDamage + dmg, ...damageAttribution } as unknown as Record<string, unknown>,
       );
       if (dmg > 0) reactAnyUnitDamaged(targetId);
     }
@@ -285,6 +318,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       targetId as CoreCardId,
       {
         damage: priorDamage + amount,
+        ...damageAttribution,
       } as unknown as Record<string, unknown>,
     );
     if (amount > 0) reactAnyUnitDamaged(targetId);

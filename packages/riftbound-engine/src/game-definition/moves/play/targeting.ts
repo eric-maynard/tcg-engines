@@ -3,7 +3,8 @@
  * Leaf module: must not import move defs.
  */
 
-import { resolveTarget } from "../../../abilities/target-resolver";
+import { isAllAtOneBattlefield, resolveTarget } from "../../../abilities/target-resolver";
+import { isLegalCounterTarget } from "../../../chain/counter-target";
 
 export type SpellEffectTargetDescriptor =
   | string
@@ -92,7 +93,14 @@ export function findSequenceLeadTarget(
   effect: SpellEffectTargetShape | undefined,
 ): SpellEffectTargetDescriptor | undefined {
   const slots = collectSequenceTargetSlots(effect);
-  return slots?.length === 1 ? slots[0] : undefined;
+  if (slots?.length === 1) return slots[0];
+  // rule-id: ogn-266-298 (rule 355.8) — "Choose a battlefield. …friendly
+  // units there… enemy units there…": several all-at-one-battlefield steps
+  // share ONE play-time battlefield choice, so the first names it.
+  if (slots && slots.length > 1 && slots.every((s) => isAllAtOneBattlefield(s))) {
+    return slots[0];
+  }
+  return undefined;
 }
 
 type SlotDescriptor = Exclude<SpellEffectTargetDescriptor, string>;
@@ -139,6 +147,44 @@ export function collectSequenceTargetSlots(
     return true;
   };
   return walk(effect.effects) ? slots : undefined;
+}
+
+/**
+ * rule-id: ogn-029-298 (rule 355.8) — a spell printed as several separate
+ * instructions ("Deal 3 to a unit. Deal 3 to a unit.") is enriched into ONE
+ * `sequence` flagged `independentTargets`. Unlike `collectSequenceTargetSlots`
+ * identical descriptors are NOT merged: every step naming a single
+ * caster-chosen card is its own positional slot (the same card may be picked
+ * for more than one slot — no "another"). Returns undefined for other effects.
+ */
+export function collectIndependentTargetSlots(
+  effect: SpellEffectTargetShape | undefined,
+): { index: number; target: SlotDescriptor }[] | undefined {
+  if (
+    effect?.type !== "sequence" ||
+    !Array.isArray(effect.effects) ||
+    (effect as { independentTargets?: boolean }).independentTargets !== true
+  ) {
+    return undefined;
+  }
+  const slots: { index: number; target: SlotDescriptor }[] = [];
+  effect.effects.forEach((sub, index) => {
+    const t = sub?.target;
+    if (!t || typeof t === "string") return;
+    if (
+      t.type === "self" ||
+      t.type === "player" ||
+      t.type === "battlefield" ||
+      t.type === "pending-value" ||
+      t.type === "trigger-source"
+    ) {
+      return;
+    }
+    if (t.quantity !== undefined && t.quantity !== 1) return;
+    if (sub.type === "damage" && (sub as { split?: boolean }).split === true) return;
+    slots.push({ index, target: t });
+  });
+  return slots;
 }
 
 /**
@@ -265,10 +311,7 @@ export function spellEffectHasLegalTargets(
   // the play is illegal (the counter would otherwise silently no-op).
   if (effect.type === "counter") {
     const items = ctx.draft.interaction?.chain?.items ?? [];
-    const wantsSpell = effect.target === undefined || (effect.target as unknown) === "spell";
-    return items.some(
-      (item) => !item.countered && (!wantsSpell || item.type === "spell"),
-    );
+    return items.some((item) => isLegalCounterTarget(effect, item));
   }
   // Multi-target effects (swap-might etc.) carry target1/target2 alongside or
   // instead of `target`; every present descriptor must resolve non-empty.

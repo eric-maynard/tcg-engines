@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-230-298",
+  "title": "BUG: 'any number' includes zero — the player may keep the buff and channel nothing (engine auto-spends)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-230-298.test.ts",
+    "testName": "BUG: 'any number' includes zero — the player may keep the buff and channel nothing (engine auto-spends)"
+  },
+  "id": "707d89937875",
+  "createdAt": "2026-08-06T18:35:08.350Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.350Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

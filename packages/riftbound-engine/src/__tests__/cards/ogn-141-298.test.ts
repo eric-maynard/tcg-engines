@@ -51,6 +51,8 @@ describe("Kinkou Monk (ogn-141-298)", () => {
     const keys = d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key) : [];
     expect(keys.sort()).toEqual(["a", "b", "c"]); // not monk, not foe
     await game.p1.pick("b");
+    // rule 355.13: "up to two" — stop after one pick.
+    await game.p1.decline();
     await game.settle();
     expect(game.state("b").isBuffed).toBe(true);
     expect(game.state("b").might).toBe(3);
@@ -98,6 +100,8 @@ describe("Kinkou Monk (ogn-141-298)", () => {
     await game.p1.play("monk");
     await game.settle();
     await game.p1.pick("vet");
+    // rule 355.13: "up to two" — stop after one pick.
+    await game.p1.decline();
     await game.settle();
     expect(game.state("vet").isBuffed).toBe(true);
     expect(game.state("vet").might).toBe(3);

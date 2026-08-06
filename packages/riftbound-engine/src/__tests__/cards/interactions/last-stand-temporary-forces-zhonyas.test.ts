@@ -68,7 +68,7 @@ describe("Last Stand × Zhonya's Hourglass — Temporary death is replaced (forc
   });
 
   // Expected: 4 → 8 this turn (432.1.a "double"), back to 4 next turn. Actual: no Might change at all.
-  test.failing("BUG: Last Stand doubles the holder's Might this turn only (4 → 8, then 4 again on P1's turn)", async () => {
+  test("Last Stand doubles the holder's Might this turn only (4 → 8, then 4 again on P1's turn)", async () => {
     const game = await board().build();
     await game.p2.cast("ls", { targets: "holder" });
     await game.settle();

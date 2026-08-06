@@ -81,7 +81,7 @@ describe("Orb of Regret (ogn-090-298)", () => {
     expect(game.locationOf("ally")).toBe("bf1"); // took only 2
   });
 
-  test.failing("BUG: timing — not activatable on the opponent's turn (rule 151.2: your Main Phase only)", async () => {
+  test("timing — not activatable on the opponent's turn (rule 151.2: your Main Phase only)", async () => {
     // Expected: on P2's turn P1's free menu has no activateAbility:orb. Actual: it is offered (and resolves).
     const theirs = await board().active(P2).build();
     expect(theirs.p1.can("activate", "orb")).toBe(false);

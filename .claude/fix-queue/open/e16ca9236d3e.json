@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 465.2.c.7 — with two Tanks the attacker chooses which Tank takes lethal first; engine auto-picks without offering P1 the choice",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/combat-damage-assignment-status-and-healing.test.ts",
+    "testName": "BUG: 465.2.c.7 — with two Tanks the attacker chooses which Tank takes lethal first; engine auto-picks without offering P1 the choice"
+  },
+  "id": "e16ca9236d3e",
+  "createdAt": "2026-08-06T20:11:47.426Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.426Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -47,9 +47,8 @@ describe("Watchful Sentry (ogn-096-298)", () => {
     expect(game.p2.hand().length).toBe(p2Hand - 1); // the killer draws nothing
   });
 
-  test.failing("BUG: dying in combat also triggers Deathknell — the Sentry's controller draws 1 (rule 323.4)", async () => {
-    // Expected: a 3-might attacker kills the defending Sentry; its Deathknell fires and P1 draws 1.
-    // Actual: combat kills move the unit to trash without firing the die trigger; no card is drawn.
+  test("dying in combat also triggers Deathknell — the Sentry's controller draws 1 (rule 323.4)", async () => {
+    // A 3-might attacker kills the defending Sentry; its Deathknell fires and P1 draws 1.
     const game = await scenario()
       .active(P2)
       .battlefield("bf1", { controller: P1 })

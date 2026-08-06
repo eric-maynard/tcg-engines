@@ -31,7 +31,12 @@ export function handle_grantKeyword(effect: ExecutableEffect, ctx: EffectContext
   }
   const targets = getTargetIds(effect, ctx);
   const kwTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
-  const duration = (effect.duration ?? "turn") as "turn" | "permanent" | "combat";
+  // rule 816.1.b: Temporary only acts at the controller's next Beginning Phase, so
+  // an unqualified "give it [Temporary]" must outlive the turn it was granted.
+  const duration = (effect.duration ?? (kw === "Temporary" ? "permanent" : "turn")) as
+    | "turn"
+    | "permanent"
+    | "combat";
   for (const targetId of kwTargets) {
     const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
       | Partial<RiftboundCardMeta>

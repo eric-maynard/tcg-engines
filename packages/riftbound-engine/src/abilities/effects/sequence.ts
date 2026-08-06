@@ -2,7 +2,7 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { TargetDescriptor } from "../target-resolver";
-import { resolveTarget } from "../target-resolver";
+import { isAllAtOneBattlefield, resolveTarget } from "../target-resolver";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 import { findSpendableBuff } from "./spend-buff";
 import { canSpendXp } from "./spend-xp";
@@ -59,7 +59,13 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     let seqSlots = (ctx as { sequenceSlots?: SequenceSlots }).sequenceSlots;
     if (!seqSlots && ctx.boundTargets && sameIdx < 0) {
       const slots = collectSequenceTargetSlots(seq as unknown as SpellEffectTargetShape);
-      if (slots && slots.length >= 2 && ctx.boundTargets.length <= slots.length) {
+      // rule-id: ogn-266-298 (rule 355.8) — "Choose a battlefield. …friendly
+      // units there… enemy units there…": every all-at-one-battlefield step
+      // shares the ONE chosen battlefield id, so leave it bound on the whole
+      // sequence instead of routing it to the first slot only.
+      const sharedBattlefield =
+        slots !== undefined && slots.length > 0 && slots.every((s) => isAllAtOneBattlefield(s));
+      if (slots && !sharedBattlefield && slots.length >= 2 && ctx.boundTargets.length <= slots.length) {
         seqSlots = { bound: ctx.boundTargets, slots: slots as Record<string, unknown>[] };
       }
     }
@@ -74,6 +80,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     let sameZone: string | undefined;
     let leadIds: string[] = [];
     let sameBound: string[] | undefined;
+    let prevPerformed: boolean | undefined;
     for (let i = 0; i < seq.effects.length; i++) {
       const sub = seq.effects[i];
       // rule-id: ogn-147-298 — "spend a buff to buff me and ready me": the
@@ -188,6 +195,25 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           sameZone = leadId ? ctx.zones.getCardZone(leadId as CoreCardId) : undefined;
         }
       }
+      // rule-id: ogn-056-298 — "you may kill a gear. If you do, buff me": a
+      // following `paid-additional-cost` conditional is satisfied when the
+      // preceding bare action step actually had something to act on.
+      if (
+        prevPerformed !== undefined &&
+        sub.type === "conditional" &&
+        (sub as { condition?: { type?: string } }).condition?.type === "paid-additional-cost"
+      ) {
+        subCtx = { ...subCtx, ifYouDoPerformed: prevPerformed } as EffectContext;
+      }
+      prevPerformed =
+        typeof subTarget === "object" &&
+        subTarget.type !== "self" &&
+        subTarget.type !== "player" &&
+        sub.type !== "conditional" &&
+        sub.type !== "optional" &&
+        sub.type !== "sequence"
+          ? getTargetIds(sub, subCtx).length > 0
+          : undefined;
       executeEffect(
         sub,
         { ...subCtx, pendingSequenceValue: pending } as EffectContext,

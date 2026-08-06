@@ -214,7 +214,7 @@ describe("Vi × Bilgewater Bully × Sunlit Guardian — ganking group move into 
     expect(game.gameState.battlefields.bfA?.controller ?? null).toBeNull();
   });
 
-  test.failing("BUG: (c) moving every unit off A forfeits it — with no P1 unit left at A it becomes UNCONTROLLED at the next open-state cleanup (190.4.c); engine leaves P1 as controller", async () => {
+  test("(c) moving every unit off A forfeits it — with no P1 unit left at A it becomes UNCONTROLLED at the next open-state cleanup (190.4.c); engine leaves P1 as controller", async () => {
     // Expected: after Vi + Bully leave bfA (here: one Standard Move to base, open state, no combat there),
     // the following cleanup clears bfA's controller.
     // Actual: bfA.controller stays "player-1" indefinitely (even across turns).

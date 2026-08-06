@@ -42,7 +42,7 @@ describe("Spoils of War (ogn-144-298)", () => {
     expect(noBody.p1.can("cast", "spoils")).toBe(false);
   });
 
-  test.failing("BUG: costs [2] less (2 energy + body) once an enemy unit has died this turn", async () => {
+  test("costs [2] less (2 energy + body) once an enemy unit has died this turn", async () => {
     // Expected: after Hextech Ray kills the enemy 2-might unit, Spoils of War costs 2 energy + [body],
     // so with 3 energy (1 spent on the Ray) it is castable and leaves 0. Actual: the parsed ability only
     // carries "Draw 2" — no conditional discount — so it still demands 4 energy.
@@ -65,7 +65,7 @@ describe("Spoils of War (ogn-144-298)", () => {
     expect(game.p1.can("cast", "spoils")).toBe(false);
   });
 
-  test("[Reaction]: castable on the opponent's turn and in response to a spell on the chain", async () => {
+  test("[Reaction]: castable on the opponent's turn in response to a spell on the chain (not in their Neutral Open State)", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P1, { energy: 4, power: { body: 1 } })
@@ -75,7 +75,8 @@ describe("Spoils of War (ogn-144-298)", () => {
       .hand(P2, HEXTECH_RAY, "ray")
       .hand(P1, CARD, "spoils")
       .build();
-    expect(game.p1.can("cast", "spoils")).toBe(true);
+    // rule 316.5.b: in a Neutral Open State only the Turn Player may play spells — Reaction adds Closed States (813), not this one.
+    expect(game.p1.can("cast", "spoils")).toBe(false);
     await game.p2.cast("ray", { targets: "ally" });
     await game.p2.passPriority();
     expect(game.p1.can("cast", "spoils")).toBe(true);

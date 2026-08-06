@@ -152,8 +152,9 @@ describe("Combat: Mutual Simultaneous Damage (rule 626)", () => {
     expect(result.attackerTotal).toBe(5);
     // Attacker deals 5 to defender (>= 4 might) → defender killed
     expect(result.killed).toContain("d1");
-    // Defender deals 4 to attacker (>= 3 might) → attacker also killed
-    expect(result.killed).toContain("a1");
+    // rule 807.1.c: Assault is real Might while attacking — 4 damage < 5 → attacker survives
+    expect(result.killed).not.toContain("a1");
+    expect(result.winner).toBe("attacker");
   });
 
   test("Shield increases defender Might total (rule 726)", () => {

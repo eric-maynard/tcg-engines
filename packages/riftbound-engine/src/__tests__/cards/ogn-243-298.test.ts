@@ -111,7 +111,7 @@ describe("Darius, Executioner (ogn-243-298)", () => {
     expect(game.state("field").might).toBe(3);
   });
 
-  test.failing("BUG: the static follows Darius — a Standard Move base → bf1 shifts the bonus immediately", async () => {
+  test("the static follows Darius — a Standard Move base → bf1 shifts the bonus immediately", async () => {
     // Expected: right after the move, home drops to 2 and field rises to 3.
     // Actual: no static recalculation after a standard move; stale values remain.
     const game = await staticBoard("base").build();

@@ -62,7 +62,7 @@ describe("Soaring Scout (ogn-216-298)", () => {
     expect(game.p2.runes()).toHaveLength(p2Pool0); // the killer channels nothing
   });
 
-  test.failing("BUG: dying in combat also triggers Deathknell — the controller channels 1 exhausted rune (rule 323.4)", async () => {
+  test("dying in combat also triggers Deathknell — the controller channels 1 exhausted rune (rule 323.4)", async () => {
     // Expected: a 3-might attacker kills the defending Scout; P1's rune pool grows by one exhausted rune.
     // Actual: combat deaths do not fire the die trigger, so nothing is channeled.
     const game = await scenario()

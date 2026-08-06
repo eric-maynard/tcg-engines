@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-031-298",
+  "title": "BUG: the discount cannot take a spell below 0 — a 4-cost spell becomes free (rule 356.6)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-031-298.test.ts",
+    "testName": "BUG: the discount cannot take a spell below 0 — a 4-cost spell becomes free (rule 356.6)"
+  },
+  "id": "cce67e8d613b",
+  "createdAt": "2026-08-06T17:15:21.546Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.546Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:18:02.232Z",
+      "event": "grabbed:w11-i2"
+    },
+    {
+      "at": "2026-08-06T19:53:27.728Z",
+      "event": "done",
+      "note": "already fixed concurrently by another lane's takeNextPlayDiscount (play-cost replacement); test flipped and passing, no extra change needed"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i2",
+  "claimedAt": "2026-08-06T19:18:02.232Z",
+  "resolution": {
+    "note": "already fixed concurrently by another lane's takeNextPlayDiscount (play-cost replacement); test flipped and passing, no extra change needed",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-031-298.test.ts"
+    ],
+    "at": "2026-08-06T19:53:27.728Z"
+  }
+}

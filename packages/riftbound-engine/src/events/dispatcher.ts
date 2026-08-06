@@ -186,7 +186,7 @@ export function runStateMaintenance(ctx: DispatchContext): number {
       // Change the state / kill more) but won't recurse into this loop —
       // `maintenanceDepth > 0` — so we re-run `performCleanup` here to catch
       // The next layer.
-      dispatchUnitDied(ctx, result.killed);
+      dispatchUnitDied(ctx, result.deaths ?? result.killed);
     }
   } finally {
     maintenanceDepth -= 1;
@@ -275,7 +275,17 @@ function hasCleanupCapableContext(ctx: DispatchContext): boolean {
  */
 export function dispatchUnitDied(
   ctx: DispatchContext,
-  killed: readonly (string | { cardId: string; owner?: string })[],
+  killed: readonly (
+    | string
+    | {
+        cardId: string;
+        owner?: string;
+        // rule 428.5: kill attribution forwarded onto the `die` event.
+        killedBy?: string;
+        killSource?: "spell" | "ability" | "combat";
+        wasStunned?: boolean;
+      }
+  )[],
 ): number {
   let total = 0;
   // Maintain a recent-deaths log on the draft so the target resolver's
@@ -302,7 +312,15 @@ export function dispatchUnitDied(
       cardId: cardId as string,
       owner: owner as string,
     });
-    total += dispatchEvent(ctx, { cardId, owner, type: "die" });
+    const attribution =
+      typeof entry === "string"
+        ? {}
+        : {
+            ...(entry.killedBy !== undefined ? { killedBy: entry.killedBy } : {}),
+            ...(entry.killSource !== undefined ? { killSource: entry.killSource } : {}),
+            ...(entry.wasStunned !== undefined ? { wasStunned: entry.wasStunned } : {}),
+          };
+    total += dispatchEvent(ctx, { cardId, owner, type: "die", ...attribution });
   }
   draftWithLog.__recentDeathsDepth = (draftWithLog.__recentDeathsDepth ?? 1) - 1;
   if (isOutermost) {

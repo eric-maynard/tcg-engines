@@ -1,0 +1,29 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-228-298",
+  "title": "BUG: dying in combat is dying too — a buffed attacker killed by a 6-Might defender triggers the Helm",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-228-298.test.ts",
+    "testName": "BUG: dying in combat is dying too — a buffed attacker killed by a 6-Might defender triggers the Helm"
+  },
+  "id": "78f37d1cb979",
+  "createdAt": "2026-08-06T18:35:08.337Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.337Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T20:55:01.125Z",
+      "event": "done(unclaimed)",
+      "note": "fixed by earlier worker; flipped in stabilization"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "fixed by earlier worker; flipped in stabilization",
+    "at": "2026-08-06T20:55:01.125Z"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: (a) from facedown the ENEMY Ruin Runner must not be offered — 'can't be chosen by enemy spells' (757/758, 355.9.b)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/hidden-blade-facedown-ruin-runner-flash.test.ts",
+    "testName": "BUG: (a) from facedown the ENEMY Ruin Runner must not be offered — 'can't be chosen by enemy spells' (757/758, 355.9.b)"
+  },
+  "id": "801caa21524b",
+  "createdAt": "2026-08-06T18:35:08.341Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.341Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T20:04:13.335Z",
+      "event": "done(unclaimed)",
+      "note": "fixed by isUntargetable static-self check (w8-i2); test flipped"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "fixed by isUntargetable static-self check (w8-i2); test flipped",
+    "files": [
+      "packages/riftbound-engine/src/abilities/target-resolver.ts",
+      "packages/riftbound-engine/src/__tests__/cards/interactions/hidden-blade-facedown-ruin-runner-flash.test.ts"
+    ],
+    "at": "2026-08-06T20:04:13.335Z"
+  }
+}

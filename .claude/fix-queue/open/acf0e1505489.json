@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-001-221",
+  "title": "BUG: cast mid-showdown vs two 3-Might attackers, the defender (3 + 4 = 7) survives 6 damage and holds the battlefield",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-001-221.test.ts",
+    "testName": "BUG: cast mid-showdown vs two 3-Might attackers, the defender (3 + 4 = 7) survives 6 damage and holds the battlefield"
+  },
+  "id": "acf0e1505489",
+  "createdAt": "2026-08-06T18:35:08.331Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.331Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

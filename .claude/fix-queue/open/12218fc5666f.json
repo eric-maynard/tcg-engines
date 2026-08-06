@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-266-298",
+  "title": "BUG: ALL friendly units there get +1 and ALL enemy units there get −1 (engine only touches one of each)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-266-298.test.ts",
+    "testName": "BUG: ALL friendly units there get +1 and ALL enemy units there get −1 (engine only touches one of each)"
+  },
+  "id": "12218fc5666f",
+  "createdAt": "2026-08-06T18:35:08.334Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.334Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -165,9 +165,8 @@ describe("Red Brambleback × Kai'Sa × Zaun Warrens — 'conquering here' doubli
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 
-  test.failing("BUG: Case NO — Brambleback did not conquer (it sits at X), so its own 'When I conquer' Buff must NOT trigger (383.4.c.2.a)", async () => {
-    // Expected: only Kai'Sa's item on the chain; no Buff prompt; nobody buffed.
-    // Actual: Brambleback's "When I conquer" fires on any conquer by its controller.
+  test("Case NO — Brambleback did not conquer (it sits at X), so its own 'When I conquer' Buff must NOT trigger (383.4.c.2.a)", async () => {
+    // Only Kai'Sa's item on the chain; no Buff prompt; nobody buffed.
     const game = await scenario()
       .battlefield("bfX", { controller: P1 })
       .battlefield("bfY", { controller: P2 })

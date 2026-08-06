@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-243-298",
+  "title": "BUG: Legion met (another card played earlier this turn) — 'When you play me, ready me' leaves Darius ready (rule 812)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-243-298.test.ts",
+    "testName": "BUG: Legion met (another card played earlier this turn) — 'When you play me, ready me' leaves Darius ready (rule 812)"
+  },
+  "id": "5addf3a5f182",
+  "createdAt": "2026-08-06T18:35:08.332Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.332Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

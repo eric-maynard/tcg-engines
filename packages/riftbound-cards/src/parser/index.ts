@@ -18,7 +18,7 @@ import {
 import { normalizeTokens, stripReminders } from "./impl/normalize";
 import { parseOtherSegmentMulti } from "./impl/other-segment";
 import { splitAbilityText } from "./impl/segments";
-import { mergeSpellWithRepeat, parseSpellAbility, parseSpellWithRepeat } from "./impl/spells";
+import { mergeSpellWithRepeat, parseSpellAbilities, parseSpellWithRepeat } from "./impl/spells";
 import { parseTriggeredAbility } from "./impl/triggers";
 import type { ParseAbilitiesResult, ParserOptions } from "./impl/types";
 
@@ -182,9 +182,9 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
     if (seg.type === "keyword") {
       // Check if this is [Action] or [Reaction] that should be parsed as spell
       if (/^\[(Action|Reaction)\]/i.test(seg.text)) {
-        const spell = parseSpellAbility(seg.text);
+        const spell = parseSpellAbilities(seg.text);
         if (spell) {
-          abilities.push(spell);
+          abilities.push(...spell);
           continue;
         }
       }
@@ -277,9 +277,9 @@ function parseSingleAbility(text: string): ParseAbilitiesResult {
   }
 
   // Try spell ability
-  const spell = parseSpellAbility(text);
+  const spell = parseSpellAbilities(text);
   if (spell) {
-    return { abilities: [spell], success: true };
+    return { abilities: spell, success: true };
   }
 
   // Try triggered ability

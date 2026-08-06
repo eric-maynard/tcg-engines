@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 412a145427c43aa6 (contrast) — a Standard Move of Faefolk from base to bf1 DOES trigger: P1 may drag an enemy unit to bf1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/irresistible-faefolk-412a145427c43aa6.test.ts",
+    "testName": "BUG: ruling 412a145427c43aa6 (contrast) — a Standard Move of Faefolk from base to bf1 DOES trigger: P1 may drag an enemy unit to bf1"
+  },
+  "id": "6065a5f309b2",
+  "createdAt": "2026-08-06T19:58:23.275Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:58:23.275Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

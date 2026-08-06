@@ -85,7 +85,7 @@ describe("Leona, Determined (ogn-238-298)", () => {
     expect(game.state("elsewhere").isStunned).toBe(false);
   });
 
-  test.failing("BUG: a stunned defender deals no combat damage (423.1.b) — Leona (4) into the stunned 6-Might wall: both survive", async () => {
+  test("a stunned defender deals no combat damage (423.1.b) — Leona (4) into the stunned 6-Might wall: both survive", async () => {
     // Expected: wall is stunned by the trigger, so it contributes 0 combat damage; Leona lives, wall takes 4 < 6.
     // Actual: the stun is recorded (isStunned true) but combat still has the wall deal 6, killing Leona.
     const game = await scenario()
@@ -101,7 +101,7 @@ describe("Leona, Determined (ogn-238-298)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
   });
 
-  test.failing("BUG: the stun wears off at end of turn (423.1.a.2)", async () => {
+  test("the stun wears off at end of turn (423.1.a.2)", async () => {
     // Expected: after P1's turn ends the wall is no longer stunned.
     // Actual: the stunned status applied by the trigger persists into P2's turn.
     const game = await scenario()

@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 194.3.a / 365.1 — an in-play battlefield static 'increase the points needed to win by 1' is not derived from the board (only from game setup); reaching 8 still wins",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts",
+    "testName": "BUG: 194.3.a / 365.1 — an in-play battlefield static 'increase the points needed to win by 1' is not derived from the board (only from game setup); reaching 8 still wins"
+  },
+  "id": "14b57c7e32c4",
+  "createdAt": "2026-08-06T20:50:12.436Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.436Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

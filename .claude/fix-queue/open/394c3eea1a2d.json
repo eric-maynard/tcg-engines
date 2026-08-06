@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 41492fa40ce64fb4 — a unit that becomes a copy of Aphelios via Shady Spectacles does not trigger (engine: cannot attach ven-137-166)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/aphelios-exalted-41492fa40ce64fb4.test.ts",
+    "testName": "BUG: ruling 41492fa40ce64fb4 — a unit that becomes a copy of Aphelios via Shady Spectacles does not trigger (engine: cannot attach ven-137-166)"
+  },
+  "id": "394c3eea1a2d",
+  "createdAt": "2026-08-06T19:48:12.206Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:48:12.206Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,43 @@
+{
+  "source": "unit-bug",
+  "cardId": "unl-186-219",
+  "title": "BUG: clause 2 — after killing a unit with 3 or less Might, the caster may play this from trash for [rainbow]",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/unl-186-219.test.ts",
+    "testName": "BUG: clause 2 — after killing a unit with 3 or less Might, the caster may play this from trash for [rainbow]"
+  },
+  "id": "c3272278b28d",
+  "createdAt": "2026-08-06T17:15:21.545Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.545Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:15:04.084Z",
+      "event": "grabbed:w2-i1"
+    },
+    {
+      "at": "2026-08-06T19:52:29.979Z",
+      "event": "done",
+      "note": "explicit DfB ability [kill → conditional killed-might≤3 → optional self play from trash for rainbow]; kill snapshots last-known Might; play handler replays a SPELL 'self' via opt-in prompt (optInCost) then re-chains it from trash"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i1",
+  "claimedAt": "2026-08-06T19:15:04.084Z",
+  "resolution": {
+    "note": "explicit DfB ability [kill → conditional killed-might≤3 → optional self play from trash for rainbow]; kill snapshots last-known Might; play handler replays a SPELL 'self' via opt-in prompt (optInCost) then re-chains it from trash",
+    "files": [
+      "packages/riftbound-cards/src/cards/unl/death-from-below.ts",
+      "packages/riftbound-engine/src/abilities/effects/play.ts",
+      "packages/riftbound-engine/src/abilities/effects/kill.ts",
+      "packages/riftbound-engine/src/abilities/effects/_helpers.ts",
+      "packages/riftbound-engine/src/types/game-state.ts",
+      "packages/riftbound-engine/src/__tests__/cards/unl-186-219.test.ts"
+    ],
+    "at": "2026-08-06T19:52:29.979Z"
+  }
+}

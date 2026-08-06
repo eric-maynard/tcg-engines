@@ -65,7 +65,7 @@ describe("Machine Evangel (ogn-239-298)", () => {
     expect(game.p2.units()).toHaveLength(0);
   });
 
-  test.failing("BUG: Deathknell also triggers on a combat death (323.4 / 808.1.d): attacking into a 6-Might defender", async () => {
+  test("Deathknell also triggers on a combat death (323.4 / 808.1.d): attacking into a 6-Might defender", async () => {
     // Expected: the Evangel takes lethal combat damage, dies → Deathknell → three Recruit tokens in
     // base. Actual: resolveFullCombat trashes the unit without ever creating the death trigger.
     const game = await scenario()

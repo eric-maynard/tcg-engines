@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 313.4 / 347 — the turn player WITHOUT Focus (P1, after passing) must not be able to play its own Action spell while P2 holds Focus; engine accepts the cast",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/showdown-focus-and-triggers-on-chain.test.ts",
+    "testName": "BUG: 313.4 / 347 — the turn player WITHOUT Focus (P1, after passing) must not be able to play its own Action spell while P2 holds Focus; engine accepts the cast"
+  },
+  "id": "27553113aa06",
+  "createdAt": "2026-08-06T20:50:12.433Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.433Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

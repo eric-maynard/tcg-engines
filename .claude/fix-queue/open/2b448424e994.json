@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 6c4fbff634223b27 — kill replaced by Zhonya's in play, yet the unit's controller P2 STILL draws 2",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/hidden-blade-6c4fbff634223b27.test.ts",
+    "testName": "BUG: ruling 6c4fbff634223b27 — kill replaced by Zhonya's in play, yet the unit's controller P2 STILL draws 2"
+  },
+  "id": "2b448424e994",
+  "createdAt": "2026-08-06T19:21:34.625Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:21:34.625Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

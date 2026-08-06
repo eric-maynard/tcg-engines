@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "unl-014-219",
+  "title": "\"If you control a facedown card, deal 4 to it instead\" clause is not implemented",
+  "expected": "Card def /root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/unl/monster-harpoon.ts:4-16 has no abilities field at all (only rulesText). The parsed data in /root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/unl.json:706-721 encodes the effect as a flat {type:\"damage\", amount:2, target:{type:\"unit\"}} with no conditional for \"if you control a facedown card, deal 4 instead\". No engine-side override for unl-014-219 exists (grep of riftbound-engine/src and server.ts returns nothing). So the facedown-conditional 4-damage clause is unimplemented; Monster Harpoon always deals 2.",
+  "observed": "Fight or Flight was hidden facedown at player-1-bf-ogn-276-298 (zone facedown-*, meta.hidden=true, controller player-1); Monster Harpoon then resolved for only 2 damage on Vanguard Attendant (meta.damage=2). Chain item effect was a flat {type:damage, amount:2, target:{unit, battlefield}} with no facedown conditional; the parsed ability in unl.json likewise has only {damage 2}.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/unl.json:712",
+  "id": "28b158c95f75",
+  "createdAt": "2026-08-06T20:43:38.886Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.886Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

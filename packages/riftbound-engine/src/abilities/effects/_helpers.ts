@@ -37,7 +37,11 @@ export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): stri
   // battlefield id names the chosen LOCATION, not the affected cards; resolve
   // the descriptor pinned to that battlefield's unit zone.
   const battlefieldZone = boundBattlefieldZone(effect.target, ctx.boundTargets, ctx.draft);
-  if (ctx.boundTargets && battlefieldZone === undefined) {
+  // rule-id: ogn-056-298 — "me"/"this" always names the source, never a
+  // chosen target threaded through an enclosing conditional/sequence.
+  const tgt = effect.target as unknown;
+  const isSelf = tgt === "self" || (typeof tgt === "object" && tgt !== null && (tgt as { type?: string }).type === "self");
+  if (ctx.boundTargets && battlefieldZone === undefined && !isSelf) {
     return [...ctx.boundTargets];
   }
   return resolveTarget(effect.target, {
@@ -70,7 +74,7 @@ export function getEffectiveMight(cardId: string, ctx: EffectContext): number {
   const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
     | Partial<RiftboundCardMeta>
     | undefined;
-  const buffBonus = meta?.buffed ? 1 : 0;
+  const buffBonus = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
   const mightMod = meta?.mightModifier ?? 0;
   const staticBonus = meta?.staticMightBonus ?? 0;
 
@@ -347,6 +351,28 @@ export function evaluateEffectCondition(
       const owner = ctx.cards.getCardOwner(bound as CoreCardId) ?? "";
       return want === "friendly" ? owner === ctx.playerId : owner !== ctx.playerId;
     }
+    case "while-alone": {
+      // rule-id: ogn-046-298 — "if it is the only unit you control there": the
+      // subject is the chosen (bound) target when the condition names a
+      // target, else the source; count units its controller controls in the
+      // same location (base or battlefield).
+      const subject = condition.target ? ctx.boundTargets?.[0] : ctx.sourceCardId;
+      if (!subject) return false;
+      const zone = ctx.zones.getCardZone(subject as CoreCardId) as string | undefined;
+      if (!zone || !(zone === "base" || zone.startsWith("battlefield-"))) return false;
+      const controllerOf = (id: string) =>
+        ctx.cards.getCardController?.(id as CoreCardId) ?? ctx.cards.getCardOwner(id as CoreCardId) ?? "";
+      const controller = controllerOf(subject);
+      const registry = getGlobalCardRegistry();
+      const here =
+        zone === "base"
+          ? ctx.zones.getCardsInZone("base" as CoreZoneId, controller as CorePlayerId)
+          : ctx.zones.getCardsInZone(zone as CoreZoneId);
+      const units = here.filter(
+        (id) => registry.getCardType(id as string) === "unit" && controllerOf(id as string) === controller,
+      );
+      return units.length === 1;
+    }
     case "target-attacking": {
       // rule-id: sfd-017-221 — "If it's attacking" inspects the chosen
       // (bound) target's combat role, not the source card.
@@ -356,6 +382,17 @@ export function evaluateEffectCondition(
         | Partial<RiftboundCardMeta>
         | undefined;
       return meta?.combatRole === "attacker";
+    }
+    case "killed-might": {
+      // rule-id: unl-186-219 — "Kill a unit… Then, if it had N [Might] or
+      // less": compares the last-known Might snapshotted by the `kill` step.
+      const might = ctx.draft.lastKilledUnitMight;
+      if (might === undefined) return false;
+      const cmp = condition.comparison as { lte?: number; gte?: number; eq?: number } | undefined;
+      if (cmp?.lte !== undefined && might > cmp.lte) return false;
+      if (cmp?.gte !== undefined && might < cmp.gte) return false;
+      if (cmp?.eq !== undefined && might !== cmp.eq) return false;
+      return true;
     }
     case "this-kills-target": {
       // rule-id: ogn-005-298 — "If this kills it": rule 520 death is a
@@ -385,7 +422,10 @@ export function evaluateEffectCondition(
     case "paid-additional-cost": {
       // rule-id: ven-083-166 / rule 560 — playSpell records whether the
       // caster elected the optional additional cost; absent means unpaid.
-      return ctx.draft.additionalCostsPaid?.[ctx.sourceCardId] === true;
+      if (ctx.draft.additionalCostsPaid?.[ctx.sourceCardId] === true) return true;
+      // rule-id: ogn-056-298 — "X. If you do, Y" inside a sequence: the
+      // sequence handler records whether the preceding step X was performed.
+      return (ctx as { ifYouDoPerformed?: boolean }).ifYouDoPerformed === true;
     }
     case "legion": {
       // rule-id: ogn-254-298 / rule 724 — "if you've played another card this

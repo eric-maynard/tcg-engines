@@ -313,7 +313,7 @@ export const standardMove: Defs["standardMove"] = {
             { combatRole: "attacker" } as Partial<RiftboundCardMeta>,
           );
           fireTriggers(
-            { battlefieldId: destination, cardId: unitId, type: "attack" },
+            { battlefieldId: destination, cardId: unitId, owner: playerId, type: "attack" },
             triggerCtx,
           );
         }
@@ -325,7 +325,12 @@ export const standardMove: Defs["standardMove"] = {
               { combatRole: "defender" } as Partial<RiftboundCardMeta>,
             );
             fireTriggers(
-              { battlefieldId: destination, cardId: cardId as string, type: "defend" },
+              {
+                battlefieldId: destination,
+                cardId: cardId as string,
+                owner: owner as string,
+                type: "defend",
+              },
               triggerCtx,
             );
           }

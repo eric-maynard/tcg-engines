@@ -40,9 +40,7 @@ describe("En Garde (ogn-046-298)", () => {
     expect(poor.p1.can("cast", "eg")).toBe(false);
   });
 
-  test.failing("BUG: +1 Might only when you control another unit at the same location (the extra +1 requires being alone there)", async () => {
-    // Expected: "a" shares the base with "b" → only +1 (3 Might). Actual: the effect-level
-    // `while-alone` condition is not evaluated (defaults to true), so every target gets +2.
+  test("+1 Might only when you control another unit at the same location (the extra +1 requires being alone there)", async () => {
     const game = await board().build();
     await game.p1.cast("eg", { targets: "a" });
     await game.settle();
@@ -68,7 +66,7 @@ describe("En Garde (ogn-046-298)", () => {
 
   test("[Reaction] timing: castable on the opponent's turn and in response on a chain", async () => {
     const opp = await board().active(P2).build();
-    expect(opp.p1.can("cast", "eg")).toBe(true);
+    expect(opp.p1.can("cast", "eg")).toBe(false); // rule 316.5.b: not in the opponent's Neutral Open State
 
     const game = await board().resources(P2, { energy: 1, power: { fury: 1 } }).hand(P2, "ogn-009-298", "ray").active(P2).build();
     await game.p2.cast("ray", { targets: "loner" }); // Hextech Ray: deal 3 to loner (2 Might)

@@ -52,7 +52,7 @@ describe("Daring Poro (ogn-210-298)", () => {
     expect(game.state("poro").might).toBe(3);
   });
 
-  test.failing("BUG: Assault — a 3-Might attacker survives 2 combat damage from a 2-Might defender and conquers", async () => {
+  test("Assault — a 3-Might attacker survives 2 combat damage from a 2-Might defender and conquers", async () => {
     // Expected: guard (2) dies to 3; Poro takes 2 < 3 and holds bf1 → P1 conquers.
     // Actual: the lethal threshold for attackers ignores Assault, so the Poro dies to 2 damage.
     const game = await attacking(2).build();

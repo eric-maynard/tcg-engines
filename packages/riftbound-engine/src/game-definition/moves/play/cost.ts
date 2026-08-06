@@ -10,6 +10,7 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { type EffectContext, executeEffect } from "../../../abilities/effect-executor";
+import { evaluateLegionCondition } from "../../../abilities/legion-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import {
   type CostReductionContext,
@@ -99,10 +100,95 @@ function evaluateEnterReadyCondition(
         return threshold - (player?.victoryPoints ?? 0) <= range;
       });
     }
+    // rule-id: ogn-144-298 — "If an enemy unit has died this turn": read the
+    // per-player turn event log (`fireTriggers` records deaths).
+    case "this-turn": {
+      const eventType = condition.event as string;
+      const events = state.turnEvents?.[playerId] ?? [];
+      const n = events.filter((e) => e === eventType).length;
+      const cmp = condition.count as { gte?: number; eq?: number; lte?: number } | undefined;
+      if (cmp?.eq !== undefined) return n === cmp.eq;
+      if (cmp?.lte !== undefined) return n <= cmp.lte && n >= (cmp.gte ?? 0);
+      return n >= (cmp?.gte ?? 1);
+    }
+    // rule 143.4 / rule-id: ogn-035-298 — "If an opponent controls a
+    // battlefield, I enter ready": the parser emits the battlefield subject as
+    // `{type:"card"|"battlefield", controller:"enemy"}` with no filter.
+    case "opponent-controls": {
+      const target = (condition.target ?? {}) as { type?: string; filter?: unknown };
+      if (target.type === "battlefield" || (target.type === "card" && target.filter === undefined)) {
+        return Object.values(state.battlefields ?? {}).some(
+          (bf) => typeof bf?.controller === "string" && bf.controller !== playerId,
+        );
+      }
+      return undefined;
+    }
     default: {
       return undefined;
     }
   }
+}
+
+/**
+ * rule 466 / rule-id: ogn-047-298 — the played card's OWN static
+ * "If CONDITION, this costs [N] less" rider: a flat energy discount applied
+ * at pay time when the play-time condition holds. Unscaled (no `scope`/`by`)
+ * self cost-reductions without a condition, or with a condition this module
+ * cannot evaluate, contribute 0 here.
+ */
+function getSelfConditionalEnergyReduction(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+): number {
+  let total = 0;
+  for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const { effect, condition } = ability as {
+      effect?: { type?: string; target?: unknown; scope?: unknown; by?: unknown; reduction?: unknown; amount?: unknown };
+      condition?: Record<string, unknown>;
+    };
+    if (effect?.type !== "cost-reduction" || effect.target !== "self") {
+      continue;
+    }
+    if (effect.scope !== undefined || effect.by !== undefined || !condition) {
+      continue;
+    }
+    if (evaluateEnterReadyCondition(condition, state, playerId) !== true) {
+      continue;
+    }
+    total += Math.max(0, decodeCostAmount(effect.reduction ?? effect.amount).energy);
+  }
+  return total;
+}
+
+/**
+ * rule 724 / rule-id: ogn-012-298 — the played card's OWN `[Legion] — I cost
+ * [N] less` keyword: a flat self discount once its controller has already
+ * played another card this turn (read before this play bumps the counter).
+ */
+function getSelfLegionEnergyReduction(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+): number {
+  let total = 0;
+  for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
+    if (ability?.type !== "keyword" || ability.keyword !== "Legion") {
+      continue;
+    }
+    const effect = (ability as { effect?: { type?: string; target?: unknown; reduction?: unknown; amount?: unknown; by?: unknown } }).effect;
+    if (effect?.type !== "cost-reduction" || (effect.target !== undefined && effect.target !== "self")) {
+      continue;
+    }
+    if (!evaluateLegionCondition(state, playerId)) {
+      continue;
+    }
+    total += Math.max(0, decodeCostAmount(effect.reduction ?? effect.amount ?? effect.by).energy);
+  }
+  return total;
 }
 
 /**
@@ -284,11 +370,52 @@ export function consumeEntersReadyReplacement(
 }
 
 /**
+ * rule 356.4.b (rule-id: ogn-031-298): one-shot "the next <type> you play this
+ * turn costs [N] less" discounts live in `draft.activeReplacements` as
+ * `replaces: "play-cost"` entries scoped to their installer. Returns the summed
+ * energy discount for this play; with `consume`, spends the matched
+ * `duration:"next"` entries (only call that from the pay path on a draft).
+ */
+export function takeNextPlayDiscount(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  consume: boolean,
+): number {
+  const active = state.activeReplacements as
+    | (ActiveReplacementEntry & { reduction?: unknown; amount?: unknown })[]
+    | undefined;
+  if (!active || active.length === 0) {
+    return 0;
+  }
+  const cardType = getGlobalCardRegistry().get(cardId)?.cardType;
+  let total = 0;
+  for (let i = active.length - 1; i >= 0; i--) {
+    const entry = active[i];
+    if (entry?.replaces !== "play-cost") {
+      continue;
+    }
+    if (entry.owner !== undefined && entry.owner !== playerId) {
+      continue;
+    }
+    const targetType = entry.target?.type;
+    if (targetType !== undefined && targetType !== "card" && targetType !== cardType) {
+      continue;
+    }
+    total += decodeCostAmount(entry.reduction ?? entry.amount).energy;
+    if (consume && entry.duration === "next") {
+      active.splice(i, 1);
+    }
+  }
+  return total;
+}
+
+/**
  * Optional additional-cost declared on a unit card at play time.
  */
 export interface OptionalPlayCost {
   /** `"accelerate"` (rule 717) enters the unit ready when paid. */
-  readonly kind: "accelerate" | "kill" | "pay";
+  readonly kind: "accelerate" | "kill" | "pay" | "exhaust";
   /**
    * Extra energy/power to deduct when the cost is paid.
    * rule-id: unl-178-219 — `xp` is spent from the player's XP total.
@@ -296,6 +423,8 @@ export interface OptionalPlayCost {
   readonly cost?: { energy?: number; power?: readonly string[]; xp?: number };
   /** Target descriptor for a "kill a friendly X" additional cost. */
   readonly kill?: unknown;
+  /** rule-id: ogn-048-298 (rule 356.2) — descriptor for "you may exhaust a friendly X". */
+  readonly exhaust?: unknown;
   /**
    * rule-id: unl-178-219 (rule 560) — "If you do, I cost [N] less": energy
    * discount applied to the base cost when the optional cost is paid.
@@ -383,7 +512,12 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
           power.push(m[1]);
         }
       } else if (typeof raw === "object" && raw !== null) {
-        const obj = raw as { energy?: number; power?: readonly string[]; xp?: number };
+        const obj = raw as { energy?: number; power?: readonly string[]; xp?: number; exhaust?: unknown };
+        // rule 356.2 — ogn-048-298: "you may exhaust a friendly unit" as an
+        // additional cost; the unit is chosen and exhausted at pay time.
+        if (obj.exhaust) {
+          return { exhaust: obj.exhaust, kind: "exhaust" };
+        }
         energy = obj.energy ?? 0;
         xp = obj.xp ?? 0;
         if (obj.power) {power.push(...obj.power);}
@@ -506,7 +640,7 @@ export function getCardEffectiveMight(
     return 0;
   }
   const meta = getCardMeta?.(cardId as CoreCardId);
-  const buffBonus = meta?.buffed ? 1 : 0;
+  const buffBonus = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
   const mightMod = meta?.mightModifier ?? 0;
   const staticBonus = meta?.staticMightBonus ?? 0;
   let equipBonus = 0;
@@ -627,6 +761,7 @@ export function getEffectiveSpellRepeatCost(
  * its own path. Unrecognised scopes contribute 0.
  */
 function getSelfScaledEnergyReduction(
+  state: RiftboundGameState,
   playerId: string,
   cardId: string,
   extras: CostExtras,
@@ -644,11 +779,29 @@ function getSelfScaledEnergyReduction(
     const effect = ability.effect as
       | { type?: string; target?: unknown; scope?: unknown; reduction?: unknown; amount?: unknown; by?: unknown }
       | undefined;
-    if (
-      effect?.type !== "cost-reduction" ||
-      effect.target !== "self" ||
-      typeof effect.scope !== "string"
-    ) {
+    if (effect?.type !== "cost-reduction" || effect.target !== "self") {
+      continue;
+    }
+    // rule 356.4 / rule-id: ogn-014-298 — "This spell's Energy cost is reduced
+    // by the highest Might among units you control": a flat discount equal to
+    // the current (effective) Might of the caster's mightiest unit on the board.
+    if (typeof effect.by === "string" && /highest might among units you control/i.test(effect.by)) {
+      const cards = extras.board?.cards;
+      let highest = 0;
+      const consider = (id: CoreCardId): void => {
+        if (registry.getCardType(id as string) !== "unit") return;
+        const controller = cards?.getCardController?.(id) ?? cards?.getCardOwner(id);
+        if (controller !== playerId) return;
+        highest = Math.max(highest, getCardEffectiveMight(id as string, cards?.getCardMeta));
+      };
+      for (const id of zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)) consider(id);
+      for (const bfId of Object.keys(state.battlefields ?? {})) {
+        for (const id of zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) consider(id);
+      }
+      total += highest;
+      continue;
+    }
+    if (typeof effect.scope !== "string") {
       continue;
     }
     const scope = effect.scope.toLowerCase();
@@ -823,10 +976,16 @@ export function canAffordCard(
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, repeatN, repeatTiers);
   const boardReduction = getBoardCostReduction(state, playerId, cardId, extras);
   // rule-id: ven-096-166 — self static "I cost [N] less for each …".
-  const selfScaled = getSelfScaledEnergyReduction(playerId, cardId, extras);
+  const selfScaled =
+    getSelfScaledEnergyReduction(state, playerId, cardId, extras) +
+    getSelfConditionalEnergyReduction(state, playerId, cardId) +
+    getSelfLegionEnergyReduction(state, playerId, cardId);
+  const nextPlay = takeNextPlayDiscount(state, playerId, cardId, false);
+  // rule 356.4.e: a discount's minimum binds only that discount, and the payer
+  // orders discounts — floored board auras go first so unfloored ones aren't lost.
   const adjustedEnergy = Math.max(
     0,
-    applyStaticCostReduction(Math.max(0, baseCost.energy + modifier - interactive - selfScaled), boardReduction) +
+    Math.max(0, applyStaticCostReduction(Math.max(0, baseCost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlay) +
       xAmount +
       repeatSurcharge +
       (extras.additionalCost?.energy ?? 0),
@@ -941,10 +1100,16 @@ export function deductCost(
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, repeatN, repeatTiers);
   const boardReduction = getBoardCostReduction(draft, playerId, cardId, extras);
   // rule-id: ven-096-166 — self static "I cost [N] less for each …".
-  const selfScaled = getSelfScaledEnergyReduction(playerId, cardId, extras);
+  const selfScaled =
+    getSelfScaledEnergyReduction(draft, playerId, cardId, extras) +
+    getSelfConditionalEnergyReduction(draft, playerId, cardId) +
+    getSelfLegionEnergyReduction(draft, playerId, cardId);
+  // rule 356.4.b / 356.6: the one-shot "next spell costs [N] less" is spent here.
+  const nextPlay = takeNextPlayDiscount(draft, playerId, cardId, true);
   const adjustedEnergy = Math.max(
     0,
-    applyStaticCostReduction(Math.max(0, cost.energy + modifier - interactive - selfScaled), boardReduction) +
+    // rule 356.4.e: floored board auras first, then unfloored discounts (see canAffordCard).
+    Math.max(0, applyStaticCostReduction(Math.max(0, cost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlay) +
       xAmount +
       repeatSurcharge +
       (extras.additionalCost?.energy ?? 0),

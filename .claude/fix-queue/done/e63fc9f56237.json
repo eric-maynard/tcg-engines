@@ -1,0 +1,33 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-157-298",
+  "title": "BUG: mode 'Ready me' readies an exhausted Udyr",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-157-298.test.ts",
+    "testName": "BUG: mode 'Ready me' readies an exhausted Udyr"
+  },
+  "id": "e63fc9f56237",
+  "createdAt": "2026-08-06T17:39:26.577Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.577Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:42:53.923Z",
+      "event": "done(unclaimed)",
+      "note": "ready effect now clears legacy seeded meta.exhausted (w5-i2)"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "ready effect now clears legacy seeded meta.exhausted (w5-i2)",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/ready.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-157-298.test.ts"
+    ],
+    "at": "2026-08-06T19:42:53.923Z"
+  }
+}

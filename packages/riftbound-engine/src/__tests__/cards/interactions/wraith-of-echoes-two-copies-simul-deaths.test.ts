@@ -76,9 +76,8 @@ describe("Two Wraith of Echoes × two simultaneous Watchful Sentry deaths", () =
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: (a) A draws exactly 4 — 2 Deathknells + ONE trigger per Wraith (383.1.b: simultaneous deaths are a single 'first time'; two Wraiths = two instances). Engine never fires the Wraith trigger (draws 2)", async () => {
-    // Expected: hand +4 (not +2 = Wraiths ignored, not +6 = each Wraith triggering per death).
-    // Actual: only the two Deathknells resolve; "first time a friendly unit dies" never triggers.
+  test("(a) A draws exactly 4 — 2 Deathknells + ONE trigger per Wraith (383.1.b: simultaneous deaths are a single 'first time'; two Wraiths = two instances)", async () => {
+    // hand +4 (not +2 = Wraiths ignored, not +6 = each Wraith triggering per death).
     const game = await board().build();
     const hand0 = game.p1.hand().length;
     await flurry(game, "flurry1");
@@ -86,8 +85,6 @@ describe("Two Wraith of Echoes × two simultaneous Watchful Sentry deaths", () =
   });
 
   test("(b) a third friendly death later the same turn draws nothing more from either Wraith (383.3.e.1)", async () => {
-    // NOTE: passes today only because the Wraith trigger never fires at all; the absolute count is
-    // pinned by the BUG test below.
     const game = await board().build();
     await flurry(game, "flurry1");
     const afterFirst = game.p1.hand().length;
@@ -96,8 +93,7 @@ describe("Two Wraith of Echoes × two simultaneous Watchful Sentry deaths", () =
     expect(game.p1.hand()).toHaveLength(afterFirst);
   });
 
-  test.failing("BUG: (b) absolute count — after the simultaneous deaths (+4) and a later third death (+0) A has drawn exactly 4", async () => {
-    // Expected: hand0 + 4 after both Flurries. Actual: hand0 + 2 (Wraith triggers missing).
+  test("(b) absolute count — after the simultaneous deaths (+4) and a later third death (+0) A has drawn exactly 4", async () => {
     const game = await board().build();
     const hand0 = game.p1.hand().length;
     await flurry(game, "flurry1");
@@ -106,9 +102,9 @@ describe("Two Wraith of Echoes × two simultaneous Watchful Sentry deaths", () =
     expect(game.p1.hand()).toHaveLength(hand0 + 4);
   });
 
-  test.failing("BUG: contrast — the once-per-turn count resets: on the NEXT turn the first friendly death triggers each Wraith again (+2)", async () => {
-    // Expected: after A's fodder dies in combat on A's own turn, A's hand grows by 2 (one per Wraith;
-    // fodder has no Deathknell). Actual: +0 — the Wraith trigger never fires.
+  test("contrast — the once-per-turn count resets: on the NEXT turn the first friendly death triggers each Wraith again (+2)", async () => {
+    // After A's fodder dies in combat on A's own turn, A's hand grows by 2 (one per Wraith;
+    // fodder has no Deathknell).
     const game = await board().build();
     await flurry(game, "flurry1");
     await flurry(game, "flurry2");

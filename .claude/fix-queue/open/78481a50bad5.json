@@ -1,0 +1,18 @@
+{
+  "source": "playtest",
+  "title": "The opponent's player info strip (name 'Goldfish', VP x/8, Resources Energy) that was fully visible at step 00 is now occluded by the opponent's CHAOS(3)/FURY(2) rune panel — only the 'G' avatar and a clipped 'G' remain visible at top-right in 34.png/35.png.",
+  "expected": "gameplay.html:149 places `#opponent-runePool` with inline `style=\"position:absolute;top:4px;right:8px;\"` inside `.opponent-area`, while gameplay.html:143 puts `#opponentInfo` (name/VP/energy strip) as the right-most flex child of the top row of that same area. No space is reserved for the absolutely-positioned pool (.opponent-area CSS at gameplay.css:99 has no padding-right/offset; .rune-stack is 112px wide x 172px tall per gameplay.css:511-515 with opaque cards), so once the opponent has any runes the stacks paint directly over the info strip. Screenshots verify: 00.png (opponent pool empty) shows 'Goldfish VP 0/8 Resources Energy 0' at top-right; 35.png shows CHAOS(3)/FURY(2) stacks covering that spot with only the 'G' avatar and a clipped 'G' visible.",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/public/gameplay.html:149",
+  "rule": "scoreboard / opponent VP display",
+  "id": "78481a50bad5",
+  "createdAt": "2026-08-06T20:43:38.887Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.887Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

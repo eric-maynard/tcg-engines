@@ -79,7 +79,7 @@ describe("Falling Comet (ogn-085-298)", () => {
     expect(oppTurn.p1.can("cast", "comet")).toBe(false);
   });
 
-  test.failing("BUG: killing the lone defender during the showdown leaves the attacker to win the combat and conquer (466.3.a, 466.5)", async () => {
+  test("killing the lone defender during the showdown leaves the attacker to win the combat and conquer (466.3.a, 466.5)", async () => {
     // Expected: with no defender left, P1 is the only player with units at bf1 → wins, keeps
     // "ally" there and conquers (1 point). Actual: resolveFullCombat recalls the attacker to base
     // and bf1 stays with P2.

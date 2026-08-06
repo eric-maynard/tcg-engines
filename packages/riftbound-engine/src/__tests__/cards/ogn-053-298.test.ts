@@ -52,7 +52,7 @@ describe("Stand United (ogn-053-298)", () => {
     expect(game.state("veteran").might).toBe(3);
   });
 
-  test.failing("BUG: 'Buffs give an additional +1 Might to friendly units this turn' — every buffed friendly unit is +2 over base this turn, buffed enemies are not", async () => {
+  test("'Buffs give an additional +1 Might to friendly units this turn' — every buffed friendly unit is +2 over base this turn, buffed enemies are not", async () => {
     // Expected this turn: ally 2+1+1 = 4, veteran (already buffed) 4, foeBuffed stays 3; next turn ally/veteran back to 3.
     // Actual: only the plain buff is applied (ally 3, veteran 3).
     const game = await board().build();

@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 466.3.a / 466.5 / 466.5.d — P1 is the only player with units → establishes control → Conquer +1, A stays at bf1 (engine recalls A and leaves bf1 under P2)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/combat-flow-and-resolution.test.ts",
+    "testName": "BUG: 466.3.a / 466.5 / 466.5.d — P1 is the only player with units → establishes control → Conquer +1, A stays at bf1 (engine recalls A and leaves bf1 under P2)"
+  },
+  "id": "4f7ebaf37ee7",
+  "createdAt": "2026-08-06T20:11:47.426Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.426Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

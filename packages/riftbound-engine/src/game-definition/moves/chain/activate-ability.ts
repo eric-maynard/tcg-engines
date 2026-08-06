@@ -396,6 +396,11 @@ export const activateAbility: Defs["activateAbility"] = {
     if (!isLegalTiming(timing, turnState)) {
       return false;
     }
+    // rule 316.5.b: in a Neutral Open State only the Turn Player may
+    // activate abilities ([Reaction] adds Closed States, not this one).
+    if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
+      return false;
+    }
 
     // Check if player can afford the cost
     if (ability.cost) {
@@ -507,8 +512,11 @@ export const activateAbility: Defs["activateAbility"] = {
         const options =
           cost.kill === "self"
             ? [cardId as string]
-            : resolveTarget(cost.kill as TargetDescriptor, {
+            : // rule 577.2: enumerate EVERY legal sacrifice (quantity "all"),
+              // else the default single pick may be the host itself.
+              resolveTarget({ ...(cost.kill as TargetDescriptor), quantity: "all" }, {
                 cards: context.cards,
+                choosing: true,
                 draft: state,
                 playerId,
                 sourceCardId: cardId,
@@ -671,6 +679,10 @@ export const activateAbility: Defs["activateAbility"] = {
         if (!isLegalTiming(timing, turnState)) {
           continue;
         }
+        // rule 316.5.b: Neutral Open State → only the Turn Player activates.
+        if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
+          continue;
+        }
 
         // Check cost affordability
         if (ability.cost) {
@@ -775,8 +787,10 @@ export const activateAbility: Defs["activateAbility"] = {
           const hostZone = context.zones.getCardZone(entry.hostCardId as CoreCardId) as
             | string
             | undefined;
-          sacrificeOptions = resolveTarget(killCost as TargetDescriptor, {
+          // rule 577.2: list every legal sacrifice, not the default single pick.
+          sacrificeOptions = resolveTarget({ ...(killCost as TargetDescriptor), quantity: "all" }, {
             cards: context.cards,
+            choosing: true,
             draft: state,
             playerId,
             sourceCardId: entry.hostCardId,

@@ -1,0 +1,52 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-072-298",
+  "title": "BUG: killing a stunned enemy unit (lethal spell damage, rule 428.5.c.1) offers 'exhaust this to draw 1'; accepting exhausts the Shrine and draws 1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-072-298.test.ts",
+    "testName": "BUG: killing a stunned enemy unit (lethal spell damage, rule 428.5.c.1) offers 'exhaust this to draw 1'; accepting exhausts the Shrine and draws 1"
+  },
+  "id": "78e7145a9544",
+  "createdAt": "2026-08-06T17:15:21.540Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.540Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T17:51:09.086Z",
+      "event": "grabbed:w2-i1"
+    },
+    {
+      "at": "2026-08-06T19:03:47.574Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-06T19:14:44.946Z",
+      "event": "grabbed:w3-i1"
+    },
+    {
+      "at": "2026-08-06T19:55:27.201Z",
+      "event": "done",
+      "note": "parser: emit object-shaped trigger subjects (die+actor/filter for 'When you kill…') and hoist 'exhaust this to X' into pay-cost {exhaust}"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-06T19:14:44.946Z",
+  "claimedBy": "w3-i1",
+  "resolution": {
+    "note": "parser: emit object-shaped trigger subjects (die+actor/filter for 'When you kill…') and hoist 'exhaust this to X' into pay-cost {exhaust}",
+    "files": [
+      "packages/riftbound-cards/src/parser/impl/triggers.ts",
+      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts",
+      "packages/riftbound-engine/src/types/game-state.ts",
+      "packages/riftbound-engine/src/harness/decision.ts",
+      "packages/riftbound-engine/src/harness/game.ts",
+      "packages/riftbound-engine/src/harness/types.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-072-298.test.ts"
+    ],
+    "at": "2026-08-06T19:55:27.201Z"
+  }
+}

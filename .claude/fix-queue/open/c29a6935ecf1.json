@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 485.4.a / 486.4.a — a duel/match DECK provides THREE battlefields (2 is the number IN PLAY, 485.4); validateDeck(mode duel|match) rejects 3 with WRONG_BATTLEFIELD_COUNT",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
+    "testName": "BUG: 485.4.a / 486.4.a — a duel/match DECK provides THREE battlefields (2 is the number IN PLAY, 485.4); validateDeck(mode duel|match) rejects 3 with WRONG_BATTLEFIELD_COUNT"
+  },
+  "id": "c29a6935ecf1",
+  "createdAt": "2026-08-06T20:50:12.431Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.431Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -66,7 +66,7 @@ describe("Crackshot Corsair (ogn-130-298)", () => {
     expect(game.state("a").damage).toBe(0);
   });
 
-  test.failing("BUG: killing the lone 1-Might defender with the trigger should leave Corsair at bf1 and conquer it (rules 465.1, 466.3.a, 466.5)", async () => {
+  test("killing the lone 1-Might defender with the trigger should leave Corsair at bf1 and conquer it (rules 465.1, 466.3.a, 466.5)", async () => {
     // Expected: with no defenders left, combat damage is skipped, the attacker stays and
     // establishes control (conquer). Actual: resolveFullCombat recalls Corsair to base and
     // bf1 remains controlled by P2.

@@ -36,10 +36,7 @@ describe("Solari Shrine (ogn-072-298)", () => {
     expect(poor.p1.can("play", "shrine")).toBe(false);
   });
 
-  test.failing("BUG: killing a stunned enemy unit (lethal spell damage, rule 428.5.c.1) offers 'exhaust this to draw 1'; accepting exhausts the Shrine and draws 1", async () => {
-    // Expected: Hextech Ray kills the stunned foe → P1 gets a yes/no; yes → Shrine exhausted, +1 card.
-    // Actual: the parsed `kill-enemy` trigger event is never emitted by the engine (not for
-    // damage kills, kill instructions, nor combat), so nothing is offered.
+  test("killing a stunned enemy unit (lethal spell damage, rule 428.5.c.1) offers 'exhaust this to draw 1'; accepting exhausts the Shrine and draws 1", async () => {
     const game = await board().build();
     await game.p1.cast("ray", { targets: "dazedFoe" });
     const handAfterCast = game.p1.hand().length;
@@ -53,8 +50,7 @@ describe("Solari Shrine (ogn-072-298)", () => {
     expect(game.p1.hand()).toHaveLength(handAfterCast + 1);
   });
 
-  test.failing("BUG: 'you may' — the prompt is offered and declining leaves the Shrine ready and draws nothing", async () => {
-    // Expected: a yes/no prompt after the kill; "no" → Shrine ready, no draw. Actual: no prompt at all.
+  test("'you may' — the prompt is offered and declining leaves the Shrine ready and draws nothing", async () => {
     const game = await board().build();
     await game.p1.cast("ray", { targets: "dazedFoe" });
     const handAfterCast = game.p1.hand().length;
@@ -66,8 +62,7 @@ describe("Solari Shrine (ogn-072-298)", () => {
     expect(game.p1.hand()).toHaveLength(handAfterCast);
   });
 
-  test.failing("BUG: killing a stunned enemy defender in combat also counts as 'you kill' (rule 428.5.c.2) and offers the draw", async () => {
-    // Expected: a 4-Might attacker kills the stunned 3-Might foe in combat → yes/no for P1. Actual: no prompt.
+  test("killing a stunned enemy defender in combat also counts as 'you kill' (rule 428.5.c.2) and offers the draw", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .gear(P1, CARD, "shrine")
@@ -82,8 +77,6 @@ describe("Solari Shrine (ogn-072-298)", () => {
   });
 
   test("killing an enemy unit that is NOT stunned does not trigger the Shrine", async () => {
-    // NOTE: the parsed trigger carries no "stunned" qualifier; this passes today only because
-    // the kill-enemy trigger never fires at all (see BUG tests above).
     const game = await board().build();
     await game.p1.cast("ray", { targets: "alertFoe" });
     const handAfterCast = game.p1.hand().length;

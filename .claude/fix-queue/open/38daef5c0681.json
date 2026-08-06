@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 317.2.b — the Ending Special Cleanup heals all units: by P2's turn D reads 0 damage (engine zeroes meta.damage but leaves its damage counter at 2, so the unit still reports 2)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/combat-damage-assignment-status-and-healing.test.ts",
+    "testName": "BUG: 317.2.b — the Ending Special Cleanup heals all units: by P2's turn D reads 0 damage (engine zeroes meta.damage but leaves its damage counter at 2, so the unit still reports 2)"
+  },
+  "id": "38daef5c0681",
+  "createdAt": "2026-08-06T20:11:47.426Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.426Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

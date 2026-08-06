@@ -40,7 +40,7 @@ describe("Find Your Center (ogn-047-298)", () => {
     expect(r.ok).toBe(false);
   });
 
-  test.failing("BUG: costs [2] less (i.e. 1 energy) while an opponent is within 3 points of the Victory Score", async () => {
+  test("costs [2] less (i.e. 1 energy) while an opponent is within 3 points of the Victory Score", async () => {
     // Expected: victory score 8, P2 on 5 → 8-5 = 3 → cost 1; castable with 1 energy and leaves 0.
     // Actual: the parsed ability carries only draw+channel; the conditional cost reduction is
     // dropped, so the spell still demands 3 energy.
@@ -52,7 +52,7 @@ describe("Find Your Center (ogn-047-298)", () => {
     expect(game.zoneOf("fyc")).toBe("trash");
   });
 
-  test.failing("BUG: with 3 energy and an opponent at 7/8, casting deducts only 1 energy (cost reduction not applied)", async () => {
+  test("with 3 energy and an opponent at 7/8, casting deducts only 1 energy (cost reduction not applied)", async () => {
     // Expected: reduction applies → 2 energy left. Actual: full 3 is charged → 0 left.
     const game = await scenario().victoryScore(8).points(P2, 7).resources(P1, { energy: 3 }).hand(P1, CARD, "fyc").build();
     await game.p1.cast("fyc");

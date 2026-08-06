@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 03861cdfaacd8d59 (premise) — Mirror Image's Reflection should be a unit copy of the chosen unit carrying a GRANTED Temporary; engine makes a spell-copy token without Temporary",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/shady-spectacles-03861cdfaacd8d59.test.ts",
+    "testName": "BUG: ruling 03861cdfaacd8d59 (premise) — Mirror Image's Reflection should be a unit copy of the chosen unit carrying a GRANTED Temporary; engine makes a spell-copy token without Temporary"
+  },
+  "id": "2ea7abeda81e",
+  "createdAt": "2026-08-06T20:06:58.324Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.324Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

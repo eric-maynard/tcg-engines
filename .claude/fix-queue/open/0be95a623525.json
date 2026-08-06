@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: (a) as an attacker Rengar's Assault 2 is real Might — he reads 5 (807.1.c)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/shen-rengar-reaction-units-mid-combat.test.ts",
+    "testName": "BUG: (a) as an attacker Rengar's Assault 2 is real Might — he reads 5 (807.1.c)"
+  },
+  "id": "0be95a623525",
+  "createdAt": "2026-08-06T18:35:08.346Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.346Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

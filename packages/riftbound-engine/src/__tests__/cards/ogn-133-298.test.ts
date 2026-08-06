@@ -72,7 +72,7 @@ describe("Flurry of Blades (ogn-133-298)", () => {
     expect(game.chain().map((c) => c.cardId)).toEqual(["cleave"]);
   });
 
-  test.failing("BUG: [Reaction] is not permission to act in the opponent's Neutral Open state (rule 316.5.b)", async () => {
+  test("[Reaction] is not permission to act in the opponent's Neutral Open state (rule 316.5.b)", async () => {
     // Expected: on P2's turn with no chain/showdown, only P2 may play spells → Flurry not legal for P1.
     // Actual: the engine offers P1 `cast Flurry of Blades` in P2's open main phase.
     const game = await board().active(P2).build();

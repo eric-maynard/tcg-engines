@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 356.4.e — a 'to a minimum of N' on one board discount is applied to the combined total of all board discounts",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/paying-costs-energy-power.test.ts",
+    "testName": "BUG: 356.4.e — a 'to a minimum of N' on one board discount is applied to the combined total of all board discounts"
+  },
+  "id": "3a054c06d5df",
+  "createdAt": "2026-08-06T20:50:12.438Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.438Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

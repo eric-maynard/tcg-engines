@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: Marai Spire + Ezreal, Prodigy — every optional cost is reduced to 0 ([1]→Spire; [rainbow]→Ezreal; [1][rainbow]→Spire+Ezreal): total is just [4] for four executions (356.4.c, 356.4.c.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/curtain-call-marai-spire-ezreal-repeats.test.ts",
+    "testName": "BUG: Marai Spire + Ezreal, Prodigy — every optional cost is reduced to 0 ([1]→Spire; [rainbow]→Ezreal; [1][rainbow]→Spire+Ezreal): total is just [4] for four executions (356.4.c, 356.4.c.1)"
+  },
+  "id": "6770932319b3",
+  "createdAt": "2026-08-06T18:35:08.343Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.343Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

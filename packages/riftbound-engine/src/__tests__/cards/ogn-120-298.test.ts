@@ -51,12 +51,15 @@ describe("Seal of Insight (ogn-120-298)", () => {
     expect(game.p1.can("activate", "seal")).toBe(true);
   });
 
-  test("Reaction: usable on the opponent's turn", async () => {
-    const game = await scenario().active(P2).gear(P1, SEAL, "seal").build();
+  test("Reaction: usable on the opponent's turn (in a Closed State — rule 316.5.b / 813.1.c)", async () => {
+    const game = await scenario().active(P2).gear(P1, SEAL, "seal").hand(P2, { abilities: [{ effect: { amount: 1, type: "draw" }, timing: "action", type: "spell" }], cardType: "spell", energyCost: 0, name: "Slow Draw", timing: "action" }, "theirs").build();
+    expect(game.p1.can("activate", "seal")).toBe(false); // opponent's Neutral Open State
+    await game.p2.cast("theirs");
+    await game.p2.passPriority();
     expect(game.p1.can("activate", "seal")).toBe(true);
     await game.p1.activate("seal");
     expect(game.p1.power("mind")).toBe(1);
-    expect(game.chain()).toEqual([]);
+    expect(game.chain().map((c) => c.cardId)).toEqual(["theirs"]);
     expect(game.turnPlayer()).toBe(P2);
   });
 

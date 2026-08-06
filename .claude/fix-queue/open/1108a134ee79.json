@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-220-298",
+  "title": "BUG: stunned units deal no combat damage this turn — the following combat leaves both undamaged (rule 423.1.b)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-220-298.test.ts",
+    "testName": "BUG: stunned units deal no combat damage this turn — the following combat leaves both undamaged (rule 423.1.b)"
+  },
+  "id": "1108a134ee79",
+  "createdAt": "2026-08-06T18:35:08.350Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.350Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

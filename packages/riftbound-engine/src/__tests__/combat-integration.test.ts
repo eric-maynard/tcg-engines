@@ -594,8 +594,7 @@ describe("resolveFullCombat", () => {
 
   test("Assault keyword increases attacker effective Might", () => {
     // Attacker: 3 might + Assault 3 = 6 effective. Defender: 5 might.
-    // Attacker deals 6 to defender (5, killed). Defender deals 5 to attacker (3, killed).
-    // Both die -> tie
+    // Attacker deals 6 to defender (5, killed). Defender deals 5 to attacker (6 while attacking, survives).
     registerUnit("a1", 3, ["Assault"], [{ keyword: "Assault", type: "keyword", value: 3 }]);
     registerUnit("d1", 5);
 
@@ -612,10 +611,10 @@ describe("resolveFullCombat", () => {
     });
 
     // With Assault 3, attacker deals 6. Defender has 5 might -> killed.
-    // Defender deals 5, attacker has 3 might -> killed.
-    // Tie: no conquest
+    // rule 807.1.c: Assault is real Might while attacking — defender's 5 < 6 -> attacker survives
+    // and conquers.
     expect(draft.battlefields[bfId].contested).toBe(false);
-    expect(draft.players[P1].victoryPoints).toBe(0);
+    expect(draft.players[P1].victoryPoints).toBe(1);
   });
 
   test("Assault enables attacker to win when base might would tie", () => {
@@ -724,9 +723,13 @@ describe("resolveFullCombat", () => {
       "gear-1": { owner: P1, zone: `battlefield-${bfId}` },
     });
 
-    // Gear should still be at battlefield (not treated as combatant, not killed)
-    const bfCards = mock.zoneContents.get(`battlefield-${bfId}`) ?? [];
-    expect(bfCards).toContain("gear-1");
+    // Gear is not treated as a combatant and not killed (the post-combat
+    // state-based cleanup may recall loose gear to base — rule 149.3).
+    const trashCards = [...mock.zoneContents.entries()]
+      .filter(([z]) => z === "trash")
+      .flatMap(([, ids]) => ids);
+    expect(trashCards).not.toContain("gear-1");
+    expect(trashCards).toContain("d1");
 
     // Attacker wins (6 vs 3)
     expect(draft.battlefields[bfId].controller).toBe(P1);

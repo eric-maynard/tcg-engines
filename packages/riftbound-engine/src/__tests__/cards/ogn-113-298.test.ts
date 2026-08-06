@@ -33,7 +33,7 @@ describe("Malzahar, Fanatic (ogn-113-298)", () => {
     expect(poor.p1.can("play", "malz")).toBe(false);
   });
 
-  test.failing("BUG: activating kills the chosen friendly unit, exhausts Malzahar and adds 2 rainbow power immediately (rule 429.2.a)", async () => {
+  test("activating kills the chosen friendly unit, exhausts Malzahar and adds 2 rainbow power immediately (rule 429.2.a)", async () => {
     // Expected: `activate` is legal with a friendly permanent to sacrifice; fodder → trash, Malzahar
     // exhausted, pool +2 rainbow with nothing left on the chain (Add can't be reacted to).
     // Actual: the kill-cost target resolver finds no legal sacrifice, so the ability is never offered.
@@ -47,7 +47,7 @@ describe("Malzahar, Fanatic (ogn-113-298)", () => {
     expect(game.zoneOf("theirs")).toBe("base");
   });
 
-  test.failing("BUG: a friendly GEAR is also a legal sacrifice for the cost", async () => {
+  test("a friendly GEAR is also a legal sacrifice for the cost", async () => {
     // Expected: sacrificing the Trinket gear pays the cost just like a unit. Actual: not activatable at all.
     const game = await board().build();
     await game.p1.activate("malz", 0, { sacrifice: "trinket" });
@@ -71,7 +71,7 @@ describe("Malzahar, Fanatic (ogn-113-298)", () => {
     expect(game.p1.can("activate", "malz")).toBe(false);
   });
 
-  test.failing("BUG: [Action] timing — usable during a showdown on the opponent's turn once P1 holds Focus", async () => {
+  test("[Action] timing — usable during a showdown on the opponent's turn once P1 holds Focus", async () => {
     // Expected: after P2 attacks and passes Focus, P1 may use the [Action] ability mid-showdown.
     // Actual: the ability is never offered (see the kill-cost bug above).
     const game = await scenario()

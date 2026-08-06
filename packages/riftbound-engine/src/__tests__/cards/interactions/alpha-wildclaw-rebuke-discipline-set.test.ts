@@ -96,6 +96,9 @@ describe("Alpha Wildclaw × Rebuke / Discipline — protected set is 'less Might
 
   test("(b) P1's own Discipline may choose the protected 2-Might ally (restriction is against ENEMY spells only)", async () => {
     const game = await board().build();
+    // rule 316.5.b: P1's Reaction needs a Closed State on P2's turn — P2 opens a chain first.
+    await game.p2.cast("rebuke", { targets: "big" });
+    await game.p2.passPriority();
     const offered = targetsOffered(game, P1, "discipline");
     expect(offered).toContain("small");
     expect(offered).toContain("big");
@@ -104,7 +107,7 @@ describe("Alpha Wildclaw × Rebuke / Discipline — protected set is 'less Might
     await game.p1.cast("discipline", { targets: "small" });
     await game.settle();
     expect(game.state("small").might).toBe(4);
-    expect(game.p1.hand()).toHaveLength(hand0 - 1 + 1); // Discipline spent, drew 1
+    expect(game.p1.hand()).toHaveLength(hand0 - 1 + 1 + 1); // Discipline spent, drew 1, Rebuke returned big
     expect(game.zoneOf("discipline")).toBe("trash");
   });
 

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-020-221",
+  "title": "BUG: When I win a combat (attacking, sole survivor): a Gold gear token is played to base, exhausted",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-020-221.test.ts",
+    "testName": "BUG: When I win a combat (attacking, sole survivor): a Gold gear token is played to base, exhausted"
+  },
+  "id": "1bf2aa4e27b2",
+  "createdAt": "2026-08-06T20:56:21.108Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:56:21.108Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

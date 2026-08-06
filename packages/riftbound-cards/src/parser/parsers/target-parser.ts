@@ -48,21 +48,29 @@ export function parseTarget(text: string): AnyTarget {
 
   // Parse "[a/an/that/the] [another] [controller] [TAG] CARD_TYPE [here/at a battlefield]"
   const cardTypePattern =
-    /^(?:(?:a|an|that|the)\s+)?(?:(another)\s+)?(friendly\s+|enemy\s+)?((?:\w+\s+)*?)(unit|units|gear|gears|legend|legends|rune|runes|equipment|spell|card|permanent)s?(?:\s+(here|at a battlefield|there))?$/i;
+    /^(?:(a|an|that|the)\s+)?(?:(another)\s+)?(friendly\s+|enemy\s+)?((?:\w+\s+)*?)(unit|units|gear|gears|legend|legends|rune|runes|equipment|spell|card|permanent)(s?)(?:\s+(here|at a battlefield|there))?$/i;
   const match = normalized.match(cardTypePattern);
 
   if (match) {
-    const anotherStr = match[1]; // "another" or undefined
-    const controllerStr = match[2]?.trim();
-    const tagStr = match[3]?.trim();
-    const typeStr = match[4].replace(/s$/, "") as CardTypeStr;
-    const locationStr = match[5];
+    const articleStr = match[1]; // "a"/"an"/"that"/"the" or undefined
+    const anotherStr = match[2]; // "another" or undefined
+    const controllerStr = match[3]?.trim();
+    const tagStr = match[4]?.trim();
+    const typeStr = match[5].replace(/s$/, "") as CardTypeStr;
+    const isPlural = match[5].endsWith("s") || match[6] === "s";
+    const locationStr = match[7];
     const controller = parseController(controllerStr);
 
     const result: Record<string, unknown> = { type: typeStr };
 
     if (controller) {
       result.controller = controller;
+    }
+
+    // Rule 419.2.a: a bare plural ("enemy units", "friendly units here") with no
+    // determiner is a criteria-based mass selection, not a single targeted choice.
+    if (isPlural && !articleStr && !anotherStr) {
+      result.quantity = "all";
     }
 
     if (anotherStr) {

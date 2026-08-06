@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 4b428e5dadf3b5e3 — Breach on own Hidden unit: banished then PLAYED back to bf1 face up (fresh, 0 damage); never offered as a hide, nothing facedown, [rainbow] unspent",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/temporal-breach-4b428e5dadf3b5e3.test.ts",
+    "testName": "BUG: ruling 4b428e5dadf3b5e3 — Breach on own Hidden unit: banished then PLAYED back to bf1 face up (fresh, 0 damage); never offered as a hide, nothing facedown, [rainbow] unspent"
+  },
+  "id": "4ae229ca0227",
+  "createdAt": "2026-08-06T19:48:12.208Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:48:12.208Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

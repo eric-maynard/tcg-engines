@@ -77,17 +77,17 @@ describe("Defy (ogn-045-298)", () => {
     }
   });
 
-  test.failing("BUG: cannot counter a spell whose Energy cost is more than 4", async () => {
-    // Expected: a 5-energy spell is not a legal target, so with it as the only spell Defy is not castable
-    // and the bolt resolves for 2. Actual: Defy's parsed effect is an unrestricted `counter`.
+  test("cannot counter a spell whose Energy cost is more than 4", async () => {
+    // A 5-energy spell is not a legal target, so with it as the only spell Defy is not castable
+    // and the bolt resolves for 2.
     const game = await facing(BIG_ENERGY);
     expect(game.p1.can("cast", "defy")).toBe(false);
     await game.settle();
     expect(game.state("mine").damage).toBe(2);
   });
 
-  test.failing("BUG: cannot counter a spell whose Power cost is more than 1", async () => {
-    // Expected: a 2-power spell is not a legal target. Actual: Defy is offered against it.
+  test("cannot counter a spell whose Power cost is more than 1", async () => {
+    // A 2-power spell is not a legal target.
     const game = await facing(BIG_POWER);
     expect(game.p1.can("cast", "defy")).toBe(false);
     await game.settle();

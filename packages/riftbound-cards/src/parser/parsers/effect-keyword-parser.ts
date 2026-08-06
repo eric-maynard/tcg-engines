@@ -125,6 +125,17 @@ function removeReminderText(text: string): string {
 function parseSimpleEffect(text: string): Effect | undefined {
   const cleanText = removeReminderText(text).trim();
 
+  // Try compound "EFFECT and EFFECT" sequence first (e.g., "Channel 2 runes exhausted and draw 1")
+  // — the simple patterns below are prefix matches and would otherwise swallow the left clause only.
+  const andMatch = cleanText.match(/^(.+?) and (.+?)\.?$/i);
+  if (andMatch) {
+    const left = parseSimpleEffect(andMatch[1].trim() + ".");
+    const right = parseSimpleEffect(andMatch[2].trim() + ".");
+    if (left && right) {
+      return { effects: [left, right], type: "sequence" };
+    }
+  }
+
   // Try draw effect
   const drawMatch = DRAW_PATTERN.exec(cleanText);
   if (drawMatch) {
@@ -211,16 +222,6 @@ function parseSimpleEffect(text: string): Effect | undefined {
     }
 
     return { amount, target, type: "damage" };
-  }
-
-  // Try compound "EFFECT and EFFECT" sequence (e.g., "Channel 2 runes exhausted and draw 1")
-  const andMatch = cleanText.match(/^(.+?) and (.+?)\.?$/i);
-  if (andMatch) {
-    const left = parseSimpleEffect(andMatch[1].trim() + ".");
-    const right = parseSimpleEffect(andMatch[2].trim() + ".");
-    if (left && right) {
-      return { effects: [left, right], type: "sequence" };
-    }
   }
 
   // Try "Recycle me to EFFECT." compound

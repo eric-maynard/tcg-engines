@@ -31,7 +31,7 @@ describe("Noxus Hopeful (ogn-012-298)", () => {
     expect(game.zoneOf("hopeful")).toBe("hand");
   });
 
-  test.failing("BUG: Legion — after playing another card this turn Noxus Hopeful should cost 2 (rule 812 / 727.1)", async () => {
+  test("Legion — after playing another card this turn Noxus Hopeful should cost 2 (rule 812 / 727.1)", async () => {
     // Expected: with cardsPlayedThisTurn[P1] = 1 the keyword cost-reduction makes the play legal at
     // 2 energy and charges 2. Actual: the {type:"keyword", keyword:"Legion", effect: cost-reduction}
     // ability is never consulted by the cost calculator, so the full 4 is required/charged.

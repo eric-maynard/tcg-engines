@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-198-298",
+  "title": "BUG: castable with a unit in your trash and an empty board; costs 6 energy + 2 chaos; choices are YOUR trash UNITS only",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-198-298.test.ts",
+    "testName": "BUG: castable with a unit in your trash and an empty board; costs 6 energy + 2 chaos; choices are YOUR trash UNITS only"
+  },
+  "id": "9af1ede89956",
+  "createdAt": "2026-08-06T18:35:08.335Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.335Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

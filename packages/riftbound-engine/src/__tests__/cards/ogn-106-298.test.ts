@@ -58,8 +58,7 @@ describe("Sprite Mother (ogn-106-298)", () => {
     expect(sprites(game.p1.base())).toHaveLength(0);
   });
 
-  test.failing("BUG: the Sprite token is played READY", async () => {
-    // Expected: "play a ready ... token" → isReady true. Actual: the token enters exhausted.
+  test("the Sprite token is played READY", async () => {
     const game = await ready().build();
     await game.p1.play("sm", { to: "base" });
     await game.settle();

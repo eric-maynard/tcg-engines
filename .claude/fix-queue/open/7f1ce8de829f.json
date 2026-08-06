@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-014-221",
+  "title": "BUG: once Reckoner leaves play the restriction ends",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-014-221.test.ts",
+    "testName": "BUG: once Reckoner leaves play the restriction ends"
+  },
+  "id": "7f1ce8de829f",
+  "createdAt": "2026-08-06T20:56:21.111Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:56:21.111Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

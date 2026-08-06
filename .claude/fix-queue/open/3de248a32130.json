@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-201-298",
+  "title": "BUG: timing — without [Action] it cannot be played during a showdown, even on your own turn (308.1.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-201-298.test.ts",
+    "testName": "BUG: timing — without [Action] it cannot be played during a showdown, even on your own turn (308.1.a)"
+  },
+  "id": "3de248a32130",
+  "createdAt": "2026-08-06T18:35:08.336Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.336Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

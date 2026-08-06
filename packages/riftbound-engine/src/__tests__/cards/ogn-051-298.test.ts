@@ -63,7 +63,7 @@ describe("Solari Shieldbearer (ogn-051-298)", () => {
     expect(game.state("ally").isStunned).toBe(true);
   });
 
-  test.failing("BUG: a stunned defender deals no combat damage — 5-might attacker kills it and survives (423.1.b/c)", async () => {
+  test("a stunned defender deals no combat damage — 5-might attacker kills it and survives (423.1.b/c)", async () => {
     // Expected: stunned foe contributes 0 to combat damage, so the 5-might ally lives and conquers.
     // Actual: the stun flag is set but combat still deals the foe's 5 damage and the ally dies.
     const game = await playAndStun("foe");
@@ -74,7 +74,7 @@ describe("Solari Shieldbearer (ogn-051-298)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: the stun wears off at end of turn (423.1.a.2 / 317.2.c step 3d)", async () => {
+  test("the stun wears off at end of turn (423.1.a.2 / 317.2.c step 3d)", async () => {
     // Expected: after P1's Ending Phase the foe is no longer stunned.
     // Actual: the stunned status persists into P2's turn.
     const game = await playAndStun("foe");

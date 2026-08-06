@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling cf6487465e162f43 — contrast: LOOKING at Nocturne on top (Mystic Poro's Vision) does offer 'banish me, then play me for [rainbow]'",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/nocturne-horrifying-cf6487465e162f43.test.ts",
+    "testName": "BUG: ruling cf6487465e162f43 — contrast: LOOKING at Nocturne on top (Mystic Poro's Vision) does offer 'banish me, then play me for [rainbow]'"
+  },
+  "id": "defaa7bfccba",
+  "createdAt": "2026-08-06T19:54:39.767Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:54:39.767Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

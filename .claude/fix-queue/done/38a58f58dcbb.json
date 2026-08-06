@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-113-298",
+  "title": "BUG: [Action] timing — usable during a showdown on the opponent's turn once P1 holds Focus",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-113-298.test.ts",
+    "testName": "BUG: [Action] timing — usable during a showdown on the opponent's turn once P1 holds Focus"
+  },
+  "id": "38a58f58dcbb",
+  "createdAt": "2026-08-06T17:15:21.549Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.549Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:14:51.249Z",
+      "event": "grabbed:w8-i1"
+    },
+    {
+      "at": "2026-08-06T19:48:28.536Z",
+      "event": "done",
+      "note": "kill-cost sacrifice options resolved with quantity:'all' (default single pick was the host itself → filtered to empty); Malzahar activation + gear sacrifice + showdown timing now pass"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i1",
+  "claimedAt": "2026-08-06T19:14:51.249Z",
+  "resolution": {
+    "note": "kill-cost sacrifice options resolved with quantity:'all' (default single pick was the host itself → filtered to empty); Malzahar activation + gear sacrifice + showdown timing now pass",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-113-298.test.ts"
+    ],
+    "at": "2026-08-06T19:48:28.536Z"
+  }
+}

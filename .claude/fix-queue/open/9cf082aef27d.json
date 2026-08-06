@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-246-298",
+  "title": "BUG: non-Recruit only — a Recruit token dying creates nothing (rule 187.1: the token has the Recruit tag)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-246-298.test.ts",
+    "testName": "BUG: non-Recruit only — a Recruit token dying creates nothing (rule 187.1: the token has the Recruit tag)"
+  },
+  "id": "9cf082aef27d",
+  "createdAt": "2026-08-06T18:35:08.330Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.330Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

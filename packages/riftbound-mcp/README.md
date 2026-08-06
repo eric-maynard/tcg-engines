@@ -130,8 +130,9 @@ Omitting `targets` returns `followUp: {kind:"pick", options:[{key:"ally"},{key:"
   `CardDefinitionRegistry`; the server therefore serialises every tool call through a mutex and
   re-`activate()`s the target game's registry before touching it. Many games can be held, but calls never
   run concurrently.
-- **EngineBackend only.** No BrowserBackend / WsBackend yet (design §8); pregame (battlefield select /
-  mulligan) is skipped as in `createPlayableGame`.
+- **EngineBackend only (for now).** Pregame (battlefield select / mulligan) is skipped as in
+  `createPlayableGame`. A `BrowserBackend` now exists in the engine harness (`@tcg/riftbound/harness/browser`,
+  HARNESS-DESIGN §13) — see "Pointing the MCP at a browser game" below.
 - **No `@modelcontextprotocol/sdk`.** The SDK is available in the configured registry, but a workspace-wide
   `bun add` fails on unrelated `apps/*` dependencies that the registry does not carry, so the protocol is
   implemented in `src/mcp-lite.ts` (initialize · ping · tools/list · tools/call · resources/list ·
@@ -141,3 +142,24 @@ Omitting `targets` returns `followUp: {kind:"pick", options:[{key:"ally"},{key:"
   points); no engine files were changed.
 - Engine gaps listed in HARNESS-DESIGN §10 (multi-select, distribute N, ordering, token ids using
   `Date.now()` → non-hash-stable transcripts, …) apply unchanged.
+
+## Pointing the MCP at a browser game (design note)
+
+The harness ships a second L0 backend, `BrowserBackend`, that drives the LIVE web app through Playwright
+(`Game.fromBrowser({ baseUrl, mode: "test"|"goldfish", actMode: "semantic"|"visual" })`, HARNESS-DESIGN §13).
+`Game`/`SeatHandle` run unchanged on top of it, so the tool layer here needs no protocol change to expose it;
+what a `create_game { backend: "browser", baseUrl?, mode?, actMode? }` option has to account for:
+
+- `GameManager` must build the game with `Game.fromBrowser(...)` instead of decks/scenario (`scenario` and
+  `decks` are engine-only; on the browser the setup vocabulary is goldfish game → `backend.tutor(defId)` →
+  `backend.addResources`), and `close_game` must `await backend.close()` (kills Chromium).
+- The goldfish is the *server's* sandbox autoplay, not this package's bot driver — skip `botSeats` and read
+  `executed[]` entries with `moveId:"sandboxAutoPlay"` as the autoplay report.
+- `seq` is the server's frame counter (advances on goldfish/tutor frames too); `history`/`transcript` hashes
+  are snapshot hashes; `undo` stays omitted; invariants are not evaluated.
+- Runtime requirements: Playwright resolvable (`RB_PLAYWRIGHT_MODULE` or `/tmp/pwtest/node_modules/playwright`),
+  `node` on PATH for the default bridge transport (`RB_BROWSER_TRANSPORT=bun` to run in-process), and an app
+  with `SANDBOX_ENABLED=true` answering on `baseUrl`.
+- The per-process registry mutex still applies (BrowserBackend keeps its own registry and `activate()`s it).
+
+Not wired yet to keep this package hermetic (its tests must not need a browser or a running app).

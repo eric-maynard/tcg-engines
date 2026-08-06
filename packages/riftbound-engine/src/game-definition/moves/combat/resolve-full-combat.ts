@@ -12,6 +12,8 @@ import type { CombatUnit } from "../../../combat";
 import { PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE, resolveCombat } from "../../../combat";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { createInteractionState, getTurnState } from "../../../chain";
+import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
+import type { PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type {
   GrantedKeyword,
@@ -172,6 +174,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         0,
         printedMight +
           (meta?.buffed ? 1 : 0) +
+          (meta?.extraBuffs ?? 0) +
           (meta?.mightModifier ?? 0) +
           (meta?.staticMightBonus ?? 0) +
           equipBonus,
@@ -224,6 +227,11 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         keywords: allKeywords,
         owner,
         ...(killOnDamageIdx(cardId as string) >= 0 ? { diesOnAnyDamage: true } : {}),
+        // rule 423.1.b: a stunned unit deals no combat damage (it still takes damage).
+        ...(meta?.stunned === true ||
+        (meta as { __flags?: Record<string, boolean> } | undefined)?.__flags?.stunned === true
+          ? { dealsNoCombatDamage: true }
+          : {}),
       };
 
       if (owner === attackingPlayer) {
@@ -233,25 +241,17 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       }
     }
 
-    // If either side is empty, skip the Combat Damage Step (rule 626.1.a.1)
-    // but still perform the Resolution Step (rule 627): recall the
-    // attacker's cards (627.2 — attacker failed to Conquer) and clear
-    // Contested (627.4). Without the recall, non-combat cards remain on
-    // both sides and contestBattlefield re-enumerates forever.
-    if (attackerUnits.length === 0 || defenderUnits.length === 0) {
-      for (const cardId of unitIds) {
-        if (cards.getCardOwner(cardId) === attackingPlayer) {
-          zones.moveCard({ cardId, targetZoneId: "base" as CoreZoneId });
-        }
-      }
-      expireCombatMight();
-      battlefield.contested = false;
-      battlefield.contestedBy = undefined;
-      return;
-    }
-
+    // rule 465.1: the Combat Damage Step only happens if both Attacking and
+    // Defending units remain here when the showdown closes. If one side left
+    // during the showdown (e.g. the lone defender was killed by a spell), skip
+    // straight to the Resolution Step — rule 466.3.a / 466.5: the player with
+    // units remaining wins and Establishes Control (a Conquer).
+    // rule-id: ogn-034-298 — excess damage assigned to enemy units this combat.
+    let excessDamage = 0;
+    if (attackerUnits.length > 0 && defenderUnits.length > 0) {
     // Run the combat resolver
     const result = resolveCombat(attackerUnits, defenderUnits);
+    excessDamage = result.attackerExcessDamage;
 
     // Apply damage to each unit from damageAssignment
     for (const [unitId, dmg] of Object.entries(result.damageAssignment)) {
@@ -271,44 +271,37 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       }
     }
 
-    // Kill units that were destroyed
-    for (const killedId of result.killed) {
-      // rule-id: ogn-254-298 — a "next"-duration take-damage→kill replacement
-      // that fired on this unit's combat damage is spent.
-      if ((result.damageAssignment[killedId] ?? 0) > 0) {
-        const idx = killOnDamageIdx(killedId);
-        if (activeRepl && idx >= 0 && activeRepl[idx]?.duration === "next") {
-          activeRepl.splice(idx, 1);
-        }
-      }
-      // Clear all metadata on killed unit
-      cards.updateCardMeta(
-        killedId as CoreCardId,
-        {
-          buffed: false,
-          combatRole: null,
-          damage: 0,
-          equippedWith: undefined,
-          exhausted: false,
-          combatMightModifier: 0,
-          grantedKeywords: undefined,
-          mightModifier: 0,
-          stunned: false,
-        } as Partial<RiftboundCardMeta>,
-      );
-
-      // Move to trash
-      zones.moveCard({
-        cardId: killedId as CoreCardId,
-        targetZoneId: "trash" as CoreZoneId,
-      });
-    }
-
-    // Rule 466.1.a.1 (Combat Cleanup step 3c): heal all surviving Units —
-    // combat damage does not persist on survivors past resolution.
+    // rule 466.1 (Combat Cleanup): combat deaths are ordinary deaths — reap
+    // lethally-damaged units through the state-based pipeline so board die
+    // replacements (Zhonya's Hourglass, rule 372/373), equipment detach and
+    // `die` triggers (Deathknell, rule 808) all apply, instead of trashing
+    // `result.killed` directly.
+    // The resolver's lethal threshold includes combat-only Might (Shield),
+    // which the state-based check can't see — so heal the resolver's survivors
+    // first (rule 466.1.a.1: combat damage never persists on survivors) and
+    // hand exactly `result.killed` to the cleanup with lethal damage marked.
     const killedSet = new Set<string>(result.killed);
     for (const unit of [...attackerUnits, ...defenderUnits]) {
       if (killedSet.has(unit.id)) {
+        // rule-id: ogn-254-298 — a take-damage→kill replacement fired on this
+        // unit's combat damage: it dies even to non-lethal damage, and a
+        // "next"-duration one is spent.
+        if ((result.damageAssignment[unit.id] ?? 0) > 0) {
+          const idx = killOnDamageIdx(unit.id);
+          if (activeRepl && idx >= 0 && activeRepl[idx]?.duration === "next") {
+            activeRepl.splice(idx, 1);
+          }
+        }
+        const metaNow = cards.getCardMeta(unit.id as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        // rule 428.5.c.2: a combat death is a kill by the opposing
+        // combatant's controller ("When you kill a stunned enemy unit").
+        cards.updateCardMeta(unit.id as CoreCardId, {
+          ...((metaNow?.damage ?? 0) < unit.baseMight ? { damage: Math.max(1, unit.baseMight) } : {}),
+          lastDamageSource: "combat",
+          lastDamagedBy: unit.owner === attackingPlayer ? defenderUnits[0]?.owner : attackingPlayer,
+        } as Partial<RiftboundCardMeta>);
         continue;
       }
       counters.clearCounter?.(unit.id as CoreCardId, "damage");
@@ -321,9 +314,29 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         } as Partial<RiftboundCardMeta>);
       }
     }
+    cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
+    }
+
+    // rule 466.3: the combat result is read off who still has units HERE after
+    // the Combat Cleanup (a death replacement may have recalled or removed a
+    // unit the resolver counted as killed or surviving).
+    const unitsHereNow = zones
+      .getCardsInZone(battlefieldZoneId)
+      .filter((id) => (registry.get(id as string)?.might ?? 0) > 0 || registry.getCardType(id as string) === "unit");
+    const attackersLeft = unitsHereNow.filter((id) => cards.getCardOwner(id) === attackingPlayer);
+    const defendersLeft = unitsHereNow.filter((id) => cards.getCardOwner(id) !== attackingPlayer);
+    let winner: "attacker" | "defender" | "tie";
+    if (attackersLeft.length > 0 && defendersLeft.length === 0) {
+      winner = "attacker";
+    } else if (attackersLeft.length === 0 && defendersLeft.length === 0) {
+      winner = "tie";
+    } else {
+      // rule 466.1.a.2 / 466.3.d: defenders still present → attackers recalled.
+      winner = "defender";
+    }
 
     // Apply outcome based on winner
-    if (result.winner === "attacker") {
+    if (winner === "attacker") {
       // Attacker conquers the battlefield
       battlefield.controller = attackingPlayer;
 
@@ -374,17 +387,13 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         { cards, counters, draft, zones },
       );
 
-      // Recall any losing survivors (defenders that survived) to their base
-      for (const survivorId of result.losingSurvivors) {
-        zones.moveCard({
-          cardId: survivorId as CoreCardId,
-          targetZoneId: "base" as CoreZoneId,
-        });
-      }
-    } else if (result.winner === "defender") {
+    } else if (winner === "defender") {
       // Defenders hold the battlefield
-      // Recall surviving attackers (losingSurvivors) to base
-      for (const survivorId of result.losingSurvivors) {
+      // rule 466.1.a.2: recall attackers still present to base (every
+      // attacker-owned card here, so nothing lingers to re-contest).
+      for (const survivorId of zones
+        .getCardsInZone(battlefieldZoneId)
+        .filter((id) => cards.getCardOwner(id) === attackingPlayer)) {
         zones.moveCard({
           cardId: survivorId as CoreCardId,
           targetZoneId: "base" as CoreZoneId,

@@ -69,9 +69,8 @@ describe("Kai'Sa, Survivor (ogn-039-298)", () => {
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 
-  test.failing("BUG: 'When I conquer' — another friendly unit conquering elsewhere must NOT draw (383.4.c.2)", async () => {
-    // Expected: Kai'Sa stays in base while "other" conquers bf2 → P1 scores but draws nothing.
-    // Actual: the draw fires on any conquer by her controller.
+  test("'When I conquer' — another friendly unit conquering elsewhere must NOT draw (383.4.c.2)", async () => {
+    // Kai'Sa stays in base while "other" conquers bf2 → P1 scores but draws nothing.
     const game = await scenario()
       .battlefield("bf2", { controller: P2 })
       .unit(P1, "base", CARD, "kaisa")

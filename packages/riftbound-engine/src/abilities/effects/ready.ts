@@ -16,12 +16,17 @@ export function handle_ready(effect: ExecutableEffect, ctx: EffectContext, _h: E
   for (const targetId of readied) {
     // rule-id: unl-144-219 — "I can't be readied." also blocks ready effects.
     const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
-      | { grantedKeywords?: { keyword: string }[] }
+      | { grantedKeywords?: { keyword: string }[]; exhausted?: boolean }
       | undefined;
     if (registry.cantReady(targetId, meta?.grantedKeywords)) {
       continue;
     }
     ctx.counters.setFlag(targetId as CoreCardId, "exhausted", false);
+    // Seeded positions may carry the legacy top-level `exhausted` — clear it
+    // too so both representations agree (mirrors the Awaken ready-all).
+    if (meta?.exhausted === true) {
+      ctx.cards.updateCardMeta?.(targetId as CoreCardId, { exhausted: false } as Record<string, unknown>);
+    }
     ctx.fireTriggers?.({
       cardId: targetId,
       playerId: ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId,

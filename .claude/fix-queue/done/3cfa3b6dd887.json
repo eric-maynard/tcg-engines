@@ -1,0 +1,33 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-050-221",
+  "title": "BUG: [Action] does not allow activation in the opponent's Open state outside a showdown (145.2, 806.1.b)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-050-221.test.ts",
+    "testName": "BUG: [Action] does not allow activation in the opponent's Open state outside a showdown (145.2, 806.1.b)"
+  },
+  "id": "3cfa3b6dd887",
+  "createdAt": "2026-08-06T19:03:47.639Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:03:47.639Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:48:54.007Z",
+      "event": "done(unclaimed)",
+      "note": "fixed by w8-i1 rule 316.5.b neutral-open gate (play-spell/activate-ability); test flipped"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "fixed by w8-i1 rule 316.5.b neutral-open gate (play-spell/activate-ability); test flipped",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts",
+      "packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts"
+    ],
+    "at": "2026-08-06T19:48:54.007Z"
+  }
+}

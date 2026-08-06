@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 167 / 316.3 — the OFF-turn player's pool must also empty when the turn player's Main Phase starts; engine only empties the turn player's",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/runes-rune-deck-and-rune-pool.test.ts",
+    "testName": "BUG: 167 / 316.3 — the OFF-turn player's pool must also empty when the turn player's Main Phase starts; engine only empties the turn player's"
+  },
+  "id": "24f011bfe4a5",
+  "createdAt": "2026-08-06T20:50:12.437Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.437Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -75,7 +75,7 @@ describe("Lux, Crownguard (ogs-014-024)", () => {
       .unit(P1, "base", CARD, "lux")
       .hand(P2, HEXTECH_RAY, "ray")
       .build();
-    expect(game.p1.can("activate", "lux")).toBe(true);
+    expect(game.p1.can("activate", "lux")).toBe(false); // rule 316.5.b: not in the opponent's Neutral Open State
     await game.p2.cast("ray", { targets: "ally" });
     await game.p2.passPriority();
     expect((game.decision() as ActionDecision).context).toBe("chain");

@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-082-221",
+  "title": "\"I don't deal combat damage\" is not enforced in combat resolution",
+  "expected": "Card def packages/riftbound-cards/src/cards/sfd/ezreal-dashing.ts:49-56 grants keyword \"NoCombatDamage\" via static grant-keyword. In the engine, calculateSideMight (packages/riftbound-engine/src/combat/combat-resolver.ts:114-121) only skips units with unit.dealsNoCombatDamage. That flag is set in exactly two places: resolve-full-combat.ts:230-234 (stunned units) and combat-resolver.ts:141-143 (Vilemaw PreventWeakerEnemyCombatDamage threshold). A repo-wide grep for \"NoCombatDamage\" in riftbound-engine/src and apps/riftbound-app finds no other reference — the keyword lands in CombatUnit.keywords but nothing reads it, so Ezreal contributes his full 3 Might to combat damage.",
+  "observed": "In both cases the opposing Mech was killed by combat (sent to trash alongside Ezreal), i.e. Ezreal dealt his 3 Might as combat damage. meta.grantedKeywords contains {keyword:\"NoCombatDamage\",duration:\"static\"} but packages/riftbound-engine/src/combat/combat-resolver.ts only honours CombatUnit.dealsNoCombatDamage, which is set solely by the Vilemaw PreventWeakerEnemyCombatDamage path — nothing maps the NoCombatDamage keyword onto it.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts:230",
+  "id": "77298cef486f",
+  "createdAt": "2026-08-06T20:43:38.886Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.886Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

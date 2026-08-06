@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-213-298",
+  "title": "BUG: 'Its controller draws 2' — killing an ENEMY unit makes the OPPONENT draw 2 and the caster nothing",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-213-298.test.ts",
+    "testName": "BUG: 'Its controller draws 2' — killing an ENEMY unit makes the OPPONENT draw 2 and the caster nothing"
+  },
+  "id": "e1a086fb7e46",
+  "createdAt": "2026-08-06T18:35:08.355Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.355Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

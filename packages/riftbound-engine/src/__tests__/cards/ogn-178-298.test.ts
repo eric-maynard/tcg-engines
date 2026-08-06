@@ -78,7 +78,7 @@ describe("Undercover Agent (ogn-178-298)", () => {
     expect(game.p1.hand()).toHaveLength(2);
   });
 
-  test.failing("BUG: with 3 cards in hand the controller chooses WHICH 2 to discard", async () => {
+  test("with 3 cards in hand the controller chooses WHICH 2 to discard", async () => {
     // Expected: a pick prompt for P1 (choose 2 of h0/h1/h2); picking h1+h2 keeps h0.
     // Actual: the engine silently discards the first two cards in hand with no choice.
     const game = await withHand(3).build();
@@ -93,7 +93,7 @@ describe("Undercover Agent (ogn-178-298)", () => {
     expect(game.p1.hand()).toHaveLength(3);
   });
 
-  test.failing("BUG: dying in combat also triggers Deathknell (323.4) — discard 2, draw 2", async () => {
+  test("dying in combat also triggers Deathknell (323.4) — discard 2, draw 2", async () => {
     // Expected: the 5-Might Agent attacks a 6-Might defender and dies → Deathknell → h0/h1 discarded, 2 drawn.
     // Actual: combat deaths do not fire the die trigger; the hand is untouched.
     const game = await scenario()

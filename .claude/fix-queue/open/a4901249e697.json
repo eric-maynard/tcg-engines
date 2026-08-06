@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: (a) Rengar played to bf1 resolves immediately (337.2), is paid for, gains the Attacker designation (464.2.c.3.a) and Focus passes to P2 (340.2.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/shen-rengar-reaction-units-mid-combat.test.ts",
+    "testName": "BUG: (a) Rengar played to bf1 resolves immediately (337.2), is paid for, gains the Attacker designation (464.2.c.3.a) and Focus passes to P2 (340.2.a)"
+  },
+  "id": "a4901249e697",
+  "createdAt": "2026-08-06T18:35:08.346Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.346Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

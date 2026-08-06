@@ -1,4 +1,4 @@
-import type { Ability } from "@tcg/riftbound-types";
+import type { Ability, Condition } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
@@ -16,6 +16,8 @@ import { createCardId } from "@tcg/riftbound-types/cards";
 const abilities: Ability[] = [
   { keyword: "Backline", type: "keyword" },
   {
+    // "if it has less Might than me" — evaluated against Soraka's current Might.
+    condition: { type: "less-might-than-source" } as unknown as Condition,
     replacement: {
       effects: [
         {

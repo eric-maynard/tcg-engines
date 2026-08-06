@@ -64,9 +64,7 @@ describe("Unlicensed Armory (ogn-023-298)", () => {
     expect(tapped.p1.can("activate", "armory")).toBe(false);
   });
 
-  test.failing("BUG: when the chosen unit would die to a spell, you may pay [fury] → it is healed, exhausted and stays in base", async () => {
-    // Expected: a yes/no (pay [fury]) prompt; on yes fury goes 1→0, damage cleared, unit exhausted in base.
-    // Actual: death is replaced silently with no prompt, no fury paid, damage left at 3 and the unit ready.
+  test("when the chosen unit would die to a spell, you may pay [fury] → it is healed, exhausted and stays in base", async () => {
     const game = await board().build();
     await game.p1.activate("armory", 0, { discard: "junk", targets: ["ally"] });
     await game.settle();
@@ -81,9 +79,7 @@ describe("Unlicensed Armory (ogn-023-298)", () => {
     expect(game.p1.power("fury")).toBe(0);
   });
 
-  test.failing("BUG: when the chosen unit would die in combat, paying [fury] recalls it to base healed and exhausted (rule 454)", async () => {
-    // Expected: ally (2) attacks wall (5), takes lethal → replacement offers pay [fury] → ally in base, 0 damage.
-    // Actual: the replacement is not consulted on the combat-death path; ally goes to trash.
+  test("when the chosen unit would die in combat, paying [fury] recalls it to base healed and exhausted (rule 454)", async () => {
     const game = await board().build();
     await game.p1.activate("armory", 0, { discard: "junk", targets: ["ally"] });
     await game.settle();
@@ -99,9 +95,7 @@ describe("Unlicensed Armory (ogn-023-298)", () => {
     expect(game.p1.power("fury")).toBe(0);
   });
 
-  test.failing("BUG: without [fury] to pay, the unit dies normally ('you may pay [fury] … instead')", async () => {
-    // Expected: the replacement is conditional on paying [fury]; with none, ally is killed.
-    // Actual: the engine applies the replacement unconditionally and ally survives.
+  test("without [fury] to pay, the unit dies normally ('you may pay [fury] … instead')", async () => {
     const game = await board(0).build();
     await game.p1.activate("armory", 0, { discard: "junk", targets: ["ally"] });
     await game.settle();

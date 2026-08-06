@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: (d) Possession is legal for P2 — the P1-controlled Peak Guardian is an ENEMY unit from P2's perspective ('enemy' follows control, not ownership)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/hostile-takeover-eot-after-bounce.test.ts",
+    "testName": "BUG: (d) Possession is legal for P2 — the P1-controlled Peak Guardian is an ENEMY unit from P2's perspective ('enemy' follows control, not ownership)"
+  },
+  "id": "f9dea396f58d",
+  "createdAt": "2026-08-06T18:35:08.348Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.348Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

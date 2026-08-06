@@ -46,7 +46,7 @@ describe("Ava Achiever (ogn-107-298)", () => {
     expect(game.zoneOf("plain")).toBe("hand");
   });
 
-  test.failing("BUG: accepting pays [mind] and plays the [Hidden] unit from hand HERE (at bf1), ignoring its cost", async () => {
+  test("accepting pays [mind] and plays the [Hidden] unit from hand HERE (at bf1), ignoring its cost", async () => {
     // Expected: mind 1 → 0, Pakaa Cub (3 energy) enters bf1 with 0 energy spent; the non-Hidden
     // card is not eligible and stays in hand. Actual: the power is deducted but the play effect
     // does nothing — the Cub stays in hand.

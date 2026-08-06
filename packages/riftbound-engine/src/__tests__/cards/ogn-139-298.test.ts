@@ -33,7 +33,7 @@ describe("Cithria of Cloudfield (ogn-139-298)", () => {
     expect(game.state("cith").might).toBe(1);
   });
 
-  test.failing("BUG: playing another friendly unit should buff Cithria (+1 Might); the parsed `play-unit` trigger event never fires", async () => {
+  test("playing another friendly unit should buff Cithria (+1 Might); the parsed `play-unit` trigger event never fires", async () => {
     // Expected: after u1 is played, Cithria carries a buff counter and reads 2 Might.
     // Actual: the engine emits play-card/play-self only; the `play-unit` trigger never matches.
     const game = await scenario()
@@ -50,7 +50,7 @@ describe("Cithria of Cloudfield (ogn-139-298)", () => {
     expect(game.state("u1").isBuffed).toBe(false); // only Cithria is buffed
   });
 
-  test.failing("BUG: already buffed — a second unit play leaves Cithria at exactly one buff (2 Might); trigger never fires today", async () => {
+  test("already buffed — a second unit play leaves Cithria at exactly one buff (2 Might); trigger never fires today", async () => {
     // Expected: buffed once after u1, still a single buff (2 Might) after u2 (rule 426.1.b.1).
     // Actual: never buffed at all because the play-unit trigger does not fire.
     const game = await scenario()

@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-075-298",
+  "title": "BUG: Deathknell also draws 1 (\\",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-075-298.test.ts",
+    "testName": "BUG: Deathknell also draws 1 (\\"
+  },
+  "id": "3b926e105c04",
+  "createdAt": "2026-08-06T17:15:21.545Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.545Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:15:01.164Z",
+      "event": "grabbed:w9-i1"
+    },
+    {
+      "at": "2026-08-06T19:21:19.552Z",
+      "event": "done",
+      "note": "effect-keyword parser: try 'X and Y' sequence split before prefix-matching simple effects so Deathknell channel+draw parses both clauses"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i1",
+  "claimedAt": "2026-08-06T19:15:01.164Z",
+  "resolution": {
+    "note": "effect-keyword parser: try 'X and Y' sequence split before prefix-matching simple effects so Deathknell channel+draw parses both clauses",
+    "files": [
+      "packages/riftbound-cards/src/parser/parsers/effect-keyword-parser.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-075-298.test.ts"
+    ],
+    "at": "2026-08-06T19:21:19.552Z"
+  }
+}

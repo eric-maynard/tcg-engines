@@ -1,0 +1,29 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-248-298",
+  "title": "BUG: no [Action] tag — not castable during a showdown even on your own turn with focus (rules 155, 310.1.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-248-298.test.ts",
+    "testName": "BUG: no [Action] tag — not castable during a showdown even on your own turn with focus (rules 155, 310.1.a)"
+  },
+  "id": "cd24f3a3f29e",
+  "createdAt": "2026-08-06T17:51:09.023Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.023Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T20:55:01.084Z",
+      "event": "done(unclaimed)",
+      "note": "fixed by earlier worker; flipped in stabilization"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "fixed by earlier worker; flipped in stabilization",
+    "at": "2026-08-06T20:55:01.084Z"
+  }
+}

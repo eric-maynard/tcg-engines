@@ -178,8 +178,8 @@ export const playUnit: Defs["playUnit"] = {
 
     // rule-id: unl-178-219 (rule 560) — when paying an optional cost with an
     // "I cost [N] less" rider, affordability is tested against the discounted
-    // base cost. Surcharges stay unchecked here: the reducer skips an
-    // unaffordable extra and plays the unit unpaid.
+    // base cost. rule 805.1.a: a declared Accelerate / "you may pay" extra is
+    // paid on top of the base cost, so the combined total must be affordable.
     const payable = context.params.paidAdditionalCost
       ? resolvePayableOptionalCost(
           state,
@@ -195,8 +195,8 @@ export const playUnit: Defs["playUnit"] = {
         state,
         context.params.playerId,
         context.params.cardId,
-        payable && payable.energy < 0
-          ? { additionalCost: { energy: payable.energy }, board }
+        payable
+          ? { additionalCost: { energy: payable.energy, power: payable.power }, board }
           : { board },
         createMetaAccessor(context.cards),
         getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
@@ -235,7 +235,6 @@ export const playUnit: Defs["playUnit"] = {
       context.counters,
       context.playerId as string,
     );
-    const affordPool = { energy: pool.energy + potential, power: pool.power };
     const board = { cards: context.cards, zones: context.zones };
     const metaForAfford = createMetaAccessor(context.cards);
 
@@ -255,14 +254,18 @@ export const playUnit: Defs["playUnit"] = {
       // rule-id: unl-178-219 — an XP cost with an "I cost [N] less" rider can
       // make the paid variant affordable even when the unpaid play is not.
       const payable = resolvePayableOptionalCost(state, context.playerId as string, cardId as string);
+      // rule 560 / 805.1.a: the optional cost is paid ON TOP of the base cost, so
+      // affordability is the combined total (base [C] pip + Accelerate's [C] pip
+      // needs two power), not the extra checked in isolation.
       const paidVariant =
         payable &&
-        registry.canAfford(cardId as string, {
-          ...affordPool,
-          energy: affordPool.energy - payable.energy,
-        }) &&
-        payable.power.every(
-          (d) => (affordPool.power[d as keyof typeof affordPool.power] ?? 0) >= 1,
+        canAffordCard(
+          state,
+          context.playerId as string,
+          cardId as string,
+          { additionalCost: { energy: payable.energy, power: payable.power }, board },
+          metaForAfford,
+          potential,
         )
           ? ({
               additionalCostSpec: {

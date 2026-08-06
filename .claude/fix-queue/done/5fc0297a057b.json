@@ -1,0 +1,49 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-014-298",
+  "title": "BUG: energy cost should be reduced by the highest Might among units you control (8 - 5 = 3; rule 356.4)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-014-298.test.ts",
+    "testName": "BUG: energy cost should be reduced by the highest Might among units you control (8 - 5 = 3; rule 356.4)"
+  },
+  "id": "5fc0297a057b",
+  "createdAt": "2026-08-06T17:15:21.544Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.544Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T17:51:32.619Z",
+      "event": "grabbed:w1-i1"
+    },
+    {
+      "at": "2026-08-06T19:03:47.574Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-06T19:14:43.596Z",
+      "event": "grabbed:w1-i1"
+    },
+    {
+      "at": "2026-08-06T19:40:22.325Z",
+      "event": "done",
+      "note": "self static 'Energy cost reduced by highest Might' now reads state.battlefields (was board.draft → never counted bf units / type error); floored board auras applied before unfloored self discounts (rule 356.4.e); parser rider lifted by concurrent parseSpellCostRiders; flipped 3 card + 4 interaction BUG tests"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-06T19:14:43.596Z",
+  "claimedBy": "w1-i1",
+  "resolution": {
+    "note": "self static 'Energy cost reduced by highest Might' now reads state.battlefields (was board.draft → never counted bf units / type error); floored board auras applied before unfloored self discounts (rule 356.4.e); parser rider lifted by concurrent parseSpellCostRiders; flipped 3 card + 4 interaction BUG tests",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-014-298.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/interactions/sky-splitter-apprentice-discount-order.test.ts",
+      "packages/riftbound-cards/src/parser/__tests__/spells/action.test.ts"
+    ],
+    "at": "2026-08-06T19:40:22.325Z"
+  }
+}

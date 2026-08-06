@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 486.5 / 486.6 — Match (Bo3) structure is absent: after a decisive game 1 there is no way to start game 2 with the used battlefields removed (P1 limited to {B1,B3}, B2 refused; game 3 forced to the last one; 486.5.a re-presentation after a draw)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
+    "testName": "BUG: 486.5 / 486.6 — Match (Bo3) structure is absent: after a decisive game 1 there is no way to start game 2 with the used battlefields removed (P1 limited to {B1,B3}, B2 refused; game 3 forced to the last one; 486.5.a re-presentation after a draw)"
+  },
+  "id": "1657d6919770",
+  "createdAt": "2026-08-06T20:50:12.432Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.432Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

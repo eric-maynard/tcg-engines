@@ -15,7 +15,8 @@
  *   bun fix-queue.ts stats
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { join, relative } from "node:path";
 
 const REPO = "/root/src/tcg/tcg-engines";
@@ -67,15 +68,15 @@ function walk(dir: string, out: string[] = []): string[] {
 
 switch (cmd) {
   case "enqueue-bugs": {
-    const dir = join(REPO, "packages/riftbound-engine/src/__tests__/cards");
+    const dirs = ["cards", "core-rules"].map((d) => join(REPO, "packages/riftbound-engine/src/__tests__", d)).filter((d) => existsSync(d));
     let n = 0, d = 0;
-    for (const file of walk(dir)) {
+    for (const file of dirs.flatMap((x) => walk(x))) {
       const src = readFileSync(file, "utf8");
       const rel = relative(REPO, file);
       const cardId = /([a-z]{3}-\d{3}-\d{3})\.test\.ts$/.exec(file)?.[1];
       for (const m of src.matchAll(/test\.failing\(\s*(["'`])((?:BUG|GAP)[^]*?)\1/g)) {
         const testName = m[2];
-        const r = enqueue({ key: `bug:${rel}:${testName}`, source: rel.includes("/interactions/") ? "interaction-bug" : "unit-bug", cardId, title: testName, layer: "engine", repro: { testFile: rel, testName } });
+        const r = enqueue({ key: `bug:${rel}:${testName}`, source: rel.includes("/interactions/") ? "interaction-bug" : rel.includes("/rulings/") ? "ruling-bug" : rel.includes("/core-rules/") ? "core-rule-bug" : "unit-bug", cardId, title: testName, layer: "engine", repro: { testFile: rel, testName } });
         r === "new" ? n++ : d++;
       }
     }
@@ -119,9 +120,13 @@ switch (cmd) {
     for (const seed of open) {
       if (got.length >= n) break;
       if (!tryClaim(seed) && !got.find((g) => g.id === seed.id)) continue;
-      const rel = (o: Item) => (seed.cardId && o.cardId === seed.cardId) || (seed.repro?.testFile && o.repro?.testFile === seed.repro?.testFile) || (seed.fileHint && o.fileHint && String(o.fileHint).split(":")[0] === String(seed.fileHint).split(":")[0]);
+      const MECH = [/showdown|\[action\]|\[reaction\]|timing/i, /trigger|when |whenever|first time|deathknell|when i |when you /i, /target|chosen|choose|offered|legal choice|friendly unit|enemy unit|at a battlefield|in (your|a) base/i, /static|continuous|while |other friendly|\+\d might.*(here|there)|minimum/i, /instead|would die|prevent|replacement/i, /cost|energy|power|\[rainbow\]|accelerate|additional cost|reduc/i, /combat|attacker|defender|assault|shield|tank|backline|stun/i, /token|recruit|sprite|sand soldier|mech\b/i, /hidden|facedown|reveal|legion|ganking|temporary/i, /draw|discard|recycle|banish|trash|return .* hand/i, /move|recall|conquer|hold|score/i];
+      const mechOf = (t: string) => MECH.findIndex((re) => re.test(t));
+      const seedMech = mechOf(seed.title);
+      const rel = (o: Item) => (seed.cardId && o.cardId === seed.cardId) || (seed.repro?.testFile && o.repro?.testFile === seed.repro?.testFile) || (seed.fileHint && o.fileHint && String(o.fileHint).split(":")[0] === String(seed.fileHint).split(":")[0]) || (seedMech >= 0 && mechOf(o.title) === seedMech);
       for (const o of open) if (rel(o)) tryClaim(o);
     }
+    try { execSync(`bun ${join(ROOT, "fix-queue.ts")} metrics`, { cwd: REPO, stdio: "ignore" }); } catch {}
     console.log(JSON.stringify(got.map((i) => ({ id: i.id, source: i.source, cardId: i.cardId, title: i.title, expected: i.expected, observed: i.observed, layer: i.layer, fileHint: i.fileHint, rule: i.rule, testFile: i.repro?.testFile, testName: i.repro?.testName }))));
     break;
   }
@@ -157,6 +162,32 @@ switch (cmd) {
     const mins = parseInt(flag("older-than-min", "120")!, 10); let n = 0;
     for (const i of list("claimed")) if (i.claimedAt && Date.now() - Date.parse(i.claimedAt) > mins * 60_000 && move(i.id, "claimed", "open", (x) => ({ ...x, claimedBy: undefined, history: [...(x.history ?? []), { at: now(), event: "reaped" }] }))) n++;
     console.log(JSON.stringify({ reaped: n }));
+    break;
+  }
+  case "metrics": {
+    // Snapshot throughput/backlog; append to metrics.jsonl (also called from land scripts + grab).
+    const t = Date.now(); const within = (iso: string | undefined, min: number) => !!iso && t - Date.parse(iso) <= min * 60_000;
+    const all = STATUSES.flatMap((st) => list(st));
+    const done = all.filter((i) => i.status === "done"); const open = all.filter((i) => i.status === "open");
+    const d15 = done.filter((i) => within(i.resolution?.at, 15)).length, d60 = done.filter((i) => within(i.resolution?.at, 60)).length;
+    const e60 = all.filter((i) => within(i.createdAt, 60)).length;
+    const lat = done.map((i) => (i.claimedAt && i.resolution?.at ? (Date.parse(i.resolution.at) - Date.parse(i.claimedAt)) / 60_000 : NaN)).filter((x) => !Number.isNaN(x)).sort((a, b) => a - b);
+    const med = lat.length ? +lat[Math.floor(lat.length / 2)].toFixed(1) : null;
+    let sha = "", commits60 = 0;
+    try { sha = execSync("git rev-parse --short HEAD", { cwd: REPO }).toString().trim(); commits60 = parseInt(execSync("git rev-list --count --since='60 minutes ago' HEAD", { cwd: REPO }).toString().trim(), 10); } catch {}
+    const bySource = (xs: Item[]) => xs.reduce((a: any, i) => ((a[i.source] = (a[i.source] ?? 0) + 1), a), {});
+    const m = { ts: new Date(t).toISOString(), open: open.length, claimed: all.filter((i) => i.status === "claimed").length, done: done.length, failed: all.filter((i) => i.status === "failed").length, done_15m: d15, done_60m: d60, fixes_per_min_15m: +(d15 / 15).toFixed(2), enq_60m: e60, net_per_h: d60 - e60, median_claim_to_done_min: med, open_by_source: bySource(open), sha, commits_60m: commits60 };
+    appendFileSync(join(ROOT, "metrics.jsonl"), JSON.stringify(m) + "\n");
+    console.log(JSON.stringify(m));
+    break;
+  }
+  case "report": {
+    const rows = existsSync(join(ROOT, "metrics.jsonl")) ? readFileSync(join(ROOT, "metrics.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l)) : [];
+    const bars = "▁▂▃▄▅▆▇█"; const spark = (xs: number[]) => { const mx = Math.max(1, ...xs); return xs.map((x) => bars[Math.min(7, Math.floor((x / mx) * 7))]).join(""); };
+    const last = rows.slice(-48);
+    console.log("time   open  done  d/15m  fpm  enq/60m net/h  med(min) commits/60m sha");
+    for (const r of last.filter((_, i, a) => i % Math.max(1, Math.floor(a.length / 16)) === 0 || i === a.length - 1)) console.log(`${r.ts.slice(11, 16)}  ${String(r.open).padStart(4)}  ${String(r.done).padStart(4)}  ${String(r.done_15m).padStart(5)}  ${String(r.fixes_per_min_15m).padStart(4)}  ${String(r.enq_60m).padStart(7)} ${String(r.net_per_h).padStart(5)}  ${String(r.median_claim_to_done_min ?? "-").padStart(8)} ${String(r.commits_60m).padStart(11)} ${r.sha}`);
+    console.log("open :", spark(last.map((r) => r.open))); console.log("fpm  :", spark(last.map((r) => r.fixes_per_min_15m)));
     break;
   }
   case "stats": {

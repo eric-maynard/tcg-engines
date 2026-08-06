@@ -5,6 +5,8 @@ import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { buildConsumedKey, findAllReplacements } from "../replacement-effects";
 import { type EffectHelpers, resolveAmount, tokenEntersReadyFromStaticGrant } from "./_helpers";
 
+let tokenSeq = 0;
+
 /**
  * Rule unl-086-219 (Zilean, Time Mage): "Once each turn, if you would play a
  * token unit while I'm at a battlefield, you may play that token and an
@@ -66,8 +68,13 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   if (count > 0 && tokenDef.type !== "gear") {
     count += applyPlayTokenReplacement(ctx);
   }
+  // rule 811.1.d.3: a hidden spell / hidden permanent's play effect that plays
+  // a unit must play it at the battlefield the card was facedown at.
+  const hiddenUnitZone = tokenDef.type !== "gear" && !effect.location ? ctx.hiddenZone : undefined;
   let targetZone: string;
-  if (effect.location === "here" && ctx.sourceZone) {
+  if (hiddenUnitZone) {
+    targetZone = hiddenUnitZone;
+  } else if (effect.location === "here" && ctx.sourceZone) {
     targetZone = ctx.sourceZone;
   } else if (effect.location && effect.location !== "here") {
     targetZone = effect.location as string;
@@ -94,7 +101,10 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   }
   // Rule sfd-171-221: a static EntersReady grant on a friendly board card
   // overrides rule 143.4 for every token this effect creates.
-  const tokenEntersReady = tokenEntersReadyFromStaticGrant(ctx, tokenDef.type);
+  // rule 184.1: "Play a ready … unit token" — the effect may state the
+  // token's state, overriding the rule 143.4 default.
+  const tokenEntersReady =
+    effect.ready === true || tokenEntersReadyFromStaticGrant(ctx, tokenDef.type);
   // Rule unl-081-219 (Keeper of Masks): "They become copies of me." A token
   // spec carrying the `CopyOnPlay` marker registers each instance with the
   // source card's definition (name, Might, keywords, abilities) instead of
@@ -105,7 +115,9 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
       : undefined;
   const createdIds: string[] = [];
   for (let i = 0; i < count; i++) {
-    const tokenId = `token-${tokenSlug}-${Date.now()}-${i}`;
+    // A process-wide sequence keeps ids unique when two create-token effects
+    // resolve within the same millisecond (e.g. a [Repeat]ed spell).
+    const tokenId = `token-${tokenSlug}-${Date.now()}-${tokenSeq++}`;
     ctx.createCardInZone(tokenId, targetZone, ctx.playerId);
     createdIds.push(tokenId);
     // Rule 143.4 / 185.2.d: token units enter play exhausted; gear tokens
@@ -146,7 +158,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   // token may enter at base or any battlefield its controller controls. The
   // tokens are minted in base; when a controlled battlefield exists the
   // controller is prompted per token via a `created` choose-destination.
-  if (!effect.location && tokenDef.type !== "gear" && !ctx.draft.pendingChoice) {
+  if (!effect.location && !hiddenUnitZone && tokenDef.type !== "gear" && !ctx.draft.pendingChoice) {
     const controlled = Object.entries(ctx.draft.battlefields ?? {})
       .filter(([, bf]) => bf.controller === ctx.playerId)
       .map(([bfId]) => `battlefield-${bfId}`);

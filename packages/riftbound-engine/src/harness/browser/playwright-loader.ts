@@ -1,11 +1,14 @@
 /**
- * Lazy Playwright resolution + the minimal structural surface the
- * BrowserBackend needs.
+ * Playwright plumbing for the BrowserBackend:
  *
- * Playwright is NOT a dependency of this package. It is resolved at runtime
- * from (in order): `RB_PLAYWRIGHT_MODULE` (absolute path to a playwright
- * entry file or package dir), a bare `playwright` import (if the workspace
- * happens to have it), then the pw-repl checkout at /tmp/pwtest.
+ *  - the minimal structural page/locator surface we use (`PwPage`) — no
+ *    Playwright types dependency;
+ *  - lazy resolution of the playwright module (NOT a dependency of this
+ *    package): `RB_PLAYWRIGHT_MODULE`, bare `playwright`, then the pw-repl
+ *    checkout at /tmp/pwtest;
+ *  - `withTimeout` / `guardPage` so calls without native timeouts are bounded;
+ *  - `launchInProcess()` — chromium driven by Playwright inside this (Bun)
+ *    process. See bridge.ts for the default, more robust Node-hosted transport.
  */
 
 import { HarnessError } from "../types";
@@ -20,7 +23,7 @@ export interface PwLocator {
   isVisible(): Promise<boolean>;
 }
 
-/** Subset of playwright's Page we use (kept structural so no types dep is needed). */
+/** Subset of playwright's Page we use (kept structural and string-scripted so it can be proxied over RPC). */
 export interface PwPage {
   goto(url: string, opts?: { waitUntil?: "load" | "domcontentloaded" | "networkidle" | "commit"; timeout?: number }): Promise<unknown>;
   evaluate<R = unknown>(script: string): Promise<R>;
@@ -47,127 +50,18 @@ export interface PwBrowser {
 export interface PwModule {
   chromium: {
     launch(opts?: { headless?: boolean; args?: string[]; timeout?: number }): Promise<PwBrowser>;
-    connectOverCDP?(endpoint: string, opts?: { timeout?: number }): Promise<PwBrowser>;
     executablePath?(): string;
   };
 }
 
+/** A running browser with exactly one page, however it is hosted. */
 export interface LaunchedBrowser {
-  readonly browser: PwBrowser;
-  readonly transport: "pipe" | "cdp";
-  /** Close gracefully, then make sure the process is gone. Never throws. */
+  readonly page: PwPage;
+  readonly transport: "bun" | "node";
+  /** Page-side diagnostics (console errors, pageerrors, dialogs), newest last. */
+  readonly pageErrors: string[];
+  /** Close gracefully, then make sure everything is gone. Never throws. */
   shutdown(): Promise<void>;
-}
-
-/**
- * Start Chromium.
- *
- *  - "cdp" (default): spawn the browser ourselves with --remote-debugging-port
- *    and `connectOverCDP` over a WebSocket. Under Bun, Playwright's default
- *    stdio-pipe transport was observed to wedge sporadically mid-session
- *    (every call, even browser.close(), stops answering); the WS transport
- *    avoids that code path and lets us SIGKILL the process on shutdown.
- *  - "pipe": plain `chromium.launch()`.
- */
-export async function launchChromium(
-  pw: PwModule,
-  opts: { headless?: boolean; transport?: "pipe" | "cdp"; timeoutMs?: number } = {},
-): Promise<LaunchedBrowser> {
-  const transport = opts.transport ?? (process.env.RB_BROWSER_TRANSPORT as "pipe" | "cdp" | undefined) ?? "cdp";
-  const timeout = opts.timeoutMs ?? 30_000;
-  if (transport === "pipe" || !pw.chromium.connectOverCDP || !pw.chromium.executablePath) {
-    const browser = await pw.chromium.launch({ headless: opts.headless ?? true, timeout });
-    return {
-      browser,
-      shutdown: () => withTimeout(browser.close(), 10_000, "browser.close").catch(() => undefined),
-      transport: "pipe",
-    };
-  }
-
-  const { spawn } = await import("node:child_process");
-  const fs = await import("node:fs");
-  const os = await import("node:os");
-  const path = await import("node:path");
-  const full = pw.chromium.executablePath();
-  // Prefer the lighter headless shell that ships next to the full build.
-  const shell = full.replace(/chromium-(\d+)\/chrome-linux64\/chrome$/, "chromium_headless_shell-$1/chrome-headless-shell-linux64/chrome-headless-shell");
-  const exe = opts.headless === false ? full : fs.existsSync(shell) ? shell : full;
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "rb-harness-chromium-"));
-  const args = [
-    "--remote-debugging-port=0",
-    `--user-data-dir=${userDataDir}`,
-    "--no-sandbox",
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-gpu",
-    "--disable-dev-shm-usage",
-    "--disable-background-timer-throttling",
-    "--disable-renderer-backgrounding",
-    "--disable-backgrounding-occluded-windows",
-    "--mute-audio",
-    ...(opts.headless === false ? [] : exe === full ? ["--headless=new"] : ["--headless"]),
-    "about:blank",
-  ];
-  const child = spawn(exe, args, { stdio: ["ignore", "ignore", "pipe"] });
-  const cleanup = () => {
-    try {
-      fs.rmSync(userDataDir, { force: true, recursive: true });
-    } catch {
-      /* best effort */
-    }
-  };
-  const endpoint = await new Promise<string>((resolve, reject) => {
-    let buf = "";
-    const timer = setTimeout(() => reject(new HarnessError({ code: "TIMEOUT", message: `chromium did not print a DevTools endpoint within ${timeout}ms` })), timeout);
-    child.stderr?.on("data", (d: Buffer) => {
-      buf += d.toString();
-      const m = buf.match(/DevTools listening on (ws:\/\/\S+)/);
-      if (m?.[1]) {
-        clearTimeout(timer);
-        resolve(m[1]);
-      }
-      if (buf.length > 64_000) {
-        buf = buf.slice(-8_000);
-      }
-    });
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new HarnessError({ code: "ILLEGAL_ARGS", detail: { exe, stderr: buf.slice(-2000) }, message: `chromium exited early (code ${String(code)})` }));
-    });
-  }).catch((error) => {
-    child.kill("SIGKILL");
-    cleanup();
-    throw error;
-  });
-  let browser: PwBrowser;
-  try {
-    browser = await pw.chromium.connectOverCDP(endpoint, { timeout });
-  } catch (error) {
-    child.kill("SIGKILL");
-    cleanup();
-    throw error;
-  }
-  return {
-    browser,
-    shutdown: async () => {
-      await withTimeout(browser.close(), 5_000, "browser.close").catch(() => undefined);
-      if (child.exitCode === null) {
-        child.kill("SIGTERM");
-        await new Promise<void>((r) => {
-          const t = setTimeout(() => {
-            child.kill("SIGKILL");
-            r();
-          }, 3_000);
-          child.once("exit", () => {
-            clearTimeout(t);
-            r();
-          });
-        });
-      }
-      cleanup();
-    },
-    transport: "cdp",
-  };
 }
 
 /** Reject with HarnessError(TIMEOUT) if `p` does not settle within `ms` (Playwright calls without their own timeout can stall forever). */
@@ -214,6 +108,13 @@ export function guardPage(page: PwPage, ms: number): PwPage {
 
 const FALLBACK_PATHS = ["/tmp/pwtest/node_modules/playwright/index.mjs", "/tmp/pwtest/node_modules/playwright"];
 
+/** Module specifiers/paths tried (in order) to resolve playwright, here and in the Node bridge. */
+export function playwrightCandidates(): string[] {
+  return [process.env.RB_PLAYWRIGHT_MODULE, "playwright", ...FALLBACK_PATHS].filter(
+    (s): s is string => typeof s === "string" && s.length > 0,
+  );
+}
+
 let cached: Promise<PwModule> | undefined;
 
 async function tryImport(spec: string): Promise<PwModule | undefined> {
@@ -226,13 +127,11 @@ async function tryImport(spec: string): Promise<PwModule | undefined> {
   }
 }
 
-/** Resolve the playwright module or throw a HarnessError explaining how to point at one. */
+/** Resolve the playwright module in THIS process or throw a HarnessError explaining how to point at one. */
 export function loadPlaywright(): Promise<PwModule> {
   if (!cached) {
     cached = (async () => {
-      const candidates = [process.env.RB_PLAYWRIGHT_MODULE, "playwright", ...FALLBACK_PATHS].filter(
-        (s): s is string => typeof s === "string" && s.length > 0,
-      );
+      const candidates = playwrightCandidates();
       for (const spec of candidates) {
         const mod = await tryImport(spec);
         if (mod) {
@@ -249,4 +148,36 @@ export function loadPlaywright(): Promise<PwModule> {
     })();
   }
   return cached;
+}
+
+/**
+ * Chromium driven by Playwright inside this process (`chromium.launch()`,
+ * stdio-pipe transport). Under Bun this transport was observed to wedge
+ * sporadically (every call — even browser.close() — stops answering); prefer
+ * the Node bridge (bridge.ts) when `node` is available.
+ */
+export async function launchInProcess(opts: { headless?: boolean; viewport?: { width: number; height: number }; timeoutMs?: number } = {}): Promise<LaunchedBrowser> {
+  const pw = await loadPlaywright();
+  const browser = await pw.chromium.launch({ headless: opts.headless ?? true, timeout: opts.timeoutMs ?? 30_000 });
+  let page: PwPage;
+  try {
+    page = await browser.newPage({ viewport: opts.viewport ?? { height: 900, width: 1440 } });
+  } catch (error) {
+    await browser.close().catch(() => undefined);
+    throw error;
+  }
+  const pageErrors: string[] = [];
+  page.on("console", (m) => {
+    const msg = m as { type(): string; text(): string };
+    if (msg.type() === "error") {
+      pageErrors.push(`console: ${msg.text()}`);
+    }
+  });
+  page.on("pageerror", (e) => pageErrors.push(`pageerror: ${String(e)}`));
+  return {
+    page,
+    pageErrors,
+    shutdown: () => withTimeout(browser.close(), 10_000, "browser.close").catch(() => undefined),
+    transport: "bun",
+  };
 }

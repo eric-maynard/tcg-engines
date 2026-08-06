@@ -59,8 +59,11 @@ describe("Retreat (ogn-104-298)", () => {
     expect(game.p1.energy()).toBe(1); // channeling exhausted adds no energy
   });
 
-  test("Reaction timing: playable on the opponent's turn", async () => {
-    const game = await scenario().active(P2).resources(P1, { energy: 1 }).unit(P1, "base", { might: 2 }, "ally").hand(P1, CARD, "ret").build();
+  test("Reaction timing: playable on the opponent's turn (in a Closed State — rule 316.5.b / 813.1.c)", async () => {
+    const game = await scenario().active(P2).resources(P1, { energy: 1 }).unit(P1, "base", { might: 2 }, "ally").hand(P1, CARD, "ret").hand(P2, { abilities: [{ effect: { amount: 1, type: "draw" }, timing: "action", type: "spell" }], cardType: "spell", energyCost: 0, name: "Slow Draw", timing: "action" }, "theirs").build();
+    expect(game.p1.can("cast", "ret")).toBe(false); // opponent's Neutral Open State
+    await game.p2.cast("theirs");
+    await game.p2.passPriority();
     expect(game.p1.can("cast", "ret")).toBe(true);
     await game.p1.cast("ret", { targets: "ally" });
     await game.settle();

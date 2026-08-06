@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-055-298",
+  "title": "BUG: defending alongside another friendly unit: not alone → 2 Might",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-055-298.test.ts",
+    "testName": "BUG: defending alongside another friendly unit: not alone → 2 Might"
+  },
+  "id": "7bfb660fa818",
+  "createdAt": "2026-08-06T17:15:21.545Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.545Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:15:01.164Z",
+      "event": "grabbed:w9-i1"
+    },
+    {
+      "at": "2026-08-06T19:21:19.630Z",
+      "event": "done",
+      "note": "already fixed in-tree by w12-i1 (alone-in-combat static condition); test flipped and passing"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i1",
+  "claimedAt": "2026-08-06T19:15:01.164Z",
+  "resolution": {
+    "note": "already fixed in-tree by w12-i1 (alone-in-combat static condition); test flipped and passing",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-055-298.test.ts"
+    ],
+    "at": "2026-08-06T19:21:19.630Z"
+  }
+}

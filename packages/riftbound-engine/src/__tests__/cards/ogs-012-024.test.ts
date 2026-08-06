@@ -86,7 +86,7 @@ describe("Blast of Power (ogs-012-024)", () => {
     expect(game.zoneOf("wall")).toBe("trash");
   });
 
-  test.failing("BUG: killing the lone defender during the combat showdown leaves the attacker to win and conquer (466.1.a.2, 466.3.a, 466.5)", async () => {
+  test("killing the lone defender during the combat showdown leaves the attacker to win and conquer (466.1.a.2, 466.3.a, 466.5)", async () => {
     // Expected: with the 9-Might wall killed before damage, only P1 has units at bf1 → P1 wins the
     // combat, is NOT recalled (recall happens only if defenders remain), establishes control and scores.
     // Actual: resolveFullCombat recalls the scout to base and bf1 stays with P2.

@@ -1,0 +1,28 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: with lethal on all three, Soraka still saves the Recruit even though she dies in the same cleanup (370.4, 373, 373.1.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/soraka-saves-ally-while-dying-combat.test.ts",
+    "testName": "BUG: with lethal on all three, Soraka still saves the Recruit even though she dies in the same cleanup (370.4, 373, 373.1.a)"
+  },
+  "id": "29b2d7cbcc87",
+  "createdAt": "2026-08-06T17:39:26.575Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.575Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T20:55:01.461Z",
+      "event": "done(unclaimed)",
+      "note": "stabilization: combat deaths now route through SBA die-replacements; replacement matching honours excludeSelf/here/less-might-than-source + rule 370.4 simultaneous pre-match"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "stabilization: combat deaths now route through SBA die-replacements; replacement matching honours excludeSelf/here/less-might-than-source + rule 370.4 simultaneous pre-match",
+    "at": "2026-08-06T20:55:01.461Z"
+  }
+}

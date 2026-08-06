@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-206-298",
+  "title": "BUG: TWO friendly units are chosen and each gets +2 Might",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-206-298.test.ts",
+    "testName": "BUG: TWO friendly units are chosen and each gets +2 Might"
+  },
+  "id": "f4af9beceea2",
+  "createdAt": "2026-08-06T18:35:08.353Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.353Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

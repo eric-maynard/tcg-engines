@@ -46,7 +46,7 @@ describe("Rune Prison (ogn-050-298)", () => {
     expect(game.zoneOf("prison")).toBe("trash");
   });
 
-  test.failing("BUG: a stunned defender deals no combat damage — a 2-might attacker survives against a stunned 5-might defender (rule 423.1.b)", async () => {
+  test("a stunned defender deals no combat damage — a 2-might attacker survives against a stunned 5-might defender (rule 423.1.b)", async () => {
     // Expected: the stunned defender contributes 0 might, so the attacker takes no damage, fails to
     // clear the defender (2 < 5) and is recalled to base after the combat heal (rule 466.1).
     // Actual: the defender still deals 5 and the attacker dies.
@@ -61,7 +61,7 @@ describe("Rune Prison (ogn-050-298)", () => {
     expect(game.zoneOf("def")).toBe("battlefield-bf1");
   });
 
-  test.failing("BUG: the stun ends during the end-of-turn Expiration Step (rules 423.1.a.2 / 317.2.c)", async () => {
+  test("the stun ends during the end-of-turn Expiration Step (rules 423.1.a.2 / 317.2.c)", async () => {
     // Expected: after P1's turn ends the defender is no longer stunned.
     // Actual: the `stunned` flag survives the turn boundary.
     const game = await board().build();

@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 012ae43c41524a98 — PF needs no target and prompts each player to banish one of their top 5 (engine: targets a board unit instead)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/promising-future-012ae43c41524a98.test.ts",
+    "testName": "BUG: ruling 012ae43c41524a98 — PF needs no target and prompts each player to banish one of their top 5 (engine: targets a board unit instead)"
+  },
+  "id": "16097713b8e3",
+  "createdAt": "2026-08-06T20:07:40.914Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:07:40.914Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

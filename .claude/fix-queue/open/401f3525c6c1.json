@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling a92fdaf27c81161c — exactly one Abandoned Hall trigger per spell played; engine fires it twice",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/abandoned-hall-a92fdaf27c81161c.test.ts",
+    "testName": "BUG: ruling a92fdaf27c81161c — exactly one Abandoned Hall trigger per spell played; engine fires it twice"
+  },
+  "id": "401f3525c6c1",
+  "createdAt": "2026-08-06T19:45:47.841Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:45:47.841Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

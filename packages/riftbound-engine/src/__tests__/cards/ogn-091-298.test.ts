@@ -37,7 +37,7 @@ describe("Pit Crew (ogn-091-298)", () => {
 
   // Expected: the gear play triggers "ready me". Actual: the card's trigger event is
   // `play-gear`, but playGear fires `play-card {cardType: gear}` — nothing matches, no ready.
-  test.failing("BUG: playing a gear should ready an exhausted Pit Crew (trigger never fires)", async () => {
+  test("playing a gear should ready an exhausted Pit Crew (trigger never fires)", async () => {
     const game = await board().build();
     expect(game.state("crew").isExhausted).toBe(true);
     await game.p1.play("wrench");
@@ -47,7 +47,7 @@ describe("Pit Crew (ogn-091-298)", () => {
   });
 
   // Expected: enters exhausted, then the gear play readies it. Actual: stays exhausted (see above).
-  test.failing("BUG: Pit Crew played this turn should be readied by a following gear play", async () => {
+  test("Pit Crew played this turn should be readied by a following gear play", async () => {
     const game = await scenario().resources(P1, { energy: 4 }).hand(P1, CARD, "crew").hand(P1, WRENCH, "wrench").build();
     await game.p1.play("crew");
     await game.settle();

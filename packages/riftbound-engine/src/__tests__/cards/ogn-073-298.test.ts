@@ -56,10 +56,7 @@ describe("Sona, Harmonious (ogn-073-298)", () => {
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sona", controller: P1, triggered: true })]);
   });
 
-  test.failing("BUG: readies friendly runes (3 exhausted → all 3 ready after the trigger resolves)", async () => {
-    // Expected: the three exhausted calm runes are ready going into P2's turn.
-    // Actual: the trigger resolves but target type "rune" is not resolved against the rune pool,
-    // so no rune is readied.
+  test("readies friendly runes (3 exhausted → all 3 ready after the trigger resolves)", async () => {
     const game = await withSonaAt("bf1", 3).build();
     expect(game.p1.runes({ ready: true })).toHaveLength(0);
     await endTurnChoosingRunes(game, 4);
@@ -67,8 +64,7 @@ describe("Sona, Harmonious (ogn-073-298)", () => {
     expect(game.p1.runes({ ready: true })).toHaveLength(3);
   });
 
-  test.failing("BUG: 'up to 4' — with 5 exhausted runes exactly 4 become ready and 1 stays exhausted", async () => {
-    // Expected: controller picks 4 of the 5. Actual: nothing is readied (see above).
+  test("'up to 4' — with 5 exhausted runes exactly 4 become ready and 1 stays exhausted", async () => {
     const game = await withSonaAt("bf1", 5).build();
     await endTurnChoosingRunes(game, 4);
     expect(game.turnPlayer()).toBe(P2);

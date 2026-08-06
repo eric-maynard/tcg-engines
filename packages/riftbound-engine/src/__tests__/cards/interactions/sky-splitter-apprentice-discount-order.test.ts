@@ -59,10 +59,8 @@ describe("Sky Splitter × Eager Apprentice × Dunebreaker — ordering Energy di
     expect(game.state("sky").powerCost).toEqual(["fury"]);
   });
 
-  test.failing("BUG: Dunebreaker + Apprentice at a battlefield → player-optimal order gives [0][fury]: castable with 0 energy, only the fury pip is spent (356.4.c.1 / 356.4.e)", async () => {
-    // Expected: Apprentice 8→7, then −7 (highest Might) → 0 energy; pay just [fury].
-    // Actual: Sky Splitter's self-discount is not applied at all — the engine demands 7 energy
-    // (printed 8 minus only the Apprentice's 1).
+  test("Dunebreaker + Apprentice at a battlefield → player-optimal order gives [0][fury]: castable with 0 energy, only the fury pip is spent (356.4.c.1 / 356.4.e)", async () => {
+    // Apprentice 8→7, then −7 (highest Might) → 0 energy; pay just [fury].
     const game = await board({ energy: 0 }).build();
     expect(game.p1.can("cast", "sky")).toBe(true);
     await game.p1.cast("sky", { targets: "foe" });
@@ -72,9 +70,8 @@ describe("Sky Splitter × Eager Apprentice × Dunebreaker — ordering Energy di
     expect(game.zoneOf("sky")).toBe("trash");
   });
 
-  test.failing("BUG: with spare energy the engine must still charge 0 energy (not the reverse-order [1]) — 8 energy in, 8 energy left", async () => {
-    // Expected: the player may order discounts optimally (or the engine computes the optimum): 0 energy paid.
-    // Actual: 7 energy is charged.
+  test("with spare energy the engine must still charge 0 energy (not the reverse-order [1]) — 8 energy in, 8 energy left", async () => {
+    // the player may order discounts optimally (or the engine computes the optimum): 0 energy paid.
     const game = await board({ energy: 8 }).build();
     await game.p1.cast("sky", { targets: "foe" });
     expect(game.p1.energy()).toBe(8);
@@ -89,9 +86,8 @@ describe("Sky Splitter × Eager Apprentice × Dunebreaker — ordering Energy di
     expect(game.zoneOf("sky")).toBe("hand");
   });
 
-  test.failing("BUG: (a) Apprentice in BASE — its static is off; only Sky Splitter's own discount: 8 − 7 = [1][fury]", async () => {
-    // Expected: 1 energy + fury is exactly enough; 0 energy is not.
-    // Actual: Sky Splitter's self-discount is missing, so the full 8 is demanded.
+  test("(a) Apprentice in BASE — its static is off; only Sky Splitter's own discount: 8 − 7 = [1][fury]", async () => {
+    // 1 energy + fury is exactly enough; 0 energy is not.
     const broke = await board({ apprenticeAt: "base", energy: 0 }).build();
     expect(broke.p1.can("cast", "sky")).toBe(false);
 
@@ -101,9 +97,8 @@ describe("Sky Splitter × Eager Apprentice × Dunebreaker — ordering Energy di
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0 } });
   });
 
-  test.failing("BUG: (b) no Dunebreaker — Apprentice (3 Might, at a battlefield) is itself the highest Might: 8 − 1 − 3 = [4][fury] in any order", async () => {
-    // Expected: 4 energy + fury castable and fully spent; 3 energy is short.
-    // Actual: only the Apprentice's −1 applies → 7 energy demanded.
+  test("(b) no Dunebreaker — Apprentice (3 Might, at a battlefield) is itself the highest Might: 8 − 1 − 3 = [4][fury] in any order", async () => {
+    // 4 energy + fury castable and fully spent; 3 energy is short.
     const short = await board({ dunebreaker: false, energy: 3 }).build();
     expect(short.p1.can("cast", "sky")).toBe(false);
 

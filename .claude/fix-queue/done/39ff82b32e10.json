@@ -1,0 +1,41 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-127-298",
+  "title": "BUG: deals 2 to every enemy unit IN THE COMBAT only — not to enemies at other locations or in base",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-127-298.test.ts",
+    "testName": "BUG: deals 2 to every enemy unit IN THE COMBAT only — not to enemies at other locations or in base"
+  },
+  "id": "39ff82b32e10",
+  "createdAt": "2026-08-06T17:15:21.543Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.543Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T17:51:17.846Z",
+      "event": "grabbed:w3-i1"
+    },
+    {
+      "at": "2026-08-06T18:32:13.485Z",
+      "event": "done",
+      "note": "parser: 'units in combat' → in-combat filter; resolver matches combatRole (rule 740.2.c)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i1",
+  "claimedAt": "2026-08-06T17:51:17.846Z",
+  "resolution": {
+    "note": "parser: 'units in combat' → in-combat filter; resolver matches combatRole (rule 740.2.c)",
+    "files": [
+      "packages/riftbound-cards/src/parser/impl/targets.ts",
+      "packages/riftbound-engine/src/abilities/target-resolver.ts",
+      "packages/riftbound-types/src/targeting/riftbound-target-dsl.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-127-298.test.ts"
+    ],
+    "at": "2026-08-06T18:32:13.485Z"
+  }
+}

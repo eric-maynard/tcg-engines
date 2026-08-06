@@ -34,6 +34,60 @@ import { isLegalMultiTargetSet } from "./play/targeting";
 const isBoardZone = (z: string): boolean => z === "base" || z.startsWith("battlefield-");
 
 /**
+ * rule 355.14.c/f/g (ogn-041-298): a split-damage allocation is legal when
+ * every keyed id is an option, each amount is a positive integer, at most
+ * `total` targets are named, and the amounts sum to exactly `total` (or no
+ * target is named at all — "any number of" includes zero).
+ */
+function isLegalSplitAllocation(
+  options: readonly string[],
+  total: number,
+  allocation: unknown,
+): allocation is Record<string, number> {
+  if (!allocation || typeof allocation !== "object") return false;
+  const entries = Object.entries(allocation as Record<string, unknown>).filter(
+    ([, v]) => v !== 0,
+  );
+  let sum = 0;
+  for (const [id, v] of entries) {
+    if (!options.includes(id)) return false;
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 1) return false;
+    sum += v;
+  }
+  if (entries.length === 0) return true;
+  return entries.length <= total && sum === total;
+}
+
+/** rule 355.14 (ogn-041-298): every legal split of `total` over subsets of `options` (capped). */
+function enumerateSplitAllocations(
+  options: readonly string[],
+  total: number,
+  cap = 500,
+): Record<string, number>[] {
+  const out: Record<string, number>[] = [];
+  const walk = (idx: number, remaining: number, acc: Record<string, number>): void => {
+    if (out.length >= cap) return;
+    if (idx === options.length) {
+      if (remaining === 0) out.push({ ...acc });
+      return;
+    }
+    const id = options[idx] as string;
+    // skip this option
+    walk(idx + 1, remaining, acc);
+    for (let k = 1; k <= remaining; k++) {
+      acc[id] = k;
+      walk(idx + 1, remaining - k, acc);
+      delete acc[id];
+    }
+  };
+  walk(0, total, {});
+  // most-concentrated splits first so a lone target taking everything leads
+  out.sort((a, b) => Object.keys(a).length - Object.keys(b).length);
+  out.push({});
+  return out;
+}
+
+/**
  * rule-id: sfd-109-221 (rule 356.1.b.3 / 560) — a pending "play it, ignoring
  * its cost" finalized via choose-destination is still a play: the unit's
  * optional "you may pay X as an additional cost" may be paid. Returns that
@@ -312,6 +366,10 @@ export const pendingChoiceMoves: Partial<
         if (choice.anyNumber && context.params.accept === false) {
           return true;
         }
+        // rule 355.14.e (ogn-041-298): fixed-total split is answered with one allocation.
+        if (choice.assign && typeof choice.total === "number") {
+          return isLegalSplitAllocation(choice.options, choice.total, context.params.allocation);
+        }
         return choice.options.includes(context.params.pickedCardId as string);
       }
       if (choice.type === "choose-destination") {
@@ -340,6 +398,18 @@ export const pendingChoiceMoves: Partial<
       // rule-id: ogn-235-298-vision-optional-recycle
       if (choice.optional && context.params.accept === false) {
         return true;
+      }
+      // rule 422.1.a (ogn-030-298): a multi-pick prompt may be answered with
+      // up to `remaining` distinct valid picks at once.
+      const multi = context.params.pickedCardIds as string[] | undefined;
+      if (Array.isArray(multi)) {
+        if (choice.onPicked === "play" || multi.length === 0 || multi.length > (choice.remaining ?? 1)) {
+          return false;
+        }
+        if (new Set(multi).size !== multi.length) {
+          return false;
+        }
+        return multi.every((id) => isValidPendingPick(choice, id));
       }
       return isValidPendingPick(choice, context.params.pickedCardId as string);
     },
@@ -389,6 +459,13 @@ export const pendingChoiceMoves: Partial<
       if (choice.type === "choose-target") {
         if (choice.playerId !== (context.playerId as string)) {
           return [];
+        }
+        // rule 355.14.e (ogn-041-298): fixed-total split → one move per legal allocation.
+        if (choice.assign && typeof choice.total === "number") {
+          return enumerateSplitAllocations(choice.options, choice.total).map((allocation) => ({
+            allocation,
+            playerId: context.playerId as string,
+          }));
         }
         const picks: { playerId: string; pickedCardId?: string; accept?: boolean }[] =
           choice.options.map((cardId) => ({
@@ -515,6 +592,9 @@ export const pendingChoiceMoves: Partial<
           const cost = optInCostOf(choice);
           if (cost) {
             if (!canPayOptInCost(draft, choice.playerId, choice.sourceCardId, cost, context)) {
+              if (choice.suspendedDeathCardId) {
+                postChoiceCleanup(draft, context);
+              }
               return;
             }
             deductAbilityCost(draft, choice.playerId, cost, context.zones, context.counters);
@@ -533,6 +613,10 @@ export const pendingChoiceMoves: Partial<
           if (!draft.pendingChoice) {
             postChoiceCleanup(draft, context);
           }
+        } else if (choice.suspendedDeathCardId) {
+          // rule 372 (ogn-023-298): a declined "you may pay … instead" death
+          // replacement — the suspended unit now dies via state-based checks.
+          postChoiceCleanup(draft, context);
         }
         return;
       }
@@ -590,7 +674,9 @@ export const pendingChoiceMoves: Partial<
             return;
           }
           const pickedSoFar = declined ? [...(choice.picked ?? [])] : [...(choice.picked ?? []), picked];
-          if (!declined) {
+          // rule 355.13 (ogn-073-298): "up to N" caps the accumulated picks.
+          const capped = typeof choice.maxPicks === "number" && pickedSoFar.length >= choice.maxPicks;
+          if (!declined && !capped) {
             const tgt = (choice.effect as { target?: unknown }).target as
               | Parameters<typeof isLegalMultiTargetSet>[0]
               | undefined;
@@ -633,6 +719,36 @@ export const pendingChoiceMoves: Partial<
             ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
             boundTargets: pickedSoFar,
           });
+          postChoiceCleanup(draft, context);
+          return;
+        }
+        // rule 355.14.e/f (ogn-041-298): fixed-total split — the allocation is
+        // encoded as one boundTargets occurrence per point of damage; every
+        // allocated unit is a target (355.14.a → "when you choose me" fires).
+        if (choice.assign && typeof choice.total === "number") {
+          const allocation = context.params.allocation;
+          if (!isLegalSplitAllocation(choice.options, choice.total, allocation)) {
+            return;
+          }
+          draft.pendingChoice = undefined;
+          const encoded: string[] = [];
+          for (const [id, n] of Object.entries(allocation)) {
+            for (let i = 0; i < n; i++) encoded.push(id);
+          }
+          if (encoded.length > 0) {
+            const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+            const sourceType =
+              getGlobalCardRegistry().get(choice.sourceCardId as string)?.cardType === "spell"
+                ? "spell"
+                : "ability";
+            for (const id of new Set(encoded)) {
+              fireTriggers({ cardId: id, chooserId: choice.playerId, sourceType, type: "choose" }, trigCtx);
+            }
+            executeEffect(choice.effect as ExecutableEffect, {
+              ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+              boundTargets: encoded,
+            });
+          }
           postChoiceCleanup(draft, context);
           return;
         }
@@ -817,36 +933,57 @@ export const pendingChoiceMoves: Partial<
         return;
       }
 
-      const { pickedCardId } = context.params;
-
-      if (!isValidPendingPick(choice, pickedCardId as string)) {
+      // rule 422.1.a (ogn-030-298): a multi-pick prompt ("discard 2") takes
+      // one pick per move or several via `pickedCardIds`; every pick is
+      // applied here, and the prompt re-parks until `remaining` is spent.
+      const multi = context.params.pickedCardIds as string[] | undefined;
+      const picks: string[] =
+        Array.isArray(multi) && multi.length > 0 ? [...multi] : [context.params.pickedCardId as string];
+      if (!picks.every((id) => isValidPendingPick(choice, id))) {
         return;
       }
+      const pickedCardId = picks[picks.length - 1] as string;
+      let remaining = choice.remaining ?? 1;
+      let taken = choice.taken ?? 0;
+      let revealed = choice.revealed as readonly string[];
 
       const targetZoneId = onPickedTargetZone(choice.onPicked);
-      const moveParams: {
-        cardId: CoreCardId;
-        targetZoneId: CoreZoneId;
-        position?: "top" | "bottom";
-      } = {
-        cardId: pickedCardId as CoreCardId,
-        targetZoneId,
-      };
-      // Recycle → bottom of main deck (rule: recycle places at bottom).
-      if (choice.onPicked === "recycle") {
-        moveParams.position = "bottom";
-      }
-      context.counters.clearAllCounters(pickedCardId as CoreCardId);
-      context.zones.moveCard(moveParams);
+      for (const id of picks) {
+        const moveParams: {
+          cardId: CoreCardId;
+          targetZoneId: CoreZoneId;
+          position?: "top" | "bottom";
+        } = {
+          cardId: id as CoreCardId,
+          targetZoneId,
+        };
+        // Recycle → bottom of main deck (rule: recycle places at bottom).
+        if (choice.onPicked === "recycle") {
+          moveParams.position = "bottom";
+        }
+        context.counters.clearAllCounters(id as CoreCardId);
+        context.zones.moveCard(moveParams);
+        revealed = revealed.filter((r) => r !== id);
 
-      // Rule ogn-006-298: emit the discard event so "When you discard me…"
-      // self-triggers (Flame Chompers) can fire. Guarded so unit-test stubs
-      // that omit the full zone bag don't crash.
-      if (choice.onPicked === "discard" && typeof context.zones.getCardsInZone === "function") {
-        fireTriggers(
-          { cardId: pickedCardId as string, playerId: choice.revealer, type: "discard" },
-          { cards: context.cards, counters: context.counters, draft, zones: context.zones },
-        );
+        // Rule ogn-006-298: emit the discard event so "When you discard me…"
+        // self-triggers (Flame Chompers) can fire. Guarded so unit-test stubs
+        // that omit the full zone bag don't crash. Rule ogn-202-298: tag the
+        // batch position so "discard one or more" fires once per instruction.
+        if (choice.onPicked === "discard" && typeof context.zones.getCardsInZone === "function") {
+          fireTriggers(
+            { batchIndex: taken, cardId: id, playerId: choice.revealer, type: "discard" },
+            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+          );
+        }
+        taken += 1;
+        remaining -= 1;
+      }
+      if (remaining > 0) {
+        const rest = { ...choice, revealed: [...revealed] } as typeof choice;
+        if (revealed.some((id) => isValidPendingPick(rest, id))) {
+          draft.pendingChoice = { ...rest, remaining, taken };
+          return;
+        }
       }
 
       // rule-id: ogn-062-298-look-banish-play — "banish a unit from among
@@ -878,9 +1015,9 @@ export const pendingChoiceMoves: Partial<
       }
 
       // Rule 435 (ogn-174-298): look/Vision recycles the unpicked cards.
-      const recycledIds: string[] = choice.onPicked === "recycle" ? [pickedCardId as string] : [];
+      const recycledIds: string[] = choice.onPicked === "recycle" ? [...picks] : [];
       if (choice.onRest === "recycle") {
-        for (const restId of choice.revealed) {
+        for (const restId of revealed) {
           if (restId === pickedCardId) continue;
           context.zones.moveCard({
             cardId: restId as CoreCardId,
@@ -907,6 +1044,12 @@ export const pendingChoiceMoves: Partial<
           triggerSourceId: pickedCardId as string,
         };
         executeEffect(choice.then as ExecutableEffect, effectCtx);
+      }
+      // rule 319.7 / rule-id: ogn-019-298 — the pick changed game state (a
+      // discard, recycle, banish…), so refresh statics + SBA like the other
+      // choice kinds do, unless a follow-up prompt is still parked.
+      if (!draft.pendingChoice) {
+        postChoiceCleanup(draft, context);
       }
     },
   },

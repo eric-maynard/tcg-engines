@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: (b) buffed Bully + Vi + the base unit may ALL move to B as one Standard Move (144.3, 810.1.b); engine has no multi-origin / ganking group move",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/vi-bully-ganking-group-move-defended.test.ts",
+    "testName": "BUG: (b) buffed Bully + Vi + the base unit may ALL move to B as one Standard Move (144.3, 810.1.b); engine has no multi-origin / ganking group move"
+  },
+  "id": "914a31304cbb",
+  "createdAt": "2026-08-06T18:35:08.340Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.340Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

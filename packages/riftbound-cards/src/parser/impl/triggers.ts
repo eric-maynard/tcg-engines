@@ -9,6 +9,7 @@ import { parseCost } from "../parsers/cost-parser";
 import { parseEffects } from "./effects";
 import { stripReminders } from "./normalize";
 import { TRIGGER_PATTERNS } from "./trigger-patterns";
+import type { TriggerPatternSubject } from "./trigger-patterns";
 
 export function parseTriggeredAbility(text: string): TriggeredAbility | undefined {
   // Allow a leading "While you control this battlefield, ..." gating prefix on
@@ -82,16 +83,29 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
 
     // Check for "pay :rb_energy_N: to" pattern (optional cost condition)
     const payMatch = effectText.match(
-      /^pay\s+((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)):)+)\s+to\s+/i,
+      /^pay\s+((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)):)+)(\s+and exhaust (?:this|me|myself))?\s+to\s+/i,
     );
     if (payMatch) {
       optional = true;
       // rule-id: sfd-119-221 — keep the cost so the engine charges it on opt-in
       // instead of resolving the effect for free.
-      condition = { cost: parseCost(payMatch[1]), type: "pay-cost" } as unknown as {
-        type: string;
-      };
+      const cost = parseCost(payMatch[1]);
+      condition = {
+        cost: payMatch[2] ? { ...cost, exhaust: true } : cost,
+        type: "pay-cost",
+      } as unknown as { type: string };
       effectText = effectText.slice(payMatch[0].length);
+    }
+
+    // rule 383.3.b (rule-id: ogn-072-298): "you may exhaust this/me to X" —
+    // [Exhaust]-self is the trigger's cost, charged on opt-in; an already
+    // exhausted source can't pay, so X never resolves for free.
+    const exhaustSelfToMatch = optional && !condition
+      ? effectText.match(/^exhaust (?:this|me|myself) to\s+/i)
+      : null;
+    if (exhaustSelfToMatch) {
+      condition = { cost: { exhaust: true }, type: "pay-cost" } as unknown as { type: string };
+      effectText = effectText.slice(exhaustSelfToMatch[0].length);
     }
 
     // Check for "pay :rb_X:. If you do, Y" pattern: treat as optional cost
@@ -158,8 +172,10 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       if (tp.on === "controller-here") {
         trigger.on = "controller";
         trigger.location = "here";
-      } else if (tp.on) {
+      } else if (typeof tp.on === "string") {
         trigger.on = tp.on;
+      } else if (tp.on) {
+        (trigger as { on?: unknown }).on = { ...tp.on };
       }
 
       const ability: TriggeredAbility = {
@@ -205,12 +221,16 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
 
     const trigger: {
       event: string;
-      on?: string | { controller: string; type: string; excludeSelf?: boolean };
+      on?: string | { controller: string; type: string; excludeSelf?: boolean } | TriggerPatternSubject;
       timing?: string;
       location?: string;
       restrictions?: readonly { type: string; count?: number }[];
     } = { event: tp.event };
-    if (tp.on === "self") {
+    if (typeof tp.on === "object") {
+      // Object-shaped subject (TriggerSubjectQuery) is emitted verbatim —
+      // rule 428.5: "When you kill a [stunned] enemy unit" = die + actor/filter.
+      trigger.on = { ...tp.on };
+    } else if (tp.on === "self") {
       trigger.on = "self";
     } else if (tp.on === "friendly-units") {
       trigger.on = { controller: "friendly", type: "unit" };

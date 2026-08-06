@@ -44,7 +44,14 @@ describe("Spell: Reaction", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      // rule 466: the cost rider is lifted into its own static cost-reduction ability.
+      expect(result.abilities).toHaveLength(2);
+      expect(result.abilities?.[0]).toMatchObject({ effect: { amount: 2, type: "draw" }, timing: "reaction", type: "spell" });
+      expect(result.abilities?.[1]).toMatchObject({
+        condition: { event: "enemy-died", type: "this-turn" },
+        effect: { target: "self", type: "cost-reduction" },
+        type: "static",
+      });
     });
   });
 

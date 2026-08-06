@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogs-010-024",
+  "title": "BUG: only SPELLS in YOUR trash are offered — not units, not the opponent's trash",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogs-010-024.test.ts",
+    "testName": "BUG: only SPELLS in YOUR trash are offered — not units, not the opponent's trash"
+  },
+  "id": "5a3057333b9b",
+  "createdAt": "2026-08-06T18:35:08.356Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.356Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

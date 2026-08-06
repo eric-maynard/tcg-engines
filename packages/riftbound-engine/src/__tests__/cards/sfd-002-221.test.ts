@@ -42,7 +42,7 @@ describe("Armed Assailant (sfd-002-221)", () => {
     expect(game.state("aa").isReady).toBe(true);
   });
 
-  test.failing("BUG: Accelerate needs the second fury — with 7 energy + 1 fury the accelerated play must be refused (engine accepts it and silently plays un-accelerated)", async () => {
+  test("Accelerate needs the second fury — with 7 energy + 1 fury the accelerated play must be refused (engine accepts it and silently plays un-accelerated)", async () => {
     // Expected: the paid-additional-cost variant is illegal when [1][fury] extra cannot be covered.
     // Actual: the variant is offered and executes as a plain 6+[fury] play (enters exhausted, 1 energy left).
     const game = await scenario().resources(P1, { energy: 7, power: { fury: 1 } }).hand(P1, CARD, "aa").build();

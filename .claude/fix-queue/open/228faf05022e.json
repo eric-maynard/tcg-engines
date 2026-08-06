@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 115 (fair random method) — on EQUAL rolls nobody wins: rollWinner stays undefined, the step returns to rollForFirst with rolls cleared, and chooseFirstPlayer is refused for both; the engine awards ties to players[0]",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
+    "testName": "BUG: 115 (fair random method) — on EQUAL rolls nobody wins: rollWinner stays undefined, the step returns to rollForFirst with rolls cleared, and chooseFirstPlayer is refused for both; the engine awards ties to players[0]"
+  },
+  "id": "228faf05022e",
+  "createdAt": "2026-08-06T20:50:12.432Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.432Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 468/469/410.2 — Scoring is a Limited Action (only Hold/Conquer); engine offers a discretionary `scorePoint` main-phase action that awards a point on demand",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/scoring-hold-and-conquer.test.ts",
+    "testName": "BUG: 468/469/410.2 — Scoring is a Limited Action (only Hold/Conquer); engine offers a discretionary `scorePoint` main-phase action that awards a point on demand"
+  },
+  "id": "5dddc67043bd",
+  "createdAt": "2026-08-06T20:50:12.439Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.439Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

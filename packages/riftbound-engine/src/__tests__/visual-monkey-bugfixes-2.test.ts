@@ -588,7 +588,9 @@ describe("Fix 3: Conquer events fire from conquerBattlefield reducer", () => {
       abilities: [
         {
           effect: { amount: 1, type: "draw" },
-          trigger: { event: "conquer" },
+          // rule 383.4.c.2: "When YOU conquer" — a bare/self conquer trigger on a
+          // unit in base no longer fires (the unit must be at the conquered battlefield).
+          trigger: { event: "conquer", on: "controller" },
           type: "triggered",
         },
       ],

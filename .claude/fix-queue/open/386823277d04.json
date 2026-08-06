@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling e254c1e6fe0d792b — the swap expires at end of turn: bearer back to 5 (sword still counted once), weakling back to 1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/switcheroo-e254c1e6fe0d792b.test.ts",
+    "testName": "BUG: ruling e254c1e6fe0d792b — the swap expires at end of turn: bearer back to 5 (sword still counted once), weakling back to 1"
+  },
+  "id": "386823277d04",
+  "createdAt": "2026-08-06T20:06:58.329Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.329Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

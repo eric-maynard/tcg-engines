@@ -81,6 +81,98 @@ export interface ReplacementContext {
   };
 }
 
+
+interface BoardCardEntry {
+  id: string;
+  owner: string;
+  zone: string;
+}
+
+/** Base + battlefield units/gear that can carry a board replacement ability. */
+function collectBoardCards(ctx: ReplacementContext): BoardCardEntry[] {
+  const boardCards: BoardCardEntry[] = [];
+  for (const playerId of Object.keys(ctx.draft.players)) {
+    const baseCards = ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId);
+    for (const cardId of baseCards) {
+      boardCards.push({ id: cardId as string, owner: playerId, zone: "base" });
+    }
+  }
+  for (const bfId of Object.keys(ctx.draft.battlefields)) {
+    const zone = `battlefield-${bfId}`;
+    const bfCards = ctx.zones.getCardsInZone(zone as CoreZoneId);
+    for (const cardId of bfCards) {
+      const owner = ctx.cards.getCardOwner(cardId) ?? "";
+      boardCards.push({ id: cardId as string, owner, zone });
+    }
+  }
+  return boardCards;
+}
+
+function boardEffectiveMight(cardId: string, ctx: ReplacementContext): number {
+  const registry = getGlobalCardRegistry();
+  const base = registry.get(cardId)?.might ?? 0;
+  const meta = ctx.cards.getCardMeta(cardId as CoreCardId);
+  let equip = 0;
+  for (const equipId of meta?.equippedWith ?? []) {
+    equip += registry.getMightBonus(equipId as string);
+  }
+  return Math.max(
+    0,
+    base +
+      (meta?.buffed ? 1 : 0) +
+      (meta?.extraBuffs ?? 0) +
+      (meta?.mightModifier ?? 0) +
+      (meta?.staticMightBonus ?? 0) +
+      equip,
+  );
+}
+
+/**
+ * Does a board replacement's `target` / `condition` cover this event?
+ * Honours controller friendly/enemy, `excludeSelf` ("another unit"),
+ * `location: "here"` (same zone as the source; a source in base only covers
+ * its owner's base) and `condition: {type: "less-might-than-source"}`
+ * (rule-id: sfd-173-221 "if it has less Might than me").
+ */
+function replacementApplies(
+  ability: unknown,
+  card: BoardCardEntry,
+  event: ReplacementEvent,
+  eventCard: BoardCardEntry | undefined,
+  ctx: ReplacementContext,
+): boolean {
+  const { target, condition } = ability as {
+    target?: { controller?: string; excludeSelf?: boolean; location?: string };
+    condition?: { type?: string };
+  };
+  if (target?.controller === "friendly") {
+    if (event.owner && event.owner !== card.owner) {
+      return false;
+    }
+  } else if (target?.controller === "enemy") {
+    if (event.owner && event.owner === card.owner) {
+      return false;
+    }
+  }
+  if (target?.excludeSelf && event.cardId !== undefined && event.cardId === card.id) {
+    return false;
+  }
+  if (target?.location === "here" && event.cardId !== undefined) {
+    if (!eventCard || eventCard.zone !== card.zone) {
+      return false;
+    }
+    if (card.zone === "base" && eventCard.owner !== card.owner) {
+      return false;
+    }
+  }
+  if (condition?.type === "less-might-than-source" && event.cardId !== undefined) {
+    if (!(boardEffectiveMight(event.cardId, ctx) < boardEffectiveMight(card.id, ctx))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Build the consumed-next key for a replacement ability.
  *
@@ -111,21 +203,9 @@ export function findAllReplacements(
 ): MatchedReplacement[] {
   const registry = getGlobalCardRegistry();
 
-  // Collect all board cards
-  const boardCards: { id: string; owner: string }[] = [];
-  for (const playerId of Object.keys(ctx.draft.players)) {
-    const baseCards = ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId);
-    for (const cardId of baseCards) {
-      boardCards.push({ id: cardId as string, owner: playerId });
-    }
-  }
-  for (const bfId of Object.keys(ctx.draft.battlefields)) {
-    const bfCards = ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
-    for (const cardId of bfCards) {
-      const owner = ctx.cards.getCardOwner(cardId) ?? "";
-      boardCards.push({ id: cardId as string, owner });
-    }
-  }
+  const boardCards = collectBoardCards(ctx);
+  const eventCard =
+    event.cardId === undefined ? undefined : boardCards.find((c) => c.id === event.cardId);
 
   const consumed = ctx.draft.consumedNextReplacements ?? {};
   const matches: MatchedReplacement[] = [];
@@ -143,15 +223,8 @@ export function findAllReplacements(
         continue;
       }
 
-      const { target } = ability as unknown as { target?: { controller?: string } };
-      if (target?.controller === "friendly") {
-        if (event.owner && event.owner !== card.owner) {
-          continue;
-        }
-      } else if (target?.controller === "enemy") {
-        if (event.owner && event.owner === card.owner) {
-          continue;
-        }
+      if (!replacementApplies(ability, card, event, eventCard, ctx)) {
+        continue;
       }
 
       const { duration } = ability as unknown as { duration?: string };
@@ -242,21 +315,9 @@ export function checkReplacement(
 ): MatchedReplacement | null {
   const registry = getGlobalCardRegistry();
 
-  // Collect all board cards
-  const boardCards: { id: string; owner: string }[] = [];
-  for (const playerId of Object.keys(ctx.draft.players)) {
-    const baseCards = ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId);
-    for (const cardId of baseCards) {
-      boardCards.push({ id: cardId as string, owner: playerId });
-    }
-  }
-  for (const bfId of Object.keys(ctx.draft.battlefields)) {
-    const bfCards = ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
-    for (const cardId of bfCards) {
-      const owner = ctx.cards.getCardOwner(cardId) ?? "";
-      boardCards.push({ id: cardId as string, owner });
-    }
-  }
+  const boardCards = collectBoardCards(ctx);
+  const eventCard =
+    event.cardId === undefined ? undefined : boardCards.find((c) => c.id === event.cardId);
 
   const consumed = ctx.draft.consumedNextReplacements ?? {};
 
@@ -274,17 +335,8 @@ export function checkReplacement(
         continue;
       }
 
-      // Check target matching
-      const { target } = ability as unknown as { target?: { controller?: string } };
-      if (target?.controller === "friendly") {
-        // Only applies to cards owned by the same player
-        if (event.owner && event.owner !== card.owner) {
-          continue;
-        }
-      } else if (target?.controller === "enemy") {
-        if (event.owner && event.owner === card.owner) {
-          continue;
-        }
+      if (!replacementApplies(ability, card, event, eventCard, ctx)) {
+        continue;
       }
 
       const { duration } = ability as unknown as { duration?: string };

@@ -285,6 +285,8 @@ export interface PickDecision extends DecisionBase {
 export interface YesNoDecision extends DecisionBase {
   readonly kind: "yes-no";
   readonly consequence?: string;
+  /** False when "yes" is not a legal answer right now (e.g. an unpayable "you may [cost] to …"). */
+  readonly canAccept?: boolean;
 }
 
 export interface IntegerDecision extends DecisionBase {

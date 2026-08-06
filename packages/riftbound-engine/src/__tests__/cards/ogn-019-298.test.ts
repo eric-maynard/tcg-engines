@@ -89,7 +89,7 @@ describe("Raging Soul (ogn-019-298)", () => {
     expect(noDiscard.zoneOf("soul")).toBe("trash");
   });
 
-  test.failing("BUG: 'discarded a card this turn' never expires — Assault/Ganking persist into later turns with no discard", async () => {
+  test("'discarded a card this turn' expires — Assault/Ganking do not persist into later turns with no discard", async () => {
     // Expected: the condition is scoped to the current turn, so on the opponent's turn and on
     // P1's following turn (no discard yet) Raging Soul has no keywords and cannot gank.
     // Actual: the discarded-this-turn flag is never cleared; keywords and gankingMove stay on.

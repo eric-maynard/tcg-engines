@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 42df64abb73517a3 — Repeat paid and Irelia chosen for both executions: TWO targeting triggers hit the chain (+1 +1 → 6), then the spell gives +2 +2 → 10 (+6 total); engine fires her trigger only once (ends at 9)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/irelia-fervent-42df64abb73517a3.test.ts",
+    "testName": "BUG: ruling 42df64abb73517a3 — Repeat paid and Irelia chosen for both executions: TWO targeting triggers hit the chain (+1 +1 → 6), then the spell gives +2 +2 → 10 (+6 total); engine fires her trigger only once (ends at 9)"
+  },
+  "id": "3de3c68d4e3e",
+  "createdAt": "2026-08-06T19:45:47.842Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:45:47.842Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

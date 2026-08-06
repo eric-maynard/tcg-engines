@@ -68,7 +68,7 @@ describe("Tasty Faefolk (ogn-075-298)", () => {
     expect(game.p1.energy()).toBe(0); // exhausted runes yield nothing by themselves
   });
 
-  test.failing("BUG: Deathknell also draws 1 (\"Channel 2 runes exhausted AND draw 1\")", async () => {
+  test("Deathknell also draws 1 (\"Channel 2 runes exhausted AND draw 1\")", async () => {
     // Expected: after Faefolk dies P1's hand grows by one card (bolt is gone, +1 drawn = 1).
     // Actual: the parsed Deathknell effect only carries the channel clause; no card is drawn.
     const game = await scenario().unit(P1, "base", CARD, "fae").hand(P1, BOLT, "bolt").build();

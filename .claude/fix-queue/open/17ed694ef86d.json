@@ -1,0 +1,18 @@
+{
+  "source": "playtest",
+  "title": "The Actions panel shows 'Duplicate (Shift+C)' disabled with a 'Sandbox only' hint, while the same screen renders the opponent's hand face-up (board.js only does that when isSandboxGame is true) and opponent turns are auto-skipped (turn 1→3→5), i.e. this IS a sandbox/goldfish game.",
+  "expected": "Screenshot 16.png shows opponent hand face-up (board.js:17 renders face-up only when isSandboxGame is true) while the Actions panel shows Duplicate disabled with \"Sandbox only\". Source cause: meta-actions.js:224-238 initMetaActions() is a one-shot (guarded by _metaActionsInitialized) that calls renderActionPanel() at DOMContentLoaded, when state.js:108 `let isSandboxGame = false`. lobby.js:395/425 later set isSandboxGame = true but grep shows no caller of renderActionPanel outside meta-actions.js (only setCounterSign at :42 and initMetaActions at :228), so the panel is never re-rendered after the flag flips and stays in the non-sandbox disabled state (meta-actions.js:122,130-133) in a sandbox game.",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/public/js/gameplay/meta-actions.js:224",
+  "rule": "rule 108.7.c (hand is Private Information) / DESIGN.md Goldfish mode",
+  "id": "17ed694ef86d",
+  "createdAt": "2026-08-06T20:43:38.887Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.887Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

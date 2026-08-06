@@ -61,10 +61,9 @@ describe("(a) Enforcer attacks into Taric + Poro", () => {
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P2, controller: P1 });
   });
 
-  // Expected: Taric's static "Other friendly units here have [Shield]" applies continuously to Poro (a
-  // second Shield source on top of the printed one, 814.2), and not to Taric himself. Actual: the grant
-  // is only stamped when Taric is PLAYED to the battlefield; units that are simply there with him get nothing.
-  test.failing("BUG: Poro at Taric's battlefield carries a Taric-granted Shield in addition to its printed Shield; Taric grants himself nothing ('other')", async () => {
+  // Taric's static "Other friendly units here have [Shield]" applies continuously to Poro (a
+  // second Shield source on top of the printed one, 814.2), and not to Taric himself.
+  test("Poro at Taric's battlefield carries a Taric-granted Shield in addition to its printed Shield; Taric grants himself nothing ('other')", async () => {
     const game = await defendBoard().build();
     await game.p2.move("enf", "bf1"); // a real engine step has run; statics must be (re)computed by now
     expect(game.state("poro").keywords).toContain("Shield"); // printed

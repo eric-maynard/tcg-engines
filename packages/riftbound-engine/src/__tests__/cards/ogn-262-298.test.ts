@@ -99,7 +99,7 @@ describe("Zenith Blade (ogn-262-298)", () => {
     expect(game.state("foe").isStunned).toBe(true);
   });
 
-  test.failing("BUG: a stunned defender deals no combat damage — the 2-Might ally attacks the stunned 4-Might foe and survives (423.1.b)", async () => {
+  test("a stunned defender deals no combat damage — the 2-Might ally attacks the stunned 4-Might foe and survives (423.1.b)", async () => {
     // Expected: foe contributes 0 combat damage, so the ally lives (recalled to base; foe holds bf1).
     // Actual: the stunned foe still deals 4 and the ally is killed.
     const game = await board().build();
@@ -142,7 +142,7 @@ describe("Zenith Blade (ogn-262-298)", () => {
     expect(g2.zoneOf("zb")).toBe("trash");
   });
 
-  test.failing("BUG: 'this turn' — the stun is cleared at end of turn (423.1.a.2)", async () => {
+  test("'this turn' — the stun is cleared at end of turn (423.1.a.2)", async () => {
     // Expected: after P1's turn ends the foe is no longer stunned. Actual: the flag persists.
     const game = await board().build();
     await castAndResolve(game);

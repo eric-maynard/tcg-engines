@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 07bcfc25c33fc96b — engine resolves Bone Skewer as a no-op; expected: P1 picks Teemo from P2's revealed hand, P2 PLAYS it to bf1 (not hidden facedown), stunned, for free (811.1.c.1, 419.3)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-07bcfc25c33fc96b.test.ts",
+    "testName": "BUG: ruling 07bcfc25c33fc96b — engine resolves Bone Skewer as a no-op; expected: P1 picks Teemo from P2's revealed hand, P2 PLAYS it to bf1 (not hidden facedown), stunned, for free (811.1.c.1, 419.3)"
+  },
+  "id": "9a0eb5313fa5",
+  "createdAt": "2026-08-06T19:45:47.841Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:45:47.841Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogs-007-024",
+  "title": "BUG: Assault 2 also raises his lethal threshold while attacking — he survives the 6 damage (6 < 7) and conquers",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogs-007-024.test.ts",
+    "testName": "BUG: Assault 2 also raises his lethal threshold while attacking — he survives the 6 damage (6 < 7) and conquers"
+  },
+  "id": "f8225f1f51fe",
+  "createdAt": "2026-08-06T18:35:08.329Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.329Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

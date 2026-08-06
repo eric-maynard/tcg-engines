@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-118-298",
+  "title": "BUG: two friendly units dying simultaneously is still one 'first time' → exactly 1 card",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-118-298.test.ts",
+    "testName": "BUG: two friendly units dying simultaneously is still one 'first time' → exactly 1 card"
+  },
+  "id": "287d3f70c8cc",
+  "createdAt": "2026-08-06T17:15:21.548Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.548Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:52:06.931Z",
+      "event": "grabbed:w8-i2"
+    },
+    {
+      "at": "2026-08-06T20:04:13.297Z",
+      "event": "done",
+      "note": "passes via w10-i2 first-time-each-turn turnEventCounts impl; test already flipped"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i2",
+  "claimedAt": "2026-08-06T19:52:06.931Z",
+  "resolution": {
+    "note": "passes via w10-i2 first-time-each-turn turnEventCounts impl; test already flipped",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-118-298.test.ts"
+    ],
+    "at": "2026-08-06T20:04:13.297Z"
+  }
+}

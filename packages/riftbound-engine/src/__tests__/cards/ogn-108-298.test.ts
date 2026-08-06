@@ -53,7 +53,7 @@ describe("Convergent Mutation (ogn-108-298)", () => {
 
   test("Reaction: playable on the opponent's turn, and in response to their spell on the chain", async () => {
     const theirTurn = await board(P2).build();
-    expect(theirTurn.p1.can("cast", "cm")).toBe(true);
+    expect(theirTurn.p1.can("cast", "cm")).toBe(false); // rule 316.5.b: not in the opponent's Neutral Open State
 
     const game = await board(P2).resources(P2, { energy: 8 }).hand(P2, FINAL_SPARK, "spark").build();
     await game.p2.cast("spark", { targets: "big" });

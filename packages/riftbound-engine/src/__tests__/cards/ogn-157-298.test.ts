@@ -104,7 +104,7 @@ describe("Udyr, Wildman (ogn-157-298)", () => {
     expect(game.state("home").isStunned).toBe(false);
   });
 
-  test.failing("BUG: mode 'Ready me' readies an exhausted Udyr", async () => {
+  test("mode 'Ready me' readies an exhausted Udyr", async () => {
     // Expected: Udyr (exhausted) becomes ready after the mode resolves. Actual: he stays exhausted.
     const game = await board().build();
     expect(game.state("udyr").isExhausted).toBe(true);

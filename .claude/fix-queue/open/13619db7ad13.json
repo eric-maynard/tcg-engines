@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 705 / 747 — a killed unit's Buff counter ceases to exist: the card in the trash is not buffed and reads its printed Might (engine keeps buffed=true in the trash)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/tokens-banishment-trash-object-identity.test.ts",
+    "testName": "BUG: 705 / 747 — a killed unit's Buff counter ceases to exist: the card in the trash is not buffed and reads its printed Might (engine keeps buffed=true in the trash)"
+  },
+  "id": "13619db7ad13",
+  "createdAt": "2026-08-06T20:50:12.438Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.438Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

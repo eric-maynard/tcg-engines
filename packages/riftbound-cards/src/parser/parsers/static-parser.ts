@@ -562,7 +562,9 @@ function parseStaticAbilityInner(
   const otherMightMatch = cleanText.match(
     /^(.+?)\s+have\s+\+(\d+)\s*:rb_might:(?:\s+(here))?\.?$/i,
   );
-  if (otherMightMatch) {
+  // "While/If CONDITION, I have +N" is a conditional self-might (handled below),
+  // not an aura whose subject is the condition clause.
+  if (otherMightMatch && !/^(?:While|If)\b.*,\s*I$/i.test(otherMightMatch[1])) {
     const target = parseGrantTarget(otherMightMatch[1]);
     const amount = Number.parseInt(otherMightMatch[2], 10);
     if (otherMightMatch[3]) {

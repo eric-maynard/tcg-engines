@@ -74,7 +74,7 @@ describe("Vi, Destructive (ogn-036-298)", () => {
     expect(game.state("vi").might).toBe(3);
   });
 
-  test.failing("BUG: timing — a unit's non-[Action]/[Reaction] activated ability cannot be used on the opponent's turn (rule 145.2)", async () => {
+  test("timing — a unit's non-[Action]/[Reaction] activated ability cannot be used on the opponent's turn (rule 145.2)", async () => {
     // Expected: with P2 as turn player, P1 has no legal `activate` for Vi (Main Phase of the
     // controller only). Actual: the engine offers it and puts the ability on the chain.
     const game = await scenario().active(P2).unit(P1, "base", CARD, "vi").trash(P1, JUNK, "junk").build();

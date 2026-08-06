@@ -43,7 +43,7 @@ describe("Ruin Runner × Discipline / En Garde targeting", () => {
     expect(game.p1.hand()).toHaveLength(hand - 1 + 1); // spent Discipline, drew 1
   });
 
-  test.failing("BUG: Discipline offers the ENEMY Ruin Runner as a target — 'can't be chosen by enemy spells' (rule 757) not enforced at target enumeration", async () => {
+  test("Discipline does NOT offer the ENEMY Ruin Runner as a target — 'can't be chosen by enemy spells' (rule 757) enforced at target enumeration", async () => {
     const game = await board().build();
     const offered = targetsOffered(game, "discipline");
     expect(offered).toContain(game.card("myRunner"));
@@ -69,7 +69,7 @@ describe("Ruin Runner × Discipline / En Garde targeting", () => {
     await expect(game.p1.cast("enGarde", { targets: "theirGrunt" })).rejects.toThrow();
   });
 
-  test.failing("BUG: En Garde grants the extra +1 even when you control another unit there — 'only unit you control there' condition ignored", async () => {
+  test("En Garde grants the extra +1 only when it is the only unit you control there", async () => {
     const game = await board().build(); // myRunner is P1's only unit at bf1
     const before = game.state("myRunner").might;
     await game.p1.cast("enGarde", { targets: "myRunner" });

@@ -48,9 +48,10 @@ describe("Immortal Phoenix (ogn-037-298)", () => {
       .build();
     await game.p1.move("phoenix", "bf1");
     await game.settle();
-    // 3 base + 2 Assault = 5 ≥ 4 kills the defender; the 4 back kills Phoenix (Assault adds Might, not toughness beyond it).
+    // 3 base + 2 Assault = 5 ≥ 4 kills the defender; rule 807.1.c: Assault is real Might while
+    // attacking, so the 4 back is not lethal (4 < 5) — Phoenix survives and conquers.
     expect(game.zoneOf("defender")).toBe("trash");
-    expect(game.zoneOf("phoenix")).toBe("trash");
+    expect(game.locationOf("phoenix")).toBe("bf1");
   });
 
   test("Assault 2 is exactly +2: a 5-might defender dies, a 6-might defender survives", async () => {
@@ -85,10 +86,9 @@ describe("Immortal Phoenix (ogn-037-298)", () => {
     expect(game.zoneOf("phoenix")).toBe("trash");
   });
 
-  test.failing("BUG: killing a unit with your spell should offer to pay [1][fury] and play Phoenix from trash", async () => {
-    // Expected: after the bolt kills the victim, P1 gets a "you may pay [1][fury]" prompt; accepting
+  test("killing a unit with your spell offers to pay [1][fury] and play Phoenix from trash", async () => {
+    // After the bolt kills the victim, P1 gets a "you may pay [1][fury]" prompt; accepting
     // plays Phoenix from trash to base and drains the pool.
-    // Actual: the killed-by-spell trigger never fires from the trash — no prompt, Phoenix stays put.
     const game = await trashSetup().build();
     await game.p1.cast("bolt", { targets: "victim" });
     await game.settle();
@@ -100,8 +100,7 @@ describe("Immortal Phoenix (ogn-037-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0 } }); // 1 for bolt, 1+fury for phoenix
   });
 
-  test.failing("BUG: declining the trigger leaves Phoenix in the trash and spends nothing extra", async () => {
-    // Expected: a yes/no prompt that can be declined. Actual: no prompt is ever offered (see above).
+  test("declining the trigger leaves Phoenix in the trash and spends nothing extra", async () => {
     const game = await trashSetup().build();
     await game.p1.cast("bolt", { targets: "victim" });
     await game.settle();

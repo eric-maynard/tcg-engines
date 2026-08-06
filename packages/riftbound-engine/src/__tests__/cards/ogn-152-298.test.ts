@@ -41,7 +41,7 @@ describe("Mistfall (ogn-152-298)", () => {
     expect(poor.p1.can("play", "mist")).toBe(false);
   });
 
-  test.failing("BUG: buffing a friendly unit asks 'you may'; yes → pay [body], exhaust Mistfall, the buffed unit is readied", async () => {
+  test("buffing a friendly unit asks 'you may'; yes → pay [body], exhaust Mistfall, the buffed unit is readied", async () => {
     // Expected: after paying, the buffed unit ("ally") becomes ready. Actual: [body] is paid and
     // Mistfall exhausts, but the `trigger-source` ready target resolves to nothing — ally stays exhausted.
     const game = await board().build();

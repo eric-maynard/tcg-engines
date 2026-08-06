@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-036-221",
+  "title": "BUG: 'If I died alone' — with another friendly unit at the same battlefield the Deathknell must draw nothing (740.2.a, 428.1.a.1.b)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-036-221.test.ts",
+    "testName": "BUG: 'If I died alone' — with another friendly unit at the same battlefield the Deathknell must draw nothing (740.2.a, 428.1.a.1.b)"
+  },
+  "id": "fb33584078c1",
+  "createdAt": "2026-08-06T19:03:47.632Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:03:47.632Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

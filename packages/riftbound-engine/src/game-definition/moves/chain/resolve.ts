@@ -149,7 +149,13 @@ export function executeResolvedItem(
     target.type !== "trigger-source" &&
     target.type !== "player" &&
     target.type !== "battlefield" &&
-    target.quantity !== "all"
+    target.quantity !== "all" &&
+    // rule-id: ogn-107-298 — "play a card … from your hand": the hand is not
+    // a board zone the resolver scans; the play handler gathers candidates.
+    !(effect.type === "play" && (effect as { from?: unknown }).from === "hand") &&
+    // rule 355.14 (ogn-041-298): split damage picks its targets together with
+    // the distribution in the damage handler, not as a single-target prompt.
+    !(effect.type === "damage" && (effect as { split?: boolean }).split === true)
   ) {
     let options = resolveTarget(
       { ...target, quantity: "all" },
@@ -177,7 +183,28 @@ export function executeResolvedItem(
     // controller picks 0..n (declining is legal even with one candidate), so
     // prompt whenever any candidate exists; candidates that alone breach the
     // descriptor's aggregate cap (`totalMight`) are never legal.
-    const anyNumber = (target as { quantity?: unknown }).quantity === "any";
+    const quantity = (target as { quantity?: unknown }).quantity;
+    const anyNumber = quantity === "any";
+    // rule 355.13 (ogn-073-298): "up to N <things>" — the controller picks
+    // 0..N distinct targets; picks accumulate like "any number" capped at N.
+    const upTo =
+      typeof quantity === "object" && quantity !== null && typeof (quantity as { upTo?: unknown }).upTo === "number"
+        ? ((quantity as { upTo: number }).upTo as number)
+        : undefined;
+    if (upTo !== undefined && upTo > 1 && options.length >= 2) {
+      draft.pendingChoice = {
+        type: "choose-target",
+        playerId: resolved.controller,
+        sourceCardId: resolved.cardId,
+        effect,
+        options,
+        remaining: Math.min(upTo, options.length),
+        anyNumber: true,
+        maxPicks: upTo,
+        picked: [],
+      };
+      return;
+    }
     if (anyNumber) {
       const legal = options.filter((id) =>
         isLegalMultiTargetSet(target as Parameters<typeof isLegalMultiTargetSet>[0], [id], {
@@ -256,6 +283,8 @@ export function executeResolvedItem(
     ...(_variables ? { variables: _variables } : {}),
     ...(boundTargets ? { boundTargets } : {}),
     ...(triggerSourceId ? { triggerSourceId } : {}),
+    // rule 811.1.d.3: units played by a from-Hidden card go to that battlefield.
+    ...(hiddenZone ? { hiddenZone } : {}),
   };
   // Rule 359.2: "when you choose me" triggers fire when a spell/ability's
   // controller picks a card as a target.

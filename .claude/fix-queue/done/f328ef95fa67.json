@@ -1,0 +1,28 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: Soraka (surviving) should replace the Recruit's combat death — heal, exhaust, recall to base (card text; 373.1.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/soraka-saves-ally-while-dying-combat.test.ts",
+    "testName": "BUG: Soraka (surviving) should replace the Recruit's combat death — heal, exhaust, recall to base (card text; 373.1.a)"
+  },
+  "id": "f328ef95fa67",
+  "createdAt": "2026-08-06T17:39:26.575Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.575Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T20:55:01.420Z",
+      "event": "done(unclaimed)",
+      "note": "stabilization: combat deaths now route through SBA die-replacements; replacement matching honours excludeSelf/here/less-might-than-source + rule 370.4 simultaneous pre-match"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "stabilization: combat deaths now route through SBA die-replacements; replacement matching honours excludeSelf/here/less-might-than-source + rule 370.4 simultaneous pre-match",
+    "at": "2026-08-06T20:55:01.420Z"
+  }
+}

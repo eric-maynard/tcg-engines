@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 24995e96f6e7c30f — control (no Stupefy): ceiling is 4+1 = 5 → Big is eligible; choosing it plays Big for free and recycles the rest",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/baited-hook-24995e96f6e7c30f.test.ts",
+    "testName": "BUG: ruling 24995e96f6e7c30f — control (no Stupefy): ceiling is 4+1 = 5 → Big is eligible; choosing it plays Big for free and recycles the rest"
+  },
+  "id": "ed6c92df3c5b",
+  "createdAt": "2026-08-06T20:06:58.325Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.325Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

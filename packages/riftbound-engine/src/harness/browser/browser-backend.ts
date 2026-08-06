@@ -47,7 +47,8 @@ import { HarnessError } from "../types";
 import { AnswerResolver } from "./answer-resolver";
 import type { ResolvePlan } from "./answer-resolver";
 import { CALM_SCRIPT, DISPATCH_FN, FRAME_AFTER_FN, OUTCOME_FN, READY_FN, READ_FRAME, TAP_SCRIPT, call } from "./page-scripts";
-import { guardPage, launchChromium, loadPlaywright } from "./playwright-loader";
+import { launchNodeBridge } from "./bridge";
+import { guardPage, launchInProcess } from "./playwright-loader";
 import type { LaunchedBrowser, PwPage } from "./playwright-loader";
 import {
   SnapshotEngine,
@@ -90,8 +91,12 @@ export interface BrowserLaunchOptions {
   /** After bootstrap, pass priority/focus until the local seat holds an open main-phase decision (default true). */
   readonly settle?: boolean;
   readonly viewport?: { width: number; height: number };
-  /** How Playwright talks to Chromium: "cdp" (spawn + connectOverCDP over WebSocket; default, robust under Bun) or "pipe" (chromium.launch). Env: RB_BROWSER_TRANSPORT. */
-  readonly transport?: "cdp" | "pipe";
+  /**
+   * Where Playwright runs: "node" = a Node child process (bridge.ts / pw-bridge.mjs; default when
+   * `node` is on PATH — dependable browser transport, hard-killable), "bun" = inside this process
+   * (chromium.launch(); observed to wedge sporadically under Bun). Env: RB_BROWSER_TRANSPORT.
+   */
+  readonly transport?: "node" | "bun";
   /** Abort /card-image/* requests (saves renderer CPU/bandwidth). Default false: the pending-choice modal's picks ARE <img> elements, so visual mode needs them laid out. */
   readonly blockImages?: boolean;
   /** Inject a stylesheet disabling CSS animations/transitions (stable clicks, less CPU). Default true. */
@@ -189,15 +194,8 @@ export class BrowserBackend implements GameBackend {
     let browser: LaunchedBrowser | undefined;
     let page = opts.page;
     if (!page) {
-      const pw = await loadPlaywright();
-      browser = await launchChromium(pw, { headless: opts.headless ?? true, transport: opts.transport });
-      trace("launch: chromium up", `transport=${browser.transport}`);
-      try {
-        page = await browser.browser.newPage({ viewport: opts.viewport ?? { height: 900, width: 1440 } });
-      } catch (error) {
-        await browser.shutdown();
-        throw error;
-      }
+      browser = await BrowserBackend.startBrowser(opts);
+      page = browser.page;
     }
     const backend = new BrowserBackend(page, browser, { ...opts, pool });
     try {
@@ -242,6 +240,34 @@ export class BrowserBackend implements GameBackend {
     }
   }
 
+  /** Start chromium via the Node bridge (default) or in-process, per `opts.transport` / RB_BROWSER_TRANSPORT. */
+  static async startBrowser(opts: Pick<BrowserLaunchOptions, "headless" | "viewport" | "transport" | "timeoutMs"> = {}): Promise<LaunchedBrowser> {
+    const want = opts.transport ?? (process.env.RB_BROWSER_TRANSPORT as "node" | "bun" | undefined) ?? "node";
+    const common = { headless: opts.headless ?? true, timeoutMs: opts.timeoutMs, viewport: opts.viewport ?? { height: 900, width: 1440 } };
+    if (want === "node") {
+      try {
+        const b = await launchNodeBridge(common);
+        trace("launch: chromium up via node bridge");
+        return b;
+      } catch (error) {
+        trace("launch: node bridge unavailable, falling back to in-process playwright:", (error as Error).message);
+      }
+    }
+    const b = await launchInProcess(common);
+    trace("launch: chromium up in-process (bun)");
+    return b;
+  }
+
+  /** Which transport hosts Playwright ("node" bridge, in-process "bun", or "external" for a caller-supplied page). */
+  get transport(): "node" | "bun" | "external" {
+    return this.browser?.transport ?? "external";
+  }
+
+  /** Page-side diagnostics collected by the transport (console errors, pageerrors, dialogs). */
+  get pageErrors(): readonly string[] {
+    return this.browser?.pageErrors ?? [];
+  }
+
   private async bootstrap(opts: BrowserLaunchOptions): Promise<void> {
     const mode = opts.mode ?? "test";
     if (mode === "test") {
@@ -265,19 +291,78 @@ export class BrowserBackend implements GameBackend {
       );
     }
     await this.page.locator("#soloDeckPicker .start-btn").first().click({ timeout: 10_000 });
-    // Pregame: battlefield select (match) and mulligan (keep). Sandbox completes the goldfish seat.
+    // Pregame: battlefield select (match) and mulligan (keep). The sandbox server completes the
+    // goldfish's mulligan but NOT its battlefield pick, so we make that pick over a side socket.
     const deadline = Date.now() + 25_000;
+    let goldfishBfDone = false;
     while (Date.now() < deadline) {
       const ready = await this.page.evaluate<boolean>(call(READY_FN));
       if (ready) {
         return;
       }
-      await this.page.evaluate(
-        `(() => { const ov = document.querySelector("#pregameOverlay.visible"); if (!ov) return "none"; const bf = ov.querySelector(".bf-choice"); if (bf) { bf.click(); return "bf"; } const keep = ov.querySelector(".mulligan-btn-keep") || ov.querySelector("button:not([disabled])"); if (keep) { keep.click(); return "keep"; } return "wait"; })()`,
+      const step = await this.page.evaluate<string>(
+        `(() => { const ov = document.querySelector("#pregameOverlay.visible"); if (!ov) return "none"; const bf = ov.querySelector(".bf-choice:not(.selected)"); if (bf && !ov.querySelector(".bf-choice.selected")) { bf.click(); return "bf"; } if (ov.querySelector(".pregame-waiting")) return "bf-waiting"; const keep = ov.querySelector(".mulligan-btn-keep") || ov.querySelector("button:not([disabled])"); if (keep) { keep.click(); return "keep"; } return "wait"; })()`,
       );
+      if (step === "bf-waiting" && !goldfishBfDone) {
+        goldfishBfDone = await this.pickGoldfishBattlefield().catch((error) => {
+          trace("goldfish battlefield pick failed:", String(error));
+          return false;
+        });
+      }
       await sleep(400);
     }
     throw new HarnessError({ code: "TIMEOUT", message: "goldfish bootstrap: board did not become playable within 25s" });
+  }
+
+  /**
+   * Sandbox "match" games: choose the goldfish seat's battlefield (first option) over a short-lived
+   * game socket opened as that seat (the game WS trusts ?player=; sandbox only).
+   */
+  private async pickGoldfishBattlefield(): Promise<boolean> {
+    const info = await this.page.evaluate<{ gameId: string; me: string; players: string[] } | null>(
+      `(() => window.__rbGameId ? { gameId: window.__rbGameId, me: window.__rbViewingPlayer, players: Object.keys((window.__rbGameState && window.__rbGameState.players) || { "player-1": 1, "player-2": 1 }) } : null)()`,
+    );
+    if (!info) {
+      return false;
+    }
+    const other = info.players.find((p) => p !== info.me) ?? "player-2";
+    const wsUrl = `${this.baseUrl.replace(/^http/, "ws")}/ws/game/${info.gameId}?player=${encodeURIComponent(other)}`;
+    trace("goldfish battlefield pick via", wsUrl);
+    return new Promise<boolean>((resolve) => {
+      const sock = new WebSocket(wsUrl);
+      const done = (ok: boolean) => {
+        clearTimeout(timer);
+        try {
+          sock.close();
+        } catch {
+          /* ignore */
+        }
+        resolve(ok);
+      };
+      const timer = setTimeout(() => done(false), 5_000);
+      sock.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(String(ev.data)) as { type?: string; pregame?: { phase?: string; battlefieldOptions?: { id: string }[]; battlefieldSelected?: string | null } };
+          const pg = msg.pregame;
+          if (msg.type !== "sync" || !pg) {
+            return;
+          }
+          if (pg.phase !== "battlefield_select" || pg.battlefieldSelected) {
+            done(true);
+            return;
+          }
+          const choice = pg.battlefieldOptions?.[0]?.id;
+          if (!choice) {
+            done(false);
+            return;
+          }
+          sock.send(JSON.stringify({ battlefieldId: choice, type: "pregame_battlefield_select" }));
+        } catch {
+          /* ignore */
+        }
+      };
+      sock.onerror = () => done(false);
+    });
   }
 
   private async waitReady(timeout: number): Promise<void> {

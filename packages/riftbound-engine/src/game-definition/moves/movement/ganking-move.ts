@@ -211,7 +211,10 @@ export const gankingMove: Defs["gankingMove"] = {
           unitId as CoreCardId,
           { combatRole: "attacker" } as Partial<RiftboundCardMeta>,
         );
-        fireTriggers({ battlefieldId: toBattlefield, cardId: unitId, type: "attack" }, triggerCtx);
+        fireTriggers(
+          { battlefieldId: toBattlefield, cardId: unitId, owner: playerId, type: "attack" },
+          triggerCtx,
+        );
         for (const cardId of allUnits) {
           const owner = context.cards.getCardOwner(cardId);
           if (owner !== undefined && (owner as string) !== playerId) {
@@ -220,7 +223,12 @@ export const gankingMove: Defs["gankingMove"] = {
               { combatRole: "defender" } as Partial<RiftboundCardMeta>,
             );
             fireTriggers(
-              { battlefieldId: toBattlefield, cardId: cardId as string, type: "defend" },
+              {
+                battlefieldId: toBattlefield,
+                cardId: cardId as string,
+                owner: owner as string,
+                type: "defend",
+              },
               triggerCtx,
             );
           }

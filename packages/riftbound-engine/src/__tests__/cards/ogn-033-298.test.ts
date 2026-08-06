@@ -61,7 +61,7 @@ describe("Shakedown (ogn-033-298)", () => {
 
   test("[Reaction] timing: playable on the opponent's turn and onto an existing chain", async () => {
     const oppTurn = await board().active(P2).build();
-    expect(oppTurn.p1.can("cast", "sd")).toBe(true);
+    expect(oppTurn.p1.can("cast", "sd")).toBe(false); // rule 316.5.b: not in the opponent's Neutral Open State
 
     const game = await board().resources(P2, { energy: 1, power: { fury: 1 } }).battlefield("bf2", { controller: P1 }).unit(P1, "bf2", { might: 4 }, "bfAlly").hand(P2, "ogn-009-298", "ray").active(P2).build();
     await game.p2.cast("ray", { targets: "bfAlly" });

@@ -9,9 +9,7 @@
  * there −1 (floored at 1) until end of turn; units elsewhere are untouched. Reaction timing = any
  * turn, including onto an open chain.
  *
- * Engine note: today the spell asks for a [friendly unit, enemy unit] target pair instead of a
- * battlefield, so casts below pass `targets: [friendly, enemy]` at the intended battlefield; a
- * [rainbow] pip is paid from `power.rainbow`.
+ * The cast names the chosen battlefield (`targets: "bf1"`); a [rainbow] pip is paid from `power.rainbow`.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -37,7 +35,7 @@ function board(res: { energy: number; power?: Record<string, number> } = { energ
 describe("Siphon Power (ogn-266-298)", () => {
   test("cost: 2 energy + 1 rainbow; resolves to trash; unaffordable without the power or with 1 energy", async () => {
     const game = await board().build();
-    await game.p1.cast("sp", { targets: ["f1", "e1"] });
+    await game.p1.cast("sp", { targets: "bf1" });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
     await game.settle();
     expect(game.zoneOf("sp")).toBe("trash");
@@ -49,7 +47,7 @@ describe("Siphon Power (ogn-266-298)", () => {
 
   test("at the chosen battlefield a friendly unit gets +1 and an enemy unit −1 this turn; other locations untouched", async () => {
     const game = await board().build();
-    await game.p1.cast("sp", { targets: ["f1", "e1"] });
+    await game.p1.cast("sp", { targets: "bf1" });
     await game.settle();
     expect(game.state("f1").might).toBe(3);
     expect(game.state("e1").might).toBe(2);
@@ -58,10 +56,9 @@ describe("Siphon Power (ogn-266-298)", () => {
     expect(game.state("fb").might).toBe(2);
   });
 
-  test.failing("BUG: ALL friendly units there get +1 and ALL enemy units there get −1 (engine only touches one of each)", async () => {
-    // Expected: bf1 → f1 3, f1b 3, e1 2, e1s 1 (floored). Actual: only the two picked units change.
+  test("ALL friendly units there get +1 and ALL enemy units there get −1", async () => {
     const game = await board().build();
-    await game.p1.cast("sp", { targets: ["f1", "e1"] });
+    await game.p1.cast("sp", { targets: "bf1" });
     await game.settle();
     expect(game.state("f1").might).toBe(3);
     expect(game.state("f1b").might).toBe(3);
@@ -71,24 +68,23 @@ describe("Siphon Power (ogn-266-298)", () => {
 
   test("'to a minimum of 1 [Might]': a 1-might enemy unit there stays at 1", async () => {
     const game = await board().build();
-    await game.p1.cast("sp", { targets: ["f1", "e1s"] });
+    await game.p1.cast("sp", { targets: "bf1" });
     await game.settle();
     expect(game.state("e1s").might).toBe(1);
     expect(game.state("f1").might).toBe(3);
   });
 
-  test.failing("BUG: the choice is a battlefield — a base unit or units at two different battlefields can never be affected together", async () => {
-    // Expected: no legal way to pair Friend Home (base) with anything, nor f1 (bf1) with e2 (bf2).
-    // Actual: the cast enumerates arbitrary [friendly, enemy] unit pairs across the whole board.
+  test("the choice is a battlefield — the legal targets are exactly the battlefields, never units", async () => {
     const game = await board().build();
-    const pairs = (game.p1.option("cast", "sp")?.fields.find((f) => f.arg === "targets")?.options ?? []) as string[][];
-    expect(pairs.some((p) => p.includes("fb"))).toBe(false);
-    expect(pairs.some((p) => p.includes("f1") && p.includes("e2"))).toBe(false);
+    const opts = (game.p1.option("cast", "sp")?.fields.find((f) => f.arg === "targets")?.options ?? []) as string[][];
+    expect(opts.map((o) => [...o]).sort()).toEqual([["bf1"], ["bf2"]]);
+    const bad = await game.p1.try((p) => p.cast("sp", { targets: ["f1", "e1"] }));
+    expect(bad.ok).toBe(false);
   });
 
   test("'this turn': the modifiers are gone after the turn ends", async () => {
     const game = await board().build();
-    await game.p1.cast("sp", { targets: ["f1", "e1"] });
+    await game.p1.cast("sp", { targets: "bf1" });
     await game.settle();
     expect(game.state("f1").might).toBe(3);
     await game.advanceTurn();
@@ -106,7 +102,7 @@ describe("Siphon Power (ogn-266-298)", () => {
     await game.p2.cast("theirs");
     await game.p2.passPriority();
     expect(game.p1.can("cast", "sp")).toBe(true);
-    await game.p1.cast("sp", { targets: ["f1", "e1"] });
+    await game.p1.cast("sp", { targets: "bf1" });
     expect(game.chain().map((c) => c.cardId)).toEqual(["theirs", "sp"]);
     await game.p1.passPriority();
     await game.p2.passPriority(); // Siphon Power resolves first (LIFO)

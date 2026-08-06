@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-258-298",
+  "title": "BUG: with no OTHER enemy unit at the destination the move still happens and no damage is dealt",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-258-298.test.ts",
+    "testName": "BUG: with no OTHER enemy unit at the destination the move still happens and no damage is dealt"
+  },
+  "id": "9e70c331e988",
+  "createdAt": "2026-08-06T18:35:08.339Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.339Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

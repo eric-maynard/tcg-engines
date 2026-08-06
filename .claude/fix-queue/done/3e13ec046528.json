@@ -1,0 +1,33 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogs-011-024",
+  "title": "BUG: [Reaction] in a showdown — flashing the lone defender home leaves the attacker alone, so it wins the combat and conquers (rules 466.3.a, 466.5)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogs-011-024.test.ts",
+    "testName": "BUG: [Reaction] in a showdown — flashing the lone defender home leaves the attacker alone, so it wins the combat and conquers (rules 466.3.a, 466.5)"
+  },
+  "id": "3e13ec046528",
+  "createdAt": "2026-08-06T18:35:08.338Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.338Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T20:10:30.461Z",
+      "event": "done(unclaimed)",
+      "note": "fixed by resolveFullCombat empty-side resolution (466.3.a/466.5)"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "fixed by resolveFullCombat empty-side resolution (466.3.a/466.5)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogs-011-024.test.ts"
+    ],
+    "at": "2026-08-06T20:10:30.461Z"
+  }
+}

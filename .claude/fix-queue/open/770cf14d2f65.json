@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 457.1/323.7 — Setup A: when a unit at bf1 is killed by a spell, its attached Equipment stays at the battlefield still 'attached' to the dead unit instead of being recalled to base at the next cleanup",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/movement-recalls-and-entering-exhausted.test.ts",
+    "testName": "BUG: 457.1/323.7 — Setup A: when a unit at bf1 is killed by a spell, its attached Equipment stays at the battlefield still 'attached' to the dead unit instead of being recalled to base at the next cleanup"
+  },
+  "id": "770cf14d2f65",
+  "createdAt": "2026-08-06T20:50:12.437Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.437Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

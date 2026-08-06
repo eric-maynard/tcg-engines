@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 431.3 / 431.3.b / 431.3.c.1 — repeated Burn Out must keep awarding (undeniable) points until P1 wins at 8; engine burns out once and plays on",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts",
+    "testName": "BUG: 431.3 / 431.3.b / 431.3.c.1 — repeated Burn Out must keep awarding (undeniable) points until P1 wins at 8; engine burns out once and plays on"
+  },
+  "id": "cfaa2aa3ae38",
+  "createdAt": "2026-08-06T20:50:12.436Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.436Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -447,6 +447,19 @@ export function parseConditionFromText(text: string): ConditionParseResult | und
     };
   }
 
+  // rule 740.2.a / 740.2.c: "While I'm attacking or defending alone" (Wielder of Water)
+  const whileAloneInCombatMatch =
+    /^While I'm (attacking or defending|attacking|defending) alone,?\s*/i.exec(text);
+  if (whileAloneInCombatMatch) {
+    const roleWord = whileAloneInCombatMatch[1].toLowerCase();
+    const role = roleWord === "attacking" || roleWord === "defending" ? roleWord : "either";
+    return {
+      condition: { role, type: "alone-in-combat" } as Condition,
+      remainingText: text.slice(whileAloneInCombatMatch[0].length),
+      startIndex: 0,
+    };
+  }
+
   // Try "If I was [Mighty]" (past tense)
   const ifMightyMatch = IF_MIGHTY_PATTERN.exec(text);
   if (ifMightyMatch) {

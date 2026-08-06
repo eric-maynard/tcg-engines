@@ -4,6 +4,7 @@
 
 import type {
   BuffEffect,
+  DoubleMightEffect,
   Effect,
   ModifyMightEffect,
   SequenceEffect,
@@ -12,6 +13,35 @@ import type { AnyTarget, Location } from "@tcg/riftbound-types/targeting";
 import { parseTarget } from "../parsers/target-parser";
 import { parseEffect } from "./effect";
 import { wordToNumber } from "./tokens";
+
+/**
+ * Try to parse a double-might effect (rule 432.1.a):
+ * "Double TARGET's Might [this turn|this combat]." / "Double my Might this combat."
+ */
+export function parseDoubleMightEffect(text: string): DoubleMightEffect | undefined {
+  const match = text.match(
+    /^Double (my|its|(?:(?:a|an|another)\s+)?(?:friendly |enemy )?unit(?:['’]s)?)(?:\s+Might|\s*:rb_might:)\s*(this turn|this combat)?\.?$/i,
+  );
+  if (!match) {
+    return undefined;
+  }
+  const targetStr = match[1].toLowerCase().replace(/['’]s$/, "").trim();
+  let target: AnyTarget;
+  if (targetStr === "my") {
+    target = "self";
+  } else if (targetStr === "its") {
+    target = { type: "unit" } as AnyTarget;
+  } else {
+    target = parseTarget(targetStr);
+  }
+  const durationStr = match[2]?.toLowerCase();
+  const duration = durationStr?.includes("combat")
+    ? "combat"
+    : durationStr?.includes("turn")
+      ? "turn"
+      : undefined;
+  return { ...(duration ? { duration } : {}), target, type: "double-might" } as DoubleMightEffect;
+}
 
 /**
  * Try to parse a buff effect: "Buff TARGET."

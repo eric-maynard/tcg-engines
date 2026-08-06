@@ -23,7 +23,7 @@ import type {
   MatchedTrigger,
   TriggerableAbility,
 } from "./trigger-matcher";
-import { findMatchingTriggers } from "./trigger-matcher";
+import { abilityFunctionsFromTrash, findMatchingTriggers, turnEventCountKeys } from "./trigger-matcher";
 
 /**
  * rule-id: ogn-100-298 (Gemcraft Seer) — effect keywords granted by another
@@ -566,6 +566,32 @@ export function orderTriggers(
 }
 
 export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
+  // rule-id: ogn-118-298 — tally every event (per type / player / card) before
+  // matching so "the first time … each turn" restrictions can read the count.
+  {
+    const draft = ctx.draft as { turnEventCounts?: Record<string, number> };
+    draft.turnEventCounts ??= {};
+    for (const key of turnEventCountKeys(event)) {
+      draft.turnEventCounts[key] = (draft.turnEventCounts[key] ?? 0) + 1;
+    }
+  }
+  // rule-id: ogn-019-298 — "If you've discarded a card this turn" statics read a
+  // per-player log of this turn's events; every discard flows through here.
+  if (event.type === "discard" && event.playerId) {
+    const draft = ctx.draft as { turnEvents?: Record<string, string[]> };
+    draft.turnEvents ??= {};
+    (draft.turnEvents[event.playerId] ??= []).push("discarded");
+  }
+  // rule-id: ogn-144-298 — "If an enemy unit has died this turn": log the
+  // death against every OTHER player as `enemy-died` (and the owner as
+  // `friendly-died`) so play-time cost conditions can read it.
+  if (event.type === "die" && event.owner) {
+    const draft = ctx.draft as { turnEvents?: Record<string, string[]>; players?: Record<string, unknown> };
+    draft.turnEvents ??= {};
+    for (const pid of Object.keys(draft.players ?? {})) {
+      (draft.turnEvents[pid] ??= []).push(pid === event.owner ? "friendly-died" : "enemy-died");
+    }
+  }
   // rule-id: ogn-100-298 — static keyword grants are otherwise only refreshed
   // in post-move cleanup, so a unit entering play under "Other friendly units
   // have [Vision]" would not yet carry the grant when its play-self fires.
@@ -601,6 +627,21 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
       owner: event.owner,
       zone: ctx.zones.getCardZone?.(event.cardId as CoreCardId) ?? "trash",
     });
+  }
+  // rule-id: ogn-037-298 (rule 385.2 / 383.2.c.1) — "…play me from your trash"
+  // triggers are active in the trash: scan each player's trash for cards
+  // carrying such an ability (the matcher ignores their other abilities).
+  for (const playerId of Object.keys(ctx.draft.players ?? {})) {
+    const trashCards = ctx.zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId);
+    for (const cardId of trashCards) {
+      if (boardCards.some((c) => c.id === (cardId as string))) {
+        continue;
+      }
+      const abilities = toTriggerableAbilities(cardId as string);
+      if (abilities.some(abilityFunctionsFromTrash)) {
+        boardCards.push({ abilities, id: cardId as string, owner: playerId, zone: "trash" });
+      }
+    }
   }
   const allMatches = findMatchingTriggers(event, boardCards, ctx.draft);
 

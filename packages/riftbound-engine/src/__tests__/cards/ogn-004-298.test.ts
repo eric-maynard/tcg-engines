@@ -69,7 +69,7 @@ describe("Cleave (ogn-004-298)", () => {
     expect(game.zoneOf("foe")).toBe("trash"); // 2 + 3 = 5 ≥ 4
   });
 
-  test.failing("BUG: the Assault-boosted attacker survives non-lethal return damage and conquers (rules 719.1.c, 626.1.d.1.a, 627.1/627.3)", async () => {
+  test("the Assault-boosted attacker survives non-lethal return damage and conquers (rules 719.1.c, 626.1.d.1.a, 627.1/627.3)", async () => {
     // 2 (+3 Assault) = 5 Might attacker takes 4 damage from the defender: 4 < 5 is not Lethal Damage,
     // so it must remain, conquer bf1 and have its damage cleared (627.5). The engine's combat
     // resolver counts Shield toward a defender's lethal threshold but ignores Assault for attackers,

@@ -469,6 +469,8 @@ export interface RiftboundMoves {
   resolvePendingChoice: {
     playerId: PlayerId;
     pickedCardId?: CardId;
+    /** rule 422.1.a: several picks at once for a reveal-and-pick with `remaining` > 1. */
+    pickedCardIds?: CardId[];
     pickedName?: string;
     pickedZoneId?: string;
     pickedMode?: number;
@@ -480,6 +482,11 @@ export interface RiftboundMoves {
      * unit's optional "you may pay X as an additional cost".
      */
     paidAdditionalCost?: boolean;
+    /**
+     * rule 355.14.e-g (ogn-041-298): one-shot split-damage allocation for a
+     * choose-target carrying `total` — card id → damage (each ≥1, sum = total).
+     */
+    allocation?: Record<string, number>;
   };
 
   // ============================================

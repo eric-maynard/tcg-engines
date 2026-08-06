@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-085-298",
+  "title": "BUG: killing the lone defender during the showdown leaves the attacker to win the combat and conquer (466.3.a, 466.5)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-085-298.test.ts",
+    "testName": "BUG: killing the lone defender during the showdown leaves the attacker to win the combat and conquer (466.3.a, 466.5)"
+  },
+  "id": "c80caea12691",
+  "createdAt": "2026-08-06T17:15:21.551Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.551Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:58:55.496Z",
+      "event": "grabbed:w3-i2"
+    },
+    {
+      "at": "2026-08-06T20:10:30.381Z",
+      "event": "done",
+      "note": "resolveFullCombat: side empty at showdown close skips damage step but still runs 466.3/466.5 resolution (attacker alone → conquer)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i2",
+  "claimedAt": "2026-08-06T19:58:55.496Z",
+  "resolution": {
+    "note": "resolveFullCombat: side empty at showdown close skips damage step but still runs 466.3/466.5 resolution (attacker alone → conquer)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-085-298.test.ts"
+    ],
+    "at": "2026-08-06T20:10:30.380Z"
+  }
+}

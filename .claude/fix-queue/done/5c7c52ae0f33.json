@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-122-298",
+  "title": "BUG: no [Action]/[Reaction] keyword — not playable during a showdown or onto a chain (rules 155, 308.1.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-122-298.test.ts",
+    "testName": "BUG: no [Action]/[Reaction] keyword — not playable during a showdown or onto a chain (rules 155, 308.1.a)"
+  },
+  "id": "5c7c52ae0f33",
+  "createdAt": "2026-08-06T17:15:21.550Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.550Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:58:55.495Z",
+      "event": "grabbed:w3-i2"
+    },
+    {
+      "at": "2026-08-06T20:10:30.534Z",
+      "event": "done",
+      "note": "already fixed on HEAD (normalizeSpellTiming derives timing from printed text); test already flipped and passing"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i2",
+  "claimedAt": "2026-08-06T19:58:55.495Z",
+  "resolution": {
+    "note": "already fixed on HEAD (normalizeSpellTiming derives timing from printed text); test already flipped and passing",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-122-298.test.ts"
+    ],
+    "at": "2026-08-06T20:10:30.534Z"
+  }
+}

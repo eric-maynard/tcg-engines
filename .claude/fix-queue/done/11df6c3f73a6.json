@@ -1,0 +1,33 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-036-298",
+  "title": "BUG: timing — a unit's non-[Action]/[Reaction] activated ability cannot be used on the opponent's turn (rule 145.2)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-036-298.test.ts",
+    "testName": "BUG: timing — a unit's non-[Action]/[Reaction] activated ability cannot be used on the opponent's turn (rule 145.2)"
+  },
+  "id": "11df6c3f73a6",
+  "createdAt": "2026-08-06T17:15:21.554Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.554Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:48:53.807Z",
+      "event": "done(unclaimed)",
+      "note": "fixed by w8-i1 rule 316.5.b neutral-open gate (play-spell/activate-ability); test flipped"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "fixed by w8-i1 rule 316.5.b neutral-open gate (play-spell/activate-ability); test flipped",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts",
+      "packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts"
+    ],
+    "at": "2026-08-06T19:48:53.807Z"
+  }
+}

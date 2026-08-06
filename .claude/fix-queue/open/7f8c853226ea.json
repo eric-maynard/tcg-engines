@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ven-044-166",
+  "title": "Astral Heron's triggered effect 'your next card costs [2][rainbow][rainbow] less' is unimplemented (resolves as a raw-text no-op).",
+  "expected": "Card def ven.json:1577-1579 has rulesText but abilities:[]/parseSuccess:false; the runtime parser matches the trigger via trigger-patterns.ts:373-379 (\"When you play your first card each turn\") but no effect parser handles \"your next card costs [2][rainbow][rainbow] less\" (only \"I cost X less\" static/self cost-reduction exists: effect-keyword-parser.ts:357-363, static-parser.ts), so the effect falls back to {type:\"raw\"}. Engine executeEffect (riftbound-engine/src/abilities/effect-executor.ts:150-156) has no EFFECT_HANDLERS[\"raw\"] entry and silently no-ops. Existing ruling test astral-heron-8cedb5e8fc134531.test.ts encodes this exact bug as test.failing (\"engine applies no discount\") and it currently passes (i.e., the discount is indeed not applied) when run with bun test.",
+  "observed": "Trigger fired and went on the chain with effect {\"type\":\"raw\",\"text\":\"your next card costs :rb_energy_2::rb_rune_rainbow::rb_rune_rainbow: less.\"}; after resolving it, hand still showed Shipyard Skulker cost 3 and playing it deducted full cost: energy 8 -> 5. No cost reduction applied.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effect-executor.ts:150",
+  "id": "7f8c853226ea",
+  "createdAt": "2026-08-06T20:43:38.884Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.884Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

@@ -51,7 +51,7 @@ describe("Garen, Rugged (ogs-007-024)", () => {
     expect(game.zoneOf("wall")).toBe("trash");
   });
 
-  test.failing("BUG: Assault 2 also raises his lethal threshold while attacking — he survives the 6 damage (6 < 7) and conquers", async () => {
+  test("Assault 2 also raises his lethal threshold while attacking — he survives the 6 damage (6 < 7) and conquers", async () => {
     // Expected (807 + 142.4): as an attacker Garen has 7 Might, so 6 damage is not lethal; he stays,
     // heals in the combat cleanup and conquers bf1 for 1 point. Actual: the engine adds Assault to the
     // damage he deals but checks lethality against his printed 5, so he dies alongside the defender.

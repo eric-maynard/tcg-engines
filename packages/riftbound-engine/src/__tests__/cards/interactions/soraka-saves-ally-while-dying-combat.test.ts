@@ -64,7 +64,7 @@ describe("Soraka, Wanderer dying simultaneously with the allies she protects (co
     expect(game.zoneOf("attacker")).toBe("trash");
   });
 
-  test.failing("BUG: Soraka (surviving) should replace the Recruit's combat death — heal, exhaust, recall to base (card text; 373.1.a)", async () => {
+  test("Soraka (surviving) should replace the Recruit's combat death — heal, exhaust, recall to base (card text; 373.1.a)", async () => {
     // Expected: the Recruit (1 < 4 Might) never reaches the trash; it ends in P2's base exhausted
     // and undamaged. Actual: combat kills bypass the die-replacement entirely → Recruit in trash.
     const game = await attackAndResolve(8);
@@ -73,7 +73,7 @@ describe("Soraka, Wanderer dying simultaneously with the allies she protects (co
     expect(game.state("recruit").damage).toBe(0);
   });
 
-  test.failing("BUG: with lethal on all three, Soraka still saves the Recruit even though she dies in the same cleanup (370.4, 373, 373.1.a)", async () => {
+  test("with lethal on all three, Soraka still saves the Recruit even though she dies in the same cleanup (370.4, 373, 373.1.a)", async () => {
     // Expected: Recruit healed/exhausted/recalled to base before the other deaths are processed;
     // Soraka leaving simultaneously does not stop her replacement (370.4 names her as the example).
     // Actual: Recruit goes to trash with the rest.
@@ -105,7 +105,7 @@ describe("Soraka, Wanderer dying simultaneously with the allies she protects (co
     expect(game.p1.points()).toBe(1);
   });
 
-  test.failing("BUG: full expected end state — Recruit exhausted in P2's base, Sergeant + Soraka in trash, attacker holds bf1 (370.4, 456, 466.3.a)", async () => {
+  test("full expected end state — Recruit exhausted in P2's base, Sergeant + Soraka in trash, attacker holds bf1 (370.4, 456, 466.3.a)", async () => {
     // Composite oracle for the whole question; fails today only because the Recruit is not saved.
     const game = await attackAndResolve(10);
     expect(game.p2.base()).toContain("recruit");

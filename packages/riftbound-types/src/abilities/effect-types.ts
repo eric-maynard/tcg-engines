@@ -52,6 +52,12 @@ export interface RecycleEffect {
    * to pick top or bottom via a `choose-destination` pending choice.
    */
   readonly position?: "bottom" | "owner-choice";
+  /**
+   * "Each player chooses N …; recycle the rest" (ogn-244-298) — the per-player
+   * keep-N choice. Not executed by the engine yet; its presence stops the
+   * handler from reading the step as "recycle all".
+   */
+  readonly keep?: number;
 }
 
 /**
@@ -281,6 +287,17 @@ export interface SwapMightEffect {
   readonly target1: AnyTarget;
   readonly target2: AnyTarget;
   readonly duration?: "turn" | "permanent";
+}
+
+/**
+ * rule 364.3 (ogn-053-298 Stand United): a spell/ability-created continuous
+ * effect that behaves like a static ability for the rest of the turn — it is
+ * re-evaluated on every static pass, so it also reaches units that start
+ * matching later ("Buffs give an additional +1 [Might] to friendly units this turn").
+ */
+export interface TurnStaticEffect {
+  readonly type: "turn-static";
+  readonly effect: ModifyMightEffect | GrantKeywordEffect | GrantKeywordsEffect;
 }
 
 // ============================================================================
@@ -765,6 +782,7 @@ export type Effect =
   | SpendBuffEffect
   | DoubleMightEffect
   | SwapMightEffect
+  | TurnStaticEffect
 
   // Movement
   | MoveEffect

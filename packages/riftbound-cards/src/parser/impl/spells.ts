@@ -2,10 +2,11 @@
  * Spell-ability parsing (incl. Repeat handling).
  */
 
-import type { SpellAbility } from "@tcg/riftbound-types";
+import type { Ability, SpellAbility, StaticAbility } from "@tcg/riftbound-types";
 import type { Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import type { AnyTarget } from "@tcg/riftbound-types/targeting";
 import { parseCost } from "../parsers/cost-parser";
+import { parseStaticAbility } from "../parsers/static-parser";
 import { parseTarget } from "../parsers/target-parser";
 import { parseEffects } from "./effects";
 import { stripReminders } from "./normalize";
@@ -55,6 +56,51 @@ function bindChosenTarget(effect: Effect, chosen: AnyTarget): Effect {
  */
 export const SPELL_PATTERN = /^\[(Action|Reaction)\]\s*(?:_?\s*\([^)]*\)\s*_?\s*)?(.+)$/s;
 
+// rule 466 / rule 356.4: cost-modifying sentences printed on a spell
+// ("If …, this costs [2] less.", "This spell's Energy cost is reduced by …")
+// are static riders read at pay time, not part of the resolve-time effect.
+// `parseSpellAbility` strips them from the effect text; this lifts them into
+// their own static `cost-reduction` abilities so the engine can apply them.
+const SPELL_COST_RIDER_RES: readonly RegExp[] = [
+  /^This spell's Energy cost is reduced by[^.]*\./i,
+  /^If an enemy unit has died this turn, this costs[^.]*\./i,
+  /^If an opponent's score is within \d+ points? of the Victory Score, this costs[^.]*\./i,
+  /^If you(?:'re|’re) within \d+ points? of winning, this costs[^.]*\./i,
+];
+
+export function parseSpellCostRiders(text: string): StaticAbility[] {
+  const match = SPELL_PATTERN.exec(text);
+  if (!match) {
+    return [];
+  }
+  const out: StaticAbility[] = [];
+  for (const line of match[2].split(/\n+|(?<=\.)\s*(?=[A-Z])/)) {
+    const sentence = line.trim();
+    for (const re of SPELL_COST_RIDER_RES) {
+      const m = re.exec(sentence);
+      if (!m) {
+        continue;
+      }
+      const parsed = parseStaticAbility(m[0])?.ability;
+      const eff = parsed?.effect as { type?: string } | undefined;
+      if (parsed && eff?.type === "cost-reduction") {
+        out.push(parsed);
+      }
+      break;
+    }
+  }
+  return out;
+}
+
+/** The spell ability plus any static cost riders printed on it. */
+export function parseSpellAbilities(text: string): Ability[] | undefined {
+  const spell = parseSpellAbility(text);
+  if (!spell) {
+    return undefined;
+  }
+  return [spell, ...parseSpellCostRiders(text)];
+}
+
 export function parseSpellAbility(text: string): SpellAbility | undefined {
   const match = SPELL_PATTERN.exec(text);
   if (!match) {
@@ -92,7 +138,15 @@ export function parseSpellAbility(text: string): SpellAbility | undefined {
   // and remember the single chosen target so "it" in the effect binds to it.
   let chosenTarget: AnyTarget | undefined;
   const chooseMatch = CHOOSE_PREAMBLE_RE.exec(effectText);
-  if (chooseMatch) {
+  // rule-id: ogn-266-298 (rule 355.8) — "Choose a battlefield. …units there…":
+  // the battlefield is the play-time choice and every "there" refers to it, so
+  // rewrite to the "at a battlefield" (all-at-one-battlefield) descriptor.
+  const chooseBfMatch = /^Choose a battlefield\.\s*/i.exec(effectText);
+  if (chooseBfMatch && /\bunits there\b/i.test(effectText)) {
+    effectText = effectText
+      .slice(chooseBfMatch[0].length)
+      .replace(/\b(units) there\b/gi, "$1 at a battlefield");
+  } else if (chooseMatch) {
     effectText = effectText.slice(chooseMatch[0].length);
     if (!chooseMatch[2] || !/^\s+and /i.test(chooseMatch[2])) {
       chosenTarget = parseTarget(chooseMatch[1]);

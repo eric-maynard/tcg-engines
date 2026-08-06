@@ -45,7 +45,7 @@ describe("Thousand-Tailed Watcher (ogn-116-298)", () => {
     expect(r.ok).toBe(false);
   });
 
-  test.failing("BUG: Accelerate needs a SECOND [mind] on top of the base [mind] pip — with 8 energy + 1 mind the accelerated play is not legal", async () => {
+  test("Accelerate needs a SECOND [mind] on top of the base [mind] pip — with 8 energy + 1 mind the accelerated play is not legal", async () => {
     // Expected: total cost 8 energy + 2 mind is unaffordable with 1 mind, so the accelerate variant is
     // not in the legal menu. Actual: it is offered (power of the additional cost is checked in isolation);
     // executing it silently plays the unit un-accelerated.
@@ -68,7 +68,7 @@ describe("Thousand-Tailed Watcher (ogn-116-298)", () => {
     expect(game.state("two").might).toBe(2);
   });
 
-  test.failing("BUG: 'enemy units' — ALL enemy units everywhere get -3 (min 1) with no target prompt; friendly units untouched", async () => {
+  test("'enemy units' — ALL enemy units everywhere get -3 (min 1) with no target prompt; friendly units untouched", async () => {
     // Expected: five→2, seven→4, two→1, ally stays 5, and no choice is asked.
     // Actual: the trigger asks P1 to pick ONE enemy unit and only debuffs that one.
     const game = await scenario()

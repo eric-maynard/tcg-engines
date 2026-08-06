@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 444.2.c — cannot tap a ready rune to pay an optional 'you may pay [1]' while the ability resolves; only 'decline' is offered",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/paying-costs-energy-power.test.ts",
+    "testName": "BUG: 444.2.c — cannot tap a ready rune to pay an optional 'you may pay [1]' while the ability resolves; only 'decline' is offered"
+  },
+  "id": "0de7c03c9495",
+  "createdAt": "2026-08-06T20:50:12.438Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.438Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

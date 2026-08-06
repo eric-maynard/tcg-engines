@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-270-298",
+  "title": "BUG: moving it into an enemy-held battlefield contests it — combat follows and the buffed 3-Might unit beats a 2-Might defender",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-270-298.test.ts",
+    "testName": "BUG: moving it into an enemy-held battlefield contests it — combat follows and the buffed 3-Might unit beats a 2-Might defender"
+  },
+  "id": "6650020bae92",
+  "createdAt": "2026-08-06T18:35:08.356Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.356Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

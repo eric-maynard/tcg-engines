@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 466.7.a — the Attacker designation must be removed from a recalled attacker (engine leaves combatRole='attacker' on units recalled to base)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/combat-flow-and-resolution.test.ts",
+    "testName": "BUG: 466.7.a — the Attacker designation must be removed from a recalled attacker (engine leaves combatRole='attacker' on units recalled to base)"
+  },
+  "id": "700c6b30d6bd",
+  "createdAt": "2026-08-06T20:11:47.425Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.425Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

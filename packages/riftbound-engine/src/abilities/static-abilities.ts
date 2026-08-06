@@ -121,7 +121,7 @@ export function evaluateCondition(
         | Partial<RiftboundCardMeta>
         | undefined;
       const baseMight = def?.might ?? 0;
-      const buffBonus = meta?.buffed ? 1 : 0;
+      const buffBonus = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
       const mightMod = meta?.mightModifier ?? 0;
       return baseMight + buffBonus + mightMod >= MIGHTY_THRESHOLD;
     }
@@ -230,6 +230,27 @@ export function evaluateCondition(
       return meta?.combatRole === "attacker" || meta?.combatRole === "defender";
     }
 
+    // rule 740.2.a / 740.2.c: "While I'm attacking or defending alone" — the
+    // source has a combat designation matching `role` and no other friendly
+    // unit shares its location.
+    case "alone-in-combat": {
+      const meta = ctx.cards.getCardMeta(source.id as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      const role = (condition.role as string | undefined) ?? "either";
+      const combatRole = meta?.combatRole;
+      const roleOk =
+        role === "attacking"
+          ? combatRole === "attacker"
+          : role === "defending"
+            ? combatRole === "defender"
+            : combatRole === "attacker" || combatRole === "defender";
+      if (!roleOk) {
+        return false;
+      }
+      return evaluateCondition({ type: "while-alone" }, source, ctx);
+    }
+
     case "and": {
       const subConditions = condition.conditions as Record<string, unknown>[];
       return subConditions.every((c) => evaluateCondition(c, source, ctx));
@@ -264,6 +285,19 @@ export function evaluateCondition(
       const eventType = condition.event as string;
       const events = ctx.draft.turnEvents?.[source.owner] ?? [];
       return events.includes(eventType);
+    }
+
+    // rule-id: ogn-019-298 — "If you've discarded a card this turn, I have …":
+    // true only while this turn's event log holds a matching entry for the
+    // source's controller (never by default).
+    case "this-turn": {
+      const eventType = condition.event as string;
+      const events = ctx.draft.turnEvents?.[source.owner] ?? [];
+      const n = events.filter((e) => e === eventType).length;
+      const cmp = condition.count as { gte?: number; eq?: number; lte?: number } | undefined;
+      if (cmp?.eq !== undefined) return n === cmp.eq;
+      if (cmp?.lte !== undefined) return n <= cmp.lte && n >= (cmp.gte ?? 0);
+      return n >= (cmp?.gte ?? 1);
     }
 
     case "turn-count-at-least": {
@@ -505,7 +539,7 @@ function applyStaticEffect(
       // take the unit's current Might below the stated floor (nor raise it).
       if (typeof effect.minimum === "number" && targetAmount < 0) {
         const reg = registry ?? getGlobalCardRegistry();
-        let cur = reg.getMight(targetId) + (meta?.buffed ? 1 : 0);
+        let cur = reg.getMight(targetId) + (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
         cur += (meta?.mightModifier ?? 0) + (meta?.staticMightBonus ?? 0);
         for (const equipId of meta?.equippedWith ?? []) cur += reg.getMightBonus(equipId as string);
         targetAmount = Math.min(0, Math.max(targetAmount, (effect.minimum as number) - cur));
@@ -589,7 +623,6 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   const boardCards = getAllBoardCards(ctx);
   const registry = getGlobalCardRegistry();
   let anyApplied = false;
-  if (process.env.W1DBG) console.error('W1DBG recalc', boardCards.map(c=>c.id+'@'+c.zone).join(','));
 
   // Step 1: Strip all static modifications
   for (const card of boardCards) {
@@ -690,7 +723,6 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
               ? (resolveStaticTargetsFromDescriptor(passEffect.target, card, boardCards, ctx) ??
                 defaultTargetIds)
               : defaultTargetIds;
-          if (process.env.W1DBG) console.error('W1DBG static', card.id, card.zone, JSON.stringify(passEffect), targetIds);
           applyStaticEffect(passEffect, targetIds, ctx, card);
         }
         anyApplied = true;
@@ -702,6 +734,20 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   applyPass(PASS_1_EFFECTS);
   // Pass 2 — arithmetic
   applyPass(PASS_2_EFFECTS);
+
+  // rule 364.3 (ogn-053-298): turn-scoped continuous effects created by a
+  // spell/ability ("Buffs give an additional +1 [Might] to friendly units this
+  // turn") apply like statics from a virtual source controlled by the caster.
+  for (const ts of ctx.draft.turnStatics ?? []) {
+    const effect = ts.effect as Record<string, unknown> | undefined;
+    if (!effect || typeof effect.type !== "string") {
+      continue;
+    }
+    const source: BoardCard = { id: ts.sourceCardId, owner: ts.controllerId, zone: "" };
+    const targetIds = resolveStaticTargetsFromDescriptor(effect.target, source, boardCards, ctx) ?? [];
+    applyStaticEffect(effect, targetIds, ctx, source);
+    anyApplied = true;
+  }
 
   return anyApplied;
 }

@@ -1,6 +1,6 @@
 # Riftbound Agent Harness — Design
 
-Status: implemented headless core (`packages/riftbound-engine/src/harness/`), BrowserBackend + MCP are design-only.
+Status: implemented headless core (`packages/riftbound-engine/src/harness/`) and BrowserBackend (`harness/browser/`, §13); MCP server lives in `packages/riftbound-mcp`.
 Inputs: `01-engine-inventory.md`, `02-ui-surface.md`, `03-rules-decision-taxonomy.md`, `04-prior-art.md`.
 
 ---
@@ -39,7 +39,7 @@ L2  Game / Seat (ergonomic)    seat.play/cast/activate/move/hide/tapRune/recycle
 L1  Decision / Answer protocol deriveDecision(source) · resolveAction(option,args) · answer→move mapping
 L0  GameBackend                view(seat) · decision() · decisionFor(seat) · act(seat,answer) · waitFor · hash
         ├─ EngineBackend        RuleEngine + TurnDriver (+ createPlayableGame | scenario)
-        └─ BrowserBackend (plan) Playwright: window.executeMove / __rbGameState / __rbAvailableMoves, seq-gated
+        └─ BrowserBackend        Playwright: window.executeMove / __rbGameState / __rbAvailableMoves, seq-gated (§13)
 ```
 
 Rules of the layering:
@@ -299,7 +299,7 @@ energy/power unless a cost modifier is present), `noOrphanChain` (chain.active �
 
 ---
 
-## 8. BrowserBackend plan (not implemented)
+## 8. BrowserBackend plan (implemented — see §13 for what shipped)
 
 - **Semantic mode**: `act` → `page.evaluate(executeMove(moveId, params, seat))` using the *same* `{moveId, params}` the
   L1 resolver produced from `__rbAvailableMoves` (grouping code is shared through `DecisionSource`); completion =
@@ -413,3 +413,142 @@ Clause 2 ("if it had ≤3 Might you may play this from your trash for [rainbow]"
 **standardMove of 2 units.** `p1.move(["u1","u2"], "bf1")` matches the variant whose `unitIds` set-equals `{u1,u2}` and `destination:"bf1"`; if enemies are present a combat showdown opens: `decision()` = `action(showdown, seat:P1, passKey)`; `game.settle()` passes focus both ways, TurnDriver auto-runs `resolveFullCombat`, `executed[]` lists it, and the test asserts damage/control.
 
 **Reveal-and-pick (Stacked Deck: look at 3, draw 1, recycle rest).** `p1.cast("sd")` → settle stops at `pick{seat:P1, timing:RES, semantics:"from-revealed", min:1,max:1, options:[d0,d1,d2 with names]}` → `p1.pick("d1")` → `d1` in hand, `d0,d2` at deck bottom. With `game.script(P1, ["d1"])` the settle consumes the scripted answer instead of stopping; in strict mode an unscripted prompt throws `UNSCRIPTED_DECISION`.
+
+---
+
+## 13. BrowserBackend (implemented: `harness/browser/`)
+
+The same L0 `GameBackend` contract as `EngineBackend`, but the "engine" is the LIVE web app: a Playwright
+page connected to the app's game WebSocket. L2 (`Game` / `SeatHandle`), `settle()` / `advanceTurn()`, and
+card-test vocabulary run unchanged on top of it.
+
+```
+Game / SeatHandle (game.ts, unchanged)
+   └─ BrowserBackend (browser-backend.ts)                    implements GameBackend + the EngineBackend duck-type Game uses
+        ├─ AnswerResolver (answer-resolver.ts)             Answer → {moveId, params}: same L1 narrowing/park/follow-up as EngineBackend
+        ├─ SnapshotEngine (snapshot-adapter.ts)            __rbGameState/__rbAvailableMoves → RiftboundGameState + zones/cards/metas façade
+        │                                                   (observation.ts / card-state.ts / decision.ts consume it as a DecisionContext)
+        ├─ page-scripts.ts                                  in-page JS (socket tap, frame read, dispatch, outcome/autoplay predicates)
+        ├─ visual.ts                                        gesture map for visual act mode
+        └─ transport: bridge.ts + pw-bridge.mjs (node)  |  playwright-loader.ts (in-process)
+```
+
+### 13.1 Construction
+
+```ts
+const backend = await BrowserBackend.launch({
+  baseUrl: "http://localhost:3000", seat: "player-1",
+  mode: "test" | "goldfish",          // test = GET /play/test (fastest); goldfish = real /play solo lobby flow (deck?, soloMode duel|match)
+  actMode: "semantic" | "visual",     // default semantic
+  headless: true, page?: PwPage,      // or drive an existing Playwright page (attach; navigate:true to bootstrap on it)
+  transport: "node" | "bun",          // where Playwright runs (below); env RB_BROWSER_TRANSPORT
+  autoProcedures, timeoutMs, autoplayGraceMs, settle: true, calm: true, blockImages: false,
+});
+const game = attachBrowserGame(backend);          // or: await Game.fromBrowser(opts) / launchBrowserGame(opts); browserBackendOf(game)
+```
+
+Bootstrap lands on a playable board: past pregame (mulligan kept; in `match` solo games the goldfish's
+battlefield is picked over a side socket because the sandbox server only auto-completes its mulligan), the
+socket tap installed, and — `settle:true` — priority/focus passed until the local seat holds an open
+main-phase decision (the default legend opens turn 1 with a start-of-turn trigger on the chain).
+
+Playwright is not a package dependency: it is resolved at runtime (`RB_PLAYWRIGHT_MODULE`, bare
+`playwright`, then `/tmp/pwtest/node_modules/playwright`). **Transport**: by default Playwright runs in a
+Node child process (`pw-bridge.mjs`, NDJSON RPC over stdio, every call individually timed out, hard-killable);
+`transport:"bun"` runs it in-process. Under Bun 1.3 the in-process pipe transport was observed to wedge
+sporadically (~1 in 6 sessions: every call including `browser.close()` stops answering), and Playwright's
+`connectOverCDP` WebSocket never connects under Bun — hence the Node bridge.
+
+### 13.2 Observation
+
+Every read is against the cached frame `refresh()` pulls from the page: `lastSeq`, `__rbGameState`,
+`__rbAvailableMoves`, `__rbViewingPlayer`, plus — sandbox only — the other seats' menus via
+`GET /api/game/:id/moves?player=` (so `decisionFor(P2)` / hot-seat acts work). `snapshot-adapter.ts` maps the
+server snapshot to `RiftboundGameState` (bookkeeping fields defaulted) and to an `InternalView`
+(zones → cardIds in server order, cards, metas incl. lifted `__flags`), wraps them in a read-only
+`SnapshotEngine` (`getState()`, `internalState`, `enumerateMoves()` from the cached menus, `canExecuteMove()`
+by menu membership) and registers every visible instance id in a backend-private `CardDefinitionRegistry`
+from the card pool (`activate()` swaps it in, exactly like EngineBackend). `deriveDecision`, `observe`,
+`buildCardState`, `listZoneSummaries`, `Game.findAll` therefore run unchanged. Hidden cards: outside sandbox
+the server's `hidden-*` stubs are kept as count-only instances; in sandbox the snapshot is omniscient and the
+harness redaction (`view(seat)`) applies. `seq()` **is the server's `seq`** (embedded in decision ids, so a
+goldfish frame makes an old id stale). `stateHash()` hashes the snapshot (not comparable with EngineBackend).
+
+### 13.3 act(): semantic vs visual
+
+`act(seat, answer)`: `refresh()` → `AnswerResolver.resolve()` (identical semantics to EngineBackend: stale
+ids, chooser checks, `findOption`, `narrowVariants` with parked follow-ups, `resolvePendingAnswer`) →
+dispatch → wait → `ActResult`.
+
+- **Semantic** (default): `executeMove(moveId, params, playerId)` inside the page; the requestId it used is
+  read back from the client's `requestCounter`. Completion = a `move_accepted`/`move_rejected`/`error` frame
+  carrying that requestId (from the socket tap `window.__rbHarness.frames`; the client also mirrors the last
+  frame to `window.__rbLastFrame`). Rejection → `ENGINE_REJECTED` with the server's `errorCode`, state
+  untouched. Other seats (sandbox hot-seat) go through `POST /api/game/:id/move` and a seq wait.
+- Then, for sandbox WS moves, the `state_update{moveId:"sandboxAutoPlay"}` frame that always follows is
+  awaited (`autoplayGraceMs`) and reported as `executed[] {auto:true, moveId:"sandboxAutoPlay"}`; procedures
+  the UI now offers us (`resolveFullCombat`/`endShowdown`/`resolveChain`) are auto-run when `autoProcedures`;
+  finally we wait until the cursor is back on the local seat (bounded).
+- **Visual** (`actMode:"visual"`, switchable at runtime): the resolved move is expressed as the UI gesture and
+  considered dispatched when the client's request counter advances; the frame the UI actually sent is
+  cross-checked against the resolved move (`visualLog[]` records `{gesture, dispatched, visualFallback?,
+  mismatch?}`; `executed[0]` reports what was really sent). No mapping / gesture did not dispatch → semantic
+  fallback with a `visualFallback` note.
+
+| move | visual gesture | notes |
+|---|---|---|
+| `exhaustRune` | click rune (top strip; same-domain runes are fanned 26px apart) | ✓ tested |
+| `playUnit` to base / untargeted `playGear` | click hand card → (play-cost modal variant by params) / ("No target") / (action bar) | ✓ tested; hand→battlefield play: fallback (UI drags to base only) |
+| `playSpell` | click hand card → click each `.valid-target` → "Done"/"No target" | ✓ tested (Cleave); repeat/accelerate/flow/X variants: fallback (UI gap) |
+| `passChainPriority` / `passShowdownFocus` | Space | ✓ tested |
+| `endTurn` | `#actionsList` "End Turn" (Space fallback) | implemented |
+| `resolvePendingChoice` | `#choiceOverlay .choice-modal-card[data-pick-idx]` / `.choice-modal-btn[data-other-idx]` (index recomputed from `availableMoves`), board-glow fallback | ✓ tested (Stacked Deck) |
+| `standardMove` (1 unit) | drag unit → `.battlefield[data-drop-zone]` | implemented, untested; multi-unit: fallback (UI gap) |
+| `recallUnit` / `gankingMove` | click unit → action-bar button | implemented, untested |
+| everything else (`recycleRune`, `activateAbility`, `hideCard`, `concede`, …) | — | semantic fallback (recorded) |
+
+`calm:true` injects `animation/transition: none` (stable clicks, less renderer CPU on a shared box).
+
+### 13.4 Live-server setup vocabulary
+
+`scenario()` placement is engine-only. On the browser: fresh goldfish game (+ saved deck in goldfish mode)
+→ `backend.tutor(defId, seat)` (`POST /api/game/:id/tutor`: card to hand — moved from deck if present, else
+spawned as `player-N-main-999-<defId>` — plus energy = cost+4 and the card's power pips) →
+`backend.addResources(seat, {energy, power})` (sandbox REST move). `seat.do(moveId, params)` works (async raw).
+
+### 13.5 Limitations
+
+- Invariants are not evaluated (no prev/cur engine snapshots); `violations()` is empty. Transcript steps are
+  recorded with snapshot hashes; replay is engine-only.
+- X ranges come from pool energy (no `canExecute` probe channel); `explainMissing` cannot quote engine
+  validation errors (menus only contain valid moves).
+- One page = one seat's socket. Other seats are readable/drivable only in sandbox (REST hooks); a real
+  two-human game needs two backends (two pages) — supported by construction, not yet wrapped.
+- `seq` also advances on frames we did not cause (goldfish, tutor, resync); decision ids go stale accordingly.
+- Visual mode expresses only the gestures in the table; paid+targeted / repeat / multi-unit variants are UI
+  gaps (02-ui-surface §5) and fall back to semantic.
+- App gap worked around: sandbox `match` games never complete the goldfish's battlefield pick server-side.
+- EngineBackend still has its own copy of the act() sequencing; `AnswerResolver` is drop-in shareable.
+
+### 13.6 Tests (gated)
+
+`src/__tests__/harness-browser/` runs only with `RB_BROWSER_TESTS=1` **and** an app answering on
+`RB_BROWSER_URL` (default `http://localhost:3000`) **and** Playwright resolvable; otherwise every describe is
+skipped, so `bun test packages/riftbound-engine/src/__tests__/harness` stays hermetic.
+
+```bash
+RB_BROWSER_TESTS=1 bun test ./packages/riftbound-engine/src/__tests__/harness-browser      # ~30s, 7 tests
+RB_BROWSER_DEBUG=1 …   # trace every dispatch/wait to stderr;  RB_BROWSER_TRANSPORT=bun|node;  RB_NODE=/path/to/node
+```
+
+Covered: semantic core loop (turn 1 → tap ×2 → play → base/exhausted/energy read back from `__rbGameState` →
+endTurn → goldfish turn → our turn 3 with 4 runes); Cleave via tutor with `targets` (chain item visible →
+settle resolves → trash + Assault); Stacked Deck via tutor (`pick`/`from-revealed` surfaced from the live
+`pendingChoice` → answer → hand/deck-bottom); error results (UNKNOWN_OPTION / STALE_DECISION / ILLEGAL_ARGS leave
+seq+state untouched); visual mode (rune click, hand click, targeting clicks, Space, modal pick, semantic
+fallback note); and the **differential test**: the /play/test position is mirrored card-for-card (same
+instance ids, deck/rune order, battlefields, pools, second-player bonus-rune bookkeeping) into a `scenario()`
+engine, the same L2 script runs on both (tap ×2 → play → end turn → opponent turn → our turn 3), and per-seat
+observations must agree on turn / resources / zones (visible ids as sets, hidden cards as per-owner counts) /
+battlefields / chain / points / P1 menu keys. Tolerated diffs: seq & decision ids & hashes, `players[*].turnsTaken`,
+log, chain item ids, `BattlefieldView.name`, order inside unordered zones.

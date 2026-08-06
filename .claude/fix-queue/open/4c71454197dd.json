@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 471.1.b — Victory Score 9: at 8, a lone conquer (other battlefield unscored this turn) must draw instead and stay 8; engine awards 9 and the win",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/victory-and-final-point.test.ts",
+    "testName": "BUG: 471.1.b — Victory Score 9: at 8, a lone conquer (other battlefield unscored this turn) must draw instead and stay 8; engine awards 9 and the win"
+  },
+  "id": "4c71454197dd",
+  "createdAt": "2026-08-06T20:50:12.439Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.439Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

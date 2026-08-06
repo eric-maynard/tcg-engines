@@ -1,0 +1,40 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-077-298",
+  "title": "BUG: lethal damage to a friendly unit should kill the Hourglass instead and heal, exhaust and recall that unit (rules 438, 370.1.a.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-077-298.test.ts",
+    "testName": "BUG: lethal damage to a friendly unit should kill the Hourglass instead and heal, exhaust and recall that unit (rules 438, 370.1.a.1)"
+  },
+  "id": "36f4f7a75581",
+  "createdAt": "2026-08-06T17:15:21.542Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.542Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T17:51:17.845Z",
+      "event": "grabbed:w3-i1"
+    },
+    {
+      "at": "2026-08-06T18:32:13.644Z",
+      "event": "done",
+      "note": "SBA die-replacement now executes the replacement effect (kill self/heal/exhaust/recall) with dying unit as trigger-source"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i1",
+  "claimedAt": "2026-08-06T17:51:17.845Z",
+  "resolution": {
+    "note": "SBA die-replacement now executes the replacement effect (kill self/heal/exhaust/recall) with dying unit as trigger-source",
+    "files": [
+      "packages/riftbound-engine/src/cleanup/state-based-checks.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-077-298.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/interactions/immortal-phoenix-kill-source-matrix.test.ts"
+    ],
+    "at": "2026-08-06T18:32:13.644Z"
+  }
+}

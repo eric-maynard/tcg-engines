@@ -112,7 +112,8 @@ describe("Fiora, Victorious × Block × Doran's Blade — Mighty/Shield layering
   test.failing("BUG: (a) layered Might — Blocked defending Fiora fights at 8 (4 +3 Shield → Mighty → +1 own Shield): she survives a 7-might attacker and trades with an 8-might one (476.3, 814.1.c, 814.2)", async () => {
     // Expected: 7-might attacker deals 7 < 8 → Fiora lives, attacker takes 8 → dies; an 8-might
     // attacker kills her but also takes 8 → dies. Actual: Fiora's "While I'm Mighty … Shield" is
-    // never applied, she fights at 7: dies to the 7 and leaves the 8-might attacker alive.
+    // never derived (equipment/Shield Might is ignored by the while-mighty check), so she fights at
+    // most at 7: she does not survive the 7-might attacker and the 8-might attacker is left alive.
     const vs7 = await defence(7).build();
     await vs7.p2.move("atk", "bf1");
     await vs7.p2.passFocus();
@@ -144,7 +145,7 @@ describe("Fiora, Victorious × Block × Doran's Blade — Mighty/Shield layering
   });
 
   test("(a) after combat ends she is a plain 4-might unit again: Defender designation gone, damage healed, only Block's turn-long grants remain; next turn she cannot Ganking-move (466.7.a, 466.1.a.1, 476.3)", async () => {
-    const game = await defence(6).battlefield("bf2", { controller: P2 }).build(); // 6 < her combat Might under either reading
+    const game = await defence(3).battlefield("bf2", { controller: P2 }).build(); // 3 < 4: she survives no matter how her combat Might is computed
     await game.p2.move("atk", "bf1");
     await game.p2.passFocus();
     await game.p1.cast("block", { targets: "fiora" });

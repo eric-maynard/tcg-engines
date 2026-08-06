@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ven-172-166",
+  "title": "Static 'My Might is increased by your points' does nothing on the VEN reprint",
+  "expected": "ven.json:4714-4734 defines ven-172-166 with rulesText \"My Might is increased by your points.\", abilities:[], parseSuccess:false. adaptJsonCard (all-cards.ts:805-807) turns [] into undefined, so enrichCard (enrich-cards.ts:22-33) re-parses rulesText, but parseAbilities returns {success:false,\"Could not parse ability text\"} (verified by running the parser via bun). Result: getCardRegistry().get(\"ven-172-166\").abilities === undefined, while ogn-028-298 gets the hand-authored static modify-might {amount:{score:'self'}} from cards/ogn/draven-showboat.ts:12-21. There is no cards/ven/ override directory and no name-based reprint inheritance in all-cards.ts/enrich-cards.ts, so the VEN printing has no static ability and gets no Might bonus from points.",
+  "observed": "After conquering Aspirant's Climb (players.player-1.victoryPoints = 1), Draven's meta had no staticMightBonus/mightModifier and might stayed 3; UI showed no buff badge. Root cause: the loaded def for ven-172-166 has no `abilities` at all (ven.json entry has abilities:[] / parseSuccess:false and the parser can't handle this text), whereas the OGN printing ogn-028-298 carries a hand-authored static {type:'modify-might', amount:{score:'self'}, target:'self'}. The VEN reprint never inherits it.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/ven.json:4733",
+  "id": "df5623971157",
+  "createdAt": "2026-08-06T20:43:38.884Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.884Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

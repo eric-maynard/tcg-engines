@@ -203,7 +203,7 @@ describe("Rengar, Pouncing / Shen, Kinkou played into an ongoing combat", () => 
     expect(game.p2.units("bf1")).toEqual([]);
   });
 
-  test.failing("BUG: defenders' 7 (2 + Shen 5) cannot kill both a 4-Might unit and a 5-Might Rengar — exactly one attacker survives, so P1 wins the combat and conquers bf1 (807.1.c, 465.2.c.3, 466.3.a, 466.5)", async () => {
+  test("defenders' 7 (2 + Shen 5) cannot kill both a 4-Might unit and a 5-Might Rengar — exactly one attacker survives, so P1 wins the combat and conquers bf1 (807.1.c, 465.2.c.3, 466.3.a, 466.5)", async () => {
     // Expected: 7 = lethal 4 on one + 3 leftover (or lethal 5 on Rengar + 2 leftover): one attacker
     // lives, P1 is the only player with units at bf1 → wins, establishes control, scores 1.
     // Actual: the resolver treats Rengar's lethal threshold as his base 3 (Assault ignored for

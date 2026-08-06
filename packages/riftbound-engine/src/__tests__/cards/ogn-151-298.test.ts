@@ -112,9 +112,7 @@ describe("Lee Sin, Centered (ogn-151-298)", () => {
     expect(game.state("buffedHere").might).toBe(5);
   });
 
-  test.failing("BUG: static follows him — a Standard Move of Lee Sin off bf2 drops the bonus there immediately", async () => {
-    // Expected: after Lee Sin walks from bf2 to base, buffedThere is back to 3 (2 +1 buff).
-    // Actual: no static recalculation runs after a standard move; the stale +2 lingers.
+  test("static follows him — a Standard Move of Lee Sin off bf2 drops the bonus there immediately", async () => {
     const game = await board("bf2").build();
     await castBuff(game, "lee");
     expect(game.state("buffedThere").might).toBe(5);

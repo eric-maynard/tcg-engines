@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 445563aa61a7f05a — at Rockfall Path the unit ends in its owner's BANISHMENT (replay skipped); engine leaves it on the battlefield",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/temporal-breach-445563aa61a7f05a.test.ts",
+    "testName": "BUG: ruling 445563aa61a7f05a — at Rockfall Path the unit ends in its owner's BANISHMENT (replay skipped); engine leaves it on the battlefield"
+  },
+  "id": "a156024aa0e5",
+  "createdAt": "2026-08-06T19:56:55.634Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:56:55.634Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

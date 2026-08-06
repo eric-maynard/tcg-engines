@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 317.1/317.2.c — 'this turn' effects expire before end-of-turn triggers resolve (buff already gone during the Ending Step)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/turn-structure-phases-and-resources.test.ts",
+    "testName": "BUG: 317.1/317.2.c — 'this turn' effects expire before end-of-turn triggers resolve (buff already gone during the Ending Step)"
+  },
+  "id": "2bdf469b32a5",
+  "createdAt": "2026-08-06T20:50:12.434Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.434Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

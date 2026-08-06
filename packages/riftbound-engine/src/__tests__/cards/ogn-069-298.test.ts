@@ -35,7 +35,7 @@ describe("Last Stand (ogn-069-298)", () => {
     expect(game.zoneOf("ls")).toBe("trash");
   });
 
-  test.failing("BUG: doubles the unit's Might this turn (3 → 6) (rule 432.1.a)", async () => {
+  test("doubles the unit's Might this turn (3 → 6) (rule 432.1.a)", async () => {
     // Expected: a 3-Might unit becomes 6 Might until end of turn. Actual: the parsed spell only
     // grants Temporary; no might modification is applied (stays 3).
     const game = await board().build();
@@ -46,7 +46,7 @@ describe("Last Stand (ogn-069-298)", () => {
     expect(game.state("ally").might).toBe(3); // "this turn" only
   });
 
-  test.failing("BUG: only FRIENDLY units are legal targets", async () => {
+  test("only FRIENDLY units are legal targets", async () => {
     // Expected: only "ally" is offered. Actual: the enemy "foe" is offered too.
     const game = await board().build();
     const targets = game.p1.option("cast", "ls")?.fields.find((f) => f.arg === "targets")?.options;
@@ -55,7 +55,7 @@ describe("Last Stand (ogn-069-298)", () => {
     expect(t.ok).toBe(false);
   });
 
-  test.failing("BUG: Temporary persists past this turn and kills the unit at the start of its controller's next Beginning Phase (rule 816.1.b)", async () => {
+  test("Temporary persists past this turn and kills the unit at the start of its controller's next Beginning Phase (rule 816.1.b)", async () => {
     // Expected: the keyword is still there on the opponent's turn, and when P1's next turn
     // begins the unit is killed. Actual: Temporary is granted with duration "turn", so it
     // expires at end of turn and the unit survives.

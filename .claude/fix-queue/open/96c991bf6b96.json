@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogs-020-024",
+  "title": "BUG: must choose a FRIENDLY unit when played (enemy units not offered; no friendly unit → not playable); costs 4",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogs-020-024.test.ts",
+    "testName": "BUG: must choose a FRIENDLY unit when played (enemy units not offered; no friendly unit → not playable); costs 4"
+  },
+  "id": "96c991bf6b96",
+  "createdAt": "2026-08-06T18:35:08.356Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.356Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

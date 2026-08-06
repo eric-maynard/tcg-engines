@@ -55,8 +55,25 @@ export interface RiftboundCardMeta {
   /** Damage counters on the card */
   damage: number;
 
+  /**
+   * rule 428.5.c: who dealt the most recent spell/ability damage to this
+   * unit (and whether the source was a spell), so a lethal-damage cleanup
+   * kill can be attributed; rule 428.5.c.2: "combat" = killed by combat
+   * damage, attributed to the opposing combatant's controller. Cleared when
+   * the unit dies.
+   */
+  lastDamagedBy?: PlayerId;
+  lastDamageSource?: "spell" | "ability" | "combat";
+
   /** Whether the card has a buff counter */
   buffed: boolean;
+
+  /**
+   * rule 702.3 (ogn-078-298): buffs beyond the first, only for a unit whose
+   * ability lifts the one-buff cap ("I can have any number of buffs"). Each is
+   * +1 Might (rule 703); `buffed` stays the first buff.
+   */
+  extraBuffs?: number;
 
   /** Whether the card is stunned */
   stunned: boolean;
@@ -397,6 +414,16 @@ export interface RevealAndPickChoice {
    * `discard 1, then draw 1` resume after the player has chosen.
    */
   readonly then?: unknown;
+
+  /**
+   * rule 422.1.a (ogn-030-298 "discard 2"): picks still owed. When >1 the
+   * prompt re-parks after each pick (revealed minus the pick) and `then`
+   * only runs after the last one; `resolvePendingChoice.pickedCardIds` may
+   * answer several at once. Omitted = exactly one pick.
+   */
+  readonly remaining?: number;
+  /** Picks already taken for this prompt (batchIndex for "one or more" triggers). */
+  readonly taken?: number;
 }
 
 /**
@@ -447,6 +474,12 @@ export interface ChooseTargetChoice {
    */
   readonly assign?: true;
   /**
+   * rule 355.14.c/e/f (ogn-041-298): with `assign`, a fixed damage TOTAL the
+   * chooser splits over `options` in one `allocation` answer (any number of
+   * targets ≤ total, each ≥1, summing to total; zero targets is legal).
+   */
+  readonly total?: number;
+  /**
    * rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": picks
    * accumulate in `picked` until the chooser declines (`accept:false`) or no
    * legal option remains; `options` is re-pruned after each pick against the
@@ -454,6 +487,8 @@ export interface ChooseTargetChoice {
    */
   readonly anyNumber?: true;
   readonly picked?: readonly CardId[];
+  /** rule 355.13 (ogn-073-298): "up to N" — stop prompting once N are picked. */
+  readonly maxPicks?: number;
 }
 
 /**
@@ -518,6 +553,13 @@ export interface OptInChoice {
   readonly sourceCardId: CardId;
   /** The resolved chain item to execute if the player accepts. */
   readonly resolved: unknown;
+  /**
+   * rule 372 (ogn-023-298): an optional "you may pay … instead" death
+   * replacement is awaiting its controller's answer for this unit; state-based
+   * checks leave its lethal damage in place until the prompt resolves
+   * (accept → the replacement heals/recalls it; decline → it dies).
+   */
+  readonly suspendedDeathCardId?: CardId;
 }
 
 /**
@@ -643,6 +685,13 @@ export interface RiftboundGameState {
   lastCounterTargetId?: string;
 
   /**
+   * rule-id: unl-186-219 — effective Might of the unit most recently killed by
+   * a `kill` effect, snapshotted as it left the board so "if it had N [Might]
+   * or less" reads last-known information rather than the trash copy.
+   */
+  lastKilledUnitMight?: number;
+
+  /**
    * Number of units each player has moved this turn.
    *
    * Used by move-escalation effects (e.g., Mageseeker Investigator) that
@@ -653,6 +702,13 @@ export interface RiftboundGameState {
 
   /** Events that occurred this turn, for condition checking */
   readonly turnEvents?: Record<string, string[]>;
+
+  /**
+   * rule-id: ogn-118-298 — per-turn tally of fired game events, keyed by
+   * `type`, `type|p:<player>` and `type|c:<card>` (see `turnEventCountKeys`).
+   * Backs "The first time … each turn" trigger restrictions. Reset every turn.
+   */
+  turnEventCounts?: Record<string, number>;
 
   /**
    * rule-id: ogn-026-298 — players who can't play cards for the rest of this
@@ -679,6 +735,14 @@ export interface RiftboundGameState {
    * of `checkReplacement` may consult this alongside board-card abilities.
    */
   activeReplacements?: unknown[];
+
+  /**
+   * rule 364.3 (ogn-053-298): spell/ability-created continuous effects that
+   * act as static abilities until end of turn. Re-applied on every
+   * `recalculateStaticEffects` pass (so units that start matching later are
+   * covered) and cleared at Ending Step (rule 517.2.b).
+   */
+  turnStatics?: { controllerId: PlayerId; sourceCardId: CardId; effect: unknown }[];
 
   /**
    * A pending player decision that blocks all other moves until resolved.

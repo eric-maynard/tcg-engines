@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-260-298",
+  "title": "BUG: damage equal to Might is lethal — a 5-Might striker kills the 5-Might enemy at the battlefield",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-260-298.test.ts",
+    "testName": "BUG: damage equal to Might is lethal — a 5-Might striker kills the 5-Might enemy at the battlefield"
+  },
+  "id": "a1171716f180",
+  "createdAt": "2026-08-06T18:35:08.358Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.358Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

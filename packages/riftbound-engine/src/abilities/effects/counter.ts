@@ -1,6 +1,7 @@
 // Effect handler: "counter"
 import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import { removeChainItem } from "../../chain";
+import { isLegalCounterTarget } from "../../chain/counter-target";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers } from "./_helpers";
 
@@ -16,9 +17,8 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
       // rule-id: sfd-206-221 — "Counter a spell": the target is the topmost
       // un-countered SPELL beneath this item (never a triggered/activated
       // ability sitting above it, and never the countering spell itself),
-      // mirroring the play-time gate in spellEffectHasLegalTargets.
-      const tgtDesc = (effect as { target?: unknown }).target;
-      const wantsSpell = tgtDesc === undefined || tgtDesc === "spell";
+      // sharing the play-time gate's legality check (isLegalCounterTarget).
+      const counterSpec = effect as { target?: unknown };
       let targetItem: (typeof items)[number] | undefined;
       // rule-id: ogn-064-298 (rule 355.8) — the spell to counter was chosen
       // at play time and travels as boundTargets[0]; honour it rather than
@@ -28,8 +28,7 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
         boundId !== undefined && items.some((it) => it && it.cardId === boundId);
       for (let i = items.length - 1; i >= 0; i--) {
         const item = items[i];
-        if (!item || item.countered || item.cardId === ctx.sourceCardId) continue;
-        if (wantsSpell && item.type !== "spell") continue;
+        if (!isLegalCounterTarget(counterSpec, item, ctx.sourceCardId)) continue;
         if (boundOnChain && item.cardId !== boundId) continue;
         targetItem = item;
         break;

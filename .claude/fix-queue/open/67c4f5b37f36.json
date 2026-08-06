@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: the granted Flow expires at end of turn — castable from trash this turn, not on P1's next turn",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/kennen-drag-under-stargazer-flow.test.ts",
+    "testName": "BUG: the granted Flow expires at end of turn — castable from trash this turn, not on P1's next turn"
+  },
+  "id": "67c4f5b37f36",
+  "createdAt": "2026-08-06T18:35:08.344Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.344Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

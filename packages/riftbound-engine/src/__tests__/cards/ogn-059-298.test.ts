@@ -68,9 +68,7 @@ describe("Eclipse Herald (ogn-059-298)", () => {
     expect(game.state("herald").might).toBe(7);
   });
 
-  test.failing("BUG: choosing an already-stunned enemy unit does not stun it again, so the Herald must not trigger (rule 423.1.a.1)", async () => {
-    // Expected: "dazed" is already stunned → no stun event → Herald stays exhausted at 7 Might.
-    // Actual: the stun handler re-sets the flag and fires the stun trigger unconditionally.
+  test("choosing an already-stunned enemy unit does not stun it again, so the Herald must not trigger (rule 423.1.a.1)", async () => {
     const game = await board().build();
     await game.p1.cast("prison", { targets: "dazed" });
     await game.settle();

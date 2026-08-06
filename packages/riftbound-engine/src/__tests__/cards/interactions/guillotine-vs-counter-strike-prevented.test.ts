@@ -82,12 +82,12 @@ describe("Noxian Guillotine × Counter Strike × Sudden Storm — prevented dama
   test("Counter Strike then resolves for B: B draws 1 immediately on resolution (net hand size unchanged: -CS +1)", async () => {
     const game = await board().build();
     await game.p1.cast("ng", { targets: "foe" });
-    await game.settle();
     const p2Hand = game.p2.hand().length;
     const p2Deck = game.p2.deck().length;
-    expect(game.p2.can("cast", "cs")).toBe(true); // Reaction: playable on A's turn in the open state
+    await game.p1.passPriority(); // rule 316.5.b/813.1.c: B needs a Closed State, not A's open state
+    expect(game.p2.can("cast", "cs")).toBe(true); // Reaction: playable on A's turn in the Closed State
     await castCounterStrike(game, "foe");
-    expect(game.chain().map((c) => c.name)).toEqual(["Counter Strike"]);
+    expect(game.chain().map((c) => c.name)).toEqual(["Noxian Guillotine", "Counter Strike"]);
     await game.settle();
     expect(game.zoneOf("cs")).toBe("trash");
     expect(game.p2.hand()).toHaveLength(p2Hand - 1 + 1);
@@ -100,6 +100,8 @@ describe("Noxian Guillotine × Counter Strike × Sudden Storm — prevented dama
     // Expected: the cast option has a `targets` field offering every unit (foe, ally).
     // Actual: Counter Strike is parsed as just "Draw 1" — no target field, no prevention installed.
     const game = await board().build();
+    await game.p1.cast("ng", { targets: "foe" });
+    await game.p1.passPriority(); // rule 316.5.b: B's Reaction needs the Closed State on A's turn
     const offered = targetsOffered(game, "p2", "cs");
     expect(offered).toContain(game.card("foe"));
     expect(offered).toContain(game.card("ally"));
@@ -124,7 +126,7 @@ describe("Noxian Guillotine × Counter Strike × Sudden Storm — prevented dama
     // Actual: Counter Strike installs no prevention; Storm deals 2 and Guillotine kills foe.
     const game = await board().build();
     await game.p1.cast("ng", { targets: "foe" });
-    await game.settle();
+    await game.p1.passPriority(); // rule 316.5.b: B responds in the Closed State
     await castCounterStrike(game, "foe");
     await game.settle();
     await game.p1.cast("storm", { targets: "foe" });
@@ -141,7 +143,7 @@ describe("Noxian Guillotine × Counter Strike × Sudden Storm — prevented dama
     // Actual: the unit already died to Storm because nothing was prevented, so Ray has no target.
     const game = await board().build();
     await game.p1.cast("ng", { targets: "foe" });
-    await game.settle();
+    await game.p1.passPriority(); // rule 316.5.b: B responds in the Closed State
     await castCounterStrike(game, "foe");
     await game.settle();
     await game.p1.cast("storm", { targets: "foe" });

@@ -14,7 +14,16 @@
     {
       "at": "2026-08-06T17:15:21.547Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:48:12.268Z",
+      "event": "grabbed:w4-i2"
+    },
+    {
+      "at": "2026-08-06T20:56:32.492Z",
+      "event": "reaped"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedAt": "2026-08-06T19:48:12.268Z"
 }

@@ -39,7 +39,7 @@ describe("Petty Officer (ogn-215-298)", () => {
     expect(game.zoneOf("po")).toBe("trash"); // took 6 ≥ 6
   });
 
-  test.failing("BUG: Assault also raises its own lethal threshold — attacking a 5-Might defender it survives (6 vs 5 damage) and conquers", async () => {
+  test("Assault also raises its own lethal threshold — attacking a 5-Might defender it survives (6 vs 5 damage) and conquers", async () => {
     // Expected (807, 627): attacker has 6 Might during combat, takes 5 → lives, defender dies, P1 conquers bf1.
     // Actual: the engine compares incoming damage against printed Might, so both units die and nobody conquers.
     const game = await scenario()

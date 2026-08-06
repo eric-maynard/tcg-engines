@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 61269cd307cc8ca8 — enemy Vex attacking: from 3E/2R exactly [1] and 1 power are taken (→ 2E/1R)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/vex-cheerless-61269cd307cc8ca8.test.ts",
+    "testName": "BUG: ruling 61269cd307cc8ca8 — enemy Vex attacking: from 3E/2R exactly [1] and 1 power are taken (→ 2E/1R)"
+  },
+  "id": "373e15b0b786",
+  "createdAt": "2026-08-06T19:45:47.841Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:45:47.841Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

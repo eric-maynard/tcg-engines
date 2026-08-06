@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 4fea0600e91a6adf — playing Baron creates the Baron Pit token battlefield and Baron ENTERS there (entry replaced, 446.2) with zero moves recorded; engine never creates the Pit",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/baron-nashor-4fea0600e91a6adf.test.ts",
+    "testName": "BUG: ruling 4fea0600e91a6adf — playing Baron creates the Baron Pit token battlefield and Baron ENTERS there (entry replaced, 446.2) with zero moves recorded; engine never creates the Pit"
+  },
+  "id": "7c16b6cf36f5",
+  "createdAt": "2026-08-06T19:41:44.526Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:41:44.526Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

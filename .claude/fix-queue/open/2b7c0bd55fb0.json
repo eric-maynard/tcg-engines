@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 402.2 / 383.3 — the trigger's target is chosen while FINALIZING the trigger (before anyone receives Priority); engine defers the choice to resolution",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/showdown-focus-and-triggers-on-chain.test.ts",
+    "testName": "BUG: 402.2 / 383.3 — the trigger's target is chosen while FINALIZING the trigger (before anyone receives Priority); engine defers the choice to resolution"
+  },
+  "id": "2b7c0bd55fb0",
+  "createdAt": "2026-08-06T20:50:12.433Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.433Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

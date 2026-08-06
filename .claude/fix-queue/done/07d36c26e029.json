@@ -1,0 +1,46 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-015-298",
+  "title": "BUG: other friendly units at Farron's location have Assault (static grant, rule 719)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-015-298.test.ts",
+    "testName": "BUG: other friendly units at Farron's location have Assault (static grant, rule 719)"
+  },
+  "id": "07d36c26e029",
+  "createdAt": "2026-08-06T17:15:21.543Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.543Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T17:51:32.618Z",
+      "event": "grabbed:w1-i1"
+    },
+    {
+      "at": "2026-08-06T19:03:47.575Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-06T19:14:50.526Z",
+      "event": "grabbed:w7-i1"
+    },
+    {
+      "at": "2026-08-06T19:20:35.355Z",
+      "event": "done",
+      "note": "already fixed by shared 'other friendly units here have [kw]' static grant (Taric fix); flipped both Farron BUG tests"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-06T19:14:50.526Z",
+  "claimedBy": "w7-i1",
+  "resolution": {
+    "note": "already fixed by shared 'other friendly units here have [kw]' static grant (Taric fix); flipped both Farron BUG tests",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-015-298.test.ts"
+    ],
+    "at": "2026-08-06T19:20:35.355Z"
+  }
+}

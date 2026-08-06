@@ -44,7 +44,7 @@ describe("Grand Strategem (ogn-233-298)", () => {
     expect(game.state("home").baseMight).toBe(1);
   });
 
-  test.failing("BUG: ALL friendly units (base and battlefields) get +5 — nothing is targeted, castable even with no units", async () => {
+  test("ALL friendly units (base and battlefields) get +5 — nothing is targeted, castable even with no units", async () => {
     // Expected: no target prompt; home 1→6 and front 2→7. Actual: parsed as "a friendly unit":
     // the play requires exactly one target and only that unit gets +5.
     const game = await board().build();

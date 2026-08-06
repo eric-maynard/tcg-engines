@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ogs-008-024",
+  "title": "playSpell accepted with no targets and auto-picked units at resolution, bypassing the choice and Deflect",
+  "expected": "Reproduced with harness: P1 (6 energy + 1 body, no spare power), friendly 4-Might unit, only enemy unit = Pouty Poro (ogn-013-298, Deflect). game.p1.can(\"cast\",\"duel\") === false (enumerator's [attacker,defender] pairs at play-spell.ts:512-530 are filtered out by condition because canAffordCard with targets includes the Deflect rainbow surcharge). But raw playSpell {cardId, playerId} with no targets returned ok: paid 6+body, spell went to chain with targets undefined, and after settle Poro was in trash, Rengar had 2 damage, no pendingChoice, resources unchanged beyond base cost. Root cause: playSpell.condition (play-spell.ts:82-339) never requires targets for a `fight` effect — canAffordCard at :173-188 computes Deflect from context.params.targets (undefined → 0 surcharge, cost.ts:1016 getDeflectSurcharge), spellEffectHasLegalTargets at :235 only checks existence, and the single-target validation at :249-268 is skipped when targets is absent. At resolution abilities/effects/fight.ts:19-31 falls back to resolveTarget(...)[0] for attacker/defender when boundTargets are missing, silently auto-picking without a prompt or Deflect payment.",
+  "observed": "Enumerator offered no playSpell move (UI showed card unplayable), but REST playSpell {cardId, playerId} with no targets returned success, paid 6+body, put the spell on chain with no targets, and on resolution the fight handler silently picked Rengar and the Deflect Poro (Poro killed, Rengar took 2) with no pendingChoice and no Deflect payment",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts",
+  "id": "3fcb9aa51dc8",
+  "createdAt": "2026-08-06T20:43:38.884Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.884Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

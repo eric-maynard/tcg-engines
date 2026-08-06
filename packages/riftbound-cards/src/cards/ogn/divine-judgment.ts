@@ -22,21 +22,25 @@ const abilities: Ability[] = [
       effects: [
         {
           from: "board",
+          keep: 2,
           target: { controller: "any", quantity: "all", type: "unit" },
           type: "recycle",
         },
         {
           from: "board",
+          keep: 2,
           target: { controller: "any", quantity: "all", type: "gear" },
           type: "recycle",
         },
         {
           from: "board",
+          keep: 2,
           target: { controller: "any", quantity: "all", type: "rune" },
           type: "recycle",
         },
         {
           from: "hand",
+          keep: 2,
           target: { controller: "any", quantity: "all", type: "card" },
           type: "recycle",
         },

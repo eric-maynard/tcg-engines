@@ -1,0 +1,46 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-014-298",
+  "title": "BUG: reduced cost boundary — 2 energy with a 5-Might unit is not enough, 3 is (rule 356.4)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-014-298.test.ts",
+    "testName": "BUG: reduced cost boundary — 2 energy with a 5-Might unit is not enough, 3 is (rule 356.4)"
+  },
+  "id": "042255227237",
+  "createdAt": "2026-08-06T17:15:21.544Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.544Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T17:51:32.620Z",
+      "event": "grabbed:w1-i1"
+    },
+    {
+      "at": "2026-08-06T19:03:47.575Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-06T19:15:04.083Z",
+      "event": "grabbed:w2-i1"
+    },
+    {
+      "at": "2026-08-06T19:52:30.058Z",
+      "event": "done",
+      "note": "resolved by w1-i1's Sky Splitter cost fix (item 5fc0297a057b); boundary test already flipped, verified 7/7 pass"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-06T19:15:04.083Z",
+  "claimedBy": "w2-i1",
+  "resolution": {
+    "note": "resolved by w1-i1's Sky Splitter cost fix (item 5fc0297a057b); boundary test already flipped, verified 7/7 pass",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-014-298.test.ts"
+    ],
+    "at": "2026-08-06T19:52:30.058Z"
+  }
+}

@@ -55,9 +55,7 @@ describe("Sprite Call (ogn-094-298)", () => {
     expect(sprites(game.p1.units("bf1"))).toHaveLength(1);
   });
 
-  test.failing("BUG: the Sprite token is played READY", async () => {
-    // Expected: "Play a ready ... token" → isReady true. Actual: the token enters exhausted like a
-    // normally played unit.
+  test("the Sprite token is played READY", async () => {
     const game = await fromHand().build();
     await game.p1.cast("sc");
     await game.settle();
@@ -112,9 +110,7 @@ describe("Sprite Call (ogn-094-298)", () => {
     expect(game.zoneOf("sc")).toBe("trash");
   });
 
-  test.failing("BUG: played from facedown, the Sprite must be played at THAT battlefield — base is not a legal destination (Hidden rule)", async () => {
-    // Expected: no destination choice offering "base" (either auto-placed at bf1 or a bf1-only
-    // prompt). Actual: the engine offers base | battlefield-bf1.
+  test("played from facedown, the Sprite must be played at THAT battlefield — base is not a legal destination (Hidden rule)", async () => {
     const game = await hidden().build();
     await game.p1.hide("sc", "bf1");
     await game.advanceTurn();

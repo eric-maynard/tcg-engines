@@ -93,7 +93,7 @@ describe("Wizened Elder (ogn-065-298)", () => {
   // Expected: a buffed Elder already on the board is 6 Might and survives a 5-Might attacker.
   // Actual: the static +1 is only (re)computed when an effect resolves; the cleanup after a
   // move / before combat damage doesn't evaluate "while" statics, so it fights at 5 and dies.
-  test.failing("BUG: 'while buffed' +1 must apply from board state alone (buffed Elder placed in play is 6 Might; rules 364, 519–522)", async () => {
+  test("'while buffed' +1 must apply from board state alone (buffed Elder placed in play is 6 Might; rules 364, 519–522)", async () => {
     const game = await scenario()
       .active(P2)
       .battlefield("bf1", { controller: P1 })

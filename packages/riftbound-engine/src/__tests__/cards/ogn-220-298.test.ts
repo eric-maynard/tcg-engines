@@ -60,7 +60,7 @@ describe("Facebreaker (ogn-220-298)", () => {
     expect(t.ok).toBe(false);
   });
 
-  test.failing("BUG: stunned units deal no combat damage this turn — the following combat leaves both undamaged (rule 423.1.b)", async () => {
+  test("stunned units deal no combat damage this turn — the following combat leaves both undamaged (rule 423.1.b)", async () => {
     // Expected: neither stunned unit deals combat damage, so both survive with 0 damage and the
     // attacker is recalled (466.1.a.2). Actual: the stunned 3-Might defender still kills "mine".
     const game = await scenario()

@@ -1,0 +1,40 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-107-298",
+  "title": "BUG: accepting pays [mind] and plays the [Hidden] unit from hand HERE (at bf1), ignoring its cost",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-107-298.test.ts",
+    "testName": "BUG: accepting pays [mind] and plays the [Hidden] unit from hand HERE (at bf1), ignoring its cost"
+  },
+  "id": "521c8e94f3c7",
+  "createdAt": "2026-08-06T17:15:21.546Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.546Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:18:02.232Z",
+      "event": "grabbed:w11-i2"
+    },
+    {
+      "at": "2026-08-06T19:53:27.689Z",
+      "event": "done",
+      "note": "play effect from:'hand' gathers hand candidates (choose-target if >1); toLocation:'here'+ignoreCost units enter source battlefield directly; resolve.ts skips board pre-resolution for from-hand plays"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i2",
+  "claimedAt": "2026-08-06T19:18:02.232Z",
+  "resolution": {
+    "note": "play effect from:'hand' gathers hand candidates (choose-target if >1); toLocation:'here'+ignoreCost units enter source battlefield directly; resolve.ts skips board pre-resolution for from-hand plays",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/play.ts",
+      "packages/riftbound-engine/src/game-definition/moves/chain/resolve.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-107-298.test.ts"
+    ],
+    "at": "2026-08-06T19:53:27.689Z"
+  }
+}

@@ -50,10 +50,7 @@ describe("Adaptatron (ogn-056-298)", () => {
     expect(game.zoneOf("trinket")).toBe("base");
   });
 
-  test.failing("BUG: 'If you do, buff me' — killing the gear buffs Adaptatron (+1 Might buff)", async () => {
-    // Expected: after the chosen gear dies Adaptatron becomes buffed (3 → 4 Might).
-    // Actual: the follow-up was parsed as `condition: paid-additional-cost`, which is never
-    // true for a conquer trigger, so the gear dies but no buff is applied.
+  test("'If you do, buff me' — killing the gear buffs Adaptatron (+1 Might buff)", async () => {
     const game = await conquer();
     await game.p1.yes();
     await game.settle();

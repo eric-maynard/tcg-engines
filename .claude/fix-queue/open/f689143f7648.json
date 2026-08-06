@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: branch B (383.3.a / 402.1) — accepting at finalization leaves a finalized trigger on the chain in a Closed State with P1 holding Priority and P2 still able to respond before the draw. Engine has no finalization prompt",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/showdown-focus-and-triggers-on-chain.test.ts",
+    "testName": "BUG: branch B (383.3.a / 402.1) — accepting at finalization leaves a finalized trigger on the chain in a Closed State with P1 holding Priority and P2 still able to respond before the draw. Engine has no finalization prompt"
+  },
+  "id": "f689143f7648",
+  "createdAt": "2026-08-06T20:50:12.433Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.433Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

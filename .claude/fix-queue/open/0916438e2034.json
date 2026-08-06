@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-020-221",
+  "title": "BUG: When I attack: you may pay [fury] → +2 Might this turn (4 → 6 kills a 5-Might defender)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-020-221.test.ts",
+    "testName": "BUG: When I attack: you may pay [fury] → +2 Might this turn (4 → 6 kills a 5-Might defender)"
+  },
+  "id": "0916438e2034",
+  "createdAt": "2026-08-06T20:56:21.107Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:56:21.107Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

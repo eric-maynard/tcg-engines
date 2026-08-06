@@ -29,6 +29,7 @@ import { parseExhaustEffect, parseReadyEffect, parseStunEffect } from "./effects
 import { parseGrantKeywordEffect } from "./effects-grant-keyword";
 import {
   parseBuffEffect,
+  parseDoubleMightEffect,
   parseHealEffect,
   parseModifyMightEffect,
   parseSpendBuffEffect,
@@ -72,6 +73,7 @@ export function parseEffect(text: string): Effect | undefined {
     parseBuffEffect(cleaned) ??
     parseDamageEffect(cleaned) ??
     parseModifyMightEffect(cleaned) ??
+    parseDoubleMightEffect(cleaned) ??
     parseKillEffect(cleaned) ??
     parseHealEffect(cleaned) ??
     parseStunEffect(cleaned) ??

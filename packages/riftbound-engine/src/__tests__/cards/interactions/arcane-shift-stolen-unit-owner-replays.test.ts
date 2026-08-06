@@ -24,14 +24,21 @@
  * (124.1/705), exhausted unless P1 pays Accelerate, and its trigger fires again under P1 (hits P2's units).
  */
 import { describe, expect, test } from "bun:test";
-import type { Decision, Seat } from "../../../harness";
-import { P1, P2, scenario } from "../../../harness";
+import type { Decision, Policy, Seat } from "../../../harness";
+import { P1, P2, passivePolicy, scenario } from "../../../harness";
 
 const ARCANE_SHIFT = "sfd-200-221";
 const POSSESSION = "ogn-203-298";
 const WATCHER = "ogn-116-298";
 
 type G = Awaited<ReturnType<ReturnType<typeof scenario>["build"]>>;
+
+/** Passive settling (pass priority, forced picks) plus: answer NO to any "you may pay …" question. */
+const declineOptional: Policy = (d, g) => (d.kind === "yes-no" ? { kind: "yes-no", value: false } : passivePolicy(d, g));
+
+/** Passive settling plus: if the engine (wrongly) asks to pick ONE enemy unit for the Watcher's trigger, name the victim. */
+const pickVictimIfAsked: Policy = (d, g) =>
+  d.kind === "pick" && d.options.some((o) => o.key === "victim") ? { keys: ["victim"], kind: "pick" } : passivePolicy(d, g);
 
 /** The [friendly, enemy] target pairs Arcane Shift offers `seat`. */
 function pairsOffered(game: G, seat: Seat, alias: string): string[][] {
@@ -142,7 +149,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     const game = await possessed();
     await shiftStolen(game);
     await game.p2.pick("battlefield-bf2");
-    await game.settle({ policy: (d) => (d.kind === "yes-no" && d.seat === P2 ? { kind: "yes-no", value: false } : undefined) });
+    await game.settle({ policy: declineOptional });
     await game.settle({ policy: "first" });
     const s = game.state("watcher");
     expect(s.zone).toBe("battlefield-bf2");
@@ -246,7 +253,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     await game.p1.cast("shift", { targets: ["ownWatcher", "victim"] });
     await game.settle();
     await game.p1.pick("base");
-    await game.settle({ policy: (d) => (d.kind === "yes-no" ? { kind: "yes-no", value: false } : undefined) });
+    await game.settle({ policy: declineOptional });
     await game.settle({ policy: "first" });
     expect(game.state("ownWatcher").isExhausted).toBe(true);
   });
@@ -283,18 +290,28 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     expect(game.p1.resources()).toEqual({ energy: 1, power: { chaos: 0, mind: 0 } });
   });
 
-  test.failing("BUG: (d) its 'When you play me' fires again under P1 and hits ALL of P2's units: victim 5→2, p2Small 2→1 (minimum 1); P1's units untouched", async () => {
-    // Expected: no choice — every enemy unit is affected. Actual: the engine asks P1 to pick ONE enemy unit.
+  test("(d) its 'When you play me' fires again under P1 and hits ALL of P2's units: p2Small 2→1 (minimum 1) and victim 5→2 — which, already carrying Arcane Shift's 3 damage, now has lethal damage and dies; P1's units untouched", async () => {
+    // Expected: no choice — every enemy unit is affected. Actual: the engine asks P1 to pick ONE enemy unit
+    // (we name the victim, so it does die, but p2Small keeps its 2 Might).
     const game = await ownBoard().build();
     await game.p1.cast("shift", { targets: ["ownWatcher", "victim"] });
     await game.settle();
     await game.p1.pick("base");
-    await game.settle({
-      policy: (d) => (d.kind === "pick" && d.seat === P1 && d.options.some((o) => o.key === "victim") ? { keys: ["victim"], kind: "pick" } : undefined),
-    });
-    await game.settle({ policy: "first" });
-    expect(game.state("victim").might).toBe(2);
+    await game.settle({ policy: pickVictimIfAsked });
+    expect(game.zoneOf("victim")).toBe("trash");
     expect(game.state("p2Small").might).toBe(1);
     expect(game.state("p1AtBase").might).toBe(4);
+    expect(game.state("ownWatcher").controller).toBe(P1);
+  });
+
+  test("(d) the trigger's -3 Might is applied after Arcane Shift's Deal 3: the 5-Might victim (3 damage) drops to 2 Might and is cleaned up as dead", async () => {
+    const game = await ownBoard().build();
+    await game.p1.cast("shift", { targets: ["ownWatcher", "victim"] });
+    await game.settle();
+    expect(game.state("victim")).toMatchObject({ damage: 3, might: 5, zone: "battlefield-bf2" });
+    await game.p1.pick("base");
+    await game.settle({ policy: pickVictimIfAsked });
+    expect(game.zoneOf("victim")).toBe("trash");
+    expect(game.p2.units("bf2")).toEqual([]);
   });
 });

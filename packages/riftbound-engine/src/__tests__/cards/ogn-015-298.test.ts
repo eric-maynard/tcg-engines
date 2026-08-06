@@ -29,9 +29,9 @@ describe("Captain Farron (ogn-015-298)", () => {
     expect(noEnergy.p1.can("play", "farron")).toBe(false);
   });
 
-  test.failing("BUG: other friendly units at Farron's location have Assault (static grant, rule 719)", async () => {
-    // Expected: once Farron and an ally share a location, the ally's keywords include Assault
-    // (granted with duration "static"). Actual: the static grant-keyword never lands on the ally.
+  test("other friendly units at Farron's location have Assault (static grant, rule 719)", async () => {
+    // Once Farron and an ally share a location, the ally's keywords include Assault
+    // (granted with duration "static").
     const game = await scenario()
       .battlefield("bf1", { controller: P1 })
       .unit(P1, "bf1", CARD, "farron")
@@ -57,9 +57,8 @@ describe("Captain Farron (ogn-015-298)", () => {
     expect(game.state("allyElsewhere").keywords).not.toContain("Assault");
   });
 
-  test.failing("BUG: in combat the ally's Assault counts — Farron (5) + a 2-might ally deal 8 and kill 5+3 defenders", async () => {
-    // Expected: attackers deal 5 + (2+1) = 8, enough to assign lethal damage to both defenders.
-    // Actual: the ally attacks with 2 (no Assault), 7 total, so the 3-might defender survives.
+  test("in combat the ally's Assault counts — Farron (5) + a 2-might ally deal 8 and kill 5+3 defenders", async () => {
+    // Attackers deal 5 + (2+1) = 8, enough to assign lethal damage to both defenders.
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P2, "bf1", { might: 5 }, "d5")

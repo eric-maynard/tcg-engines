@@ -1,0 +1,18 @@
+{
+  "source": "playtest",
+  "title": "After the click (which correctly just expanded the Recycle Rune submenu listing Mind Rune/Order Rune as exhausted, with no state change), the only unit at Back-Alley Bar (Unsung Hero, exhausted=true in engine after its move/conquer) is rendered almost entirely clipped at the bottom edge of the battlefield panel — only a ~10px sliver of a sideways card is visible in 16.png, and the harness invarian",
+  "expected": "Visual clipping is real and deterministic, not exhausted-specific (24.png shows the same unit READY and still ~75% clipped). Source: gameplay.css:109-119 `.battlefield-row { flex: 2; min-height: 180px }` (flex-basis 0 on an over-subscribed 1080px board — acknowledged in the comment at gameplay.css:143-150) collapses the row to 180px logical; inside it `.battlefield { overflow: hidden }` (css:927), `.bf-body`/`.bf-units { min-height: 0; flex: 1 1 56px; overflow-y: auto }` (css:1115, 1151-1153) leave ~44px per unit row while `.bf-units .card { height: 126px }` (css:493). So any unit at a battlefield — here exhausted Unsung Hero — shows only a sliver; screenshot 16.png matches. CAVEAT: the sub-claim 'DOM does not mark the battlefield card as exhausted' is REFUTED — render/card.js:151-153 adds `card--exhausted` for bf units via renderCardElement (board.js:138); the engine=2/DOM=1 invariant is a harness false positive because monkey-drive.ts:93 queries `[id^=\"bf-\"] .card.card--exhausted, .bf-zone .card.card--exhausted`, selectors that never exist in the DOM (#battlefieldRow .battlefield .bf-units), which is why bfExhausted is 0 at every step of the trace.",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/public/css/gameplay.css:119",
+  "rule": "DESIGN.md 'Exhausted cards rotate 90° + dark overlay' / Unsung Hero (sfd-167-221) at battlefield-player-2-bf-ogn-277-298",
+  "id": "fa00eb1e396a",
+  "createdAt": "2026-08-06T20:43:38.887Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.887Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

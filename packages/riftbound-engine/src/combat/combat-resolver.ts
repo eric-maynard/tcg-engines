@@ -56,6 +56,11 @@ export interface CombatResult {
   readonly losingSurvivors: string[];
   /** Damage assigned to each unit */
   readonly damageAssignment: Record<string, number>;
+  /**
+   * rule 626.1.d.2 — attacker damage assigned to enemy units beyond what was
+   * needed to make every defender lethal ("excess damage", Tryndamere).
+   */
+  readonly attackerExcessDamage: number;
 }
 
 /**
@@ -82,11 +87,15 @@ function hasKeyword(unit: CombatUnit, keyword: string): boolean {
  * Might threshold for lethal-damage assignment and kill determination.
  * Rule 726: Shield is "+X Might while I'm a defender" — Might is the unit's
  * survival stat too, so a defending Shield unit needs base+Shield damage to die.
+ * rule 719.1.c: Assault is likewise "+X Might while I'm an attacker", so an
+ * attacking Assault unit needs base+Assault damage to die.
  */
 function lethalThreshold(unit: CombatUnit, role?: "attacker" | "defender"): number {
   let might = unit.baseMight;
   if (role === "defender") {
     might += getKeywordValue(unit, "Shield");
+  } else if (role === "attacker") {
+    might += getKeywordValue(unit, "Assault");
   }
   return Math.max(0, might);
 }
@@ -217,6 +226,12 @@ export function resolveCombat(
   // Step 2: Attackers deal their total Might to defenders (rule 626.1.b)
   const attackerDamageToDefenders = distributeDamage(defenders, attackerTotal, "defender");
   Object.assign(damageAssignment, attackerDamageToDefenders);
+  // rule-id: ogn-034-298 — excess = assigned beyond each defender's lethal need.
+  let attackerExcessDamage = 0;
+  for (const unit of defenders) {
+    const need = Math.max(0, lethalThreshold(unit, "defender") - unit.currentDamage);
+    attackerExcessDamage += Math.max(0, (attackerDamageToDefenders[unit.id] ?? 0) - need);
+  }
 
   // Step 3: Defenders deal their total Might to attackers (rule 626.1.c)
   const defenderDamageToAttackers = distributeDamage(attackers, defenderTotal, "attacker");
@@ -276,6 +291,7 @@ export function resolveCombat(
         : attackerSurvivors.map((u) => u.id));
 
   return {
+    attackerExcessDamage,
     attackerTotal,
     damageAssignment,
     defenderTotal,

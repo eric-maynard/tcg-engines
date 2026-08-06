@@ -213,6 +213,10 @@ export function resolveTarget(
       const def = registry.get(id);
       return def?.cardType === "unit" || def?.cardType === "gear" || def?.cardType === "equipment";
     });
+  } else if (target.type === "rune") {
+    // rule-id: ogn-073-298 — "friendly runes" live in each player's runePool,
+    // never on the unit board; board cards are not runes.
+    filtered = getRunePoolCardIds(ctx);
   }
 
   // Filter by controller. rule-id: unl-192-219 (359.3.e.12) — "friendly" /
@@ -360,7 +364,28 @@ const MIGHTY_THRESHOLD = 5;
  * printed/static or granted for a duration via `grant-keyword`.
  */
 export function isUntargetable(cardId: string, ctx: Pick<TargetResolverContext, "cards">): boolean {
-  if (getGlobalCardRegistry().hasKeyword(cardId, "Untargetable")) {
+  const registry = getGlobalCardRegistry();
+  if (registry.hasKeyword(cardId, "Untargetable")) {
+    return true;
+  }
+  // rule 757: an unconditional printed static "I can't be chosen…" (self
+  // grant-keyword Untargetable) is always on while the card is in play — it
+  // must not depend on when static effects were last recalculated into meta.
+  const abilities = (registry.getAbilities(cardId) ?? []) as readonly {
+    type?: string;
+    condition?: unknown;
+    effect?: { type?: string; keyword?: string; target?: unknown };
+  }[];
+  if (
+    abilities.some(
+      (a) =>
+        a.type === "static" &&
+        a.condition === undefined &&
+        a.effect?.type === "grant-keyword" &&
+        a.effect.keyword === "Untargetable" &&
+        (a.effect.target === undefined || a.effect.target === "self"),
+    )
+  ) {
     return true;
   }
   const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
@@ -518,7 +543,7 @@ function effectiveMight(
   meta: Partial<RiftboundCardMeta> | undefined,
 ): number {
   const base = def?.might ?? 0;
-  const buff = meta?.buffed ? 1 : 0;
+  const buff = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
   return Math.max(0, base + buff + (meta?.mightModifier ?? 0) + (meta?.staticMightBonus ?? 0));
 }
 

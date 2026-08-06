@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-262-298",
+  "title": "BUG: 'You may move' is optional — the spell is castable for the stun alone (e.g. with no friendly unit at all)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-262-298.test.ts",
+    "testName": "BUG: 'You may move' is optional — the spell is castable for the stun alone (e.g. with no friendly unit at all)"
+  },
+  "id": "c14a52b21298",
+  "createdAt": "2026-08-06T18:35:08.357Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.357Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

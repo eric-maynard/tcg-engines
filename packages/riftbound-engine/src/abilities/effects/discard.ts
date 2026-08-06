@@ -17,7 +17,10 @@ export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: 
   const wholeHand = (effect.amount as unknown) === "hand";
   if (effect.player === "each" || wholeHand) {
     const playerIds = effect.player === "each" ? Object.keys(ctx.draft.players) : [ctx.playerId];
-    const then = (effect as { then?: ExecutableEffect }).then;
+    const rawThen = (effect as { then?: ExecutableEffect }).then;
+    // `then` already runs once per player here, so `player: "each"` on it
+    // means "that same player" — strip it so draw doesn't fan out again.
+    const then = rawThen?.player === "each" ? { ...rawThen, player: "self" } : rawThen;
     for (const pid of playerIds) {
       const pctx: EffectContext = { ...ctx, playerId: pid };
       const phand = ctx.zones
@@ -37,11 +40,11 @@ export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: 
     .getCardsInZone("hand" as CoreZoneId, ctx.playerId as CorePlayerId)
     .map((id) => id as string);
   if (hand.length === 0) return;
-  // The discarding player chooses which card. Use pendingChoice so play
-  // pauses until they pick (goldfish auto-resolves via pickDefaultForChoice).
-  // count>1 falls back to auto-discard for now — extend PendingChoice with
-  // a `remaining` counter to support multi-pick properly.
-  if (count === 1) {
+  // rule 422.1.a: the discarding player chooses which card(s). Use
+  // pendingChoice so play pauses until they pick (goldfish auto-resolves via
+  // pickDefaultForChoice); "discard N" re-prompts via `remaining` (ogn-030-298).
+  const n = Math.min(count, hand.length);
+  if (count === 1 || n < hand.length) {
     ctx.draft.pendingChoice = {
       onPicked: "discard",
       prompter: ctx.playerId,
@@ -50,13 +53,18 @@ export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: 
       sourceCardId: ctx.sourceCardId,
       then: (effect as { then?: unknown }).then,
       type: "reveal-and-pick",
+      ...(n > 1 ? { remaining: n } : {}),
     };
   } else {
-    for (let i = 0; i < Math.min(count, hand.length); i++) {
+    // No choice to make (discarding at least the whole hand): rule 422.2 —
+    // discard as many as possible.
+    for (let i = 0; i < n; i++) {
       ctx.zones.moveCard({ cardId: hand[i] as CoreCardId, targetZoneId: "trash" as CoreZoneId });
       // Rule ogn-006-298: emit the discard event for auto-discarded cards.
       // Rule ogn-202-298: tag batch position so "one or more" fires once.
       ctx.fireTriggers?.({ batchIndex: i, cardId: hand[i], playerId: ctx.playerId, type: "discard" });
     }
+    const then = (effect as { then?: ExecutableEffect }).then;
+    if (then) h.executeEffect(then, ctx);
   }
 }

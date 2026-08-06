@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling c765ee70b72b31fc — the chosen Mighty unit is dead (in the trash) the instant Sacrifice hits the chain, before any priority",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/sacrifice-c765ee70b72b31fc.test.ts",
+    "testName": "BUG: ruling c765ee70b72b31fc — the chosen Mighty unit is dead (in the trash) the instant Sacrifice hits the chain, before any priority"
+  },
+  "id": "9b20946f8749",
+  "createdAt": "2026-08-06T20:06:58.327Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.327Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

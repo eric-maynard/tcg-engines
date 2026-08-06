@@ -88,7 +88,7 @@ describe("Leona, Determined × Sunlit Guardian × Enthusiastic Promoter — stun
   // Expected: the stunned Guardian contributes 0 (423.1.b), so defenders deal only the Promoter's 2
   // to Leona (4 Might) — she survives, is healed in cleanup and recalled because a defender remains.
   // Actual: combat resolution ignores the stun; defenders deal 4+2 = 6 and Leona dies.
-  test.failing("BUG: (a) a stunned defender deals no combat damage — Leona takes only 2, survives, is healed and recalled to base (423.1.b, 466.1.a.1-2)", async () => {
+  test("(a) a stunned defender deals no combat damage — Leona takes only 2, survives, is healed and recalled to base (423.1.b, 466.1.a.1-2)", async () => {
     const game = await board().build();
     await attackAndStun(game, "guardian");
     await game.settle();

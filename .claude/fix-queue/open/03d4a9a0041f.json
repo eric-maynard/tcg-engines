@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-068-221",
+  "title": "No player-facing way to Equip a standalone Equipment on board to a unit",
+  "expected": "The only engine path that attaches an equipment already on board is `equipCard` (packages/riftbound-engine/src/game-definition/moves/equipment.ts:50-151), which defines only `condition` + `reducer` and no `enumerator` (and pays no Equip cost). Core enumerateMoves treats enumerator-less moves as an invalid NO_ENUMERATOR placeholder (packages/core/src/engine/rule-engine.ts:970-984), so equipCard never appears as a valid available move. The `activateAbility` enumerator only collects abilities with `ability.type === \"activated\"` (chain/activate-ability.ts:101-105), while the parsed Equip ability is `{ type: \"keyword\", keyword: \"Equip\", cost }` (e.g. riftbound-cards the-zero-drive.ts:26; only consumer is the Weaponmaster pending-choice at pending-choice.ts:188), so no activateAbility entry is generated for Doran's Blade. UI drag-drop only handles equipment dragged from hand via playGear (apps/riftbound-app/public/js/gameplay/drag-drop.js:333-349, gated on `dragState.zone === \"hand\"`), and play-gear.ts reducer only passes chosenTargetId to deductCost without attaching. Hence no player-facing Equip action for a standalone equipment in base.",
+  "observed": "enumerateMoves listed no equipCard/activateAbility for the equipment; playGear with chosenTargetId=Gearhead also left it unattached in base. Only the non-enumerated raw REST 'equipCard' move could attach it.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/equipment.ts:50",
+  "id": "03d4a9a0041f",
+  "createdAt": "2026-08-06T20:43:38.883Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.883Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

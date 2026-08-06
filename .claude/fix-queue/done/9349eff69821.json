@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-014-298",
+  "title": "BUG: a friendly unit with 8+ Might should reduce the energy cost to 0 with the power cost still due (rule 356.4.e)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-014-298.test.ts",
+    "testName": "BUG: a friendly unit with 8+ Might should reduce the energy cost to 0 with the power cost still due (rule 356.4.e)"
+  },
+  "id": "9349eff69821",
+  "createdAt": "2026-08-06T17:15:21.544Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.544Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:15:04.083Z",
+      "event": "grabbed:w2-i1"
+    },
+    {
+      "at": "2026-08-06T19:52:30.020Z",
+      "event": "done",
+      "note": "resolved by w1-i1's Sky Splitter cost fix (item 5fc0297a057b: self static highest-Might discount in cost.ts); test already flipped, verified 7/7 pass"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i1",
+  "claimedAt": "2026-08-06T19:15:04.083Z",
+  "resolution": {
+    "note": "resolved by w1-i1's Sky Splitter cost fix (item 5fc0297a057b: self static highest-Might discount in cost.ts); test already flipped, verified 7/7 pass",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-014-298.test.ts"
+    ],
+    "at": "2026-08-06T19:52:30.020Z"
+  }
+}

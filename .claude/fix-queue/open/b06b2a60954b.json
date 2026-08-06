@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-230-298",
+  "title": "BUG: 'any number' — with two buffed allies you may spend BOTH and channel 2 exhausted runes (engine spends at most one)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-230-298.test.ts",
+    "testName": "BUG: 'any number' — with two buffed allies you may spend BOTH and channel 2 exhausted runes (engine spends at most one)"
+  },
+  "id": "b06b2a60954b",
+  "createdAt": "2026-08-06T18:35:08.350Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.350Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

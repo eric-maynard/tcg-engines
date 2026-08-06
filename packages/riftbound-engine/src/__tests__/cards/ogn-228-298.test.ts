@@ -100,7 +100,7 @@ describe("Vanguard Helm (ogn-228-298)", () => {
     expect(game.state("plain").isBuffed).toBe(false);
   });
 
-  test.failing("BUG: dying in combat is dying too — a buffed attacker killed by a 6-Might defender triggers the Helm", async () => {
+  test("dying in combat is dying too — a buffed attacker killed by a 6-Might defender triggers the Helm", async () => {
     // Expected: buffed 2(+1)-Might "victim" attacks a 6-Might wall and dies → P1 is prompted to
     // buff another friendly unit. Actual: combat deaths never fire the Helm's trigger.
     const game = await scenario()

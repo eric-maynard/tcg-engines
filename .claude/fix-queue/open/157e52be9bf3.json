@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 03861cdfaacd8d59 — Shady Spectacles cannot be equipped at all; expected: attach to the Reflection for [1][order], then a P1 pick of ANOTHER friendly unit (Skulker offered, Reflection not)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/shady-spectacles-03861cdfaacd8d59.test.ts",
+    "testName": "BUG: ruling 03861cdfaacd8d59 — Shady Spectacles cannot be equipped at all; expected: attach to the Reflection for [1][order], then a P1 pick of ANOTHER friendly unit (Skulker offered, Reflection not)"
+  },
+  "id": "157e52be9bf3",
+  "createdAt": "2026-08-06T20:06:58.324Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.324Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

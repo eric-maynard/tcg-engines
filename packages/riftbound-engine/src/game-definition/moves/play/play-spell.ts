@@ -17,6 +17,7 @@ import {
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../../chain";
 import type { TimingClass } from "../../../chain";
+import { isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { CostExtras } from "./cost";
 import {
@@ -40,6 +41,39 @@ import {
 } from "./targeting";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
+
+/**
+ * rule 356.2 — ogn-048-298: legal choices for a spell's optional "you may
+ * exhaust a friendly X" additional cost: matching permanents that are ready
+ * (an exhausted permanent cannot pay an exhaust cost). The chosen one rides
+ * as `targets[0]` of the paid variant and is stripped before the spell's own
+ * targets are locked on the chain.
+ */
+function exhaustCostCandidates(
+  state: RiftboundGameState,
+  context: {
+    cards: unknown;
+    zones: Parameters<typeof resolveTarget>[1]["zones"];
+    counters: { getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined };
+  },
+  playerId: string,
+  cardId: string,
+  descriptor: unknown,
+): string[] {
+  const ids = resolveTarget(
+    { ...(descriptor as Record<string, unknown>), quantity: "all" } as Parameters<
+      typeof resolveTarget
+    >[0],
+    {
+      cards: context.cards as Parameters<typeof resolveTarget>[1]["cards"],
+      draft: state,
+      playerId,
+      sourceCardId: cardId,
+      zones: context.zones,
+    },
+  ) as string[];
+  return ids.filter((id) => !context.counters.getFlag(id as CoreCardId, "exhausted"));
+}
 
 /**
  * Play a spell (rule 146-151)
@@ -106,16 +140,33 @@ export const playSpell: Defs["playSpell"] = {
     let spellAdditionalCost: CostExtras["additionalCost"];
     if (context.params.paidAdditionalCost) {
       const optional = getOptionalPlayCost(context.params.cardId);
-      if (optional?.kind !== "pay") {
+      if (optional?.kind === "exhaust") {
+        // rule 356.2 — ogn-048-298: targets[0] names the ready friendly
+        // permanent exhausted to pay the optional cost.
+        const chosen = context.params.targets?.[0];
+        if (
+          !chosen ||
+          !exhaustCostCandidates(
+            state,
+            context,
+            context.params.playerId,
+            context.params.cardId,
+            optional.exhaust,
+          ).includes(chosen as string)
+        ) {
+          return false;
+        }
+      } else if (optional?.kind !== "pay") {
         return false;
+      } else {
+        // rule-id: unl-140-219 (rule 560) — "spend N XP as an additional cost":
+        // the paid variant is only legal when the caster has the XP.
+        const xpNeed = optional.cost?.xp ?? 0;
+        if (xpNeed > 0 && (state.players[context.params.playerId]?.xp ?? 0) < xpNeed) {
+          return false;
+        }
+        spellAdditionalCost = optional.cost ?? {};
       }
-      // rule-id: unl-140-219 (rule 560) — "spend N XP as an additional cost":
-      // the paid variant is only legal when the caster has the XP.
-      const xpNeed = optional.cost?.xp ?? 0;
-      if (xpNeed > 0 && (state.players[context.params.playerId]?.xp ?? 0) < xpNeed) {
-        return false;
-      }
-      spellAdditionalCost = optional.cost ?? {};
     }
 
     if (
@@ -148,13 +199,10 @@ export const playSpell: Defs["playSpell"] = {
       return false;
     }
 
-    // Rule 530: in Neutral Open state, only the active player holds
-    // Priority, so only they may play an Action-timed spell. Reaction
-    // Spells can be played by any relevant player in a Closed state.
-    if (timing !== "reaction" && turnState === "neutral-open") {
-      if (state.turn.activePlayer !== context.params.playerId) {
-        return false;
-      }
+    // rule 316.5.b: in a Neutral Open State only the Turn Player may play
+    // spells — [Reaction] (813.1.c) only adds Closed States, not this one.
+    if (turnState === "neutral-open" && state.turn.activePlayer !== context.params.playerId) {
+      return false;
     }
 
     // Rule 355.8 / 419.2.a: gate on caster-chosen targets (including modal options).
@@ -198,7 +246,25 @@ export const playSpell: Defs["playSpell"] = {
     // location / filter such as "in combat with an enemy Fury unit"); the
     // ≥1-legal-target gate above only proves SOME candidate exists.
     const spellTgt = (spellAbility?.effect as SpellEffectTargetShape | undefined)?.target;
+    const isCounterSpell = (spellAbility?.effect as { type?: string } | undefined)?.type === "counter";
+    // rule-id: ogn-045-298 (rule 355.8) — a counter's supplied target names a
+    // chain item, validated against the chain rather than the board.
+    if (isCounterSpell && context.params.targets?.length) {
+      const chainItems = (state.interaction ?? createInteractionState()).chain?.items ?? [];
+      const t = context.params.targets;
+      if (
+        t.length !== 1 ||
+        !chainItems.some(
+          (item) =>
+            item.cardId === t[0] &&
+            isLegalCounterTarget(spellAbility?.effect as { target?: unknown }, item),
+        )
+      ) {
+        return false;
+      }
+    }
     if (
+      !isCounterSpell &&
       context.params.targets?.length === 1 &&
       spellTgt &&
       typeof spellTgt !== "string" &&
@@ -300,6 +366,10 @@ export const playSpell: Defs["playSpell"] = {
     const registry = getGlobalCardRegistry();
     const interaction = state.interaction ?? createInteractionState();
     const turnState = getTurnState(interaction);
+    // rule 316.5.b: Neutral Open State → only the Turn Player plays spells.
+    if (turnState === "neutral-open" && state.turn.activePlayer !== (context.playerId as string)) {
+      return [];
+    }
     const pool = state.runePools[context.playerId as string];
     if (!pool) {
       return [];
@@ -410,7 +480,9 @@ export const playSpell: Defs["playSpell"] = {
         // replacement; lift it so the caster picks at play time.
         findReplacementChosenTarget(spellEffect) ??
         (secondTgt ? seqSlots?.[0] : findSequenceLeadTarget(spellEffect));
+      // rule-id: ogn-045-298 — a counter's target is a chain item (own branch below).
       const isCardTarget =
+        spellEffect?.type !== "counter" &&
         tgt !== undefined &&
         typeof tgt !== "string" &&
         tgt.type !== "self" &&
@@ -633,11 +705,9 @@ export const playSpell: Defs["playSpell"] = {
         // counter is a caster-chosen target locked at play time. Enumerate one
         // Play per legal chain item so the caster picks when several are
         // pending (the handler reads it from boundTargets).
-        const wantsSpell =
-          spellEffect.target === undefined || (spellEffect.target as unknown) === "spell";
         const seen = new Set<string>();
         for (const item of interaction.chain?.items ?? []) {
-          if (item.countered || (wantsSpell && item.type !== "spell")) continue;
+          if (!isLegalCounterTarget(spellEffect, item)) continue;
           if (seen.has(item.cardId)) continue;
           seen.add(item.cardId);
           baseVariants.push({
@@ -683,6 +753,29 @@ export const playSpell: Defs["playSpell"] = {
               ...base,
               additionalCostSpec: { energy: extra.energy ?? 0, power: extra.power ?? [] },
               paidAdditionalCost: true,
+            });
+          }
+        }
+      }
+      // rule 356.2 — ogn-048-298: "you may exhaust a friendly unit" — one paid
+      // variant per ready candidate; the chosen permanent rides as targets[0].
+      if (optionalPay?.kind === "exhaust") {
+        const candidates = exhaustCostCandidates(
+          state,
+          context,
+          context.playerId as string,
+          cardId as string,
+          optionalPay.exhaust,
+        );
+        for (const base of baseVariants) {
+          for (const id of candidates) {
+            if (base.targets?.includes(id)) {
+              continue;
+            }
+            results.push({
+              ...base,
+              paidAdditionalCost: true,
+              targets: [id, ...(base.targets ?? [])],
             });
           }
         }
@@ -748,10 +841,9 @@ export const playSpell: Defs["playSpell"] = {
       if (!isLegalTiming(timing, turnState)) {
         continue;
       }
-      if (timing !== "reaction" && turnState === "neutral-open") {
-        if (state.turn.activePlayer !== (context.playerId as string)) {
-          continue;
-        }
+      // rule 316.5.b: Neutral Open State → only the Turn Player plays spells.
+      if (turnState === "neutral-open" && state.turn.activePlayer !== (context.playerId as string)) {
+        continue;
       }
       const abilities = registry.getAbilities(cardId as string) ?? [];
       const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
@@ -781,6 +873,7 @@ export const playSpell: Defs["playSpell"] = {
         findReplacementChosenTarget(spellEffect) ??
         findSequenceLeadTarget(spellEffect);
       const isCardTarget =
+        spellEffect?.type !== "counter" &&
         tgt !== undefined &&
         typeof tgt !== "string" &&
         tgt.type !== "self" &&
@@ -813,8 +906,9 @@ export const playSpell: Defs["playSpell"] = {
     return results;
   },
   reducer: (draft, context) => {
-    const { cardId, playerId, targets, xAmount, repeatCount, viaFlow, paidAdditionalCost } =
+    const { cardId, playerId, xAmount, repeatCount, viaFlow, paidAdditionalCost } =
       context.params;
+    let { targets } = context.params;
     const { zones } = context;
 
     // rule-id: ven-083-166 / rule 560 — re-derive the optional additional
@@ -822,9 +916,26 @@ export const playSpell: Defs["playSpell"] = {
     // record whether it was actually paid so the spell's
     // `paid-additional-cost` conditional can read it at resolution.
     let spellAdditionalCost: CostExtras["additionalCost"];
+    let exhaustCostPaid = false;
     if (paidAdditionalCost) {
       const optional = getOptionalPlayCost(cardId);
-      if (optional?.kind === "pay") {
+      if (optional?.kind === "exhaust") {
+        // rule 356.2 — ogn-048-298: exhaust the chosen ready friendly
+        // permanent now (costs are paid as the spell is played, before it is
+        // on the chain); it is a cost choice, not a spell target.
+        const chosen = targets?.[0];
+        if (
+          chosen &&
+          exhaustCostCandidates(draft, context, playerId, cardId, optional.exhaust).includes(
+            chosen as string,
+          )
+        ) {
+          context.counters.setFlag(chosen as CoreCardId, "exhausted", true);
+          exhaustCostPaid = true;
+          const rest = (targets ?? []).slice(1);
+          targets = rest.length > 0 ? rest : undefined;
+        }
+      } else if (optional?.kind === "pay") {
         // rule-id: unl-140-219 (rule 560) — "spend N XP as an additional
         // cost": deduct the XP from the caster's total; if they lack it the
         // additional cost is not paid at all.
@@ -841,7 +952,7 @@ export const playSpell: Defs["playSpell"] = {
     if (!draft.additionalCostsPaid) {
       draft.additionalCostsPaid = {};
     }
-    draft.additionalCostsPaid[cardId] = spellAdditionalCost !== undefined;
+    draft.additionalCostsPaid[cardId] = spellAdditionalCost !== undefined || exhaustCostPaid;
 
     const repeatN = Math.max(0, repeatCount ?? 0);
     deductCost(

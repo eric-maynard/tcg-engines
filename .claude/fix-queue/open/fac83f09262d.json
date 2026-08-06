@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: (d) after Possession P2 controls it in P2's base (later control timestamp wins, 480.3); at end of turn Hostile Takeover's clause changes nothing — it is still P2's, in base, buffed",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/hostile-takeover-eot-after-bounce.test.ts",
+    "testName": "BUG: (d) after Possession P2 controls it in P2's base (later control timestamp wins, 480.3); at end of turn Hostile Takeover's clause changes nothing — it is still P2's, in base, buffed"
+  },
+  "id": "fac83f09262d",
+  "createdAt": "2026-08-06T18:35:08.348Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.348Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

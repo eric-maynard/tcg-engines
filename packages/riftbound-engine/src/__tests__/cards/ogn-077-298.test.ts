@@ -114,9 +114,9 @@ describe("Zhonya's Hourglass (ogn-077-298)", () => {
     expect(game.zoneOf("zh")).toBe("base");
   });
 
-  // Expected: combat death is a death like any other — Hourglass dies, attacker recalled exhausted
-  // at full health, defender holds. Actual: Hourglass never leaves the base.
-  test.failing("BUG: a friendly unit dying in combat should be saved by the Hourglass (killed instead; unit healed, exhausted, recalled)", async () => {
+  // Combat death is a death like any other — Hourglass dies, attacker recalled exhausted
+  // at full health, defender holds.
+  test("a friendly unit dying in combat should be saved by the Hourglass (killed instead; unit healed, exhausted, recalled)", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .gear(P1, CARD, "zh")

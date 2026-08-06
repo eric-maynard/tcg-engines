@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: negative — with no friendly Mighty unit (only a 4-Might ally) the additional cost cannot be paid, so Sacrifice is NOT a legal play (356.7); engine lets it be cast",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/sacrifice-rift-herald-deathknell-first.test.ts",
+    "testName": "BUG: negative — with no friendly Mighty unit (only a 4-Might ally) the additional cost cannot be paid, so Sacrifice is NOT a legal play (356.7); engine lets it be cast"
+  },
+  "id": "ac2e18808b4d",
+  "createdAt": "2026-08-06T18:35:08.349Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.349Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

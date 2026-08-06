@@ -62,7 +62,7 @@ describe("Death from Below (unl-186-219)", () => {
     expect(game.zoneOf("dfb")).toBe("trash");
   });
 
-  test.failing("BUG: clause 2 — after killing a unit with 3 or less Might, the caster may play this from trash for [rainbow]", async () => {
+  test("clause 2 — after killing a unit with 3 or less Might, the caster may play this from trash for [rainbow]", async () => {
     // Expected: once the kill resolves, P1 (4 energy, 1 rainbow left) is asked yes/no (or offered a
     // trash play of dfb costing only [rainbow]); accepting puts Death from Below back on the chain.
     // The parsed ability only carries the `kill` clause, so nothing is offered.

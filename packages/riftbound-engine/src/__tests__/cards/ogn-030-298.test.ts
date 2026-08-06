@@ -58,7 +58,7 @@ describe("Jinx, Demolitionist (ogn-030-298)", () => {
     expect(game.p1.trash()).toHaveLength(2);
   });
 
-  test.failing("BUG: the discarding player chooses WHICH 2 cards to discard (rule 422.1.a)", async () => {
+  test("the discarding player chooses WHICH 2 cards to discard (rule 422.1.a)", async () => {
     // Expected: with 3 other cards in hand the play trigger prompts P1 to pick 2 of them, so P1
     // can keep "h1". Actual: the engine discards the first two hand cards automatically with
     // no prompt, so "h1" always ends up in the trash.

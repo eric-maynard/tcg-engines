@@ -52,7 +52,7 @@ describe("Seal of Unity (ogn-245-298)", () => {
 
   test("[Reaction] timing: usable on the opponent's turn and in response to an opponent's spell, without joining the chain", async () => {
     const oppTurn = await scenario().active(P2).gear(P1, CARD, "seal").build();
-    expect(oppTurn.p1.can("activate", "seal")).toBe(true);
+    expect(oppTurn.p1.can("activate", "seal")).toBe(false); // rule 316.5.b: not in the opponent's Neutral Open State
 
     const game = await scenario()
       .active(P2)

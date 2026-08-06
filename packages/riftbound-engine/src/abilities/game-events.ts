@@ -23,11 +23,32 @@ export type GameEvent =
     }
   | { type: "play-card"; cardId: string; playerId: string; cardType: string }
   | { type: "play-token-unit"; cardId: string; playerId: string }
-  | { type: "attack"; cardId: string; battlefieldId: string }
-  | { type: "defend"; cardId: string; battlefieldId: string }
-  | { type: "conquer"; playerId: string; battlefieldId: string }
+  // rule-id: ogn-060-298 — `owner` = the attacking/defending unit's controller
+  // so "When a friendly unit attacks/defends" subject matchers can resolve.
+  | { type: "attack"; cardId: string; battlefieldId: string; owner?: string }
+  | { type: "defend"; cardId: string; battlefieldId: string; owner?: string }
+  // rule-id: ogn-034-298 — combat conquers carry `afterAttack` and the excess
+  // damage the attacker assigned to enemy units (rule 626.1.d.2).
+  | {
+      type: "conquer";
+      playerId: string;
+      battlefieldId: string;
+      afterAttack?: boolean;
+      excessDamage?: number;
+    }
   | { type: "hold"; playerId: string; battlefieldId: string }
-  | { type: "die"; cardId: string; owner: string }
+  // rule 428.5: `killedBy` = the player responsible for the kill (kill
+  // instruction's controller, the dealer of the lethal spell/ability damage,
+  // or the opposing combatant's controller); `killSource` = what did it;
+  // `wasStunned` = the unit was stunned as it died ("kill a stunned enemy unit").
+  | {
+      type: "die";
+      cardId: string;
+      owner: string;
+      killedBy?: string;
+      killSource?: "spell" | "ability" | "combat";
+      wasStunned?: boolean;
+    }
   // rule-id: unl-133-219 — `owner` = moved unit's controller, `movedBy` = the
   // player whose action/effect moved it ("When you move an enemy unit").
   | { type: "move"; cardId: string; from: string; to: string; owner?: string; movedBy?: string }

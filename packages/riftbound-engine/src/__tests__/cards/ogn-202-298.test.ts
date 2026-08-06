@@ -57,7 +57,7 @@ describe("Jinx, Rebel (ogn-202-298)", () => {
     expect(game.state("jinx").might).toBe(5);
   });
 
-  test.failing("BUG: you discard 1 → Jinx is also READIED by the trigger", async () => {
+  test("you discard 1 → Jinx is also READIED by the trigger", async () => {
     // Expected: the exhausted Jinx becomes ready (and 6 Might). Actual: the trigger resolves the
     // +1 Might half of the sequence but the `ready self` step leaves her exhausted.
     const game = await scenario()

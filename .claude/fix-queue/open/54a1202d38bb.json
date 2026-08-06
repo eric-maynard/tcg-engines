@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-050-221",
+  "title": "BUG: 'Use only once per turn' — after one activation resolves it is not offered again this turn (rule 377.2.b)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-050-221.test.ts",
+    "testName": "BUG: 'Use only once per turn' — after one activation resolves it is not offered again this turn (rule 377.2.b)"
+  },
+  "id": "54a1202d38bb",
+  "createdAt": "2026-08-06T19:03:47.639Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:03:47.639Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,19 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: ruling 8cedb5e8fc134531 — the resolved trigger discounts the next card by [2][rainbow][rainbow]; engine applies no discount",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/do_not_commit/probe2.test.ts",
+    "testName": "BUG: ruling 8cedb5e8fc134531 — the resolved trigger discounts the next card by [2][rainbow][rainbow]; engine applies no discount"
+  },
+  "id": "5ae6af39ca86",
+  "createdAt": "2026-08-06T19:41:44.532Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:41:44.532Z",
+      "event": "enqueued:interaction-bug"
+    }
+  ],
+  "status": "open"
+}

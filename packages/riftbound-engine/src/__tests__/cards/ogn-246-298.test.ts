@@ -84,7 +84,7 @@ describe("Viktor, Leader (ogn-246-298)", () => {
     expect(recruits([...game.p1.base(), ...game.p2.base()])).toHaveLength(0);
   });
 
-  test.failing("BUG: a friendly unit dying IN COMBAT also triggers Viktor (any death counts)", async () => {
+  test("a friendly unit dying IN COMBAT also triggers Viktor (any death counts)", async () => {
     // Expected: the 2-Might ally attacks a 3-Might defender, dies, and Viktor makes a Recruit in
     // base. Actual: combat deaths do not raise the "die" trigger, so no token appears.
     const game = await board().build();

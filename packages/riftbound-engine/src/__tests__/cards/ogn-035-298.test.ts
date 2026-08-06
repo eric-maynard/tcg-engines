@@ -31,7 +31,7 @@ describe("Vayne, Hunter (ogn-035-298)", () => {
     expect(game.zoneOf("foe")).toBe("trash");
   });
 
-  test.failing("BUG: Assault 3 also raises her own lethal threshold — attacking a 4-Might unit she survives (5 Might vs 4 damage) and conquers", async () => {
+  test("Assault 3 also raises her own lethal threshold — attacking a 4-Might unit she survives (5 Might vs 4 damage) and conquers", async () => {
     // Expected (807.1.c + 142.4.b): while attacking Vayne has 5 Might, 4 damage is not lethal; combat cleanup heals her.
     // Actual: the engine adds Assault to damage dealt but checks lethality against her printed 2 Might → she dies.
     const game = await attack(4).build();
@@ -69,9 +69,8 @@ describe("Vayne, Hunter (ogn-035-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 1, power: { fury: 0 } });
   });
 
-  test.failing("BUG: enters exhausted when NO opponent controls a battlefield (rule 143.4)", async () => {
-    // Expected: the enter-ready static is conditional; with bf1 uncontrolled she enters exhausted.
-    // Actual: the engine cannot evaluate the `opponent-controls` condition and treats it as always true.
+  test("enters exhausted when NO opponent controls a battlefield (rule 143.4)", async () => {
+    // The enter-ready static is conditional; with bf1 uncontrolled she enters exhausted.
     const game = await scenario()
       .resources(P1, { energy: 4, power: { fury: 1 } })
       .battlefield("bf1", { controller: null })

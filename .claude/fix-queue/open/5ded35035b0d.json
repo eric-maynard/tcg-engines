@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-001-221",
+  "title": "BUG: +2 Might this turn for EACH enemy unit there — two enemies → 3 + 4 = 7, back to 3 next turn",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-001-221.test.ts",
+    "testName": "BUG: +2 Might this turn for EACH enemy unit there — two enemies → 3 + 4 = 7, back to 3 next turn"
+  },
+  "id": "5ded35035b0d",
+  "createdAt": "2026-08-06T18:35:08.331Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.331Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

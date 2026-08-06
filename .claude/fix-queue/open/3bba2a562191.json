@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling e574b44846512539 — with Karthus, Rex dying yields two separate Deathknell chain items (engine: none)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/karthus-eternal-e574b44846512539.test.ts",
+    "testName": "BUG: ruling e574b44846512539 — with Karthus, Rex dying yields two separate Deathknell chain items (engine: none)"
+  },
+  "id": "3bba2a562191",
+  "createdAt": "2026-08-06T20:06:58.328Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.328Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

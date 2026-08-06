@@ -56,7 +56,7 @@ describe("Meditation (ogn-048-298)", () => {
     expect(game.zoneOf("bolt")).toBe("chain");
   });
 
-  test.failing("BUG: Reaction only adds Closed-state permission — not castable in a Neutral Open state on the opponent's turn (rules 316.5.b, 813.1.c.1)", async () => {
+  test("Reaction only adds Closed-state permission — not castable in a Neutral Open state on the opponent's turn (rules 316.5.b, 813.1.c.1)", async () => {
     // Expected: with no chain on P2's turn only the turn player may play spells, so P1 cannot cast yet.
     // Actual: the engine offers playSpell:med to P1 during P2's open main phase.
     const game = await scenario().active(P2).resources(P1, { energy: 2 }).hand(P1, CARD, "med").build();
@@ -64,7 +64,7 @@ describe("Meditation (ogn-048-298)", () => {
     expect(game.p1.can("cast", "med")).toBe(false);
   });
 
-  test.failing("BUG: paying the optional cost exhausts the chosen friendly unit as you play it, then draws 2 (rules 355.1.a, 356.2)", async () => {
+  test("paying the optional cost exhausts the chosen friendly unit as you play it, then draws 2 (rules 355.1.a, 356.2)", async () => {
     // Expected: the play bundle offers the optional exhaust cost (payOptional + which unit); the unit is
     // exhausted before Meditation is on the chain; on resolution the caster draws 2.
     // Actual: no such variant exists — the exhaust happens unprompted at resolution and only 1 card is drawn.
@@ -82,7 +82,7 @@ describe("Meditation (ogn-048-298)", () => {
     expect(game.p1.hand()).toHaveLength(2);
   });
 
-  test.failing("BUG: declining the optional cost leaves friendly units ready and draws exactly 1", async () => {
+  test("declining the optional cost leaves friendly units ready and draws exactly 1", async () => {
     // Expected: "you may" — casting without paying exhausts nothing and draws 1.
     // Actual: on resolution the engine exhausts a friendly unit without asking.
     const game = await scenario()

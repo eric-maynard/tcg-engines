@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogs-010-024",
+  "title": "BUG: with no spell in your trash Annie still stays in play and nothing is returned",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogs-010-024.test.ts",
+    "testName": "BUG: with no spell in your trash Annie still stays in play and nothing is returned"
+  },
+  "id": "692ce8c4fe0b",
+  "createdAt": "2026-08-06T18:35:08.356Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.356Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

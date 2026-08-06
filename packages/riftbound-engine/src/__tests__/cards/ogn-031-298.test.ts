@@ -39,7 +39,7 @@ describe("Raging Firebrand (ogn-031-298)", () => {
     expect(lowEnergy.p1.can("play", "fb")).toBe(false);
   });
 
-  test.failing("BUG: play trigger — the next spell this turn costs [5] less, and only that one (rule 356.4.b)", async () => {
+  test("play trigger — the next spell this turn costs [5] less, and only that one (rule 356.4.b)", async () => {
     // Expected: after Firebrand resolves, Final Spark (8) charges 3; a second Final Spark charges the full 8.
     // Actual: the trigger grants an inert "NextSpellCostReduction" marker; spells are charged full price.
     const game = await board().build();
@@ -54,7 +54,7 @@ describe("Raging Firebrand (ogn-031-298)", () => {
     expect(game.p1.energy()).toBe(13); // full 8 for the second spell
   });
 
-  test.failing("BUG: the discount cannot take a spell below 0 — a 4-cost spell becomes free (rule 356.6)", async () => {
+  test("the discount cannot take a spell below 0 — a 4-cost spell becomes free (rule 356.6)", async () => {
     // Expected: Consult the Past (4) costs 0 after Firebrand; with 0 energy left it is still castable.
     // Actual: no discount is applied, so with 0 energy the spell is not legal.
     const game = await board(6).build();

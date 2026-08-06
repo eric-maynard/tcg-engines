@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-198-298",
+  "title": "BUG: '(You must still pay its Power cost.)' — bringing back Vi (2 + [fury]) spends the fury but no energy",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-198-298.test.ts",
+    "testName": "BUG: '(You must still pay its Power cost.)' — bringing back Vi (2 + [fury]) spends the fury but no energy"
+  },
+  "id": "80bbf766b3d3",
+  "createdAt": "2026-08-06T18:35:08.335Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.335Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

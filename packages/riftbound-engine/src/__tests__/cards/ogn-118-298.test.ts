@@ -31,9 +31,7 @@ describe("Wraith of Echoes (ogn-118-298)", () => {
     expect(noPower.p1.can("play", "wraith")).toBe(false);
   });
 
-  test.failing("BUG: a friendly unit dying (in combat) draws 1", async () => {
-    // Expected: fodder1 dies → the trigger resolves and P1's hand grows by 1. Actual: the
-    // friendly-unit "die" trigger never fires (hand unchanged) — same for spell kills.
+  test("a friendly unit dying (in combat) draws 1", async () => {
     const game = await board().build();
     const hand0 = game.p1.hand().length;
     await game.p1.move("fodder1", "bf1");
@@ -42,8 +40,7 @@ describe("Wraith of Echoes (ogn-118-298)", () => {
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 
-  test.failing("BUG: only the FIRST friendly death each turn draws — a second death the same turn draws nothing", async () => {
-    // Expected: +1 after the first death, still +1 after the second. Actual: never draws.
+  test("only the FIRST friendly death each turn draws — a second death the same turn draws nothing", async () => {
     const game = await board().build();
     const hand0 = game.p1.hand().length;
     await game.p1.move("fodder1", "bf1");
@@ -55,8 +52,7 @@ describe("Wraith of Echoes (ogn-118-298)", () => {
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 
-  test.failing("BUG: two friendly units dying simultaneously is still one 'first time' → exactly 1 card", async () => {
-    // Expected: a single trigger (one event), hand +1. Actual: never draws.
+  test("two friendly units dying simultaneously is still one 'first time' → exactly 1 card", async () => {
     const game = await board().build();
     const hand0 = game.p1.hand().length;
     await game.p1.move(["fodder1", "fodder2"], "bf1");
@@ -81,9 +77,8 @@ describe("Wraith of Echoes (ogn-118-298)", () => {
     expect(game.p1.hand()).toHaveLength(hand0);
   });
 
-  test.failing("BUG: 'each turn' resets — a friendly death on the following (opponent's) turn draws again", async () => {
-    // Expected: the once-per-turn limit refreshes every turn (yours and the opponent's). Actual:
-    // the trigger never fires at all.
+  test("'each turn' resets — a friendly death on the following (opponent's) turn draws again", async () => {
+    // The once-per-turn limit refreshes every turn (yours and the opponent's).
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .battlefield("bf2", { controller: P1 })

@@ -56,6 +56,9 @@ function renderPendingChoiceModal() {
     // Rule ogn-256-298: "any number of" multi-pick — picks accumulate until Done.
     : pending.type === "choose-target" && pending.anyNumber
       ? `Choose any number of targets${pending.picked?.length ? ` (${pending.picked.length} chosen)` : ""}`
+    // Rule 355.14 (ogn-041-298): fixed-total split damage — one button per legal split.
+    : pending.type === "choose-target" && pending.assign && typeof pending.total === "number"
+      ? `Split ${pending.total} damage`
     : pending.type === "choose-target" ? "Choose a target"
     : pending.type === "choose-mode" ? "Choose one"  // Rule sfd-091-221
     : "Choose a card";
@@ -88,7 +91,16 @@ function renderPendingChoiceModal() {
       // Rule sfd-091-221: choose-mode buttons name the mode ("draw 1" / "buff me").
       const modeIdx = otherPicks[i].params?.pickedMode;
       const modeOpt = pending.type === "choose-mode" && modeIdx != null ? pending.effect?.options?.[modeIdx] : null;
-      const label = modeOpt
+      // Rule 355.14 (ogn-041-298): split-damage allocation → "Unit 2 · Other 3" / "No targets".
+      const alloc = otherPicks[i].params?.allocation;
+      const allocLabel = alloc && typeof alloc === "object"
+        ? (Object.keys(alloc).length
+          ? Object.entries(alloc).map(([cid, n]) => `${findCard(cid)?.name ?? cid} ${n}`).join(" · ")
+          : "No targets")
+        : null;
+      const label = allocLabel != null
+        ? allocLabel
+        : modeOpt
         ? (modeOpt.label ?? modeOpt.text ?? modeOpt.effect?.text ?? `${modeOpt.effect?.type ?? "mode"}${modeOpt.effect?.amount != null ? ` ${modeOpt.effect.amount}` : ""}`)
         : typeof accept === "boolean"
         ? (pending.type === "choose-target" && pending.anyNumber ? "Done" : accept ? "Yes" : "No")  // Rule ogn-067-298 / ogn-256-298

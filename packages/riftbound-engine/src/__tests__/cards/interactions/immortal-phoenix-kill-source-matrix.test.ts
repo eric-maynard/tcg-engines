@@ -40,10 +40,9 @@ function trashBoard() {
 }
 
 describe("Immortal Phoenix — which kill sources count as 'you kill a unit with a spell'", () => {
-  test.failing("BUG: (a) Sky Splitter's damage kills an enemy unit in cleanup → kill attributed to the spell (428.5.c); P1 is offered the [1][fury] replay and Phoenix lands in base", async () => {
-    // Expected: victim → trash, then a yes/no "Pay [1][fury]…" prompt for P1; yes → Phoenix from
+  test("(a) Sky Splitter's damage kills an enemy unit in cleanup → kill attributed to the spell (428.5.c); P1 is offered the [1][fury] replay and Phoenix lands in base", async () => {
+    // victim → trash, then a yes/no "Pay [1][fury]…" prompt for P1; yes → Phoenix from
     // trash to P1's base, 1 energy + 1 fury spent on top of the spell.
-    // Actual: Phoenix's trigger is never evaluated while it sits in the trash — no prompt at all.
     const game = await trashBoard().unit(P2, "bf1", { might: 4 }, "victim").hand(P1, SKY_SPLITTER, "sky").build();
     await game.p1.cast("sky", { targets: "victim" });
     const afterCast = game.p1.resources();

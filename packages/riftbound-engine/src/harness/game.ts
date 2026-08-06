@@ -85,7 +85,7 @@ export const firstOptionPolicy: Policy = (d, g) => {
       return d.options.length > 0 ? { keys: d.options.slice(0, Math.max(1, d.min)).map((o) => o.key), kind: "pick" } : { kind: "decline" };
     }
     case "yes-no": {
-      return { kind: "yes-no", value: true };
+      return { kind: "yes-no", value: d.canAccept !== false };
     }
     case "integer": {
       return { kind: "integer", value: d.min };

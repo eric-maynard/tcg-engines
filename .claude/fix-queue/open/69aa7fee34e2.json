@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: branch A (383.3.a.2 / 402.1.a) — P1 is asked 'perform it?' while finalizing; declining removes the item: chain empty, Neutral Open, P1 acting, P2 never received Priority, hand unchanged. Engine only asks at resolution, after a full priority round",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/showdown-focus-and-triggers-on-chain.test.ts",
+    "testName": "BUG: branch A (383.3.a.2 / 402.1.a) — P1 is asked 'perform it?' while finalizing; declining removes the item: chain empty, Neutral Open, P1 acting, P2 never received Priority, hand unchanged. Engine only asks at resolution, after a full priority round"
+  },
+  "id": "69aa7fee34e2",
+  "createdAt": "2026-08-06T20:50:12.433Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.433Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

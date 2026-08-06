@@ -57,10 +57,9 @@ describe("Ekko, Recurrent (ogn-110-298)", () => {
     expect(game.state("ekko").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: [Deathknell] on a spell death — the trigger resolves by recycling him to the bottom of the main deck and readying all your runes", async () => {
+  test("[Deathknell] on a spell death — the trigger resolves by recycling him to the bottom of the main deck and readying all your runes", async () => {
     // Expected (808, 383.3.b, 416.1.a): Ekko dies → Deathknell on the chain → resolves: Ekko leaves the
-    // trash for the deck bottom and every P1 rune is ready (tappable again). Actual: the trigger does go
-    // on the chain, but on resolution Ekko stays in the trash and the runes stay exhausted.
+    // trash for the deck bottom and every P1 rune is ready (tappable again).
     const game = await scenario()
       .battlefield("bf1", { controller: P1 })
       .unit(P1, "bf1", CARD, "ekko")
@@ -81,9 +80,9 @@ describe("Ekko, Recurrent (ogn-110-298)", () => {
     expect(game.p1.energy()).toBe(3); // readying runes adds no energy by itself
   });
 
-  test.failing("BUG: [Deathknell] also triggers when he dies in combat (rule 323.4 / 808)", async () => {
+  test("[Deathknell] also triggers when he dies in combat (rule 323.4 / 808)", async () => {
     // Expected: 5-Might Ekko attacks a 6-Might defender, takes lethal damage → Deathknell → recycled,
-    // runes readied. Actual: no trigger is created for a combat death; Ekko just goes to the trash.
+    // runes readied.
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P1, "base", CARD, "ekko")
@@ -98,8 +97,8 @@ describe("Ekko, Recurrent (ogn-110-298)", () => {
     expect(game.p1.runes({ ready: true })).toHaveLength(2);
   });
 
-  test.failing("BUG: [Deathknell] readies only YOUR runes", async () => {
-    // Expected: P1's rune readied, P2's exhausted rune untouched. Actual: nothing is readied (see above).
+  test("[Deathknell] readies only YOUR runes", async () => {
+    // Expected: P1's rune readied, P2's exhausted rune untouched.
     const game = await scenario()
       .battlefield("bf1", { controller: P1 })
       .unit(P1, "bf1", CARD, "ekko")

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-020-221",
+  "title": "BUG: When I defend: the same optional [fury] payment gives +2 Might (4 → 6 survives a 5-Might attacker)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-020-221.test.ts",
+    "testName": "BUG: When I defend: the same optional [fury] payment gives +2 Might (4 → 6 survives a 5-Might attacker)"
+  },
+  "id": "4cc89909f040",
+  "createdAt": "2026-08-06T20:56:21.108Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:56:21.108Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

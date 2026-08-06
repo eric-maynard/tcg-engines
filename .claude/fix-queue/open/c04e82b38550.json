@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ogs-005-024",
+  "title": "Shield's +1 Might is not reflected in Zephyr Sage's current/displayed Might while it is the designated defender in a combat showdown",
+  "expected": "render/card.js:199-205 computes effMight = base + meta.mightModifier + meta.staticMightBonus + (buffed?1:0) + equipmentMightBonus — no term for Shield (or Assault) keyed on meta.combatRole, so a Shield defender's badge never changes. Engine-side, Shield is only added inside combat/combat-resolver.ts:96/109 (calculateSideMight / per-unit bonus during resolution) and is never folded into mightModifier/staticMightBonus on the card, so /api state and __rbGameState also report might=6. The only UI place that adds Shield is the combat preview total in gameplay/combat.js:101-104, not the per-card display. Rule 432.1.a states a defending Shield unit's *current* Might includes Shield, so Zephyr Sage should read 7 while combatRole==='defender'.",
+  "observed": "During the combat showdown (combatRole='defender' confirmed in state) the board card showed no modified-might badge (printed 6), client __rbGameState might=6 and /api state might=6; the attacker's +3 mightModifier DID render as a '6' badge, so the UI folds mightModifier/buff/equipment but not Shield-while-defender (card.js effective-might calc). Shield was only applied inside combat resolution.",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/public/js/gameplay/render/card.js:199-205",
+  "id": "c04e82b38550",
+  "createdAt": "2026-08-06T20:43:38.886Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.886Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

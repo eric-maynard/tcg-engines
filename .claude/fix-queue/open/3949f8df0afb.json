@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-004-221",
+  "title": "BUG: the Gold token is a real Gold gear (rule 187.5) — once ready, 'Kill this, [Exhaust]: [Add] [rainbow]' is activatable",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-004-221.test.ts",
+    "testName": "BUG: the Gold token is a real Gold gear (rule 187.5) — once ready, 'Kill this, [Exhaust]: [Add] [rainbow]' is activatable"
+  },
+  "id": "3949f8df0afb",
+  "createdAt": "2026-08-06T19:03:47.633Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:03:47.633Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

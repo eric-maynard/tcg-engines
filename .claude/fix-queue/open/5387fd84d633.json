@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogs-020-024",
+  "title": "BUG: a combat death is replaced too — the attacker comes home exhausted and unhurt instead of dying",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogs-020-024.test.ts",
+    "testName": "BUG: a combat death is replaced too — the attacker comes home exhausted and unhurt instead of dying"
+  },
+  "id": "5387fd84d633",
+  "createdAt": "2026-08-06T18:35:08.356Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.356Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

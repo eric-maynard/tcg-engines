@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-258-298",
+  "title": "BUG: the only play-time target is ONE ENEMY unit (friendly units are never a choice)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-258-298.test.ts",
+    "testName": "BUG: the only play-time target is ONE ENEMY unit (friendly units are never a choice)"
+  },
+  "id": "2b57f0dd8532",
+  "createdAt": "2026-08-06T18:35:08.339Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.339Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

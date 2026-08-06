@@ -18,6 +18,14 @@ export function parseOtherSegment(text: string): Ability | undefined {
     return undefined;
   }
 
+  // rule 465.2.c.6 / 826.3: unbracketed Tank/Backline wording ("I must be assigned
+  // combat damage first/last.") is the same damage-assignment requirement.
+  const damageOrderMatch = cleaned.match(/^I must be assigned combat damage (first|last)\.?$/i);
+  if (damageOrderMatch) {
+    const keyword = damageOrderMatch[1].toLowerCase() === "first" ? "Tank" : "Backline";
+    return { keyword, type: "keyword" } as Ability;
+  }
+
   // Try activated ability
   const activated = parseActivatedAbility(cleaned);
   if (activated) {

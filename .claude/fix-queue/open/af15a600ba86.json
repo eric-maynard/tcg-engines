@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling ae63ceaf2b19eed6 — the caster chooses the two units: with 3 units at bf1, Switcheroo on [small(3), middling(4)] → small 4, middling 3, big untouched",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/switcheroo-ae63ceaf2b19eed6.test.ts",
+    "testName": "BUG: ruling ae63ceaf2b19eed6 — the caster chooses the two units: with 3 units at bf1, Switcheroo on [small(3), middling(4)] → small 4, middling 3, big untouched"
+  },
+  "id": "af15a600ba86",
+  "createdAt": "2026-08-06T20:11:47.409Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.409Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,19 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 0aacd2f79d3e8aec — countered by Hard Bargain: the killed unit is NOT returned (stays in trash), nothing is resurrected",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/heedless-resurrection-0aacd2f79d3e8aec.test.ts",
+    "testName": "BUG: ruling 0aacd2f79d3e8aec — countered by Hard Bargain: the killed unit is NOT returned (stays in trash), nothing is resurrected"
+  },
+  "id": "af0511319595",
+  "createdAt": "2026-08-06T19:56:55.636Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:56:55.636Z",
+      "event": "enqueued:ruling-bug"
+    }
+  ],
+  "status": "open"
+}

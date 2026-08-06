@@ -86,6 +86,11 @@ export interface EffectContext {
    * triggered ability, so `{ type: "trigger-source" }` ("it") resolves.
    */
   readonly triggerSourceId?: string;
+  /**
+   * rule 811.1.d: zone id (`battlefield-<bfId>`) of the battlefield this
+   * card was played from Hidden at — units it plays must be played there.
+   */
+  readonly hiddenZone?: string;
   readonly zones: {
     moveCard: (params: {
       cardId: CoreCardId;

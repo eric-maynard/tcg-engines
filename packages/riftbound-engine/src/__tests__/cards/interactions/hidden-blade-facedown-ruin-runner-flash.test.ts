@@ -82,9 +82,7 @@ describe("Hidden Blade from facedown × Ruin Runner × Flash", () => {
     expect(offered).not.toContain("baseVanilla");
   });
 
-  test.failing("BUG: (a) from facedown the ENEMY Ruin Runner must not be offered — 'can't be chosen by enemy spells' (757/758, 355.9.b)", async () => {
-    // Expected: the pick set at bf1 is {myGuard, bf1Vanilla}. Actual: the engine also offers the
-    // enemy Ruin Runner (its Untargetable grant is not applied when enumerating choices).
+  test("(a) from facedown the ENEMY Ruin Runner must not be offered — 'can't be chosen by enemy spells' (757/758, 355.9.b)", async () => {
     const game = await board().build();
     await game.p1.reveal("blade");
     await game.settle();
@@ -154,8 +152,7 @@ describe("Hidden Blade from facedown × Ruin Runner × Flash", () => {
     expect(game.zoneOf("bladeHand")).toBe("hand");
   });
 
-  test.failing("BUG: (c) from hand the ENEMY Ruin Runner is not a legal target either (757)", async () => {
-    // Expected: Runner absent from the offered set and casting on it is rejected. Actual: offered.
+  test("(c) from hand the ENEMY Ruin Runner is not a legal target either (757)", async () => {
     const game = await board().build();
     const offered = targetsOffered(game, "bladeHand");
     expect(offered).toContain("bf2Vanilla");

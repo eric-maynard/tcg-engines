@@ -89,7 +89,7 @@ describe("Immortal Phoenix × Singularity — killing your own Phoenix with your
   // Expected: two units killed by the spell → two independent "When you kill a unit with a spell"
   // triggers; declining the first still leaves the second to accept. Actual: the engine raises a
   // single opt-in prompt; after declining it the turn is simply open and Phoenix stays in the trash.
-  test.failing("BUG: (b) two kills → TWO Phoenix triggers; declining the first and paying for the second still replays Phoenix (383.1.b a contrario)", async () => {
+  test("(b) two kills → TWO Phoenix triggers; declining the first and paying for the second still replays Phoenix (383.1.b a contrario)", async () => {
     const game = await board().build();
     await game.p1.cast("sing", { targets: ["phoenix", "foe"] });
     await game.settle();
@@ -121,7 +121,7 @@ describe("Immortal Phoenix × Singularity — killing your own Phoenix with your
   // Expected: the ability self-describes its zone ("play me from your trash") and is only active
   // there (385.2). A Phoenix that survives on the board while your spell kills something else does
   // not trigger. Actual: the engine raises the pay-[1][fury] prompt for the on-board Phoenix.
-  test.failing("BUG: control — Phoenix left ALIVE on the board does not trigger when Singularity kills only the enemy (385.2: trash-only ability)", async () => {
+  test("control — Phoenix left ALIVE on the board does not trigger when Singularity kills only the enemy (385.2: trash-only ability)", async () => {
     const game = await board().build();
     await game.p1.cast("sing", { targets: ["foe"] });
     const r = await game.settle();
@@ -150,7 +150,7 @@ describe("Immortal Phoenix × Singularity — killing your own Phoenix with your
   // Expected: "When YOU kill a unit with a spell" — an opponent's Singularity killing P1's Phoenix is
   // the opponent's kill (428.5.c.1), so P1's Phoenix does not trigger. Actual: P1 is prompted to pay
   // [1][fury] and may replay Phoenix off the opponent's kill.
-  test.failing("BUG: no side — an OPPONENT's Singularity killing Phoenix does not trigger it for P1 ('you kill', 428.5.c.1)", async () => {
+  test("no side — an OPPONENT's Singularity killing Phoenix does not trigger it for P1 ('you kill', 428.5.c.1)", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P1, { energy: 2, power: { fury: 2 } })

@@ -1,4 +1,5 @@
 import type { Ability } from "@tcg/riftbound-types";
+import type { Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
@@ -7,20 +8,18 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *
  * When you play me, the next spell you play this turn costs [5] less.
  *
- * Modelled as a triggered cost-reduction via grant-keyword with a
- * virtual "NextSpellCostReduction" modifier keyed on the controller.
- * Engine support for this modifier is pending; the ability structure
- * captures the intent.
+ * rule 356.4.b: installs a single-fire `play-cost` discount scoped to the
+ * controller's next spell this turn (consumed by the engine's pay path).
  */
 const abilities: Ability[] = [
   {
     effect: {
-      duration: "turn",
-      keyword: "NextSpellCostReduction",
-      target: "controller",
-      type: "grant-keyword",
-      value: 5,
-    },
+      duration: "next",
+      reduction: 5,
+      replaces: "play-cost",
+      target: { controller: "friendly", type: "spell" },
+      type: "replacement",
+    } as unknown as Effect,
     trigger: { event: "play-self" },
     type: "triggered",
   },

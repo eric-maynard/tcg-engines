@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-062-221",
+  "title": "'When you play me, ready another friendly Mech' readies nothing even with exhausted friendly Mechs present",
+  "expected": "Bubble Bot's parsed ability is ready{target:{type:unit,controller:friendly,filter:{tag:\"Mech\"},excludeSelf:true}} (verified at runtime via getAllCards()). target-resolver.ts:463-465 matches filter.tag strictly against registry def.tags (`return tags?.includes(filter.tag) ?? false`). No card in getAllCards() carries tags containing \"Mech\" (runtime check: zero matches) — bubble-bot.ts:4-15, mega-mech.ts, breakneck-mech.ts have no `tags`; sfd.json:2348 has \"tags\": []; sandbox Mech token registration (game-definition/moves/token.ts:133-161) and ability-minted tokens (abilities/effects/create-token.ts:92-98,139-145) register name/might/keywords but no tags. So the filter can never match, targets is empty, and handle_ready (abilities/effects/ready.ts:13-14) fizzles because a target spec exists. Nothing is readied.",
+  "observed": "Trigger went on chain as ready{target:{type:unit,controller:friendly,filter:{tag:'Mech'},excludeSelf:true}} with no targets/pendingChoice; after passChainPriority all friendly units (Mech token, Recruit token, first Bubble Bot) stayed exhausted:true. Tested twice: once with an exhausted Mech token, once (via duplicateCard) with an exhausted printed Bubble Bot as the other Mech. Root cause visible in data: target-resolver matches filter.tag against def.tags, but no card def (bubble-bot.ts, mega-mech.ts, etc.) nor the sandbox Mech token def carries tags:['Mech'], so the filter can never match.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/target-resolver.ts:463",
+  "id": "951a3571a1e1",
+  "createdAt": "2026-08-06T20:43:38.887Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.887Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

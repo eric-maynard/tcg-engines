@@ -1,0 +1,19 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 416.1.b/.c — an EFFECT that recycles P1's rune (cast by P2) puts it under P1's rune deck and adds no power to either player; engine leaves the rune on the board",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/runes-rune-deck-and-rune-pool.test.ts",
+    "testName": "BUG: 416.1.b/.c — an EFFECT that recycles P1's rune (cast by P2) puts it under P1's rune deck and adds no power to either player; engine leaves the rune on the board"
+  },
+  "id": "d8f1a6ac01eb",
+  "createdAt": "2026-08-06T20:50:12.437Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.437Z",
+      "event": "enqueued:core-rule-bug"
+    }
+  ],
+  "status": "open"
+}

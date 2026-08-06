@@ -32,7 +32,7 @@ describe("Caitlyn, Patrolling (ogn-068-298)", () => {
     expect(noPower.p1.can("play", "cait")).toBe(false);
   });
 
-  test.failing("BUG: assigned combat damage last (defending) — a 3-Might attacker must kill the other defender, Caitlyn takes nothing (465.2.c.6)", async () => {
+  test("assigned combat damage last (defending) — a 3-Might attacker must kill the other defender, Caitlyn takes nothing (465.2.c.6)", async () => {
     // Expected: lethal damage goes to grunt first; Caitlyn is untouched. Actual: the static clause
     // is dropped by the parser and the auto-assignment follows placement order, killing Caitlyn.
     const game = await scenario()
@@ -49,7 +49,7 @@ describe("Caitlyn, Patrolling (ogn-068-298)", () => {
     expect(game.zoneOf("attacker")).toBe("trash"); // 3 + 3 = 6 ≥ 3
   });
 
-  test.failing("BUG: assigned combat damage last (attacking) — the defender's 3 damage goes to the other attacker first (465.2.c.6)", async () => {
+  test("assigned combat damage last (attacking) — the defender's 3 damage goes to the other attacker first (465.2.c.6)", async () => {
     // Expected: grunt absorbs the lethal 3, Caitlyn survives and conquers. Actual: Caitlyn
     // (placed first) is assigned the damage and dies.
     const game = await scenario()

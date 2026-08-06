@@ -427,11 +427,12 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         allowDecline,
         id: decisionId(ctx.seq, seat, "pick"),
         kind: "pick",
-        max: 1,
-        meta: { onPicked: pc.onPicked, onRest: pc.onRest, revealer: pc.revealer },
+        // rule 422.1.a: "discard N" prompts take up to `remaining` picks in one answer.
+        max: pc.remaining ?? 1,
+        meta: { onPicked: pc.onPicked, onRest: pc.onRest, remaining: pc.remaining, revealer: pc.revealer },
         min: allowDecline ? 0 : 1,
         options,
-        prompt: `Pick a revealed card to ${pc.onPicked}${allowDecline ? " (or decline)" : ""}`,
+        prompt: `Pick ${pc.remaining && pc.remaining > 1 ? `${pc.remaining} revealed cards` : "a revealed card"} to ${pc.onPicked}${allowDecline ? " (or decline)" : ""}`,
         semantics: "from-revealed",
       };
       return d;
@@ -448,6 +449,19 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       return d;
     }
     case "choose-target": {
+      // rule 355.14.e (ogn-041-298): fixed-total split — one allocation answer.
+      if (pc.assign && typeof pc.total === "number") {
+        const total = pc.total;
+        const d: DistributeDecision = {
+          ...base,
+          buckets: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id), max: total, min: 0 })),
+          id: decisionId(ctx.seq, seat, "distribute"),
+          kind: "distribute",
+          prompt: `Split ${total} damage`,
+          total,
+        };
+        return d;
+      }
       if (pc.assign) {
         const d: DistributeDecision = {
           ...base,
@@ -532,6 +546,8 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       costText = costText ? `${costText} to use` : "Use";
       const d: YesNoDecision = {
         ...base,
+        // rule 383.3.b (ogn-072-298): "yes" is only legal when the opt-in cost is payable.
+        canAccept: flat.some((m) => m.params.accept === true),
         consequence: "Perform the optional triggered ability",
         id: decisionId(ctx.seq, seat, "yes-no"),
         kind: "yes-no",
@@ -625,6 +641,24 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
     case "reveal-and-pick":
     case "weaponmaster-equip":
     case "choose-target": {
+      // rule 355.14.e (ogn-041-298): fixed-total split → `allocation` param.
+      if (pc.type === "choose-target" && pc.assign && typeof pc.total === "number") {
+        let allocation: Record<string, number>;
+        if (answer.kind === "distribute") {
+          allocation = {};
+          for (const [k, n] of Object.entries(answer.allocation)) {
+            if (n > 0) allocation[k] = n;
+          }
+        } else if (answer.kind === "pick" && answer.keys.length === 1) {
+          allocation = { [answer.keys[0] as string]: pc.total };
+        } else if (answer.kind === "decline" || (answer.kind === "pick" && answer.keys.length === 0)) {
+          allocation = {};
+        } else {
+          return err("WRONG_ANSWER_KIND", "Split-damage decision needs a distribute (or single pick) answer");
+        }
+        params.allocation = allocation;
+        break;
+      }
       if (pc.type === "choose-target" && pc.assign) {
         if (answer.kind === "distribute") {
           const chosen = Object.entries(answer.allocation).filter(([, n]) => n > 0);
@@ -639,6 +673,16 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
           break;
         }
         return err("WRONG_ANSWER_KIND", "Distribute decision needs a distribute (or single pick) answer");
+      }
+      // rule 422.1.a (ogn-030-298): a "discard N" prompt accepts up to `remaining` picks at once.
+      if (
+        pc.type === "reveal-and-pick" &&
+        answer.kind === "pick" &&
+        answer.keys.length > 1 &&
+        answer.keys.length <= (pc.remaining ?? 1)
+      ) {
+        params.pickedCardIds = [...answer.keys];
+        break;
       }
       const k = pickKey();
       if (typeof k === "object") {
@@ -709,6 +753,15 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
     }
   }
 
+  // rule 422.1.a: a multi-pick answer is legal when each key is an enumerated single pick.
+  if (Array.isArray(params.pickedCardIds)) {
+    const keys = params.pickedCardIds as string[];
+    const singles = keys.map((id) => flat.find((m) => canonicalJson(m.params) === canonicalJson({ pickedCardId: id, playerId: seat })));
+    if (new Set(keys).size === keys.length && singles.every((m) => m !== undefined)) {
+      const first = singles[0] as FlatMove;
+      return { move: { moveId: first.moveId, params, playerId: first.playerId }, type: "move" };
+    }
+  }
   const wanted = canonicalJson(params);
   const legal = flat.find((m) => canonicalJson(m.params) === wanted);
   if (!legal) {
