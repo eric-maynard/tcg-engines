@@ -14,6 +14,7 @@ import {
   isUntargetable,
   resolveTarget,
 } from "../../../abilities/target-resolver";
+import { playIsForbidden } from "../../../abilities/play-restrictions";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import {
   addToChain,
@@ -169,6 +170,16 @@ export const playSpell: Defs["playSpell"] = {
     }
     // rule-id: ogn-026-298 — "opponents can't play cards this turn".
     if (state.cannotPlayCardsThisTurn?.[context.params.playerId as string]) {
+      return false;
+    }
+    // rule 419.1 — a board static may forbid PLAYING this card (ven-132-166).
+    if (
+      playIsForbidden(
+        { cards: context.cards, draft: state, zones: context.zones },
+        context.params.playerId as string,
+        context.params.cardId as string,
+      )
+    ) {
       return false;
     }
 
