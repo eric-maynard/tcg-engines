@@ -23,10 +23,16 @@ export type GameEvent =
     }
   | { type: "play-card"; cardId: string; playerId: string; cardType: string }
   | { type: "play-token-unit"; cardId: string; playerId: string }
+  // rule-id: ogn-167-298 — rule 811.1.c.3: playing a card from facedown IS
+  // playing a card; cards that key off it specifically ("When you play a card
+  // from [Hidden]") need their own event alongside play-self / play-card.
+  | { type: "play-from-hidden"; cardId: string; playerId: string; cardType?: string }
   // rule-id: ogn-060-298 — `owner` = the attacking/defending unit's controller
   // so "When a friendly unit attacks/defends" subject matchers can resolve.
-  | { type: "attack"; cardId: string; battlefieldId: string; owner?: string }
-  | { type: "defend"; cardId: string; battlefieldId: string; owner?: string }
+  // `alone` (rule 740.2.a) = no OTHER unit its controller controls is at that
+  // battlefield, so "attacks or defends alone" triggers can match.
+  | { type: "attack"; cardId: string; battlefieldId: string; owner?: string; alone?: boolean }
+  | { type: "defend"; cardId: string; battlefieldId: string; owner?: string; alone?: boolean }
   // rule-id: ogn-034-298 — combat conquers carry `afterAttack` and the excess
   // damage the attacker assigned to enemy units (rule 626.1.d.2).
   | {
