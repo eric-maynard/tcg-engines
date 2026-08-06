@@ -163,7 +163,7 @@ describe("Ruined Rex Deathknell × Navori Scout Deflect", () => {
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "rex", controller: P1, triggered: true })]);
   });
 
-  test.failing("BUG: (a) control — Deflect must tax the triggered ability: with 1 power P1 pays it to hit the Scout (809.1.c)", async () => {
+  test("(a) control — Deflect must tax the triggered ability: with 1 power P1 pays it to hit the Scout (809.1.c)", async () => {
     // Expected: Scout takes 4 and dies AND the mind power is spent on the Deflect surcharge.
     // Actual: Scout dies but P1 keeps the power — the surcharge is only applied to spells.
     const game = await controlBoard(1).build();
@@ -173,7 +173,7 @@ describe("Ruined Rex Deathknell × Navori Scout Deflect", () => {
     expect(game.p1.power("mind")).toBe(0);
   });
 
-  test.failing("BUG: (b) control — with NO power the Scout cannot be chosen: the trigger is dropped and Scout takes no damage (404.2)", async () => {
+  test("(b) control — with NO power the Scout cannot be chosen: the trigger is dropped and Scout takes no damage (404.2)", async () => {
     // Expected: only legal target has Deflect, P1 cannot pay → pending ability removed, Scout undamaged.
     // Actual: the engine auto-targets the Scout for free and kills it.
     const game = await controlBoard(0).build();

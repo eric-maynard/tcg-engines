@@ -29,7 +29,7 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { getCardEffectiveMight, xCostIsPower } from "../play/cost";
+import { getCardEffectiveMight, getDeflectSurcharge, xCostIsPower } from "../play/cost";
 import {
   findSequenceLeadTarget,
   isLegalMultiTargetSet,
@@ -38,6 +38,50 @@ import {
 import { buildEffectContext } from "./effect-context";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
+
+/**
+ * Total pooled Power a player has across every Domain — rule 809.1.c.1: a
+ * Deflect surcharge is Power of ANY Domain, so only the total matters.
+ */
+function totalPooledPower(state: RiftboundGameState, playerId: string): number {
+  const pool = state.runePools[playerId];
+  if (!pool) {
+    return 0;
+  }
+  return Object.values(pool.power as Partial<Record<string, number>>).reduce(
+    (a: number, b) => a + (b ?? 0),
+    0,
+  );
+}
+
+/**
+ * Pay `amount` Power of any Domain, draining the most-stocked Domain first.
+ * Pays nothing and returns false when the player is short (rule 404.2).
+ */
+function payAnyDomainPower(
+  draft: RiftboundGameState,
+  playerId: string,
+  amount: number,
+): boolean {
+  if (amount <= 0) {
+    return true;
+  }
+  const pool = draft.runePools[playerId];
+  if (!pool || totalPooledPower(draft, playerId) < amount) {
+    return false;
+  }
+  const anyPool = pool.power as Partial<Record<string, number>>;
+  for (let i = 0; i < amount; i++) {
+    const key = Object.entries(anyPool)
+      .filter(([, v]) => (v ?? 0) > 0)
+      .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0];
+    if (key === undefined) {
+      return false;
+    }
+    anyPool[key] = (anyPool[key] ?? 0) - 1;
+  }
+  return true;
+}
 
 /**
  * Execute a resolved chain item's effect.
@@ -268,6 +312,29 @@ export function executeResolvedItem(
         (id) => baseCtx.zones.getCardZone(id as CoreCardId) === hiddenZone,
       );
     }
+    // rule 809.1.c / 809.1.d (721.1.c): Deflect taxes ABILITIES as well as
+    // spells — an opponent choosing a Deflect card with a triggered or
+    // activated ability owes a mandatory additional cost of Power of any
+    // Domain (rule 809.1.c.1), incurred when the target is chosen. A target
+    // whose surcharge the controller cannot pay is not a legal choice; when
+    // none remain the pending ability is removed without resolving
+    // (rule 404.2 — removed, NOT countered). Only the auto-bound single
+    // candidate is charged here; a prompted multi-candidate pick still owes
+    // its surcharge at pick time (choose-target branch of `pending-choice.ts`).
+    let deflectTax = false;
+    if (resolved.type !== "spell" && options.length > 0) {
+      const surchargeOf = (id: string): number =>
+        getDeflectSurcharge(draft, resolved.controller, [id], baseCtx.cards);
+      const available = totalPooledPower(draft, resolved.controller);
+      deflectTax = options.some((id) => surchargeOf(id) > 0);
+      if (deflectTax) {
+        const payable = options.filter((id) => surchargeOf(id) <= available);
+        if (payable.length === 0) {
+          return;
+        }
+        options = payable;
+      }
+    }
     // rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": the
     // controller picks 0..n (declining is legal even with one candidate), so
     // prompt whenever any candidate exists; candidates that alone breach the
@@ -330,6 +397,13 @@ export function executeResolvedItem(
       return;
     } else {
       boundTargets = options;
+      if (deflectTax && boundTargets.length > 0) {
+        payAnyDomainPower(
+          draft,
+          resolved.controller,
+          getDeflectSurcharge(draft, resolved.controller, [...boundTargets], baseCtx.cards),
+        );
+      }
     }
   }
 
