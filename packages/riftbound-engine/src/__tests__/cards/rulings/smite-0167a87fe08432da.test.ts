@@ -100,7 +100,7 @@ describe("Ruling 0167a87fe08432da — Smite vs Zhonya's Hourglass / Tactical Ret
 
   // Expected: two replacement effects want the same death → P2 (victim's controller) orders them (372).
   // Actual: Smite's banish replacement is applied silently; nobody is asked.
-  test.failing("BUG: ruling 0167a87fe08432da — Zhonya's: P2 is asked to order Smite's and Zhonya's replacement effects (engine: no prompt)", async () => {
+  test("ruling 0167a87fe08432da — Zhonya's: P2 is asked to order Smite's and Zhonya's replacement effects (engine: no prompt)", async () => {
     const game = await zhonyasBoard().build();
     await smiteResolves(game);
     expectOrderingDecisionForP2(game);
@@ -108,7 +108,7 @@ describe("Ruling 0167a87fe08432da — Smite vs Zhonya's Hourglass / Tactical Ret
 
   // Expected: P2 applies Zhonya's first → Hourglass killed (trash); victim healed, exhausted, recalled to base; Smite's
   // "banish instead" has no death left to replace (370.2) → NOT banished. Actual: no prompt; victim banished.
-  test.failing("BUG: ruling 0167a87fe08432da — Zhonya's applied first saves the unit: Hourglass to trash, victim in base healed+exhausted, not banished (engine: banished)", async () => {
+  test("ruling 0167a87fe08432da — Zhonya's applied first saves the unit: Hourglass to trash, victim in base healed+exhausted, not banished (engine: banished)", async () => {
     const game = await zhonyasBoard().build();
     await smiteResolves(game);
     expectOrderingDecisionForP2(game);
@@ -119,7 +119,7 @@ describe("Ruling 0167a87fe08432da — Smite vs Zhonya's Hourglass / Tactical Ret
 
   // Expected: P2 may instead apply Smite first → victim banished; Zhonya's cannot chain onto a banish (427.2.a) so it
   // stays on the board unused. Actual: the outcome matches, but P2 is never given the choice.
-  test.failing("BUG: ruling 0167a87fe08432da — Zhonya's: P2 CHOOSES Smite first → banished, Hourglass stays (engine: right outcome, but no choice offered)", async () => {
+  test("ruling 0167a87fe08432da — Zhonya's: P2 CHOOSES Smite first → banished, Hourglass stays (engine: right outcome, but no choice offered)", async () => {
     const game = await zhonyasBoard().build();
     await smiteResolves(game);
     expectOrderingDecisionForP2(game);

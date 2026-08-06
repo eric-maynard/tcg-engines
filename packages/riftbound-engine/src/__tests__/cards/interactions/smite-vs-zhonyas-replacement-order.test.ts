@@ -86,7 +86,7 @@ describe("Smite × Zhonya's Hourglass × LeBlanc, Fragmented — replacement ord
   // Expected: after Smite resolves and the lethal damage is found, two replacement effects want the
   // same death event; rule 372 hands the ordering to P2 (LeBlanc's controller). Actual: the engine
   // applies Smite's banish replacement silently and never consults Zhonya's or asks P2.
-  test.failing("BUG: with Zhonya's on board P2 (controller of the dying unit) should be asked to order the two replacement effects (rule 372)", async () => {
+  test("with Zhonya's on board P2 (controller of the dying unit) should be asked to order the two replacement effects (rule 372)", async () => {
     const game = await board({ zhonyas: true }).build();
     await game.p1.cast("smite", { targets: "leblanc" });
     const r = await game.settle();
@@ -98,7 +98,7 @@ describe("Smite × Zhonya's Hourglass × LeBlanc, Fragmented — replacement ord
   // Expected: P2 applies Zhonya's first → Hourglass is killed (trash), LeBlanc healed, exhausted,
   // recalled to base; the death is fully replaced so Smite's "banish instead" finds nothing (370.2).
   // Actual: no ordering prompt; LeBlanc is banished and the Hourglass never leaves base.
-  test.failing("BUG: P2 applying Zhonya's first saves LeBlanc — Hourglass to trash, LeBlanc in base healed + exhausted, not banished (370.2, 370.1.a.1)", async () => {
+  test("P2 applying Zhonya's first saves LeBlanc — Hourglass to trash, LeBlanc in base healed + exhausted, not banished (370.2, 370.1.a.1)", async () => {
     const game = await board({ zhonyas: true }).build();
     await game.p1.cast("smite", { targets: "leblanc" });
     await game.settle();
@@ -115,7 +115,7 @@ describe("Smite × Zhonya's Hourglass × LeBlanc, Fragmented — replacement ord
   // Expected: whichever order is applied, LeBlanc is never "killed and sent to the trash", so her
   // Deathknell must not draw (808.1.d.1). Under the Zhonya's-first order she is in base.
   // Actual: cannot reach the Zhonya's-first branch (see above).
-  test.failing("BUG: Zhonya's-first save does not trigger Deathknell — LeBlanc in base and P2's hand unchanged (808.1.d.1)", async () => {
+  test("Zhonya's-first save does not trigger Deathknell — LeBlanc in base and P2's hand unchanged (808.1.d.1)", async () => {
     const game = await board({ zhonyas: true }).build();
     const hand = game.p2.hand().length;
     await game.p1.cast("smite", { targets: "leblanc" });

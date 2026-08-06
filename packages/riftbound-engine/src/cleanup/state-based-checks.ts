@@ -215,6 +215,7 @@ function payReplacementCost(
 function consumeActiveDieReplacement(
   draft: RiftboundGameState,
   cardId: string,
+  peek = false,
 ): ActiveDieReplacementEntry | undefined {
   const active = draft.activeReplacements as ActiveDieReplacementEntry[] | undefined;
   if (!active || active.length === 0) {
@@ -225,7 +226,9 @@ function consumeActiveDieReplacement(
     if (entry?.replaces !== "die" || !entry.targetCardIds?.includes(cardId)) {
       continue;
     }
-    active.splice(i, 1);
+    if (!peek) {
+      active.splice(i, 1);
+    }
     return entry;
   }
   return undefined;
@@ -326,7 +329,48 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       // rule-id: unl-007-219 — runtime die-replacements bound to this unit
       // (installed by a resolved spell: "If it would die this turn, banish it
       // instead") take precedence over the normal kill (rule 571-573).
-      const activeDie = consumeActiveDieReplacement(ctx.draft, cardId as string);
+      // rule 372: when two replacement effects both apply to this death, the
+      // controller of the dying object chooses which one applies (the other
+      // never sees the event — rule 370.2). Ask once, then honour the answer.
+      let boardPeek = preDieReplacements.get(cardId as string) ?? null;
+      if (
+        boardPeek?.duration === "next" &&
+        ctx.draft.consumedNextReplacements?.[
+          buildConsumedKey(boardPeek.sourceCardId, boardPeek.abilityIndex)
+        ]
+      ) {
+        boardPeek = null;
+      }
+      const boundPeek = consumeActiveDieReplacement(ctx.draft, cardId as string, true);
+      let preferBound = true;
+      if (boundPeek && boardPeek && boundPeek.condition?.type !== "pay-cost") {
+        const orders = (ctx.draft as { replacementOrderChoices?: Record<string, string> })
+          .replacementOrderChoices;
+        const picked = orders?.[cardId as string];
+        if (picked === undefined) {
+          if (ctx.draft.pendingChoice) {
+            continue;
+          }
+          ctx.draft.pendingChoice = {
+            effect: { type: "noop" },
+            options: [boardPeek.sourceCardId, boundPeek.sourceCardId ?? (cardId as string)],
+            playerId: ctx.cards.getCardController?.(cardId) ?? ctx.cards.getCardOwner(cardId) ?? "",
+            remaining: 1,
+            replacementOrderFor: cardId as string,
+            sourceCardId: cardId as string,
+            type: "choose-target",
+          } as RiftboundGameState["pendingChoice"];
+          stateChanged = true;
+          continue;
+        }
+        preferBound = picked !== boardPeek.sourceCardId;
+        if (orders) {
+          delete orders[cardId as string];
+        }
+      }
+      const activeDie = preferBound
+        ? consumeActiveDieReplacement(ctx.draft, cardId as string)
+        : undefined;
       // rule 372 (ogn-023-298): "you may pay [C] to … instead" — an optional,
       // costed replacement. Unpayable ⇒ the death proceeds normally (the
       // single-fire entry is still spent: "the next time" has passed).

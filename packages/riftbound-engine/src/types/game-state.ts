@@ -653,6 +653,13 @@ export interface RiftboundGameState {
    */
   readonly cardsPlayedThisTurn?: Record<string, number>;
 
+  /**
+   * rule 430.3 — runes actually channeled per player by the most recent
+   * `channel` effect. Read by the `channeled-fewer-than` condition
+   * ("If you couldn't channel 2 runes this way, draw 1").
+   */
+  readonly lastChanneledCount?: Record<string, number>;
+
   /** Turn state */
   readonly turn: TurnState;
 

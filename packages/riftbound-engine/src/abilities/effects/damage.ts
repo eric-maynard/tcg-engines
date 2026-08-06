@@ -1,6 +1,7 @@
 // Effect handler: "damage"
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
+import { getBonusDamage } from "../bonus-damage";
 import { checkReplacement, markReplacementConsumed } from "../replacement-effects";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
@@ -39,6 +40,9 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     lastDamageSource:
       getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "spell" ? "spell" : "ability",
   };
+  // rule 715.1: Bonus Damage the controller of this spell/ability has
+  // increases EACH instance of damage it deals.
+  const bonusDamage = getBonusDamage(ctx);
   // rule-id: ogn-221-298 (Imperial Decree) — "When any unit takes damage this
   // turn, kill it": a turn-wide, unbound take-damage entry in
   // activeReplacements is a criteria reaction, not a per-unit choice. After a
@@ -211,7 +215,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
             | Partial<RiftboundCardMeta>
             | undefined
         )?.damage ?? 0;
-      const dmg = assigned[targetId] + surplus;
+      const dmg = assigned[targetId] + surplus + bonusDamage;
       surplus = 0;
       ctx.counters.addCounter(targetId as CoreCardId, "damage", dmg);
       ctx.cards.updateCardMeta?.(
@@ -229,7 +233,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       : resolveAmount(rawAmount as Record<string, unknown>, ctx);
   const targets = getTargetIds(effect, ctx);
   const hits: { targetId: string; amount: number }[] = targets.map((targetId) => ({
-    amount,
+    amount: amount > 0 ? amount + bonusDamage : amount,
     targetId,
   }));
   // rule-id: unl-072-219 (Crescent Strike) — "Deal N to that unit and M to
@@ -253,7 +257,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
         (id) => !targets.includes(id) && ctx.zones.getCardZone(id as CoreCardId) === zone,
       );
       for (const id of others) {
-        hits.push({ amount: splashOthers, targetId: id });
+        hits.push({ amount: splashOthers + bonusDamage, targetId: id });
       }
     }
   }

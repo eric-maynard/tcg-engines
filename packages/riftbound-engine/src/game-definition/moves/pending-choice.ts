@@ -680,6 +680,23 @@ export const pendingChoiceMoves: Partial<
           postChoiceCleanup(draft, context);
           return;
         }
+        // rule-id: ogn-080-298 (rule 355.9) — "You may make new choices for
+        // it": the pick RE-TARGETS a chain item the chooser just gained
+        // control of; rewrite that item's locked targets instead of executing
+        // anything now (the stolen spell resolves later, on its own).
+        if (choice.retargetChainItemId !== undefined) {
+          if (!choice.options.includes(picked)) {
+            return;
+          }
+          const items = draft.interaction?.chain?.items ?? [];
+          const item = items.find((it) => it && it.id === choice.retargetChainItemId);
+          if (item) {
+            (item as { targets?: readonly string[] }).targets = [picked];
+          }
+          draft.pendingChoice = undefined;
+          postChoiceCleanup(draft, context);
+          return;
+        }
         // rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": each
         // pick accumulates; remaining options are re-pruned against the
         // target's aggregate constraints (one battlefield, `totalMight` cap)

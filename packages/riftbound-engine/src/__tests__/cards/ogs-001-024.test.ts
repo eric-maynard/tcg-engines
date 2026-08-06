@@ -41,7 +41,7 @@ describe("Annie, Fiery (ogs-001-024)", () => {
     expect(noFury.p1.can("play", "annie")).toBe(false);
   });
 
-  test.failing("BUG: your SPELLS deal 1 Bonus Damage — Hextech Ray deals 4 instead of 3 (rule 715.1)", async () => {
+  test("your SPELLS deal 1 Bonus Damage — Hextech Ray deals 4 instead of 3 (rule 715.1)", async () => {
     // Expected: with Annie on the board, P1's Hextech Ray "Deal 3" becomes 4. Actual: foe takes 3 —
     // the controller-scoped BonusDamage keyword is not consulted by the damage pipeline.
     const game = await board().build();
@@ -50,7 +50,7 @@ describe("Annie, Fiery (ogs-001-024)", () => {
     expect(game.state("foe").damage).toBe(4);
   });
 
-  test.failing("BUG: your ABILITIES deal 1 Bonus Damage — Iron Ballista's 'Deal 2' deals 3", async () => {
+  test("your ABILITIES deal 1 Bonus Damage — Iron Ballista's 'Deal 2' deals 3", async () => {
     // Expected: the gear's activated damage ability is boosted to 3. Actual: foe takes 2.
     const game = await board().build();
     await game.p1.activate("ballista", 1, { targets: "foe" }); // #0 is the "enters exhausted" static

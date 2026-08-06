@@ -55,7 +55,7 @@ describe("Ravenborn Tome (ogn-032-298)", () => {
     expect(exhausted.p1.can("activate", "tired")).toBe(false);
   });
 
-  test.failing("BUG: the next spell you play this turn deals 1 Bonus Damage (Hextech Ray deals 4 instead of 3)", async () => {
+  test("the next spell you play this turn deals 1 Bonus Damage (Hextech Ray deals 4 instead of 3)", async () => {
     // Expected: after the Tome resolves, Hextech Ray's "Deal 3" is increased to 4 (rule 715.1).
     // Actual: the replacement is registered but never applied — the unit takes 3.
     const game = await board().build();
