@@ -53,7 +53,7 @@ describe("Ruling cf6487465e162f43 — Burn / Minefield mill Nocturne without a l
   // straight into P1's trash — no look/reveal, so no Nocturne offer; Nocturne ends in the TRASH, not in
   // banishment, and P1's spare [rainbow] is untouched. Actual: [Burn] is unimplemented (raw text) — the
   // deck is untouched and Nocturne stays on top.
-  test.failing("BUG: ruling cf6487465e162f43 — Burn 2 (Kennen) mills Nocturne from the top straight to trash; no banish/play offer (engine: Burn does nothing)", async () => {
+  test("ruling cf6487465e162f43 — Burn 2 (Kennen) mills Nocturne from the top straight to trash; no banish/play offer (engine: Burn does nothing)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { chaos: 1, rainbow: 1 } })
       .hand(P1, KENNEN, "kennen")
@@ -99,7 +99,7 @@ describe("Ruling cf6487465e162f43 — Burn / Minefield mill Nocturne without a l
   // Vision) hits Nocturne's "as you look at … me" replacement: P1 is offered to banish Nocturne (and then
   // to play it for [rainbow]). Actual: the Vision look shows a recycle prompt only; Nocturne's ability is
   // wired to a "reveal" trigger that the look never raises, so no banish offer appears.
-  test.failing("BUG: ruling cf6487465e162f43 — contrast: LOOKING at Nocturne on top (Mystic Poro's Vision) does offer 'banish me, then play me for [rainbow]'", async () => {
+  test("ruling cf6487465e162f43 — contrast: LOOKING at Nocturne on top (Mystic Poro's Vision) does offer 'banish me, then play me for [rainbow]'", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2, power: { rainbow: 1 } })
       .hand(P1, MYSTIC_PORO, "poro")

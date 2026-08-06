@@ -1,0 +1,42 @@
+// Effect handler: "mill" — the [Burn N] keyword action.
+import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
+import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { type EffectHelpers, resolveAmount } from "./_helpers";
+
+/**
+ * rule 440.1 — "[Burn N]" puts the top N cards of a player's Main Deck into
+ * their trash. The cards are never looked at or revealed on the way (424.1),
+ * so "as you look at or reveal me" replacements never see them.
+ */
+export function handle_mill(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+  const who = (effect as { player?: string }).player ?? "self";
+  if (who === "each") {
+    for (const pid of Object.keys(ctx.draft.players)) {
+      handle_mill({ ...effect, player: "self" }, { ...ctx, playerId: pid }, _h);
+    }
+    return;
+  }
+  if (who === "opponent") {
+    for (const pid of Object.keys(ctx.draft.players)) {
+      if (pid !== ctx.playerId) {
+        handle_mill({ ...effect, player: "self" }, { ...ctx, playerId: pid }, _h);
+      }
+    }
+    return;
+  }
+  const raw = (effect as { amount?: unknown }).amount ?? 1;
+  const count = typeof raw === "number" ? raw : resolveAmount(raw, ctx);
+  const burned: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const deck = ctx.zones.getCardsInZone("mainDeck" as CoreZoneId, ctx.playerId as CorePlayerId);
+    const top = deck[0];
+    if (top === undefined) {
+      break;
+    }
+    ctx.zones.moveCard({ cardId: top as CoreCardId, targetZoneId: "trash" as CoreZoneId });
+    burned.push(top as string);
+  }
+  if (burned.length > 0) {
+    ctx.fireTriggers?.({ cardIds: burned, playerId: ctx.playerId, type: "burn" } as never);
+  }
+}

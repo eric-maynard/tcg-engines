@@ -1575,7 +1575,36 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "When you play your first card each turn, if I'm at a battlefield, your next card costs [2][rainbow][rainbow] less.",
-      "abilities": [],
+      "abilities": [
+  {
+   "type": "triggered",
+   "trigger": {
+    "event": "play-card",
+    "on": "controller",
+    "restrictions": [
+     {
+      "type": "nth-time-each-turn",
+      "count": 1
+     }
+    ]
+   },
+   "condition": {
+    "type": "while-at-battlefield"
+   },
+   "effect": {
+    "type": "replacement",
+    "replaces": "play-cost",
+    "duration": "next",
+    "reduction": {
+     "energy": 2,
+     "power": [
+      "rainbow",
+      "rainbow"
+     ]
+    }
+   }
+  }
+ ],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/b1ce87efc9a1a7e2438c53e034a7f92caaa67ed6-744x1039.png?accountingTag=RB",
       "illustrator": null,
@@ -2142,10 +2171,7 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nBanish a unit, then its owner plays it to the same location, ignoring its cost.",
-      "abilities": [
-        null,
-        null
-      ],
+      "abilities": [{"type": "keyword", "keyword": "Hidden"}, {"type": "spell", "effect": {"type": "sequence", "pendingValue": {"source": 0}, "effects": [{"type": "banish", "target": {"type": "unit"}}, {"type": "play", "target": {"type": "pending-value"}, "ignoreCost": true, "toLocation": "same"}]}}],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/7c670dc3d997c52b90d67043989b53c67a72f4c4-744x1039.png?accountingTag=RB",
       "illustrator": null,
@@ -3760,7 +3786,7 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "Choose a unit. If it's [Empowered], disempower it. Then kill it if it has 3 [Might] or less.\n[Flow] [4][order][order] (You may play this from your trash for its Flow cost. Then banish it.)",
-      "abilities": [],
+      "abilities": [{"_rule": "355.9.a.1 - choose ANY unit; the 3-Might test is a resolution check", "type": "spell", "effect": {"type": "sequence", "effects": [{"type": "disempower", "target": {"type": "unit"}}, {"type": "conditional", "condition": {"type": "target-might", "comparison": {"lte": 3}}, "then": {"type": "kill"}}]}}],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f21bbd09545d949f095756281e5506128eb4809d-744x1039.png?accountingTag=RB",
       "illustrator": null,

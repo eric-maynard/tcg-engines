@@ -44,6 +44,7 @@ import { handle_doTimes } from "./do-times";
 import { handle_fight } from "./fight";
 import { handle_play } from "./play";
 import { handle_look } from "./look";
+import { handle_mill } from "./mill";
 import { handle_reveal } from "./reveal";
 import { handle_revealHand } from "./reveal-hand";
 import { handle_preventDamage } from "./prevent-damage";
@@ -115,6 +116,8 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "fight": handle_fight,
   "play": handle_play,
   "look": handle_look,
+  // rule 440.1 — [Burn N]: put the top N cards of a Main Deck into its trash.
+  "mill": handle_mill,
   "reveal": handle_reveal,
   "reveal-hand": handle_revealHand,
   "prevent-damage": handle_preventDamage,

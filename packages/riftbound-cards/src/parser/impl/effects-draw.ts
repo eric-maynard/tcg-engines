@@ -53,11 +53,13 @@ export function parseDrawEffect(text: string): DrawEffect | undefined {
   }
 
   // Handle "Its controller draws N" / "Their controller draws N"
+  // rule 359.3.e.14.a — "its" refers to the chosen object, so the DRAW belongs to
+  // that object's controller (who need not be the caster's opponent).
   const controllerDrawMatch = text.match(/^Its controller draws (\d+)\.?$/i);
   if (controllerDrawMatch) {
     return {
       amount: Number.parseInt(controllerDrawMatch[1], 10),
-      player: "opponent",
+      player: "target-controller",
       type: "draw",
     };
   }
@@ -250,4 +252,17 @@ export function parsePredictEffect(text: string): Effect | undefined {
   }
   const amount = match[1] ? Number.parseInt(match[1], 10) : 1;
   return { amount, type: "predict" } as unknown as Effect;
+}
+
+/**
+ * rule 440.1 — "[Burn N]" / "They [Burn N]": put the top N cards of the
+ * indicated player's Main Deck into their trash (no look, no reveal).
+ */
+export function parseBurnEffect(text: string): Effect | undefined {
+  const match = text.match(/^(?:(You|They)\s+)?\[Burn (\d+)\]\.?$/i);
+  if (!match) {
+    return undefined;
+  }
+  const player = (match[1] ?? "").toLowerCase() === "they" ? "opponent" : "self";
+  return { amount: Number(match[2]), player, type: "mill" } as unknown as Effect;
 }

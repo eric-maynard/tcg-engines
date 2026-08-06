@@ -19,6 +19,7 @@ import {
   parsePreventDamageEffect,
 } from "./effects-damage";
 import {
+  parseBurnEffect,
   parseDiscardEffect,
   parseDrawEffect,
   parseLookEffect,
@@ -68,6 +69,7 @@ export function parseEffect(text: string): Effect | undefined {
   return (
     parseNextUnitEntersReadyEffect(cleaned) ??
     parseNextSpellBonusDamageEffect(cleaned) ??
+    parseBurnEffect(cleaned) ??
     parseDrawEffect(cleaned) ??
     parseChannelEffect(cleaned) ??
     parseBuffEffect(cleaned) ??
