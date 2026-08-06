@@ -85,7 +85,7 @@ describe("Gust (ogn-169-298)", () => {
     expect(game.chain().map((i) => i.cardId)).toEqual(["cleave"]);
   });
 
-  test.failing("BUG: the spell Gust answered then fizzles — a unit bounced to hand is no longer a legal target (rule 359.3.e.5)", async () => {
+  test("the spell Gust answered then fizzles — a unit bounced to hand is no longer a legal target (rule 359.3.e.5)", async () => {
     // Expected: Cleave's target left the board, so it resolves with no effect. Actual: the
     // Assault grant is applied to the card sitting in its owner's hand.
     const game = await response().build();

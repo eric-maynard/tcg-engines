@@ -1211,7 +1211,12 @@ export const pendingChoiceMoves: Partial<
           }
         }
         context.counters.clearAllCounters(id as CoreCardId);
-        context.zones.moveCard(moveParams);
+        // rule 359.2.c (ogn-196-298 / ogn-226-298): a unit played FROM the
+        // trash never passes through banishment — it goes straight onto the
+        // board below, so leave it where it is for now.
+        if (choice.playFrom !== "trash") {
+          context.zones.moveCard(moveParams);
+        }
         revealed = revealed.filter((r) => r !== id);
 
         // Rule ogn-006-298: emit the discard event so "When you discard me…"
@@ -1270,17 +1275,58 @@ export const pendingChoiceMoves: Partial<
               pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - (amount ?? 0));
             }
           }
-          draft.interaction = addToChain(
-            draft.interaction ?? createInteractionState(),
-            {
-              cardId: pickedCardId as string,
-              controller: choice.prompter,
-              effect: { target: pickedCardId as string, to: "choose", type: "move" },
-              triggered: true,
-              type: "ability",
-            },
-            Object.keys(draft.players),
-          );
+          // rule 359.2.c / 143.4 (ogn-196-298, ogn-226-298): "play a unit from
+          // your trash" completes as part of the enclosing effect — the unit
+          // enters its owner's base exhausted and fires its own play triggers.
+          if (choice.playFrom === "trash") {
+            const playedOwner =
+              context.cards.getCardOwner(pickedCardId as CoreCardId) ?? choice.prompter;
+            context.zones.moveCard({
+              cardId: pickedCardId as CoreCardId,
+              targetZoneId: "base" as CoreZoneId,
+            });
+            context.counters.setFlag(pickedCardId as CoreCardId, "exhausted", true);
+            const playCtx = {
+              cards: context.cards,
+              counters: context.counters,
+              draft,
+              zones: context.zones,
+            };
+            fireTriggers(
+              {
+                cardId: pickedCardId as string,
+                paidAdditionalCost: false,
+                playerId: playedOwner,
+                type: "play-self",
+              },
+              playCtx,
+            );
+            fireTriggers(
+              {
+                cardId: pickedCardId as string,
+                cardType: "unit",
+                playerId: playedOwner,
+                type: "play-card",
+              },
+              playCtx,
+            );
+            if (draft.cardsPlayedThisTurn) {
+              draft.cardsPlayedThisTurn[playedOwner] =
+                (draft.cardsPlayedThisTurn[playedOwner] ?? 0) + 1;
+            }
+          } else {
+            draft.interaction = addToChain(
+              draft.interaction ?? createInteractionState(),
+              {
+                cardId: pickedCardId as string,
+                controller: choice.prompter,
+                effect: { target: pickedCardId as string, to: "choose", type: "move" },
+                triggered: true,
+                type: "ability",
+              },
+              Object.keys(draft.players),
+            );
+          }
           // rule 356.1 / 145.2 (ogn-025-298 Blind Fury): the player who PLAYS
           // a card controls it, even when another player owns it.
           const owner = context.cards.getCardOwner(pickedCardId as CoreCardId);

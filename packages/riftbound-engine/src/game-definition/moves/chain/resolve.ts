@@ -241,8 +241,30 @@ export function executeResolvedItem(
       baseCtx.cards.getCardController?.(id as CoreCardId) ??
       baseCtx.cards.getCardOwner(id as CoreCardId) ??
       "";
+    // rule 359.3.e.5 (ogn-169-298): a chosen target that has LEFT the board
+    // before the item resolves (bounced to hand, recycled to a deck) is no
+    // longer legal — the item resolves but does nothing to it. Effects that
+    // deliberately reach into a private zone (playing a card from hand/trash)
+    // keep their targets.
+    const targetLocation = (effect.target as { location?: unknown } | undefined)?.location;
+    const reachesPrivateZones =
+      effect.type === "play" ||
+      (typeof targetLocation === "string" &&
+        ["hand", "deck", "trash", "anywhere"].includes(targetLocation));
+    // Runes live in the rune pool / rune deck and are still legal targets for
+    // "ready a rune"-style effects, so only the hand and Main Deck count as
+    // having left play here.
+    const OFF_BOARD_ZONES = ["hand", "mainDeck"];
+    const stillOnBoard = (id: string): boolean => {
+      if (reachesPrivateZones) {
+        return true;
+      }
+      const zone = baseCtx.zones.getCardZone(id as CoreCardId);
+      return typeof zone !== "string" || !OFF_BOARD_ZONES.includes(zone);
+    };
     const legal = boundTargets.filter(
       (id) =>
+        stillOnBoard(id) &&
         !(
           controllerOf(id) !== resolved.controller &&
           (isUntargetable(id, resolverCtx) || isProtectedFromEnemyChoice(id, resolverCtx))

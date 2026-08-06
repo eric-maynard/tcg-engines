@@ -251,6 +251,7 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
       ctx.draft.pendingChoice = {
         onPicked: "play",
         optional: true,
+        playFrom: "trash",
         playIgnoreEnergy: extras.ignoreEnergyCost === true,
         playIgnoreCost: extras.ignoreBaseCost === true,
         prompter: ctx.playerId,

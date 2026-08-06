@@ -385,9 +385,12 @@ export interface RevealAndPickChoice {
   /**
    * Optional filter on which revealed card may be picked.
    * - `excludeCardTypes`: card types that are NOT valid picks (e.g., ["unit"]).
+   * - `maxMight`: rule-id ogn-242-298 — "a unit … that has Might up to 1 more
+   *   than the killed unit"; picks with printed Might above this are illegal.
    */
   readonly filter?: {
     readonly excludeCardTypes?: readonly string[];
+    readonly maxMight?: number;
   };
 
   /**
