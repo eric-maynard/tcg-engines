@@ -483,3 +483,58 @@ export function targetDescriptorIsSatisfiable(
   );
   return resolved.length > 0;
 }
+
+/**
+ * rule 355.4 / 355.4.a (unl-101-219 Call to Battle) — when a spell's move
+ * effect makes its controller CHOOSE the destination, the destination must be
+ * a location other than the unit's current one. A unit for which no such
+ * destination exists therefore cannot be chosen at all. A spell that NAMES its
+ * destination ("Move up to 2 friendly units to base") asks for no choice, so a
+ * unit already there stays a legal target.
+ *
+ * Returns the legal destination zones for `cardId`, or `undefined` when the
+ * effect does not ask for a destination choice (no restriction applies).
+ */
+export function chosenMoveDestinations(
+  effect: SpellEffectTargetShape | undefined,
+  cardId: string,
+  ctx: Parameters<typeof resolveTarget>[1],
+): string[] | undefined {
+  const move = effect as
+    | { type?: string; to?: string | { battlefield?: string } }
+    | undefined;
+  if (!move || move.type !== "move") {
+    return undefined;
+  }
+  const to = move.to;
+  const battlefields = Object.entries(
+    (ctx.draft as { battlefields?: Record<string, { controller?: string | null }> }).battlefields ??
+      {},
+  );
+  const current = ctx.zones.getCardZone(cardId as Parameters<typeof ctx.zones.getCardZone>[0]) as
+    | string
+    | undefined;
+  let zones: string[];
+  if (to === "choose") {
+    zones = ["base", ...battlefields.map(([bfId]) => `battlefield-${bfId}`)];
+  } else if (to !== null && typeof to === "object" && typeof to.battlefield === "string") {
+    const which = to.battlefield;
+    zones = battlefields
+      .filter(([, bf]) => {
+        switch (which) {
+          case "controlled":
+            return bf.controller === ctx.playerId;
+          case "enemy":
+            return bf.controller !== null && bf.controller !== ctx.playerId;
+          case "open":
+            return bf.controller === null || bf.controller === undefined;
+          default:
+            return true;
+        }
+      })
+      .map(([bfId]) => `battlefield-${bfId}`);
+  } else {
+    return undefined;
+  }
+  return zones.filter((z) => z !== current);
+}

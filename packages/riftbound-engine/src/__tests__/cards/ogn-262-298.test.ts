@@ -89,7 +89,7 @@ describe("Zenith Blade (ogn-262-298)", () => {
     expect(game.locationOf("ally")).toBe("bf1");
   });
 
-  test.failing("BUG: 'You may move' is optional — the spell is castable for the stun alone (e.g. with no friendly unit at all)", async () => {
+  test("'You may move' is optional — the spell is castable for the stun alone (e.g. with no friendly unit at all)", async () => {
     // Expected: with zero friendly units P1 can still Zenith Blade the foe (stun only).
     // Actual: the friendly unit is a mandatory second target, so the cast is not legal.
     const game = await scenario()

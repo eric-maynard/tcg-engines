@@ -512,13 +512,16 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       const payable = new Set(
         flat.filter((m) => m.params.paidAdditionalCost === true).map((m) => String(m.params.pickedZoneId)),
       );
+      // rule-id: ogn-262-298 (rule 355.13) — "You may move …": the move can be
+      // declined, so the destination pick is not forced.
+      const declinable = flat.some((m) => m.params.accept === false);
       const d: PickDecision = {
         ...base,
-        allowDecline: false,
+        allowDecline: declinable,
         id: decisionId(ctx.seq, seat, "pick"),
         kind: "pick",
         max: 1,
-        min: 1,
+        min: declinable ? 0 : 1,
         options: pc.options.flatMap((z) => [
           { key: z, label: z, zone: z },
           ...(payable.has(z)

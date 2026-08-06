@@ -287,6 +287,15 @@ export function isValidPendingPick(choice: PendingChoice, cardId: string): boole
       return false;
     }
   }
+  // rule-id: unl-139-219 — "You may choose a UNIT from it": an allow-list of
+  // card types on the pick.
+  const allowedTypes = choice.filter?.cardTypes;
+  if (allowedTypes && allowedTypes.length > 0) {
+    const cardType = getGlobalCardRegistry().get(cardId)?.cardType;
+    if (cardType && !allowedTypes.includes(cardType)) {
+      return false;
+    }
+  }
   // rule-id: ogn-242-298 — "a unit … that has Might up to 1 more than the
   // killed unit": a Might ceiling on the pick, read from printed Might.
   const maxMight = choice.filter?.maxMight;
@@ -482,6 +491,11 @@ export const pendingChoiceMoves: Partial<
         ) {
           return false;
         }
+        // rule-id: ogn-262-298 (rule 355.13) — "You may move …": declining the
+        // move is always legal.
+        if (choice.optional && context.params.accept === false) {
+          return true;
+        }
         return choice.options.includes(context.params.pickedZoneId as string);
       }
       if (choice.prompter !== context.params.playerId) {
@@ -594,12 +608,17 @@ export const pendingChoiceMoves: Partial<
         // rule-id: sfd-109-221 (rule 356.1.b.3 / 560) — a pending "play it,
         // ignoring its cost" still offers the unit's optional additional cost.
         const payable = pendingPlayOptionalCost(state, choice, context) !== undefined;
-        return choice.options.flatMap((zoneId) => [
+        // rule-id: ogn-262-298 (rule 355.13) — "You may move …": declining is
+        // one of the answers, so the prompt is never auto-taken.
+        const declineVariants = choice.optional
+          ? [{ accept: false, playerId: context.playerId as string }]
+          : [];
+        return [...declineVariants, ...choice.options.flatMap((zoneId) => [
           { pickedZoneId: zoneId, playerId: context.playerId as string },
           ...(payable
             ? [{ paidAdditionalCost: true, pickedZoneId: zoneId, playerId: context.playerId as string }]
             : []),
-        ]);
+        ])];
       }
       if (choice.prompter !== (context.playerId as string)) {
         return [];
@@ -1059,6 +1078,13 @@ export const pendingChoiceMoves: Partial<
 
       if (choice.type === "choose-destination") {
         const zoneId = context.params.pickedZoneId as string;
+        // rule-id: ogn-262-298 (rule 355.13) — the declined "you may move"
+        // simply does nothing.
+        if (choice.optional && context.params.accept === false) {
+          draft.pendingChoice = undefined;
+          postChoiceCleanup(draft, context);
+          return;
+        }
         if (!choice.options.includes(zoneId)) {
           return;
         }
@@ -1294,7 +1320,9 @@ export const pendingChoiceMoves: Partial<
         // rule 359.2.c (ogn-196-298 / ogn-226-298): a unit played FROM the
         // trash never passes through banishment — it goes straight onto the
         // board below, so leave it where it is for now.
-        if (choice.playFrom !== "trash") {
+        // rule 419.3 (unl-139-219): a forced play to a fixed battlefield goes
+        // straight there too.
+        if (choice.playFrom !== "trash" && choice.playTo === undefined) {
           context.zones.moveCard(moveParams);
         }
         revealed = revealed.filter((r) => r !== id);
@@ -1324,7 +1352,50 @@ export const pendingChoiceMoves: Partial<
       // them, then play it, reducing its cost by [N]": pay the discounted
       // cost from the prompter's pool and add the play to the chain (rule
       // 354.2/354.3) so its owner chooses a location when it finalizes.
-      if (choice.onPicked === "play") {
+      // rule 419.3 / 811.1.c.1 (unl-139-219 Bone Skewer): "They play that unit
+      // to that battlefield, ignoring any and all costs." The card's OWNER
+      // plays it — control stays with them, nothing is paid, the destination
+      // is fixed, and Hide is never an alternative (Hide is not a subset of
+      // Play). rule 143.4: it enters exhausted; rule 423: stunned if asked.
+      if (choice.onPicked === "play" && choice.playTo !== undefined) {
+        const playedOwner = context.cards.getCardOwner(pickedCardId as CoreCardId) ?? choice.revealer;
+        context.zones.moveCard({
+          cardId: pickedCardId as CoreCardId,
+          targetZoneId: choice.playTo as CoreZoneId,
+        });
+        context.counters.setFlag(pickedCardId as CoreCardId, "exhausted", true);
+        if (choice.playStun === true) {
+          context.counters.setFlag(pickedCardId as CoreCardId, "stunned", true);
+          context.cards.updateCardMeta(pickedCardId as CoreCardId, {
+            stunned: true,
+          } as Partial<RiftboundCardMeta>);
+        }
+        const playCtx = {
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          zones: context.zones,
+        };
+        fireTriggers(
+          {
+            cardId: pickedCardId as string,
+            paidAdditionalCost: false,
+            playerId: playedOwner,
+            type: "play-self",
+          },
+          playCtx,
+        );
+        fireTriggers(
+          { cardId: pickedCardId as string, cardType: "unit", playerId: playedOwner, type: "play-card" },
+          playCtx,
+        );
+        if (choice.playStun === true) {
+          fireTriggers({ cardId: pickedCardId as string, type: "stun" }, playCtx);
+        }
+        if (draft.cardsPlayedThisTurn) {
+          draft.cardsPlayedThisTurn[playedOwner] = (draft.cardsPlayedThisTurn[playedOwner] ?? 0) + 1;
+        }
+      } else if (choice.onPicked === "play") {
         const pool = draft.runePools[choice.prompter];
         const raw = getGlobalCardRegistry().getCostToDeduct(pickedCardId as string);
         // rule 356.1.b.1 (ogn-025-298): "ignoring its cost" waives the whole
@@ -1359,6 +1430,27 @@ export const pendingChoiceMoves: Partial<
           // your trash" completes as part of the enclosing effect — the unit
           // enters its owner's base exhausted and fires its own play triggers.
           if (choice.playFrom === "trash") {
+            // rule 355.2 / 355.4 (rule-id: sfd-165-221-glasc-mixologist-deathknell-destination):
+            // a card entering play from off-board may be placed at its player's base OR
+            // any battlefield they control — the choice is theirs. The
+            // choose-destination handler finalizes the play (exhaust, play triggers,
+            // play count, contest) exactly as the base path below does.
+            const destOptions = [
+              "base",
+              ...Object.entries(draft.battlefields)
+                .filter(([, bf]) => bf.controller === choice.prompter)
+                .map(([bfId]) => `battlefield-${bfId}`),
+            ];
+            if (destOptions.length > 1) {
+              draft.pendingChoice = {
+                cardId: pickedCardId as string,
+                options: destOptions,
+                playerId: choice.prompter,
+                sourceCardId: choice.sourceCardId,
+                type: "choose-destination",
+              } as RiftboundGameState["pendingChoice"];
+              return;
+            }
             const playedOwner =
               context.cards.getCardOwner(pickedCardId as CoreCardId) ?? choice.prompter;
             context.zones.moveCard({

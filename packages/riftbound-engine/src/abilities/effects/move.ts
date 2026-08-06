@@ -113,6 +113,32 @@ function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void
   markContestedOnArrival(ctx.draft, partnerZone, ctx.playerId);
   moveCardWithEvent(ctx, partner, selfZone);
   markContestedOnArrival(ctx.draft, selfZone, ctx.playerId);
+
+  // rule-id: sfd-050-221 (rule 716) — "If it's equipped, you may attach one of
+  // its Equipment to me": only the swap knows which unit was chosen, so the
+  // optional attach rides on this effect. Offer it as an opt-in whose accepted
+  // item runs an `attach` bound to the partner's Equipment.
+  if ((effect as unknown as { mayAttachPartnerEquipment?: boolean }).mayAttachPartnerEquipment !== true) {
+    return;
+  }
+  const held = ctx.cards.getCardMeta?.(partner as CoreCardId) as
+    | { equippedWith?: readonly string[] }
+    | undefined;
+  const equipment = held?.equippedWith ?? [];
+  if (equipment.length === 0) {
+    return;
+  }
+  ctx.draft.pendingChoice = {
+    playerId: ctx.playerId,
+    resolved: {
+      cardId: selfId,
+      controller: ctx.playerId,
+      effect: { equipmentCandidates: [...equipment], type: "attach" },
+      type: "ability",
+    },
+    sourceCardId: selfId,
+    type: "opt-in",
+  } as RiftboundGameState["pendingChoice"];
 }
 
 export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
@@ -128,6 +154,39 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // boundTargets[1]; whichever is not yet bound is prompted via
   // choose-target at resolution. The moved set is criteria-based, so it
   // is resolved here rather than through getTargetIds/boundTargets.
+  // rule-id: ogn-250-298 (Stormbringer) — "… then move your unit there": the
+  // caster-chosen unit rides at boundTargets[0] and the chosen battlefield at
+  // boundTargets[1] (both locked at play time, rule 355.8). Rule 359.3.e.2:
+  // a unit that stopped matching the `reference` descriptor no longer moves.
+  if ((effect as unknown as { to?: unknown }).to === "chosen-battlefield") {
+    const unitId = ctx.boundTargets?.[0];
+    const bfId = ctx.boundTargets?.[1];
+    if (unitId === undefined || bfId === undefined) {
+      return;
+    }
+    const bfKey = bfId.startsWith("battlefield-") ? bfId.slice("battlefield-".length) : bfId;
+    if (!ctx.draft.battlefields?.[bfKey]) {
+      return;
+    }
+    const ref = (effect as unknown as { reference?: TargetDescriptor }).reference;
+    if (
+      ref &&
+      !resolveTarget({ ...ref, quantity: "all" }, {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      }).includes(unitId)
+    ) {
+      return;
+    }
+    const destZone = `battlefield-${bfKey}`;
+    moveCardWithEvent(ctx, unitId, destZone);
+    markContestedOnArrival(ctx.draft, destZone, ctx.playerId);
+    return;
+  }
   const moveRef = (effect as unknown as { reference?: TargetDescriptor }).reference;
   if (moveRef && (effect as unknown as { from?: unknown }).from === "chosen-battlefield") {
     const resolverCtx = {
@@ -206,6 +265,12 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     effect.target !== null &&
     (effect.target as { quantity?: unknown }).quantity === "any";
   if (anyNumber && targets.length === 0) {
+    return;
+  }
+  // rule-id: ogn-262-298 (rule 355.13) — "You may move a friendly unit …": an
+  // optional move with no legal unit does nothing; it must never fall back to
+  // moving the source card.
+  if (targets.length === 0 && (effect as unknown as { optional?: boolean }).optional === true) {
     return;
   }
   const moveTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
@@ -293,6 +358,33 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     return;
   }
   const dest = rawDest as string | undefined;
+
+  // rule-id: ogn-262-298 (rule 355.4) — "…to THAT enemy unit's battlefield":
+  // the destination is fixed by an earlier chosen target's battlefield (threaded
+  // as `sameZone` by the sequence handler), so it is the ONLY option offered —
+  // never a free base/battlefield choice.
+  if (dest === "target-battlefield") {
+    const cardId = moveTargets[0];
+    const destZone = ctx.sameZone;
+    if (
+      cardId === undefined ||
+      destZone === undefined ||
+      ctx.zones.getCardZone(cardId as CoreCardId) === destZone
+    ) {
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      cardId,
+      // rule 355.13 — "You may move": declining is an answer, so the single
+      // legal destination is still offered as a prompt rather than forced.
+      optional: (effect as unknown as { optional?: boolean }).optional === true ? true : undefined,
+      options: [destZone],
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      type: "choose-destination",
+    } as RiftboundGameState["pendingChoice"];
+    return;
+  }
 
   if (dest === "choose") {
     // Rule 355.4 — no stated destination: the controller chooses base or
