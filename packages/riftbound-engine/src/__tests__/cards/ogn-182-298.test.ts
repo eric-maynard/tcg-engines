@@ -28,7 +28,7 @@ describe("Scrapheap (ogn-182-298)", () => {
 
   // The parsed trigger event `play-discard-or-die-self` is never raised by the engine, so none
   // of the three branches below draws today (hand/deck unchanged, no chain item).
-  test.failing("BUG: 'When this is played … draw 1' — playing it puts a trigger on the chain and draws 1", async () => {
+  test("'When this is played … draw 1' — playing it puts a trigger on the chain and draws 1", async () => {
     const game = await scenario().resources(P1, { energy: 2 }).hand(P1, SCRAPHEAP, "heap").build();
     const deckBefore = game.p1.deck().length;
     await game.p1.play("heap");
@@ -39,7 +39,7 @@ describe("Scrapheap (ogn-182-298)", () => {
     expect(game.p1.deck()).toHaveLength(deckBefore - 1);
   });
 
-  test.failing("BUG: 'When this is … discarded … draw 1' — discarded from hand by your own effect draws 1", async () => {
+  test("'When this is … discarded … draw 1' — discarded from hand by your own effect draws 1", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2 })
       .hand(P1, ENFORCER, "ce")
@@ -55,7 +55,7 @@ describe("Scrapheap (ogn-182-298)", () => {
     expect(game.p1.hand()).toHaveLength(1); // Scrapheap left, one card drawn
   });
 
-  test.failing("BUG: 'When this is … killed, draw 1' — killed on the board (even by an opponent's spell) its controller draws 1", async () => {
+  test("'When this is … killed, draw 1' — killed on the board (even by an opponent's spell) its controller draws 1", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P2, { energy: 5, power: { fury: 2 } })

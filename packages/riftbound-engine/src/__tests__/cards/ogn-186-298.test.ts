@@ -46,7 +46,7 @@ describe("Treasure Trove (ogn-186-298)", () => {
     expect(tapped.p1.can("activate", "trove")).toBe(false);
   });
 
-  test.failing("BUG: when it leaves the board (killed by its own ability) its controller draws 1 and channels 1 rune exhausted", async () => {
+  test("when it leaves the board (killed by its own ability) its controller draws 1 and channels 1 rune exhausted", async () => {
     // Expected: after the kill resolves → hand +1, rune pool +1 (that rune exhausted), rune deck -1.
     // Actual: the parser produced only the activated ability; the leaves-the-board trigger is missing.
     const game = await withTrove().build();

@@ -873,11 +873,29 @@ export class SeatHandle {
 
   equip = this.playGear.bind(this);
 
-  /** ActivateAbility(card, abilityIndex). Targets are asked at resolution (answer()/answers option). */
-  async activate(card: CardRef, abilityIndex = 0, opts: ActivateOptions = {}): Promise<Extract<ActResult, { ok: true }>> {
-    return this.verb("activateAbility", card, { ...opts, abilityIndex }, `activate(${card}#${abilityIndex})`, opts, (o) =>
-      o.key === `activateAbility:${card}#${abilityIndex}`,
+  /**
+   * ActivateAbility(card, abilityIndex). Targets are asked at resolution (answer()/answers option).
+   * With no index, use the card's first currently-legal activated ability — a card whose printed
+   * text leads with a triggered ability has its activated one at a non-zero index.
+   */
+  async activate(card: CardRef, abilityIndex?: number, opts: ActivateOptions = {}): Promise<Extract<ActResult, { ok: true }>> {
+    const idx = abilityIndex ?? this.firstActivatableIndex(card) ?? 0;
+    return this.verb("activateAbility", card, { ...opts, abilityIndex: idx }, `activate(${card}#${idx})`, opts, (o) =>
+      o.key === `activateAbility:${card}#${idx}`,
     );
+  }
+
+  private firstActivatableIndex(card: CardRef): number | undefined {
+    const prefix = `activateAbility:${card}#`;
+    for (const o of this.legal()) {
+      if (o.key.startsWith(prefix)) {
+        const n = Number(o.key.slice(prefix.length));
+        if (Number.isInteger(n)) {
+          return n;
+        }
+      }
+    }
+    return undefined;
   }
 
   /** MoveCard: standard move of one or more units to "base" or a battlefield id. */

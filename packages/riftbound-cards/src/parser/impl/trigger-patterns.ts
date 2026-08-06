@@ -268,9 +268,19 @@ export const TRIGGER_PATTERNS: {
   // "When this is played, discarded, or killed, ..." (Scrapheap)
   // Multi-event union encoded as a synthetic event name.
   {
-    event: "play-discard-or-die-self",
+    // Each part must be an engine event name so `triggerMatchesEvent`'s "-or-"
+    // split resolves every branch (play-self / discard / die).
+    event: "play-self-or-discard-or-die",
     on: "self",
     pattern: /^When this is played, discarded, or killed,\s*/i,
+  },
+  // "When this leaves the board, ..." (Treasure Trove)
+  // rule 427: killing a permanent sends it to its owner's trash, which is the
+  // only way a gear leaves the board today — the engine emits `die` for it.
+  {
+    event: "die",
+    on: "self",
+    pattern: /^When (?:this|I) leaves? the board,\s*/i,
   },
   // "When an opponent scores, ..." (Sumpworks Map)
   { event: "score", on: "opponent", pattern: /^When an opponent scores,\s*/i },
