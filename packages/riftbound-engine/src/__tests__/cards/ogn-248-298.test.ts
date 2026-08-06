@@ -72,7 +72,7 @@ describe("Icathian Rain (ogn-248-298)", () => {
     expect([...new Set(firsts)].sort()).toEqual(["a", "b", "c"]);
   });
 
-  test.failing("BUG: six instances of 'Deal 2' — all aimed at one unit deal 12", async () => {
+  test("six instances of 'Deal 2' — all aimed at one unit deal 12", async () => {
     // Expected: 6 × 2 = 12 damage on "a". Actual: the spell is modelled as a single "Deal 2 to a unit"
     // (one target, resolves once), so "a" takes only 2.
     const game = await board().build();
@@ -81,7 +81,7 @@ describe("Icathian Rain (ogn-248-298)", () => {
     expect(game.zoneOf("rain")).toBe("trash");
   });
 
-  test.failing("BUG: the six instances can be spread across different units (3 on a, 2 on b, 1 on c)", async () => {
+  test("the six instances can be spread across different units (3 on a, 2 on b, 1 on c)", async () => {
     // Expected: a=6, b=4, c=2. Actual: only one instance exists, so a=2 and the rest take nothing.
     const game = await board().build();
     await castAt(game, ["a", "a", "a", "b", "b", "c"]);
