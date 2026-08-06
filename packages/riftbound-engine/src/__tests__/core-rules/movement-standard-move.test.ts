@@ -440,7 +440,7 @@ describe("Destinations: base→battlefield, battlefield→base; battlefield→ba
     expect(game.gameState.battlefields.bf2).toMatchObject({ contested: true, contestedBy: P1 });
   });
 
-  test.failing("BUG: 144.3.b / 144.4.c.1 — a Ganking unit at bf1 and a plain unit in base may go to enemy-held bf2 as ONE Standard Move (different origins, same destination) and both become attackers; engine models Ganking as a separate single-unit move and never offers the mixed-origin group", async () => {
+  test("144.3.b / 144.4.c.1 — a Ganking unit at bf1 and a plain unit in base may go to enemy-held bf2 as ONE Standard Move (different origins, same destination) and both become attackers; engine models Ganking as a separate single-unit move and never offers the mixed-origin group", async () => {
     // Expected: standardMove → bf2 offers the group [a, g]; both exhausted simultaneously; bf2 Contested by P1;
     // combat staged and begun with P1 attacking (323.9/323.13).
     // Actual: only [a] is offered for bf2; the bundle matches no legal variant and throws.

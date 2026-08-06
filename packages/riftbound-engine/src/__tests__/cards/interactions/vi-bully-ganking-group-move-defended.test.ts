@@ -112,7 +112,7 @@ describe("Vi × Bilgewater Bully × Sunlit Guardian — ganking group move into 
     expect(game.chain()).toHaveLength(0);
   });
 
-  test.failing("BUG: (a) Vi (from A, via Ganking) + the base unit (from base) may be sent to B as ONE Standard Move — different Origins, same Destination (144.3.a/b, 144.4.c.1); engine only offers base units for a move to B", async () => {
+  test("(a) Vi (from A, via Ganking) + the base unit (from base) may be sent to B as ONE Standard Move — different Origins, same Destination (144.3.a/b, 144.4.c.1); engine only offers base units for a move to B", async () => {
     // Expected: standardMove → bfB offers the group [vi, grunt]; taking it exhausts both and puts both at bfB
     // in a single action (one Contested application, one showdown).
     // Actual: Ganking is a separate single-unit `gankingMove`; standardMove to bfB offers only [grunt].
@@ -143,7 +143,7 @@ describe("Vi × Bilgewater Bully × Sunlit Guardian — ganking group move into 
     expect(game.state("bully").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: (b) buffed Bully + Vi + the base unit may ALL move to B as one Standard Move (144.3, 810.1.b); engine has no multi-origin / ganking group move", async () => {
+  test("(b) buffed Bully + Vi + the base unit may ALL move to B as one Standard Move (144.3, 810.1.b); engine has no multi-origin / ganking group move", async () => {
     // Expected: the group [vi, bully, grunt] is a legal single move to bfB; all three exhausted, all at bfB.
     // Actual: not offered; the harness rejects the bundle as matching no legal variant.
     const game = await board().build();
@@ -191,7 +191,7 @@ describe("Vi × Bilgewater Bully × Sunlit Guardian — ganking group move into 
     expect(game.state("bully").combatRole).toBeFalsy();
   });
 
-  test.failing("BUG: (c) all three arrive together → ONE combat with Vi, Bully and Grunt all attackers; Guardian (4, Tank) dies to 3+7+2; its 4 damage kills at most the units it can cover lethal-first; P1 conquers B; A — now empty — becomes uncontrolled (461, 464.2.c.3, 465.2.c.3, 190.4.c)", async () => {
+  test("(c) all three arrive together → ONE combat with Vi, Bully and Grunt all attackers; Guardian (4, Tank) dies to 3+7+2; its 4 damage kills at most the units it can cover lethal-first; P1 conquers B; A — now empty — becomes uncontrolled (461, 464.2.c.3, 465.2.c.3, 190.4.c)", async () => {
     // Expected: single showdown/combat; Guardian dead; P1 controls bfB (+1 point); total damage marked on
     // P1's attackers is exactly 4 before healing so at most Grunt(2)-then-partial or Vi(3)-then-partial die
     // lethal-first — Bully (7) certainly survives; bfA has no units → controller null after cleanup.

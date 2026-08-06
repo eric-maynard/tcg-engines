@@ -16,7 +16,7 @@ import {
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { getMoveEscalationSurcharge, isAloneAtLocation } from "./helpers";
+import { getMoveEscalationSurcharge, hasKeyword, isAloneAtLocation } from "./helpers";
 
 /**
  * rule 350.1 / ogn-203-298 (Possession): moves are made by the unit's CURRENT
@@ -76,7 +76,21 @@ export const standardMove: Defs["standardMove"] = {
           return false;
         }
       } else if (zone !== "base") {
-        return false;
+        // rule 144.3.a/b + 810.1.b — one Standard Move may gather units from
+        // DIFFERENT Origins as long as they share a Destination; a
+        // battlefield→battlefield leg is only open to a unit with Ganking.
+        if (
+          zone === undefined ||
+          !zone.startsWith("battlefield-") ||
+          zone === `battlefield-${destination}` ||
+          !hasKeyword(
+            unitId,
+            "Ganking",
+            (id: CoreCardId) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
+          )
+        ) {
+          return false;
+        }
       }
 
       if (controllerOf(context.cards, unitId as CoreCardId) !== playerId) {
@@ -157,22 +171,50 @@ export const standardMove: Defs["standardMove"] = {
       readyUnits.push(cardId as string);
     }
 
-    // Rule 144.3: a Standard Move may move multiple units together to the
-    // same destination as one action. Enumerate every non-empty subset of
-    // ready base units per battlefield so the group move is offered.
-    const subsets: string[][] = [];
-    for (let mask = 1; mask < 1 << readyUnits.length; mask++) {
-      const subset: string[] = [];
-      for (let i = 0; i < readyUnits.length; i++) {
-        if (mask & (1 << i)) {
-          subset.push(readyUnits[i]);
+    const subsetsOf = (units: readonly string[]): string[][] => {
+      const out: string[][] = [];
+      for (let mask = 1; mask < 1 << units.length; mask++) {
+        const subset: string[] = [];
+        for (let i = 0; i < units.length; i++) {
+          if (mask & (1 << i)) {
+            subset.push(units[i]);
+          }
+        }
+        out.push(subset);
+      }
+      return out;
+    };
+
+    const metaAccessor = (id: CoreCardId) =>
+      context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined;
+
+    // rule 144.3 / 144.3.a — a Standard Move may move multiple units together
+    // to the same Destination as one action, and their Origins need not match.
+    // rule 810.1.b — Ganking is what lets a unit already at a battlefield join
+    // a move to another battlefield.
+    for (const bfId of Object.keys(state.battlefields || {})) {
+      const gankers: string[] = [];
+      for (const otherBfId of Object.keys(state.battlefields || {})) {
+        if (otherBfId === bfId) {
+          continue;
+        }
+        for (const cardId of context.zones.getCardsInZone(`battlefield-${otherBfId}` as CoreZoneId)) {
+          if (controllerOf(context.cards, cardId) !== (context.playerId as string)) {
+            continue;
+          }
+          if (registry.get(cardId as string)?.cardType !== "unit") {
+            continue;
+          }
+          if (context.counters.getFlag(cardId, "exhausted")) {
+            continue;
+          }
+          if (!hasKeyword(cardId as string, "Ganking", metaAccessor)) {
+            continue;
+          }
+          gankers.push(cardId as string);
         }
       }
-      subsets.push(subset);
-    }
-
-    for (const bfId of Object.keys(state.battlefields || {})) {
-      for (const unitIds of subsets) {
+      for (const unitIds of subsetsOf([...readyUnits, ...gankers])) {
         results.push({
           destination: bfId,
           playerId: context.playerId as string,
