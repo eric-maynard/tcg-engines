@@ -20,6 +20,13 @@ export function canHoldUnlimitedBuffs(cardId: string): boolean {
 
 export function handle_buff(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   const targets = getTargetIds(effect, ctx);
+  // rule-id: ogn-136-298 — only fall back to the source when the ability has NO
+  // target descriptor ("buff me"). A targeted buff that finds no legal target
+  // fizzles; otherwise "buff ANOTHER friendly unit" buffs itself on an empty board.
+  const hasTargetSpec = "target" in effect && effect.target != null;
+  if (targets.length === 0 && hasTargetSpec) {
+    return;
+  }
   const buffTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
   for (const targetId of buffTargets) {
     // Enforce max 1 buff per unit (rule)
@@ -38,7 +45,12 @@ export function handle_buff(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         { extraBuffs: (meta.extraBuffs ?? 0) + 1 } as unknown as Record<string, unknown>,
       );
       checkBecomesMighty(targetId, before, ctx);
-      ctx.fireTriggers?.({ cardId: targetId, playerId: ctx.playerId, type: "buff" });
+      ctx.fireTriggers?.({
+        cardId: targetId,
+        owner: ctx.cards.getCardOwner?.(targetId as CoreCardId),
+        playerId: ctx.playerId,
+        type: "buff",
+      });
       continue;
     }
     const mightBefore = getEffectiveMight(targetId, ctx);
@@ -54,6 +66,11 @@ export function handle_buff(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // rule-id: ogn-152-298 — "When you buff a friendly unit" listeners
     // (Mistfall) need a buff event; playerId is the buffing player so
     // `controller: "friendly"` descriptors can resolve the subject owner.
-    ctx.fireTriggers?.({ cardId: targetId, playerId: ctx.playerId, type: "buff" });
+    ctx.fireTriggers?.({
+      cardId: targetId,
+      owner: ctx.cards.getCardOwner?.(targetId as CoreCardId),
+      playerId: ctx.playerId,
+      type: "buff",
+    });
   }
 }

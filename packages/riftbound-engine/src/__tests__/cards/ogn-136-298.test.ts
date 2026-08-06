@@ -70,7 +70,7 @@ describe("Pit Rookie (ogn-136-298)", () => {
     expect(game.state("b").might).toBe(4);
   });
 
-  test.failing("BUG: with no other friendly unit the trigger must do nothing — 'another' excludes Pit Rookie itself", async () => {
+  test("with no other friendly unit the trigger must do nothing — 'another' excludes Pit Rookie itself", async () => {
     // Expected: no legal target → the play trigger fizzles; Rookie is unbuffed at 2 Might.
     // Actual: with no other friendly unit the engine falls back to buffing Pit Rookie itself.
     const game = await scenario().resources(P1, { energy: 2 }).unit(P2, "base", { might: 2 }, "foe").hand(P1, CARD, "rookie").build();

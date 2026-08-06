@@ -92,7 +92,7 @@ describe("Mistfall (ogn-152-298)", () => {
     expect(tapped.p1.power("body")).toBe(1);
   });
 
-  test.failing("BUG: only when YOU buff a FRIENDLY unit: buffing an enemy unit offers nothing", async () => {
+  test("only when YOU buff a FRIENDLY unit: buffing an enemy unit offers nothing", async () => {
     // Expected: no trigger (the buffed unit is not friendly to Mistfall's controller).
     // Actual: the opt-in yes/no prompt is raised for any buff event.
     const game = await board().build();
