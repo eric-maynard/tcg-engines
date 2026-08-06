@@ -429,6 +429,20 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   });
                 }
               }
+
+              // rule 364: the rune pool grew outside any move, so statics that
+              // read it ("While you have 8+ runes, …") must be re-applied now.
+              if (runesToChannel > 0 && context.cards.updateCardMeta) {
+                recalculateStaticEffects({
+                  cards: {
+                    getCardMeta: context.cards.getCardMeta,
+                    getCardOwner: context.cards.getCardOwner ?? (() => undefined),
+                    updateCardMeta: context.cards.updateCardMeta,
+                  },
+                  draft: context.state,
+                  zones: context.zones,
+                });
+              }
             },
 
             order: 3,
@@ -628,6 +642,13 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   context.cards.updateCardMeta(cardId, {
                     grantedAbilities: remaining.length > 0 ? remaining : undefined,
                   });
+                }
+
+                // rule-id: ogn-157-298 — "you've not chosen this turn" resets (rule 517.2.b)
+                if (meta.modesChosenThisTurn && meta.modesChosenThisTurn.length > 0) {
+                  context.cards.updateCardMeta(cardId, {
+                    modesChosenThisTurn: [],
+                  } as Partial<RiftboundCardMeta>);
                 }
 
                 // Reset turn-scoped Might modifier (rule 517.2.b)

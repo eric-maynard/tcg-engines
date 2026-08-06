@@ -956,6 +956,52 @@ function getBoardCostReduction(
   return computeStaticCostReduction({ draft: state, ...extras.board }, playerId, cardId);
 }
 
+/**
+ * rule-id: ogn-150-298 (rule 560) — pips waived by board statics plus those
+ * waived by a paid optional additional cost, merged per domain.
+ */
+function waivedPower(
+  boardReduction: StaticCostReduction,
+  extras: CostExtras,
+): Partial<Record<string, number>> {
+  if (!extras.waivePower) {
+    return boardReduction.power;
+  }
+  const out: Partial<Record<string, number>> = { ...boardReduction.power };
+  for (const [domain, n] of Object.entries(extras.waivePower)) {
+    if (n && n > 0) {
+      out[domain] = (out[domain] ?? 0) + n;
+    }
+  }
+  return out;
+}
+
+/**
+ * rule-id: ogn-150-298 (rule 560 / 702.2.b) — "you may spend any number of
+ * buffs as an additional cost. Reduce my cost by [D] for each buff you spend."
+ * Returns the domain pip waived per buff spent. Kept separate from
+ * `getOptionalPlayCost` because a card may declare BOTH this and another
+ * optional cost (Kraken Hunter also has Accelerate).
+ */
+export function getBuffSpendCost(cardId: string): { domain: string } | undefined {
+  for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
+    if (ability.type !== "static" && ability.type !== "additional-cost-option") {
+      continue;
+    }
+    const effect = ability.effect as
+      | { type?: string; additionalCost?: { spendBuff?: string; reducePower?: string } }
+      | undefined;
+    if (effect?.type !== "additional-cost-option") {
+      continue;
+    }
+    const spec = effect.additionalCost;
+    if (spec?.spendBuff === "any" && typeof spec.reducePower === "string") {
+      return { domain: spec.reducePower };
+    }
+  }
+  return undefined;
+}
+
 export type RepeatTiers = readonly { energy: number; power: readonly string[] }[];
 
 /**
@@ -1230,7 +1276,7 @@ export function canAffordCard(
   // Check power (domain requirements are not affected by cost modifiers,
   // only by board statics that waive power pips).
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
-  const basePower = reducePowerCost(baseCost.power, boardReduction.power, pool.power);
+  const basePower = reducePowerCost(baseCost.power, waivedPower(boardReduction, extras), pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
   const extraPower = additionalCostPower(extras);
   const powerDomains = new Set([
@@ -1350,7 +1396,7 @@ export function deductCost(
 
   pool.energy = Math.max(0, pool.energy - adjustedEnergy);
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
-  const basePower = reducePowerCost(cost.power, boardReduction.power, pool.power);
+  const basePower = reducePowerCost(cost.power, waivedPower(boardReduction, extras), pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
   const extraPower = additionalCostPower(extras);
   const powerDomains = new Set([

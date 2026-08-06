@@ -165,6 +165,16 @@ export function evaluateCondition(
       return friendlyCount === 1;
     }
 
+    // rule 430.1 — "runes you have" are the runes in your rune pool, ready or
+    // exhausted; an opponent's runes never count.
+    case "runes-at-least": {
+      const runes = ctx.zones.getCardsInZone(
+        "runePool" as CoreZoneId,
+        source.owner as CorePlayerId,
+      ).length;
+      return runes >= ((condition.amount as number | undefined) ?? 0);
+    }
+
     case "while-equipped": {
       const meta = ctx.cards.getCardMeta(source.id as CoreCardId) as
         | Partial<RiftboundCardMeta>

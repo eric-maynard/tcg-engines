@@ -38,7 +38,7 @@ describe("Yi, Meditative (ogs-004-024)", () => {
     expect(game.state("yi").might).toBe(8);
   });
 
-  test.failing("BUG: with 7 or fewer runes Yi is just 4 Might (the +4 is conditional on 8+ runes)", async () => {
+  test("with 7 or fewer runes Yi is just 4 Might (the +4 is conditional on 8+ runes)", async () => {
     // Expected: 7 runes → condition false → printed 4 Might. Actual: the parsed static has no
     // rune-count condition, so +4 is applied unconditionally (8 Might).
     const seven = await withRunes(7).build();
@@ -51,7 +51,7 @@ describe("Yi, Meditative (ogs-004-024)", () => {
     expect(none.state("yi").might).toBe(4);
   });
 
-  test.failing("BUG: 'you' — the opponent's runes do not count toward the 8", async () => {
+  test("'you' — the opponent's runes do not count toward the 8", async () => {
     // Expected: P1 has 2 runes (P2 has 9) → 4 Might. Actual: unconditional +4 → 8.
     const game = await withRunes(2).runes(P2, "calm", 9).build();
     await game.p1.play("yi");
@@ -68,7 +68,7 @@ describe("Yi, Meditative (ogs-004-024)", () => {
     expect(game.state("foe").might).toBe(3);
   });
 
-  test.failing("BUG: continuous — 4 Might at 6 runes, becomes 8 once your next turn channels runes 7 and 8", async () => {
+  test("continuous — 4 Might at 6 runes, becomes 8 once your next turn channels runes 7 and 8", async () => {
     // Expected: off at 6 runes, on after P1's next Channel step (6 + 2 = 8).
     // Actual: already 8 Might at 6 runes (condition not evaluated).
     const game = await withRunes(6).build();

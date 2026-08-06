@@ -109,6 +109,16 @@ export interface ThisTurnCondition {
 }
 
 /**
+ * rule-id: ogn-189-298 — "If I have moved twice this turn": true once THIS
+ * card has moved at least `count` times during the current turn (any move,
+ * Standard Move or effect-driven).
+ */
+export interface MovedThisTurnCondition {
+  readonly type: "moved-this-turn";
+  readonly count?: number;
+}
+
+/**
  * Legion condition - if you've played another card this turn
  */
 export interface LegionCondition {
@@ -266,6 +276,16 @@ export interface OpponentControlsCondition {
 // rule-id: ven-005-166
 export interface FewerRunesThanOpponentCondition {
   readonly type: "fewer-runes-than-opponent";
+}
+
+/**
+ * "While you have N+ runes" — rule 430.1: counts the runes in your own rune
+ * pool (ready or exhausted); opponents' runes never count.
+ */
+// rule-id: ogs-004-024
+export interface RunesAtLeastCondition {
+  readonly type: "runes-at-least";
+  readonly amount: number;
 }
 
 /**
@@ -439,6 +459,7 @@ export type Condition =
 
   // Turn conditions
   | ThisTurnCondition
+  | MovedThisTurnCondition
   | LegionCondition
   | FirstTimeCondition
 
@@ -466,6 +487,7 @@ export type Condition =
   | ControlCondition
   | OpponentControlsCondition
   | FewerRunesThanOpponentCondition
+  | RunesAtLeastCondition
   | ChanneledFewerThanCondition
   | TargetControllerCondition
   | TargetAttackingCondition
