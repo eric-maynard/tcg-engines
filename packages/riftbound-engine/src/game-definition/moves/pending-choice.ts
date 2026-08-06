@@ -1021,6 +1021,11 @@ export const pendingChoiceMoves: Partial<
         // Recycle → bottom of main deck (rule: recycle places at bottom).
         if (choice.onPicked === "recycle") {
           moveParams.position = "bottom";
+          // rule 424.4.a — recycling puts a card on the bottom of the
+          // CORRESPONDING deck; a rune goes to its owner's Rune Deck.
+          if (getGlobalCardRegistry().get(id)?.cardType === "rune") {
+            moveParams.targetZoneId = "runeDeck" as CoreZoneId;
+          }
         }
         context.counters.clearAllCounters(id as CoreCardId);
         context.zones.moveCard(moveParams);

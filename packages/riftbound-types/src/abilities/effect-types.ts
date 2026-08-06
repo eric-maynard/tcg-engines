@@ -63,11 +63,12 @@ export interface RecycleEffect {
    */
   readonly position?: "bottom" | "owner-choice";
   /**
-   * "Each player chooses N …; recycle the rest" (ogn-244-298) — the per-player
-   * keep-N choice. Not executed by the engine yet; its presence stops the
-   * handler from reading the step as "recycle all".
+   * "Each player chooses N …; recycle the rest" (ogn-244-298) — every player
+   * keeps up to N of each listed category and recycles the remainder.
    */
   readonly keep?: number;
+  /** Categories a `keep` recycle walks, in prompt order. */
+  readonly categories?: readonly ("unit" | "gear" | "rune" | "hand")[];
 }
 
 /**

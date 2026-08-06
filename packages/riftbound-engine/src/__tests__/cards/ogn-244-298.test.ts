@@ -47,7 +47,7 @@ describe("Divine Judgment (ogn-244-298)", () => {
     expect(lowEnergy.p1.can("cast", "dj")).toBe(false);
   });
 
-  test.failing("BUG: each player keeps exactly 2 units, 2 gear and 2 hand cards of their choice; the rest are recycled to the bottom of their Main Deck", async () => {
+  test("each player keeps exactly 2 units, 2 gear and 2 hand cards of their choice; the rest are recycled to the bottom of their Main Deck", async () => {
     // Expected: both players are prompted per category; afterwards each has 2 units, 2 gear, 2 cards
     // in hand, and the third of each sits in that owner's main deck. Actual: nothing happens.
     const game = await crowded().build();
@@ -64,7 +64,7 @@ describe("Divine Judgment (ogn-244-298)", () => {
     }
   });
 
-  test.failing("BUG: each player keeps 2 runes; the rest are recycled to the bottom of their Rune Deck", async () => {
+  test("each player keeps 2 runes; the rest are recycled to the bottom of their Rune Deck", async () => {
     // Expected: 3 runes in play → 2 remain, rune deck grows from 12 to 13. Actual: all 3 stay.
     const game = await crowded().build();
     const runeDeckBefore = game.p2.runeDeck().length;

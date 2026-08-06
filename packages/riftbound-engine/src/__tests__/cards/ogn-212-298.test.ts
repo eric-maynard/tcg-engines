@@ -62,7 +62,7 @@ describe("Forge of the Future (ogn-212-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
   });
 
-  test.failing("BUG: on resolution P1 picks up to 4 cards from ANY trash; each goes to the bottom of its owner's main deck", async () => {
+  test("on resolution P1 picks up to 4 cards from ANY trash; each goes to the bottom of its owner's main deck", async () => {
     // Expected: a pick prompt (min 0, max 4) listing every trash card (t1–t5, e1 and the Forge
     // itself); choosing t1, t2, e1 recycles them — t1/t2 to the bottom of P1's deck, e1 to the
     // bottom of P2's deck; t3–t5 stay. Actual: the ability resolves with no prompt and recycles nothing.
@@ -86,7 +86,7 @@ describe("Forge of the Future (ogn-212-298)", () => {
     expect(game.p1.trash().sort()).toEqual(["forge", "t3", "t4", "t5"]);
   });
 
-  test.failing("BUG: 'up to 4' — the controller may recycle nothing at all", async () => {
+  test("'up to 4' — the controller may recycle nothing at all", async () => {
     // Expected: the pick allows declining / choosing zero; all trash cards stay. Actual: no prompt.
     const game = await trashBoard().build();
     await game.p1.activate("forge", KILL_ABILITY);

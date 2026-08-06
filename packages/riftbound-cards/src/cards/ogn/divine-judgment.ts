@@ -8,44 +8,16 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * Each player chooses 2 units, 2 gear, 2 runes, and 2 cards in their
  * hands. Recycle the rest.
  *
- * Approximated as a sequence of four per-player recycle effects, each
- * targeting a different zone/card-type with a "keep 2, recycle the rest"
- * semantic. The engine's recycle effect executes against the unchosen
- * remainder when given a target plus an explicit amount.
- *
- * FIXME: The "keep N" semantic is expressed here via four separate recycle
- * steps rather than a first-class "keep N, recycle rest" primitive.
+ * One "keep 2" recycle over four categories: the handler prompts each player
+ * per category that holds more than 2 and recycles the remainder (runes to the
+ * Rune Deck, everything else to the Main Deck).
  */
 const abilities: Ability[] = [
   {
     effect: {
-      effects: [
-        {
-          from: "board",
-          keep: 2,
-          target: { controller: "any", quantity: "all", type: "unit" },
-          type: "recycle",
-        },
-        {
-          from: "board",
-          keep: 2,
-          target: { controller: "any", quantity: "all", type: "gear" },
-          type: "recycle",
-        },
-        {
-          from: "board",
-          keep: 2,
-          target: { controller: "any", quantity: "all", type: "rune" },
-          type: "recycle",
-        },
-        {
-          from: "hand",
-          keep: 2,
-          target: { controller: "any", quantity: "all", type: "card" },
-          type: "recycle",
-        },
-      ],
-      type: "sequence",
+      categories: ["unit", "gear", "rune", "hand"],
+      keep: 2,
+      type: "recycle",
     },
     timing: "action",
     type: "spell",

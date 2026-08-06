@@ -27,7 +27,9 @@ const abilities: Ability[] = [
     effect: {
       amount: 4,
       from: "trash",
+      owner: "any",
       type: "recycle",
+      upTo: true,
     },
     type: "activated",
   },
