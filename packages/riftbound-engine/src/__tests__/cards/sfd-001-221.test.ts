@@ -43,7 +43,7 @@ describe("Against the Odds (sfd-001-221)", () => {
     expect(noBfAlly.p1.can("cast", "ato")).toBe(false);
   });
 
-  test.failing("BUG: +2 Might this turn for EACH enemy unit there — two enemies → 3 + 4 = 7, back to 3 next turn", async () => {
+  test("+2 Might this turn for EACH enemy unit there — two enemies → 3 + 4 = 7, back to 3 next turn", async () => {
     // Expected: ally 7 this turn, 3 after the turn passes. Actual: the per-enemy count resolves to 0 for a
     // spell (`location: "here"` has no anchor), so ally stays at 3.
     const game = await board(2).build();
@@ -55,7 +55,7 @@ describe("Against the Odds (sfd-001-221)", () => {
     expect(game.state("ally").might).toBe(3);
   });
 
-  test.failing("BUG: only enemies at THAT battlefield count — one enemy there (others at bf2/base) → 3 + 2 = 5", async () => {
+  test("only enemies at THAT battlefield count — one enemy there (others at bf2/base) → 3 + 2 = 5", async () => {
     // Expected: 5 (far/ehome don't count). Actual: 3 (see above).
     const game = await board(1).build();
     await game.p1.cast("ato", { targets: "ally" });
@@ -90,7 +90,7 @@ describe("Against the Odds (sfd-001-221)", () => {
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: cast mid-showdown vs two 3-Might attackers, the defender (3 + 4 = 7) survives 6 damage and holds the battlefield", async () => {
+  test("cast mid-showdown vs two 3-Might attackers, the defender (3 + 4 = 7) survives 6 damage and holds the battlefield", async () => {
     // Expected: ally lives (6 < 7), both attackers die to 7 damage, bf1 stays P1's. Actual: no Might is
     // granted, so the 3-Might ally dies and P2 conquers.
     const game = await scenario()
