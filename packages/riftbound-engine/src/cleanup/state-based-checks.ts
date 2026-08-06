@@ -34,6 +34,10 @@ import {
 import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { canAffordPower } from "../game-definition/moves/chain/effect-context";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import {
+  applyScoreReplacement,
+  canPlayerScoreAtBattlefield,
+} from "../operations/scoring-rules";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 
 /**
@@ -606,7 +610,6 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         mightModifier: 0,
         stunned: false,
       } as Partial<RiftboundCardMeta>);
-      ctx.counters.clearCounter(cardId, "damage");
 
       killed.push(cardId as string);
       stateChanged = true;
@@ -826,13 +829,30 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       (ctx.draft.interaction?.showdownStack?.length ?? 0) === 0 &&
       !ctx.draft.pendingChoice;
     if (bf.controller && isOpenState) {
-      const controllerHasUnit = unitsAtBf.some(
-        (id) =>
-          ctx.cards.getCardOwner(id) === bf.controller &&
-          registry.getCardType(id as string) === "unit",
-      );
-      if (!controllerHasUnit) {
-        bf.controller = null;
+      // rule 323.6 / 127.1: "have a Unit there" follows CONTROL, not ownership — a unit
+      // stolen by e.g. Hostile Takeover holds the battlefield for its new controller.
+      const controllerOf = (id: CoreCardId) =>
+        ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id);
+      const unitControllers = new Set<string>();
+      for (const id of unitsAtBf) {
+        if (registry.getCardType(id as string) !== "unit") {
+          continue;
+        }
+        const c = controllerOf(id);
+        if (c) {
+          unitControllers.add(c);
+        }
+      }
+      if (!unitControllers.has(bf.controller)) {
+        // rule 190.3.a: a unit that "otherwise becomes present" (a control change, no move)
+        // at a battlefield its controller doesn't control contests it. With no other enemy
+        // units there the showdown is non-combat and settles straight into a conquer.
+        if (unitControllers.size === 1 && !bf.contested) {
+          const conqueror = [...unitControllers][0] as string;
+          conquerByPresence(ctx, bfId, conqueror);
+        } else {
+          bf.controller = null;
+        }
         stateChanged = true;
       }
     }
@@ -856,6 +876,38 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
   }
 
   return { combatPending, deaths, hiddenRemoved, killed, stateChanged };
+}
+
+/**
+ * rule 190.3.a / 630.1 — the sole player with units at a battlefield they don't control takes
+ * it and scores, exactly as a non-combat showdown close would.
+ */
+function conquerByPresence(ctx: CleanupContext, bfId: string, playerId: string): void {
+  const draft = ctx.draft;
+  const bf = draft.battlefields[bfId];
+  if (!bf) {
+    return;
+  }
+  bf.controller = playerId;
+  bf.contested = false;
+  bf.contestedBy = undefined;
+  (draft.conqueredThisTurn[playerId] ??= []).push(bfId);
+  const player = draft.players[playerId];
+  const alreadyScored = (draft.scoredThisTurn[playerId] ?? []).includes(bfId);
+  if (
+    player &&
+    !alreadyScored &&
+    canPlayerScoreAtBattlefield(draft, playerId as CorePlayerId, bfId) &&
+    !applyScoreReplacement(draft, playerId as CorePlayerId, {
+      cards: ctx.cards,
+      zones: ctx.zones,
+    } as never)
+  ) {
+    player.victoryPoints += 1;
+  }
+  if (!alreadyScored) {
+    (draft.scoredThisTurn[playerId] ??= []).push(bfId);
+  }
 }
 
 /**

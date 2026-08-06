@@ -9,6 +9,9 @@ export function handle_takeControl(effect: ExecutableEffect, ctx: EffectContext,
   // effect on each target and apply it. `until-leaves` entries carry the
   // source so state-based cleanup can drop them (and fall back to the
   // next-latest effect, else the owner) once the source leaves the board.
+  // rule 190.3.a: a stolen unit "otherwise becomes present" at a battlefield for its new
+  // controller — the Contested / conquer consequence is settled by state-based cleanup once
+  // the ability has finished (so Possession's follow-up recall leaves nothing behind).
   const targets = getTargetIds(effect, ctx);
   const untilLeaves = effect.duration === "until-leaves";
   for (const targetId of targets) {

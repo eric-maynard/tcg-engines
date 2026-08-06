@@ -111,7 +111,7 @@ describe("Hostile Takeover × Peak Guardian × Rebuke / Possession — temporary
     expect(game.state("peak").isReady).toBe(true);
   });
 
-  test.failing("BUG: (a) P1 now has a unit at a battlefield it doesn't control → A becomes Contested and, with no other enemy units there, P1 conquers A and scores (190.3.a, reminder text 'Otherwise, conquer.')", async () => {
+  test("(a) P1 now has a unit at a battlefield it doesn't control → A becomes Contested and, with no other enemy units there, P1 conquers A and scores (190.3.a, reminder text 'Otherwise, conquer.')", async () => {
     // Expected: after everything settles A is P1's and P1 has 1 point. Actual: A never becomes
     // Contested; it stays P2's and P1 scores nothing.
     const game = await taken();
