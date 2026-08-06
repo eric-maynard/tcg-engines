@@ -46,7 +46,7 @@ describe("Wallop (ogn-146-298)", () => {
     expect(game.state("foe").isReady).toBe(true);
   });
 
-  test.failing("BUG: may spend a buff as an additional cost — then the 2 energy is ignored (free with 0 energy)", async () => {
+  test("may spend a buff as an additional cost — then the 2 energy is ignored (free with 0 energy)", async () => {
     // Expected: with 0 energy but a buffed unit you control, Wallop is playable by spending the
     // buff (payOptional); the buff is removed and no energy is paid. Actual: the optional
     // buff cost is not parsed, so Wallop is simply unaffordable at 0 energy.
@@ -59,7 +59,7 @@ describe("Wallop (ogn-146-298)", () => {
     expect(game.state("tired").isReady).toBe(true);
   });
 
-  test.failing("BUG: spending the buff with energy available leaves the energy untouched", async () => {
+  test("spending the buff with energy available leaves the energy untouched", async () => {
     // Expected: pay by spending the buff → still 2 energy afterwards, buff gone.
     // Actual: no optional-cost path exists; 2 energy is always deducted and the buff stays.
     const game = await board(2).build();

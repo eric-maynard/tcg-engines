@@ -10,7 +10,7 @@ import { parseStaticAbility } from "../parsers/static-parser";
 import { parseTarget } from "../parsers/target-parser";
 import { parseEffects } from "./effects";
 import { stripReminders } from "./normalize";
-import { parseReplacementAbility } from "./replacement";
+import { parseAdditionalCostAbility, parseReplacementAbility } from "./replacement";
 import type { TextSegment } from "./segments";
 import { parseTriggeredAbility } from "./triggers";
 
@@ -68,14 +68,36 @@ const SPELL_COST_RIDER_RES: readonly RegExp[] = [
   /^If you(?:'re|’re) within \d+ points? of winning, this costs[^.]*\./i,
 ];
 
+// rule 356.2.b / rule 560 — "As you play this, you may … as an additional
+// cost." printed on a spell is a play-time cost option, not part of the
+// resolve-time effect; `parseSpellAbility` strips it, so lift it here.
+const SPELL_ADDITIONAL_COST_RE = /^As you play (?:me|this),\s+you may\s+.+?\s+as an additional cost\b/i;
+// rule 356.5 — "If you do, ignore this spell's cost." waives the base cost
+// entirely when the optional additional cost is paid.
+const IGNORE_COST_RIDER_RE = /^If you do,\s+ignore this (?:spell|card)'s cost\b/i;
+
 export function parseSpellCostRiders(text: string): StaticAbility[] {
   const match = SPELL_PATTERN.exec(text);
   if (!match) {
     return [];
   }
   const out: StaticAbility[] = [];
-  for (const line of match[2].split(/\n+|(?<=\.)\s*(?=[A-Z])/)) {
+  const sentences = match[2].split(/\n+|(?<=\.)\s*(?=[A-Z])/);
+  for (const [i, line] of sentences.entries()) {
     const sentence = line.trim();
+    if (SPELL_ADDITIONAL_COST_RE.test(sentence)) {
+      const ability = parseAdditionalCostAbility(sentence) as StaticAbility | undefined;
+      if (ability) {
+        const next = sentences[i + 1]?.trim() ?? "";
+        if (IGNORE_COST_RIDER_RE.test(next)) {
+          (ability.effect as unknown as Record<string, unknown>).ifPaid = {
+            type: "ignore-cost",
+          };
+        }
+        out.push(ability);
+      }
+      continue;
+    }
     for (const re of SPELL_COST_RIDER_RES) {
       const m = re.exec(sentence);
       if (!m) {

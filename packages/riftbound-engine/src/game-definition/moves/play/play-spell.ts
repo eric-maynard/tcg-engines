@@ -108,7 +108,14 @@ function spendBuffCandidates(
       zones: context.zones,
     },
   ) as string[];
-  return ids.filter((id) => context.counters.getFlag(id as CoreCardId, "buffed") === true);
+  const meta = context.cards as {
+    getCardMeta?: (cardId: CoreCardId) => { buffed?: boolean } | undefined;
+  };
+  return ids.filter(
+    (id) =>
+      meta.getCardMeta?.(id as CoreCardId)?.buffed === true ||
+      context.counters.getFlag(id as CoreCardId, "buffed") === true,
+  );
 }
 
 /**
@@ -462,7 +469,20 @@ export const playSpell: Defs["playSpell"] = {
       if (!def || def.cardType !== "spell") {
         continue;
       }
+      // rule 356.5 (ogn-146-298) — a spell whose optional additional cost says
+      // "ignore this spell's cost" is playable with no resources at all, so
+      // the base-cost gate must not filter it out.
+      const freeViaOptionalCost = (() => {
+        const opt = getOptionalPlayCost(cardId as string);
+        return (
+          opt?.kind === "spend-buff" &&
+          opt.ignoresBaseCost === true &&
+          spendBuffCandidates(state, context, context.playerId as string, cardId as string).length >
+            0
+        );
+      })();
       if (
+        !freeViaOptionalCost &&
         !canAffordCard(
           state,
           context.playerId as string,
@@ -600,31 +620,36 @@ export const playSpell: Defs["playSpell"] = {
               resolverCtx,
             ) as string[],
         );
-        let total = 0;
-        let running = 1;
-        for (const pool of pools) {
-          running *= pool.length;
-          total += running;
-        }
         // Instructions naming the SAME descriptor are interchangeable, so only
         // non-decreasing picks are distinct plays.
         const uniform = indepSlots.every(
           (s) => JSON.stringify(s.target) === JSON.stringify(indepSlots[0].target),
         );
+        // rule-id: ogn-248-298 (rule 355.8) — the guard must count the tuples
+        // actually generated, not the raw product of the pools: with uniform
+        // descriptors only non-decreasing picks are built (3 units × 6
+        // instructions = 83 plays, not 3^6), so a product-based estimate
+        // wrongly collapsed six-instruction spells to a single target.
+        const TUPLE_LIMIT = 2000;
         const tuples: string[][] = [];
-        if (total > 0 && total <= 400) {
-          const build = (depth: number, start: number, acc: string[]) => {
-            if (depth >= pools.length) return;
-            const pool = pools[depth] ?? [];
-            for (let k = uniform ? start : 0; k < pool.length; k++) {
-              const next = [...acc, pool[k] as string];
-              tuples.push(next);
-              build(depth + 1, k, next);
+        let overflowed = false;
+        const build = (depth: number, start: number, acc: string[]) => {
+          if (depth >= pools.length || overflowed) return;
+          const pool = pools[depth] ?? [];
+          for (let k = uniform ? start : 0; k < pool.length; k++) {
+            if (tuples.length >= TUPLE_LIMIT) {
+              overflowed = true;
+              return;
             }
-          };
-          build(0, 0, []);
-        } else {
+            const next = [...acc, pool[k] as string];
+            tuples.push(next);
+            build(depth + 1, k, next);
+          }
+        };
+        build(0, 0, []);
+        if (overflowed) {
           // Guard against combinatorial blow-up on many-instruction spells.
+          tuples.length = 0;
           for (const id of pools[0] ?? []) {
             tuples.push([id]);
           }
@@ -864,6 +889,16 @@ export const playSpell: Defs["playSpell"] = {
           }
         }
       }
+      // rule 356.2.b — ogn-146-298: "you may spend a buff as an additional
+      // cost" — offer the paid variant whenever a friendly buff exists.
+      if (
+        optionalPay?.kind === "spend-buff" &&
+        spendBuffCandidates(state, context, context.playerId as string, cardId as string).length > 0
+      ) {
+        for (const base of baseVariants) {
+          results.push({ ...base, paidAdditionalCost: true });
+        }
+      }
       // rule 356.2 — ogn-048-298: "you may exhaust a friendly unit" — one paid
       // variant per ready candidate; the chosen permanent rides as targets[0].
       if (optionalPay?.kind === "exhaust") {
@@ -1028,9 +1063,22 @@ export const playSpell: Defs["playSpell"] = {
     // `paid-additional-cost` conditional can read it at resolution.
     let spellAdditionalCost: CostExtras["additionalCost"];
     let exhaustCostPaid = false;
+    let ignoreBaseCost = false;
     if (paidAdditionalCost) {
       const optional = getOptionalPlayCost(cardId);
-      if (optional?.kind === "exhaust") {
+      if (optional?.kind === "spend-buff") {
+        // rule 702.2.b — spending a buff removes the buff counter; the Might
+        // readers look at top-level meta.buffed, so mirror the flag there.
+        const chosen = spendBuffCandidates(draft, context, playerId, cardId)[0];
+        if (chosen) {
+          context.counters.setFlag(chosen as CoreCardId, "buffed", false);
+          context.cards.updateCardMeta?.(chosen as CoreCardId, {
+            buffed: false,
+          } as Partial<RiftboundCardMeta>);
+          exhaustCostPaid = true;
+          ignoreBaseCost = optional.ignoresBaseCost === true;
+        }
+      } else if (optional?.kind === "exhaust") {
         // rule 356.2 — ogn-048-298: exhaust the chosen ready friendly
         // permanent now (costs are paid as the spell is played, before it is
         // on the chain); it is a cost choice, not a spell target.
@@ -1074,6 +1122,7 @@ export const playSpell: Defs["playSpell"] = {
         additionalCost: spellAdditionalCost,
         // rule-id: ven-055-166 — friendly "your spells cost less" statics.
         board: { cards: context.cards, zones: context.zones },
+        ignoreBaseCost,
         repeatCount: repeatN,
         targets,
         viaFlow: viaFlow === true,

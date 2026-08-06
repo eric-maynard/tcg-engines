@@ -401,7 +401,17 @@ describe("Spell: Action", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.abilities).toHaveLength(1);
+      // rule 356.2.b / 356.5 — the printed optional additional cost is lifted
+      // into its own static rider alongside the spell ability.
+      expect(result.abilities).toHaveLength(2);
+      expect(result.abilities?.[1]).toMatchObject({
+        effect: {
+          additionalCost: "spend a buff",
+          ifPaid: { type: "ignore-cost" },
+          type: "additional-cost-option",
+        },
+        type: "static",
+      });
     });
 
     it("should parse '[Action] Ready a friendly unit. It deals damage equal to its Might to an enemy unit at a battlefield.'", () => {

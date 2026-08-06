@@ -60,7 +60,7 @@ describe("Call to Glory (ogn-207-298)", () => {
     expect(game.p1.can("cast", "ctg")).toBe(false);
   });
 
-  test.failing("BUG: optional additional cost — spending a friendly buff makes the spell free (0 energy paid, donor loses its buff)", async () => {
+  test("optional additional cost — spending a friendly buff makes the spell free (0 energy paid, donor loses its buff)", async () => {
     // Expected: with 0 energy but a buffed friendly unit, Call to Glory is castable by spending that
     // buff; the donor's buff is removed and no energy is paid. Actual: the parsed ability has no
     // optional spend-buff cost, so with 0 energy the spell is simply not legal.
