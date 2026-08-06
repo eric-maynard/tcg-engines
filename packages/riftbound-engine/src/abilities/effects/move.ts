@@ -56,7 +56,70 @@ export function moveCardWithEvent(ctx: EffectContext, cardId: string, targetZone
   });
 }
 
+/**
+ * rule-id: ogn-199-298 (Tideturner) — `{type:"move", swap:true, partner}`:
+ * "choose a unit you control at another location. Move me to its location and
+ * it to my original location." The partner pool is every matching unit whose
+ * location differs from mine, and the chooser is always prompted (rule 355.10)
+ * even with a single candidate. Rule 811.1.d.2: the Hidden targeting
+ * restriction (a card played from facedown may only choose at that
+ * battlefield) can never be satisfied by this ability, so it does not apply —
+ * the partner may sit anywhere, a base included.
+ */
+function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void {
+  const selfId = ctx.sourceCardId;
+  const selfZone =
+    (ctx.zones.getCardZone(selfId as CoreCardId) as string | undefined) ?? ctx.sourceZone;
+  if (!selfZone) {
+    return;
+  }
+  const partnerDescriptor = ((effect as unknown as { partner?: TargetDescriptor }).partner ?? {
+    controller: "friendly",
+    type: "unit",
+  }) as TargetDescriptor;
+
+  const partner = ctx.boundTargets?.[0];
+  if (partner === undefined) {
+    const options = resolveTarget({ ...partnerDescriptor, quantity: "all" }, {
+      cards: ctx.cards,
+      choosing: true,
+      draft: ctx.draft,
+      playerId: ctx.playerId,
+      sourceCardId: selfId,
+      sourceZone: selfZone,
+      zones: ctx.zones,
+    } as Parameters<typeof resolveTarget>[1]).filter(
+      (id) => id !== selfId && ctx.zones.getCardZone(id as CoreCardId) !== selfZone,
+    );
+    if (options.length === 0) {
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      effect,
+      options,
+      playerId: ctx.playerId,
+      remaining: 1,
+      sourceCardId: selfId,
+      type: "choose-target",
+    } as RiftboundGameState["pendingChoice"];
+    return;
+  }
+
+  const partnerZone = ctx.zones.getCardZone(partner as CoreCardId) as string | undefined;
+  if (!partnerZone || partnerZone === selfZone) {
+    return;
+  }
+  moveCardWithEvent(ctx, selfId, partnerZone);
+  markContestedOnArrival(ctx.draft, partnerZone, ctx.playerId);
+  moveCardWithEvent(ctx, partner, selfZone);
+  markContestedOnArrival(ctx.draft, selfZone, ctx.playerId);
+}
+
 export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+  if ((effect as unknown as { swap?: boolean }).swap === true) {
+    handleSwapLocations(effect, ctx);
+    return;
+  }
   // rule-id: unl-107-219 (Stare Down) — Rule 355.8 / 355.2: "Choose a
   // friendly unit and a battlefield. Move all enemy units at that
   // battlefield with less Might than the chosen unit to their base." The

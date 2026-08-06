@@ -53,7 +53,7 @@ describe("Tideturner (ogn-199-298)", () => {
     expect(game.locationOf("near")).toBe("base");
   });
 
-  test.failing("BUG: accepting → choose a unit YOU control at ANOTHER location (only 'far'), then swap: Tideturner → bf1, Far → base", async () => {
+  test("accepting → choose a unit YOU control at ANOTHER location (only 'far'), then swap: Tideturner → bf1, Far → base", async () => {
     // Expected: after "yes" P1 picks among own units not at Tideturner's location (far; not near, not
     // the enemy foe); Tideturner moves to bf1 and Far moves to base. Actual: answering yes resolves
     // the trigger with no pick and nothing moves.
@@ -92,7 +92,7 @@ describe("Tideturner (ogn-199-298)", () => {
     expect(game.zoneOf("tt")).toBe("battlefield-bf1");
   });
 
-  test.failing("BUG: played from facedown at bf1, the swap partner may be a unit in base (811.1.d.2 example): Tideturner → base, Near → bf1", async () => {
+  test("played from facedown at bf1, the swap partner may be a unit in base (811.1.d.2 example): Tideturner → base, Near → bf1", async () => {
     // Expected: the Hidden targeting restriction does not apply (impossible at own battlefield), so
     // 'near' (in base) is offered; after the swap Tideturner is in base and Near is at bf1.
     // Actual: the swap never prompts / moves anything (see above).

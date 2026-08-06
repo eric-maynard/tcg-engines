@@ -9,27 +9,17 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * When you play me, you may choose a unit you control at another location.
  * Move me to its location and it to my original location.
  *
- * The swap-locations effect is modeled as a sequence of two moves:
- *   1. Move self to the chosen unit's location
- *   2. Move the chosen unit to self's original location
+ * The chosen partner and I trade locations (`move` with `swap`). Rule 811.1.d.2:
+ * played from Hidden the "another location" clause can never be met at my own
+ * battlefield, so the Hidden targeting restriction does not apply here.
  */
 const abilities: Ability[] = [
   { keyword: "Hidden", type: "keyword" },
   {
     effect: {
-      effects: [
-        {
-          target: "self",
-          to: "here",
-          type: "move",
-        },
-        {
-          target: { type: "trigger-source" },
-          to: "here",
-          type: "move",
-        },
-      ],
-      type: "sequence",
+      partner: { controller: "friendly", type: "unit" },
+      swap: true,
+      type: "move",
     },
     optional: true,
     trigger: { event: "play-self" },
