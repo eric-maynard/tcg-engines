@@ -36,7 +36,7 @@ describe("Noxus Saboteur (ogn-018-298)", () => {
     expect(game.zoneOf("trap")).toBe("battlefield-bf1");
   });
 
-  test.failing("BUG: an opponent's hidden card at the Saboteur's battlefield cannot be revealed", async () => {
+  test("an opponent's hidden card at the Saboteur's battlefield cannot be revealed", async () => {
     // Expected: with Noxus Saboteur at bf1, P2's `revealHidden` on the card hidden at bf1 is
     // not a legal move. Actual: the static is captured as an unimplemented "PreventReveal"
     // keyword grant, so the reveal gate ignores it and P2 can still play the card.

@@ -64,9 +64,7 @@ describe("Ember Monk (ogn-167-298)", () => {
     expect(game.state("monk").might).toBe(4);
   });
 
-  test.failing("BUG: playing a card from Hidden gives Ember Monk +2 Might this turn (4 → 6), gone next turn", async () => {
-    // Expected: revealing (playing) the facedown Pakaa Cub triggers the Monk: +2 Might until end of turn.
-    // Actual: the engine never emits a `play-from-hidden` event, so the parsed trigger never fires (stays 4).
+  test("playing a card from Hidden gives Ember Monk +2 Might this turn (4 → 6), gone next turn", async () => {
     const game = await hiddenCubReady();
     await game.p1.reveal("cub");
     await game.settle();

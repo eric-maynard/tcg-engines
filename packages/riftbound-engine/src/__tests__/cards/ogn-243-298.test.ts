@@ -56,7 +56,7 @@ describe("Darius, Executioner (ogn-243-298)", () => {
     expect(game.state("darius").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: Legion met (another card played earlier this turn) — 'When you play me, ready me' leaves Darius ready (rule 812)", async () => {
+  test("Legion met (another card played earlier this turn) — 'When you play me, ready me' leaves Darius ready (rule 812)", async () => {
     // Expected: after Cheap Recruit was played this turn, playing Darius fires the Legion play
     // trigger and he ends ready. Actual: the keyword ability's effect is never triggered.
     const game = await scenario()

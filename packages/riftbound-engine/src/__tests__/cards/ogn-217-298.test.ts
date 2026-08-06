@@ -37,7 +37,7 @@ describe("Trifarian Gloryseeker (ogn-217-298)", () => {
     expect(game.state("gs").might).toBe(2);
   });
 
-  test.failing("BUG: Legion met — after playing another card this turn, Gloryseeker enters and buffs itself (2 → 3, rule 812.1.c)", async () => {
+  test("Legion met — after playing another card this turn, Gloryseeker enters and buffs itself (2 → 3, rule 812.1.c)", async () => {
     // Expected: Skulker finalized earlier this turn → the play effect is active → Gloryseeker gets a
     // +1 buff (isBuffed, 3 Might) that persists into later turns. Actual: parsed as a bare Legion
     // keyword with no trigger, so nothing happens (stays 2, unbuffed).

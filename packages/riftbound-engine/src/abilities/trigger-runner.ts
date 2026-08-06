@@ -123,6 +123,25 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
         type: "triggered",
       });
     }
+    // rule-id: ogn-020-298 — rule 724: the parser keeps "[Legion] — When you
+    // play me, …" as a bare `{type:"keyword", keyword:"Legion", effect}`
+    // ability, which no event would ever match. Synthesise the play-self
+    // trigger it stands for, gated by the Legion condition. Cost-shaped Legion
+    // riders ("[Legion] — I cost [2] less.") are read by the cost path instead.
+    if (a.type === "keyword" && (a as { keyword?: string }).keyword === "Legion") {
+      const effect = (a as { effect?: unknown }).effect as
+        | { type?: string }
+        | undefined;
+      const kind = effect?.type;
+      if (effect && kind !== "cost-reduction" && kind !== "cost-increase") {
+        result.push({
+          condition: { type: "legion" },
+          effect: effect as never,
+          trigger: { event: "play-self", on: "self" },
+          type: "triggered",
+        });
+      }
+    }
   }
   return result;
 }
@@ -355,6 +374,13 @@ function evaluateControlCondition(
           ? t.quantity.atLeast
           : 1;
 
+  const filters = t.filter === undefined ? [] : Array.isArray(t.filter) ? t.filter : [t.filter];
+  // rule-id: ogn-101-298 — "a facedown card at a battlefield" lives in the
+  // `facedown-<bf>` zones, which the board scan below never visits. Only pull
+  // them in when the clause actually asks for facedown cards: a hidden card is
+  // not a unit/gear in play and must not satisfy any other control clause.
+  const wantsFacedown = filters.some((f) => f === "facedown");
+
   const ids: string[] = [];
   if (onlyZone?.startsWith("battlefield-")) {
     ids.push(...ctx.zones.getCardsInZone(onlyZone as CoreZoneId).map((x) => x as string));
@@ -376,9 +402,15 @@ function evaluateControlCondition(
       }
     }
   }
+  if (wantsFacedown) {
+    for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+      ids.push(
+        ...ctx.zones.getCardsInZone(`facedown-${bfId}` as CoreZoneId).map((x) => x as string),
+      );
+    }
+  }
 
   const registry = getGlobalCardRegistry();
-  const filters = t.filter === undefined ? [] : Array.isArray(t.filter) ? t.filter : [t.filter];
   let count = 0;
   for (const id of ids) {
     if (t.excludeSelf && id === sourceCardId) {
@@ -411,6 +443,17 @@ function evaluateControlCondition(
       if (f && typeof f === "object" && typeof (f as { tag?: unknown }).tag === "string") {
         const tag = (f as { tag: string }).tag.toLowerCase();
         if (!(def?.tags ?? []).some((x) => x.toLowerCase() === tag)) {
+          ok = false;
+          break;
+        }
+      }
+      // rule-id: ogn-101-298 — rule 811: only a card that is actually facedown
+      // satisfies a "facedown card" clause.
+      if (f === "facedown") {
+        const meta = ctx.cards.getCardMeta(id as CoreCardId) as
+          | { hidden?: boolean }
+          | undefined;
+        if (meta?.hidden !== true) {
           ok = false;
           break;
         }

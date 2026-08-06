@@ -40,7 +40,7 @@ describe("Dangerous Duo (ogn-016-298)", () => {
     expect(game.state("duo").might).toBe(3);
   });
 
-  test.failing("BUG: Legion met — after playing another card this turn, playing me gives a chosen unit +2 Might this turn (rule 812.1.c)", async () => {
+  test("Legion met — after playing another card this turn, playing me gives a chosen unit +2 Might this turn (rule 812.1.c)", async () => {
     // Expected: Skulker was finalized earlier this turn, so Dangerous Duo's play trigger goes on the
     // chain, asks for a unit, and gives it +2 Might until end of turn. Actual: the ability is parsed as
     // a bare `keyword: Legion` entry (not a triggered ability), so nothing ever triggers.

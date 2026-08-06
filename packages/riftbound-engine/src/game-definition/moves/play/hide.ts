@@ -52,6 +52,49 @@ function deductHideCost(draft: RiftboundGameState, playerId: string): void {
 }
 
 /**
+ * rule-id: ogn-018-298 — Noxus Saboteur, "Your opponents' [Hidden] cards can't
+ * be revealed here." The static is captured as a self grant of the
+ * `PreventReveal` keyword; the gate itself lives at the reveal action (rule
+ * 811.1.c.3). "Here" = the battlefield the blocker occupies, and it only stops
+ * players other than the blocker's controller.
+ */
+function revealIsPrevented(
+  battlefieldId: string | undefined,
+  playerId: string,
+  ctx: {
+    cards: { getCardController?: (id: CoreCardId) => string | undefined; getCardOwner: (id: CoreCardId) => string | undefined };
+    zones: { getCardsInZone: (zoneId: CoreZoneId) => readonly CoreCardId[] };
+  },
+): boolean {
+  if (!battlefieldId) {
+    return false;
+  }
+  const registry = getGlobalCardRegistry();
+  const here = ctx.zones.getCardsInZone(getBattlefieldZoneId(battlefieldId) as CoreZoneId);
+  for (const id of here) {
+    const controller = ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id);
+    if (controller === playerId) {
+      continue;
+    }
+    const abilities = (registry.getAbilities(id as string) ?? []) as readonly {
+      type?: string;
+      effect?: { type?: string; keyword?: string };
+    }[];
+    if (
+      abilities.some(
+        (ab) =>
+          ab.type === "static" &&
+          ab.effect?.type === "grant-keyword" &&
+          ab.effect?.keyword === "PreventReveal",
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Hide a card at a Battlefield (rule 723)
  */
 export const hideCard: Defs["hideCard"] = {
@@ -226,6 +269,11 @@ export const revealHidden: Defs["revealHidden"] = {
         return false;
       }
     }
+    // rule-id: ogn-018-298 — a "can't be revealed here" static at the card's
+    // battlefield blocks the reveal outright.
+    if (revealIsPrevented(meta.hiddenAt, context.params.playerId as string, context)) {
+      return false;
+    }
     return true;
   },
   // rule-id: sfd-017-221 — Rule 723.1.c.3: surface hidden cards as playable
@@ -323,6 +371,12 @@ export const revealHidden: Defs["revealHidden"] = {
         { cardId, cardType: "spell", playerId, type: "play-card" },
         { cards, counters, draft, zones },
       );
+      // rule-id: ogn-167-298 — rule 811.1.c.3: revealing a facedown card is
+      // playing it "from [Hidden]".
+      fireTriggers(
+        { cardId, cardType: "spell", playerId, type: "play-from-hidden" },
+        { cards, counters, draft, zones },
+      );
       return;
     }
 
@@ -362,5 +416,12 @@ export const revealHidden: Defs["revealHidden"] = {
         { cards, counters, draft, zones },
       );
     }
+
+    // rule-id: ogn-167-298 — rule 811.1.c.3: revealing a facedown card is
+    // playing it "from [Hidden]" (units, gear and equipment alike).
+    fireTriggers(
+      { cardId, playerId, type: "play-from-hidden", ...(cardType ? { cardType } : {}) },
+      { cards, counters, draft, zones },
+    );
   },
 };

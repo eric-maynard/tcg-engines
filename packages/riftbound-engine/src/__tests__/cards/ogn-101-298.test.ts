@@ -50,7 +50,7 @@ describe("Mushroom Pouch (ogn-101-298)", () => {
     expect(game.zoneOf("fd")).toBe("facedown-bf1"); // the facedown card is untouched
   });
 
-  test.failing("BUG: without any facedown card there is no extra draw (0 → 1, only the draw step)", async () => {
+  test("without any facedown card there is no extra draw (0 → 1, only the draw step)", async () => {
     // Expected: the "if you control a facedown card at a battlefield" condition gates the draw.
     // Actual: the trigger draws unconditionally (hand ends at 2).
     const game = await board().build();
@@ -59,7 +59,7 @@ describe("Mushroom Pouch (ogn-101-298)", () => {
     expect(game.p1.hand()).toHaveLength(1);
   });
 
-  test.failing("BUG: an OPPONENT's facedown card does not satisfy 'you control a facedown card' (0 → 1)", async () => {
+  test("an OPPONENT's facedown card does not satisfy 'you control a facedown card' (0 → 1)", async () => {
     // Expected: only facedown cards P1 controls count. Actual: the draw happens regardless.
     const game = await board().facedown(P2, "bf2", FACEBREAKER, "theirFd").build();
     await game.advanceTurn();

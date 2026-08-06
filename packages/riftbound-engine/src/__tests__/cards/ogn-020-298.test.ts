@@ -48,7 +48,7 @@ describe("Scrapyard Champion (ogn-020-298)", () => {
     expect(game.zoneOf("d1")).toBe("mainDeck");
   });
 
-  test.failing("BUG: with Legion (another card played earlier this turn) you discard 2, then draw 2", async () => {
+  test("with Legion (another card played earlier this turn) you discard 2, then draw 2", async () => {
     // Expected: after Cheap Recruit was played, playing Scrapyard Champion discards a+b
     // (the only two cards left) and then draws d1+d2. Actual: the Legion-gated play
     // trigger never fires — hand and trash are untouched.
@@ -66,7 +66,7 @@ describe("Scrapyard Champion (ogn-020-298)", () => {
     expect(game.p1.hand().sort()).toEqual(["d1", "d2"]);
   });
 
-  test.failing("BUG: Legion discard is a choice — with 3 other cards in hand the player picks which 2 to discard, then draws 2", async () => {
+  test("Legion discard is a choice — with 3 other cards in hand the player picks which 2 to discard, then draws 2", async () => {
     // Expected: a 2-card pick prompt among cheap2/a/b; the unpicked card stays. Actual: no prompt, no effect.
     const game = await board().resources(P1, { energy: 7 }).hand(P1, CHEAP, "cheap2").build();
     await game.p1.play("cheap");
