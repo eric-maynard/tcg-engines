@@ -6,6 +6,7 @@ import { checkReplacement, markReplacementConsumed } from "../replacement-effect
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { unitIgnoresDamage } from "../../operations/damage-immunity";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
 
@@ -209,6 +210,10 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     // any caster-assigned surplus; a lone target (no choice possible)
     // absorbs the whole surplus so all available damage is distributed.
     for (const targetId of splitTargets) {
+      // rule 465.2.c.10 (ogn-189-298) — never dealt damage.
+      if (unitIgnoresDamage(targetId, ctx.draft)) {
+        continue;
+      }
       const priorDamage =
         (
           ctx.cards.getCardMeta?.(targetId as CoreCardId) as
@@ -262,6 +267,11 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     }
   }
   for (const { targetId, amount } of hits) {
+    // rule 465.2.c.10 (ogn-189-298) — a unit with an active "I don't take
+    // damage" restriction is dealt nothing at all.
+    if (unitIgnoresDamage(targetId, ctx.draft)) {
+      continue;
+    }
     // rule-id: ogn-254-298 — a runtime take-damage replacement bound to this
     // unit at play time ("Kill it the next time it takes damage") applies its
     // nested effect to that unit and, being single-fire, is spent.

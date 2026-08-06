@@ -15,6 +15,7 @@ import { createInteractionState, getTurnState } from "../../../chain";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { unitIgnoresDamage } from "../../../operations/damage-immunity";
 import type {
   GrantedKeyword,
   RiftboundCardMeta,
@@ -227,6 +228,9 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         keywords: allKeywords,
         owner,
         ...(killOnDamageIdx(cardId as string) >= 0 ? { diesOnAnyDamage: true } : {}),
+        // rule 465.2.c.10 (ogn-189-298): "I don't take damage" — skipped for
+        // damage assignment and never dealt lethal damage.
+        ...(unitIgnoresDamage(cardId as string, draft) ? { immuneToDamage: true } : {}),
         // rule 423.1.b: a stunned unit deals no combat damage (it still takes damage).
         ...(meta?.stunned === true ||
         (meta as { __flags?: Record<string, boolean> } | undefined)?.__flags?.stunned === true
@@ -247,8 +251,13 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // straight to the Resolution Step — rule 466.3.a / 466.5: the player with
     // units remaining wins and Establishes Control (a Conquer).
     // rule-id: ogn-034-298 — excess damage assigned to enemy units this combat.
-    let excessDamage = 0;
-    if (attackerUnits.length > 0 && defenderUnits.length > 0) {
+    let excessDamage = battlefield.combatExcessDamage ?? 0;
+    // rule 466.2: chain items from the Combat Damage Step / Combat Cleanup
+    // already resolved on an earlier pass — go straight to the result step.
+    const damageAlreadyDone = battlefield.combatDamageDone === true;
+    battlefield.combatDamageDone = undefined;
+    battlefield.combatExcessDamage = undefined;
+    if (!damageAlreadyDone && attackerUnits.length > 0 && defenderUnits.length > 0) {
     // Run the combat resolver
     const result = resolveCombat(attackerUnits, defenderUnits);
     excessDamage = result.attackerExcessDamage;
@@ -315,6 +324,17 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       }
     }
     cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
+
+    // rule 466.2: resolve every chain item from combat damage and the Combat
+    // Cleanup (Deathknell, "when a unit dies" …) BEFORE determining the combat
+    // result — a Deathknell that kills the last attacker means no conquer.
+    // The battlefield stays contested/showdown-complete, so this move re-runs
+    // as soon as the chain empties (its condition needs a neutral-open state).
+    if (draft.interaction?.chain?.active === true) {
+      battlefield.combatDamageDone = true;
+      battlefield.combatExcessDamage = excessDamage;
+      return;
+    }
     }
 
     // rule 466.3: the combat result is read off who still has units HERE after

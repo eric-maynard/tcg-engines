@@ -78,9 +78,7 @@ describe("Kayn, Unleashed (ogn-189-298)", () => {
     expect(game.state("kayn").damage).toBe(3);
   });
 
-  test.failing("BUG: moved twice this turn (gank + Ride the Wind) → Kayn doesn't take spell damage", async () => {
-    // Expected: after a Standard Move bf1→bf2 and an effect move bf2→base, the 3-damage bolt deals 0.
-    // Actual: the "moved twice → no damage" clause is not implemented; Kayn takes 3.
+  test("moved twice this turn (gank + Ride the Wind) → Kayn doesn't take spell damage", async () => {
     const game = await board().build();
     await game.p1.gank("kayn", "bf2");
     await ride(game, "ride1", "base");
@@ -91,8 +89,7 @@ describe("Kayn, Unleashed (ogn-189-298)", () => {
     expect(game.state("kayn").damage).toBe(0);
   });
 
-  test.failing("BUG: two effect-moves also count — Ride the Wind twice, then the bolt deals nothing", async () => {
-    // Expected: "moved" is any move of Kayn, not just Standard Moves. Actual: takes 3.
+  test("two effect-moves also count — Ride the Wind twice, then the bolt deals nothing", async () => {
     const game = await board().build();
     await ride(game, "ride1", "battlefield-bf2");
     await ride(game, "ride2", "battlefield-bf1");
@@ -102,9 +99,7 @@ describe("Kayn, Unleashed (ogn-189-298)", () => {
     expect(game.state("kayn").damage).toBe(0);
   });
 
-  test.failing("BUG: moved twice → immune in combat too: Kayn (6) into a 6-Might defender kills it and survives to conquer (465.2.c.10)", async () => {
-    // Expected: second move (Ride the Wind) carries Kayn into enemy bf3; he deals 6, takes none.
-    // Actual: both 6-Might units trade and Kayn goes to the trash.
+  test("moved twice → immune in combat too: Kayn (6) into a 6-Might defender kills it and survives to conquer (465.2.c.10)", async () => {
     const game = await board().battlefield("bf3", { controller: P2 }).unit(P2, "bf3", { might: 6 }, "foe").build();
     await game.p1.gank("kayn", "bf2");
     await ride(game, "ride1", "battlefield-bf3");

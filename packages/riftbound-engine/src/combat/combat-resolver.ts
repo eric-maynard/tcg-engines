@@ -33,6 +33,11 @@ export interface CombatUnit {
    * replacement: any nonzero combat damage assigned to this unit kills it.
    */
   readonly diesOnAnyDamage?: boolean;
+  /**
+   * rule 465.2.c.10 (ogn-189-298) — "I don't take damage": the unit is skipped
+   * for mandatory combat damage assignment and is never dealt lethal damage.
+   */
+  readonly immuneToDamage?: boolean;
 }
 
 /**
@@ -161,8 +166,12 @@ export function distributeDamage(
   const assignment: Record<string, number> = {};
   let remaining = totalDamage;
 
+  // rule 465.2.c.10 (ogn-189-298): units that can't take damage are skipped
+  // entirely for damage assignment — no mandatory lethal, no leftover.
+  const assignable = units.filter((u) => u.immuneToDamage !== true);
+
   // Sort by damage assignment priority: Tank first, then normal, then Backline last
-  const withFlags = units.map((u) => ({
+  const withFlags = assignable.map((u) => ({
     ...u,
     hasBackline: hasKeyword(u, "Backline"),
     hasTank: hasKeyword(u, "Tank"),
@@ -243,6 +252,10 @@ export function resolveCombat(
   const killed: string[] = [];
   const checkKills = (units: CombatUnit[], role: "attacker" | "defender") => {
     for (const unit of units) {
+      // rule 465.2.c.10 (ogn-189-298): never dealt lethal damage.
+      if (unit.immuneToDamage === true) {
+        continue;
+      }
       const combatDamage = damageAssignment[unit.id] ?? 0;
       const totalDamage = unit.currentDamage + combatDamage;
       // rule-id: ogn-254-298 — kill on any damage taken (bound replacement).
