@@ -17,6 +17,7 @@ import { markContestedOnArrival } from "../../abilities/effects/move";
 import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
 import { resolveTarget } from "../../abilities/target-resolver";
 import { fireTriggers } from "../../abilities/trigger-runner";
+import { lockTriggerTargets } from "../../abilities/trigger-target-lock";
 import { addToChain, createInteractionState } from "../../chain";
 import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
@@ -862,7 +863,9 @@ export const pendingChoiceMoves: Partial<
           }
           const items = draft.interaction?.chain?.items;
           const idx = items?.findIndex((it) => it.id === choice.bindToChainItemId) ?? -1;
+          let triggeredItem = false;
           if (items && idx >= 0) {
+            triggeredItem = items[idx]?.triggered === true;
             items[idx] = { ...items[idx], targets: [picked] };
           }
           draft.pendingChoice = undefined;
@@ -870,11 +873,15 @@ export const pendingChoiceMoves: Partial<
             {
               cardId: picked,
               chooserId: choice.playerId,
-              sourceType: "spell",
+              // rule-id: sfd-142-221 — a finalized trigger choosing a unit is
+              // an ability-sourced choice, not a spell one.
+              sourceType: triggeredItem ? "ability" : "spell",
               type: "choose",
             },
             { cards: context.cards, counters: context.counters, draft, zones: context.zones },
           );
+          // rule 355.5: several simultaneous triggers each choose in turn.
+          lockTriggerTargets(draft, { cards: context.cards, zones: context.zones });
           postChoiceCleanup(draft, context);
           return;
         }
@@ -1195,7 +1202,7 @@ export const pendingChoiceMoves: Partial<
           // played — unless a static "enters ready" ability applies.
           if (
             getGlobalCardRegistry().get(cardId)?.cardType === "unit" &&
-            !staticEnterReadyApplies(cardId, draft, choice.playerId)
+            !staticEnterReadyApplies(cardId, draft, choice.playerId, context.zones)
           ) {
             context.counters.setFlag(cardId as CoreCardId, "exhausted", true);
           }

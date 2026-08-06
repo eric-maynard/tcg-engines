@@ -18,6 +18,7 @@ import { executeEffect } from "./effect-executor";
 import type { GameEvent } from "./game-events";
 import { evaluateLegionCondition } from "./legion-conditions";
 import { recalculateStaticEffects } from "./static-abilities";
+import { lockTriggerTargets } from "./trigger-target-lock";
 import type {
   CardWithAbilities,
   MatchedTrigger,
@@ -894,6 +895,9 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
         turnOrder,
       );
     }
+    // rule 355.5 / 808.1.d.2: each freshly finalized item chooses its own
+    // Game Object now, before anyone receives priority.
+    lockTriggerTargets(ctx.draft, { cards: ctx.cards, zones: ctx.zones });
   }
 
   for (const match of inlineMatches) {

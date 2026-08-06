@@ -143,7 +143,7 @@ describe("Karthus doubling Ruined Rex's Deathknell vs a single Not So Fast", () 
 
   // ── with Karthus ──────────────────────────────────────────────────────────────────────
 
-  test.failing("BUG: (a) with Karthus, Rex's death puts TWO independent Deathknell items on the chain, each choosing its own target as it is finalized (Karthus text, 808.1.d.2, 355.5, 337.1.b)", async () => {
+  test("(a) with Karthus, Rex's death puts TWO independent Deathknell items on the chain, each choosing its own target as it is finalized (Karthus text, 808.1.d.2, 355.5, 337.1.b)", async () => {
     // Expected: two pending items appended in order; P1 answers two separate target prompts before
     // priority (different units here; the same unit twice would also be legal).
     // Actual: no trigger at all (and the 'trigger-double' static has no engine support either).
