@@ -159,7 +159,7 @@ describe("Ruling 6b3effc73787ce91 — how Alpha Strike's targets are chosen", ()
   // Expected (355.14.a/c): only CHOSEN enemy units are targets — choosing zero split targets means the spell
   // resolves dealing no damage to anyone. Actual: when cast with the friendly unit alone the engine falls
   // back to damaging every enemy unit at a battlefield (E1–E3 die, E4 takes 1).
-  test.failing("BUG: ruling 6b3effc73787ce91 — choosing ZERO enemy units is legal and then nothing is damaged (engine damages all enemies at battlefields instead)", async () => {
+  test("ruling 6b3effc73787ce91 — choosing ZERO enemy units is legal and then nothing is damaged", async () => {
     const game = await board().build();
     await game.p1.cast("alpha", { targets: "champ" });
     expect(game.p1.resources()).toEqual({ energy: 2, power: { rainbow: 2 } });

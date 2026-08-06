@@ -153,7 +153,10 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     // encode surplus damage the caster has already assigned to it.
     let splitTargets: string[];
     const assigned: Record<string, number> = {};
-    if (ctx.boundTargets && (hasRef ? ctx.boundTargets.length > 1 : true)) {
+    // rule 355.14.c (unl-192-219): choosing ZERO split targets is legal, so
+    // bound targets carrying only the reference unit are a deliberate empty
+    // choice — never a cue to fall back to "every legal enemy".
+    if (ctx.boundTargets) {
       splitTargets = ctx.boundTargets
         .slice(splitFrom)
         .filter((id) => legalPool.includes(id));
@@ -270,6 +273,20 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     // rule 465.2.c.10 (ogn-189-298) — a unit with an active "I don't take
     // damage" restriction is dealt nothing at all.
     if (unitIgnoresDamage(targetId, ctx.draft)) {
+      continue;
+    }
+    // rule 437.2.a / 437.4 + 417.1.e.1 (sfd-194-221) — a single-instance
+    // "prevent it" shield replaces this whole damage event with 0. Entirely
+    // prevented damage was never dealt, so it must be consulted BEFORE any
+    // take-damage replacement: "the next time it takes damage" has not happened.
+    const shieldMeta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+      | { preventNextDamageInstance?: boolean }
+      | undefined;
+    if (amount > 0 && shieldMeta?.preventNextDamageInstance === true) {
+      ctx.cards.updateCardMeta?.(
+        targetId as CoreCardId,
+        { preventNextDamageInstance: false } as unknown as Record<string, unknown>,
+      );
       continue;
     }
     // rule-id: ogn-254-298 — a runtime take-damage replacement bound to this
