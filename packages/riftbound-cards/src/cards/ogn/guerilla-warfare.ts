@@ -10,13 +10,24 @@ import { createCardId } from "@tcg/riftbound-types/cards";
 const abilities: Ability[] = [
   {
     effect: {
-      target: {
-        filter: { keyword: "Hidden" },
-        location: "trash",
-        quantity: { upTo: 2 },
-        type: "card",
-      },
-      type: "return-to-hand",
+      effects: [
+        {
+          target: {
+            filter: { keyword: "Hidden" },
+            location: "trash",
+            quantity: { upTo: 2 },
+            type: "card",
+          },
+          type: "return-to-hand",
+        },
+        // rule 517.2.b / 723.1.b — a turn-scoped licence to take the Hide
+        // action without paying its [rainbow]; it expires in the Ending Step.
+        {
+          effect: { type: "hide-ignoring-costs" },
+          type: "turn-static",
+        },
+      ],
+      type: "sequence",
     },
     timing: "action",
     type: "spell",

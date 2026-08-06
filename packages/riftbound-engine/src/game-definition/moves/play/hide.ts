@@ -24,7 +24,27 @@ type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCar
  */
 const HIDE_POWER_COST = 1;
 
+/**
+ * rule-id: ogn-264-298 — rule 517.2.b: a turn-scoped "you can hide cards
+ * ignoring costs this turn" licence, installed as a `turn-static` by the
+ * resolving spell and cleared in the Ending Step.
+ */
+function hasFreeHideLicence(state: RiftboundGameState, playerId: string): boolean {
+  for (const ts of state.turnStatics ?? []) {
+    if (ts.controllerId !== playerId) {
+      continue;
+    }
+    if ((ts.effect as { type?: string } | undefined)?.type === "hide-ignoring-costs") {
+      return true;
+    }
+  }
+  return false;
+}
+
 function canAffordHide(state: RiftboundGameState, playerId: string): boolean {
+  if (hasFreeHideLicence(state, playerId)) {
+    return true;
+  }
   const pool = state.runePools[playerId];
   if (!pool) {
     return false;
@@ -37,6 +57,10 @@ function canAffordHide(state: RiftboundGameState, playerId: string): boolean {
 }
 
 function deductHideCost(draft: RiftboundGameState, playerId: string): void {
+  // rule-id: ogn-264-298 — the licence waives the [rainbow] entirely.
+  if (hasFreeHideLicence(draft, playerId)) {
+    return;
+  }
   const pool = draft.runePools[playerId];
   if (!pool) {
     return;

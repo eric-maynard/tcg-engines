@@ -89,13 +89,17 @@ describe("Guerilla Warfare (ogn-264-298)", () => {
     expect(game.zoneOf("junk")).toBe("trash");
   });
 
-  test.failing("BUG: this turn you can hide [Hidden] cards ignoring the [rainbow] cost; the licence ends with the turn", async () => {
+  test("this turn you can hide [Hidden] cards ignoring the [rainbow] cost; the licence ends with the turn", async () => {
     // Expected: after resolving (0 power left) P1 can still hide the Fae at bf1 for free; next turn, with no
     // power, hiding is illegal again. Actual: no free-hide effect is created — hide is illegal at 0 power.
     const game = await scenario()
       .resources(P1, { energy: 2, power: { rainbow: 1 } })
       .battlefield("bf1", { controller: P1 })
       .battlefield("bf2", { controller: P1 })
+      // rule 323.6 — control of a battlefield needs a unit there, otherwise
+      // cleanup strips it and hiding would be illegal for an unrelated reason.
+      .unit(P1, "bf1", { might: 1 }, "guard1")
+      .unit(P1, "bf2", { might: 1 }, "guard2")
       .hand(P1, BLASTCONE_FAE, "fae")
       .hand(P1, HIDDEN_BLADE, "blade")
       .hand(P1, CARD, "gw")
