@@ -64,14 +64,9 @@ Return {fixed:[ids], failed:[{id,reason}], files:[touched], summary}.`,
 
   phase('Land')
   const land = await agent(
-`Land round ${round} of the fixer. Repo ${REPO} (branch as-is; remote 'origin' = private repo). Steps (use dangerouslyDisableSandbox:true — rsync/ssh/git push need the network):
-1. \`cd ${REPO} && grep -rl '^<<<<<<<\\|^>>>>>>>' packages apps --include='*.ts' --include='*.js' | grep -v node_modules\` must be empty (else resolve by keeping the newer side and re-run tests).
-2. \`bun test packages/riftbound-engine/src/__tests__/ 2>&1 | tail -3\` → must be 0 fail; \`bun test packages/riftbound-cards/src/parser/__tests__/ 2>&1 | tail -2\` → 0 fail; \`for f in $(git ls-files -m 'apps/riftbound-app/public/js/**/*.js'); do node --check $f; done\`.
-   If red: identify the failing test files, \`git stash push -- <files touched only by the culprit>\` is NOT allowed; instead report committed:false with the failure text and STOP (the next round's lanes will see it).
-3. \`bun packages/riftbound-engine/src/testing/playtest/game-tracer.ts --games 20 --max-turns 40 --out /tmp/pt-fx${round} --seed fx${round} && bun packages/riftbound-engine/src/testing/playtest/coverage-check.ts /tmp/pt-fx${round} | grep -E "moveFailed|costViolations"\` → both 0 (report if not, but still commit if tests are green).
-4. \`git add -A ':!apps/riftbound-app/data/' && git commit -q -m "fix(queue r${round}): ${fixed.length} items — <very short themes>" && GIT_TERMINAL_PROMPT=0 git push origin HEAD 2>&1 | tail -1\` (skip commit if nothing staged).
-5. Sync + bounce the dev app: \`rsync -a --delete ${REPO}/packages/ emaynard-tcg:/root/tcg/tcg-engines/packages/ --exclude node_modules && rsync -a ${REPO}/apps/riftbound-app/ emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/ --exclude data --exclude node_modules --exclude downloads && ssh emaynard-tcg 'kill $(cat /tmp/app.pid) 2>/dev/null; sleep 3; curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/play'\`.
-Return {committed, sha, engineTests:"<pass>/<fail>", tracer:"moveFailed=…,costViolations=…", notes}.`,
+`Land round ${round} of the fixer by running ONE fixed script (it does conflict-check → engine+parser tests → tracer → commit → push → rsync → app bounce; you do not compose any of those commands yourself):
+\`bash ${REPO}/.claude/fix-queue/land.sh fx${round} "fix(queue r${round}): ${fixed.length} items"\`
+That single command needs dangerouslyDisableSandbox:true (git push/rsync/ssh); run nothing else unsandboxed. Parse its key=value output lines and return {committed (bool), sha, engineTests: engine_tests value, tracer: tracer value, notes: any conflict_markers/js_syntax/reason/app lines}. If committed=false because tests failed, include the failing summary in notes.`,
    {label:`r${round} land`, phase:'Land', schema:LAND})
   if (land?.sha) totals.commits.push(land.sha)
   log(`round ${round}: landed=${!!land?.committed} ${land?.sha||''} tests=${land?.engineTests||'?'} ${land?.tracer||''}`)
