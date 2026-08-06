@@ -29,7 +29,7 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { getCardEffectiveMight } from "../play/cost";
+import { getCardEffectiveMight, xCostIsPower } from "../play/cost";
 import {
   findSequenceLeadTarget,
   isLegalMultiTargetSet,
@@ -99,6 +99,29 @@ export function executeResolvedItem(
       playerId: resolved.controller,
       sourceCardId: resolved.cardId,
       resolved: { ...resolved, optional: false },
+    };
+    return;
+  }
+
+  // rule 204.3.b (ogn-268-298): "Pay any amount of [rainbow] to …" is a
+  // cost paid WITHIN the instructions, i.e. on resolution — after the
+  // opponents' reaction window (359.3.c) and never as a play cost. Pause and
+  // ask the controller how much Power to pay; the reducer binds `x` and
+  // re-enters here.
+  if (
+    xCostIsPower(resolved.cardId) &&
+    (resolved.effect as { _variables?: Record<string, number> } | undefined)?._variables?.x ===
+      undefined
+  ) {
+    const pool = draft.runePools[resolved.controller];
+    // rule 444.2: paying 0 is always legal, so `max` only bounds the offer.
+    const max = Object.values(pool?.power ?? {}).reduce<number>((a, b) => a + (b ?? 0), 0);
+    draft.pendingChoice = {
+      max,
+      playerId: resolved.controller,
+      resolved,
+      sourceCardId: resolved.cardId,
+      type: "pay-x",
     };
     return;
   }

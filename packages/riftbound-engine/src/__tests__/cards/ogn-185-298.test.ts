@@ -52,7 +52,7 @@ describe("Traveling Merchant (ogn-185-298)", () => {
     expect(game.p1.hand().sort()).toEqual(["keep", "topdeck"]);
   });
 
-  test.failing("BUG: empty hand — the discard is skipped but you still draw 1 (rules 422.4 / 359.3.e.11)", async () => {
+  test("empty hand — the discard is skipped but you still draw 1 (rules 422.4 / 359.3.e.11)", async () => {
     // Expected: nothing to discard → discard ignored, then draw 1 → hand = [topdeck].
     // Actual: the trigger resolves but the `then: draw` is skipped when the discard did nothing.
     const game = await board([]).build();

@@ -22,6 +22,8 @@ const abilities: Ability[] = [
   {
     condition: { cost: { discard: 1 }, type: "pay-cost" },
     effect: {
+      // rule 385.2: this ability functions only while the card is in the trash.
+      from: "trash",
       target: "self",
       type: "return-to-hand",
     },

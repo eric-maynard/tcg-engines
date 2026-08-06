@@ -76,7 +76,7 @@ describe("Super Mega Death Rocket! (ogn-252-298)", () => {
     expect(game.zoneOf("junk")).toBe("trash");
   });
 
-  test.failing("BUG: 'you may' — declining leaves the rocket in the trash and the hand intact", async () => {
+  test("'you may' — declining leaves the rocket in the trash and the hand intact", async () => {
     // Expected: a yes/no prompt that can be declined. Actual: no prompt at all (trigger missing).
     const game = await conquerBoard().build();
     await game.p1.move("runner", "bf1");

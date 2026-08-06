@@ -39,7 +39,13 @@ export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: 
   const hand = ctx.zones
     .getCardsInZone("hand" as CoreZoneId, ctx.playerId as CorePlayerId)
     .map((id) => id as string);
-  if (hand.length === 0) return;
+  if (hand.length === 0) {
+    // rule 422.4 / 359.3.e.11 (ogn-185-298): an impossible discard is simply
+    // ignored — the rest of the effect ("…, then draw 1") still happens.
+    const emptyThen = (effect as { then?: ExecutableEffect }).then;
+    if (emptyThen) h.executeEffect(emptyThen, ctx);
+    return;
+  }
   // rule 422.1.a: the discarding player chooses which card(s). Use
   // pendingChoice so play pauses until they pick (goldfish auto-resolves via
   // pickDefaultForChoice); "discard N" re-prompts via `remaining` (ogn-030-298).
