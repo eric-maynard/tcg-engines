@@ -68,9 +68,7 @@ describe("Lee Sin, Ascetic (ogn-078-298)", () => {
     expect(game.p1.can("activate", "lee")).toBe(false);
   });
 
-  test.failing("BUG: 'I can have any number of buffs' — a second activation on a later turn stacks a second buff (7 might)", async () => {
-    // Expected: buff #2 lands (426.1.b.2 lifts the one-buff cap) → 5 + 2 = 7.
-    // Actual: buffs are a boolean flag, so he stays at 6.
+  test("'I can have any number of buffs' — a second activation on a later turn stacks a second buff (7 might)", async () => {
     const game = await scenario().unit(P1, "base", CARD, "lee").build();
     await game.p1.activate("lee", EXHAUST_BUFF);
     await game.settle();

@@ -425,6 +425,12 @@ export interface GrantKeywordEffect {
    * (e.g. "your spells have [Repeat] [2][chaos]", rule 820).
    */
   readonly cost?: Cost;
+  /**
+   * rule 809 (ogn-063-298) — "… have [Keyword] if they didn't already": the
+   * grant is skipped entirely for a card that already has the keyword, so
+   * nothing stacks on top of the printed one.
+   */
+  readonly ifMissing?: boolean;
 }
 
 /**
@@ -497,8 +503,14 @@ export interface ChoiceEffect {
   readonly type: "choice";
   readonly options: ChoiceOption[];
   readonly notChosenThisTurn?: boolean; // "Choose one you've not chosen this turn"
-  /** Who picks the mode (rule 355.10.e: "each other player chooses"). Default: the controller. */
-  readonly player?: "self" | "opponent";
+  /**
+   * Who picks the mode (rule 355.10.e: "each other player chooses"). Default: the controller.
+   * `target-controller` — the controller of the chosen target decides
+   * ("Deal 6 to it unless its controller has you draw 2", rule 355.10.e).
+   */
+  readonly player?: "self" | "opponent" | "target-controller";
+  /** Caster-chosen target locked at play time and shared by every mode. */
+  readonly target?: Target;
 }
 
 /**
@@ -677,6 +689,20 @@ export interface PreventScoreEffect {
   readonly type: "prevent-score";
 }
 
+/**
+ * Lift the one-buff-per-unit cap on the source unit.
+ *
+ * rule 702.3 / 426.1.b.2: a unit can normally hold at most one buff; a
+ * static ability may allow more. Read by the buff effect handler, which
+ * tracks the extra buffs beyond the first (each +1 Might, rule 703).
+ *
+ * @example "I can have any number of buffs."
+ * { type: "unlimited-buffs" }
+ */
+export interface UnlimitedBuffsEffect {
+  readonly type: "unlimited-buffs";
+}
+
 // ============================================================================
 // XP / Progression Effects (Unleashed set)
 // ============================================================================
@@ -823,6 +849,7 @@ export type Effect =
   | IncreaseVictoryScoreEffect
   | IncreaseHiddenCapacityEffect
   | PreventScoreEffect
+  | UnlimitedBuffsEffect
 
   // XP / progression (UNL set)
   | GainXpEffect
@@ -838,7 +865,8 @@ export type StaticEffect =
   | GrantKeywordsEffect
   | IncreaseVictoryScoreEffect
   | IncreaseHiddenCapacityEffect
-  | PreventScoreEffect;
+  | PreventScoreEffect
+  | UnlimitedBuffsEffect;
 
 // ============================================================================
 // Type Guards
