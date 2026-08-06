@@ -47,6 +47,16 @@ export interface RecycleEffect {
   readonly amount?: number;
   readonly from?: "trash" | "board" | "hand" | "self";
   /**
+   * Whose zone the counted form draws from. `"any"` (ogn-212-298 "recycle up
+   * to 4 cards from trashes") pools every player's copy of `from`.
+   */
+  readonly owner?: "any";
+  /**
+   * "Recycle **up to** N" — the chooser may pick fewer, including none, so the
+   * prompt is declinable.
+   */
+  readonly upTo?: boolean;
+  /**
    * Where in the owner's Main Deck the card lands. Defaults to `"bottom"`.
    * `"owner-choice"` (unl-204-219 Keeper's Verdict) prompts the card's OWNER
    * to pick top or bottom via a `choose-destination` pending choice.
@@ -390,6 +400,9 @@ export interface TokenDefinition {
   readonly type: "unit" | "gear";
   readonly might?: number;
   readonly keywords?: string[];
+  // rule 187.1: a named unit token carries its name as a tag (a Recruit token
+  // has the Recruit tag). Override here when the printed token differs.
+  readonly tags?: string[];
 }
 
 /**

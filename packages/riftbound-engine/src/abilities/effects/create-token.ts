@@ -8,6 +8,14 @@ import { type EffectHelpers, resolveAmount, tokenEntersReadyFromStaticGrant } fr
 let tokenSeq = 0;
 
 /**
+ * rule 187.1: a unit token carries its name as a tag (a Recruit token has the
+ * Recruit tag), so "non-Recruit unit" filters can exclude it.
+ */
+function tokenTags(tokenDef: { name: string; tags?: readonly string[] }): string[] {
+  return tokenDef.tags ? [...tokenDef.tags] : [tokenDef.name];
+}
+
+/**
  * Rule unl-086-219 (Zilean, Time Mage): "Once each turn, if you would play a
  * token unit while I'm at a battlefield, you may play that token and an
  * additional copy of it instead." Scans the creating player's board for an
@@ -97,6 +105,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
       keywords: tokenDef.keywords ? [...tokenDef.keywords] : undefined,
       might: tokenDef.might,
       name: tokenDef.name,
+      tags: tokenTags(tokenDef),
     });
   }
   // Rule sfd-171-221: a static EntersReady grant on a friendly board card
@@ -146,6 +155,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         keywords: tokenDef.keywords ? [...tokenDef.keywords] : undefined,
         might: tokenDef.might,
         name: tokenDef.name,
+        tags: tokenTags(tokenDef),
       });
     }
     // Rule unl-058-219: creating a unit token is "playing a token unit" —

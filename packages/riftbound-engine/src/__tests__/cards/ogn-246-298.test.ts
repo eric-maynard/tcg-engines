@@ -53,7 +53,7 @@ describe("Viktor, Leader (ogn-246-298)", () => {
     expect(recruits(game.p1.units("bf1"))).toHaveLength(0); // into your base, nowhere else
   });
 
-  test.failing("BUG: non-Recruit only — a Recruit token dying creates nothing (rule 187.1: the token has the Recruit tag)", async () => {
+  test("non-Recruit only — a Recruit token dying creates nothing (rule 187.1: the token has the Recruit tag)", async () => {
     // Expected: killing the Recruit token leaves the base with no Recruits. Actual: its death
     // triggers Viktor again and a fresh Recruit token is created.
     const game = await board().build();

@@ -69,13 +69,15 @@ describe("Ruling 2a1de5fca1bd9d62 — Faefolk into an open battlefield, enemy pu
     await game.p1.move("faefolk", "bf1");
     expect(game.locationOf("faefolk")).toBe("bf1");
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P1, controller: null });
-    expect(game.decision()).toMatchObject({ context: "showdown", kind: "action", seat: P1 });
+    // Faefolk's own "when I move to a battlefield" trigger goes on the chain
+    // first, so P1's action decision is chain priority inside that showdown.
+    expect(game.decision()).toMatchObject({ kind: "action", seat: P1 });
   });
 
   // Expected: "When I move to a battlefield" is fulfilled → Faefolk's (optional) triggered ability is
   // pending for P1. Actual: the engine's "move" event never matches the parsed `move-to-battlefield`
   // trigger, so nothing goes on the chain and no prompt appears.
-  test.failing("BUG: ruling 2a1de5fca1bd9d62 — Faefolk's move trigger becomes pending when it moves to bf1 (engine never fires it)", async () => {
+  test("ruling 2a1de5fca1bd9d62 — Faefolk's move trigger becomes pending when it moves to bf1 (engine never fires it)", async () => {
     const game = await board().build();
     await game.p1.move("faefolk", "bf1");
     expect(faefolkTriggerPending(game)).toBe(true);

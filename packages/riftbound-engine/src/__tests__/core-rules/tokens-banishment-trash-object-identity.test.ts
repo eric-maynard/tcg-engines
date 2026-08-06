@@ -186,7 +186,7 @@ describe("Token characteristics: a Recruit token is a real unit with cost 0 and 
     expect(game.gameState.battlefields.bf1?.controller).toBeNull();
   });
 
-  test.failing("BUG: 187.1 — a Recruit token carries the Recruit TAG, so 'choose a Recruit' can target it (engine registers the token without tags)", async () => {
+  test("187.1 — a Recruit token carries the Recruit TAG, so 'choose a Recruit' can target it (engine registers the token without tags)", async () => {
     // Expected: RALLY_RECRUIT (filter tag Recruit) offers the token as a legal target.
     // Actual: create-token registers { name, might } only — no tags — so the spell has no target.
     const game = await scenario().hand(P1, MAKE_RECRUIT, "mk").hand(P1, RALLY_RECRUIT, "rally").build();

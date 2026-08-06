@@ -41,9 +41,7 @@ describe("Noxian Drummer (ogn-222-298)", () => {
     expect(poor.p1.can("play", "drummer")).toBe(false);
   });
 
-  test.failing("BUG: moving to an open battlefield plays a 1-Might Recruit unit token at that battlefield", async () => {
-    // Expected: the move puts the Drummer's trigger on the chain; it resolves into a Recruit token at bf1.
-    // Actual: no trigger, no token ("move-to-battlefield" is not a matched event).
+  test("moving to an open battlefield plays a 1-Might Recruit unit token at that battlefield", async () => {
     const game = await board().build();
     await game.p1.move("drummer", "bf1");
     await game.settle();
@@ -54,8 +52,7 @@ describe("Noxian Drummer (ogn-222-298)", () => {
     expect(recruitsAt(game, "bf1")).toHaveLength(1);
   });
 
-  test.failing("BUG: the Recruit token is played, so it enters exhausted (rule 143.4)", async () => {
-    // Expected: an exhausted Recruit token at bf1. Actual: no token is created at all.
+  test("the Recruit token is played, so it enters exhausted (rule 143.4)", async () => {
     const game = await board().build();
     await game.p1.move("drummer", "bf1");
     await game.settle();
@@ -64,8 +61,7 @@ describe("Noxian Drummer (ogn-222-298)", () => {
     expect(game.state(tok!).isExhausted).toBe(true);
   });
 
-  test.failing("BUG: moving into an enemy-held battlefield also makes a Recruit there (before combat resolves)", async () => {
-    // Expected: the Recruit joins the attack at bf2. Actual: no trigger fires.
+  test("moving into an enemy-held battlefield also makes a Recruit there (before combat resolves)", async () => {
     const game = await board().autoProcedures(false).build();
     await game.p1.move("drummer", "bf2");
     // Resolve the trigger but stop before combat damage.

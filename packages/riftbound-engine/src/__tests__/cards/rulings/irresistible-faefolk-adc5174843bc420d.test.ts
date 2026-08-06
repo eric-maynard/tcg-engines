@@ -65,7 +65,7 @@ describe("Ruling adc5174843bc420d — Faefolk's 'that battlefield' is fixed at t
   // Expected: moving Faefolk to bf1 fulfils "When I move to a battlefield" → a triggered ability
   // controlled by P1 is put on the chain (P2 then gets a reaction window). Actual: the engine emits a
   // generic "move" event that never matches the parsed `move-to-battlefield` trigger — nothing happens.
-  test.failing("BUG: ruling adc5174843bc420d — moving Faefolk to a battlefield puts its triggered ability on the chain (engine never fires the trigger)", async () => {
+  test("ruling adc5174843bc420d — moving Faefolk to a battlefield puts its triggered ability on the chain (engine never fires the trigger)", async () => {
     const game = await board().build();
     await game.p1.move("fae", "bf1");
     const pending = game.chain().some((c) => c.cardId === "fae" && c.triggered) || (game.decision()?.seat === P1 && game.decision()?.kind !== "action");

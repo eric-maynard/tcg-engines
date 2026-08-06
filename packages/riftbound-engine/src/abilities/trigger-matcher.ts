@@ -5,6 +5,7 @@
  * triggered abilities should fire.
  */
 
+import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { GameEvent } from "./game-events";
 
 /**
@@ -233,11 +234,27 @@ function triggerMatchesEvent(
   // `beginning-phase`) is the same moment as `start-of-turn`.
   // rule-id: ogn-235-298 — parser event `recycle-cards-to-deck` ("When you
   // recycle one or more cards to your Main Deck") is the engine `recycle` event.
+  // rule-id: ogn-222-298 — parser event `move-to-battlefield` ("When I move to
+  // a battlefield") is the engine `move` event narrowed to battlefield
+  // destinations; a move back to base never fires it.
   const triggerEvents = trigger.event
     .split("-or-")
     .map((e) =>
-      e === "beginning-phase" ? "start-of-turn" : e === "recycle-cards-to-deck" ? "recycle" : e,
+      e === "beginning-phase"
+        ? "start-of-turn"
+        : e === "recycle-cards-to-deck"
+          ? "recycle"
+          : e === "move-to-battlefield"
+            ? "move"
+            : e,
     );
+  if (
+    event.type === "move" &&
+    trigger.event.split("-or-").includes("move-to-battlefield") &&
+    !String(event.to).startsWith("battlefield-")
+  ) {
+    return false;
+  }
   // rule-id: ogn-091-298 — a typed play trigger ("When you play a gear /
   // unit") is the `play-card` event narrowed by the played card's type. Spells
   // already get a dedicated `play-spell` event on resolution — don't double-fire.
@@ -408,6 +425,19 @@ function triggerMatchesEvent(
     }
     if (desc.excludeSelf && "cardId" in event && event.cardId === card.id) {
       return false;
+    }
+    // rule 383.4.d — tag-scoped subjects ("another non-Recruit unit you
+    // control dies"). `not:X` excludes tag X; a bare tag requires it. Tokens
+    // carry their name as a tag (rule 187.1).
+    if (desc.tag && "cardId" in event && typeof event.cardId === "string") {
+      const negated = desc.tag.startsWith("not:");
+      const wanted = negated ? desc.tag.slice(4) : desc.tag;
+      const def = getGlobalCardRegistry().get(event.cardId);
+      const tags = def?.tags ?? [];
+      const has = tags.some((t) => t === wanted) || def?.name === wanted;
+      if (has === negated) {
+        return false;
+      }
     }
     if (desc.location === "here") {
       const evLoc =
