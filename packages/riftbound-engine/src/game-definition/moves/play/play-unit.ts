@@ -10,6 +10,7 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
+import { executeEffect } from "../../../abilities/effect-executor";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import { createInteractionState, getTurnState, isLegalTiming } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
@@ -31,6 +32,7 @@ import {
   playOnlyToConqueredBattlefield,
   consumeEntersReadyReplacement,
   getBuffSpendCost,
+  getKillAnyNumberCost,
   getOptionalPlayCost,
   createMetaAccessor,
   getPotentialRuneEnergy,
@@ -73,6 +75,17 @@ function resolvePayableOptionalCost(
   };
 }
 
+/**
+ * rule 813.1.c.1 — [Reaction] is a timing permission only: a unit carrying it
+ * may be played in any Closed state by the player who holds PRIORITY on the
+ * chain (not just the Focus holder). Legal destinations are unchanged
+ * (rule 813.3.a / 355.2.a: base or a battlefield that player controls).
+ */
+function holdsChainPriority(state: RiftboundGameState, playerId: string): boolean {
+  const chain = (state.interaction ?? createInteractionState()).chain;
+  return chain?.active === true && chain.activePlayer === playerId;
+}
+
 type BoardCards = { getCardMeta?: (cardId: CoreCardId) => unknown };
 type BoardZones = {
   getCardsInZone: (zoneId: CoreZoneId, playerId: CorePlayerId) => readonly CoreCardId[];
@@ -94,6 +107,29 @@ function friendlyBuffedUnits(
     for (const id of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
       const meta = cards.getCardMeta?.(id as CoreCardId) as { buffed?: boolean } | undefined;
       if (meta?.buffed === true) {
+        out.push(id as string);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * rule-id: ogn-231-298 (rule 356.2.b) — friendly units on the board that could
+ * be killed to pay a "kill any number of friendly units" additional cost, in
+ * board order (base first). The card being played is never among them (it is
+ * still in hand).
+ */
+function friendlyKillableUnits(
+  state: RiftboundGameState,
+  zones: BoardZones,
+  playerId: string,
+): string[] {
+  const zoneIds = ["base", ...Object.keys(state.battlefields ?? {}).map(getBattlefieldZoneId)];
+  const out: string[] = [];
+  for (const zoneId of zoneIds) {
+    for (const id of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
+      if (getGlobalCardRegistry().getCardType(id as string) === "unit") {
         out.push(id as string);
       }
     }
@@ -161,6 +197,11 @@ export const playUnit: Defs["playUnit"] = {
       state.turn.activePlayer === context.params.playerId &&
       state.turn.phase === "main" &&
       getTurnState(state.interaction ?? createInteractionState()) === "neutral-open";
+    // rule 813.1.c.1: a [Reaction] unit may also be played while its
+    // controller holds priority on a chain (Closed state, any player's turn).
+    const reactionTimingOk =
+      registry.hasKeyword(context.params.cardId, "Reaction") &&
+      holdsChainPriority(state, context.params.playerId as string);
 
     // rule 355.2 (ogn-070-298): an enemy static may confine this player's
     // units to their own base — every battlefield destination is illegal.
@@ -178,7 +219,7 @@ export const playUnit: Defs["playUnit"] = {
       if (!targetBfId || !standardTimingOk || !conquered.includes(targetBfId)) {
         return false;
       }
-    } else if (targetIsBattlefield && targetIsControlledBf && standardTimingOk) {
+    } else if (targetIsBattlefield && targetIsControlledBf && (standardTimingOk || reactionTimingOk)) {
       // Rule 355.2.a: controlled battlefield — legal for any unit.
     } else if (
       targetIsBattlefield &&
@@ -234,7 +275,7 @@ export const playUnit: Defs["playUnit"] = {
       if (!canPlayViaAmbush(hasAmbush, hasFriendlyUnits, true)) {
         return false;
       }
-    } else {
+    } else if (!reactionTimingOk) {
       // Standard play path: active player, main phase.
       if (state.turn.activePlayer !== context.params.playerId) {
         return false;
@@ -298,6 +339,36 @@ export const playUnit: Defs["playUnit"] = {
     // an additional cost. Reduce my cost by [body] for each buff you spend":
     // every named unit must be a friendly buffed unit, and the play is priced
     // with that many pips waived.
+    // rule 356.2.b / 356.4 (ogn-231-298) — "kill any number of friendly units …
+    // reduce my cost by [order] for each killed this way": every named unit must
+    // be a friendly board unit, and the play is priced with that many pips waived.
+    const sacrificeIds = context.params.sacrificeIds as string[] | undefined;
+    if (sacrificeIds && sacrificeIds.length > 0) {
+      const killCost = getKillAnyNumberCost(context.params.cardId as string);
+      if (!killCost) {
+        return false;
+      }
+      const killable = friendlyKillableUnits(
+        state,
+        context.zones,
+        context.params.playerId as string,
+      );
+      if (new Set(sacrificeIds).size !== sacrificeIds.length) {
+        return false;
+      }
+      if (!sacrificeIds.every((id) => killable.includes(id))) {
+        return false;
+      }
+      return canAffordCard(
+        state,
+        context.params.playerId,
+        context.params.cardId,
+        { board, waivePower: { [killCost.domain]: sacrificeIds.length } },
+        createMetaAccessor(context.cards),
+        getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
+      );
+    }
+
     const spentBuffIds = context.params.spentBuffIds as string[] | undefined;
     if (spentBuffIds && spentBuffIds.length > 0) {
       const buffCost = getBuffSpendCost(context.params.cardId as string);
@@ -359,6 +430,9 @@ export const playUnit: Defs["playUnit"] = {
       state.turn.activePlayer === (context.playerId as string) &&
       state.turn.phase === "main" &&
       getTurnState(interaction) === "neutral-open";
+    // rule 813.1.c.1: [Reaction] units are also offered while their controller
+    // holds priority on a chain (any Closed state, any player's turn).
+    const reactionWindow = holdsChainPriority(state, context.playerId as string);
 
     const registry = getGlobalCardRegistry();
     const pool = state.runePools[context.playerId as string];
@@ -453,6 +527,37 @@ export const playUnit: Defs["playUnit"] = {
           }
         }
       }
+      // rule 356.2.b / 356.4 (ogn-231-298): "kill any number of friendly units …
+      // reduce my cost by [order] for each" — offer one variant per killable set
+      // whose waiver makes the play affordable.
+      const killAnyCost = standardTiming ? getKillAnyNumberCost(cardId as string) : undefined;
+      const killAnyVariants: RiftboundMoves["playUnit"][] = [];
+      if (killAnyCost) {
+        const killable = friendlyKillableUnits(state, context.zones, context.playerId as string);
+        for (const subset of buffSpendSubsets(killable)) {
+          if (
+            canAffordCard(
+              state,
+              context.playerId as string,
+              cardId as string,
+              { board, waivePower: { [killAnyCost.domain]: subset.length } },
+              metaForAfford,
+              potential,
+            )
+          ) {
+            killAnyVariants.push({
+              cardId: cardId as string,
+              location: "base",
+              paidAdditionalCost: true,
+              playerId: context.playerId as string,
+              sacrificeIds: subset,
+              // single-kill variants also carry `sacrificeId` so a caller naming
+              // one unit to sacrifice matches without knowing about the list form.
+              ...(subset.length === 1 ? { sacrificeId: subset[0] as string } : {}),
+            });
+          }
+        }
+      }
       // rule 560 / 805.1.a: the optional cost is paid ON TOP of the base cost, so
       // affordability is the combined total (base [C] pip + Accelerate's [C] pip
       // needs two power), not the extra checked in isolation.
@@ -496,6 +601,7 @@ export const playUnit: Defs["playUnit"] = {
         }
         results.push(...discardVariants);
         results.push(...buffVariants);
+        results.push(...killAnyVariants);
         continue;
       }
 
@@ -519,12 +625,18 @@ export const playUnit: Defs["playUnit"] = {
         }
       }
 
-      if (!standardTiming) {
+      // rule 813.1.c.1: a [Reaction] unit is offered to its 355.2.a defaults
+      // (base / a controlled battlefield) while its controller holds priority.
+      const reactionPlay = reactionWindow && registry.hasKeyword(cardId as string, "Reaction");
+      if (!standardTiming && !reactionPlay) {
         continue;
       }
 
       // Rule sfd-015-221: only battlefields conquered this turn are legal.
       if (playOnlyToConqueredBattlefield(cardId as string)) {
+        if (!standardTiming) {
+          continue;
+        }
         const conquered = state.conqueredThisTurn?.[context.playerId as string] ?? [];
         for (const bfId of conquered) {
           if (!state.battlefields?.[bfId]) {
@@ -570,6 +682,7 @@ export const playUnit: Defs["playUnit"] = {
       // battlefields when the card carries a static play-restriction
       // permitting it, or a friendly board unit grants it.
       if (
+        standardTiming &&
         canPlayToOpenBattlefield(
           state,
           context.zones,
@@ -595,7 +708,7 @@ export const playUnit: Defs["playUnit"] = {
 
       // rule 355.2.b (ogn-161-298): offer occupied enemy battlefields when the
       // card carries the matching static play-restriction.
-      if (canPlayToOccupiedEnemyBattlefield(cardId as string)) {
+      if (standardTiming && canPlayToOccupiedEnemyBattlefield(cardId as string)) {
         for (const bfId of Object.keys(state.battlefields ?? {})) {
           const bfZoneId = getBattlefieldZoneId(bfId) as string;
           if (results.some((r) => r.cardId === (cardId as string) && r.location === bfZoneId)) {
@@ -619,6 +732,7 @@ export const playUnit: Defs["playUnit"] = {
       const optional = discardCost;
       results.push(...discardVariants);
       results.push(...buffVariants);
+      results.push(...killAnyVariants);
       if (paidVariant) {
         results.push(paidVariant);
       } else if (optional?.kind === "kill") {
@@ -655,7 +769,7 @@ export const playUnit: Defs["playUnit"] = {
     return results;
   },
   reducer: (draft, context) => {
-    const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId, discardId, spentBuffIds } =
+    const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId, sacrificeIds, discardId, spentBuffIds } =
       context.params;
     const { zones, counters } = context;
 
@@ -708,8 +822,25 @@ export const playUnit: Defs["playUnit"] = {
         }
       }
     }
+    // rule 356.2.b / 356.4 (ogn-231-298) — kill the declared friendly units: each
+    // kill waives a pip of the card's Power cost. Re-validate against the board
+    // rather than trusting the client-supplied ids.
+    const killAnyCost = getKillAnyNumberCost(cardId);
+    const sacrificed: string[] = [];
+    if (killAnyCost && sacrificeIds && sacrificeIds.length > 0) {
+      const killable = friendlyKillableUnits(draft, zones, playerId);
+      for (const id of sacrificeIds) {
+        if (killable.includes(id as string) && !sacrificed.includes(id as string)) {
+          sacrificed.push(id as string);
+        }
+      }
+    }
     const waivePower =
-      buffCost && spentBuffs.length > 0 ? { [buffCost.domain]: spentBuffs.length } : undefined;
+      buffCost && spentBuffs.length > 0
+        ? { [buffCost.domain]: spentBuffs.length }
+        : killAnyCost && sacrificed.length > 0
+          ? { [killAnyCost.domain]: sacrificed.length }
+          : undefined;
 
     deductCost(
       draft,
@@ -739,8 +870,28 @@ export const playUnit: Defs["playUnit"] = {
       );
     }
 
+    // rule 428.1: paying the kill cost is a real kill — route through the kill
+    // effect so Deathknell / "when a friendly unit dies" triggers fire and a
+    // die-replacement can apply (rule 357.2.a: a replaced cost still counts as paid).
+    for (const id of sacrificed) {
+      executeEffect(
+        { target: { type: "unit" }, type: "kill" },
+        {
+          boundTargets: [id],
+          cards: context.cards,
+          counters,
+          draft,
+          fireTriggers: (event) =>
+            fireTriggers(event, { cards: context.cards, counters, draft, zones }),
+          playerId,
+          sourceCardId: cardId as string,
+          zones,
+        },
+      );
+    }
+
     let paidAccelerate = false;
-    let paidAdditionalCostActual = discardPaid;
+    let paidAdditionalCostActual = discardPaid || sacrificed.length > 0;
     if (paidAdditionalCost) {
       const pool = draft.runePools[playerId];
       if ((optional?.kind === "accelerate" || optional?.kind === "pay") && pool) {

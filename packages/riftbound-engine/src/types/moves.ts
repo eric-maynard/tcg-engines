@@ -173,6 +173,12 @@ export interface RiftboundMoves {
     paidAdditionalCost?: boolean;
     additionalCostSpec?: { energy?: number; power?: readonly string[]; xp?: number };
     sacrificeId?: CardId;
+    /**
+     * rule 356.2.b / 356.4 (ogn-231-298) — friendly units killed as an optional
+     * additional cost ("kill any number of friendly units … reduce my cost by
+     * [order] for each killed this way"). Each named unit dies as the cost is paid.
+     */
+    sacrificeIds?: CardId[];
     /** rule 356.2.b — card discarded from hand as an optional additional cost. */
     discardId?: CardId;
     /**
@@ -232,6 +238,12 @@ export interface RiftboundMoves {
      */
     paidAdditionalCost?: boolean;
     additionalCostSpec?: { energy?: number; power?: readonly string[] };
+    /**
+     * rule 356.2.a.1 / 204.2 (unl-173-219) — instance ID of the friendly
+     * permanent killed to pay a MANDATORY "as an additional cost to play
+     * this, kill a …" cost. Required whenever the spell declares one.
+     */
+    sacrificeId?: CardId;
   };
 
   /** Place Hidden card facedown */

@@ -625,6 +625,14 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
       const cost = ability.cost as { energy?: number; power?: readonly string[] } | undefined;
       return { cost, kind: "accelerate" };
     }
+    // rule 356.2.a.1 / 204.2 (unl-173-219) — "As an additional cost to play
+    // this, kill a friendly [Mighty] unit": on a SPELL ability the parser
+    // hangs the descriptor off `additionalCost` at the top level. It is
+    // mandatory, so the spell is unplayable without a legal sacrifice.
+    const spellAdditional = (ability as { additionalCost?: { kill?: unknown } }).additionalCost;
+    if (ability.type === "spell" && spellAdditional?.kill) {
+      return { kill: spellAdditional.kill, kind: "kill", mandatory: true };
+    }
     const rawCost = ability.cost as { kill?: unknown } | undefined;
     if (
       (ability.type === "static" || ability.type === "additional-cost-option") &&
@@ -1002,6 +1010,39 @@ export function getBuffSpendCost(cardId: string): { domain: string } | undefined
     const spec = effect.additionalCost;
     if (spec?.spendBuff === "any" && typeof spec.reducePower === "string") {
       return { domain: spec.reducePower };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * rule-id: ogn-231-298 (rule 356.2.b / 356.4) — "you may kill any number of
+ * friendly units as an additional cost. Reduce my cost by [D] for each killed
+ * this way." Returns the domain pip waived per kill plus the target descriptor
+ * naming what may be killed. Kept out of `getOptionalPlayCost` because the
+ * count is variable, so it prices like the buff-spend cost, not a single kill.
+ */
+export function getKillAnyNumberCost(
+  cardId: string,
+): { domain: string; target: unknown } | undefined {
+  for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
+    if (ability.type !== "static" && ability.type !== "additional-cost-option") {
+      continue;
+    }
+    const effect = ability.effect as
+      | {
+          type?: string;
+          additionalCost?: { killAnyNumber?: unknown };
+          ifPaid?: { reducePower?: string };
+        }
+      | undefined;
+    if (effect?.type !== "additional-cost-option") {
+      continue;
+    }
+    const target = effect.additionalCost?.killAnyNumber;
+    const domain = effect.ifPaid?.reducePower;
+    if (target !== undefined && typeof domain === "string") {
+      return { domain, target };
     }
   }
   return undefined;

@@ -43,12 +43,22 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     optional?: boolean;
     reduceCost?: { energy?: number };
     ignoreEnergyCost?: boolean;
+    ignoreCost?: boolean;
+    maxMightAboveKilled?: number;
     followUp?: unknown;
   };
   const visionLike = lookEff.then?.recycle !== undefined;
   const onPicked = lookEff.onPicked ?? (visionLike ? "recycle" : "draw");
   const onRest = lookEff.onRest ?? (visionLike ? undefined : "recycle");
   const lookExcluded = lookEff.filter?.excludeCardTypes;
+  // rule-id: ogn-242-298 — "a unit … that has Might up to 1 more than the
+  // killed unit": the ceiling is the Might the just-killed unit last had
+  // (rule 429 / last-known information), recorded by `handle_kill`.
+  const maxMight =
+    lookEff.maxMightAboveKilled !== undefined &&
+    typeof ctx.draft.lastKilledUnitMight === "number"
+      ? ctx.draft.lastKilledUnitMight + lookEff.maxMightAboveKilled
+      : undefined;
   // rule-id: ogn-062-298-look-banish-play — "banish … then play it,
   // reducing its cost by [N]" threads the discount to the pick resolver.
   const playEnergyReduction =
@@ -62,11 +72,21 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     ...(playEnergyReduction !== undefined ? { playEnergyReduction } : {}),
     // rule-id: ogn-115-298 — "plays those cards, ignoring Energy costs".
     ...(onPicked === "play" && lookEff.ignoreEnergyCost ? { playIgnoreEnergy: true } : {}),
+    // rule 356.1.b.1 (ogn-242-298) — "play it, ignoring its cost": nothing is
+    // paid, energy and power alike.
+    ...(onPicked === "play" && lookEff.ignoreCost ? { playIgnoreCost: true } : {}),
     // rule-id: ogn-062-298-look-pick-filter — "banish a unit from among
     // them" must restrict the pick; thread the effect's filter through so
     // isValidPendingPick rejects non-matching revealed cards.
-    ...(lookExcluded && lookExcluded.length > 0
-      ? { filter: { excludeCardTypes: [...lookExcluded] } }
+    ...((lookExcluded && lookExcluded.length > 0) || maxMight !== undefined
+      ? {
+          filter: {
+            ...(lookExcluded && lookExcluded.length > 0
+              ? { excludeCardTypes: [...lookExcluded] }
+              : {}),
+            ...(maxMight !== undefined ? { maxMight } : {}),
+          },
+        }
       : {}),
     // rule-id: ogn-235-298-vision-optional-recycle — "You may recycle it"
     // means leave-on-top is a legal outcome; the pick must be declinable.

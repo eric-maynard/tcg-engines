@@ -1,7 +1,39 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { GearCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Unique phrasing: the look-at-5 pick is gated on the Might of the unit killed
+ * by the same ability ("Might up to 1 more than the killed unit"), and the pick
+ * is banished then played for free (rule 356.1.b.1). `maxMightAboveKilled`
+ * reads the killed unit's last-known Might recorded by the kill step.
+ */
+const abilities: Ability[] = [
+  {
+    cost: { energy: 1, exhaust: true, power: ["order"] },
+    effect: {
+      effects: [
+        { target: { controller: "friendly", type: "unit" }, type: "kill" },
+        {
+          amount: 5,
+          filter: { excludeCardTypes: ["spell", "legend", "battlefield", "rune", "gear", "equipment"] },
+          from: "deck",
+          ignoreCost: true,
+          maxMightAboveKilled: 1,
+          onPicked: "play",
+          onRest: "recycle",
+          optional: true,
+          type: "look",
+        },
+      ],
+      type: "sequence",
+    },
+    type: "activated",
+  },
+] as unknown as Ability[];
+
 export const baitedHook: GearCard = {
+  abilities,
   cardNumber: 242,
   cardType: "gear",
   domain: "order",

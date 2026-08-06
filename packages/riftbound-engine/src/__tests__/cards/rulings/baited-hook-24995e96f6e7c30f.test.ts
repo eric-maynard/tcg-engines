@@ -129,7 +129,7 @@ describe("Ruling 24995e96f6e7c30f — Baited Hook: the kill is an effect on a de
   // spell Junk are not; the choice is optional ("you may"). Actual: the engine shows all five cards in a
   // mandatory "Pick a revealed card to draw" prompt — no might ceiling, no unit filter, draw instead of
   // banish-and-play.
-  test.failing("BUG: ruling 24995e96f6e7c30f — after Stupefy (4→3) the look offers only units with Might ≤ 4 (Four, Two — not Big/Six/Junk), optionally", async () => {
+  test("ruling 24995e96f6e7c30f — after Stupefy (4→3) the look offers only units with Might ≤ 4 (Four, Two — not Big/Six/Junk), optionally", async () => {
     const game = await board().build();
     await game.p1.activate("hook");
     await game.p1.passPriority();
@@ -145,7 +145,7 @@ describe("Ruling 24995e96f6e7c30f — Baited Hook: the kill is an effect on a de
   // Expected (control, no reaction): Bait dies at 4 Might → ceiling 5: Big, Four, Two eligible (not Six, not
   // the spell). Choosing Big banishes it and P1 plays it ignoring its cost (P1 has 0 energy left) → Big ends
   // on P1's board; the other four cards are recycled and remain in the deck. Actual: see above.
-  test.failing("BUG: ruling 24995e96f6e7c30f — control (no Stupefy): ceiling is 4+1 = 5 → Big is eligible; choosing it plays Big for free and recycles the rest", async () => {
+  test("ruling 24995e96f6e7c30f — control (no Stupefy): ceiling is 4+1 = 5 → Big is eligible; choosing it plays Big for free and recycles the rest", async () => {
     const game = await board().build();
     await game.p1.activate("hook");
     const d = await toLookPrompt(game);

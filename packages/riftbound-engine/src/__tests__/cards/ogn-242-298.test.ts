@@ -61,7 +61,7 @@ describe("Baited Hook (ogn-242-298)", () => {
     expect(noEnergy.p1.can("activate", "hook")).toBe(false);
   });
 
-  test.failing("BUG: the look-at-5 pick is optional and offers only UNITS with Might ≤ killed unit's Might + 1", async () => {
+  test("the look-at-5 pick is optional and offers only UNITS with Might ≤ killed unit's Might + 1", async () => {
     // Expected: killed Bait has 2 Might → eligible: Three (3), Skulker (3), One (1); Four (4) is NOT offered;
     // "you may" → declinable. Actual: a mandatory "pick a revealed card to draw" over all 5 cards.
     const game = await board().build();
@@ -77,7 +77,7 @@ describe("Baited Hook (ogn-242-298)", () => {
     expect(offered).not.toContain("sixth"); // only the top 5 are looked at
   });
 
-  test.failing("BUG: the chosen unit is banished then PLAYED ignoring its cost (ends on the board, no energy spent); the rest are recycled", async () => {
+  test("the chosen unit is banished then PLAYED ignoring its cost (ends on the board, no energy spent); the rest are recycled", async () => {
     // Expected: Three leaves the deck and is played for free → on the board (base); four/sk1/one/sk2 go to the
     // bottom of the deck; hand unchanged. Actual: the picked card is simply drawn to hand.
     const game = await board().build();

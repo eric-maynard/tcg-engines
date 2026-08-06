@@ -43,7 +43,7 @@ describe("Commander Ledros (ogn-231-298)", () => {
     expect(game.zoneOf("led")).toBe("base");
   });
 
-  test.failing("BUG: may kill a friendly unit as you play him to reduce the cost by [order] (6 + 3 order with one kill; rule 356.2.b/356.4)", async () => {
+  test("may kill a friendly unit as you play him to reduce the cost by [order] (6 + 3 order with one kill; rule 356.2.b/356.4)", async () => {
     // Expected: with 6 energy, 3 order and a friendly unit, Ledros is playable by killing that unit;
     // the unit goes to trash and the pool is emptied. Actual: the clause parsed to an inert
     // `additional-cost-option` static, so no sacrifice is offered and 4 order is always required.
@@ -60,7 +60,7 @@ describe("Commander Ledros (ogn-231-298)", () => {
     expect(game.zoneOf("led")).toBe("base");
   });
 
-  test.failing("BUG: 'any number' — killing four friendly units reduces the power cost to 0 (6 energy, no order)", async () => {
+  test("'any number' — killing four friendly units reduces the power cost to 0 (6 energy, no order)", async () => {
     // Expected: four kills discount all four [order] pips; only the 6 energy is paid. Actual: not playable.
     const b = scenario().resources(P1, { energy: 6 }).hand(P1, CARD, "led");
     for (const id of ["a", "b", "c", "d"]) {
