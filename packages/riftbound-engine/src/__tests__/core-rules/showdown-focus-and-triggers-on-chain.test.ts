@@ -418,7 +418,7 @@ describe("313.1 / 313.4 / 347.1 / 806.1.c.1: in a Showdown Open State the Focus 
     expect(game.locationOf("X")).toBe("base");
   });
 
-  test.failing("BUG: 313.4 / 347 — the turn player WITHOUT Focus (P1, after passing) must not be able to play its own Action spell while P2 holds Focus; engine accepts the cast", async () => {
+  test("313.4 / 347 — the turn player WITHOUT Focus (P1, after passing) must not be able to play its own Action spell while P2 holds Focus", async () => {
     // Expected: only the Focus holder may take discretionary actions in a Showdown Open State,
     // so P1's cast is not legal (can === false) and attempting it is rejected; hand/chain unchanged.
     // Actual: playSpell only checks the turn state's timing class, so P1's Action spell is
@@ -432,7 +432,7 @@ describe("313.1 / 313.4 / 347.1 / 806.1.c.1: in a Showdown Open State the Focus 
     expect(focusOf(game)).toBe(P2);
   });
 
-  test.failing("BUG: 313.4 / 338.1 — before P1 passes, P2 (no Focus, no Priority) must not be able to play even a Reaction into the open showdown; engine accepts it", async () => {
+  test("313.4 / 338.1 — before P1 passes, P2 (no Focus, no Priority) must not be able to play even a Reaction into the open showdown", async () => {
     // Expected: in a Showdown OPEN State the Focus holder also holds Priority (335.1); a player
     // with neither cannot start a chain, Reaction keyword notwithstanding. Actual: accepted.
     const game = await emptyBattlefieldBoard().build();

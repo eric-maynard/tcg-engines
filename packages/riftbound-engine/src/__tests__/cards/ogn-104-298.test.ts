@@ -44,9 +44,7 @@ describe("Retreat (ogn-104-298)", () => {
     expect(noEnergy.p1.can("cast", "ret")).toBe(false);
   });
 
-  test.failing("BUG: 'Its owner channels 1 rune exhausted' — P1's rune pool gains one exhausted rune from the rune deck", async () => {
-    // Expected: after resolution P1 has +1 rune in the pool, that rune is exhausted, rune deck −1.
-    // Actual: only the return-to-hand half resolves; no rune is channeled.
+  test("'Its owner channels 1 rune exhausted' — P1's rune pool gains one exhausted rune from the rune deck", async () => {
     const game = await board().build();
     const pool0 = game.p1.runes().length;
     const deck0 = game.p1.runeDeck().length;

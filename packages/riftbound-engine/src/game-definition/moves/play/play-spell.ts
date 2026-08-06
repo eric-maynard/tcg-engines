@@ -15,7 +15,13 @@ import {
   resolveTarget,
 } from "../../../abilities/target-resolver";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../../chain";
+import {
+  addToChain,
+  createInteractionState,
+  getTurnState,
+  hasShowdownPermission,
+  isLegalTiming,
+} from "../../../chain";
 import type { TimingClass } from "../../../chain";
 import { isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
@@ -206,6 +212,12 @@ export const playSpell: Defs["playSpell"] = {
       return false;
     }
 
+    // rule 313.1 / 347: in a Showdown Open State only the Focus holder may
+    // play cards; everyone else waits for Focus to pass.
+    if (turnState === "showdown-open" && !hasShowdownPermission(interaction, context.params.playerId)) {
+      return false;
+    }
+
     // Rule 355.8 / 419.2.a: gate on caster-chosen targets (including modal options).
     const abilities = registry.getAbilities(context.params.cardId) ?? [];
     const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
@@ -369,6 +381,10 @@ export const playSpell: Defs["playSpell"] = {
     const turnState = getTurnState(interaction);
     // rule 316.5.b: Neutral Open State → only the Turn Player plays spells.
     if (turnState === "neutral-open" && state.turn.activePlayer !== (context.playerId as string)) {
+      return [];
+    }
+    // rule 313.1 / 347: Showdown Open State → only the Focus holder acts.
+    if (turnState === "showdown-open" && !hasShowdownPermission(interaction, context.playerId as string)) {
       return [];
     }
     const pool = state.runePools[context.playerId as string];
@@ -894,6 +910,10 @@ export const playSpell: Defs["playSpell"] = {
       }
       // rule 316.5.b: Neutral Open State → only the Turn Player plays spells.
       if (turnState === "neutral-open" && state.turn.activePlayer !== (context.playerId as string)) {
+        continue;
+      }
+      // rule 313.1 / 347: Showdown Open State → only the Focus holder acts.
+      if (turnState === "showdown-open" && !hasShowdownPermission(interaction, context.playerId as string)) {
         continue;
       }
       const abilities = registry.getAbilities(cardId as string) ?? [];

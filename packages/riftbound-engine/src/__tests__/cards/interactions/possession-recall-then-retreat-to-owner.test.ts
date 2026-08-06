@@ -172,7 +172,7 @@ describe("Possession × Sett × Retreat — control vs ownership after a take-co
 
   // Expected: …and P1 (the owner) channels 1 rune exhausted. Actual: Retreat's channel clause is not
   // implemented — no rune moves.
-  test.failing("BUG: (c) contrast: when P1 Retreats its own unit, P1 channels 1 rune exhausted", async () => {
+  test("(c) contrast: when P1 Retreats its own unit, P1 channels 1 rune exhausted", async () => {
     const game = await possessed();
     const p1Runes0 = game.p1.runes().length;
     const p1Deck0 = game.p1.runeDeck().length;

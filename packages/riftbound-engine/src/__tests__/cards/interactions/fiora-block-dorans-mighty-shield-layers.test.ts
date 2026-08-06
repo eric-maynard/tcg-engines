@@ -81,7 +81,7 @@ function equipped(active: typeof P1 | typeof P2 = P1) {
 describe("Fiora, Victorious × Block × Doran's Blade — Mighty/Shield layering", () => {
   // ---- (a) Fiora DEFENDING with Block ----------------------------------------------------------
 
-  test.failing("BUG: (a) the defender cannot cast Block until the attacker passes Focus (464.2.d, 347.1)", async () => {
+  test("(a) the defender cannot cast Block until the attacker passes Focus (464.2.d, 347.1)", async () => {
     // Expected: right after the move opens the showdown P2 (attacker) holds Focus; P1's Action spell
     // is not legal yet. Actual: the engine offers P1's Block immediately.
     const game = await defence(7).build();

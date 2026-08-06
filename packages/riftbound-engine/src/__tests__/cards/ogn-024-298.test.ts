@@ -101,7 +101,7 @@ describe("Void Seeker (ogn-024-298)", () => {
     expect(game.zoneOf("atk")).toBe("trash");
   });
 
-  test.failing("BUG: [Action] timing — an Action spell is NOT playable in a showdown while the opponent holds Focus (rules 313.1, 347)", async () => {
+  test("[Action] timing — an Action spell is NOT playable in a showdown while the opponent holds Focus (rules 313.1, 347)", async () => {
     const game = await showdown().build();
     await game.p2.move("atk", "bf1");
     expect(game.actingSeat()).toBe(P2);

@@ -87,9 +87,7 @@ describe("Orb of Regret (ogn-090-298)", () => {
     expect(theirs.p1.can("activate", "orb")).toBe(false);
   });
 
-  test.failing("BUG: timing — a gear ability without [Action] is not activatable during a showdown (rule 151.2)", async () => {
-    // Expected: with a showdown open at bf1 the Orb's plain [Exhaust] ability is not on P1's menu.
-    // Actual: the engine offers activateAbility:orb while P1 holds focus in the showdown.
+  test("timing — a gear ability without [Action] is not activatable during a showdown (rule 151.2)", async () => {
     const game = await board().build();
     await game.p1.move("ally", "bf1");
     expect((game.decision() as ActionDecision).context).toBe("showdown");

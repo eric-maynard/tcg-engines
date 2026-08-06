@@ -8,7 +8,13 @@ import type {
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
 } from "@tcg/core";
-import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../../chain";
+import {
+  addToChain,
+  createInteractionState,
+  getTurnState,
+  hasShowdownPermission,
+  isLegalTiming,
+} from "../../../chain";
 import type { ExecutableEffect } from "../../../abilities/effect-executor";
 import { executeEffect } from "../../../abilities/effect-executor";
 import type { TargetDescriptor } from "../../../abilities/target-resolver";
@@ -23,6 +29,25 @@ import { spellEffectHasLegalTargets } from "../play/targeting";
 import { buildEffectContext, canAffordPower } from "./effect-context";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
+
+/**
+ * rule 151.2: a Gear activated ability may be used only during its controller's
+ * Main Phase in an Open State, never during a Showdown — unless the ability
+ * itself is printed [Action]/[Reaction]. Classifying it as "standard" timing
+ * gives exactly that through `isLegalTiming` (neutral-open only).
+ */
+function abilityTimingClass(
+  ability: { keyword?: string; timing?: string },
+  hostCardId: string,
+): "standard" | "action" | "reaction" {
+  if (ability.keyword === "Reaction" || ability.timing === "reaction") {
+    return "reaction";
+  }
+  if (ability.keyword === "Action" || ability.timing === "action") {
+    return "action";
+  }
+  return getGlobalCardRegistry().getCardType(hostCardId) === "gear" ? "standard" : "action";
+}
 
 /**
  * rule-id: sfd-052-221 (rule 355.10.f / 355.14.b) — an activated ability's
@@ -391,14 +416,17 @@ export const activateAbility: Defs["activateAbility"] = {
     // Check timing legality
     const interaction = state.interaction ?? createInteractionState();
     const turnState = getTurnState(interaction);
-    const isReaction = ability.keyword === "Reaction" || ability.timing === "reaction";
-    const timing = (isReaction ? "reaction" : "action") as "action" | "reaction";
+    const timing = abilityTimingClass(ability as { keyword?: string; timing?: string }, cardId as string);
     if (!isLegalTiming(timing, turnState)) {
       return false;
     }
     // rule 316.5.b: in a Neutral Open State only the Turn Player may
     // activate abilities ([Reaction] adds Closed States, not this one).
     if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
+      return false;
+    }
+    // rule 313.1 / 347: in a Showdown Open State only the Focus holder acts.
+    if (turnState === "showdown-open" && !hasShowdownPermission(interaction, playerId)) {
       return false;
     }
 
@@ -685,13 +713,19 @@ export const activateAbility: Defs["activateAbility"] = {
         }
 
         // Check timing
-        const isReaction = ability.keyword === "Reaction" || ability.timing === "reaction";
-        const timing = (isReaction ? "reaction" : "action") as "action" | "reaction";
+        const timing = abilityTimingClass(
+          ability as { keyword?: string; timing?: string },
+          entry.hostCardId as string,
+        );
         if (!isLegalTiming(timing, turnState)) {
           continue;
         }
         // rule 316.5.b: Neutral Open State → only the Turn Player activates.
         if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
+          continue;
+        }
+        // rule 313.1 / 347: Showdown Open State → only the Focus holder acts.
+        if (turnState === "showdown-open" && !hasShowdownPermission(interaction, playerId)) {
           continue;
         }
 

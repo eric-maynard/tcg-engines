@@ -194,6 +194,23 @@ export function isLegalTiming(timing: TimingClass, turnState: TurnStateType): bo
 }
 
 /**
+ * rule 313.1 / 347: Focus is the permission to take Discretionary Actions in a
+ * Showdown Open State — only the player holding Focus may play cards or
+ * activate abilities there. Outside an active showdown this is always true
+ * (the Neutral Open State is gated by turn player instead).
+ */
+export function hasShowdownPermission(
+  interaction: TurnInteractionState,
+  playerId: string,
+): boolean {
+  const showdown = getActiveShowdown(interaction);
+  if (!showdown?.active) {
+    return true;
+  }
+  return showdown.focusPlayer === playerId;
+}
+
+/**
  * Create an empty interaction state.
  */
 export function createInteractionState(): TurnInteractionState {

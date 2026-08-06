@@ -9,6 +9,7 @@ export {
   endShowdown,
   getActiveShowdown,
   getTurnState,
+  hasShowdownPermission,
   isLegalTiming,
   isShowdownEnded,
   passFocus,

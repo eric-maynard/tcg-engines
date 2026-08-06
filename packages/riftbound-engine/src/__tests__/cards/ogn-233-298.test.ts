@@ -107,7 +107,7 @@ describe("Grand Strategem (ogn-233-298)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: while the attacker still holds Focus the defender may not play an Action spell (rules 313.1, 347)", async () => {
+  test("while the attacker still holds Focus the defender may not play an Action spell (rules 313.1, 347)", async () => {
     // Expected: right after the attack is declared P2 has Focus, so P1 cannot cast yet.
     // Actual: the engine lists playSpell:gs as legal for P1 immediately.
     const game = await defended().build();
