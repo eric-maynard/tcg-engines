@@ -36,7 +36,7 @@ describe("Apprentice Smith (sfd-041-221)", () => {
     expect((await scenario().resources(P1, { energy: 1 }).hand(P1, CARD, "smith").build()).p1.can("play", "smith")).toBe(false);
   });
 
-  test.failing("BUG: When I move — a GEAR revealed on top is DRAWN into hand (engine puts it onto the board instead)", async () => {
+  test("When I move — a GEAR revealed on top is DRAWN into hand (engine puts it onto the board instead)", async () => {
     // Expected: the revealed Seal goes to P1's hand and d2 becomes the top card. Actual: the
     // hand-authored `reveal until gear → recycle` approximation plays the gear to the base.
     const game = await board(GEAR).build();
@@ -49,7 +49,7 @@ describe("Apprentice Smith (sfd-041-221)", () => {
     expect(game.locationOf("smith")).toBe("bf1");
   });
 
-  test.failing("BUG: a NON-gear on top is recycled to the bottom of the deck (engine leaves it on top)", async () => {
+  test("a NON-gear on top is recycled to the bottom of the deck (engine leaves it on top)", async () => {
     // Expected: `top` moves to the bottom, d2 is the new top, hand unchanged. Actual: the deck
     // order is untouched — nothing is recycled.
     const game = await board(UNIT).build();
@@ -73,7 +73,7 @@ describe("Apprentice Smith (sfd-041-221)", () => {
     expect(game.p1.hand()).toEqual([]);
   });
 
-  test.failing("BUG: moving back to base is also a move — the gear on top is drawn (engine banishes it)", async () => {
+  test("moving back to base is also a move — the gear on top is drawn (engine banishes it)", async () => {
     // Expected: `top` (a gear) ends in hand. Actual: it ends in banishment.
     const game = await scenario()
       .battlefield("bf1", { controller: P1 })

@@ -8,16 +8,15 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * "When I move, reveal the top card of your Main Deck. If it's a gear, draw
  *  it. Otherwise, recycle it."
  *
- * Modeled as a triggered reveal with a `then` look-like branch — we use a
- * sequence that reveals and then recycles 1 (approximation; the branch for
- * drawing vs. recycling is not structurally represented).
+ * Bounded reveal of exactly the top card: a hit is drawn, a miss is recycled
+ * (rule 403 — to the bottom of the Main Deck).
  */
 const abilities: Ability[] = [
   {
     effect: {
       amount: 1,
       from: "deck",
-      then: { amount: 1, from: "board", type: "recycle" },
+      then: { draw: 1, recycle: "rest" },
       type: "reveal",
       until: "gear",
     },

@@ -15,7 +15,7 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
     amount?: number;
     from?: string;
     ignoreCost?: boolean;
-    then?: { draw?: unknown };
+    then?: { draw?: unknown; recycle?: unknown };
     until?: string;
   };
   // rule 354.2 / 356.1.b.1 (ogn-025-298 Blind Fury): "Each opponent reveals the
@@ -47,7 +47,9 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
   // Main Deck. If it's a <cardType>, draw it." — a bounded reveal with a
   // `then: { draw }` follow-up is a conditional draw of the top `amount`
   // cards, not a reveal-until scan. Matching cards go to hand; non-matching
-  // cards stay on top of the deck.
+  // cards stay on top of the deck — unless the reveal also says what to do
+  // with the misses ("Otherwise, recycle it", sfd-041-221 Apprentice Smith):
+  // rule 403, a recycled card goes to the BOTTOM of its owner's deck.
   if (
     revEff.until &&
     (revEff.from ?? "deck") === "deck" &&
@@ -56,6 +58,7 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
     "draw" in revEff.then
   ) {
     const registry = getGlobalCardRegistry();
+    const recyclesMisses = revEff.then.recycle !== undefined;
     const top = ctx.zones
       .getCardsInZone("mainDeck" as CoreZoneId, ctx.playerId as CorePlayerId)
       .slice(0, Math.max(1, revEff.amount ?? 1));
@@ -64,6 +67,12 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
         ctx.zones.moveCard({
           cardId: cardId as CoreCardId,
           targetZoneId: "hand" as CoreZoneId,
+        });
+      } else if (recyclesMisses) {
+        ctx.zones.moveCard({
+          cardId: cardId as CoreCardId,
+          position: "bottom",
+          targetZoneId: "mainDeck" as CoreZoneId,
         });
       }
     }
