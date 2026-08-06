@@ -32,6 +32,8 @@ import {
   boardEntersReadyGrantApplies,
   canPlayToOpenBattlefield,
   canPlayToOccupiedEnemyBattlefield,
+  canPlayToAttackedBattlefield,
+  battlefieldIsAttackedBy,
   battlefieldIsOccupiedEnemy,
   battlefieldIsOpen,
   opponentsRestrictedToBase,
@@ -45,6 +47,7 @@ import {
   canAffordCard,
   deductCost,
   discountOptionalPlayCost,
+  hasPlayFromTrashGrant,
 } from "./cost";
 import type { CostExtras } from "./cost";
 
@@ -130,6 +133,32 @@ function unitHasReaction(cardId: string): boolean {
   return registry.getSpellTiming(cardId) === "reaction" || registry.hasKeyword(cardId, "Reaction");
 }
 
+/**
+ * rule 340.2.a / 347.1 — taking a Focus action in a Showdown passes Focus to
+ * the next Relevant Player once that action finishes. Unlike a pass, the
+ * passed-players list is cleared (rule 346), matching what happens when a
+ * chain empties.
+ */
+function advanceFocusAfterAction(
+  state: RiftboundGameState["interaction"],
+): RiftboundGameState["interaction"] {
+  const showdown = getActiveShowdown(state);
+  if (!showdown) {
+    return state;
+  }
+  const idx = showdown.relevantPlayers.indexOf(showdown.focusPlayer);
+  if (idx < 0) {
+    return state;
+  }
+  const stack = [...state.showdownStack];
+  stack[stack.length - 1] = {
+    ...showdown,
+    focusPlayer: showdown.relevantPlayers[(idx + 1) % showdown.relevantPlayers.length],
+    passedPlayers: [],
+  };
+  return { ...state, showdownStack: stack };
+}
+
 type BoardCards = { getCardMeta?: (cardId: CoreCardId) => unknown };
 type BoardZones = {
   getCardsInZone: (zoneId: CoreZoneId, playerId: CorePlayerId) => readonly CoreCardId[];
@@ -212,7 +241,15 @@ export const playUnit: Defs["playUnit"] = {
     }
 
     const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
-    if (zone !== "hand") {
+    if (
+      zone !== "hand" &&
+      // rule 419.1 (rule-id: ven-022-166) — "You may play cards from your
+      // trash" makes the trash a legal play-from zone for its controller.
+      !(
+        zone === "trash" &&
+        hasPlayFromTrashGrant(state, context.zones, context.params.playerId as string)
+      )
+    ) {
       return false;
     }
 
@@ -266,6 +303,15 @@ export const playUnit: Defs["playUnit"] = {
       }
     } else if (targetIsBattlefield && targetIsControlledBf && (standardTimingOk || reactionTimingOk)) {
       // Rule 355.2.a: controlled battlefield — legal for any unit.
+    } else if (
+      targetIsBattlefield &&
+      Boolean(targetBfId) &&
+      (standardTimingOk || reactionTimingOk) &&
+      canPlayToAttackedBattlefield(context.params.cardId as string) &&
+      battlefieldIsAttackedBy(state, targetBfId as string, context.params.playerId as string)
+    ) {
+      // rule 355.2 (sfd-025-221): "I can be played to a battlefield you're
+      // attacking" — the contested battlefield this player moved onto.
     } else if (
       targetIsBattlefield &&
       targetBf &&
@@ -500,8 +546,17 @@ export const playUnit: Defs["playUnit"] = {
       context.playerId as CorePlayerId,
     );
 
+    // rule 419.1 (rule-id: ven-022-166) — with "You may play cards from your
+    // trash" on board, trash cards are offered alongside the hand.
+    const playableCards = hasPlayFromTrashGrant(state, context.zones, context.playerId as string)
+      ? [
+          ...handCards,
+          ...context.zones.getCardsInZone("trash" as CoreZoneId, context.playerId as CorePlayerId),
+        ]
+      : handCards;
+
     const results: RiftboundMoves["playUnit"][] = [];
-    for (const cardId of handCards) {
+    for (const cardId of playableCards) {
       const def = registry.get(cardId as string);
       if (!def || def.cardType !== "unit") {
         continue;
@@ -723,6 +778,25 @@ export const playUnit: Defs["playUnit"] = {
           location: bfZoneId,
           playerId: context.playerId as string,
         });
+      }
+
+      // rule 355.2 (sfd-025-221): offer the battlefield this player is
+      // currently attacking when the card grants CanPlayToAttacked.
+      if (canPlayToAttackedBattlefield(cardId as string)) {
+        for (const bfId of Object.keys(state.battlefields ?? {})) {
+          if (!battlefieldIsAttackedBy(state, bfId, context.playerId as string)) {
+            continue;
+          }
+          const bfZoneId = getBattlefieldZoneId(bfId) as string;
+          if (results.some((r) => r.cardId === (cardId as string) && r.location === bfZoneId)) {
+            continue;
+          }
+          results.push({
+            cardId: cardId as string,
+            location: bfZoneId,
+            playerId: context.playerId as string,
+          });
+        }
       }
 
       // Rule ogn-174-298 / ogn-193-298: offer open (uncontrolled)
@@ -1010,7 +1084,7 @@ export const playUnit: Defs["playUnit"] = {
     // grant "enters ready" to the units its controller plays.
     const entersReady =
       replacedReady ||
-      staticEnterReadyApplies(cardId, draft, playerId) ||
+      staticEnterReadyApplies(cardId, draft, playerId, zones) ||
       boardEntersReadyGrantApplies(draft, zones, cardId, playerId) ||
       paidAccelerate;
     if (!entersReady) {

@@ -72,10 +72,7 @@ async function attack() {
 describe("Rengar, Pouncing / Shen, Kinkou played into an ongoing combat", () => {
   // ── (a) Rengar to the battlefield he is attacking ─────────────────────────────────────
 
-  test.failing("BUG: (a) with Focus, P1 is offered Rengar → bf1 ('a battlefield you're attacking') as well as base / his own bf2 (813.3.a + card text)", async () => {
-    // Expected: destinations = base, battlefield-bf1 (attacking), battlefield-bf2 (controlled).
-    // Actual: units are never offered during a showdown — Reaction on units is ignored and the
-    // 'CanPlayToAttacked' grant has no engine hook.
+  test("(a) with Focus, P1 is offered Rengar → bf1 ('a battlefield you're attacking') as well as base / his own bf2 (813.3.a + card text)", async () => {
     const game = await attack();
     expect(game.p1.can("play", "rengar")).toBe(true);
     expect(destinationsOffered(game, P1, "rengar")).toEqual(["base", "battlefield-bf1", "battlefield-bf2"]);

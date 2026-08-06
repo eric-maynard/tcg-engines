@@ -66,7 +66,7 @@ describe("Ruling e466b98501472a22 — Shadowblade Lurker played from trash does 
   // Expected: with Endless Riches ("You may play cards from your trash") on board, the Lurker in the
   // trash is playable. Actual: Endless Riches' static permission is unimplemented (raw text) — no
   // play-from-trash option is offered at all.
-  test.failing("BUG: ruling e466b98501472a22 — with Endless Riches in play, a Shadowblade Lurker in the trash is a legal play (engine offers no play-from-trash)", async () => {
+  test("ruling e466b98501472a22 — with Endless Riches in play, a Shadowblade Lurker in the trash is a legal play (engine offers no play-from-trash)", async () => {
     const game = await fromTrash(5).build();
     expect(game.p1.can("play", "lurker")).toBe(true);
   });
@@ -74,7 +74,7 @@ describe("Ruling e466b98501472a22 — Shadowblade Lurker played from trash does 
   // Expected (354, 419.1): playing "lurker" from the trash moves it to the chain first; only "other" is
   // still in the trash when the cost is worked out → [5] - [2] = [3]. With exactly 3 energy the play
   // succeeds and drains the pool; "other" stays in the trash. Actual: not playable from trash at all.
-  test.failing("BUG: ruling e466b98501472a22 — played from trash with one OTHER copy there it costs [3], not [1]: 3 energy → 0", async () => {
+  test("ruling e466b98501472a22 — played from trash with one OTHER copy there it costs [3], not [1]: 3 energy → 0", async () => {
     const game = await fromTrash(3).build();
     await game.p1.play("lurker");
     expect(game.p1.energy()).toBe(0);
@@ -86,7 +86,7 @@ describe("Ruling e466b98501472a22 — Shadowblade Lurker played from trash does 
 
   // Expected: because it does NOT discount itself, [1] (which would suffice if both trash copies
   // counted) is not enough to play it from the trash. Actual: not playable from trash for any amount.
-  test.failing("BUG: ruling e466b98501472a22 — played from trash it does not discount itself: with only [1] the play is NOT affordable, with [3] it is", async () => {
+  test("ruling e466b98501472a22 — played from trash it does not discount itself: with only [1] the play is NOT affordable, with [3] it is", async () => {
     const poor = await fromTrash(1).build();
     expect(poor.p1.can("play", "lurker")).toBe(false);
     const ok = await fromTrash(3).build();
