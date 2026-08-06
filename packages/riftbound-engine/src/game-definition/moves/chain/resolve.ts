@@ -11,12 +11,15 @@ import {
 } from "../../../chain";
 import type { EffectContext, ExecutableEffect } from "../../../abilities/effect-executor";
 import { executeEffect } from "../../../abilities/effect-executor";
+import { findSpendableBuff } from "../../../abilities/effects/spend-buff";
 import type { TargetDescriptor } from "../../../abilities/target-resolver";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
+import { getCardEffectiveMight } from "../play/cost";
+import { isLegalMultiTargetSet } from "../play/targeting";
 import { buildEffectContext } from "./effect-context";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -39,6 +42,23 @@ export function executeResolvedItem(
   // effect runs only if the controller opts in. Pause via an `opt-in` pending
   // choice; on accept the reducer re-enters here with `optional` cleared.
   if (resolved.optional) {
+    // rule-id: ogn-147-298 — "you may spend a buff to …": when no friendly
+    // buff can be spent the cost is unpayable, so don't offer the opt-in
+    // prompt at all — the trigger simply has no effect.
+    const optEffect = resolved.effect as ExecutableEffect | undefined;
+    const leadEffect =
+      optEffect?.type === "sequence"
+        ? (optEffect as { effects?: ExecutableEffect[] }).effects?.[0]
+        : optEffect;
+    if (
+      leadEffect?.type === "spend-buff" &&
+      !findSpendableBuff(
+        leadEffect,
+        buildEffectContext(draft, resolved.controller, resolved.cardId, context),
+      )
+    ) {
+      return;
+    }
     draft.pendingChoice = {
       type: "opt-in",
       playerId: resolved.controller,
@@ -77,10 +97,14 @@ export function executeResolvedItem(
   // rule-id: ven-021-166 — expose the firing event's from/to zones so
   // `location: "move-to-or-from"` targets resolve against only the
   // battlefields the triggering move touched.
-  const trigEvt = resolved.triggerEvent as { from?: string; to?: string } | undefined;
+  const trigEvt = resolved.triggerEvent as
+    | { from?: string; to?: string; cardId?: string }
+    | undefined;
   const triggerZones = trigEvt
     ? [trigEvt.from, trigEvt.to].filter((z): z is string => typeof z === "string")
     : undefined;
+  // rule-id: unl-133-219 — the firing event's subject card ("…[Stun] it").
+  const triggerSourceId = typeof trigEvt?.cardId === "string" ? trigEvt.cardId : undefined;
 
   // Rule 355.10: for a resolved effect that targets a caster-chosen single
   // card ("give a unit X"), the controller picks which card. When targets
@@ -96,6 +120,8 @@ export function executeResolvedItem(
     // specified — never route through the choose-target prompt.
     typeof target !== "string" &&
     target.type !== "self" &&
+    // rule-id: unl-133-219 — "it" (trigger-source) is a fixed referent, not a choice.
+    target.type !== "trigger-source" &&
     target.type !== "player" &&
     target.type !== "battlefield" &&
     target.quantity !== "all"
@@ -104,15 +130,47 @@ export function executeResolvedItem(
       { ...target, quantity: "all" },
       {
         cards: baseCtx.cards,
+        // rule-id: ven-031-166 — choose-target pool honours "can't be chosen".
+        choosing: true,
         draft,
         playerId: resolved.controller,
         sourceCardId: resolved.cardId,
         sourceZone: baseCtx.sourceZone,
+        triggerSourceId,
         triggerZones,
         zones: baseCtx.zones,
       },
     );
-    if (options.length >= 2) {
+    // rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": the
+    // controller picks 0..n (declining is legal even with one candidate), so
+    // prompt whenever any candidate exists; candidates that alone breach the
+    // descriptor's aggregate cap (`totalMight`) are never legal.
+    const anyNumber = (target as { quantity?: unknown }).quantity === "any";
+    if (anyNumber) {
+      const legal = options.filter((id) =>
+        isLegalMultiTargetSet(target as Parameters<typeof isLegalMultiTargetSet>[0], [id], {
+          getCardZone: (c) => baseCtx.zones.getCardZone(c as CoreCardId),
+          getMight: (c) =>
+            getCardEffectiveMight(c, (m) =>
+              baseCtx.cards.getCardMeta?.(m) as Partial<RiftboundCardMeta> | undefined,
+            ),
+        }),
+      );
+      if (legal.length >= 1) {
+        draft.pendingChoice = {
+          type: "choose-target",
+          playerId: resolved.controller,
+          sourceCardId: resolved.cardId,
+          effect,
+          options: legal,
+          remaining: legal.length,
+          anyNumber: true,
+          picked: [],
+        };
+        return;
+      }
+      boundTargets = [];
+    } else if (options.length >= 2) {
       draft.pendingChoice = {
         type: "choose-target",
         playerId: resolved.controller,
@@ -122,21 +180,33 @@ export function executeResolvedItem(
         remaining: 1,
       };
       return;
+    } else {
+      boundTargets = options;
     }
-    boundTargets = options;
   }
 
   const effectCtx: EffectContext = {
     ...baseCtx,
     ...(_variables ? { variables: _variables } : {}),
     ...(boundTargets ? { boundTargets } : {}),
+    ...(triggerSourceId ? { triggerSourceId } : {}),
   };
   // Rule 359.2: "when you choose me" triggers fire when a spell/ability's
   // controller picks a card as a target.
-  if (boundTargets && boundTargets.length > 0) {
+  // rule-id: sfd-142-221 (383.4.b.2) / sfd-052-221 (355.14.b) — play-time
+  // targets (spell or activated ability) already fired `choose` at
+  // finalization; only fire here for targets picked at resolution.
+  const choseAtFinalize = !resolved.triggered && !!resolved.targets;
+  if (!choseAtFinalize && boundTargets && boundTargets.length > 0) {
     const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+    // rule-id: sfd-142-221 — carry the source kind so "choose me with a
+    // spell" triggers don't fire on gear/unit ability choices.
+    const sourceType = resolved.type === "spell" ? "spell" : "ability";
     for (const targetId of boundTargets) {
-      fireTriggers({ cardId: targetId, chooserId: resolved.controller, type: "choose" }, trigCtx);
+      fireTriggers(
+        { cardId: targetId, chooserId: resolved.controller, sourceType, type: "choose" },
+        trigCtx,
+      );
     }
   }
   const preLen = draft.interaction?.chain?.items.length ?? 0;

@@ -13,6 +13,7 @@ import type { GameEvent } from "./game-events";
 export interface TriggerRestriction {
   readonly type: string;
   readonly count?: number;
+  readonly whose?: "your" | "opponent";
 }
 
 /**
@@ -81,6 +82,7 @@ const EVENT_MAP: Record<string, string> = {
   heal: "heal",
   hide: "hide",
   hold: "hold",
+  "main-phase": "main-phase",
   move: "move",
   "play-card": "play-card",
   "play-self": "play-self",
@@ -134,6 +136,15 @@ function restrictionSatisfied(
       // TriggerMatcherState.turn (callers pass the full game state draft).
       const active = state?.turn?.activePlayer;
       return active !== undefined && active !== card.owner;
+    }
+    case "during-turn": {
+      // ogn-117-298 (Viktor, Innovator): typed `during-turn` restriction —
+      // compare the active player against this card's controller.
+      const active = state?.turn?.activePlayer;
+      if (active === undefined) {
+        return false;
+      }
+      return restriction.whose === "opponent" ? active !== card.owner : active === card.owner;
     }
     case "self-at-battlefield":
       return card.zone.startsWith("battlefield");
@@ -240,14 +251,44 @@ function triggerMatchesEvent(
       location?: "here" | "battlefield";
       excludeSelf?: boolean;
       tag?: string;
-      filter?: string;
+      filter?: string | readonly string[];
+      actor?: "controller" | "opponent" | "any";
     };
+    // rule-id: sfd-142-221 — "When you choose ME with a SPELL": `filter`
+    // tokens `self` (subject must be this card) and `spell` (choose events
+    // must be spell-sourced; unknown source → deny).
+    const filters = desc.filter === undefined ? [] : Array.isArray(desc.filter) ? desc.filter : [desc.filter];
+    if (filters.includes("self") && "cardId" in event && event.cardId !== card.id) {
+      return false;
+    }
+    if (filters.includes("spell") && event.type === "choose" && event.sourceType !== "spell") {
+      return false;
+    }
     const subjectOwner = "owner" in event ? event.owner : "playerId" in event ? event.playerId : undefined;
     if (desc.controller === "friendly" && subjectOwner !== undefined && subjectOwner !== card.owner) {
       return false;
     }
     if (desc.controller === "enemy" && subjectOwner !== undefined && subjectOwner === card.owner) {
       return false;
+    }
+    // rule-id: unl-133-219 — "When YOU move an enemy unit": the actor (the
+    // player whose action/effect caused the event) must be this card's
+    // controller. Unknown actor → deny rather than fire permissively.
+    if (desc.actor && desc.actor !== "any") {
+      const actorId =
+        "movedBy" in event
+          ? event.movedBy
+          : "chooserId" in event
+            ? event.chooserId
+            : "playerId" in event
+              ? event.playerId
+              : undefined;
+      if (actorId === undefined) {
+        return false;
+      }
+      if (desc.actor === "controller" ? actorId !== card.owner : actorId === card.owner) {
+        return false;
+      }
     }
     if (desc.excludeSelf && "cardId" in event && event.cardId === card.id) {
       return false;

@@ -731,4 +731,62 @@ describe("Power Cost Enforcement", () => {
     expect(s.runePools[P1].energy).toBe(0);
     expect(s.runePools[P1].power.chaos).toBe(0);
   });
+
+  // Rule 135.2.e.5.a: multi-domain cards load with `rainbow` power pips, which
+  // must be payable with Power of any Domain (not a literal `rainbow` pool key).
+  test("Tibbers (8 energy + 2 rainbow) is playable with fury/chaos power and deducts it", async () => {
+    const { getAllCards } = await import("../../../riftbound-cards/src/data/all-cards");
+    const { createPlayableGame, getZoneCards } = await import("../testing/playtest/game-setup");
+
+    const allCards = getAllCards();
+    const tibbers = allCards.find((c) => c.id === "ogs-018-024");
+    expect(tibbers?.powerCost).toEqual(["rainbow", "rainbow"]);
+
+    const deck = {
+      battlefieldIds: ["ogn-275-298"],
+      mainDeckCardIds: Array.from({ length: 40 }, () => "ogs-018-024"),
+      runeDeckCardIds: Array.from({ length: 12 }, () => "ogn-166-298"),
+    };
+    const P1 = "player-1";
+    const { engine } = createPlayableGame(allCards as never, deck, deck, "rainbow-cost-test");
+
+    const hand = getZoneCards(engine, "hand", P1);
+    const instance = hand.find((id) => id.endsWith("ogs-018-024"));
+    expect(instance).toBeDefined();
+
+    engine.executeMove("emptyRunePool", {
+      params: { directed: true, playerId: P1 },
+      playerId: P1 as CorePlayerId,
+    });
+    engine.executeMove("addResources", {
+      params: { energy: 8, playerId: P1, power: { fury: 1 } },
+      playerId: P1 as CorePlayerId,
+    });
+    let moves = engine.enumerateMoves(P1 as CorePlayerId, { validOnly: true });
+    let play = moves.find(
+      (m) => m.moveId === "playUnit" && (m.params as { cardId?: string })?.cardId === instance,
+    );
+    expect(play).toBeUndefined();
+
+    engine.executeMove("addResources", {
+      params: { energy: 0, playerId: P1, power: { chaos: 1 } },
+      playerId: P1 as CorePlayerId,
+    });
+    moves = engine.enumerateMoves(P1 as CorePlayerId, { validOnly: true });
+    play = moves.find(
+      (m) => m.moveId === "playUnit" && (m.params as { cardId?: string })?.cardId === instance,
+    );
+    expect(play).toBeDefined();
+
+    const played = engine.executeMove("playUnit", {
+      params: { ...(play!.params as Record<string, unknown>), cardId: instance!, playerId: P1 },
+      playerId: P1 as CorePlayerId,
+    });
+    expect(played.success).toBe(true);
+
+    const s = engine.getState();
+    expect(s.runePools[P1].energy).toBe(0);
+    expect(s.runePools[P1].power.fury ?? 0).toBe(0);
+    expect(s.runePools[P1].power.chaos ?? 0).toBe(0);
+  });
 });

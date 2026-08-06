@@ -17,12 +17,43 @@ import type { EffectContext, ExecutableEffect } from "./effect-executor";
 import { executeEffect } from "./effect-executor";
 import type { GameEvent } from "./game-events";
 import { evaluateLegionCondition } from "./legion-conditions";
+import { recalculateStaticEffects } from "./static-abilities";
 import type {
   CardWithAbilities,
   MatchedTrigger,
   TriggerableAbility,
 } from "./trigger-matcher";
 import { findMatchingTriggers } from "./trigger-matcher";
+
+/**
+ * rule-id: ogn-100-298 (Gemcraft Seer) — effect keywords granted by another
+ * card's static ("Other friendly units have [Vision]") live only in
+ * `meta.grantedKeywords`, so synthesize the triggered ability the keyword
+ * stands for (mirrors the parser's KEYWORD_TRIGGER_EVENTS expansion).
+ */
+const GRANTED_KEYWORD_TRIGGERS: Readonly<Record<string, TriggerableAbility>> = {
+  Vision: {
+    // Rule 729: When you play me, look at the top card of your Main Deck. You may recycle it.
+    effect: { amount: 1, from: "deck", then: { recycle: 1 }, type: "look" },
+    trigger: { event: "play-self", on: "self" },
+    type: "triggered",
+  },
+};
+
+function grantedKeywordAbilities(
+  meta: Partial<RiftboundCardMeta> | undefined,
+): TriggerableAbility[] {
+  const out: TriggerableAbility[] = [];
+  for (const gk of meta?.grantedKeywords ?? []) {
+    // Rule 729.2: each instance of Vision triggers separately, so a granted
+    // copy stacks with a printed one.
+    const synth = GRANTED_KEYWORD_TRIGGERS[gk.keyword];
+    if (synth) {
+      out.push(synth);
+    }
+  }
+  return out;
+}
 
 /**
  * Context passed from move reducers to the trigger runner.
@@ -97,6 +128,30 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
 }
 
 /**
+ * rule-id: sfd-119-221 — pull the `{ type: "pay-cost", cost }` clause out of a
+ * triggered ability's condition (top-level or one level inside an `and`) so
+ * the chain item can charge it on opt-in.
+ */
+export function extractPayCost(condition: unknown): Record<string, unknown> | undefined {
+  if (!condition || typeof condition !== "object") {
+    return undefined;
+  }
+  const c = condition as { type?: string; cost?: unknown; conditions?: unknown[] };
+  if (c.type === "pay-cost" && c.cost && typeof c.cost === "object") {
+    return c.cost as Record<string, unknown>;
+  }
+  if (c.type === "and" && Array.isArray(c.conditions)) {
+    for (const sub of c.conditions) {
+      const found = extractPayCost(sub);
+      if (found) {
+        return found;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
  * Evaluate whether a triggered ability's `condition` holds against the
  * current game state. Returns `true` if there is no condition or the
  * condition is satisfied.
@@ -154,6 +209,16 @@ export function evaluateTriggerCondition(
       }
     }
     return false;
+  }
+  if (c.type === "fewer-runes-than-opponent" && ctx) {
+    // rule-id: ven-005-166 (Forsaken Baccai) — compare rune pool sizes; the
+    // trigger only goes on the chain if some opponent controls more runes.
+    const runeCount = (pid: string): number =>
+      ctx.zones.getCardsInZone("runePool" as CoreZoneId, pid as CorePlayerId).length;
+    const mine = runeCount(controllerId);
+    return Object.keys(ctx.draft.players ?? {}).some(
+      (pid) => pid !== controllerId && runeCount(pid) > mine,
+    );
   }
   if (c.type === "control" && ctx) {
     // rule-id: ven-058-166 (Patched Porobot) / rule 383.2.a.1 — an "if you
@@ -272,13 +337,19 @@ export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
   // control-changed permanent triggers for whoever controls it now.
   const controllerOf = (cardId: CoreCardId, fallback: string): string =>
     ctx.cards.getCardController?.(cardId) ?? ctx.cards.getCardOwner(cardId) ?? fallback;
+  // rule-id: ogn-100-298 — include triggers implied by granted effect keywords.
+  const abilitiesOf = (cardId: CoreCardId): TriggerableAbility[] => {
+    const printed = toTriggerableAbilities(cardId as string);
+    const granted = grantedKeywordAbilities(ctx.cards.getCardMeta(cardId));
+    return granted.length > 0 ? [...printed, ...granted] : printed;
+  };
 
   // Get cards from all players' bases and legend zones
   for (const playerId of Object.keys(ctx.draft.players)) {
     const baseCards = ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId);
     for (const cardId of baseCards) {
       boardCards.push({
-        abilities: toTriggerableAbilities(cardId as string),
+        abilities: abilitiesOf(cardId),
         id: cardId as string,
         owner: controllerOf(cardId, playerId),
         zone: "base",
@@ -306,7 +377,7 @@ export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
     for (const cardId of bfCards) {
       const owner = controllerOf(cardId, "");
       boardCards.push({
-        abilities: toTriggerableAbilities(cardId as string),
+        abilities: abilitiesOf(cardId),
         id: cardId as string,
         owner,
         zone: bfZoneId as string,
@@ -402,6 +473,20 @@ export function orderTriggers(
 }
 
 export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): number {
+  // rule-id: ogn-100-298 — static keyword grants are otherwise only refreshed
+  // in post-move cleanup, so a unit entering play under "Other friendly units
+  // have [Vision]" would not yet carry the grant when its play-self fires.
+  if (event.type === "play-self" && ctx.cards.updateCardMeta) {
+    recalculateStaticEffects({
+      cards: {
+        getCardMeta: ctx.cards.getCardMeta,
+        getCardOwner: ctx.cards.getCardOwner,
+        updateCardMeta: ctx.cards.updateCardMeta,
+      },
+      draft: ctx.draft,
+      zones: ctx.zones,
+    });
+  }
   const boardCards = getBoardCards(ctx);
   // Rule ogn-006-298 (Flame Chompers): a card that reads "When you discard
   // me…" is in the trash by the time the discard event is processed. Include
@@ -452,14 +537,27 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
     return 0;
   }
 
-  if (!resolveInline) {
+  // Rule 429.2 / 337.2 (unl-022-219): triggered abilities whose effect only
+  // Adds resources resolve immediately and can't be reacted to — never put
+  // them on the chain, mirroring the activated-ability carve-out.
+  const isImmediateAdd = (match: (typeof matches)[number]): boolean => {
+    const t = (match.ability.effect as { type?: string } | undefined)?.type;
+    return (t === "add-resource" || t === "add") && match.ability.optional !== true;
+  };
+  const inlineMatches = resolveInline ? matches : matches.filter(isImmediateAdd);
+
+  if (!resolveInline && inlineMatches.length < matches.length) {
     if (!ctx.draft.interaction) {
       (ctx.draft as RiftboundGameState & {
         interaction: NonNullable<RiftboundGameState["interaction"]>;
       }).interaction = createInteractionState();
     }
     for (const match of matches) {
+      if (isImmediateAdd(match)) {
+        continue;
+      }
       const effect = match.ability.effect as unknown;
+      const optInCost = extractPayCost(match.ability.condition);
       (ctx.draft as RiftboundGameState & {
         interaction: NonNullable<RiftboundGameState["interaction"]>;
       }).interaction = addToChain(
@@ -468,9 +566,12 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
           cardId: match.cardId,
           controller: match.cardOwner,
           effect,
+          // rule-id: sfd-119-221 — "you may pay [N] to …": carry the cost so
+          // the opt-in prompt charges it instead of resolving for free.
+          ...(optInCost ? { optInCost } : {}),
           // Rule 583 (unl-021-219): carry the "you may" flag onto the chain so
           // executeResolvedItem can prompt the controller to opt in or decline.
-          optional: match.ability.optional === true,
+          optional: match.ability.optional === true || optInCost !== undefined,
           // rule-id: ven-021-166 — carry the firing event so "moved to or from"
           // target qualifiers can resolve against its from/to zones.
           triggerEvent: match.event,
@@ -480,10 +581,9 @@ export function fireTriggers(event: GameEvent, ctx: TriggerRunnerContext): numbe
         turnOrder,
       );
     }
-    return matches.length;
   }
 
-  for (const match of matches) {
+  for (const match of inlineMatches) {
     // Build a no-op for missing optional methods
     const noop = () => {};
     const effectCtx: EffectContext = {

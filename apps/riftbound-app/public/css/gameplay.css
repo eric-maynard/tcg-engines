@@ -514,15 +514,20 @@
       transform: translateY(-24px) scale(1.2) !important;
     }
     /* Exhausted runes rotate 90° (tabletop tap convention) in addition to the
-       overlay dim from .card--exhausted::before. */
+       overlay dim from .card--exhausted::before.
+       [rule:ui-rune-exhausted-overlay] A 110x154 card rotated about its center is
+       154px wide inside a 112px stack and spills ~21px past the left edge (clipped
+       off-screen when the rune grid hugs the viewport). Scale to 110/154 so the
+       rotated footprint stays inside the stack. */
     .rune-stack .card.card--exhausted,
     .rune-stack .card.exhausted {
-      transform: rotate(90deg);
+      transform: rotate(90deg) scale(0.714);
+      transform-origin: center;
     }
     .rune-stack .card.exhausted:hover,
     .rune-stack .card.card--exhausted:hover {
       z-index: 20 !important;
-      transform: translateY(-18px) scale(1.15) rotate(90deg) !important;
+      transform: translateY(-18px) rotate(90deg) scale(0.82) !important;
     }
     .rune-stack .card .card-name {
       display: none;
@@ -1052,6 +1057,9 @@
       display: flex;
       flex-direction: column;
       min-width: 0;
+      /* ui-bf-units-overflow: let .bf-units shrink and scroll instead of
+         being clipped by .battlefield's overflow:hidden when units wrap. */
+      min-height: 0;
       padding: 8px;
       gap: 4px;
     }
@@ -1084,10 +1092,14 @@
       gap: 4px;
       flex-wrap: wrap;
       justify-content: center;
-      min-height: 56px;
-      flex: 1;
+      /* ui-bf-units-overflow: 3rd/4th wrapped unit (e.g. tokens played
+         "here") must stay reachable — scroll rather than clip. `safe`
+         keeps the first row visible when content overflows. */
+      min-height: 0;
+      flex: 1 1 56px;
+      overflow-y: auto;
       align-items: center;
-      align-content: center;
+      align-content: safe center;
       position: relative;
       z-index: 1;
     }

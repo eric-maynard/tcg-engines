@@ -11,8 +11,107 @@
  * plumbing card-registry contexts through every call site.
  */
 
+import type {
+  CardId as CoreCardId,
+  PlayerId as CorePlayerId,
+  ZoneId as CoreZoneId,
+} from "@tcg/core";
+import {
+  findAllReplacements,
+  markReplacementConsumed,
+  type ReplacementContext,
+} from "../abilities/replacement-effects";
 import type { PlayerId, RiftboundGameState } from "../types";
 import { getGlobalCardRegistry } from "./card-lookup";
+
+/**
+ * Engine surface needed to look up and apply a `score` replacement.
+ */
+export interface ScoreReplacementIO {
+  readonly zones: {
+    getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
+    drawCards: (params: {
+      count: number;
+      from: CoreZoneId;
+      to: CoreZoneId;
+      playerId: CorePlayerId;
+    }) => unknown;
+  };
+  readonly cards: {
+    getCardOwner?: (cardId: CoreCardId) => string | undefined;
+    getCardMeta?: (cardId: CoreCardId) => unknown;
+  };
+}
+
+/**
+ * Evaluate a replacement ability's condition against the *scoring* player
+ * (Otterpus: "during their first or second turn" is the scorer's turn count).
+ */
+function scoreReplacementConditionMet(
+  condition: unknown,
+  state: RiftboundGameState,
+  playerId: PlayerId,
+): boolean {
+  if (!condition || typeof condition !== "object") {
+    return true;
+  }
+  const c = condition as { type?: string; threshold?: number; condition?: unknown };
+  if (c.type === "not") {
+    return !scoreReplacementConditionMet(c.condition, state, playerId);
+  }
+  if (c.type === "turn-count-at-least") {
+    return (state.players[playerId]?.turnsTaken ?? 0) >= (c.threshold ?? 0);
+  }
+  return true;
+}
+
+/**
+ * Rule 571.4: before a player scores a point from conquering/holding, consult
+ * board `replaces: "score"` replacement abilities (e.g. Otterpus — "they draw
+ * 1 instead"). Returns `true` when the point was replaced and must NOT be
+ * awarded; the replacement effect has already been applied.
+ */
+export function applyScoreReplacement(
+  state: RiftboundGameState,
+  playerId: PlayerId,
+  io: ScoreReplacementIO,
+): boolean {
+  const ctx: ReplacementContext = {
+    cards: {
+      getCardMeta: (io.cards.getCardMeta ??
+        (() => undefined)) as ReplacementContext["cards"]["getCardMeta"],
+      getCardOwner: io.cards.getCardOwner ?? (() => undefined),
+    },
+    draft: state,
+    zones: { getCardsInZone: io.zones.getCardsInZone },
+  };
+  const matches = findAllReplacements(
+    { amount: 1, owner: playerId, playerId, type: "score" },
+    ctx,
+  );
+  for (const match of matches) {
+    if (!scoreReplacementConditionMet(match.condition, state, playerId)) {
+      continue;
+    }
+    const replacement = match.replacement as { type?: string; amount?: number } | "prevent";
+    if (replacement === "prevent") {
+      markReplacementConsumed(state, match);
+      return true;
+    }
+    if (replacement?.type === "draw") {
+      io.zones.drawCards({
+        count: replacement.amount ?? 1,
+        from: "mainDeck" as CoreZoneId,
+        playerId: playerId as CorePlayerId,
+        to: "hand" as CoreZoneId,
+      });
+      markReplacementConsumed(state, match);
+      return true;
+    }
+    // Unknown replacement shape: don't silently eat the point.
+  }
+  return false;
+}
 
 /**
  * A battlefield card ability with a static `prevent-score` effect blocks

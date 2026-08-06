@@ -440,6 +440,14 @@ export interface ChooseTargetChoice {
    * (one extra occurrence = one extra point of damage) rather than removed.
    */
   readonly assign?: true;
+  /**
+   * rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": picks
+   * accumulate in `picked` until the chooser declines (`accept:false`) or no
+   * legal option remains; `options` is re-pruned after each pick against the
+   * effect target's aggregate constraints (one battlefield, `totalMight`).
+   */
+  readonly anyNumber?: true;
+  readonly picked?: readonly CardId[];
 }
 
 /**
@@ -476,6 +484,8 @@ export interface ChooseModeChoice {
   readonly options: readonly number[];
   /** When true, the picked index is recorded on `sourceCardId`'s `modesChosenThisTurn`. */
   readonly notChosenThisTurn?: boolean;
+  /** rule-id: sfd-091-221 — targets bound at chain placement, re-threaded into the picked mode. */
+  readonly boundTargets?: readonly string[];
 }
 
 /**

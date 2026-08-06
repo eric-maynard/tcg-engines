@@ -25,6 +25,34 @@ import { buildEffectContext, canAffordPower } from "./effect-context";
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
 /**
+ * rule-id: sfd-052-221 (rule 355.10.f / 355.14.b) — an activated ability's
+ * single caster-chosen card target ("Give a unit +3 Might") is chosen when
+ * the ability is finalized on the chain, not when it resolves. Returns that
+ * descriptor, or undefined when the effect has no such play-time choice
+ * (self / player / battlefield / "all" / multi-pick targets stay as-is).
+ */
+function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
+  const t = (effect as { target?: unknown } | undefined)?.target;
+  if (!t || typeof t !== "object") {
+    return undefined;
+  }
+  const d = t as TargetDescriptor & { quantity?: unknown };
+  if (
+    d.type === "self" ||
+    d.type === "trigger-source" ||
+    d.type === "player" ||
+    d.type === "battlefield" ||
+    d.type === "pending-value"
+  ) {
+    return undefined;
+  }
+  if (d.quantity !== undefined && d.quantity !== 1) {
+    return undefined;
+  }
+  return d;
+}
+
+/**
  * A resolved entry returned by `collectActivatedAbilities`.
  *
  * - `hostCardId` is the card whose cost will be paid (e.g., Heimerdinger,
@@ -449,17 +477,22 @@ export const activateAbility: Defs["activateAbility"] = {
       // Rule 577.2: A [Kill] (sacrifice) cost requires a legal target on
       // the board matching the descriptor. Malzahar (ogn-113-298) is the
       // canonical case: exhaust + kill a friendly permanent → +2 rainbow.
-      // The host card cannot pay its own kill cost.
+      // The host card cannot pay its own kill cost — unless the cost is
+      // literally "Kill this" (ogn-212-298 Forge of the Future), where the
+      // host is the only legal sacrifice.
       if (cost.kill) {
         const sacrificeId = context.params.sacrificeId as string | undefined;
-        const options = resolveTarget(cost.kill as TargetDescriptor, {
-          cards: context.cards,
-          draft: state,
-          playerId,
-          sourceCardId: cardId,
-          sourceZone: zone,
-          zones: context.zones,
-        }).filter((id) => id !== cardId);
+        const options =
+          cost.kill === "self"
+            ? [cardId as string]
+            : resolveTarget(cost.kill as TargetDescriptor, {
+                cards: context.cards,
+                draft: state,
+                playerId,
+                sourceCardId: cardId,
+                sourceZone: zone,
+                zones: context.zones,
+              }).filter((id) => id !== cardId);
         if (options.length === 0) {
           return false;
         }
@@ -485,6 +518,31 @@ export const activateAbility: Defs["activateAbility"] = {
       return false;
     }
 
+    // rule-id: sfd-052-221 (rule 355.14.b) — a supplied play-time target
+    // must be one of the legal candidates for the effect's chosen target.
+    const boundTargets = context.params.targets as string[] | undefined;
+    if (boundTargets && boundTargets.length > 0) {
+      const chosen = activationChosenTarget(ability.effect);
+      if (!chosen) {
+        return false;
+      }
+      const options = resolveTarget(
+        { ...chosen, quantity: "all" },
+        {
+          cards: context.cards,
+          choosing: true,
+          draft: state,
+          playerId,
+          sourceCardId: cardId,
+          sourceZone: zone,
+          zones: context.zones,
+        },
+      );
+      if (boundTargets.length !== 1 || !options.includes(boundTargets[0] as string)) {
+        return false;
+      }
+    }
+
     return true;
   },
   enumerator: (state, context) => {
@@ -504,6 +562,7 @@ export const activateAbility: Defs["activateAbility"] = {
       sourceCardId?: string;
       sacrificeId?: string;
       discardId?: string;
+      targets?: string[];
     }[] = [];
 
     // Collect cards on base, battlefields, legendZone, battlefieldRow, and championZone
@@ -672,7 +731,10 @@ export const activateAbility: Defs["activateAbility"] = {
         // to trash. No legal target → the ability is not activatable.
         let sacrificeOptions: string[] | undefined;
         const killCost = (ability.cost as Record<string, unknown> | undefined)?.kill;
-        if (killCost) {
+        if (killCost === "self") {
+          // Rule 577.2 (ogn-212-298): "Kill this" — the host sacrifices itself.
+          sacrificeOptions = [entry.hostCardId];
+        } else if (killCost) {
           const hostZone = context.zones.getCardZone(entry.hostCardId as CoreCardId) as
             | string
             | undefined;
@@ -707,6 +769,29 @@ export const activateAbility: Defs["activateAbility"] = {
           continue;
         }
 
+        // rule-id: sfd-052-221 (rule 355.10.f / 355.14.b) — enumerate one
+        // activation per legal caster-chosen target so the choice is locked
+        // when the ability is finalized on the chain, not at resolution.
+        let targetOptions: string[] | undefined;
+        const chosen = activationChosenTarget(ability.effect);
+        if (chosen) {
+          targetOptions = resolveTarget(
+            { ...chosen, quantity: "all" },
+            {
+              cards: context.cards,
+              choosing: true,
+              draft: state,
+              playerId,
+              sourceCardId: entry.hostCardId,
+              sourceZone: hostZone,
+              zones: context.zones,
+            },
+          );
+          if (targetOptions.length === 0) {
+            continue;
+          }
+        }
+
         const result: {
           playerId: string;
           cardId: string;
@@ -714,6 +799,7 @@ export const activateAbility: Defs["activateAbility"] = {
           sourceCardId?: string;
           sacrificeId?: string;
           discardId?: string;
+          targets?: string[];
         } = {
           abilityIndex: entry.abilityIndex,
           cardId: entry.hostCardId,
@@ -722,9 +808,21 @@ export const activateAbility: Defs["activateAbility"] = {
         if (entry.sourceCardId !== entry.hostCardId) {
           result.sourceCardId = entry.sourceCardId;
         }
-        const bases: (typeof result)[] = sacrificeOptions
+        let bases: (typeof result)[] = sacrificeOptions
           ? sacrificeOptions.map((sacrificeId) => ({ ...result, sacrificeId }))
           : [result];
+        if (targetOptions) {
+          const withTargets: (typeof result)[] = [];
+          for (const base of bases) {
+            for (const targetId of targetOptions) {
+              if (targetId === base.sacrificeId) {
+                continue;
+              }
+              withTargets.push({ ...base, targets: [targetId] });
+            }
+          }
+          bases = withTargets;
+        }
         if (discardOptions) {
           for (const base of bases) {
             for (const discardId of discardOptions) {
@@ -792,11 +890,13 @@ export const activateAbility: Defs["activateAbility"] = {
       // Handle kill (sacrifice) cost — the chosen permanent is trashed as
       // part of paying the cost, before the effect resolves.
       if (cost.kill) {
-        if (!sacrificeId) {
+        // Rule 577.2 (ogn-212-298): "Kill this" defaults to the host card.
+        const killId = (sacrificeId as string | undefined) ?? (cost.kill === "self" ? cardId : undefined);
+        if (!killId) {
           return;
         }
         context.zones.moveCard({
-          cardId: sacrificeId as CoreCardId,
+          cardId: killId as CoreCardId,
           targetZoneId: "trash" as CoreZoneId,
         });
       }
@@ -816,10 +916,31 @@ export const activateAbility: Defs["activateAbility"] = {
     // Location-relative targets) resolves to the host.
     const interaction = draft.interaction ?? createInteractionState();
     const turnOrder = Object.keys(draft.players);
+    // rule-id: sfd-052-221 (rule 355.10.f / 355.14.b) — lock the caster-chosen
+    // target on the chain item at finalization so resolution uses it instead
+    // of prompting.
+    const targets = context.params.targets as string[] | undefined;
     draft.interaction = addToChain(
       interaction,
-      { cardId, controller: playerId, effect: ability.effect, type: "ability" },
+      {
+        cardId,
+        controller: playerId,
+        effect: ability.effect,
+        ...(targets && targets.length > 0 ? { targets } : {}),
+        type: "ability",
+      },
       turnOrder,
     );
+    // Rule 359.2: "when you choose me" triggers fire when the target is
+    // chosen — at finalization for play-time targets (parity with playSpell).
+    if (targets && targets.length > 0) {
+      const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+      for (const targetId of targets) {
+        fireTriggers(
+          { cardId: targetId, chooserId: playerId, sourceType: "ability", type: "choose" },
+          trigCtx,
+        );
+      }
+    }
   },
 };

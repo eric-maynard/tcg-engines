@@ -750,3 +750,70 @@ describe("Granted Keywords in Combat", () => {
     expect(total).toBe(4); // 3 base + 1 Assault
   });
 });
+
+// ============================================================================
+// rule-id: unl-133-219 (Blast Cone) — effect-driven moves emit `move` events
+// and "…[Stun] it" resolves the trigger-source unit.
+// ============================================================================
+
+describe("Effect move emits move event with owner/movedBy (unl-133-219)", () => {
+  let registry: CardDefinitionRegistry;
+
+  beforeEach(() => {
+    registry = new CardDefinitionRegistry();
+    registry.register("enemy-unit", { cardType: "unit", id: "enemy-unit", might: 3, name: "Grunt" });
+    setGlobalCardRegistry(registry);
+  });
+
+  afterEach(() => {
+    clearGlobalCardRegistry();
+  });
+
+  test("moving an enemy unit via an effect fires a move event tagged with mover and owner", () => {
+    const state = createMockState();
+    const ctx = createMockEffectContext(state, {
+      cards: {
+        "blast-cone": { meta: {}, owner: "p1", zone: "base" },
+        "enemy-unit": { meta: {}, owner: "p2", zone: "battlefield-bf-1" },
+      },
+      playerId: "p1",
+      sourceCardId: "blast-cone",
+      sourceZone: "base",
+    });
+
+    executeEffect(
+      { target: { controller: "enemy", type: "unit" }, to: "base", type: "move" } as ExecutableEffect,
+      ctx,
+    );
+
+    expect(ctx.cardStore.get("enemy-unit")?.zone).toBe("base");
+    const moveEvents = ctx.firedEvents.filter((e) => e.type === "move");
+    expect(moveEvents).toHaveLength(1);
+    expect(moveEvents[0]).toMatchObject({
+      cardId: "enemy-unit",
+      from: "battlefield-bf-1",
+      movedBy: "p1",
+      owner: "p2",
+      to: "base",
+    });
+  });
+
+  test("stun with a trigger-source target stuns the threaded event subject", () => {
+    const state = createMockState();
+    const base = createMockEffectContext(state, {
+      cards: {
+        "blast-cone": { meta: {}, owner: "p1", zone: "base" },
+        "enemy-unit": { meta: {}, owner: "p2", zone: "base" },
+      },
+      playerId: "p1",
+      sourceCardId: "blast-cone",
+      sourceZone: "base",
+    });
+    const ctx = { ...base, triggerSourceId: "enemy-unit" };
+
+    executeEffect({ target: { type: "trigger-source" }, type: "stun" } as ExecutableEffect, ctx);
+
+    expect(base.cardStore.get("enemy-unit")?.meta.stunned).toBe(true);
+    expect(base.cardStore.get("blast-cone")?.meta.stunned).toBeUndefined();
+  });
+});

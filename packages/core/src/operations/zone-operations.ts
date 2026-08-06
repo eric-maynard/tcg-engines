@@ -248,4 +248,13 @@ export interface ZoneOperations {
     controllerId?: PlayerId;
     position?: "top" | "bottom" | number;
   }): void;
+
+  /**
+   * Remove a card instance from the game entirely (inverse of
+   * `createCardInZone`). Used for tokens that cease to exist once they
+   * leave the board. Deletes the instance, its metadata, and its zone slot.
+   *
+   * Optional for backward-compatibility with existing test stubs.
+   */
+  removeCardFromGame?(params: { cardId: CardId }): void;
 }

@@ -250,6 +250,32 @@ export const createZoneOperations = <TCardDef, TCardMeta>(
       }
     },
 
+    removeCardFromGame: ({ cardId }) => {
+      logger?.trace("Removing card from game", { cardId });
+      for (const zoneId in state.zones) {
+        const zone = state.zones[zoneId];
+        if (!zone) {
+          continue;
+        }
+        const index = zone.cardIds.indexOf(cardId);
+        if (index === -1) {
+          continue;
+        }
+        zone.cardIds.splice(index, 1);
+        if (zone.config.ordered) {
+          for (let i = index; i < zone.cardIds.length; i++) {
+            const cid = zone.cardIds[i] as string;
+            if (state.cards[cid]) {
+              state.cards[cid].position = i;
+            }
+          }
+        }
+        break;
+      }
+      delete state.cards[cardId as string];
+      delete state.cardMetas[cardId as string];
+    },
+
     mulligan: ({ hand, deck, drawCount, playerId }) => {
       const handCards = zoneOps.getCardsInZone(hand, playerId);
 

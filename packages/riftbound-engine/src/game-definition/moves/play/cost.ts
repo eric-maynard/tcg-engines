@@ -111,6 +111,32 @@ export function canPlayToOpenBattlefield(
 }
 
 /**
+ * rule-id: sfd-015-221 — "Play me only to a battlefield you conquered this
+ * turn." True when the card self-grants the `PlayOnlyToConqueredBattlefield`
+ * keyword (printed or via an unconditional static).
+ */
+export function playOnlyToConqueredBattlefield(cardId: string): boolean {
+  const registry = getGlobalCardRegistry();
+  if (registry.hasKeyword(cardId, "PlayOnlyToConqueredBattlefield")) {
+    return true;
+  }
+  return (registry.getAbilities(cardId) ?? []).some((a) => {
+    const ab = a as {
+      type?: string;
+      condition?: unknown;
+      effect?: { type?: string; keyword?: string; target?: unknown };
+    };
+    return (
+      ab.type === "static" &&
+      ab.condition === undefined &&
+      ab.effect?.type === "grant-keyword" &&
+      ab.effect.keyword === "PlayOnlyToConqueredBattlefield" &&
+      (ab.effect.target === undefined || ab.effect.target === "self")
+    );
+  });
+}
+
+/**
  * Runtime replacement stored in `draft.activeReplacements` by the
  * effect-executor `case "replacement"`.
  */
@@ -198,10 +224,45 @@ export function consumeEntersReadyReplacement(
 export interface OptionalPlayCost {
   /** `"accelerate"` (rule 717) enters the unit ready when paid. */
   readonly kind: "accelerate" | "kill" | "pay";
-  /** Extra energy/power to deduct when the cost is paid. */
-  readonly cost?: { energy?: number; power?: readonly string[] };
+  /**
+   * Extra energy/power to deduct when the cost is paid.
+   * rule-id: unl-178-219 — `xp` is spent from the player's XP total.
+   */
+  readonly cost?: { energy?: number; power?: readonly string[]; xp?: number };
   /** Target descriptor for a "kill a friendly X" additional cost. */
   readonly kill?: unknown;
+  /**
+   * rule-id: unl-178-219 (rule 560) — "If you do, I cost [N] less": energy
+   * discount applied to the base cost when the optional cost is paid.
+   */
+  readonly energyDiscount?: number;
+}
+
+/** Decode an "I cost [N] less" ifPaid rider into an energy discount. */
+function ifPaidEnergyDiscount(ifPaid: unknown): number {
+  if (typeof ifPaid !== "object" || ifPaid === null) {
+    return 0;
+  }
+  const r = ifPaid as { type?: string; reduction?: unknown; amount?: unknown; energy?: unknown };
+  if (r.type !== "cost-reduction") {
+    return 0;
+  }
+  let discount = 0;
+  for (const v of [r.reduction, r.amount, r.energy]) {
+    if (typeof v === "number") {
+      discount += v;
+    } else if (typeof v === "string") {
+      for (const m of v.matchAll(/:rb_energy_(\d+):/g)) {
+        discount += Number.parseInt(m[1], 10);
+      }
+    } else if (typeof v === "object" && v !== null) {
+      const e = (v as { energy?: unknown }).energy;
+      if (typeof e === "number") {
+        discount += e;
+      }
+    }
+  }
+  return discount;
 }
 
 /**
@@ -232,8 +293,11 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
     // parser wraps it as a static ability whose effect is
     // `{type:"additional-cost-option", additionalCost}` with no top-level
     // `cost`, so read the nested effect and decode the rune-token string.
+    // Rule 560 — unl-178-219: "you may spend N XP as an additional cost … If
+    // you do, I cost [N] less" arrives as `additionalCost:{xp:N}` with an
+    // `ifPaid` cost-reduction rider.
     const effect = ability.effect as
-      | { type?: string; additionalCost?: unknown }
+      | { type?: string; additionalCost?: unknown; ifPaid?: unknown }
       | undefined;
     if (
       (ability.type === "static" || ability.type === "additional-cost-option") &&
@@ -241,6 +305,7 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
       effect.additionalCost !== undefined
     ) {
       let energy = 0;
+      let xp = 0;
       const power: string[] = [];
       const raw = effect.additionalCost;
       if (typeof raw === "string") {
@@ -253,12 +318,18 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
           power.push(m[1]);
         }
       } else if (typeof raw === "object" && raw !== null) {
-        const obj = raw as { energy?: number; power?: readonly string[] };
+        const obj = raw as { energy?: number; power?: readonly string[]; xp?: number };
         energy = obj.energy ?? 0;
+        xp = obj.xp ?? 0;
         if (obj.power) {power.push(...obj.power);}
       }
-      if (energy > 0 || power.length > 0) {
-        return { cost: { energy, power }, kind: "pay" };
+      if (energy > 0 || power.length > 0 || xp > 0) {
+        const energyDiscount = ifPaidEnergyDiscount(effect.ifPaid);
+        return {
+          cost: { energy, power, ...(xp > 0 ? { xp } : {}) },
+          kind: "pay",
+          ...(energyDiscount > 0 ? { energyDiscount } : {}),
+        };
       }
     }
   }
@@ -273,11 +344,19 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
  * Deflect abilities on the same target stack (rule 721.2). Falls back to
  * +1 per target if the card declares Deflect in its flat `keywords[]`
  * array but no ability carries an explicit numeric value (rule 721.1.b.3).
+ *
+ * rule-id: unl-030-219 (rule 721.1.c) — "OPPONENTS must pay": targets the
+ * caster controls (or owns, when no controller accessor is available) never
+ * contribute a surcharge.
  */
 export function getDeflectSurcharge(
   _state: RiftboundGameState,
   _playerId: string,
   _targets?: string[],
+  cards?: {
+    getCardOwner?: (cardId: CoreCardId) => string | undefined;
+    getCardController?: (cardId: CoreCardId) => string | undefined;
+  },
 ): number {
   if (!_targets || _targets.length === 0) {
     return 0;
@@ -285,6 +364,12 @@ export function getDeflectSurcharge(
   const registry = getGlobalCardRegistry();
   let surcharge = 0;
   for (const targetId of _targets) {
+    const controller =
+      cards?.getCardController?.(targetId as CoreCardId) ??
+      cards?.getCardOwner?.(targetId as CoreCardId);
+    if (controller !== undefined && controller === _playerId) {
+      continue;
+    }
     const abilities = registry.getAbilities(targetId) ?? [];
     let targetSurcharge = 0;
     for (const ability of abilities) {
@@ -408,6 +493,8 @@ export interface CostExtras {
   /**
    * rule-id: ven-083-166 — optional "you may pay [X] as an additional cost"
    * (rule 560) elected by the caster; stacks on top of the base cost.
+   * rule-id: unl-178-219 — `energy` may be negative when the paid optional
+   * cost carries an "I cost [N] less" rider; the total is clamped at 0.
    */
   additionalCost?: { energy?: number; power?: readonly string[] };
   /**
@@ -550,11 +637,13 @@ export function canAffordCard(
   const xAmount = Math.max(0, extras.xAmount ?? 0);
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
   const boardReduction = getBoardCostReduction(state, playerId, cardId, extras);
-  const adjustedEnergy =
+  const adjustedEnergy = Math.max(
+    0,
     applyStaticCostReduction(Math.max(0, baseCost.energy + modifier - interactive), boardReduction) +
-    xAmount +
-    repeatSurcharge +
-    (extras.additionalCost?.energy ?? 0);
+      xAmount +
+      repeatSurcharge +
+      (extras.additionalCost?.energy ?? 0),
+  );
 
   // Rule 357.1.a: ready runes can be exhausted for energy during Pay Costs,
   // so treat their yield as available when testing affordability.
@@ -574,21 +663,44 @@ export function canAffordCard(
     ...Object.keys(repeatPower),
     ...Object.keys(extraPower),
   ]);
+  // Rule 135.2.e.5.a: [rainbow] pips are payable with Power of any Domain —
+  // check named domains first, then cover rainbow from whatever is left.
+  // Rule 721.1.c / 721.1.c.1 (unl-030-219): the Deflect surcharge is Power of
+  // any Domain, so it joins the rainbow requirement rather than energy.
+  let rainbowNeed = getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards);
+  const remaining: Record<string, number> = {};
+  for (const [d, v] of Object.entries(pool.power)) {
+    if (typeof v === "number" && v > 0) {
+      remaining[d] = v;
+    }
+  }
   for (const domain of powerDomains) {
     const need =
       (basePower[domain] ?? 0) +
       (repeatPower[domain] ?? 0) +
       (extraPower[domain] ?? 0);
-    const available = pool.power[domain as keyof typeof pool.power] ?? 0;
-    if (available < need) {
-      return false;
+    if (domain === "rainbow") {
+      rainbowNeed += need;
+      continue;
     }
+    const available = remaining[domain] ?? 0;
+    if (available < need) {
+      // Rule 135.2.e.5.b (unl-022-219): [rainbow] Power in the pool can be
+      // spent as Power of any Domain — cover the shortfall from it.
+      const shortfall = need - available;
+      const wild = remaining.rainbow ?? 0;
+      if (wild < shortfall) {
+        return false;
+      }
+      remaining.rainbow = wild - shortfall;
+      remaining[domain] = 0;
+      continue;
+    }
+    remaining[domain] = available - need;
   }
-
-  const deflectCost = getDeflectSurcharge(state, playerId, extras.targets);
-  if (deflectCost > 0) {
-    const remainingEnergy = availableEnergy - adjustedEnergy;
-    if (remainingEnergy < deflectCost) {
+  if (rainbowNeed > 0) {
+    const leftover = Object.values(remaining).reduce((a, b) => a + b, 0);
+    if (leftover < rainbowNeed) {
       return false;
     }
   }
@@ -616,11 +728,13 @@ export function deductCost(
   const xAmount = Math.max(0, extras.xAmount ?? 0);
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, Math.max(0, extras.repeatCount ?? 0));
   const boardReduction = getBoardCostReduction(draft, playerId, cardId, extras);
-  const adjustedEnergy =
+  const adjustedEnergy = Math.max(
+    0,
     applyStaticCostReduction(Math.max(0, cost.energy + modifier - interactive), boardReduction) +
-    xAmount +
-    repeatSurcharge +
-    (extras.additionalCost?.energy ?? 0);
+      xAmount +
+      repeatSurcharge +
+      (extras.additionalCost?.energy ?? 0),
+  );
 
   pool.energy = Math.max(0, pool.energy - adjustedEnergy);
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
@@ -632,19 +746,42 @@ export function deductCost(
     ...Object.keys(repeatPower),
     ...Object.keys(extraPower),
   ]);
+  // Rule 721.1.c / 721.1.c.1 (unl-030-219): Deflect surcharge is paid in
+  // Power of any Domain, never energy.
+  let rainbowOwed = getDeflectSurcharge(draft, playerId, extras.targets, extras.board?.cards);
   for (const domain of powerDomains) {
     const amount =
       (basePower[domain] ?? 0) +
       (repeatPower[domain] ?? 0) +
       (extraPower[domain] ?? 0);
+    if (domain === "rainbow") {
+      rainbowOwed += amount;
+      continue;
+    }
     if (amount > 0) {
       const key = domain as keyof typeof pool.power;
-      pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - amount);
+      const have = pool.power[key] ?? 0;
+      pool.power[key] = Math.max(0, have - amount);
+      // Rule 135.2.e.5.b (unl-022-219): pooled [rainbow] Power covers any
+      // domain shortfall.
+      const shortfall = amount - have;
+      if (shortfall > 0) {
+        const wildPool = pool.power as Partial<Record<string, number>>;
+        wildPool.rainbow = Math.max(0, (wildPool.rainbow ?? 0) - shortfall);
+      }
     }
   }
-
-  const deflectCost = getDeflectSurcharge(draft, playerId, extras.targets);
-  if (deflectCost > 0) {
-    pool.energy = Math.max(0, pool.energy - deflectCost);
+  // Rule 135.2.e.5.a: [rainbow] pips are paid with any Domain's Power — after
+  // named domains, drain one pip at a time from whichever domain has the most.
+  const anyPool = pool.power as Partial<Record<string, number>>;
+  while (rainbowOwed > 0) {
+    const key = Object.entries(anyPool)
+      .filter(([, v]) => (v ?? 0) > 0)
+      .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0];
+    if (key === undefined) {
+      break;
+    }
+    anyPool[key] = (anyPool[key] ?? 0) - 1;
+    rainbowOwed--;
   }
 }

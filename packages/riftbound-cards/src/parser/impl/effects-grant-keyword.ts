@@ -180,6 +180,30 @@ export function parseGrantKeywordEffect(text: string): GrantKeywordEffect | unde
     return effect as GrantKeywordEffect;
   }
 
+  // rule-id: ven-031-166 (Twilight Shroud) / sfd-105-221 — "It/I can't be
+  // chosen by enemy spells and abilities [this turn]." is captured as the
+  // virtual Untargetable keyword the engine's target resolver enforces.
+  const cantBeChosenMatch = text.match(
+    /^(It|I) can(?:'|’)?t be chosen by enemy spells and abilities\s*(this turn)?\.?$/i,
+  );
+  if (cantBeChosenMatch) {
+    const effect: {
+      type: "grant-keyword";
+      keyword: string;
+      target: AnyTarget;
+      duration?: "turn" | "combat";
+    } = {
+      keyword: "Untargetable",
+      target:
+        cantBeChosenMatch[1].toLowerCase() === "i" ? "self" : ({ type: "unit" } as AnyTarget),
+      type: "grant-keyword",
+    };
+    if (cantBeChosenMatch[2]) {
+      effect.duration = "turn";
+    }
+    return effect as GrantKeywordEffect;
+  }
+
   // Handle "choose a unit. It gains [KEYWORD N] this combat/turn." pattern
   const chooseGainsMatch = text.match(
     /^choose a (?:friendly |enemy )?(?:unit|gear)\.\s*It gains \[(\w+(?:-\w+)?)\s*(\d+)?\]\s*(this (?:turn|combat))?\.?$/i,

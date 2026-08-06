@@ -216,7 +216,8 @@ const STACK_MAX = 3;
 function renderRuneCard(c, topOffset, zIndex, borderColor) {
   const classes = ["card"];
   if (c.cardType) classes.push("type-" + c.cardType);
-  if (c.meta?.exhausted) classes.push("exhausted");
+  // [rule:ui-rune-exhausted-overlay] card--exhausted carries the dark overlay + lock icon (DESIGN.md: rotate 90° + dark overlay)
+  if (c.meta?.exhausted) classes.push("exhausted", "card--exhausted");
   if (selectedCard === c.id) classes.push("selected");
   if (interaction.sourceCardId === c.id && interaction.mode !== "idle") classes.push("interaction-source");
 
@@ -260,7 +261,10 @@ function renderRuneStacks(runes) {
     const color = DOMAIN_COLORS[domain] || "#a09030";
     // Rule 133.5.a.1: every rune must be individually clickable to exhaust,
     // so render all cards (no STACK_MAX cap) — the count label still shows the total.
-    const visibleCards = cards;
+    // [rule:ui-rune-exhausted-overlay] Ready runes first (bottom of pile), exhausted last
+    // (top, highest z-index) — a rotated exhausted rune lower in the pile is fully
+    // covered by the ready cards stacked over it and reads as missing.
+    const visibleCards = [...cards].sort((a, b) => (a.meta?.exhausted ? 1 : 0) - (b.meta?.exhausted ? 1 : 0));
     // Fixed footprint: size for a full 12-rune stack so the zone never resizes.
     const stackHeight = 154 + (12 - 1) * 26;
     const label = DOMAIN_LABELS[domain] ?? domain[0].toUpperCase();

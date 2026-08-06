@@ -8,7 +8,7 @@ import type { PlayerId } from "@tcg/core";
 import { makeLogEntry } from "../src/narrator";
 import { allCards } from "./cards";
 import { SANDBOX_ENABLED, SERVER_ONLY_MOVES } from "./config";
-import { buildDefaultDeck } from "./decks";
+import { MIN_MAIN_DECK_SIZE, buildDefaultDeck, findCopyLimitViolations } from "./decks";
 import { json } from "./http";
 import { gameLogger } from "./log";
 import { createGameFromDecks } from "./pregame";
@@ -34,6 +34,18 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
 
     const deck1 = body.deck1 ?? buildDefaultDeck();
     const deck2 = body.deck2 ?? buildDefaultDeck();
+    // Rule 103.2.b: reject decks with more than 3 copies of a named card.
+    for (const [label, deck] of [["deck1", deck1], ["deck2", deck2]] as const) {
+      const violations = findCopyLimitViolations(deck.mainDeckCardIds ?? []);
+      if (violations.length > 0) {
+        return json({ error: `${label} exceeds the 3-copy limit (rule 103.2.b): ${violations.join(", ")}` }, 400);
+      }
+      // Rule 103.2 / 103.2.a.1: at least 40 Main Deck cards, Chosen Champion included.
+      const mainDeckSize = (deck.mainDeckCardIds ?? []).length + (deck.championId ? 1 : 0);
+      if (mainDeckSize < MIN_MAIN_DECK_SIZE) {
+        return json({ error: `${label} main deck has ${mainDeckSize} cards, needs at least ${MIN_MAIN_DECK_SIZE} (rule 103.2)` }, 400);
+      }
+    }
     const gameId = crypto.randomUUID();
     const session = createGameFromDecks(deck1, deck2, body.seed, { gameMode: "duel", sandbox: (body.sandbox ?? false) && SANDBOX_ENABLED });
     gameSessions.set(gameId, session);

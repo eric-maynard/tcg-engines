@@ -11,7 +11,10 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { createInteractionState, getActiveShowdown, getTurnState } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { hasPlayerWon } from "../../win-conditions/victory";
-import { canPlayerScoreAtBattlefield } from "../../../operations/scoring-rules";
+import {
+  applyScoreReplacement,
+  canPlayerScoreAtBattlefield,
+} from "../../../operations/scoring-rules";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -148,7 +151,8 @@ export const conquerBattlefield: Defs["conquerBattlefield"] = {
     // This player from scoring here right now.
     const scoringAllowed = canPlayerScoreAtBattlefield(draft, playerId, battlefieldId);
     const player = draft.players[playerId];
-    if (player && scoringAllowed) {
+    // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
+    if (player && scoringAllowed && !applyScoreReplacement(draft, playerId, context)) {
       player.victoryPoints += 1;
     }
 

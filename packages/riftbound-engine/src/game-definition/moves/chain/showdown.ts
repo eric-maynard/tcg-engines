@@ -19,6 +19,7 @@ import {
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { hasPlayerWon } from "../../win-conditions/victory";
+import { applyScoreReplacement } from "../../../operations/scoring-rules";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -115,7 +116,8 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
               const scored = draft.scoredThisTurn[solo] ?? [];
               if (!scored.includes(before!.battlefieldId)) {
                 const p = draft.players[solo];
-                if (p) p.victoryPoints += 1;
+                // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
+                if (p && !applyScoreReplacement(draft, solo, context)) p.victoryPoints += 1;
                 if (!draft.scoredThisTurn[solo]) draft.scoredThisTurn[solo] = [];
                 draft.scoredThisTurn[solo].push(before!.battlefieldId);
                 if (hasPlayerWon(draft, solo)) {

@@ -53,7 +53,11 @@ function renderPendingChoiceModal() {
     : pending.onPicked === "play" ? "Choose a card to play"
     : pending.type === "name-card" ? "Name a card"
     : pending.type === "choose-destination" ? "Choose a destination"
+    // Rule ogn-256-298: "any number of" multi-pick — picks accumulate until Done.
+    : pending.type === "choose-target" && pending.anyNumber
+      ? `Choose any number of targets${pending.picked?.length ? ` (${pending.picked.length} chosen)` : ""}`
     : pending.type === "choose-target" ? "Choose a target"
+    : pending.type === "choose-mode" ? "Choose one"  // Rule sfd-091-221
     : "Choose a card";
 
   let html = `<div class="chain-title">${esc(title)}</div>`;
@@ -81,7 +85,13 @@ function renderPendingChoiceModal() {
       // "battlefield-<id>") the same way describePlayVariant does.
       const zid = otherPicks[i].params?.pickedZoneId;
       const accept = otherPicks[i].params?.accept;
-      const label = typeof accept === "boolean" ? (accept ? "Yes" : "No")  // Rule ogn-067-298
+      // Rule sfd-091-221: choose-mode buttons name the mode ("draw 1" / "buff me").
+      const modeIdx = otherPicks[i].params?.pickedMode;
+      const modeOpt = pending.type === "choose-mode" && modeIdx != null ? pending.effect?.options?.[modeIdx] : null;
+      const label = modeOpt
+        ? (modeOpt.label ?? modeOpt.text ?? modeOpt.effect?.text ?? `${modeOpt.effect?.type ?? "mode"}${modeOpt.effect?.amount != null ? ` ${modeOpt.effect.amount}` : ""}`)
+        : typeof accept === "boolean"
+        ? (pending.type === "choose-target" && pending.anyNumber ? "Done" : accept ? "Yes" : "No")  // Rule ogn-067-298 / ogn-256-298
         : zid != null
         ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, "")))
         : (otherPicks[i].params?.pickedName ?? "—");

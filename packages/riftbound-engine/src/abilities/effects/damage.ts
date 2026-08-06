@@ -174,7 +174,36 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       ? rawAmount
       : resolveAmount(rawAmount as Record<string, unknown>, ctx);
   const targets = getTargetIds(effect, ctx);
-  for (const targetId of targets) {
+  const hits: { targetId: string; amount: number }[] = targets.map((targetId) => ({
+    amount,
+    targetId,
+  }));
+  // rule-id: unl-072-219 (Crescent Strike) — "Deal N to that unit and M to
+  // each other enemy unit there": splash every OTHER enemy unit sharing the
+  // chosen target's battlefield zone.
+  const splashOthers = (effect as { splashOthers?: unknown }).splashOthers;
+  if (typeof splashOthers === "number" && splashOthers > 0 && targets.length > 0) {
+    const zone = ctx.zones.getCardZone(targets[0] as CoreCardId);
+    if (zone?.startsWith("battlefield-")) {
+      const others = resolveTarget(
+        { controller: "enemy", quantity: "all", type: "unit" },
+        {
+          cards: ctx.cards,
+          draft: ctx.draft,
+          playerId: ctx.playerId,
+          sourceCardId: ctx.sourceCardId,
+          sourceZone: ctx.sourceZone,
+          zones: ctx.zones,
+        },
+      ).filter(
+        (id) => !targets.includes(id) && ctx.zones.getCardZone(id as CoreCardId) === zone,
+      );
+      for (const id of others) {
+        hits.push({ amount: splashOthers, targetId: id });
+      }
+    }
+  }
+  for (const { targetId, amount } of hits) {
     // Check for "take-damage" replacement effects
     const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? "";
     const replacementCtx = {

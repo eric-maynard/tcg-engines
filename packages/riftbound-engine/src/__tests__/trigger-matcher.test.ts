@@ -349,4 +349,72 @@ describe("Trigger Matcher", () => {
       ).toBe(true);
     });
   });
+
+  // rule-id: unl-133-219 (Blast Cone) — "When YOU move an ENEMY unit".
+  describe("actor-scoped move trigger (unl-133-219)", () => {
+    const blastCone = (): CardWithAbilities =>
+      makeCard(
+        "blast-cone",
+        [
+          {
+            effect: { target: { type: "trigger-source" }, type: "stun" },
+            optional: true,
+            trigger: {
+              event: "move",
+              on: { actor: "controller", cardType: "unit", controller: "enemy" } as unknown as string,
+            },
+            type: "triggered",
+          },
+        ],
+        "base",
+        "p1",
+      );
+
+    test("fires when the controller moves an enemy unit", () => {
+      const event: GameEvent = {
+        cardId: "enemy-unit",
+        from: "base",
+        movedBy: "p1",
+        owner: "p2",
+        to: "battlefield-bf-1",
+        type: "move",
+      };
+      expect(findMatchingTriggers(event, [blastCone()])).toHaveLength(1);
+    });
+
+    test("does not fire when the opponent moves their own unit", () => {
+      const event: GameEvent = {
+        cardId: "enemy-unit",
+        from: "base",
+        movedBy: "p2",
+        owner: "p2",
+        to: "battlefield-bf-1",
+        type: "move",
+      };
+      expect(findMatchingTriggers(event, [blastCone()])).toHaveLength(0);
+    });
+
+    test("does not fire when the controller moves a friendly unit", () => {
+      const event: GameEvent = {
+        cardId: "own-unit",
+        from: "base",
+        movedBy: "p1",
+        owner: "p1",
+        to: "battlefield-bf-1",
+        type: "move",
+      };
+      expect(findMatchingTriggers(event, [blastCone()])).toHaveLength(0);
+    });
+
+    test("does not fire when the mover is unknown", () => {
+      const event: GameEvent = {
+        cardId: "enemy-unit",
+        from: "base",
+        owner: "p2",
+        to: "battlefield-bf-1",
+        type: "move",
+      };
+      expect(findMatchingTriggers(event, [blastCone()])).toHaveLength(0);
+    });
+  });
 });

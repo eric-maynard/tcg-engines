@@ -8,6 +8,7 @@
  */
 import { RuleEngine, type PlayerId } from "@tcg/core";
 import { riftboundDefinition } from "../../game-definition/definition";
+import { endTurn as driverEndTurn } from "../../harness/turn-driver";
 import {
   type CardDefinitionLookup,
   CardDefinitionRegistry,
@@ -26,15 +27,15 @@ export interface DeckConfig {
   championId?: string;
 }
 
-type CardDef = Record<string, unknown> & {
+export type CardDef = Record<string, unknown> & {
   id: string;
   cardType: string;
   name?: string;
-  domain?: string | string[];
+  domain?: string | readonly string[];
   energyCost?: number;
 };
 
-type Internal = {
+export type Internal = {
   zones: Record<string, { config: unknown; cardIds: string[] }>;
   cards: Record<
     string,
@@ -43,7 +44,7 @@ type Internal = {
   cardMetas: Record<string, RiftboundCardMeta>;
 };
 
-function getInternal(engine: Engine): Internal {
+export function getInternal(engine: Engine): Internal {
   return (engine as unknown as { internalState: Internal }).internalState;
 }
 
@@ -60,7 +61,9 @@ export function getZoneCards(engine: Engine, zone: string, playerId?: string): s
 /** Map an instance id back to its definition id. */
 export function getCardMeta(engine: Engine, instanceId: string): Record<string, unknown> | undefined {
   const internal = getInternal(engine);
-  const meta = internal.cardMetas[instanceId] as (Record<string, unknown> & { __flags?: Record<string, boolean> }) | undefined;
+  const meta = internal.cardMetas[instanceId] as unknown as
+    | (Record<string, unknown> & { __flags?: Record<string, boolean> })
+    | undefined;
   return meta ? { ...meta, exhausted: meta.__flags?.exhausted ?? (meta as { exhausted?: boolean }).exhausted } : undefined;
 }
 
@@ -68,7 +71,7 @@ export function definitionIdOf(engine: Engine, instanceId: string): string | und
   return getInternal(engine).cards[instanceId]?.definitionId;
 }
 
-function makeLookupPayload(
+export function makeLookupPayload(
   def: CardDef,
   cardId: string,
   overrides?: { cardType?: string; energyCost?: number }
@@ -77,7 +80,7 @@ function makeLookupPayload(
     abilities: def.abilities as CardDefinitionLookup["abilities"],
     cardType: overrides?.cardType ?? def.cardType,
     copyAttachedUnitText: def.copyAttachedUnitText as boolean | undefined,
-    domain: def.domain,
+    domain: def.domain as string | string[] | undefined,
     energyCost: overrides?.energyCost ?? def.energyCost,
     id: cardId,
     inheritExhaustAbilities: def.inheritExhaustAbilities as boolean | undefined,
@@ -95,7 +98,7 @@ function makeLookupPayload(
   };
 }
 
-function registerCard(
+export function registerCard(
   internal: Internal,
   cardId: string,
   definitionId: string,
@@ -381,49 +384,7 @@ export function advanceTurn(
   engine: Engine,
   players: readonly string[],
 ): { next: string; success: boolean; error?: string } {
-  const s = engine.getState();
-  const cur = s.turn.activePlayer;
-  const idx = players.indexOf(cur);
-  const next = players[(idx + 1) % players.length];
-
-  // The flow's onBegin callbacks (awaken/channel/draw) read getCurrentPlayer(),
-  // So the next player must be set BEFORE endTurn cascades them.
-  engine.getFlowManager()?.setCurrentPlayer(next as PlayerId);
-
-  const result = engine.executeMove("endTurn", {
-    params: { playerId: cur },
-    playerId: cur as PlayerId,
-  }) as { success?: boolean; error?: string };
-
-  if (result?.success === false) {
-    engine.getFlowManager()?.setCurrentPlayer(cur as PlayerId);
-    return { error: result.error, next, success: false };
-  }
-
-  const after = engine.getState();
-  // rule-id: 517.1-end-of-turn-triggers — Ending Step holds while end-of-turn
-  // triggers are on the chain; the flow rotates on its own once it resolves.
-  if (after.turn.phase === "ending") {
-    return { next, success: true };
-  }
-  // Rule 734: the flow's turn.onEnd may have redirected to an additional-turn
-  // owner; treat the flow's activePlayer as authoritative.
-  const actualNext = after.turn.activePlayer || next;
-  if (actualNext !== next) {
-    engine.getFlowManager()?.setCurrentPlayer(actualNext as PlayerId);
-  }
-  // rule-id: 515.2.a-beginning-step-triggers — Beginning Phase holds while
-  // start-of-turn triggers are on the chain; the flow cascades to main once
-  // it resolves, so don't patch the phase over it.
-  if (after.turn.phase === "beginning") {
-    return { next: actualNext, success: true };
-  }
-  if (after.turn.activePlayer !== actualNext || after.turn.phase !== "main") {
-    engine.applyPatches([
-      { op: "replace", path: ["turn", "activePlayer"], value: actualNext },
-      { op: "replace", path: ["turn", "phase"], value: "main" },
-    ]);
-  }
-
-  return { next: actualNext, success: true };
+  // Single implementation shared with the agent harness (harness/turn-driver.ts).
+  const { next, success, error } = driverEndTurn(engine, players);
+  return { error, next, success };
 }

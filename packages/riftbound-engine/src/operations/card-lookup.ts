@@ -295,11 +295,24 @@ export class CardDefinitionRegistry {
       for (const domain of def.powerCost) {
         needed[domain] = (needed[domain] ?? 0) + 1;
       }
+      // Rule 135.2.e.5.a: [rainbow] pips are payable with Power of any
+      // Domain — check named domains first, cover rainbow from the leftover.
+      let leftover = 0;
+      for (const v of Object.values(pool.power)) {
+        leftover += v ?? 0;
+      }
       for (const [domain, count] of Object.entries(needed)) {
+        if (domain === "rainbow") {
+          continue;
+        }
         const available = pool.power[domain as Domain] ?? 0;
         if (available < (count ?? 0)) {
           return false;
         }
+        leftover -= count ?? 0;
+      }
+      if (leftover < (needed.rainbow ?? 0)) {
+        return false;
       }
     }
 

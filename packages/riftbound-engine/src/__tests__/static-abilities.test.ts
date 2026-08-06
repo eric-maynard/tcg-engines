@@ -251,6 +251,56 @@ describe("Static Abilities: Keyword Granting", () => {
       ctx.cardStore.get("enemy")?.meta.grantedKeywords?.some((gk) => gk.keyword === "Assault"),
     ).toBeFalsy();
   });
+
+  // rule-id: unl-058-219 — "Your token units have [Tank]" (parser target descriptor, no `affects`)
+  test("grants keyword to friendly token units via effect.target, not to source", () => {
+    registry.register("lillia", {
+      abilities: [
+        {
+          effect: {
+            keyword: "Tank",
+            target: { controller: "friendly", filter: "token", type: "unit" },
+            type: "grant-keyword",
+          },
+          type: "static",
+        },
+      ],
+      cardType: "unit",
+      id: "lillia",
+      might: 4,
+      name: "Lillia, Protector of Dreams",
+    });
+    registry.register("token-sand-soldier-p1-1", {
+      cardType: "unit",
+      id: "token-sand-soldier-p1-1",
+      might: 2,
+      name: "Sand Soldier",
+    });
+    registry.register("ally", { cardType: "unit", id: "ally", might: 3, name: "Ally" });
+    registry.register("token-recruit-p2-1", {
+      cardType: "unit",
+      id: "token-recruit-p2-1",
+      might: 1,
+      name: "Recruit",
+    });
+
+    const draft = createMockState();
+    const ctx = createMockStaticContext(draft, {
+      ally: { meta: {}, owner: "p1", zone: "base" },
+      lillia: { meta: {}, owner: "p1", zone: "base" },
+      "token-recruit-p2-1": { meta: {}, owner: "p2", zone: "base" },
+      "token-sand-soldier-p1-1": { meta: {}, owner: "p1", zone: "battlefield-bf-1" },
+    });
+
+    recalculateStaticEffects(ctx);
+
+    const hasTank = (id: string) =>
+      ctx.cardStore.get(id)?.meta.grantedKeywords?.some((gk) => gk.keyword === "Tank") ?? false;
+    expect(hasTank("token-sand-soldier-p1-1")).toBe(true);
+    expect(hasTank("lillia")).toBe(false);
+    expect(hasTank("ally")).toBe(false);
+    expect(hasTank("token-recruit-p2-1")).toBe(false);
+  });
 });
 
 describe("Static Abilities: Recalculation", () => {

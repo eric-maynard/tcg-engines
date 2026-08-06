@@ -893,3 +893,161 @@ describe("Sudden Storm (sfd-017-221): target-attacking conditional damage", () =
     expect(run("attacker")).toBe(4);
   });
 });
+
+// ============================================================================
+// Crescent Strike (unl-072-219): 4 to chosen enemy unit, 1 to each OTHER
+// enemy unit at that battlefield only
+// ============================================================================
+
+// rule-id: unl-072-219
+describe("Crescent Strike (unl-072-219): splashOthers damage", () => {
+  let registry: CardDefinitionRegistry;
+
+  beforeEach(() => {
+    registry = new CardDefinitionRegistry();
+    setGlobalCardRegistry(registry);
+  });
+
+  afterEach(() => {
+    clearGlobalCardRegistry();
+  });
+
+  test("chosen unit takes 4; other enemy units there take 1; elsewhere/friendly untouched", () => {
+    registry.register("strike-1", { cardType: "spell", id: "strike-1", name: "Crescent Strike" });
+    for (const id of ["e-main", "e-other", "e-elsewhere", "e-base", "f-here"]) {
+      registry.register(id, { cardType: "unit", id, might: 6, name: id });
+    }
+    const state = createMockState({
+      battlefields: {
+        "bf-1": { contested: false, controller: "p1", id: "bf-1" },
+        "bf-2": { contested: false, controller: "p2", id: "bf-2" },
+      } as RiftboundGameState["battlefields"],
+    });
+    const blank = { buffed: false, damage: 0, exhausted: false, hidden: false, stunned: false };
+    const harness = createHarness({
+      "e-base": { meta: { ...blank }, owner: "p2", zone: "base" },
+      "e-elsewhere": { meta: { ...blank }, owner: "p2", zone: "battlefield-bf-2" },
+      "e-main": { meta: { ...blank }, owner: "p2", zone: "battlefield-bf-1" },
+      "e-other": { meta: { ...blank }, owner: "p2", zone: "battlefield-bf-1" },
+      "f-here": { meta: { ...blank }, owner: "p1", zone: "battlefield-bf-1" },
+    });
+    const effect = {
+      amount: 4,
+      splashOthers: 1,
+      target: { controller: "enemy", location: "battlefield", type: "unit" },
+      type: "damage",
+    } as unknown as ExecutableEffect;
+    const effectCtx: EffectContext = {
+      boundTargets: ["e-main"],
+      cards: harness.cards as unknown as EffectContext["cards"],
+      counters: harness.counters,
+      draft: state,
+      playerId: "p1",
+      sourceCardId: "strike-1",
+      sourceZone: "trash",
+      zones: harness.zones as unknown as EffectContext["zones"],
+    } as EffectContext;
+    executeEffect(effect, effectCtx);
+    const dmg = (id: string) => harness.cardStore.get(id)!.meta.damage ?? 0;
+    expect(dmg("e-main")).toBe(4);
+    expect(dmg("e-other")).toBe(1);
+    expect(dmg("e-elsewhere")).toBe(0);
+    expect(dmg("e-base")).toBe(0);
+    expect(dmg("f-here")).toBe(0);
+  });
+});
+
+// ============================================================================
+// Facebreaker (ogn-220-298): "Stun a friendly unit and an enemy unit at the
+// same battlefield" — the enemy stun is pinned to the friendly's battlefield.
+// ============================================================================
+
+// rule-id: ogn-220-298
+describe("Facebreaker (ogn-220-298): location 'same' pins to lead's battlefield", () => {
+  let registry: CardDefinitionRegistry;
+
+  beforeEach(() => {
+    registry = new CardDefinitionRegistry();
+    setGlobalCardRegistry(registry);
+  });
+
+  afterEach(() => {
+    clearGlobalCardRegistry();
+  });
+
+  const facebreakerEffect = {
+    effects: [
+      { target: { controller: "friendly", location: "battlefield", type: "unit" }, type: "stun" },
+      { target: { controller: "enemy", location: "same", type: "unit" }, type: "stun" },
+    ],
+    type: "sequence",
+  } as unknown as ExecutableEffect;
+
+  function setup(cards: Record<string, { owner: string; zone: string }>) {
+    registry.register("fb-1", { cardType: "spell", id: "fb-1", name: "Facebreaker" });
+    for (const id of Object.keys(cards)) {
+      registry.register(id, { cardType: "unit", id, might: 3, name: id });
+    }
+    const state = createMockState({
+      battlefields: {
+        "bf-1": { contested: false, controller: "p1", id: "bf-1" },
+        "bf-2": { contested: false, controller: "p2", id: "bf-2" },
+      } as RiftboundGameState["battlefields"],
+    });
+    const blank = { buffed: false, damage: 0, exhausted: false, hidden: false, stunned: false };
+    const harness = createHarness(
+      Object.fromEntries(
+        Object.entries(cards).map(([id, c]) => [id, { meta: { ...blank }, owner: c.owner, zone: c.zone }]),
+      ),
+    );
+    const ctx = (bound?: string[]): EffectContext =>
+      ({
+        ...(bound ? { boundTargets: bound } : {}),
+        cards: harness.cards as unknown as EffectContext["cards"],
+        counters: harness.counters,
+        draft: state,
+        playerId: "p1",
+        sourceCardId: "fb-1",
+        sourceZone: "chain",
+        zones: harness.zones as unknown as EffectContext["zones"],
+      }) as EffectContext;
+    const stunned = (id: string) => harness.cardStore.get(id)!.meta.stunned === true;
+    return { ctx, stunned };
+  }
+
+  test("enemy at a different battlefield / base is never stunned", () => {
+    const { ctx, stunned } = setup({
+      "e-base": { owner: "p2", zone: "base" },
+      "e-bf2": { owner: "p2", zone: "battlefield-bf-2" },
+      "e-bf1": { owner: "p2", zone: "battlefield-bf-1" },
+      "f-bf1": { owner: "p1", zone: "battlefield-bf-1" },
+    });
+    executeEffect(facebreakerEffect, ctx(["f-bf1"]));
+    expect(stunned("f-bf1")).toBe(true);
+    expect(stunned("e-bf1")).toBe(true);
+    expect(stunned("e-bf2")).toBe(false);
+    expect(stunned("e-base")).toBe(false);
+  });
+
+  test("unbound lead prefers a friendly unit whose battlefield has an enemy", () => {
+    const { ctx, stunned } = setup({
+      "e-bf2": { owner: "p2", zone: "battlefield-bf-2" },
+      "f-alone": { owner: "p1", zone: "battlefield-bf-1" },
+      "f-bf2": { owner: "p1", zone: "battlefield-bf-2" },
+    });
+    executeEffect(facebreakerEffect, ctx());
+    expect(stunned("f-bf2")).toBe(true);
+    expect(stunned("e-bf2")).toBe(true);
+    expect(stunned("f-alone")).toBe(false);
+  });
+
+  test("no enemy at the lead's battlefield: enemy elsewhere is not stunned", () => {
+    const { ctx, stunned } = setup({
+      "e-bf2": { owner: "p2", zone: "battlefield-bf-2" },
+      "f-bf1": { owner: "p1", zone: "battlefield-bf-1" },
+    });
+    executeEffect(facebreakerEffect, ctx(["f-bf1"]));
+    expect(stunned("f-bf1")).toBe(true);
+    expect(stunned("e-bf2")).toBe(false);
+  });
+});

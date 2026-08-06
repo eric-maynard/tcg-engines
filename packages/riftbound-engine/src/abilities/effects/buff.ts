@@ -25,5 +25,9 @@ export function handle_buff(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
       { buffed: true } as unknown as Record<string, unknown>,
     );
     checkBecomesMighty(targetId, mightBefore, ctx);
+    // rule-id: ogn-152-298 — "When you buff a friendly unit" listeners
+    // (Mistfall) need a buff event; playerId is the buffing player so
+    // `controller: "friendly"` descriptors can resolve the subject owner.
+    ctx.fireTriggers?.({ cardId: targetId, playerId: ctx.playerId, type: "buff" });
   }
 }

@@ -149,6 +149,17 @@ export const tokenMoves: Partial<
           ownerId: playerId as CorePlayerId,
           zoneId: zoneId as CoreZoneId,
         });
+        // Rule unl-180-219: register the instance id too — target
+        // resolution ("all units") looks up cardType by instance id with
+        // no definitionId fallback, so unregistered sandbox tokens would
+        // survive board wipes that ability-minted tokens die to.
+        registry.register(cardId, {
+          cardType: def.type === "gear" ? "gear" : "unit",
+          id: cardId,
+          keywords: def.keywords ? [...def.keywords] : undefined,
+          might: def.might,
+          name: def.name,
+        });
       }
     },
   },

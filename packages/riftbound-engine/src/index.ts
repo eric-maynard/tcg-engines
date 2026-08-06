@@ -39,6 +39,11 @@ export { riftboundMoves } from "./game-definition/moves";
 
 // Type exports
 export * from "./types";
+// Views (information hiding + acting-seat cursor)
+export { createPlayerView, getActingSeat, getPendingChoiceChooser } from "./views";
+// Agent harness (L0–L4). Namespaced to avoid clashing with engine type names;
+// also available as the `@tcg/riftbound/harness` subpath.
+export * as Harness from "./harness";
 // Move enumeration type exports
 export type {
   AvailableMoveInfo,

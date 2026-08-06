@@ -29,6 +29,33 @@ export function markContestedOnArrival(
   bf.showdownComplete = false;
 }
 
+/**
+ * rule-id: unl-133-219 — an effect-driven move is still a move: move a board
+ * card and emit the `move` event (with the unit's controller as `owner` and
+ * the effect's controller as `movedBy`) so "When I move" / "When you move an
+ * enemy unit" triggers fire. Non-board origins (hand, trash, …) are not moves.
+ */
+export function moveCardWithEvent(ctx: EffectContext, cardId: string, targetZoneId: string): void {
+  const from = ctx.zones.getCardZone(cardId as CoreCardId) ?? "";
+  ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: targetZoneId as CoreZoneId });
+  const onBoard = (z: string) => z === "base" || z.startsWith("battlefield-");
+  if (from === targetZoneId || !onBoard(from) || !onBoard(targetZoneId)) {
+    return;
+  }
+  const owner =
+    ctx.cards.getCardController?.(cardId as CoreCardId) ??
+    ctx.cards.getCardOwner(cardId as CoreCardId) ??
+    undefined;
+  ctx.fireTriggers?.({
+    cardId,
+    from,
+    movedBy: ctx.playerId,
+    owner,
+    to: targetZoneId,
+    type: "move",
+  });
+}
+
 export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // rule-id: unl-107-219 (Stare Down) — Rule 355.8 / 355.2: "Choose a
   // friendly unit and a battlefield. Move all enemy units at that
@@ -103,7 +130,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         getEffectiveMight(id, ctx) < refMight,
     );
     for (const id of victims) {
-      ctx.zones.moveCard({ cardId: id as CoreCardId, targetZoneId: "base" as CoreZoneId });
+      moveCardWithEvent(ctx, id, "base");
     }
     return;
   }
@@ -178,10 +205,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         continue;
       }
       if (options.length === 1 || ctx.draft.pendingChoice) {
-        ctx.zones.moveCard({
-          cardId: cardId as CoreCardId,
-          targetZoneId: options[0] as CoreZoneId,
-        });
+        moveCardWithEvent(ctx, cardId, options[0] as string);
         // rule-id: unl-144-219 — Rule 450: arriving at a non-controlled
         // battlefield applies Contested so combat is staged.
         markContestedOnArrival(ctx.draft, options[0] as string, ctx.playerId);
@@ -205,9 +229,17 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // them straight to zones.moveCard (rule 350.1).
     const cardId = moveTargets[0];
     const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
+    // rule-id: sfd-200-221 (rule 355.2 / 341) — a card entering play from
+    // off-board (a pending "play it" from banishment) may only be placed at
+    // base or a battlefield its player CONTROLS; an on-board move keeps the
+    // unrestricted battlefield list.
+    const enteringPlay =
+      currentZone !== "base" && !(currentZone ?? "").startsWith("battlefield-");
     const options = [
       "base",
-      ...Object.keys(ctx.draft.battlefields).map((bfId) => `battlefield-${bfId}`),
+      ...Object.entries(ctx.draft.battlefields)
+        .filter(([, bf]) => !enteringPlay || bf.controller === ctx.playerId)
+        .map(([bfId]) => `battlefield-${bfId}`),
     ].filter((z) => z !== currentZone);
     if (options.length === 0) {
       return;
@@ -230,9 +262,6 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     targetZone = "base";
   }
   for (const targetId of moveTargets) {
-    ctx.zones.moveCard({
-      cardId: targetId as CoreCardId,
-      targetZoneId: targetZone as CoreZoneId,
-    });
+    moveCardWithEvent(ctx, targetId, targetZone);
   }
 }

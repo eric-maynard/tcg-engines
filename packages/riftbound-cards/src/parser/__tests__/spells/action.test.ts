@@ -311,6 +311,36 @@ describe("Spell: Action", () => {
       );
     });
 
+    // rule-id: ven-089-166-look-banish-play — Wild Claw: "You may banish a
+    // unit or gear from among them and play it, reducing its Energy cost by
+    // [5]. Recycle the rest." must be a declinable banish-then-play at -5,
+    // not the bare-look default (mandatory draw).
+    it("should parse Wild Claw's optional look → banish+play at reduced cost", () => {
+      const result = parseAbilities(
+        "Look at the top 5 cards of your Main Deck. You may banish a unit or gear from among them and play it, reducing its Energy cost by [5]. Recycle the rest. Then you may do this: Empower it. (It becomes Empowered if it's not already.)",
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({
+          effect: expect.objectContaining({
+            amount: 5,
+            from: "deck",
+            onPicked: "play",
+            optional: true,
+            reduceCost: { energy: 5 },
+            type: "look",
+          }),
+          type: "spell",
+        }),
+      );
+      const filter = (result.abilities?.[0] as { effect: { filter?: { excludeCardTypes?: string[] } } })
+        .effect.filter;
+      expect(filter?.excludeCardTypes).toContain("spell");
+      expect(filter?.excludeCardTypes).not.toContain("unit");
+      expect(filter?.excludeCardTypes).not.toContain("gear");
+    });
+
     it("should parse '[Action] Units you play this turn enter ready. Draw 1.'", () => {
       const result = parseAbilities(
         "[Action] (Play on your turn or in showdowns.)Units you play this turn enter ready. Draw 1.",

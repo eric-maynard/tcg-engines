@@ -64,23 +64,54 @@ export function findAmountReferenceTarget(
 export function findSequenceLeadTarget(
   effect: SpellEffectTargetShape | undefined,
 ): SpellEffectTargetDescriptor | undefined {
-  if (effect?.type !== "sequence" || !Array.isArray(effect.effects)) return undefined;
-  let lead: Exclude<SpellEffectTargetDescriptor, string> | undefined;
-  for (const sub of effect.effects) {
-    const t = sub?.target;
-    if (t === undefined) continue;
-    if (typeof t === "string") return undefined;
-    if (t.type === "pending-value") continue;
-    if (!lead) {
-      lead = t;
-      continue;
-    }
-    const leadRec = lead as Record<string, unknown>;
-    for (const [k, v] of Object.entries(t as Record<string, unknown>)) {
-      if (JSON.stringify(leadRec[k]) !== JSON.stringify(v)) return undefined;
-    }
+  const slots = collectSequenceTargetSlots(effect);
+  return slots?.length === 1 ? slots[0] : undefined;
+}
+
+type SlotDescriptor = Exclude<SpellEffectTargetDescriptor, string>;
+
+/** True when `t` is an anaphoric restatement of `slot` (no conflicting keys). */
+export function isRestatementOf(slot: SlotDescriptor, t: SlotDescriptor): boolean {
+  const rec = slot as Record<string, unknown>;
+  for (const [k, v] of Object.entries(t as Record<string, unknown>)) {
+    if (JSON.stringify(rec[k]) !== JSON.stringify(v)) return false;
   }
-  return lead;
+  return true;
+}
+
+/**
+ * rule-id: sfd-200-221 (rule 355.8) — a sequence may name MORE than one
+ * caster-chosen card target ("Banish a friendly unit, then its owner plays
+ * it… Deal 3 to an enemy unit at a battlefield. Banish this."). Flatten
+ * nested sequences in text order and return each distinct card descriptor
+ * once (slot 0 is the lead); restatements of an earlier slot share it.
+ * `self` / `pending-value` back-references are never caster-chosen. Returns
+ * undefined when a step carries an opaque string target other than "self".
+ */
+export function collectSequenceTargetSlots(
+  effect: SpellEffectTargetShape | undefined,
+): SlotDescriptor[] | undefined {
+  if (effect?.type !== "sequence" || !Array.isArray(effect.effects)) return undefined;
+  const slots: SlotDescriptor[] = [];
+  const walk = (effects: SpellEffectTargetShape[]): boolean => {
+    for (const sub of effects) {
+      if (sub?.type === "sequence" && Array.isArray(sub.effects)) {
+        if (!walk(sub.effects)) return false;
+        continue;
+      }
+      const t = sub?.target;
+      if (t === undefined) continue;
+      if (typeof t === "string") {
+        if (t === "self") continue;
+        return false;
+      }
+      if (t.type === "pending-value" || t.type === "self") continue;
+      if (slots.some((s) => isRestatementOf(s, t))) continue;
+      slots.push(t);
+    }
+    return true;
+  };
+  return walk(effect.effects) ? slots : undefined;
 }
 
 /**
@@ -103,6 +134,32 @@ export function findSplitDamageEffect(
     }
   }
   return undefined;
+}
+
+/**
+ * rule-id: ogn-256-298 (Fox-Fire) — aggregate legality of a multi-target pick
+ * set ("any number of units at a battlefield with total Might 4 or less"):
+ * "at a battlefield" (singular) pins every pick to ONE battlefield zone, and
+ * `totalMight: { lte|lt: N }` caps the summed Might of the whole set.
+ */
+export function isLegalMultiTargetSet(
+  tgt: { location?: string; totalMight?: { lte?: number; lt?: number } } | undefined,
+  ids: readonly string[],
+  ctx: { getCardZone: (id: string) => string | undefined; getMight: (id: string) => number },
+): boolean {
+  if (!tgt || ids.length === 0) return true;
+  if (tgt.location === "battlefield" || tgt.location === "here") {
+    const zone = ctx.getCardZone(ids[0] as string);
+    if (!ids.every((id) => ctx.getCardZone(id) === zone)) return false;
+  }
+  const cap = tgt.totalMight;
+  if (cap && (cap.lte !== undefined || cap.lt !== undefined)) {
+    let sum = 0;
+    for (const id of ids) sum += ctx.getMight(id);
+    if (cap.lte !== undefined && !(sum <= cap.lte)) return false;
+    if (cap.lt !== undefined && !(sum < cap.lt)) return false;
+  }
+  return true;
 }
 
 export function enumerateSubsetsUpTo(pool: string[], maxSize: number): string[][] {
@@ -138,7 +195,36 @@ export function spellEffectHasLegalTargets(
   }
   // Sequence effects: every sub-effect's targets must be satisfiable.
   if (effect.type === "sequence" && Array.isArray(effect.effects)) {
-    return effect.effects.every((sub) => spellEffectHasLegalTargets(sub, ctx));
+    if (!effect.effects.every((sub) => spellEffectHasLegalTargets(sub, ctx))) {
+      return false;
+    }
+    // rule-id: ogn-220-298 (rule 355.8) — "… and an enemy unit at the same
+    // battlefield": some lead candidate's battlefield must also hold a legal
+    // (distinct) target for the `location: "same"` step.
+    const sameSub = effect.effects.find(
+      (s) => typeof s?.target === "object" && (s.target as { location?: string }).location === "same",
+    );
+    const leadSub = effect.effects.find(
+      (s) =>
+        typeof s?.target === "object" &&
+        s.target.type !== "pending-value" &&
+        (s.target as { location?: string }).location !== "same",
+    );
+    if (sameSub && leadSub) {
+      type Desc = Exclude<Parameters<typeof resolveTarget>[0], string | undefined>;
+      const leads = resolveTarget({ ...(leadSub.target as Desc), quantity: "all" }, ctx);
+      return leads.some((id) => {
+        const zone = ctx.zones.getCardZone(id as Parameters<typeof ctx.zones.getCardZone>[0]);
+        return (
+          zone !== undefined &&
+          resolveTarget(
+            { ...(sameSub.target as Desc), quantity: "all" },
+            { ...ctx, sameZone: zone },
+          ).some((o) => o !== id)
+        );
+      });
+    }
+    return true;
   }
   // Rule 355.10.d: "for each <criteria>" is a programmatic selection, not a
   // caster-chosen target — 355.8's ≥1-valid-target gate does not apply, and the

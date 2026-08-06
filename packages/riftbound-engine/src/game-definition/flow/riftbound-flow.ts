@@ -29,7 +29,7 @@ import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { dequeueExtraTurn } from "../../operations/turn-queue";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
-import { canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
+import { applyScoreReplacement, canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
 
 /**
  * Build a TriggerRunnerContext from a flow phase context.
@@ -327,7 +327,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                       bfId,
                     );
                     const player = context.state.players[playerId];
-                    if (player && scoringAllowed) {
+                    // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
+                    if (
+                      player &&
+                      scoringAllowed &&
+                      !applyScoreReplacement(context.state, playerId, context)
+                    ) {
                       player.victoryPoints += 1;
                     }
 
@@ -366,7 +371,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
 
               // Channel 2 runes (rule 515.3.b)
               // Rule 644.7: second player channels extra rune on first turn
-              const playerId = context.getCurrentPlayer();
+              // rule-id: 515.3.b-channel-turn-player — the Turn Player channels.
+              // Read turn.activePlayer, not getCurrentPlayer(): callers may
+              // pre-rotate the flow's current player while the Beginning Phase
+              // is held on a start-of-turn chain.
+              const playerId = (context.state.turn?.activePlayer ||
+                context.getCurrentPlayer()) as CorePlayerId;
               let baseChannelCount = 2;
 
               const isFirstTurn =
@@ -419,7 +429,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 phase: "draw",
               };
 
-              const playerId = context.getCurrentPlayer();
+              // rule-id: 515.4.b-draw-turn-player — the Turn Player draws; see
+              // channel.onBegin for why this reads turn.activePlayer.
+              const playerId = (context.state.turn?.activePlayer ||
+                context.getCurrentPlayer()) as CorePlayerId;
 
               // Check for empty deck -> Burn Out (rule 518)
               const deckCards = context.zones.getCardsInZone(
@@ -466,7 +479,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
 
             onEnd: (context) => {
               // Rune pool empties at end of draw phase (rule 515.4.d)
-              const playerId = context.getCurrentPlayer();
+              const playerId = context.state.turn?.activePlayer || context.getCurrentPlayer();
               const pool = context.state.runePools[playerId];
               if (pool) {
                 pool.energy = 0;
@@ -491,6 +504,17 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 ...context.state.turn,
                 phase: "main",
               };
+
+              // rule-id: 516-main-phase-start (ven-067-166 Bottled
+              // Constellation): "At the start of your Main Phase" triggers
+              // fire for the turn player as the Main Phase opens.
+              const mainPlayer = context.state.turn?.activePlayer || context.getCurrentPlayer();
+              if (mainPlayer) {
+                fireTriggers(
+                  { playerId: mainPlayer as string, type: "main-phase" },
+                  buildFlowTriggerContext(context),
+                );
+              }
             },
 
             order: 5,

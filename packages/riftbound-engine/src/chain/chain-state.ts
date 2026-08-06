@@ -51,6 +51,12 @@ export interface ChainItem {
   readonly triggerEvent?: unknown;
   /** Rule 583 (unl-021-219): "you may" trigger — controller opts in on resolve */
   readonly optional?: boolean;
+  /**
+   * rule-id: sfd-119-221 — "you may pay [N] to …" trigger: the cost the
+   * controller must pay on opt-in ({ energy?, power?, exhaust? }). Accepting
+   * is only legal when affordable, and the cost is deducted before the effect.
+   */
+  readonly optInCost?: unknown;
   /** Whether this item was countered (skip execution on resolve) */
   readonly countered?: boolean;
   /**

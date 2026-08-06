@@ -548,6 +548,74 @@ describe("resolvePendingChoice move", () => {
     expect(draft.pendingChoice).toBeUndefined();
   });
 
+  it("choose-destination from banishment offers only base + CONTROLLED battlefields (sfd-200-221)", () => {
+    // rule-id: sfd-200-221 — a pending "play it" may not place the unit at
+    // an uncontrolled/enemy battlefield.
+    const mine = "player-1-bf-unl-205-219";
+    const theirs = "player-2-bf-ogn-277-298";
+    const { ctx, draft, zoneOf } = buildMockCtx();
+    (draft as { battlefields: Record<string, unknown> }).battlefields = {
+      [mine]: { contested: false, controller: "p1", id: mine },
+      [theirs]: { contested: false, controller: "p2", id: theirs },
+    };
+    zoneOf.set("rearguard", "banishment");
+    executeEffect(
+      { target: "rearguard", to: "choose", type: "move" } as unknown as ExecutableEffect,
+      { ...ctx, boundTargets: ["rearguard"] } as EffectContext,
+    );
+    const options = (draft.pendingChoice as { options: string[] }).options;
+    expect(options).toEqual(["base", `battlefield-${mine}`]);
+  });
+
+  it("sequence routes [lead, second] play-time targets to their own steps and never to 'self' (sfd-200-221)", () => {
+    // rule-id: sfd-200-221 — Arcane Shift: banish FRIENDLY, play it, deal 3
+    // to the ENEMY, banish THIS. Bound [friendly, enemy] must not banish both
+    // nor damage the friendly, and "Banish this" hits the spell itself.
+    const { ctx, draft, zoneOf } = buildMockCtx({ opponentHand: [] });
+    zoneOf.set("friendly", "battlefield-bf1");
+    zoneOf.set("enemy", "battlefield-bf1");
+    zoneOf.set("source-spell", "chain");
+    const damaged: Record<string, number> = {};
+    const seqCtx = {
+      ...ctx,
+      boundTargets: ["friendly", "enemy"],
+      counters: {
+        ...ctx.counters,
+        addCounter: (id: CoreCardId, c: string, n: number) => {
+          if (c === "damage") damaged[id as string] = (damaged[id as string] ?? 0) + n;
+        },
+      },
+    } as EffectContext;
+    executeEffect(
+      {
+        effects: [
+          { target: { controller: "friendly", type: "unit" }, type: "banish" },
+          {
+            effects: [
+              { ignoreCost: true, target: { type: "pending-value" }, type: "play" },
+              {
+                amount: 3,
+                target: { controller: "enemy", location: "battlefield", type: "unit" },
+                type: "damage",
+              },
+              { target: "self", type: "banish" },
+            ],
+            type: "sequence",
+          },
+        ],
+        pendingValue: { source: 0 },
+        type: "sequence",
+      } as unknown as ExecutableEffect,
+      seqCtx,
+    );
+    expect(zoneOf.get("friendly")).toBe("banishment");
+    expect(zoneOf.get("enemy")).toBe("battlefield-bf1");
+    expect(damaged).toEqual({ enemy: 3 });
+    expect(zoneOf.get("source-spell")).toBe("banishment");
+    const items = draft.interaction?.chain?.items ?? [];
+    expect(items.map((i: { cardId?: string }) => i.cardId)).toEqual(["friendly"]);
+  });
+
   it("recycle position:owner-choice prompts the OWNER for top/bottom of Main Deck (unl-204-219)", () => {
     // rule-id: unl-204-219-owner-chooses-top-or-bottom
     const { ctx, draft } = buildMockCtx({ opponentHand: ["enemy-unit"] });
@@ -640,6 +708,60 @@ describe("name-card effect (rule 762)", () => {
     move.reducer(draft, context);
     expect(meta.namedCard).toBe("Bolt");
     expect(draft.pendingChoice).toBeUndefined();
+  });
+});
+
+describe("two-slot sequence spell targeting (sfd-200-221)", () => {
+  it("playSpell enumerates [friendly, enemy] target pairs for a two-slot sequence spell (sfd-200-221)", () => {
+    // rule-id: sfd-200-221 (rule 355.8) — both caster-chosen targets are
+    // locked at play time.
+    const engine = createMinimalGameState({ phase: "main", currentPlayer: P1 });
+    createBattlefield(engine, "as-bf", { controller: P1 });
+    createCard(engine, "as-friendly", {
+      cardType: "unit",
+      might: 2,
+      owner: P1,
+      zone: "battlefield-as-bf",
+    });
+    createCard(engine, "as-enemy", { cardType: "unit", might: 2, owner: P2, zone: "battlefield-as-bf" });
+    createCard(engine, "as-spell", {
+      abilities: [
+        {
+          effect: {
+            effects: [
+              { target: { controller: "friendly", type: "unit" }, type: "banish" },
+              {
+                effects: [
+                  { ignoreCost: true, target: { type: "pending-value" }, type: "play" },
+                  {
+                    amount: 3,
+                    target: { controller: "enemy", location: "battlefield", type: "unit" },
+                    type: "damage",
+                  },
+                  { target: "self", type: "banish" },
+                ],
+                type: "sequence",
+              },
+            ],
+            pendingValue: { source: 0 },
+            type: "sequence",
+          },
+          timing: "action",
+          type: "spell",
+        },
+      ] as unknown as [],
+      cardType: "spell",
+      energyCost: 0,
+      owner: P1,
+      timing: "action",
+      zone: "hand",
+    });
+    const plays = enumerateLegalMoves(engine, P1).filter(
+      (m) => m.moveId === "playSpell" && (m.params as { cardId?: string }).cardId === "as-spell",
+    );
+    expect(plays.map((m) => (m.params as { targets?: string[] }).targets)).toEqual([
+      ["as-friendly", "as-enemy"],
+    ]);
   });
 });
 

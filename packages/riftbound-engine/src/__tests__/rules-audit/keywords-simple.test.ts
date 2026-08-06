@@ -459,10 +459,11 @@ describe("Rule 721.2: Multiple Deflect grants sum together", () => {
 // ---------------------------------------------------------------------------
 
 describe("Rule 721.1.b: engine playSpell surcharges by the target's Deflect Value", () => {
-  it("Deflect 3 target charges the attacker +3 energy on top of the spell cost", () => {
+  it("Deflect 3 target charges the attacker +3 power (any domain) on top of the spell cost", () => {
+    // Rule 721.1.c.1: Deflect surcharge is Power of any Domain, not energy.
     const engine = createMinimalGameState({
       phase: "main",
-      runePools: { [P1]: { energy: 5, power: {} } },
+      runePools: { [P1]: { energy: 5, power: { fury: 2, calm: 2 } } },
     });
     // Target unit owned by the opponent with Deflect 3.
     createCard(engine, "deflect-target", {
@@ -496,15 +497,17 @@ describe("Rule 721.1.b: engine playSpell surcharges by the target's Deflect Valu
       targets: ["deflect-target"],
     });
     expect(result.success).toBe(true);
-    // 5 - (1 base + 3 deflect) = 1 remaining.
-    expect(getState(engine).runePools[P1].energy).toBe(1);
+    // Energy: 5 - 1 base = 4. Power: 4 - 3 deflect = 1 remaining across domains.
+    const pool = getState(engine).runePools[P1];
+    expect(pool.energy).toBe(4);
+    expect((pool.power.fury ?? 0) + (pool.power.calm ?? 0)).toBe(1);
   });
 
-  it("Deflect 3 target blocks the play when the attacker is only affording the base cost", () => {
+  it("Deflect 3 target blocks the play when the attacker has energy but no power", () => {
     const engine = createMinimalGameState({
       phase: "main",
-      // Exactly the base cost, with no budget for Deflect.
-      runePools: { [P1]: { energy: 1, power: {} } },
+      // Plenty of energy, but Deflect must be paid in power (rule 721.1.c.1).
+      runePools: { [P1]: { energy: 5, power: {} } },
     });
     createCard(engine, "deflect-target", {
       abilities: [{ keyword: "Deflect", type: "keyword", value: 3 }],
@@ -541,7 +544,7 @@ describe("Rule 721.1.b: engine playSpell surcharges by the target's Deflect Valu
   it("Multiple Deflect abilities on the same target stack per rule 721.2", () => {
     const engine = createMinimalGameState({
       phase: "main",
-      runePools: { [P1]: { energy: 6, power: {} } },
+      runePools: { [P1]: { energy: 1, power: { mind: 5 } } },
     });
     createCard(engine, "stacked", {
       abilities: [
@@ -576,8 +579,9 @@ describe("Rule 721.1.b: engine playSpell surcharges by the target's Deflect Valu
       targets: ["stacked"],
     });
     expect(result.success).toBe(true);
-    // 6 - (1 base + 2 + 3 stacked deflect) = 0 remaining.
+    // Energy 1 - 1 base = 0; power 5 - (2 + 3 stacked deflect) = 0 remaining.
     expect(getState(engine).runePools[P1].energy).toBe(0);
+    expect(getState(engine).runePools[P1].power.mind ?? 0).toBe(0);
   });
 });
 
@@ -950,6 +954,41 @@ describe("Rule 729.1.b: Vision is 'When this is played, look at the top card of 
       type: "play-self",
     });
     expect(fired).toBe(1);
+  });
+});
+
+describe("Rule 729 (ogn-100-298 Gemcraft Seer): granted Vision triggers on play", () => {
+  it("a unit played while 'Other friendly units have [Vision]' is on board fires a look trigger", () => {
+    const engine = createMinimalGameState({ phase: "main" });
+    createCard(engine, "seer", {
+      abilities: [
+        {
+          effect: {
+            keyword: "Vision",
+            target: { controller: "friendly", excludeSelf: true, type: "unit" },
+            type: "grant-keyword",
+          },
+          type: "static",
+        } as never,
+      ],
+      cardType: "unit",
+      might: 3,
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "rearguard", {
+      cardType: "unit",
+      keywords: ["Accelerate"],
+      might: 2,
+      owner: P1,
+      zone: "base",
+    });
+    createCard(engine, "enemy", { cardType: "unit", might: 2, owner: P2, zone: "base" });
+
+    expect(fireTrigger(engine, { cardId: "rearguard", playerId: P1, type: "play-self" })).toBe(1);
+    // Seer does not grant itself Vision; enemy units are not friendly.
+    expect(fireTrigger(engine, { cardId: "seer", playerId: P1, type: "play-self" })).toBe(0);
+    expect(fireTrigger(engine, { cardId: "enemy", playerId: P2, type: "play-self" })).toBe(0);
   });
 });
 

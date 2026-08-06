@@ -24,10 +24,14 @@ export function handle_swapMight(effect: ExecutableEffect, ctx: EffectContext, _
   if (!a || !b) {
     const first = resolveTarget(swap.target1, resolverCtx);
     a ??= first[0];
-    const second = resolveTarget(swap.target2, {
-      ...resolverCtx,
-      sourceZone: a ? (ctx.zones.getCardZone(a as CoreCardId) as string) : ctx.sourceZone,
-    }).filter((id) => id !== a);
+    const aZone = a ? (ctx.zones.getCardZone(a as CoreCardId) as string) : undefined;
+    // rule-id: ogn-220-298 — `location: "same"` on target2 filters via sameZone.
+    const second = swap.target2
+      ? resolveTarget(
+          { ...swap.target2, quantity: "all" },
+          { ...resolverCtx, sameZone: aZone, sourceZone: aZone ?? ctx.sourceZone },
+        ).filter((id) => id !== a)
+      : [];
     b ??= second[0];
   }
   if (!a || !b) return;

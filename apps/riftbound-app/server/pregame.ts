@@ -10,6 +10,7 @@ import type { PlayerId } from "@tcg/core";
 import type { ServerWebSocket } from "bun";
 import { type LogEntry, actorName, makeLogEntry } from "../src/narrator";
 import { allCards, makeLookupPayload, registerCard, registry } from "./cards";
+import { MIN_MAIN_DECK_SIZE, findCopyLimitViolations } from "./decks";
 import { gameLogger } from "./log";
 import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
 import { type DeckConfig, type GameSession, type PregameState, type WsData, getInternalSnapshot } from "./state";
@@ -30,6 +31,21 @@ export function createGameFromDecks(
 ): GameSession {
   const P1 = "player-1";
   const P2 = "player-2";
+
+  // Rule 103.2.b: a Main Deck can include up to 3 copies of the same named
+  // card — refuse to start a game with an illegal deck.
+  for (const [pid, deck] of [[P1, deck1], [P2, deck2]] as const) {
+    const violations = findCopyLimitViolations(deck.mainDeckCardIds);
+    if (violations.length > 0) {
+      throw new Error(`Illegal deck for ${pid}: more than 3 copies of ${violations.join(", ")} (rule 103.2.b)`);
+    }
+    // Rule 103.2 / 103.2.a.1: Main Deck is at least 40 cards; the Chosen
+    // Champion counts toward it even though it starts in the Champion Zone.
+    const mainDeckSize = deck.mainDeckCardIds.length + (deck.championId ? 1 : 0);
+    if (mainDeckSize < MIN_MAIN_DECK_SIZE) {
+      throw new Error(`Illegal deck for ${pid}: main deck has ${mainDeckSize} cards, needs at least ${MIN_MAIN_DECK_SIZE} (rule 103.2)`);
+    }
+  }
 
   const engine = new RuleEngine<RiftboundGameState, RiftboundMoves, unknown, RiftboundCardMeta>(
     riftboundDefinition,

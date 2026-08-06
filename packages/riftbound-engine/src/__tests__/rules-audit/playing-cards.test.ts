@@ -235,6 +235,85 @@ describe("ogn-193-298: friendly board unit grants 'may be played to open battlef
 });
 
 // ---------------------------------------------------------------------------
+// rule-id: sfd-015-221 (Perched Grimwyrm) — "Play me only to a battlefield
+// you conquered this turn."
+// ---------------------------------------------------------------------------
+
+describe("sfd-015-221: play only to a battlefield conquered this turn", () => {
+  const restriction = [
+    {
+      effect: { keyword: "PlayOnlyToConqueredBattlefield", target: "self", type: "grant-keyword" },
+      type: "static",
+    },
+  ] as unknown as Parameters<typeof createCard>[2]["abilities"];
+
+  function setup() {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 4, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+    createBattlefield(engine, "bf-2", {
+      contested: true,
+      contestedBy: P1,
+      controller: null,
+      showdownComplete: true,
+    });
+    createCard(engine, "atk", { cardType: "unit", might: 5, owner: P1, zone: "battlefield-bf-2" });
+    createCard(engine, "def", { cardType: "unit", might: 1, owner: P2, zone: "battlefield-bf-2" });
+    createCard(engine, "grimwyrm", {
+      abilities: restriction,
+      cardType: "unit",
+      energyCost: 4,
+      might: 5,
+      owner: P1,
+      zone: "hand",
+    });
+    return engine;
+  }
+
+  it("with no conquest this turn, it is not offered anywhere and base is rejected", () => {
+    const engine = setup();
+    const offered = enumerateLegalMoves(engine, P1).filter(
+      (m) => m.moveId === "playUnit" && m.params?.cardId === "grimwyrm",
+    );
+    expect(offered).toEqual([]);
+    expect(
+      applyMove(engine, "playUnit", { cardId: "grimwyrm", location: "base", playerId: P1 }).success,
+    ).toBe(false);
+    expect(
+      applyMove(engine, "playUnit", {
+        cardId: "grimwyrm",
+        location: "battlefield-bf-1",
+        playerId: P1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("after conquering bf-2, it is offered only there and plays there", () => {
+    const engine = setup();
+    applyMove(engine, "resolveFullCombat", { battlefieldId: "bf-2" });
+    expect(getState(engine).conqueredThisTurn[P1]).toContain("bf-2");
+
+    const offered = enumerateLegalMoves(engine, P1).filter(
+      (m) => m.moveId === "playUnit" && m.params?.cardId === "grimwyrm",
+    );
+    expect(offered.map((m) => m.params?.location)).toEqual(["battlefield-bf-2"]);
+
+    expect(
+      applyMove(engine, "playUnit", { cardId: "grimwyrm", location: "base", playerId: P1 }).success,
+    ).toBe(false);
+    const result = applyMove(engine, "playUnit", {
+      cardId: "grimwyrm",
+      location: "battlefield-bf-2",
+      playerId: P1,
+    });
+    expect(result.success).toBe(true);
+    expect(getCardZone(engine, "grimwyrm")).toBe("battlefield-bf-2");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Rule 556: Cards have different behaviors when played.
 // Rule 556.1: Permanents become Game Objects when played.
 // Rule 556.2: Spells create game effects that are executed, then card is
@@ -536,6 +615,135 @@ describe("Rule 355.13: 'up to N units' enumerates 0..N target subsets", () => {
     expect(targetSets).toContain("a,b");
     expect(targetSets).not.toContain("a,c");
     expect(targetSets).not.toContain("a,b,c");
+  });
+});
+
+// rule-id: ogn-256-298 (Fox-Fire) — "Kill any number of units at a battlefield
+// with total Might 4 or less": the SUMMED Might of the chosen set is capped and
+// all picks share one battlefield.
+describe("ogn-256-298: 'any number of units ... with total Might N or less'", () => {
+  const foxFire = {
+    abilities: [
+      {
+        effect: {
+          target: { location: "battlefield", quantity: "any", totalMight: { lte: 4 }, type: "unit" },
+          type: "kill",
+        },
+        type: "spell",
+      },
+    ],
+    cardType: "spell" as const,
+    energyCost: 1,
+    owner: P1,
+    zone: "hand" as const,
+  };
+
+  it("enumerates only same-battlefield subsets whose total Might is ≤ 4 and rejects over-cap targets", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 1, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+    createBattlefield(engine, "bf-2", { controller: P2 });
+    createCard(engine, "a", { cardType: "unit", might: 2, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "b", { cardType: "unit", might: 2, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "c", { cardType: "unit", might: 2, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "d", { cardType: "unit", might: 1, owner: P2, zone: "battlefield-bf-2" });
+    createCard(engine, "big", { cardType: "unit", might: 5, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "foxfire", foxFire);
+
+    const targetSets = enumerateLegalMoves(engine, P1)
+      .filter((m) => m.moveId === "playSpell" && m.params?.cardId === "foxfire")
+      .map((m) => ((m.params?.targets as string[] | undefined) ?? []).slice().sort().join(","));
+    expect(targetSets).toContain("");
+    expect(targetSets).toContain("a,b");
+    expect(targetSets).toContain("b,c");
+    expect(targetSets).not.toContain("a,b,c");
+    expect(targetSets).not.toContain("a,d");
+    expect(targetSets.some((s) => s.includes("big"))).toBe(false);
+
+    const over = applyMove(engine, "playSpell", {
+      cardId: "foxfire",
+      playerId: P1,
+      targets: ["a", "b", "c"],
+    });
+    expect(over.success).toBe(false);
+
+    const ok = applyMove(engine, "playSpell", { cardId: "foxfire", playerId: P1, targets: ["a", "b"] });
+    expect(ok.success).toBe(true);
+    drainChain(engine);
+    expect(getCardZone(engine, "a")).toBe("trash");
+    expect(getCardZone(engine, "b")).toBe("trash");
+    expect(getCardZone(engine, "c")).toBe("battlefield-bf-1");
+  });
+
+  // Unbound path (from Hidden / no play-time targets): resolution prompts a
+  // multi-pick choose-target — zero is legal, picks accumulate, options are
+  // pruned to one battlefield and the running total-Might cap.
+  it("resolving with no bound targets prompts an any-number choose-target honouring the cap", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 1, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+    createBattlefield(engine, "bf-2", { controller: P2 });
+    createCard(engine, "a", { cardType: "unit", might: 2, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "b", { cardType: "unit", might: 2, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "c", { cardType: "unit", might: 3, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "d", { cardType: "unit", might: 1, owner: P2, zone: "battlefield-bf-2" });
+    createCard(engine, "big", { cardType: "unit", might: 5, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "foxfire", foxFire);
+
+    const played = applyMove(engine, "playSpell", { cardId: "foxfire", playerId: P1 });
+    expect(played.success).toBe(true);
+    drainChain(engine);
+
+    let pc = getState(engine).pendingChoice as
+      | { type: string; anyNumber?: boolean; options: string[]; picked?: string[] }
+      | undefined;
+    expect(pc?.type).toBe("choose-target");
+    expect(pc?.anyNumber).toBe(true);
+    expect([...(pc?.options ?? [])].sort()).toEqual(["a", "b", "c", "d"]);
+    // Declining immediately (zero targets) must be offered.
+    expect(
+      enumerateLegalMoves(engine, P1).some(
+        (m) => m.moveId === "resolvePendingChoice" && m.params?.accept === false,
+      ),
+    ).toBe(true);
+
+    expect(applyMove(engine, "resolvePendingChoice", { pickedCardId: "a", playerId: P1 }).success).toBe(true);
+    pc = getState(engine).pendingChoice as typeof pc;
+    // "d" (other battlefield) and "c" (2+3 > 4) drop out; "b" (2+2) remains.
+    expect(pc?.options).toEqual(["b"]);
+    expect(pc?.picked).toEqual(["a"]);
+
+    expect(applyMove(engine, "resolvePendingChoice", { pickedCardId: "b", playerId: P1 }).success).toBe(true);
+    // Cap reached — no legal additions remain, so the effect resolves.
+    expect(getState(engine).pendingChoice).toBeUndefined();
+    expect(getCardZone(engine, "a")).toBe("trash");
+    expect(getCardZone(engine, "b")).toBe("trash");
+    expect(getCardZone(engine, "c")).toBe("battlefield-bf-1");
+    expect(getCardZone(engine, "d")).toBe("battlefield-bf-2");
+  });
+
+  it("any-number choose-target can be declined after a partial pick", () => {
+    const engine = createMinimalGameState({
+      phase: "main",
+      runePools: { [P1]: { energy: 1, power: {} } },
+    });
+    createBattlefield(engine, "bf-1", { controller: P1 });
+    createCard(engine, "a", { cardType: "unit", might: 1, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "b", { cardType: "unit", might: 1, owner: P2, zone: "battlefield-bf-1" });
+    createCard(engine, "foxfire", foxFire);
+
+    expect(applyMove(engine, "playSpell", { cardId: "foxfire", playerId: P1 }).success).toBe(true);
+    drainChain(engine);
+    expect(applyMove(engine, "resolvePendingChoice", { pickedCardId: "a", playerId: P1 }).success).toBe(true);
+    expect(getState(engine).pendingChoice).toBeDefined();
+    expect(applyMove(engine, "resolvePendingChoice", { accept: false, playerId: P1 }).success).toBe(true);
+    expect(getState(engine).pendingChoice).toBeUndefined();
+    expect(getCardZone(engine, "a")).toBe("trash");
+    expect(getCardZone(engine, "b")).toBe("battlefield-bf-1");
   });
 });
 

@@ -20,6 +20,7 @@ import type {
   ZoneId as CoreZoneId,
 } from "@tcg/core";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { areAllies } from "../operations/teams";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 
 /**
@@ -48,6 +49,22 @@ export interface TargetResolverContext {
    * trigger being resolved, for `location: "move-to-or-from"` filtering.
    */
   readonly triggerZones?: readonly string[];
+  /**
+   * rule-id: ogn-220-298 — zone of the previously chosen target, for
+   * `location: "same"` ("… at the same battlefield") filtering.
+   */
+  readonly sameZone?: string;
+  /**
+   * rule-id: ven-031-166 — caller is enumerating the candidate pool for a
+   * caster-CHOSEN target (spreads `quantity:"all"` to list every option), so
+   * "can't be chosen by enemy spells and abilities" must still apply.
+   */
+  readonly choosing?: boolean;
+  /**
+   * rule-id: unl-133-219 — subject card id of the GameEvent that fired the
+   * trigger being resolved, for `{ type: "trigger-source" }` ("…[Stun] it").
+   */
+  readonly triggerSourceId?: string;
   readonly draft: RiftboundGameState;
   readonly zones: {
     getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
@@ -86,9 +103,40 @@ export function resolveTarget(
     return [ctx.sourceCardId];
   }
 
+  // rule-id: unl-133-219 — "it" in a triggered effect = the subject card of
+  // the event that fired the trigger (threaded from the chain item).
+  if (target.type === "trigger-source") {
+    return ctx.triggerSourceId ? [ctx.triggerSourceId] : [];
+  }
+
   // Battlefield definitions live in battlefieldRow, not the unit board.
   if (target.type === "battlefield") {
-    return ctx.zones.getCardsInZone("battlefieldRow" as CoreZoneId).map((c) => c as string);
+    const all = ctx.zones.getCardsInZone("battlefieldRow" as CoreZoneId).map((c) => c as string);
+    // rule-id: unl-015-219 — "battlefield you (or allies) control" counts by
+    // battlefield CONTROL (draft.battlefields[id].controller), not card owner;
+    // uncontrolled battlefields (controller null) never match friendly/enemy.
+    const controller = (target as { controller?: string }).controller;
+    if (!controller || controller === "any") {
+      return all;
+    }
+    const bfController = (id: string): string | null =>
+      ctx.draft.battlefields?.[id]?.controller ?? null;
+    if (controller === "friendly") {
+      return all.filter((id) => bfController(id) === ctx.playerId);
+    }
+    if (controller === "friendly-or-allies") {
+      return all.filter((id) => {
+        const c = bfController(id);
+        return c !== null && areAllies(ctx.draft, ctx.playerId, c);
+      });
+    }
+    if (controller === "enemy" || controller === "opponent") {
+      return all.filter((id) => {
+        const c = bfController(id);
+        return c !== null && !areAllies(ctx.draft, ctx.playerId, c);
+      });
+    }
+    return all;
   }
 
   // Collect candidate cards from the board
@@ -157,6 +205,15 @@ export function resolveTarget(
       const zone = ctx.zones.getCardZone(id as CoreCardId) ?? "";
       return moveZones.includes(zone);
     });
+  } else if (target.location === "same") {
+    // rule-id: ogn-220-298 — "at the same battlefield": only units sharing the
+    // prior target's battlefield zone are legal. Without a bound reference
+    // zone (play-legality probes), any battlefield unit is a candidate.
+    filtered = filtered.filter((id) => {
+      const zone = ctx.zones.getCardZone(id as CoreCardId) ?? "";
+      if (!zone.startsWith("battlefield-")) return false;
+      return ctx.sameZone === undefined || zone === ctx.sameZone;
+    });
   } else if (target.location?.startsWith("battlefield")) {
     filtered = filtered.filter((id) => {
       const zone = ctx.zones.getCardZone(id as CoreCardId) ?? "";
@@ -173,6 +230,16 @@ export function resolveTarget(
   // Exclude self (unless explicitly targeting self)
   if (target.type !== "self") {
     filtered = filtered.filter((id) => id !== ctx.sourceCardId);
+  }
+
+  // rule-id: ven-031-166 — "can't be chosen by enemy spells and abilities":
+  // drop opposing Untargetable cards whenever this resolution is a CHOICE
+  // (any non-"all" quantity, or an explicit choosing-pool enumeration).
+  // Programmatic `quantity:"all"` selections ("all enemy units") don't choose.
+  if (target.quantity !== "all" || ctx.choosing) {
+    filtered = filtered.filter(
+      (id) => !(controllerOf(id) !== ctx.playerId && isUntargetable(id, ctx)),
+    );
   }
 
   // Apply quantity limit
@@ -215,6 +282,21 @@ function getBoardCardIds(ctx: TargetResolverContext): string[] {
 }
 
 const MIGHTY_THRESHOLD = 5;
+
+/**
+ * rule-id: ven-031-166 / sfd-105-221 — a card "can't be chosen by enemy spells
+ * and abilities" when it carries the (virtual) Untargetable keyword, either
+ * printed/static or granted for a duration via `grant-keyword`.
+ */
+export function isUntargetable(cardId: string, ctx: Pick<TargetResolverContext, "cards">): boolean {
+  if (getGlobalCardRegistry().hasKeyword(cardId, "Untargetable")) {
+    return true;
+  }
+  const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
+    | Partial<RiftboundCardMeta>
+    | undefined;
+  return meta?.grantedKeywords?.some((gk) => gk.keyword === "Untargetable") ?? false;
+}
 
 /**
  * Evaluate a single target-descriptor filter against a card (rule 355.8).

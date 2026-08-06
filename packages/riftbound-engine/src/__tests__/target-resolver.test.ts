@@ -64,6 +64,15 @@ describe("Target Resolver", () => {
     expect(result).toEqual(["my-card"]);
   });
 
+  // rule-id: unl-133-219 — "it" = the firing event's subject card.
+  test("trigger-source resolves to the threaded triggerSourceId (else nothing)", () => {
+    const ctx = mockCtx({ moved: { owner: "p2", zone: "battlefield-bf-1" } }, "p1", "blast-cone");
+    expect(resolveTarget({ type: "trigger-source" }, ctx)).toEqual([]);
+    expect(resolveTarget({ type: "trigger-source" }, { ...ctx, triggerSourceId: "moved" })).toEqual([
+      "moved",
+    ]);
+  });
+
   test("unit target returns units on board", () => {
     const registry = new CardDefinitionRegistry();
     registry.register("u1", { cardType: "unit", id: "u1", might: 3, name: "Unit 1" });

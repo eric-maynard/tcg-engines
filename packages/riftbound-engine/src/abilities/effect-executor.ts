@@ -79,6 +79,13 @@ export interface EffectContext {
    * silently retarget the effect.
    */
   readonly boundTargets?: readonly string[];
+  /** rule-id: ogn-220-298 — prior target's zone for `location: "same"`. */
+  readonly sameZone?: string;
+  /**
+   * rule-id: unl-133-219 — subject card id of the event that fired this
+   * triggered ability, so `{ type: "trigger-source" }` ("it") resolves.
+   */
+  readonly triggerSourceId?: string;
   readonly zones: {
     moveCard: (params: {
       cardId: CoreCardId;

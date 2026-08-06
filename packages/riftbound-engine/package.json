@@ -16,6 +16,10 @@
     "./testing": {
       "types": "./src/testing/index.ts",
       "default": "./src/testing/index.ts"
+    },
+    "./harness": {
+      "types": "./src/harness/index.ts",
+      "default": "./src/harness/index.ts"
     }
   },
   "scripts": {

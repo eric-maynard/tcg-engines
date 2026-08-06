@@ -122,6 +122,13 @@ export interface TriggerSubjectQuery {
 
   /** Location filter */
   readonly location?: string;
+
+  /**
+   * Who performed the action (rule-id: unl-133-219 — "When YOU move an
+   * enemy unit"): `controller` = this card's controller caused the event,
+   * `opponent` = someone else did. Omitted = anyone.
+   */
+  readonly actor?: "controller" | "opponent" | "any";
 }
 
 /**

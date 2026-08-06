@@ -102,6 +102,12 @@ export interface LookEffect {
    */
   readonly onPicked?: "recycle" | "banish" | "discard" | "draw" | "play";
   readonly reduceCost?: Cost;
+  /**
+   * rule-id: ven-089-166-look-then-empower — effect run once the pick has
+   * been applied ("Then you may do this: Empower it"). A `trigger-source`
+   * target inside it resolves to the picked card.
+   */
+  readonly followUp?: Effect;
 }
 
 /**
@@ -177,6 +183,12 @@ export interface DamageEffect {
   readonly amount: number | AmountExpression;
   readonly target: AnyTarget;
   readonly split?: boolean; // Can split among multiple targets
+  /**
+   * rule-id: unl-072-219 (Crescent Strike) — "Deal N to that unit and M to
+   * each other enemy unit there": after damaging the chosen target, deal this
+   * amount to every OTHER enemy unit sharing the target's battlefield.
+   */
+  readonly splashOthers?: number;
 }
 
 /**

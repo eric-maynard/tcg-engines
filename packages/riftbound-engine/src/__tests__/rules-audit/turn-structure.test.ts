@@ -716,6 +716,30 @@ describe("Rule 517.1: 'At the end of your turn' triggers fire in the Ending Step
   });
 });
 
+// rule-id: 516-main-phase-start (ven-067-166 Bottled Constellation)
+describe("Rule 516: 'At the start of your Main Phase' triggers fire in main.onBegin", () => {
+  const MAIN_PHASE_GEAR = {
+    abilities: [
+      {
+        effect: { amount: 1, type: "draw" },
+        trigger: { event: "main-phase", on: "controller" },
+        type: "triggered",
+      },
+    ],
+    cardType: "gear" as const,
+    zone: "base" as const,
+  };
+
+  it("turn player's main-phase gear trigger is put on the chain by main.onBegin", () => {
+    const engine = createMinimalGameState({ currentPlayer: P1, phase: "draw" });
+    createCard(engine, "bottle-p1", { ...MAIN_PHASE_GEAR, owner: P1 });
+    createCard(engine, "bottle-p2", { ...MAIN_PHASE_GEAR, owner: P2 });
+    runPhaseHook(engine, "main", "onBegin");
+    const items = getState(engine).interaction?.chain?.items ?? [];
+    expect(items.map((i: { cardId?: string }) => i.cardId)).toEqual(["bottle-p1"]);
+  });
+});
+
 // -----------------------------------------------------------------------------
 // Rule 503-510: Turn state invariants
 // -----------------------------------------------------------------------------

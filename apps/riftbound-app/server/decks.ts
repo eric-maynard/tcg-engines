@@ -21,6 +21,30 @@ export function getOrCreateSession(sessionId: string): DeckBuilder {
   return sessions.get(sessionId)!;
 }
 
+/** Rule 103.2: a Main Deck has at least 40 cards (Chosen Champion included). */
+export const MIN_MAIN_DECK_SIZE = 40;
+
+/** Rule 103.2.b: a Main Deck can include up to 3 copies of the same named card. */
+export const MAX_COPIES_PER_NAME = 3;
+
+/**
+ * Rule 103.2.b: return the names of cards that appear more than
+ * MAX_COPIES_PER_NAME times in the main deck (counted by card name, so
+ * alternate prints of the same card share a limit). Empty when legal.
+ */
+export function findCopyLimitViolations(mainDeckCardIds: readonly string[]): string[] {
+  const counts = new Map<string, number>();
+  for (const defId of mainDeckCardIds) {
+    const name = registry.get(defId)?.name ?? defId;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  const violations: string[] = [];
+  for (const [name, count] of counts) {
+    if (count > MAX_COPIES_PER_NAME) {violations.push(`${name} (x${count})`);}
+  }
+  return violations;
+}
+
 /** Build a default starter deck from the card pool — uses Fury/Chaos domain (Annie starter) */
 export function buildDefaultDeck(domain1 = "fury", domain2 = "chaos"): DeckConfig {
   // Rule 302: a card is legal in a deck only if EVERY domain on the card is
@@ -129,6 +153,9 @@ export function savedDeckToDeckConfig(deck: FullDeck): DeckConfig | null {
   const battlefieldIds: string[] = [];
 
   for (const entry of deck.cards) {
+    // Rule 103.2: only "main" zone entries form the Main Deck — sideboard
+    // cards must not be shuffled in (that yielded a 4th copy in hand).
+    if (entry.zone === "sideboard") {continue;}
     const target =
       entry.zone === "rune" ? runeDeckCardIds :
       (entry.zone === "battlefield" ? battlefieldIds :
@@ -178,6 +205,21 @@ export function savedDeckToDeckConfig(deck: FullDeck): DeckConfig | null {
   }
   if (!championId) {
     console.warn(`Saved deck "${deck.name}" (${deck.id}) has no chosen champion`);
+    return null;
+  }
+
+  // Rule 103.2.b: up to 3 copies of the same named card in the Main Deck.
+  const copyViolations = findCopyLimitViolations(mainDeckCardIds);
+  if (copyViolations.length > 0) {
+    console.warn(`Saved deck "${deck.name}" (${deck.id}) exceeds copy limit: ${copyViolations.join(", ")}`);
+    return null;
+  }
+
+  // Rule 103.2 / 103.2.a: Main Deck of at least 40 cards, and the Chosen
+  // Champion counts toward it (it starts in the Champion Zone, 103.2.a.1).
+  const mainDeckSize = mainDeckCardIds.length + 1;
+  if (mainDeckSize < MIN_MAIN_DECK_SIZE) {
+    console.warn(`Saved deck "${deck.name}" (${deck.id}) main deck too small: ${mainDeckSize} < ${MIN_MAIN_DECK_SIZE}`);
     return null;
   }
 

@@ -5,6 +5,7 @@
 import type { TriggeredAbility } from "@tcg/riftbound-types";
 import type { DrawEffect, Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import { parseLeadingIfCondition, parseTrailingIfCondition } from "../parsers/condition-parser";
+import { parseCost } from "../parsers/cost-parser";
 import { parseEffects } from "./effects";
 import { stripReminders } from "./normalize";
 import { TRIGGER_PATTERNS } from "./trigger-patterns";
@@ -85,6 +86,11 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
     );
     if (payMatch) {
       optional = true;
+      // rule-id: sfd-119-221 — keep the cost so the engine charges it on opt-in
+      // instead of resolving the effect for free.
+      condition = { cost: parseCost(payMatch[1]), type: "pay-cost" } as unknown as {
+        type: string;
+      };
       effectText = effectText.slice(payMatch[0].length);
     }
 
@@ -163,6 +169,9 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       };
       if (optional) {
         (ability as { optional: boolean }).optional = optional;
+      }
+      if (condition) {
+        (ability as { condition: { type: string } }).condition = condition;
       }
       return ability;
     }

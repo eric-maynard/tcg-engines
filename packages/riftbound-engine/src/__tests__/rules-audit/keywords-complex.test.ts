@@ -743,7 +743,12 @@ describe("Repeat N: spell effect may be repeated at added cost", () => {
       abilities: [
         {
           effect: { amount: 1, type: "gain-xp" },
-          repeat: { energy: 1, power: [] },
+          // Rule 820.1.c.3: each Repeat instance is paid at most once, so
+          // Two instances are needed to allow repeatCount=2.
+          repeat: [
+            { energy: 1, power: [] },
+            { energy: 1, power: [] },
+          ],
           timing: "action",
           type: "spell",
         },
@@ -757,6 +762,14 @@ describe("Repeat N: spell effect may be repeated at added cost", () => {
     const initialEnergy = getState(engine).runePools[P1]?.energy ?? 0;
     expect(initialEnergy).toBe(5);
     expect(getState(engine).players[P1]?.xp ?? 0).toBe(0);
+
+    // Rule 820.1.c.3: repeatCount above the number of Repeat instances is illegal.
+    const over = applyMove(engine, "playSpell", {
+      cardId: "repeat-spell",
+      playerId: P1,
+      repeatCount: 3,
+    });
+    expect(over.success).toBe(false);
 
     const result = applyMove(engine, "playSpell", {
       cardId: "repeat-spell",

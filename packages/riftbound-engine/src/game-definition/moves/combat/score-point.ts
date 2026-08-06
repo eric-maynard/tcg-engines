@@ -11,7 +11,10 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { createInteractionState, getTurnState } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { hasPlayerWon } from "../../win-conditions/victory";
-import { canPlayerScoreAtBattlefield } from "../../../operations/scoring-rules";
+import {
+  applyScoreReplacement,
+  canPlayerScoreAtBattlefield,
+} from "../../../operations/scoring-rules";
 import { areAllies, isTeamGame } from "../../../operations/teams";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -156,7 +159,8 @@ export const scorePoint: Defs["scorePoint"] = {
       prevController !== playerId &&
       areAllies(draft, playerId, prevController as string);
 
-    if (!teamDisqualified) {
+    // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
+    if (!teamDisqualified && !applyScoreReplacement(draft, playerId, { cards, zones })) {
       player.victoryPoints += 1;
     }
 

@@ -769,6 +769,13 @@ export function parseLeadingIfCondition(
       effectText: rest,
     };
   }
+  // rule-id: ven-005-166 — "if you control fewer runes than an opponent"
+  if (/^you control fewer runes than an opponent$/i.test(clause)) {
+    return {
+      condition: { type: "fewer-runes-than-opponent" } as Condition,
+      effectText: rest,
+    };
+  }
   // "if you control ___"
   const controlCondition = parseControlPhrase(clause);
   if (controlCondition) {

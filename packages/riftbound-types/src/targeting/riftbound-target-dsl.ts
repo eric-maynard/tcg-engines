@@ -279,6 +279,13 @@ export interface Target {
 
   /** Optional targeting (player may choose not to target) */
   readonly optional?: boolean;
+
+  /**
+   * rule-id: ogn-256-298 (Fox-Fire) — aggregate constraint over the CHOSEN
+   * set: the summed Might of all selected targets must satisfy this
+   * comparison ("any number of units ... with total Might 4 or less").
+   */
+  readonly totalMight?: Comparison;
 }
 
 /**

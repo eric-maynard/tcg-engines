@@ -338,6 +338,94 @@ function resolveStaticTargets(
 }
 
 /**
+ * rule-id: unl-058-219, ogn-100-298 — parser-emitted statics ("Your token units
+ * have [Tank]", "Other friendly units have [Vision]") carry no `affects`; they describe
+ * the audience on `effect.target` instead. Resolve that descriptor against
+ * the board so the grant lands on the described units rather than the source.
+ * Returns undefined when the target is not a group descriptor (self / bare).
+ */
+function resolveStaticTargetsFromDescriptor(
+  target: unknown,
+  source: BoardCard,
+  boardCards: BoardCard[],
+  ctx: StaticAbilityContext,
+): string[] | undefined {
+  if (!target || typeof target !== "object") {
+    return undefined;
+  }
+  const t = target as {
+    type?: string;
+    controller?: string;
+    excludeSelf?: boolean;
+    location?: string;
+    filter?: unknown;
+    quantity?: unknown;
+  };
+  if (t.type !== "unit" && t.type !== "gear") {
+    return undefined;
+  }
+  const isGroup =
+    t.controller !== undefined ||
+    t.filter !== undefined ||
+    t.excludeSelf === true ||
+    t.location !== undefined ||
+    t.quantity === "all";
+  if (!isGroup) {
+    return undefined;
+  }
+  const registry = getGlobalCardRegistry();
+  return boardCards
+    .filter((c) => {
+      const def = registry.get(c.id);
+      const cardType = def?.cardType;
+      if (t.type === "unit" && cardType !== "unit") {
+        return false;
+      }
+      if (t.type === "gear" && cardType !== "gear" && cardType !== "equipment") {
+        return false;
+      }
+      if (t.controller === "friendly" && c.owner !== source.owner) {
+        return false;
+      }
+      if (t.controller === "enemy" && c.owner === source.owner) {
+        return false;
+      }
+      if (t.excludeSelf && c.id === source.id) {
+        return false;
+      }
+      if ((t.location === "here" || t.location === "battlefield") && c.zone !== source.zone) {
+        return false;
+      }
+      if (t.filter !== undefined) {
+        if (typeof t.filter === "string") {
+          if (t.filter === "token") {
+            const isToken =
+              c.id.startsWith("token-") ||
+              (def as { isToken?: boolean } | undefined)?.isToken === true;
+            if (!isToken) {
+              return false;
+            }
+          } else {
+            const meta = ctx.cards.getCardMeta(c.id as CoreCardId) as
+              | Record<string, unknown>
+              | undefined;
+            if (meta?.[t.filter] !== true) {
+              return false;
+            }
+          }
+        } else if (typeof t.filter === "object" && t.filter !== null) {
+          const tag = (t.filter as { tag?: string }).tag;
+          if (tag && !(def?.tags ?? []).includes(tag)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    })
+    .map((c) => c.id);
+}
+
+/**
  * Apply a static effect (might modification or keyword grant) to target cards.
  *
  * Accumulates into `staticMightBonus` and adds keywords with `duration: "static"`.
@@ -366,6 +454,15 @@ function applyStaticEffect(
       amount = pid
         ? ctx.zones.getCardsInZone("trash" as CoreZoneId, pid as CorePlayerId).length
         : 0;
+    } else if (rawAmount && typeof rawAmount === "object" && "score" in rawAmount) {
+      // rule-id: ogn-028-298 — dynamic static Might equal to a player's points.
+      const whose = (rawAmount as { score: string }).score;
+      const ownerId = source?.owner ?? "";
+      const pid =
+        whose === "opponent"
+          ? (Object.keys(ctx.draft.players).find((p) => p !== ownerId) ?? ownerId)
+          : ownerId;
+      amount = pid ? (ctx.draft.players[pid]?.victoryPoints ?? 0) : 0;
     }
     for (const targetId of targetIds) {
       const meta = ctx.cards.getCardMeta(targetId as CoreCardId) as
@@ -540,9 +637,16 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
 
         // Resolve targets
         const { affects } = ability as unknown as { affects?: string };
-        const targetIds = resolveStaticTargets(affects, card, boardCards);
+        const defaultTargetIds = resolveStaticTargets(affects, card, boardCards);
 
         for (const passEffect of passEffects) {
+          // rule-id: unl-058-219 — with no `affects`, honour the effect's own
+          // group target descriptor (e.g. "Your token units") over self.
+          const targetIds =
+            affects === undefined
+              ? (resolveStaticTargetsFromDescriptor(passEffect.target, card, boardCards, ctx) ??
+                defaultTargetIds)
+              : defaultTargetIds;
           applyStaticEffect(passEffect, targetIds, ctx, card);
         }
         anyApplied = true;

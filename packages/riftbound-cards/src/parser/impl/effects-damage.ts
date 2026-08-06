@@ -18,7 +18,35 @@ import { wordToNumber } from "./tokens";
 /**
  * Try to parse a damage effect: "Deal N to TARGET."
  */
-export function parseDamageEffect(text: string): DamageEffect | undefined {
+export function parseDamageEffect(text: string): DamageEffect | SequenceEffect | undefined {
+  // rule-id: ogn-005-298 — "Deal N to TARGET. If this kills it, do this: EFFECT."
+  // The generic matcher below would swallow the rider into the target string and
+  // drop it; emit damage → conditional(this-kills-target, EFFECT) so the follow-up
+  // fires when the damage step left the bound target lethally damaged (rule 520).
+  const killsMatch = text.match(
+    /^Deal (\d+) to (.+?)\.\s+If this kills (?:it|them),\s+(?:do this:\s*)?(.+?)\.?$/i,
+  );
+  if (killsMatch) {
+    const amount = Number.parseInt(killsMatch[1], 10);
+    const target = parseCardTarget(killsMatch[2]);
+    const thenText = killsMatch[3].trim();
+    const thenEffect = parseEffect(`${thenText.charAt(0).toUpperCase()}${thenText.slice(1)}.`);
+    if (thenEffect) {
+      const damage: DamageEffect = { amount, target: target as AnyTarget, type: "damage" };
+      return {
+        effects: [
+          damage,
+          {
+            condition: { type: "this-kills-target" },
+            then: thenEffect,
+            type: "conditional",
+          },
+        ],
+        type: "sequence",
+      } as SequenceEffect;
+    }
+  }
+
   // Handle "deal N damage split among" pattern
   const splitMatch = text.match(/^Deal (\d+) damage split among (.+?)\.?$/i);
   if (splitMatch) {
@@ -160,6 +188,19 @@ export function parseKillEffect(text: string): KillEffect | SequenceEffect | und
     if (mightLteMatch) {
       (target as { filter?: unknown }).filter = {
         might: { lte: Number.parseInt(mightLteMatch[1], 10) },
+      };
+    }
+    // rule-id: ogn-256-298 (Fox-Fire) — "any number of units ... with total
+    // Might N or less": caster picks 0..n targets whose SUMMED Might ≤ N.
+    if (/^any number of\b/i.test(targetStr)) {
+      (target as { quantity?: unknown }).quantity = "any";
+    }
+    const totalMightLteMatch = withClause?.match(
+      /with\s+total\s+(?:Might|:rb_might:|\[Might\])\s+(\d+)\s+or\s+less/i,
+    );
+    if (totalMightLteMatch) {
+      (target as { totalMight?: unknown }).totalMight = {
+        lte: Number.parseInt(totalMightLteMatch[1], 10),
       };
     }
     return { target: target as AnyTarget, type: "kill" };

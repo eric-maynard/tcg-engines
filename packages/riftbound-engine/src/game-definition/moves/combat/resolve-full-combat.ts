@@ -20,7 +20,10 @@ import type {
   RiftboundMoves,
 } from "../../../types";
 import { hasPlayerWon } from "../../win-conditions/victory";
-import { canPlayerScoreAtBattlefield } from "../../../operations/scoring-rules";
+import {
+  applyScoreReplacement,
+  canPlayerScoreAtBattlefield,
+} from "../../../operations/scoring-rules";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -113,11 +116,27 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       const meta = cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
       const def = registry.get(cardId as string);
 
-      const baseMight = def?.might ?? 0;
+      const printedMight = def?.might ?? 0;
       // Skip non-unit cards (might === 0 or no might)
-      if (baseMight <= 0) {
+      if (printedMight <= 0) {
         continue;
       }
+
+      // rule-id: unl-143-219 — combat uses the unit's *current* Might (printed
+      // + buff + turn-scoped mightModifier + static bonus + equipment), not the
+      // registry's printed value, for both damage dealt and lethal threshold.
+      let equipBonus = 0;
+      for (const equipId of meta?.equippedWith ?? []) {
+        equipBonus += registry.getMightBonus(equipId as string);
+      }
+      const baseMight = Math.max(
+        0,
+        printedMight +
+          (meta?.buffed ? 1 : 0) +
+          (meta?.mightModifier ?? 0) +
+          (meta?.staticMightBonus ?? 0) +
+          equipBonus,
+      );
 
       const currentDamage = meta?.damage ?? 0;
 
@@ -269,7 +288,10 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       const player = draft.players[attackingPlayer];
       if (player && scoringAllowed) {
         draft.scoredThisTurn[attackingPlayer].push(battlefieldId);
-        player.victoryPoints += 1;
+        // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
+        if (!applyScoreReplacement(draft, attackingPlayer, { cards, zones })) {
+          player.victoryPoints += 1;
+        }
 
         // Check for victory
         if (hasPlayerWon(draft, attackingPlayer)) {

@@ -38,6 +38,7 @@ export interface CleanupContext {
   readonly zones: {
     moveCard: (params: { cardId: CoreCardId; targetZoneId: CoreZoneId }) => void;
     getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
+    removeCardFromGame?: (params: { cardId: CoreCardId }) => void;
   };
   readonly cards: {
     getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
@@ -51,6 +52,31 @@ export interface CleanupContext {
     clearCounter: (cardId: CoreCardId, counter: string) => void;
     setFlag: (cardId: CoreCardId, flag: string, value: boolean) => void;
   };
+}
+
+/** Non-board zones a token can be sent to (kill, recall, banish, recycle). */
+const TOKEN_SWEEP_ZONE_IDS: readonly string[] = ["trash", "banishment", "hand", "mainDeck"];
+
+/**
+ * rule-id: 186.1 — a token in a non-board zone ceases to exist. Runs at the
+ * start of a cleanup pass so a token killed in the previous pass (or by a
+ * kill effect) has already had its `die` event dispatched before removal.
+ */
+function sweepOffBoardTokens(ctx: CleanupContext): boolean {
+  const remove = ctx.zones.removeCardFromGame;
+  if (!remove) {
+    return false;
+  }
+  let removed = false;
+  for (const zoneId of TOKEN_SWEEP_ZONE_IDS) {
+    for (const cardId of ctx.zones.getCardsInZone(zoneId as CoreZoneId)) {
+      if ((cardId as string).startsWith("token-")) {
+        remove({ cardId });
+        removed = true;
+      }
+    }
+  }
+  return removed;
 }
 
 /**
@@ -108,6 +134,11 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
   const hiddenRemoved: string[] = [];
   const combatPending: string[] = [];
   let stateChanged = false;
+
+  // Step 0 — rule-id: 186.1: tokens that left the board cease to exist.
+  if (sweepOffBoardTokens(ctx)) {
+    stateChanged = true;
+  }
 
   // Step 1: Kill units with damage >= might (rule 520)
   const registry = getGlobalCardRegistry();

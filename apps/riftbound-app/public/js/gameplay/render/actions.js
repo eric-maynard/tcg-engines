@@ -335,16 +335,25 @@ function renderActions() {
           }
         }
       } else if (moveId === "exhaustRune" || moveId === "recycleRune") {
-        // Group rune moves by domain so we don't list 11+ individual runes
+        // Group rune moves by domain so we don't list 11+ individual runes.
+        // [rule:ui-recycle-rune-ready-split] For recycleRune, a ready rune and an
+        // exhausted rune of the same domain are NOT interchangeable (recycling the
+        // ready one forfeits its energy) — split groups by exhausted state and list
+        // exhausted runes first so the default click never burns a ready rune.
+        const isExh = (m) => findCard(m.params?.runeId)?.meta?.exhausted === true;
+        const splitByState = moveId === "recycleRune";
         const byDomain = {};
         for (const m of moves) {
           const card = findCard(m.params?.runeId);
           const domain = card?.domain || card?.meta?.domain || "unknown";
           const d = Array.isArray(domain) ? domain[0] : domain;
-          if (!byDomain[d]) byDomain[d] = [];
-          byDomain[d].push(m);
+          const key = splitByState ? `${d}|${isExh(m) ? "exhausted" : "ready"}` : d;
+          if (!byDomain[key]) byDomain[key] = [];
+          byDomain[key].push(m);
         }
-        const domainEntries = Object.entries(byDomain);
+        const domainEntries = Object.entries(byDomain).sort(
+          ([a], [b]) => Number(a.endsWith("|ready")) - Number(b.endsWith("|ready")),
+        );
         if (domainEntries.length === 1 && domainEntries[0][1].length === 1) {
           // Only one rune — render as single button
           const m = domainEntries[0][1][0];
@@ -366,23 +375,24 @@ function renderActions() {
               ${esc(label)} (${moves.length} available)
             </button>
             <div id="move-group-${moveId}" class="${isExpanded ? "" : "hidden"}" style="padding-left:8px; display:flex; flex-direction:column; gap:2px;">
-              ${domainEntries.map(([domain, domMoves]) => {
-                const domLabel = DOMAIN_DISPLAY[domain] || domain;
+              ${domainEntries.map(([key, domMoves]) => {
+                const [domain, state] = key.split("|");
+                const domLabel = `${DOMAIN_DISPLAY[domain] || domain} Rune${state ? ` (${state})` : ""}`;
                 if (domMoves.length === 1) {
                   const m = domMoves[0];
                   return `
                     <button class="action-btn"
                             onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
-                      ${esc(domLabel)} Rune
+                      ${esc(domLabel)}
                     </button>
                   `;
                 }
-                // Multiple runes of same domain — show count, click exhausts first available
+                // Multiple interchangeable runes (same domain + state) — show count, click uses first
                 const m = domMoves[0];
                 return `
                   <button class="action-btn"
                           onclick='executeMove(${JSON.stringify(moveId)}, ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
-                    ${esc(domLabel)} Rune (${domMoves.length} available)
+                    ${esc(domLabel)} (${domMoves.length} available)
                   </button>
                 `;
               }).join("")}

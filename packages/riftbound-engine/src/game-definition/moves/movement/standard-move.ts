@@ -243,8 +243,9 @@ export const standardMove: Defs["standardMove"] = {
       // Hunter "When I move...") can react. Rule 616-619 covers
       // Discretionary moves — recalls do NOT fire this event and
       // Correctly live in recallUnit which omits this call.
+      // rule-id: unl-133-219 — carry mover/owner so actor-scoped triggers match.
       fireTriggers(
-        { cardId: unitId, from: fromZone, to: toZone, type: "move" },
+        { cardId: unitId, from: fromZone, movedBy: playerId, owner: playerId, to: toZone, type: "move" },
         { cards: context.cards, counters, draft, zones },
       );
     }

@@ -9,7 +9,8 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { resolveTarget } from "../../../abilities/target-resolver";
+import { isUntargetable, resolveTarget } from "../../../abilities/target-resolver";
+import { fireTriggers } from "../../../abilities/trigger-runner";
 import { addToChain, createInteractionState, getTurnState, isLegalTiming } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { CostExtras } from "./cost";
@@ -23,6 +24,7 @@ import {
 } from "./cost";
 import type { SpellEffectTargetShape } from "./targeting";
 import {
+  collectSequenceTargetSlots,
   findAmountReferenceTarget,
   findSequenceLeadTarget,
   findSplitDamageEffect,
@@ -72,7 +74,11 @@ export const playSpell: Defs["playSpell"] = {
     const reqRepeatCount = Math.max(0, context.params.repeatCount ?? 0);
     if (reqRepeatCount > 0) {
       const registryCheck = getGlobalCardRegistry();
-      if (!registryCheck.getSpellRepeatCost(context.params.cardId)) {
+      const repeatTiers = registryCheck.getSpellRepeatCost(context.params.cardId);
+      // rule-id: sfd-122-221 — Rule 820.1.c.3 / 820.3: each Repeat instance
+      // can be paid only once, so repeatCount is bounded by the number of
+      // Repeat instances on the spell.
+      if (!repeatTiers || reqRepeatCount > repeatTiers.length) {
         return false;
       }
     }
@@ -84,6 +90,12 @@ export const playSpell: Defs["playSpell"] = {
     if (context.params.paidAdditionalCost) {
       const optional = getOptionalPlayCost(context.params.cardId);
       if (optional?.kind !== "pay") {
+        return false;
+      }
+      // rule-id: unl-140-219 (rule 560) — "spend N XP as an additional cost":
+      // the paid variant is only legal when the caster has the XP.
+      const xpNeed = optional.cost?.xp ?? 0;
+      if (xpNeed > 0 && (state.players[context.params.playerId]?.xp ?? 0) < xpNeed) {
         return false;
       }
       spellAdditionalCost = optional.cost ?? {};
@@ -133,21 +145,65 @@ export const playSpell: Defs["playSpell"] = {
     // Rule 355.8 / 419.2.a: gate on caster-chosen targets (including modal options).
     const abilities = registry.getAbilities(context.params.cardId) ?? [];
     const spellAbility = abilities.find((a: { type: string }) => a.type === "spell");
+    const conditionResolverCtx = {
+      cards: {
+        getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
+        getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
+      },
+      choosing: true,
+      draft: state,
+      playerId: context.params.playerId as string,
+      sourceCardId: context.params.cardId as string,
+      zones: {
+        getCardZone: (c: CoreCardId) => context.zones.getCardZone(c),
+        getCardsInZone: (z: CoreZoneId, p?: CorePlayerId) => context.zones.getCardsInZone(z, p),
+      },
+    };
+    // rule-id: ven-031-166 — an explicitly supplied enemy target that "can't
+    // be chosen by enemy spells and abilities" makes the play illegal.
+    for (const t of context.params.targets ?? []) {
+      const ctl =
+        context.cards.getCardController?.(t as CoreCardId) ??
+        context.cards.getCardOwner(t as CoreCardId);
+      if (ctl && ctl !== context.params.playerId && isUntargetable(t, conditionResolverCtx)) {
+        return false;
+      }
+    }
     if (
-      !spellEffectHasLegalTargets(spellAbility?.effect as SpellEffectTargetShape | undefined, {
-        cards: {
-          getCardOwner: (c) => context.cards.getCardOwner(c),
-        },
-        draft: state,
-        playerId: context.params.playerId as string,
-        sourceCardId: context.params.cardId as string,
-        zones: {
-          getCardZone: (c) => context.zones.getCardZone(c),
-          getCardsInZone: (z, p) => context.zones.getCardsInZone(z, p),
-        },
-      })
+      !spellEffectHasLegalTargets(
+        spellAbility?.effect as SpellEffectTargetShape | undefined,
+        conditionResolverCtx,
+      )
     ) {
       return false;
+    }
+
+    // rule-id: ogn-256-298 (Fox-Fire) — a `totalMight` descriptor caps the
+    // SUMMED Might of the caster-chosen set, all at one battlefield; reject
+    // supplied targets that exceed it rather than trusting the client.
+    const spellTgt = (spellAbility?.effect as SpellEffectTargetShape | undefined)?.target;
+    const totalMightCap =
+      spellTgt && typeof spellTgt !== "string"
+        ? (spellTgt as { totalMight?: { lte?: number } }).totalMight?.lte
+        : undefined;
+    if (totalMightCap !== undefined && context.params.targets?.length) {
+      const chosen = context.params.targets;
+      const total = chosen.reduce(
+        (sum, id) => sum + getCardEffectiveMight(id, (c) => context.cards.getCardMeta?.(c)),
+        0,
+      );
+      if (total > totalMightCap) {
+        return false;
+      }
+      if ((spellTgt as { location?: string }).location === "battlefield") {
+        const zone = context.zones.getCardZone(chosen[0] as CoreCardId);
+        if (
+          !zone?.startsWith("battlefield") ||
+          !chosen.every((id) => context.zones.getCardZone(id as CoreCardId) === zone)
+        ) {
+          return false;
+        }
+      }
     }
 
     return true;
@@ -228,6 +284,8 @@ export const playSpell: Defs["playSpell"] = {
           getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
           getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
         },
+        // rule-id: ven-031-166 — enumerating caster-chosen targets.
+        choosing: true,
         draft: state,
         playerId: context.playerId as string,
         sourceCardId: cardId as string,
@@ -249,7 +307,26 @@ export const playSpell: Defs["playSpell"] = {
       const refTgt = findAmountReferenceTarget(spellEffect);
       // rule-id: sfd-017-221 (rule 355.8) — a `sequence` spell's caster-chosen
       // target lives on its lead sub-effect; lift it so the caster picks.
-      const tgt = spellEffect?.target ?? refTgt ?? findSequenceLeadTarget(spellEffect);
+      // rule-id: sfd-200-221 (rule 355.8) — a sequence naming a SECOND
+      // distinct card target ("…Deal 3 to an enemy unit") locks both at play
+      // time as targets [lead, second]; the sequence handler routes each to
+      // its own step.
+      const seqSlots =
+        spellEffect?.target === undefined && refTgt === undefined
+          ? collectSequenceTargetSlots(spellEffect)
+          : undefined;
+      const isSinglePick = (d: { type: string; quantity?: unknown }) =>
+        d.type !== "player" &&
+        d.type !== "battlefield" &&
+        (d.quantity === undefined || d.quantity === 1);
+      const secondTgt =
+        seqSlots?.length === 2 && isSinglePick(seqSlots[0]) && isSinglePick(seqSlots[1])
+          ? seqSlots[1]
+          : undefined;
+      const tgt =
+        spellEffect?.target ??
+        refTgt ??
+        (secondTgt ? seqSlots?.[0] : findSequenceLeadTarget(spellEffect));
       const isCardTarget =
         tgt !== undefined &&
         typeof tgt !== "string" &&
@@ -270,6 +347,33 @@ export const playSpell: Defs["playSpell"] = {
         spellEffect?.type === "fight" && typeof spellEffect.defender === "object"
           ? spellEffect.defender
           : undefined;
+      // rule-id: ogn-220-298 (Facebreaker) / rule 355.8 — "Stun a friendly
+      // unit and an enemy unit at the same battlefield": a `sequence` whose
+      // lead card target is followed by a `location:"same"` step names TWO
+      // caster-chosen targets. Enumerate one Play per legal [lead, same] pair
+      // sharing a battlefield so both are locked on the chain item.
+      const seqSubs =
+        spellEffect?.type === "sequence" && Array.isArray(spellEffect.effects)
+          ? spellEffect.effects
+          : undefined;
+      const sameStepIdx =
+        seqSubs?.findIndex(
+          (e) =>
+            typeof e?.target === "object" &&
+            (e.target as { location?: string }).location === "same",
+        ) ?? -1;
+      const sameLeadIdx =
+        sameStepIdx > 0
+          ? (seqSubs ?? []).findIndex(
+              (e, i) =>
+                i < sameStepIdx &&
+                typeof e?.target === "object" &&
+                e.target.type !== "pending-value" &&
+                (e.target as { location?: string }).location !== "same",
+            )
+          : -1;
+      const sameLead = sameLeadIdx >= 0 ? seqSubs?.[sameLeadIdx]?.target : undefined;
+      const sameDesc = sameStepIdx >= 0 ? seqSubs?.[sameStepIdx]?.target : undefined;
       if (!isCardTarget && fightAtk && fightDef) {
         const attackers = resolveTarget(
           { ...fightAtk, quantity: "all" } as Parameters<typeof resolveTarget>[0],
@@ -286,6 +390,35 @@ export const playSpell: Defs["playSpell"] = {
               cardId: cardId as string,
               playerId: context.playerId as string,
               targets: [a as string, d as string],
+            });
+          }
+        }
+      } else if (
+        !isCardTarget &&
+        sameLead &&
+        sameDesc &&
+        typeof sameLead === "object" &&
+        typeof sameDesc === "object" &&
+        sameLead.quantity !== "all" &&
+        sameDesc.quantity !== "all"
+      ) {
+        const leads = resolveTarget(
+          { ...sameLead, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+          resolverCtx,
+        );
+        for (const l of leads) {
+          const zone = context.zones.getCardZone(l as CoreCardId);
+          if (!zone) continue;
+          const others = resolveTarget(
+            { ...sameDesc, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+            { ...resolverCtx, sameZone: zone as string },
+          );
+          for (const o of others) {
+            if (o === l) continue;
+            baseVariants.push({
+              cardId: cardId as string,
+              playerId: context.playerId as string,
+              targets: [l as string, o as string],
             });
           }
         }
@@ -316,18 +449,39 @@ export const playSpell: Defs["playSpell"] = {
         // "at the same location" (location:"here" on a spell) constrains a
         // multi-pick to units sharing one zone.
         const qty = tgt.quantity;
+        // rule-id: ogn-256-298 (Fox-Fire) — "any number of units at a
+        // battlefield with total Might N or less": quantity:"any" is a 0..n
+        // caster pick at ONE battlefield, and `totalMight` caps the SUMMED
+        // Might of the chosen set.
+        const totalMightCap = (tgt as { totalMight?: { lte?: number } }).totalMight?.lte;
+        const anyQty = !splitDesc && qty === "any";
+        const mightOf = (id: string) =>
+          getCardEffectiveMight(id, (c) => context.cards.getCardMeta?.(c));
+        const subsetPool =
+          totalMightCap !== undefined
+            ? (validTargets as string[]).filter((id) => mightOf(id) <= totalMightCap)
+            : (validTargets as string[]);
         const upToN =
           !splitDesc && typeof qty === "object" && qty.upTo !== undefined && qty.atLeast === undefined
             ? qty.upTo
-            : undefined;
+            : anyQty
+              ? subsetPool.length
+              : undefined;
         if (upToN !== undefined) {
-          const sameLocation = (tgt as { location?: string }).location === "here";
-          for (const subset of enumerateSubsetsUpTo(validTargets as string[], upToN)) {
+          const loc = (tgt as { location?: string }).location;
+          const sameLocation = loc === "here" || (anyQty && loc === "battlefield");
+          for (const subset of enumerateSubsetsUpTo(subsetPool, upToN)) {
             if (sameLocation && subset.length > 1) {
               const zone = context.zones.getCardZone(subset[0] as CoreCardId);
               if (!subset.every((id) => context.zones.getCardZone(id as CoreCardId) === zone)) {
                 continue;
               }
+            }
+            if (
+              totalMightCap !== undefined &&
+              subset.reduce((sum, id) => sum + mightOf(id), 0) > totalMightCap
+            ) {
+              continue;
             }
             baseVariants.push({
               cardId: cardId as string,
@@ -353,11 +507,29 @@ export const playSpell: Defs["playSpell"] = {
                 });
               }
             } else {
-              baseVariants.push({
-                cardId: cardId as string,
-                playerId: context.playerId as string,
-                targets: [targetId as string],
-              });
+              // rule-id: sfd-200-221 (rule 355.8) — pair the lead with each
+              // legal (distinct) second-slot candidate.
+              const seconds = secondTgt
+                ? resolveTarget(
+                    { ...secondTgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+                    resolverCtx,
+                  ).filter((id) => id !== targetId)
+                : [];
+              if (seconds.length > 0) {
+                for (const secId of seconds) {
+                  baseVariants.push({
+                    cardId: cardId as string,
+                    playerId: context.playerId as string,
+                    targets: [targetId as string, secId as string],
+                  });
+                }
+              } else {
+                baseVariants.push({
+                  cardId: cardId as string,
+                  playerId: context.playerId as string,
+                  targets: [targetId as string],
+                });
+              }
             }
           }
         }
@@ -374,7 +546,13 @@ export const playSpell: Defs["playSpell"] = {
       // elect it; the spell's `paid-additional-cost` conditional reads the
       // outcome at resolution.
       const optionalPay = getOptionalPlayCost(cardId as string);
-      if (optionalPay?.kind === "pay") {
+      // rule-id: unl-140-219 (rule 560) — an XP additional cost is only
+      // offered when the caster's XP total covers it.
+      const xpNeedForPay = optionalPay?.cost?.xp ?? 0;
+      const xpAffordable =
+        xpNeedForPay === 0 ||
+        (state.players[context.playerId as string]?.xp ?? 0) >= xpNeedForPay;
+      if (optionalPay?.kind === "pay" && xpAffordable) {
         const extra = optionalPay.cost ?? {};
         const metaForPay = createMetaAccessor(context.cards);
         for (const base of baseVariants) {
@@ -406,7 +584,9 @@ export const playSpell: Defs["playSpell"] = {
       if (repeatCost?.some((t) => t.energy > 0 || t.power.length > 0)) {
         const meta = createMetaAccessor(context.cards);
         for (const base of baseVariants) {
-          for (let n = 1; ; n++) {
+          // rule-id: sfd-122-221 — Rule 820.1.c.3: each Repeat instance is
+          // paid at most once, so n never exceeds the number of instances.
+          for (let n = 1; n <= repeatCost.length; n++) {
             if (
               !canAffordCard(
                 state,
@@ -464,6 +644,8 @@ export const playSpell: Defs["playSpell"] = {
           getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
           getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
         },
+        // rule-id: ven-031-166 — enumerating caster-chosen targets.
+        choosing: true,
         draft: state,
         playerId: context.playerId as string,
         sourceCardId: cardId as string,
@@ -522,7 +704,17 @@ export const playSpell: Defs["playSpell"] = {
     if (paidAdditionalCost) {
       const optional = getOptionalPlayCost(cardId);
       if (optional?.kind === "pay") {
-        spellAdditionalCost = optional.cost ?? {};
+        // rule-id: unl-140-219 (rule 560) — "spend N XP as an additional
+        // cost": deduct the XP from the caster's total; if they lack it the
+        // additional cost is not paid at all.
+        const xpNeed = optional.cost?.xp ?? 0;
+        const player = draft.players[playerId];
+        if (xpNeed === 0) {
+          spellAdditionalCost = optional.cost ?? {};
+        } else if (player && (player.xp ?? 0) >= xpNeed) {
+          player.xp -= xpNeed;
+          spellAdditionalCost = optional.cost ?? {};
+        }
       }
     }
     if (!draft.additionalCostsPaid) {
@@ -611,5 +803,18 @@ export const playSpell: Defs["playSpell"] = {
       cardId: cardId as CoreCardId,
       targetZoneId: "chain" as CoreZoneId,
     });
+
+    // rule-id: sfd-142-221 (rule 359.2 / 383.4.b.2) — "when you choose me"
+    // triggers become pending once the choosing spell is Finalized on the
+    // chain (targets locked at play time), not when it later resolves.
+    if (targets && targets.length > 0) {
+      const trigCtx = { cards: context.cards, counters: context.counters, draft, zones };
+      for (const targetId of targets) {
+        fireTriggers(
+          { cardId: targetId, chooserId: playerId, sourceType: "spell", type: "choose" },
+          trigCtx,
+        );
+      }
+    }
   },
 };

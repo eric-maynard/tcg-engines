@@ -2,7 +2,56 @@
 import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { buildConsumedKey, findAllReplacements } from "../replacement-effects";
 import { type EffectHelpers, resolveAmount, tokenEntersReadyFromStaticGrant } from "./_helpers";
+
+/**
+ * Rule unl-086-219 (Zilean, Time Mage): "Once each turn, if you would play a
+ * token unit while I'm at a battlefield, you may play that token and an
+ * additional copy of it instead." Scans the creating player's board for an
+ * unconsumed `play-token` replacement whose `while-at-battlefield` condition
+ * holds, marks it consumed for the turn, and returns the number of extra
+ * copies to create (0 or 1).
+ */
+function applyPlayTokenReplacement(ctx: EffectContext): number {
+  const matches = findAllReplacements(
+    { owner: ctx.playerId, playerId: ctx.playerId, type: "play-token" },
+    {
+      cards: {
+        getCardMeta: (ctx.cards.getCardMeta ?? (() => undefined)) as never,
+        getCardOwner: ctx.cards.getCardOwner,
+      },
+      draft: ctx.draft,
+      zones: { getCardsInZone: ctx.zones.getCardsInZone },
+    },
+  );
+  const consumed = ctx.draft.consumedNextReplacements ?? {};
+  for (const m of matches) {
+    // "if *you* would play" — only the token's controller benefits.
+    if (m.sourceOwner !== ctx.playerId) {
+      continue;
+    }
+    const key = buildConsumedKey(m.sourceCardId, m.abilityIndex);
+    // "Once each turn" — consumedNextReplacements is cleared at end of turn.
+    if (consumed[key]) {
+      continue;
+    }
+    const condType = (m.condition as { type?: string } | undefined)?.type;
+    if (condType === "while-at-battlefield") {
+      const zone = ctx.zones.getCardZone(m.sourceCardId as CoreCardId);
+      if (!zone?.startsWith("battlefield-")) {
+        continue;
+      }
+    }
+    if (!ctx.draft.consumedNextReplacements) {
+      (ctx.draft as { consumedNextReplacements?: Record<string, true> }).consumedNextReplacements =
+        {};
+    }
+    (ctx.draft.consumedNextReplacements as Record<string, true>)[key] = true;
+    return 1;
+  }
+  return 0;
+}
 
 export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   if (!ctx.createCardInZone) {
@@ -12,7 +61,11 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   if (!tokenDef) {
     return;
   }
-  const count = resolveAmount(effect.amount ?? 1, ctx);
+  let count = resolveAmount(effect.amount ?? 1, ctx);
+  // Rule unl-086-219: a play-token replacement adds one additional copy.
+  if (count > 0 && tokenDef.type !== "gear") {
+    count += applyPlayTokenReplacement(ctx);
+  }
   let targetZone: string;
   if (effect.location === "here" && ctx.sourceZone) {
     targetZone = ctx.sourceZone;
@@ -42,6 +95,14 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   // Rule sfd-171-221: a static EntersReady grant on a friendly board card
   // overrides rule 143.4 for every token this effect creates.
   const tokenEntersReady = tokenEntersReadyFromStaticGrant(ctx, tokenDef.type);
+  // Rule unl-081-219 (Keeper of Masks): "They become copies of me." A token
+  // spec carrying the `CopyOnPlay` marker registers each instance with the
+  // source card's definition (name, Might, keywords, abilities) instead of
+  // the literal token stats, so engine reads treat it as a copy.
+  const copySource =
+    tokenDef.keywords?.includes("CopyOnPlay") && ctx.sourceCardId
+      ? registry.get(ctx.sourceCardId)
+      : undefined;
   for (let i = 0; i < count; i++) {
     const tokenId = `token-${tokenSlug}-${Date.now()}-${i}`;
     ctx.createCardInZone(tokenId, targetZone, ctx.playerId);
@@ -55,12 +116,28 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     // Is an immer proxy that will be revoked after this reducer's
     // Produce() returns. Copy arrays before storing them in the
     // Long-lived registry so later hasKeyword() reads don't throw.
-    registry.register(tokenId, {
-      cardType: tokenDef.type === "gear" ? "gear" : "unit",
-      id: tokenId,
-      keywords: tokenDef.keywords ? [...tokenDef.keywords] : undefined,
-      might: tokenDef.might,
-      name: tokenDef.name,
-    });
+    if (copySource) {
+      registry.register(tokenId, {
+        ...copySource,
+        abilities: copySource.abilities ? [...copySource.abilities] : undefined,
+        id: tokenId,
+        keywords: copySource.keywords ? [...copySource.keywords] : undefined,
+        powerCost: copySource.powerCost ? [...copySource.powerCost] : undefined,
+        tags: copySource.tags ? [...copySource.tags] : undefined,
+      });
+    } else {
+      registry.register(tokenId, {
+        cardType: tokenDef.type === "gear" ? "gear" : "unit",
+        id: tokenId,
+        keywords: tokenDef.keywords ? [...tokenDef.keywords] : undefined,
+        might: tokenDef.might,
+        name: tokenDef.name,
+      });
+    }
+    // Rule unl-058-219: creating a unit token is "playing a token unit" —
+    // fire after registry registration so trigger effects can resolve it.
+    if (tokenDef.type !== "gear") {
+      ctx.fireTriggers?.({ cardId: tokenId, playerId: ctx.playerId, type: "play-token-unit" });
+    }
   }
 }

@@ -1,0 +1,1087 @@
+/**
+ * L1 — Decision derivation and answer resolution.
+ *
+ * - deriveDecision(): pendingChoice → pick / yes-no / distribute / name;
+ *   chain → action(chain); showdown → action(showdown); else action(main).
+ * - groupActions(): flat enumerateMoves rows → one ActionOption per
+ *   (moveId, primary id) with the varying params exposed as fields.
+ * - narrowVariants(): the play bundle as ONE call — filter an option's
+ *   variants by PlayArgs, prefer base-cost variants, and either land on one
+ *   engine move, report ILLEGAL_ARGS, or describe the follow-up question.
+ * - pending-choice answers → resolvePendingChoice params; shorthand coercion.
+ *
+ * Everything takes a `DecisionContext` (public state + legal-move oracle +
+ * card labels) so a UI-snapshot backend can reuse it unchanged.
+ */
+
+import type { PlayerId } from "@tcg/core";
+import { getGlobalCardRegistry } from "../operations/card-lookup";
+import type { PendingChoice, RiftboundGameState } from "../types/game-state";
+import { getActingSeat, getPendingChoiceChooser } from "../views/acting-seat";
+import { cardLabel } from "./card-state";
+import type { HarnessEngine } from "./internal";
+import { canonicalJson } from "./internal";
+import type {
+  ActionContext,
+  ActionDecision,
+  ActionField,
+  ActionFieldKind,
+  ActionOption,
+  ActionVerb,
+  Answer,
+  AnswerShorthand,
+  CardRef,
+  Decision,
+  DistributeDecision,
+  FlatMove,
+  HarnessErrorInfo,
+  IntegerDecision,
+  NameDecision,
+  PickDecision,
+  PickOption,
+  PlayArgs,
+  Seat,
+  YesNoDecision,
+} from "./types";
+
+// ---------------------------------------------------------------------------
+// Context
+// ---------------------------------------------------------------------------
+
+export interface DecisionContext {
+  readonly state: RiftboundGameState;
+  legal(seat: Seat, moveIds?: readonly string[]): FlatMove[];
+  label(card: CardRef): string;
+  /** Optional legality probe for non-enumerated knobs (X). */
+  canExecute?(seat: Seat, moveId: string, params: Record<string, unknown>): boolean;
+  /** Whether procedures are auto-run (then they are hidden from menus). */
+  readonly autoProcedures: boolean;
+  readonly seq: number;
+}
+
+export function engineDecisionContext(
+  engine: HarnessEngine,
+  seq: number,
+  autoProcedures: boolean,
+): DecisionContext {
+  return {
+    autoProcedures,
+    canExecute: (seat, moveId, params) =>
+      engine.canExecuteMove(moveId, { params, playerId: seat as PlayerId }),
+    label: (card) => cardLabel(engine, card),
+    legal: (seat, moveIds) =>
+      engine
+        .enumerateMoves(seat as PlayerId, { moveIds: moveIds ? [...moveIds] : undefined, validOnly: true })
+        .map((m) => ({
+          moveId: m.moveId,
+          params: (m.params ?? {}) as Record<string, unknown>,
+          playerId: (m.playerId as string) ?? seat,
+        })),
+    seq,
+    state: engine.getState(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Move metadata
+// ---------------------------------------------------------------------------
+
+const VERBS: Record<string, ActionVerb> = {
+  activateAbility: "activate",
+  concede: "concede",
+  conquerBattlefield: "conquer",
+  contestBattlefield: "contest",
+  endShowdown: "endShowdown",
+  endTurn: "endTurn",
+  exhaustRune: "tapRune",
+  gankingMove: "gank",
+  hideCard: "hide",
+  invitePlayer: "invite",
+  passChainPriority: "passPriority",
+  passShowdownFocus: "passFocus",
+  playFromChampionZone: "playChampion",
+  playGear: "equip",
+  playSpell: "cast",
+  playUnit: "play",
+  recallUnit: "recall",
+  recycleRune: "recycleRune",
+  resolveChain: "resolveChain",
+  resolveFullCombat: "resolveCombat",
+  revealHidden: "reveal",
+  scorePoint: "score",
+  standardMove: "move",
+  startShowdown: "startShowdown",
+};
+
+export const PROCEDURE_MOVE_IDS = new Set(["resolveFullCombat", "endShowdown", "resolveChain"]);
+
+/** Params that identify the option (excluded from fields). */
+function primaryOf(m: FlatMove): { primary: string; card?: CardRef; consumed: string[] } {
+  const p = m.params;
+  switch (m.moveId) {
+    case "activateAbility": {
+      return {
+        card: p.cardId as string,
+        consumed: ["cardId", "abilityIndex"],
+        primary: `${String(p.cardId)}#${String(p.abilityIndex ?? 0)}`,
+      };
+    }
+    case "exhaustRune":
+    case "recycleRune": {
+      return { card: p.runeId as string, consumed: ["runeId"], primary: String(p.runeId) };
+    }
+    case "standardMove": {
+      return { consumed: ["destination"], primary: `to:${String(p.destination)}` };
+    }
+    case "gankingMove":
+    case "recallUnit": {
+      return { card: p.unitId as string, consumed: ["unitId"], primary: String(p.unitId) };
+    }
+    case "resolveFullCombat":
+    case "conquerBattlefield":
+    case "startShowdown":
+    case "contestBattlefield":
+    case "scorePoint": {
+      return { consumed: ["battlefieldId"], primary: String(p.battlefieldId) };
+    }
+    case "invitePlayer": {
+      return { consumed: ["invitedPlayerId"], primary: String(p.invitedPlayerId) };
+    }
+    default: {
+      if (typeof p.cardId === "string") {
+        return { card: p.cardId, consumed: ["cardId"], primary: p.cardId };
+      }
+      return { consumed: [], primary: "-" };
+    }
+  }
+}
+
+/** Engine param → PlayArgs name + field kind. */
+const PARAM_ARG: Record<string, { arg: string; kind: ActionFieldKind }> = {
+  abilityIndex: { arg: "abilityIndex", kind: "int" },
+  battlefieldId: { arg: "to", kind: "zone" },
+  chosenTargetId: { arg: "costTarget", kind: "card" },
+  destination: { arg: "to", kind: "zone" },
+  discardId: { arg: "discard", kind: "card" },
+  domain: { arg: "domain", kind: "enum" },
+  location: { arg: "to", kind: "zone" },
+  paidAdditionalCost: { arg: "payOptional", kind: "bool" },
+  repeatCount: { arg: "repeat", kind: "int" },
+  sacrificeId: { arg: "sacrifice", kind: "card" },
+  sourceCardId: { arg: "source", kind: "card" },
+  targets: { arg: "targets", kind: "cards" },
+  toBattlefield: { arg: "to", kind: "zone" },
+  unitIds: { arg: "units", kind: "cards" },
+  viaFlow: { arg: "flow", kind: "bool" },
+  xAmount: { arg: "x", kind: "int" },
+};
+
+/** Params never surfaced as fields. additionalCostSpec rides with paidAdditionalCost. */
+const HIDDEN_PARAMS = new Set(["playerId", "additionalCostSpec"]);
+
+/** Follow-up priority: which still-varying field to ask about first. */
+const FOLLOW_UP_ORDER = [
+  "targets",
+  "location",
+  "destination",
+  "toBattlefield",
+  "battlefieldId",
+  "unitIds",
+  "sacrificeId",
+  "discardId",
+  "chosenTargetId",
+  "domain",
+  "repeatCount",
+  "paidAdditionalCost",
+  "viaFlow",
+];
+
+// ---------------------------------------------------------------------------
+// Grouping
+// ---------------------------------------------------------------------------
+
+function labelForOption(ctx: DecisionContext, m: FlatMove, card: CardRef | undefined, primary: string): string {
+  const verb = VERBS[m.moveId] ?? m.moveId;
+  if (m.moveId === "standardMove") {
+    return `move → ${String(m.params.destination)}`;
+  }
+  if (m.moveId === "activateAbility") {
+    return `activate ${ctx.label(card as string)} ability #${String(m.params.abilityIndex ?? 0)}`;
+  }
+  if (card) {
+    return `${verb} ${ctx.label(card)}`;
+  }
+  return primary === "-" ? verb : `${verb} ${primary}`;
+}
+
+/** Does this spell's effect read `{ variable: "x" }`? */
+export function spellSupportsX(cardId: CardRef): boolean {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  const spell = abilities.find((a) => a.type === "spell");
+  if (!spell?.effect) {
+    return false;
+  }
+  return JSON.stringify(spell.effect).includes('"variable":"x"');
+}
+
+function probeMaxX(ctx: DecisionContext, variant: FlatMove): number {
+  const pool = ctx.state.runePools[variant.playerId];
+  const cap = Math.min(60, (pool?.energy ?? 0) + 1);
+  if (!ctx.canExecute) {
+    return Math.max(0, cap - 1);
+  }
+  let best = 0;
+  for (let k = 0; k <= cap; k++) {
+    if (ctx.canExecute(variant.playerId, variant.moveId, { ...variant.params, xAmount: k })) {
+      best = k;
+    } else if (k > 0) {
+      break;
+    }
+  }
+  return best;
+}
+
+function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[], consumed: string[]): ActionField[] {
+  const names = new Set<string>();
+  for (const v of variants) {
+    for (const k of Object.keys(v.params)) {
+      if (!HIDDEN_PARAMS.has(k) && !consumed.includes(k)) {
+        names.add(k);
+      }
+    }
+  }
+  const fields: ActionField[] = [];
+  for (const name of names) {
+    const distinct = new Map<string, unknown>();
+    let presentInAll = true;
+    for (const v of variants) {
+      const val = v.params[name];
+      if (val === undefined) {
+        presentInAll = false;
+      }
+      distinct.set(canonicalJson(val ?? null), val);
+    }
+    const meta = PARAM_ARG[name] ?? { arg: name, kind: "enum" as ActionFieldKind };
+    if (meta.kind === "bool" && distinct.has("null")) {
+      distinct.delete("null");
+      distinct.set("false", false);
+    }
+    const options = [...distinct.values()];
+    if (meta.kind === "bool") {
+      options.sort((a, b) => Number(a === true) - Number(b === true));
+    }
+    const ints = options.filter((o): o is number => typeof o === "number");
+    fields.push({
+      arg: meta.arg,
+      kind: meta.kind,
+      max: meta.kind === "int" && ints.length ? Math.max(...ints) : meta.kind === "cards" ? Math.max(...options.map((o) => (Array.isArray(o) ? o.length : 0))) : undefined,
+      min: meta.kind === "int" && ints.length ? Math.min(0, ...ints) : meta.kind === "cards" ? Math.min(...options.map((o) => (Array.isArray(o) ? o.length : 0))) : undefined,
+      name,
+      options,
+      required: presentInAll,
+    });
+  }
+  if (moveId === "playSpell" && variants.length > 0) {
+    const cardId = variants[0]?.params.cardId as string | undefined;
+    if (cardId && spellSupportsX(cardId)) {
+      fields.push({
+        arg: "x",
+        kind: "int",
+        max: probeMaxX(ctx, variants[0] as FlatMove),
+        min: 0,
+        name: "xAmount",
+        required: true,
+      });
+    }
+  }
+  return fields;
+}
+
+export function groupActions(
+  ctx: DecisionContext,
+  flat: readonly FlatMove[],
+): { options: ActionOption[]; passKey?: string; endTurnKey?: string } {
+  const groups = new Map<string, { moves: FlatMove[]; card?: CardRef; primary: string; consumed: string[] }>();
+  for (const m of flat) {
+    if (m.moveId === "resolvePendingChoice") {
+      continue;
+    }
+    if (ctx.autoProcedures && PROCEDURE_MOVE_IDS.has(m.moveId)) {
+      continue;
+    }
+    const { primary, card, consumed } = primaryOf(m);
+    const key = `${m.moveId}:${primary}`;
+    const g = groups.get(key);
+    if (g) {
+      g.moves.push(m);
+    } else {
+      groups.set(key, { card, consumed, moves: [m], primary });
+    }
+  }
+  const options: ActionOption[] = [];
+  let passKey: string | undefined;
+  let endTurnKey: string | undefined;
+  for (const [key, g] of groups) {
+    const first = g.moves[0] as FlatMove;
+    const option: ActionOption = {
+      card: g.card,
+      fields: buildFields(ctx, first.moveId, g.moves, g.consumed),
+      key,
+      label: labelForOption(ctx, first, g.card, g.primary),
+      moveId: first.moveId,
+      variantCount: g.moves.length,
+      variants: g.moves,
+      verb: VERBS[first.moveId] ?? "other",
+    };
+    options.push(option);
+    if (first.moveId === "passChainPriority" || first.moveId === "passShowdownFocus") {
+      passKey = key;
+    }
+    if (first.moveId === "endTurn") {
+      endTurnKey = key;
+    }
+  }
+  options.sort((a, b) => a.key.localeCompare(b.key));
+  return { endTurnKey, options, passKey };
+}
+
+// ---------------------------------------------------------------------------
+// Derivation
+// ---------------------------------------------------------------------------
+
+export function decisionId(seq: number, seat: Seat, kind: string, suffix?: string): string {
+  return `d${seq}:${seat}:${kind}${suffix ? `:${suffix}` : ""}`;
+}
+
+export function actionContextOf(state: RiftboundGameState, seat: Seat): ActionContext {
+  const chain = state.interaction?.chain;
+  if (chain?.active) {
+    return "chain";
+  }
+  const stack = state.interaction?.showdownStack ?? [];
+  const top = stack[stack.length - 1];
+  if (top?.active) {
+    return "showdown";
+  }
+  return getActingSeat(state) === seat ? "main" : "free";
+}
+
+export function deriveActionDecision(ctx: DecisionContext, seat: Seat, cursor: boolean): ActionDecision | null {
+  const flat = ctx.legal(seat);
+  const { options, passKey, endTurnKey } = groupActions(ctx, flat);
+  const context: ActionContext = cursor ? actionContextOf(ctx.state, seat) : "free";
+  if (!cursor && options.every((o) => o.moveId === "concede")) {
+    return null;
+  }
+  const chain = ctx.state.interaction?.chain;
+  const top = chain?.items[chain.items.length - 1];
+  const prompt =
+    context === "chain"
+      ? `Priority: respond to ${top ? ctx.label(top.cardId) : "the chain"} or pass`
+      : context === "showdown"
+        ? "Focus: act in the showdown or pass"
+        : context === "main"
+          ? "Main phase: take an action or end the turn"
+          : "Free actions available";
+  return {
+    context,
+    endTurnKey,
+    id: decisionId(ctx.seq, seat, "action", cursor ? undefined : "free"),
+    kind: "action",
+    options,
+    passKey,
+    prompt,
+    seat,
+    source: top ? { cardId: top.cardId, chainItemId: top.id } : undefined,
+    timing: "ACT",
+  };
+}
+
+function modeLabel(effect: unknown, idx: number): string {
+  const opts = (effect as { options?: { label?: string; text?: string; effect?: { type?: string } }[] } | undefined)
+    ?.options;
+  const o = opts?.[idx];
+  return o?.label ?? o?.text ?? (o?.effect?.type ? `${o.effect.type} (mode ${idx})` : `mode ${idx}`);
+}
+
+export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice): Decision {
+  const seat = getPendingChoiceChooser(pc);
+  const flat = ctx.legal(seat, ["resolvePendingChoice"]);
+  const source = {
+    cardId: (pc as { sourceCardId?: string }).sourceCardId,
+    pendingChoiceType: pc.type,
+  };
+  const base = { seat, source, timing: "RES" as const };
+
+  switch (pc.type) {
+    case "reveal-and-pick": {
+      const allowDecline = flat.some((m) => m.params.accept === false);
+      const options: PickOption[] = flat
+        .filter((m) => typeof m.params.pickedCardId === "string")
+        .map((m) => {
+          const id = m.params.pickedCardId as string;
+          return { card: id, key: id, label: ctx.label(id) };
+        });
+      const d: PickDecision = {
+        ...base,
+        allowDecline,
+        id: decisionId(ctx.seq, seat, "pick"),
+        kind: "pick",
+        max: 1,
+        meta: { onPicked: pc.onPicked, onRest: pc.onRest, revealer: pc.revealer },
+        min: allowDecline ? 0 : 1,
+        options,
+        prompt: `Pick a revealed card to ${pc.onPicked}${allowDecline ? " (or decline)" : ""}`,
+        semantics: "from-revealed",
+      };
+      return d;
+    }
+    case "name-card": {
+      const d: NameDecision = {
+        ...base,
+        cardType: pc.cardType,
+        id: decisionId(ctx.seq, seat, "name"),
+        kind: "name",
+        prompt: `Name a ${pc.cardType} card`,
+        vocabulary: pc.options,
+      };
+      return d;
+    }
+    case "choose-target": {
+      if (pc.assign) {
+        const d: DistributeDecision = {
+          ...base,
+          buckets: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id), max: 1, min: 0 })),
+          id: decisionId(ctx.seq, seat, "distribute"),
+          kind: "distribute",
+          prompt: "Assign 1 damage",
+          total: 1,
+        };
+        return d;
+      }
+      const d: PickDecision = {
+        ...base,
+        allowDecline: false,
+        id: decisionId(ctx.seq, seat, "pick"),
+        kind: "pick",
+        max: 1,
+        min: 1,
+        options: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
+        prompt: pc.boundTargets ? "Choose a target to drop" : `Choose a target for ${source.cardId ? ctx.label(source.cardId) : "the effect"}`,
+        semantics: pc.boundTargets ? "drop-target" : "target",
+      };
+      return d;
+    }
+    case "choose-destination": {
+      const d: PickDecision = {
+        ...base,
+        allowDecline: false,
+        id: decisionId(ctx.seq, seat, "pick"),
+        kind: "pick",
+        max: 1,
+        min: 1,
+        options: pc.options.map((z) => ({ key: z, label: z, zone: z })),
+        prompt: `Choose a destination for ${ctx.label(pc.cardId)}`,
+        semantics: "destination",
+        source: { cardId: pc.cardId, pendingChoiceType: pc.type },
+      };
+      return d;
+    }
+    case "choose-mode": {
+      const d: PickDecision = {
+        ...base,
+        allowDecline: false,
+        id: decisionId(ctx.seq, seat, "pick"),
+        kind: "pick",
+        max: 1,
+        min: 1,
+        options: pc.options.map((idx) => ({ key: String(idx), label: modeLabel(pc.effect, idx), mode: idx })),
+        prompt: "Choose a mode",
+        semantics: "mode",
+      };
+      return d;
+    }
+    case "opt-in": {
+      // rule-id: sfd-119-221 — surface the "pay [N] to …" cost in the prompt.
+      const cost = (
+        pc.resolved as
+          | { optInCost?: { energy?: number; power?: string[]; exhaust?: boolean } }
+          | undefined
+      )?.optInCost;
+      const costParts: string[] = [];
+      if (cost?.energy) {
+        costParts.push(`[${cost.energy}]`);
+      }
+      for (const p of cost?.power ?? []) {
+        costParts.push(`[${p}]`);
+      }
+      let costText = costParts.length > 0 ? `Pay ${costParts.join("")}` : "";
+      if (cost?.exhaust) {
+        costText = costText ? `${costText} and exhaust` : "Exhaust";
+      }
+      costText = costText ? `${costText} to use` : "Use";
+      const d: YesNoDecision = {
+        ...base,
+        consequence: "Perform the optional triggered ability",
+        id: decisionId(ctx.seq, seat, "yes-no"),
+        kind: "yes-no",
+        prompt: `${costText} ${ctx.label(pc.sourceCardId)}'s optional ability?`,
+      };
+      return d;
+    }
+    case "weaponmaster-equip": {
+      const d: PickDecision = {
+        ...base,
+        allowDecline: true,
+        id: decisionId(ctx.seq, seat, "pick"),
+        kind: "pick",
+        max: 1,
+        min: 0,
+        // rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost — only
+        // payable equipment is enumerated (rule 821.1.c.5).
+        options: flat
+          .filter((m) => typeof m.params.pickedCardId === "string")
+          .map((m) => {
+            const id = m.params.pickedCardId as string;
+            return { card: id, key: id, label: ctx.label(id) };
+          }),
+        prompt: `Weaponmaster: equip ${ctx.label(pc.unitId)}?`,
+        semantics: "equip",
+        source: { cardId: pc.unitId, pendingChoiceType: pc.type },
+      };
+      return d;
+    }
+    default: {
+      const never: never = pc;
+      throw new Error(`Unhandled pendingChoice ${(never as { type: string }).type}`);
+    }
+  }
+}
+
+/** The cursor seat's decision, or null when the game is over / nobody can act. */
+export function deriveDecision(ctx: DecisionContext): Decision | null {
+  const { state } = ctx;
+  if (state.status !== "playing") {
+    return null;
+  }
+  if (state.pendingChoice) {
+    return deriveFromPendingChoice(ctx, state.pendingChoice);
+  }
+  const seat = getActingSeat(state);
+  if (!seat) {
+    return null;
+  }
+  return deriveActionDecision(ctx, seat, true);
+}
+
+// ---------------------------------------------------------------------------
+// Pending-choice answers → resolvePendingChoice params
+// ---------------------------------------------------------------------------
+
+export type ResolveOutcome =
+  | { type: "move"; move: FlatMove }
+  | { type: "error"; error: HarnessErrorInfo };
+
+function err(code: HarnessErrorInfo["code"], message: string, detail?: Record<string, unknown>): ResolveOutcome {
+  return { error: { code, detail, message }, type: "error" };
+}
+
+export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, answer: Answer): ResolveOutcome {
+  const pc = ctx.state.pendingChoice;
+  if (!pc) {
+    return err("STALE_DECISION", "No pending choice");
+  }
+  const seat = decision.seat;
+  const flat = ctx.legal(seat, ["resolvePendingChoice"]);
+  const params: Record<string, unknown> = { playerId: seat };
+
+  const pickKey = (): string | undefined | ResolveOutcome => {
+    if (answer.kind === "decline") {
+      return undefined;
+    }
+    if (answer.kind !== "pick") {
+      return err("WRONG_ANSWER_KIND", `Decision ${decision.kind} cannot take a ${answer.kind} answer`);
+    }
+    if (answer.keys.length === 0) {
+      return undefined;
+    }
+    if (answer.keys.length > 1) {
+      return err("ILLEGAL_ARGS", "This engine prompt accepts exactly one pick", { keys: answer.keys });
+    }
+    return answer.keys[0];
+  };
+
+  switch (pc.type) {
+    case "reveal-and-pick":
+    case "weaponmaster-equip":
+    case "choose-target": {
+      if (pc.type === "choose-target" && pc.assign) {
+        if (answer.kind === "distribute") {
+          const chosen = Object.entries(answer.allocation).filter(([, n]) => n > 0);
+          if (chosen.length !== 1 || chosen[0]?.[1] !== 1) {
+            return err("ILLEGAL_ARGS", "Assign exactly 1 to one bucket", { allocation: answer.allocation });
+          }
+          params.pickedCardId = chosen[0]?.[0];
+          break;
+        }
+        if (answer.kind === "pick" && answer.keys.length === 1) {
+          params.pickedCardId = answer.keys[0];
+          break;
+        }
+        return err("WRONG_ANSWER_KIND", "Distribute decision needs a distribute (or single pick) answer");
+      }
+      const k = pickKey();
+      if (typeof k === "object") {
+        return k;
+      }
+      if (k === undefined) {
+        params.accept = false;
+      } else {
+        params.pickedCardId = k;
+      }
+      break;
+    }
+    case "choose-destination": {
+      const k = pickKey();
+      if (typeof k === "object") {
+        return k;
+      }
+      if (k === undefined) {
+        return err("ILLEGAL_ARGS", "A destination must be chosen");
+      }
+      params.pickedZoneId = k;
+      break;
+    }
+    case "choose-mode": {
+      let k: string | undefined | ResolveOutcome;
+      if (answer.kind === "integer") {
+        k = String(answer.value);
+      } else {
+        k = pickKey();
+      }
+      if (typeof k === "object") {
+        return k;
+      }
+      if (k === undefined) {
+        return err("ILLEGAL_ARGS", "A mode must be chosen");
+      }
+      params.pickedMode = Number(k);
+      break;
+    }
+    case "opt-in": {
+      if (answer.kind === "yes-no") {
+        params.accept = answer.value;
+      } else if (answer.kind === "decline") {
+        params.accept = false;
+      } else {
+        return err("WRONG_ANSWER_KIND", "opt-in needs a yes-no answer");
+      }
+      break;
+    }
+    case "name-card": {
+      if (answer.kind === "name") {
+        params.pickedName = answer.name;
+      } else if (answer.kind === "pick" && answer.keys.length === 1) {
+        params.pickedName = answer.keys[0];
+      } else {
+        return err("WRONG_ANSWER_KIND", "name-card needs a name answer");
+      }
+      break;
+    }
+    default: {
+      return err("WRONG_ANSWER_KIND", `Unhandled pending choice`);
+    }
+  }
+
+  const wanted = canonicalJson(params);
+  const legal = flat.find((m) => canonicalJson(m.params) === wanted);
+  if (!legal) {
+    return err("UNKNOWN_OPTION", "That answer is not among the legal resolutions", {
+      legal: flat.map((m) => m.params),
+      wanted: params,
+    });
+  }
+  return { move: legal, type: "move" };
+}
+
+// ---------------------------------------------------------------------------
+// Action answers → narrowing
+// ---------------------------------------------------------------------------
+
+export type NarrowResult =
+  | { type: "one"; move: FlatMove }
+  | { type: "none"; error: HarnessErrorInfo }
+  | { type: "many"; field: string; choices: PickOption[]; variants: FlatMove[] }
+  | { type: "needX"; variant: FlatMove; min: number; max: number };
+
+function normLoc(v: unknown): string {
+  const s = String(v ?? "");
+  return s.startsWith("battlefield-") ? s.slice("battlefield-".length) : s;
+}
+
+function asArray(v: CardRef | readonly CardRef[] | undefined): readonly CardRef[] | undefined {
+  if (v === undefined) {
+    return undefined;
+  }
+  return typeof v === "string" ? [v] : v;
+}
+
+function sameSet(a: readonly unknown[], b: readonly unknown[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  const sa = [...a].map(String).sort();
+  const sb = [...b].map(String).sort();
+  return sa.every((x, i) => x === sb[i]);
+}
+
+function sameOrdered(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.every((x, i) => String(x) === String(b[i]));
+}
+
+type Constraint = { param: string; test: (v: unknown, params: Readonly<Record<string, unknown>>) => boolean; describe: unknown };
+
+function constraintsFrom(option: ActionOption, args: PlayArgs): Constraint[] {
+  const cs: Constraint[] = [];
+  const targets = asArray(args.targets);
+  if (targets) {
+    cs.push({
+      describe: targets,
+      param: "targets",
+      test: (v) => Array.isArray(v) && (sameOrdered(v, targets) || sameSet(v, targets)),
+    });
+  }
+  if (args.units) {
+    const units = args.units;
+    cs.push({ describe: units, param: "unitIds", test: (v) => Array.isArray(v) && sameSet(v, units) });
+  }
+  if (args.repeat !== undefined) {
+    const n = args.repeat;
+    cs.push({ describe: n, param: "repeatCount", test: (v) => (Number(v ?? 0) || 0) === n });
+  }
+  if (args.flow !== undefined) {
+    const f = args.flow;
+    cs.push({ describe: f, param: "viaFlow", test: (v) => (v === true) === f });
+  }
+  const pay = args.payOptional ?? args.accelerate;
+  if (pay !== undefined) {
+    cs.push({ describe: pay, param: "paidAdditionalCost", test: (v) => (v === true) === pay });
+  }
+  if (args.sacrifice !== undefined) {
+    const s = args.sacrifice;
+    cs.push({ describe: s, param: "sacrificeId", test: (v) => v === s });
+  }
+  if (args.discard !== undefined) {
+    const s = args.discard;
+    cs.push({ describe: s, param: "discardId", test: (v) => v === s });
+  }
+  if (args.costTarget !== undefined) {
+    const s = args.costTarget;
+    cs.push({ describe: s, param: "chosenTargetId", test: (v) => v === s });
+  }
+  if (args.source !== undefined) {
+    const s = args.source;
+    cs.push({ describe: s, param: "sourceCardId", test: (v) => v === s });
+  }
+  if (args.abilityIndex !== undefined) {
+    const s = args.abilityIndex;
+    cs.push({ describe: s, param: "abilityIndex", test: (v) => Number(v ?? 0) === s });
+  }
+  if (args.domain !== undefined) {
+    const s = args.domain;
+    cs.push({ describe: s, param: "domain", test: (v) => v === s });
+  }
+  if (args.to !== undefined) {
+    const want = normLoc(args.to);
+    const locParam =
+      option.moveId === "standardMove"
+        ? "destination"
+        : option.moveId === "gankingMove"
+          ? "toBattlefield"
+          : option.moveId === "hideCard"
+            ? "battlefieldId"
+            : "location";
+    cs.push({ describe: args.to, param: locParam, test: (v) => normLoc(v) === want });
+  }
+  for (const [k, val] of Object.entries(args.params ?? {})) {
+    const want = canonicalJson(val);
+    cs.push({ describe: val, param: k, test: (v) => canonicalJson(v) === want });
+  }
+  return cs;
+}
+
+/** Preferences applied to UNSPECIFIED knobs, each only if it keeps ≥1 variant. */
+const DEFAULT_PREFS: { param: string; keep: (v: unknown) => boolean }[] = [
+  { keep: (v) => v !== true, param: "paidAdditionalCost" },
+  { keep: (v) => !v, param: "repeatCount" },
+  { keep: (v) => v !== true, param: "viaFlow" },
+  { keep: (v) => v === undefined, param: "sacrificeId" },
+  { keep: (v) => v === undefined, param: "discardId" },
+  { keep: (v) => v === undefined, param: "chosenTargetId" },
+];
+
+function choiceFor(ctx: DecisionContext, field: string, value: unknown): PickOption {
+  const kind = PARAM_ARG[field]?.kind ?? "enum";
+  if (kind === "card" && typeof value === "string") {
+    return { card: value, key: value, label: ctx.label(value), value };
+  }
+  if (kind === "cards" && Array.isArray(value)) {
+    const ids = value as string[];
+    return {
+      key: ids.length ? ids.join("+") : "(none)",
+      label: ids.length ? ids.map((id) => ctx.label(id)).join(" + ") : "(no target)",
+      value,
+    };
+  }
+  if (kind === "zone") {
+    return { key: normLoc(value), label: String(value), value, zone: String(value) };
+  }
+  return { key: typeof value === "string" ? value : canonicalJson(value), label: String(value), value };
+}
+
+export function narrowVariants(ctx: DecisionContext, option: ActionOption, args: PlayArgs): NarrowResult {
+  const constraints = constraintsFrom(option, args);
+  let variants = option.variants.filter((v) => constraints.every((c) => c.test(v.params[c.param], v.params)));
+  if (variants.length === 0) {
+    return {
+      error: {
+        code: "ILLEGAL_ARGS",
+        detail: {
+          fields: option.fields.map((f) => ({ arg: f.arg, name: f.name, options: f.options })),
+          given: constraints.map((c) => ({ [c.param]: c.describe })),
+          option: option.key,
+        },
+        message: `${option.label}: no legal variant matches ${constraints.map((c) => `${PARAM_ARG[c.param]?.arg ?? c.param}=${canonicalJson(c.describe)}`).join(", ")}`,
+      },
+      type: "none",
+    };
+  }
+  const specified = new Set(constraints.map((c) => c.param));
+  for (const pref of DEFAULT_PREFS) {
+    if (specified.has(pref.param)) {
+      continue;
+    }
+    const kept = variants.filter((v) => pref.keep(v.params[pref.param]));
+    if (kept.length > 0) {
+      variants = kept;
+    }
+  }
+  // Collapse exact duplicates (enumerators occasionally emit them).
+  const seen = new Map<string, FlatMove>();
+  for (const v of variants) {
+    seen.set(canonicalJson(v.params), v);
+  }
+  variants = [...seen.values()];
+
+  if (variants.length > 1) {
+    const varying = new Set<string>();
+    for (const name of Object.keys(Object.assign({}, ...variants.map((v) => v.params)) as Record<string, unknown>)) {
+      if (HIDDEN_PARAMS.has(name)) {
+        continue;
+      }
+      const vals = new Set(variants.map((v) => canonicalJson(v.params[name] ?? null)));
+      if (vals.size > 1) {
+        varying.add(name);
+      }
+    }
+    const ordered = [...FOLLOW_UP_ORDER.filter((f) => varying.has(f)), ...[...varying].filter((f) => !FOLLOW_UP_ORDER.includes(f))];
+    const field = ordered[0] ?? "params";
+    const distinct = new Map<string, PickOption>();
+    for (const v of variants) {
+      const c = choiceFor(ctx, field, v.params[field]);
+      distinct.set(c.key, c);
+    }
+    return { choices: [...distinct.values()], field, type: "many", variants };
+  }
+
+  const variant = variants[0] as FlatMove;
+  const xField = option.fields.find((f) => f.name === "xAmount");
+  if (xField) {
+    if (args.x === undefined) {
+      return { max: xField.max ?? 0, min: xField.min ?? 0, type: "needX", variant };
+    }
+    if (args.x < (xField.min ?? 0) || args.x > (xField.max ?? 0)) {
+      return {
+        error: {
+          code: "ILLEGAL_ARGS",
+          detail: { max: xField.max, min: xField.min, x: args.x },
+          message: `${option.label}: x=${args.x} outside ${xField.min ?? 0}..${xField.max ?? 0}`,
+        },
+        type: "none",
+      };
+    }
+    return { move: { ...variant, params: { ...variant.params, xAmount: args.x } }, type: "one" };
+  }
+  if (args.x !== undefined && args.x !== 0) {
+    return {
+      error: { code: "ILLEGAL_ARGS", detail: { option: option.key }, message: `${option.label}: this action takes no X` },
+      type: "none",
+    };
+  }
+  return { move: variant, type: "one" };
+}
+
+/** Apply a follow-up pick to a parked narrowing: keep variants whose `field` matches the chosen key. */
+export function applyFollowUpPick(
+  ctx: DecisionContext,
+  field: string,
+  variants: readonly FlatMove[],
+  key: string,
+): FlatMove[] {
+  return variants.filter((v) => choiceFor(ctx, field, v.params[field]).key === key);
+}
+
+export function followUpPickDecision(
+  ctx: DecisionContext,
+  seat: Seat,
+  option: ActionOption,
+  field: string,
+  choices: readonly PickOption[],
+  n: number,
+): PickDecision {
+  const arg = PARAM_ARG[field]?.arg ?? field;
+  return {
+    allowDecline: true,
+    id: decisionId(ctx.seq, seat, "pick", `fu${n}`),
+    kind: "pick",
+    max: 1,
+    meta: { arg, field, optionKey: option.key },
+    min: 1,
+    options: choices,
+    prompt: `${option.label}: choose ${arg}`,
+    seat,
+    semantics: "follow-up",
+    source: { cardId: option.card, moveId: option.moveId },
+    synthetic: true,
+    timing: "FIN",
+  };
+}
+
+export function followUpIntegerDecision(
+  ctx: DecisionContext,
+  seat: Seat,
+  option: ActionOption,
+  min: number,
+  max: number,
+  n: number,
+): IntegerDecision {
+  return {
+    id: decisionId(ctx.seq, seat, "integer", `fu${n}`),
+    kind: "integer",
+    max,
+    min,
+    prompt: `${option.label}: choose X (${min}..${max})`,
+    seat,
+    source: { cardId: option.card, moveId: option.moveId },
+    synthetic: true,
+    timing: "FIN",
+    unit: "x",
+  };
+}
+
+/** Find an option by exact key, by moveId (if unique), or by (verb, card). */
+export function findOption(decision: ActionDecision, key: string): ActionOption | undefined {
+  const exact = decision.options.find((o) => o.key === key);
+  if (exact) {
+    return exact;
+  }
+  const byMove = decision.options.filter((o) => o.moveId === key || o.verb === key);
+  if (byMove.length === 1) {
+    return byMove[0];
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Shorthand coercion
+// ---------------------------------------------------------------------------
+
+export function isAnswerObject(v: unknown): v is Answer {
+  return typeof v === "object" && v !== null && !Array.isArray(v) && typeof (v as { kind?: unknown }).kind === "string";
+}
+
+/**
+ * Coerce a shorthand value into an Answer for `decision`.
+ * Returns an error info when the shorthand makes no sense for this kind.
+ */
+export function coerceAnswer(decision: Decision, value: AnswerShorthand): Answer | HarnessErrorInfo {
+  if (isAnswerObject(value)) {
+    return value;
+  }
+  const bad = (): HarnessErrorInfo => ({
+    code: "WRONG_ANSWER_KIND",
+    detail: { decision: decision.kind, value: value as unknown },
+    message: `Cannot answer a ${decision.kind} decision with ${JSON.stringify(value)}`,
+  });
+  switch (decision.kind) {
+    case "action": {
+      if (value === "pass") {
+        return decision.passKey ? { key: decision.passKey, kind: "action" } : bad();
+      }
+      if (typeof value === "string") {
+        return { key: value, kind: "action" };
+      }
+      return bad();
+    }
+    case "pick": {
+      if (value === "decline" || value === "no" || value === false || value === "pass") {
+        return { kind: "decline" };
+      }
+      if (typeof value === "string") {
+        return { keys: [value], kind: "pick" };
+      }
+      if (typeof value === "number") {
+        return { keys: [String(value)], kind: "pick" };
+      }
+      if (Array.isArray(value)) {
+        return { keys: value.map(String), kind: "pick" };
+      }
+      return bad();
+    }
+    case "yes-no": {
+      if (value === true || value === "yes") {
+        return { kind: "yes-no", value: true };
+      }
+      if (value === false || value === "no" || value === "decline" || value === "pass") {
+        return { kind: "yes-no", value: false };
+      }
+      return bad();
+    }
+    case "integer": {
+      if (typeof value === "number") {
+        return { kind: "integer", value };
+      }
+      if (typeof value === "string" && /^\d+$/.test(value)) {
+        return { kind: "integer", value: Number(value) };
+      }
+      return bad();
+    }
+    case "distribute": {
+      if (typeof value === "string") {
+        return { allocation: { [value]: decision.total }, kind: "distribute" };
+      }
+      return bad();
+    }
+    case "order": {
+      if (Array.isArray(value)) {
+        return { keys: value.map(String), kind: "order" };
+      }
+      return bad();
+    }
+    case "deck-arrange": {
+      if (Array.isArray(value)) {
+        return { kind: "deck-arrange", recycle: [], top: value.map(String) };
+      }
+      return bad();
+    }
+    case "name": {
+      if (typeof value === "string") {
+        return { kind: "name", name: value };
+      }
+      return bad();
+    }
+    default: {
+      return bad();
+    }
+  }
+}

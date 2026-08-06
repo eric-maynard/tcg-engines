@@ -171,7 +171,7 @@ export interface RiftboundMoves {
     cardId: CardId;
     location: LocationId;
     paidAdditionalCost?: boolean;
-    additionalCostSpec?: { energy?: number; power?: readonly string[] };
+    additionalCostSpec?: { energy?: number; power?: readonly string[]; xp?: number };
     sacrificeId?: CardId;
   };
 
@@ -408,6 +408,11 @@ export interface RiftboundMoves {
      * `cost.discard` is present.
      */
     discardId?: CardId;
+    /**
+     * Rule 355.14.b: the effect's caster-chosen card target, locked when the
+     * ability is finalized on the chain (not at resolution).
+     */
+    targets?: CardId[];
   };
 
   // ============================================

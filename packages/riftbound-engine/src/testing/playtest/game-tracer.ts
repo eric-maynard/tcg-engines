@@ -200,11 +200,37 @@ function playAndTrace(seed: string, gameIdx: number, allCards: any[]) {
       const powerCost: string[] = def?.powerCost ?? [];
       const need: Record<string, number> = {};
       for (const d of powerCost) need[d] = (need[d] ?? 0) + 1;
+      const pbOf = (d: string): number => (poolBefore?.power as any)?.[d] ?? 0;
+      const paOf = (d: string): number => (poolAfter?.power as any)?.[d] ?? 0;
+      // Rule 135.2.e.5.b: pooled [rainbow] Power pays a pip of any Domain, so a
+      // named-domain shortfall is fine if the rainbow pool dropped to cover it.
+      let wildSpent = pbOf("rainbow") - paOf("rainbow");
       for (const [d, n] of Object.entries(need)) {
-        const pb = (poolBefore?.power as any)?.[d] ?? 0;
-        const pa = (poolAfter?.power as any)?.[d] ?? 0;
-        if (pb - pa < n) {
-          costViolation = `${costViolation ? costViolation + "; " : ""}${chosen.moveId} ${def?.id} power[${d}]=${n} but ${pb}→${pa} (deducted ${pb - pa})`;
+        if (d === "rainbow") continue;
+        const pb = pbOf(d);
+        const pa = paOf(d);
+        const short = n - (pb - pa);
+        if (short > 0 && wildSpent >= short) {
+          wildSpent -= short;
+        } else if (short > 0) {
+          costViolation = `${costViolation ? costViolation + "; " : ""}${chosen.moveId} ${def?.id} power[${d}]=${n} but ${pb}→${pa} (deducted ${pb - pa}, rainbow pool ${pbOf("rainbow")}→${paOf("rainbow")})`;
+        }
+      }
+      // Rule 135.2.e.5.a: a [rainbow] cost pip is paid with Power of ANY Domain,
+      // so only the pool's total must have dropped by at least the full pip count.
+      if ((need.rainbow ?? 0) > 0) {
+        const domains = new Set([
+          ...Object.keys((poolBefore?.power as any) ?? {}),
+          ...Object.keys((poolAfter?.power as any) ?? {}),
+        ]);
+        let tb = 0;
+        let ta = 0;
+        for (const d of domains) {
+          tb += pbOf(d);
+          ta += paOf(d);
+        }
+        if (tb - ta < powerCost.length) {
+          costViolation = `${costViolation ? costViolation + "; " : ""}${chosen.moveId} ${def?.id} power[rainbow]=${need.rainbow} (total pips ${powerCost.length}) but total power ${tb}→${ta} (deducted ${tb - ta})`;
         }
       }
     }

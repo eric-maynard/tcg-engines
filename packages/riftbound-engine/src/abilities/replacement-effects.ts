@@ -37,7 +37,8 @@ export interface ReplacementEvent {
     | "discard"
     | "score"
     | "enters-ready"
-    | "deals-bonus-damage";
+    | "deals-bonus-damage"
+    | "play-token";
   /** The card being affected (if applicable) */
   readonly cardId?: string;
   /** The player being affected (if applicable) */
@@ -62,6 +63,8 @@ export interface MatchedReplacement {
   readonly duration?: string;
   /** Index of the ability on the source card (for removal tracking) */
   readonly abilityIndex: number;
+  /** Optional gating condition from the ability; callers evaluate per event. */
+  readonly condition?: unknown;
 }
 
 /**
@@ -86,7 +89,7 @@ export interface ReplacementContext {
  * `RiftboundGameState.consumedNextReplacements` so subsequent lookups skip
  * already-fired replacements.
  */
-function buildConsumedKey(sourceCardId: string, abilityIndex: number): string {
+export function buildConsumedKey(sourceCardId: string, abilityIndex: number): string {
   return `${sourceCardId}|${abilityIndex}`;
 }
 
@@ -156,9 +159,13 @@ export function findAllReplacements(
         continue;
       }
 
-      const { replacement } = ability as unknown as { replacement: unknown };
+      const { replacement, condition } = ability as unknown as {
+        replacement: unknown;
+        condition?: unknown;
+      };
       matches.push({
         abilityIndex: i,
+        condition,
         duration,
         replacement,
         sourceCardId: card.id,
@@ -287,10 +294,14 @@ export function checkReplacement(
         continue;
       }
 
-      const { replacement } = ability as unknown as { replacement: unknown };
+      const { replacement, condition } = ability as unknown as {
+        replacement: unknown;
+        condition?: unknown;
+      };
 
       return {
         abilityIndex: i,
+        condition,
         duration,
         replacement,
         sourceCardId: card.id,

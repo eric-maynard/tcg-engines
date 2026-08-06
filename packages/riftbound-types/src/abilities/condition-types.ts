@@ -252,6 +252,15 @@ export interface OpponentControlsCondition {
 }
 
 /**
+ * "If you control fewer runes than an opponent" — compares the controller's
+ * rune pool size against each opponent's; true if any opponent has more.
+ */
+// rule-id: ven-005-166
+export interface FewerRunesThanOpponentCondition {
+  readonly type: "fewer-runes-than-opponent";
+}
+
+/**
  * If the effect's chosen target is controlled by the given player.
  * Evaluated against the caster-bound target of the enclosing spell/ability
  * (rule 355.8 last-known-information for "if it was a friendly/enemy …").
@@ -267,6 +276,15 @@ export interface TargetControllerCondition {
 // rule-id: sfd-017-221
 export interface TargetAttackingCondition {
   readonly type: "target-attacking";
+}
+
+/**
+ * "If this kills it" — the preceding damage step left the effect's chosen
+ * (bound) target with lethal damage (rule 520).
+ */
+// rule-id: ogn-005-298
+export interface ThisKillsTargetCondition {
+  readonly type: "this-kills-target";
 }
 
 // ============================================================================
@@ -428,8 +446,10 @@ export type Condition =
   // Control conditions
   | ControlCondition
   | OpponentControlsCondition
+  | FewerRunesThanOpponentCondition
   | TargetControllerCondition
   | TargetAttackingCondition
+  | ThisKillsTargetCondition
 
   // Location conditions
   | AtLocationCondition

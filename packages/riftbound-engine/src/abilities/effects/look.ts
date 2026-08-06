@@ -36,6 +36,7 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     filter?: { excludeCardTypes?: readonly string[] };
     optional?: boolean;
     reduceCost?: { energy?: number };
+    followUp?: unknown;
   };
   const visionLike = lookEff.then?.recycle !== undefined;
   const onPicked = lookEff.onPicked ?? (visionLike ? "recycle" : "draw");
@@ -65,6 +66,10 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     revealed: topN,
     revealer: ctx.playerId,
     sourceCardId: ctx.sourceCardId,
+    // rule-id: ven-089-166-look-then-empower — "Then you may do this:
+    // Empower it" runs after the pick; the resolver binds the picked card as
+    // the follow-up's trigger-source.
+    ...(lookEff.followUp !== undefined ? { then: lookEff.followUp } : {}),
     type: "reveal-and-pick",
   };
 }

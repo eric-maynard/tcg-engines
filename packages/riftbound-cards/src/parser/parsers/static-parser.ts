@@ -187,8 +187,9 @@ function parseGrantTarget(text: string): Target {
     target.location = "battlefield";
   }
 
-  // Simple state filters (stunned, buffed, damaged, ready, exhausted)
-  const stateFilters = ["stunned", "buffed", "damaged", "ready", "exhausted"];
+  // Simple state filters (stunned, buffed, damaged, ready, exhausted).
+  // rule-id: unl-058-219 — "Your token units have [Tank]" keeps the token qualifier.
+  const stateFilters = ["stunned", "buffed", "damaged", "ready", "exhausted", "token"];
   for (const f of stateFilters) {
     if (new RegExp(`\\b${f}\\b`).test(normalized)) {
       target.filter = f;

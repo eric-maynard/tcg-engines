@@ -12,7 +12,7 @@
 
 import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
 import { executeEffect } from "../../abilities/effect-executor";
-import type { ExecutableEffect } from "../../abilities/effect-executor";
+import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
 import { markContestedOnArrival } from "../../abilities/effects/move";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { addToChain, createInteractionState } from "../../chain";
@@ -24,6 +24,87 @@ import type {
   RiftboundMoves,
 } from "../../types";
 import { buildEffectContext, executeResolvedItem } from "./chain-moves";
+import { deductAbilityCost } from "./chain/activate-ability";
+import { canAffordPower } from "./chain/effect-context";
+import { getCardEffectiveMight } from "./play/cost";
+import { isLegalMultiTargetSet } from "./play/targeting";
+
+/** rule-id: sfd-119-221 — the pay-cost carried on an opt-in choice's chain item. */
+function optInCostOf(choice: PendingChoice): Record<string, unknown> | undefined {
+  if (choice.type !== "opt-in") {
+    return undefined;
+  }
+  const cost = (choice.resolved as { optInCost?: unknown } | undefined)?.optInCost;
+  return cost && typeof cost === "object" ? (cost as Record<string, unknown>) : undefined;
+}
+
+/**
+ * rule-id: sfd-119-221 — whether `playerId` can pay a "you may pay [N] to …"
+ * trigger's cost right now (energy, power pips, and [Exhaust] on the source).
+ */
+function canPayOptInCost(
+  state: RiftboundGameState,
+  playerId: string,
+  sourceCardId: string,
+  cost: Record<string, unknown>,
+  context: { counters: { getFlag?: (cardId: CoreCardId, flag: string) => boolean | undefined } },
+): boolean {
+  const pool = state.runePools[playerId];
+  if (!pool) {
+    return false;
+  }
+  const energyCost = (cost.energy as number) ?? 0;
+  if (pool.energy < energyCost) {
+    return false;
+  }
+  const powerCost = cost.power as string[] | undefined;
+  if (powerCost && powerCost.length > 0) {
+    const needed: Record<string, number> = {};
+    for (const d of powerCost) {
+      needed[d] = (needed[d] ?? 0) + 1;
+    }
+    if (!canAffordPower(pool.power, needed)) {
+      return false;
+    }
+  }
+  if (cost.exhaust === true && context.counters.getFlag?.(sourceCardId as CoreCardId, "exhausted")) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost
+ * Rule 821.1.c: Weaponmaster pays the chosen Equipment's Equip cost reduced
+ * by [A] (one power of any domain); the non-power portion is still paid
+ * (821.1.c.3). No Equip ability → the cost can't be paid (821.1.c.4).
+ */
+export function weaponmasterEquipCost(equipmentId: string): Record<string, unknown> | undefined {
+  const abilities = getGlobalCardRegistry().getAbilities(equipmentId) ?? [];
+  const equipAbility = abilities.find(
+    (a) => a.type === "keyword" && (a as { keyword?: string }).keyword === "Equip",
+  ) as { cost?: { energy?: number; power?: readonly string[] } } | undefined;
+  if (!equipAbility) {
+    return undefined;
+  }
+  const power = [...(equipAbility.cost?.power ?? [])];
+  if (power.length > 0) {
+    const rainbowIdx = power.indexOf("rainbow");
+    power.splice(rainbowIdx === -1 ? 0 : rainbowIdx, 1);
+  }
+  return { energy: equipAbility.cost?.energy ?? 0, power };
+}
+
+/** rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost — 821.1.c.5 payability gate. */
+function canPayWeaponmasterEquip(
+  state: RiftboundGameState,
+  playerId: string,
+  equipmentId: string,
+  context: Parameters<typeof canPayOptInCost>[4],
+): boolean {
+  const cost = weaponmasterEquipCost(equipmentId);
+  return cost !== undefined && canPayOptInCost(state, playerId, equipmentId, cost, context);
+}
 
 /**
  * Returns true when the given card ID is a valid pick for the pending
@@ -110,17 +191,33 @@ export const pendingChoiceMoves: Partial<
         if (choice.playerId !== context.params.playerId) {
           return false;
         }
+        if (context.params.accept === false) {
+          return true;
+        }
+        const pickedEquip = context.params.pickedCardId as string;
+        // rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost (821.1.c.5)
         return (
-          context.params.accept === false ||
-          choice.options.includes(context.params.pickedCardId as string)
+          choice.options.includes(pickedEquip) &&
+          canPayWeaponmasterEquip(state, choice.playerId, pickedEquip, context)
         );
       }
       if (choice.type === "opt-in") {
         // Rule 583 (unl-021-219): controller may accept or decline.
-        return (
-          choice.playerId === context.params.playerId &&
-          typeof context.params.accept === "boolean"
-        );
+        if (choice.playerId !== context.params.playerId) {
+          return false;
+        }
+        if (typeof context.params.accept !== "boolean") {
+          return false;
+        }
+        // rule-id: sfd-119-221 — accepting a "you may pay [N] to …" trigger
+        // is only legal when the cost is payable.
+        if (context.params.accept === true) {
+          const cost = optInCostOf(choice);
+          if (cost && !canPayOptInCost(state, choice.playerId, choice.sourceCardId, cost, context)) {
+            return false;
+          }
+        }
+        return true;
       }
       if (choice.type === "choose-mode") {
         if (choice.playerId !== context.params.playerId) {
@@ -131,6 +228,11 @@ export const pendingChoiceMoves: Partial<
       if (choice.type === "choose-target") {
         if (choice.playerId !== context.params.playerId) {
           return false;
+        }
+        // rule-id: ogn-256-298 (rule 355.13) — "any number of": declining
+        // further picks is always legal.
+        if (choice.anyNumber && context.params.accept === false) {
+          return true;
         }
         return choice.options.includes(context.params.pickedCardId as string);
       }
@@ -164,11 +266,15 @@ export const pendingChoiceMoves: Partial<
         if (choice.playerId !== (context.playerId as string)) {
           return [];
         }
+        // rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost — only
+        // offer equipment whose reduced Equip cost is payable (821.1.c.5).
         return [
-          ...choice.options.map((eq) => ({
-            pickedCardId: eq,
-            playerId: context.playerId as string,
-          })),
+          ...choice.options
+            .filter((eq) => canPayWeaponmasterEquip(state, choice.playerId, eq, context))
+            .map((eq) => ({
+              pickedCardId: eq,
+              playerId: context.playerId as string,
+            })),
           { accept: false, playerId: context.playerId as string },
         ];
       }
@@ -176,8 +282,12 @@ export const pendingChoiceMoves: Partial<
         if (choice.playerId !== (context.playerId as string)) {
           return [];
         }
+        // rule-id: sfd-119-221 — only offer "accept" when the pay-cost is payable.
+        const cost = optInCostOf(choice);
+        const canAccept =
+          !cost || canPayOptInCost(state, choice.playerId, choice.sourceCardId, cost, context);
         return [
-          { accept: true, playerId: context.playerId as string },
+          ...(canAccept ? [{ accept: true, playerId: context.playerId as string }] : []),
           { accept: false, playerId: context.playerId as string },
         ];
       }
@@ -194,10 +304,16 @@ export const pendingChoiceMoves: Partial<
         if (choice.playerId !== (context.playerId as string)) {
           return [];
         }
-        return choice.options.map((cardId) => ({
-          pickedCardId: cardId,
-          playerId: context.playerId as string,
-        }));
+        const picks: { playerId: string; pickedCardId?: string; accept?: boolean }[] =
+          choice.options.map((cardId) => ({
+            pickedCardId: cardId,
+            playerId: context.playerId as string,
+          }));
+        // rule-id: ogn-256-298 (rule 355.13) — "any number of": offer "done".
+        if (choice.anyNumber) {
+          picks.push({ accept: false, playerId: context.playerId as string });
+        }
+        return picks;
       }
       if (choice.type === "choose-destination") {
         if (choice.playerId !== (context.playerId as string)) {
@@ -249,6 +365,14 @@ export const pendingChoiceMoves: Partial<
         if (context.params.accept === false || !picked || !choice.options.includes(picked)) {
           return;
         }
+        // rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost
+        // Rule 821.1.c: pay the Equip cost reduced by [A]; if it can't be
+        // paid the Equipment stays where it is (821.1.c.5).
+        const equipCost = weaponmasterEquipCost(picked);
+        if (!equipCost || !canPayOptInCost(draft, choice.playerId, picked, equipCost, context)) {
+          return;
+        }
+        deductAbilityCost(draft, choice.playerId, equipCost, context.zones, context.counters);
         const registry = getGlobalCardRegistry();
         const priorMeta = context.cards.getCardMeta(picked as CoreCardId) as
           | Partial<RiftboundCardMeta>
@@ -295,6 +419,18 @@ export const pendingChoiceMoves: Partial<
         // on decline the trigger fizzles.
         draft.pendingChoice = undefined;
         if (context.params.accept === true) {
+          // rule-id: sfd-119-221 — "you may pay [N] to …": charge the cost
+          // before the effect; if it became unpayable, the trigger fizzles.
+          const cost = optInCostOf(choice);
+          if (cost) {
+            if (!canPayOptInCost(draft, choice.playerId, choice.sourceCardId, cost, context)) {
+              return;
+            }
+            deductAbilityCost(draft, choice.playerId, cost, context.zones, context.counters);
+            if (cost.exhaust === true) {
+              context.counters.setFlag(choice.sourceCardId as CoreCardId, "exhausted", true);
+            }
+          }
           executeResolvedItem(
             choice.resolved as Parameters<typeof executeResolvedItem>[0],
             draft,
@@ -328,12 +464,11 @@ export const pendingChoiceMoves: Partial<
           } as Partial<RiftboundCardMeta>);
         }
         if (picked) {
-          const effectCtx = buildEffectContext(
-            draft,
-            choice.playerId,
-            choice.sourceCardId,
-            context,
-          );
+          // rule-id: sfd-091-221 — keep chain-bound targets for the picked mode.
+          const effectCtx = {
+            ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+            ...(choice.boundTargets ? { boundTargets: choice.boundTargets } : {}),
+          };
           executeEffect(picked as ExecutableEffect, effectCtx);
         }
         return;
@@ -341,6 +476,61 @@ export const pendingChoiceMoves: Partial<
 
       if (choice.type === "choose-target") {
         const picked = context.params.pickedCardId as string;
+        // rule-id: ogn-256-298 (rule 355.13) — "any number of <units>": each
+        // pick accumulates; remaining options are re-pruned against the
+        // target's aggregate constraints (one battlefield, `totalMight` cap)
+        // and the prompt repeats until the chooser declines or none remain.
+        if (choice.anyNumber) {
+          const declined = context.params.accept === false;
+          if (!declined && !choice.options.includes(picked)) {
+            return;
+          }
+          const pickedSoFar = declined ? [...(choice.picked ?? [])] : [...(choice.picked ?? []), picked];
+          if (!declined) {
+            const tgt = (choice.effect as { target?: unknown }).target as
+              | Parameters<typeof isLegalMultiTargetSet>[0]
+              | undefined;
+            const legalityCtx = {
+              getCardZone: (c: string) => context.zones.getCardZone(c as CoreCardId),
+              getMight: (c: string) =>
+                getCardEffectiveMight(c, (m) =>
+                  context.cards.getCardMeta(m) as Partial<RiftboundCardMeta> | undefined,
+                ),
+            };
+            const remainingOptions = choice.options.filter(
+              (id) =>
+                id !== picked && isLegalMultiTargetSet(tgt, [...pickedSoFar, id], legalityCtx),
+            );
+            if (remainingOptions.length > 0) {
+              draft.pendingChoice = {
+                ...choice,
+                options: remainingOptions,
+                picked: pickedSoFar,
+                remaining: remainingOptions.length,
+              };
+              return;
+            }
+          }
+          draft.pendingChoice = undefined;
+          if (pickedSoFar.length === 0) {
+            return;
+          }
+          // Rule 359.2: "when you choose me" fires for each chosen target.
+          const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
+          // rule-id: sfd-142-221 — tag spell- vs ability-sourced choices.
+          const sourceType =
+            getGlobalCardRegistry().get(choice.sourceCardId as string)?.cardType === "spell"
+              ? "spell"
+              : "ability";
+          for (const id of pickedSoFar) {
+            fireTriggers({ cardId: id, chooserId: choice.playerId, sourceType, type: "choose" }, trigCtx);
+          }
+          executeEffect(choice.effect as ExecutableEffect, {
+            ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+            boundTargets: pickedSoFar,
+          });
+          return;
+        }
         if (!choice.options.includes(picked)) {
           return;
         }
@@ -390,10 +580,39 @@ export const pendingChoiceMoves: Partial<
           zoneId === "base" || zoneId.startsWith("battlefield-")
             ? zoneId
             : `battlefield-${zoneId}`;
+        const fromZone =
+          (context.zones.getCardZone?.(choice.cardId as CoreCardId) as string | undefined) ?? "";
         context.zones.moveCard({
           cardId: choice.cardId as CoreCardId,
           targetZoneId: targetZoneId as CoreZoneId,
         });
+        draft.pendingChoice = undefined;
+        // rule-id: unl-133-219 — a chosen-destination effect move is still a
+        // move: emit the `move` event (owner / movedBy) so "When I move" /
+        // "When you move an enemy unit" triggers fire. Guarded so unit-test
+        // stubs that omit the full context bags don't crash.
+        if (
+          context.cards &&
+          typeof context.zones.getCardsInZone === "function" &&
+          (fromZone === "base" || fromZone.startsWith("battlefield-")) &&
+          fromZone !== targetZoneId
+        ) {
+          const owner =
+            (context.cards as { getCardController?: (id: CoreCardId) => string | undefined })
+              .getCardController?.(choice.cardId as CoreCardId) ??
+            (context.cards.getCardOwner(choice.cardId as CoreCardId) as string | undefined);
+          fireTriggers(
+            {
+              cardId: choice.cardId,
+              from: fromZone,
+              movedBy: choice.playerId,
+              owner,
+              to: targetZoneId,
+              type: "move",
+            },
+            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+          );
+        }
         // rule-id: unl-144-219 — Rule 450: arriving at a non-controlled
         // battlefield applies Contested so combat is staged.
         markContestedOnArrival(draft, targetZoneId, choice.playerId);
@@ -511,12 +730,12 @@ export const pendingChoiceMoves: Partial<
 
       // Resume the originating effect's `then` clause (e.g. discard 1 → draw 1).
       if (choice.then) {
-        const effectCtx = buildEffectContext(
-          draft,
-          choice.prompter,
-          choice.sourceCardId ?? "",
-          context,
-        );
+        // rule-id: ven-089-166-look-then-empower — "…play it. Then you may do
+        // this: Empower it": the follow-up's "it" is the picked card.
+        const effectCtx: EffectContext = {
+          ...buildEffectContext(draft, choice.prompter, choice.sourceCardId ?? "", context),
+          triggerSourceId: pickedCardId as string,
+        };
         executeEffect(choice.then as ExecutableEffect, effectCtx);
       }
     },

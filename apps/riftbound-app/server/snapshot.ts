@@ -372,6 +372,9 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
       // Rather than the initial meta.exhausted field which may be stale
       const counterState = meta as unknown as { __flags?: Record<string, boolean> } | undefined;
       const exhaustedFromFlags = counterState?.__flags?.exhausted ?? false;
+      // rule-ogn-220-298: stun effects setFlag("stunned") into __flags, so the
+      // top-level meta.stunned stays stale — lift it like exhausted.
+      const stunnedFromFlags = counterState?.__flags?.stunned ?? meta?.stunned ?? false;
 
       const baseMeta = meta ?? { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false };
 
@@ -382,7 +385,7 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
         domain: def?.domain,
         energyCost: def?.energyCost,
         id: cardId,
-        meta: { ...baseMeta, exhausted: exhaustedFromFlags },
+        meta: { ...baseMeta, exhausted: exhaustedFromFlags, stunned: stunnedFromFlags },
         might: def && "might" in def ? (def as Record<string, unknown>).might as number : undefined,
         name: def?.name ?? cardId,
         owner: cardInstance?.owner ?? "",

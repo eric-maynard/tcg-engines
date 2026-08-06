@@ -235,6 +235,11 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
         acted = true;
         continue;
       }
+      // rule-id: 515.3.b/515.4.b-turn-player-channels-draws — endTurn is rejected while a
+      // chain is open (e.g. goldfish start-of-turn triggers). Restore the flow's
+      // current player so the pending channel/draw onBegin callbacks still
+      // target the goldfish, not the human, once the chain resolves.
+      session.engine.getFlowManager()?.setCurrentPlayer(goldfish as PlayerId);
     }
   }
 

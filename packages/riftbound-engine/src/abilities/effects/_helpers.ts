@@ -40,8 +40,10 @@ export function getTargetIds(effect: ExecutableEffect, ctx: EffectContext): stri
     cards: ctx.cards,
     draft: ctx.draft,
     playerId: ctx.playerId,
+    sameZone: ctx.sameZone,
     sourceCardId: ctx.sourceCardId,
     sourceZone: ctx.sourceZone,
+    triggerSourceId: ctx.triggerSourceId,
     zones: ctx.zones,
   });
 }
@@ -284,6 +286,24 @@ export function evaluateEffectCondition(
         | Partial<RiftboundCardMeta>
         | undefined;
       return meta?.combatRole === "attacker";
+    }
+    case "this-kills-target": {
+      // rule-id: ogn-005-298 — "If this kills it": rule 520 death is a
+      // state-based check that runs after the whole effect resolves, so the
+      // bound target is still on board here; it was killed iff the preceding
+      // damage step left it with lethal damage.
+      const bound = ctx.boundTargets ?? [];
+      if (bound.length === 0) return false;
+      return bound.some((id) => {
+        const zone = ctx.zones.getCardZone(id as CoreCardId) ?? "";
+        if (zone !== "base" && !zone.startsWith("battlefield-")) return false;
+        const might = getEffectiveMight(id, ctx);
+        if (might <= 0) return false;
+        const dmg =
+          (ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined)
+            ?.damage ?? 0;
+        return dmg >= might;
+      });
     }
     case "paid-additional-cost": {
       // rule-id: ven-083-166 / rule 560 — playSpell records whether the

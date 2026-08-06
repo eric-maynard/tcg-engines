@@ -92,6 +92,48 @@ export function parseLookEffect(text: string): LookEffect | undefined {
   }
   const amount = Number.parseInt(match[1], 10);
   const from = match[2].toLowerCase() === "rune deck" ? ("rune-deck" as const) : ("deck" as const);
+  // rule-id: ven-089-166-look-banish-play — "You may banish a unit [or gear]
+  // from among them and/then play it, reducing its [Energy] cost by [N]" must
+  // banish-then-play the pick at a discount, not fall through to the bare-look
+  // default (draw to hand).
+  const rest = text.slice(match[0].length).trim();
+  const banishPlay = rest.match(
+    /^You may banish an? (unit or gear|gear or unit|unit|gear) from among them,?\s*(?:and|then)\s+play it(?:,?\s*reducing its (?:Energy )?cost by (?:\[|:rb_energy_)(\d+)(?:\]|:))?/i,
+  );
+  if (banishPlay) {
+    const kinds = banishPlay[1].toLowerCase();
+    const allowsUnit = kinds.includes("unit");
+    const allowsGear = kinds.includes("gear");
+    const excludeCardTypes = [
+      "spell",
+      "legend",
+      "battlefield",
+      "rune",
+      ...(allowsUnit ? [] : ["unit"]),
+      ...(allowsGear ? [] : ["gear", "equipment"]),
+    ];
+    const reduce = banishPlay[2] ? Number.parseInt(banishPlay[2], 10) : 0;
+    // rule-id: ven-089-166-look-then-empower — trailing "Then you may do
+    // this: Empower it." is an optional follow-up on the played card, not
+    // text to discard.
+    const tail = rest.slice(banishPlay[0].length);
+    const followUp = /Then you may do this:\s*Empower it\b/i.test(tail)
+      ? ({
+          effect: { target: { type: "trigger-source" }, type: "empower" },
+          type: "optional",
+        } as unknown as LookEffect["followUp"])
+      : undefined;
+    return {
+      amount,
+      filter: { excludeCardTypes },
+      from,
+      onPicked: "play",
+      optional: true,
+      ...(reduce > 0 ? { reduceCost: { energy: reduce } } : {}),
+      ...(followUp ? { followUp } : {}),
+      type: "look",
+    } as LookEffect;
+  }
   return { amount, from, type: "look" };
 }
 

@@ -3,7 +3,28 @@ import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZone
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
 
-export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
+  // Rule ogn-201-298: "Each player discards their hand, then draws N" — fan
+  // out per player, discard the whole hand (no choice needed), then run the
+  // `then` effect for that same player even if their hand was empty.
+  const wholeHand = (effect.amount as unknown) === "hand";
+  if (effect.player === "each" || wholeHand) {
+    const playerIds = effect.player === "each" ? Object.keys(ctx.draft.players) : [ctx.playerId];
+    const then = (effect as { then?: ExecutableEffect }).then;
+    for (const pid of playerIds) {
+      const pctx: EffectContext = { ...ctx, playerId: pid };
+      const phand = ctx.zones
+        .getCardsInZone("hand" as CoreZoneId, pid as CorePlayerId)
+        .map((id) => id as string);
+      const n = wholeHand ? phand.length : resolveAmount(effect.amount ?? 1, pctx);
+      for (let i = 0; i < Math.min(n, phand.length); i++) {
+        ctx.zones.moveCard({ cardId: phand[i] as CoreCardId, targetZoneId: "trash" as CoreZoneId });
+        ctx.fireTriggers?.({ cardId: phand[i], playerId: pid, type: "discard" });
+      }
+      if (then) h.executeEffect(then, pctx);
+    }
+    return;
+  }
   const count = resolveAmount(effect.amount ?? 1, ctx);
   const hand = ctx.zones
     .getCardsInZone("hand" as CoreZoneId, ctx.playerId as CorePlayerId)
