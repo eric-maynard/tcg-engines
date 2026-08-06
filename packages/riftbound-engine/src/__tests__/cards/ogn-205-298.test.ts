@@ -80,7 +80,7 @@ describe("Yasuo, Windrider (ogn-205-298)", () => {
     expect(game.p1.points()).toBe(0);
   });
 
-  test.failing("BUG: the third move in a turn scores exactly 1 point", async () => {
+  test("the third move in a turn scores exactly 1 point", async () => {
     // Expected: base→bf1, bf1→bf2, bf2→bf1 in one turn → the third move triggers "you score 1 point".
     // Actual: the `nth-time-each-turn` move trigger never fires; points stay 0.
     const game = await board().build();
@@ -88,7 +88,7 @@ describe("Yasuo, Windrider (ogn-205-298)", () => {
     expect(game.p1.points()).toBe(1);
   });
 
-  test.failing("BUG: only the THIRD move — a fourth move in the same turn does not score again (total stays 1)", async () => {
+  test("only the THIRD move — a fourth move in the same turn does not score again (total stays 1)", async () => {
     // Expected: exactly one point across four moves. Actual: the trigger never fires (0 points).
     const game = await board().build();
     await moveTimes(game, 4);

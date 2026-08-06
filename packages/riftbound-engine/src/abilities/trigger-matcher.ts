@@ -323,7 +323,7 @@ function triggerMatchesEvent(
       controller?: "friendly" | "enemy" | "any";
       cardType?: string;
       type?: string;
-      location?: "here" | "battlefield";
+      location?: "here" | "battlefield" | "other-battlefield";
       excludeSelf?: boolean;
       tag?: string;
       filter?: string | readonly string[];
