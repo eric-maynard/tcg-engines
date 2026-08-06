@@ -350,9 +350,13 @@ export const activateAbility: Defs["activateAbility"] = {
       return false;
     }
 
-    // Must be controlled by the player
-    const owner = context.cards.getCardOwner(cardId as CoreCardId);
-    if (owner !== playerId) {
+    // rule 477.1.a / 702.2.b.2: activation legality follows CURRENT CONTROL,
+    // not ownership — a possessed unit is activated by its new controller and
+    // no longer by its owner.
+    const controller =
+      context.cards.getCardController?.(cardId as CoreCardId) ??
+      context.cards.getCardOwner(cardId as CoreCardId);
+    if (controller !== playerId) {
       return false;
     }
 
@@ -635,15 +639,20 @@ export const activateAbility: Defs["activateAbility"] = {
     }[] = [];
 
     // Collect cards on base, battlefields, legendZone, battlefieldRow, and championZone
-    const baseCards = context.zones.getCardsInZone(
-      "base" as CoreZoneId,
-      playerId as CorePlayerId,
-    );
+    // rule 477.1.a: a unit under this player's control may sit in ANOTHER
+    // player's base/battlefield zone bucket (control changed, ownership did
+    // not), so scan every player's board zones and filter by controller below.
+    const allPlayerIds = Object.keys(state.players ?? {});
+    const baseCards: CoreCardId[] = [];
+    for (const pid of allPlayerIds) {
+      baseCards.push(...context.zones.getCardsInZone("base" as CoreZoneId, pid as CorePlayerId));
+    }
     const bfCards: CoreCardId[] = [];
     for (const bfId of Object.keys(state.battlefields ?? {})) {
       const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
-      const cards = context.zones.getCardsInZone(bfZoneId, playerId as CorePlayerId);
-      bfCards.push(...cards);
+      for (const pid of allPlayerIds) {
+        bfCards.push(...context.zones.getCardsInZone(bfZoneId, pid as CorePlayerId));
+      }
     }
     const legendCards = context.zones.getCardsInZone(
       "legendZone" as CoreZoneId,
@@ -658,15 +667,21 @@ export const activateAbility: Defs["activateAbility"] = {
       playerId as CorePlayerId,
     );
 
+    // scanning every player's zone bucket can surface the same card twice
+    // (zone stores that ignore the player argument), so dedupe.
     for (const cardId of [
-      ...baseCards,
-      ...bfCards,
-      ...legendCards,
-      ...battlefieldRowCards,
-      ...championZoneCards,
+      ...new Set([
+        ...baseCards,
+        ...bfCards,
+        ...legendCards,
+        ...battlefieldRowCards,
+        ...championZoneCards,
+      ]),
     ]) {
-      const owner = context.cards.getCardOwner(cardId);
-      if (owner !== playerId) {
+      const controller =
+        (context.cards as { getCardController?: (id: CoreCardId) => string | undefined })
+          .getCardController?.(cardId) ?? context.cards.getCardOwner(cardId);
+      if (controller !== playerId) {
         continue;
       }
 

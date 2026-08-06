@@ -108,7 +108,7 @@ describe("Possession × Sett × Retreat — control vs ownership after a take-co
   // buff": the buff is removed as the cost and Sett gets +4 this turn → 4 + 4 = 8. Actual: activation
   // legality is keyed on OWNER, so P1 is not offered the ability at all (and the spend-buff cost is
   // separately unimplemented — see ogn-164-298.test.ts).
-  test.failing("BUG: (b) P1 (new controller) can activate Sett's 'Spend my buff' → buff removed, 8 Might this turn (702.2.b.2)", async () => {
+  test("(b) P1 (new controller) can activate Sett's 'Spend my buff' → buff removed, 8 Might this turn (702.2.b.2)", async () => {
     const game = await possessed();
     expect(game.p1.can("activate", "sett")).toBe(true);
     await game.p1.activate("sett", 1);

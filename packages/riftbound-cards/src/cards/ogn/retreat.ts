@@ -3,14 +3,15 @@ import type { SpellCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
 // "Its owner channels 1 rune exhausted" — the channel is a second, unlinked
-// clause the parser has no pattern for; the target is always friendly, so the
-// returned unit's owner is the caster.
+// clause the parser has no pattern for. rule 127.1: the channeling player is
+// the returned unit's OWNER, which is not the caster when control changed
+// hands, so the step names `player: "target-owner"`.
 const abilities: Ability[] = [
   {
     effect: {
       effects: [
         { target: { controller: "friendly", type: "unit" }, type: "return-to-hand" },
-        { amount: 1, exhausted: true, type: "channel" },
+        { amount: 1, exhausted: true, player: "target-owner", type: "channel" },
       ],
       type: "sequence",
     },

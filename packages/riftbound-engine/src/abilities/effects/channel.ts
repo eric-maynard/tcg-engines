@@ -19,6 +19,24 @@ export function handle_channel(effect: ExecutableEffect, ctx: EffectContext, _h:
     }
     return;
   }
+  // rule-id: ogn-104-298 (rule 127.1) — "ITS OWNER channels …": the channeling
+  // player is the OWNER of the effect's chosen card, which is not the caster
+  // once control has changed hands (Possession). Ownership is inherent, so this
+  // still reads correctly after the card has left the board.
+  if (effect.player === "target-owner") {
+    const targetId = ctx.boundTargets?.[0];
+    const ownerId = targetId
+      ? ctx.cards.getCardOwner(targetId as CoreCardId)
+      : undefined;
+    if (!ownerId) {
+      return;
+    }
+    if (ownerId !== ctx.playerId) {
+      const { player: _p, ...rest } = effect as Record<string, unknown>;
+      handle_channel(rest as ExecutableEffect, { ...ctx, playerId: ownerId }, _h);
+      return;
+    }
+  }
   const count = resolveAmount(effect.amount ?? 1, ctx);
   // rule-id: ogn-155-298 — channeled runes live in `runePool` (the zone
   // exhaustRune/recycleRune and the channel move use), and "channel N rune(s)
