@@ -17,6 +17,8 @@ import { handle_modifyMight } from "./modify-might";
 import { handle_doubleMight } from "./double-might";
 import { handle_grantAbility } from "./grant-ability";
 import { handle_swapMight } from "./swap-might";
+import { handle_increaseMightTo } from "./increase-might-to";
+import { handle_gainControlOfSpell } from "./gain-control-of-spell";
 import { handle_empower } from "./empower";
 import { handle_replacement } from "./replacement";
 import { handle_heal } from "./heal";
@@ -76,6 +78,8 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "double-might": handle_doubleMight,
   "grant-ability": handle_grantAbility,
   "swap-might": handle_swapMight,
+  "increase-might-to": handle_increaseMightTo,
+  "gain-control-of-spell": handle_gainControlOfSpell,
   "empower": handle_empower,
   "disempower": handle_empower,
   "replacement": handle_replacement,

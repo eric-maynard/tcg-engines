@@ -74,7 +74,7 @@ describe("Mystic Reversal (ogn-080-298)", () => {
     expect(game.p1.can("cast", "mr")).toBe(false);
   });
 
-  test.failing("BUG: on resolution P1 gains control of the targeted spell (its chain item is now controlled by P1)", async () => {
+  test("on resolution P1 gains control of the targeted spell (its chain item is now controlled by P1)", async () => {
     // Expected: after Mystic Reversal resolves, Cleave is still on the chain but controlled by
     // player-1. Actual: gain-control-of-spell is a no-op; Cleave stays with player-2.
     const game = await cleaveThenReverse();
@@ -83,7 +83,7 @@ describe("Mystic Reversal (ogn-080-298)", () => {
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "cleave", controller: P1 })]);
   });
 
-  test.failing("BUG: 'You may make new choices for it' — P1 may retarget the stolen Cleave onto their own unit", async () => {
+  test("“You may make new choices for it” — P1 may retarget the stolen Cleave onto their own unit", async () => {
     // Expected: P1 is offered a (declinable) re-choice of Cleave's target; picking "mine" means
     // mine ends the chain with Assault 3 and theirs with nothing. Actual: no prompt; Cleave
     // resolves for P2 on "theirs".

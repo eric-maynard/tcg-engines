@@ -63,7 +63,7 @@ describe("Convergent Mutation (ogn-108-298)", () => {
     expect(game.chain().map((c) => c.cardId)).toEqual(["spark", "cm"]); // resolves before Final Spark
   });
 
-  test.failing("BUG: the caster chooses the friendly unit (and the reference unit) — only friendly units are offered", async () => {
+  test("the caster chooses the friendly unit (and the reference unit) — only friendly units are offered", async () => {
     // Expected: either cast-time targets or a resolution prompt lets P1 choose among small/big (never foe).
     // Actual: no choice is ever presented; the engine auto-pairs two friendly units.
     const game = await board().build();
@@ -78,7 +78,7 @@ describe("Convergent Mutation (ogn-108-298)", () => {
     expect(offered.sort()).toEqual(["big", "small"]);
   });
 
-  test.failing("BUG: increases the chosen unit's Might TO the other unit's Might; the other unit is unchanged", async () => {
+  test("increases the chosen unit’s Might TO the other unit’s Might; the other unit is unchanged", async () => {
     // Expected: small 2 → 6 this turn, big stays 6. Actual: modelled as a swap — big drops to 2.
     const game = await board().build();
     await castOnSmall(game);

@@ -290,6 +290,18 @@ export interface SwapMightEffect {
 }
 
 /**
+ * rule 477.3.b (ogn-108-298): "increase its Might to the Might of another
+ * unit" — a one-way snapshot: target1 is raised to target2's current Might and
+ * never lowered; target2 is untouched.
+ */
+export interface IncreaseMightToEffect {
+  readonly type: "increase-might-to";
+  readonly target1: AnyTarget;
+  readonly target2: AnyTarget;
+  readonly duration?: "turn" | "permanent";
+}
+
+/**
  * rule 364.3 (ogn-053-298 Stand United): a spell/ability-created continuous
  * effect that behaves like a static ability for the rest of the turn — it is
  * re-evaluated on every static pass, so it also reaches units that start
@@ -808,6 +820,7 @@ export type Effect =
   | SpendBuffEffect
   | DoubleMightEffect
   | SwapMightEffect
+  | IncreaseMightToEffect
   | TurnStaticEffect
 
   // Movement
@@ -901,12 +914,18 @@ export function isControlFlowEffect(
  */
 export function isStatModifyingEffect(
   effect: Effect,
-): effect is ModifyMightEffect | BuffEffect | DoubleMightEffect | SwapMightEffect {
+): effect is
+  | ModifyMightEffect
+  | BuffEffect
+  | DoubleMightEffect
+  | SwapMightEffect
+  | IncreaseMightToEffect {
   return (
     effect.type === "modify-might" ||
     effect.type === "buff" ||
     effect.type === "double-might" ||
-    effect.type === "swap-might"
+    effect.type === "swap-might" ||
+    effect.type === "increase-might-to"
   );
 }
 

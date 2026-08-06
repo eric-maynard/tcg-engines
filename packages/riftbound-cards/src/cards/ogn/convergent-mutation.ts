@@ -8,10 +8,9 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * Choose a friendly unit. This turn, increase its Might to the
  * Might of another friendly unit.
  *
- * Approximated as a swap-might between a chosen friendly unit and another
- * friendly unit, duration=turn. The "increase to" semantics (only go up,
- * never down) are not expressible in the current effect model; this is a
- * reasonable approximation.
+ * rule 477.3.b — "increase to" is one-way: the chosen unit rises to the
+ * reference unit's Might for the turn, the reference unit is untouched, and
+ * nothing ever decreases.
  */
 const abilities: Ability[] = [
   {
@@ -19,7 +18,7 @@ const abilities: Ability[] = [
       duration: "turn",
       target1: { controller: "friendly", type: "unit" },
       target2: { controller: "friendly", type: "unit" },
-      type: "swap-might",
+      type: "increase-might-to",
     },
     timing: "reaction",
     type: "spell",
