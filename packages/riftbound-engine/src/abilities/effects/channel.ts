@@ -24,6 +24,7 @@ export function handle_channel(effect: ExecutableEffect, ctx: EffectContext, _h:
   // exhaustRune/recycleRune and the channel move use), and "channel N rune(s)
   // exhausted" must set the exhausted flag on each channeled rune.
   const exhausted = (effect as { exhausted?: boolean }).exhausted === true;
+  let channeled = 0;
   for (let i = 0; i < count; i++) {
     const runes = ctx.zones.getCardsInZone(
       "runeDeck" as CoreZoneId,
@@ -38,6 +39,12 @@ export function handle_channel(effect: ExecutableEffect, ctx: EffectContext, _h:
       if (exhausted) {
         ctx.counters.setFlag(runeId as unknown as CoreCardId, "exhausted", true);
       }
+      channeled++;
     }
   }
+  // rule 430.3 — channel as many as the Rune Deck allows; record how many
+  // actually moved so a sibling "if you couldn't channel N this way" condition
+  // (`channeled-fewer-than`) can see the shortfall.
+  const record = (ctx.draft as { lastChanneledCount?: Record<string, number> });
+  record.lastChanneledCount = { ...(record.lastChanneledCount ?? {}), [ctx.playerId]: channeled };
 }

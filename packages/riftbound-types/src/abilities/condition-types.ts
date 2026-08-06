@@ -269,6 +269,16 @@ export interface FewerRunesThanOpponentCondition {
 }
 
 /**
+ * "If you couldn't channel N runes this way" — rule 430.3: a channel effect
+ * moves as many runes as the Rune Deck holds, and this is true when the most
+ * recent channel moved fewer than `amount`.
+ */
+export interface ChanneledFewerThanCondition {
+  readonly type: "channeled-fewer-than";
+  readonly amount: number;
+}
+
+/**
  * If the effect's chosen target is controlled by the given player.
  * Evaluated against the caster-bound target of the enclosing spell/ability
  * (rule 355.8 last-known-information for "if it was a friendly/enemy …").
@@ -456,6 +466,7 @@ export type Condition =
   | ControlCondition
   | OpponentControlsCondition
   | FewerRunesThanOpponentCondition
+  | ChanneledFewerThanCondition
   | TargetControllerCondition
   | TargetAttackingCondition
   | ThisKillsTargetCondition

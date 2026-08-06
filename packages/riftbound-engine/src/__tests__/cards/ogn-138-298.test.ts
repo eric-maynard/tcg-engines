@@ -40,7 +40,7 @@ describe("Catalyst of Aeons (ogn-138-298)", () => {
     expect(game.zoneOf("coa")).toBe("hand");
   });
 
-  test.failing("BUG: with only 1 rune left in the rune deck it channels that 1 exhausted and you draw 1 (430.3 + 'if you couldn't')", async () => {
+  test("with only 1 rune left in the rune deck it channels that 1 exhausted and you draw 1 (430.3 + 'if you couldn't')", async () => {
     // Expected: 1 rune channeled exhausted, rune deck empty, and the fallback draw fires (+1 card).
     // Actual: the parsed ability is a bare `channel 2 exhausted`; the conditional draw is dropped.
     const game = await scenario().fillDecks({ main: 10, runes: 1 }).resources(P1, { energy: 4 }).hand(P1, CARD, "coa").build();
@@ -53,7 +53,7 @@ describe("Catalyst of Aeons (ogn-138-298)", () => {
     expect(game.p1.hand().length).toBe(handBefore - 1 + 1);
   });
 
-  test.failing("BUG: with an empty rune deck nothing is channeled and you draw 1", async () => {
+  test("with an empty rune deck nothing is channeled and you draw 1", async () => {
     // Expected: 0 channeled → "couldn't channel 2" → draw 1. Actual: no draw happens.
     const game = await scenario().fillDecks({ main: 10, runes: 0 }).resources(P1, { energy: 4 }).hand(P1, CARD, "coa").build();
     expect(game.p1.runeDeck()).toHaveLength(0);

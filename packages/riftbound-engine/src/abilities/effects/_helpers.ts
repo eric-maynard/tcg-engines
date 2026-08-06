@@ -288,6 +288,16 @@ export function evaluateEffectCondition(
 ): boolean {
   const condType = condition.type as string;
   switch (condType) {
+    // rule 430.3 — "If you couldn't channel N runes this way": true when the
+    // most recent channel effect moved fewer than N runes (empty Rune Deck).
+    case "channeled-fewer-than": {
+      const wanted = (condition.amount as number) ?? 1;
+      const channeled =
+        (ctx.draft as { lastChanneledCount?: Record<string, number> }).lastChanneledCount?.[
+          ctx.playerId
+        ] ?? 0;
+      return channeled < wanted;
+    }
     case "has-xp": {
       const threshold = (condition.threshold as number) ?? 1;
       const player = ctx.draft.players[ctx.playerId];
