@@ -52,7 +52,7 @@ describe("Solari Chief (ogn-225-298)", () => {
     expect(low.p1.can("play", "chief")).toBe(false);
   });
 
-  test.failing("BUG: 'choose an enemy unit' — the controller is prompted to pick among ENEMY units (any location, stunned or not)", async () => {
+  test("'choose an enemy unit' — the controller is prompted to pick among ENEMY units (any location, stunned or not)", async () => {
     // Expected: a pick for P1 offering exactly fresh + dazed (not the friendly ally).
     // Actual: no choice is ever presented; the hand-authored conditional auto-selects a target.
     const game = await board().build();
@@ -67,7 +67,7 @@ describe("Solari Chief (ogn-225-298)", () => {
     expect(keys).toEqual(["dazed", "fresh"]);
   });
 
-  test.failing("BUG: 'Otherwise, stun it' — choosing the non-stunned enemy stuns it and leaves the already-stunned one alive", async () => {
+  test("'Otherwise, stun it' — choosing the non-stunned enemy stuns it and leaves the already-stunned one alive", async () => {
     // Expected: fresh becomes stunned; dazed (not chosen) is untouched.
     // Actual: with any stunned enemy on the board the engine kills that one instead and stuns nothing.
     const game = await board().build();

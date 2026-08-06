@@ -399,6 +399,16 @@ export function evaluateEffectCondition(
         | undefined;
       return meta?.combatRole === "attacker";
     }
+    case "target-stunned": {
+      // rule 423 (ogn-225-298) — "choose an enemy unit. If it is stunned, kill
+      // it": the subject is the chosen (bound) target, not the source.
+      const bound = ctx.boundTargets?.[0];
+      if (!bound) return false;
+      const meta = ctx.cards.getCardMeta?.(bound as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      return meta?.stunned === true;
+    }
     case "killed-might": {
       // rule-id: unl-186-219 — "Kill a unit… Then, if it had N [Might] or
       // less": compares the last-known Might snapshotted by the `kill` step.
@@ -427,6 +437,12 @@ export function evaluateEffectCondition(
             ?.damage ?? 0;
         return dmg >= might;
       });
+    }
+    case "while-at-battlefield": {
+      // rule-id: ogn-223-298 — "if I am at a battlefield": the subject is the
+      // source card; a unit in base (or off board) does not satisfy it.
+      const zone = ctx.zones.getCardZone(ctx.sourceCardId as CoreCardId) as string | undefined;
+      return zone?.startsWith("battlefield-") === true;
     }
     case "while-empowered": {
       // rule-id: ven-075-166 / rule 827 — "If this is [Empowered], ... instead."

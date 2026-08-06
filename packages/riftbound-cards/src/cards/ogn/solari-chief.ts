@@ -12,32 +12,19 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  - kill the chosen unit (when it's already stunned)
  *  - stun the chosen unit (otherwise)
  *
- * The engine's conditional effect executes the `then`/`else` branch based
- * on whether the chosen target has the stunned filter. Since conditions
- * don't yet support "target has filter", we use the closest approximation:
- * a conditional with a count-based comparison that matches any stunned
- * enemy unit at the chosen location.
+ * rule 355.5: the controller chooses the enemy unit first (any location,
+ * stunned or not) — the conditional carries the caster-chosen `target` so
+ * chain resolution raises the pick — and only then does rule 423 decide the
+ * branch from THAT unit's stun status (`target-stunned`). `then`/`else` carry
+ * no target of their own so they act on the bound choice.
  */
 const abilities: Ability[] = [
   {
     effect: {
-      condition: {
-        comparison: { gte: 1 },
-        target: {
-          controller: "enemy",
-          filter: "stunned",
-          type: "unit",
-        },
-        type: "count",
-      },
-      else: {
-        target: { controller: "enemy", type: "unit" },
-        type: "stun",
-      },
-      then: {
-        target: { controller: "enemy", filter: "stunned", type: "unit" },
-        type: "kill",
-      },
+      condition: { type: "target-stunned" },
+      else: { type: "stun" },
+      target: { controller: "enemy", type: "unit" },
+      then: { type: "kill" },
       type: "conditional",
     },
     trigger: { event: "play-self" },
