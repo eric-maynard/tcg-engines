@@ -101,6 +101,12 @@ export interface EffectContext {
    */
   readonly triggerToZone?: string;
   /**
+   * rule 359.3.f.3 (sfd-126-221) — zone id (`battlefield-<bfId>`) of the
+   * battlefield named by the firing event ("when you defend at a battlefield
+   * … move me THERE"), so `to: "there"` lands at that battlefield.
+   */
+  readonly triggerBattlefieldZone?: string;
+  /**
    * rule 811.1.d: zone id (`battlefield-<bfId>`) of the battlefield this
    * card was played from Hidden at — units it plays must be played there.
    */

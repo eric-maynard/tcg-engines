@@ -441,6 +441,12 @@ function triggerMatchesEvent(
       if (on === "friendly-other-units" && event.cardId === card.id) {
         return false;
       }
+    } else if (event.type === "play-token-unit") {
+      // rule 817.1.b (rule-id: sfd-166-221) — playing a unit TOKEN is playing a
+      // friendly unit only for the player who played it.
+      if (event.playerId !== card.owner) {
+        return false;
+      }
     }
   } else if (on === "another-friendly-units" && event.type === "play-card") {
     // "When you play another unit": friendly play, excluding this card itself.
@@ -463,9 +469,25 @@ function triggerMatchesEvent(
     if ("playerId" in event && event.playerId !== card.owner) {
       return false;
     }
+    // rule 464.2.c.2 (sfd-126-221) — "when YOU attack/defend" is attributed to
+    // the designated player: the attack/defend event names the acting unit's
+    // controller in `owner`, so an ENEMY unit defending is not "you defending".
+    if (
+      !("playerId" in event) &&
+      "owner" in event &&
+      typeof event.owner === "string" &&
+      event.owner !== card.owner
+    ) {
+      return false;
+    }
     // rule-id: ogn-202-298 — "When you discard one or more cards" triggers
     // once per discard event, not once per card in a multi-card discard.
     if (event.type === "discard" && (event.batchIndex ?? 0) > 0) {
+      return false;
+    }
+    // rule 383.4.f.2.a (sfd-126-221) — "when you defend" is a Defend Trigger
+    // checked ONCE per combat, however many of your units defend.
+    if (event.type === "defend" && (event.batchIndex ?? 0) > 0) {
       return false;
     }
   } else if (on === "opponent") {
@@ -712,7 +734,11 @@ export function findMatchingTriggers(
       !trashOnly &&
       card.zone !== "base" &&
       !card.zone.startsWith("battlefield") &&
-      card.zone !== "legendZone"
+      card.zone !== "legendZone" &&
+      // rule 390.2 (rule-id: sfd-166-221) — a delayed triggered ability a
+      // spell installed on a PLAYER has no card on the board; it is offered
+      // as a floating entry and stays active for its duration.
+      card.zone !== "floating"
     ) {
       continue;
     }

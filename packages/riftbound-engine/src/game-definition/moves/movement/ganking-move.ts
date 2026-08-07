@@ -233,6 +233,8 @@ export const gankingMove: Defs["gankingMove"] = {
           },
           triggerCtx,
         );
+        // rule 383.4.f.2.a — one "you defend" per player per combat.
+        const defendCount = new Map<string, number>();
         for (const cardId of allUnits) {
           const owner = context.cards.getCardOwner(cardId);
           if (owner !== undefined && (owner as string) !== playerId) {
@@ -240,9 +242,12 @@ export const gankingMove: Defs["gankingMove"] = {
               cardId,
               { combatRole: "defender" } as Partial<RiftboundCardMeta>,
             );
+            const batchIndex = defendCount.get(owner as string) ?? 0;
+            defendCount.set(owner as string, batchIndex + 1);
             fireTriggers(
               {
                 alone: isAloneAtLocation(cardId as string, owner as string, occupants, ownerOf),
+                batchIndex,
                 battlefieldId: toBattlefield,
                 cardId: cardId as string,
                 owner: owner as string,

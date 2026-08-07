@@ -311,6 +311,7 @@ export function executeResolvedItem(
       cardId?: string;
       fromHiddenAt?: string;
       diedAt?: string;
+      battlefieldId?: string;
       excessDamage?: number;
     }
     | undefined;
@@ -432,10 +433,34 @@ export function executeResolvedItem(
         ? zone === "base"
         : typeof zone === "string" && zone.startsWith("battlefield-");
     };
+    // rule 359.3.e.4 / 355.9.b (sfd-162-221) — a Might-restricted target
+    // ("a unit with 2 [Might] or less") is judged on its CURRENT Might when
+    // the item resolves, so a target pumped out of range in response is no
+    // longer legal.
+    const lockedMight =
+      typeof lockedTarget === "object" && lockedTarget !== null
+        ? ((lockedTarget as { filter?: { might?: unknown } }).filter?.might as
+            | { lte?: number; gte?: number; eq?: number }
+            | undefined)
+        : undefined;
+    const mightStillMatches = (id: string): boolean => {
+      if (lockedMight === undefined || draft.battlefields?.[id] !== undefined) {
+        return true;
+      }
+      const might = getCardEffectiveMight(
+        id,
+        (m) => baseCtx.cards.getCardMeta?.(m) as Partial<RiftboundCardMeta> | undefined,
+      );
+      if (lockedMight.lte !== undefined && might > lockedMight.lte) return false;
+      if (lockedMight.gte !== undefined && might < lockedMight.gte) return false;
+      if (lockedMight.eq !== undefined && might !== lockedMight.eq) return false;
+      return true;
+    };
     const legal = boundTargets.filter(
       (id) =>
         stillOnBoard(id) &&
         locationStillMatches(id) &&
+        mightStillMatches(id) &&
         !(
           controllerOf(id) !== resolved.controller &&
           (isUntargetable(id, resolverCtx) || isProtectedFromEnemyChoice(id, resolverCtx))
@@ -660,6 +685,11 @@ export function executeResolvedItem(
     ...(triggerSourceId ? { triggerSourceId } : {}),
     // rule-id: ogn-177-298 — where the triggering move went ("with it").
     ...(typeof trigEvt?.to === "string" ? { triggerToZone: trigEvt.to } : {}),
+    // rule 359.3.f.3 (sfd-126-221) — the battlefield the firing event names
+    // ("when you defend at a battlefield … move me there").
+    ...(typeof trigEvt?.battlefieldId === "string"
+      ? { triggerBattlefieldZone: `battlefield-${trigEvt.battlefieldId}` }
+      : {}),
     // rule 811.1.d.3: units played by a from-Hidden card go to that battlefield.
     ...(hiddenZone ? { hiddenZone } : {}),
     // rule 560 (unl-164-219) — a play-self trigger's "if you paid my additional
@@ -691,7 +721,10 @@ export function executeResolvedItem(
   // sequence whose lead step lost its only target ("Kill a friendly unit.
   // Look at the top 5 cards…") still performs its remaining instructions.
   // A single-instruction effect resolves but does nothing.
-  if (!mistargeted || effect.type === "sequence") {
+  // rule 359.3.e.4 (sfd-162-221) — when the sequence itself owns the target
+  // ("Kill a unit …. If it was an enemy unit, …"), every instruction depends on
+  // that one choice, so an illegal target means the whole item does nothing.
+  if (!mistargeted || (effect.type === "sequence" && effect.target === undefined)) {
     executeEffect(effect, effectCtx);
   }
   firePlayedCardTriggers(resolved, draft, context, preLen);

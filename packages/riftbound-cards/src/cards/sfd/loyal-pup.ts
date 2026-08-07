@@ -11,7 +11,9 @@ const abilities: Ability[] = [
   {
     effect: {
       target: "self",
-      to: "here",
+      // rule 359.3.f.3 — "there" = the battlefield from the trigger condition,
+      // not the Pup's own location.
+      to: "there",
       type: "move",
     },
     optional: true,

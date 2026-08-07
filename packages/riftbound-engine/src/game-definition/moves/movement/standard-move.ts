@@ -396,9 +396,12 @@ export const standardMove: Defs["standardMove"] = {
       // Check if there are only friendly units (no opposing units)
       const bfZoneId = `battlefield-${destination}` as CoreZoneId;
       const allUnits = zones.getCardsInZone(bfZoneId);
+      // rule 127.1 — "opposing" follows the CURRENT controller, not the owner:
+      // a unit stolen by the mover is friendly, and a unit stolen FROM the mover
+      // is hostile even though they still own it.
       const hasOpponentUnit = allUnits.some((cardId) => {
-        const owner = context.cards.getCardOwner(cardId);
-        return owner !== undefined && (owner as string) !== playerId;
+        const owner = controllerOf(context.cards, cardId);
+        return owner !== undefined && owner !== playerId;
       });
 
       // Rule 450: the destination becomes Contested when it is an
@@ -440,7 +443,7 @@ export const standardMove: Defs["standardMove"] = {
       if (hasOpponentUnit) {
         const triggerCtx = { cards: context.cards, counters, draft, zones };
         // rule 740.2.a — "alone" is judged against the battlefield's occupancy.
-        const ownerOf = (id: string) => context.cards.getCardOwner(id as CoreCardId) as string | undefined;
+        const ownerOf = (id: string) => controllerOf(context.cards, id as CoreCardId);
         const occupants = allUnits as unknown as string[];
         for (const unitId of unitIds) {
           context.cards.updateCardMeta(
@@ -458,16 +461,22 @@ export const standardMove: Defs["standardMove"] = {
             triggerCtx,
           );
         }
+        // rule 383.4.f.2.a — index each player's defenders so "when YOU
+        // defend" fires once per combat while "when I defend" still fires per unit.
+        const defendCount = new Map<string, number>();
         for (const cardId of allUnits) {
-          const owner = context.cards.getCardOwner(cardId);
-          if (owner !== undefined && (owner as string) !== playerId) {
+          const owner = controllerOf(context.cards, cardId);
+          if (owner !== undefined && owner !== playerId) {
             context.cards.updateCardMeta(
               cardId,
               { combatRole: "defender" } as Partial<RiftboundCardMeta>,
             );
+            const batchIndex = defendCount.get(owner as string) ?? 0;
+            defendCount.set(owner as string, batchIndex + 1);
             fireTriggers(
               {
                 alone: isAloneAtLocation(cardId as string, owner as string, occupants, ownerOf),
+                batchIndex,
                 battlefieldId: destination,
                 cardId: cardId as string,
                 owner: owner as string,

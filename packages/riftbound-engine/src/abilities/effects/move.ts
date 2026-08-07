@@ -730,6 +730,14 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       return;
     }
     targetZone = ctx.triggerToZone;
+  } else if (dest === "there") {
+    // rule 359.3.f.3 (sfd-126-221 Loyal Pup) — "there" is the battlefield named
+    // by the trigger condition ("when you defend AT A BATTLEFIELD"), never the
+    // source's own location. No such battlefield on the firing event → no move.
+    if (!ctx.triggerBattlefieldZone) {
+      return;
+    }
+    targetZone = ctx.triggerBattlefieldZone;
   } else if (dest === "here" && ctx.sourceZone) {
     // rule 359.3.f.2 / 359.3.e.6 (ruling cc1dfe2325b10a8d, sfd-177-221 Azir) —
     // "here"/"this battlefield" is a referent read from the source card when the
