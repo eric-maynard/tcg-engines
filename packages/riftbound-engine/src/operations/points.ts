@@ -204,6 +204,22 @@ export function findWinner(
 }
 
 /**
+ * rule 472.2 — an ALTERNATE win condition ("you win the game"). It does not go
+ * through the points check, so it is written here rather than by
+ * {@link checkVictory}, and it applies immediately on resolution (rule 321's
+ * "no Cleanup while a Chain Item resolves" gates the points check only).
+ * First writer wins: a game already finished is never re-decided.
+ */
+export function declareWinner(draft: RiftboundGameState, playerId: string): PlayerId | null {
+  if (draft.status !== "playing") {
+    return (draft.winner as PlayerId | undefined) ?? null;
+  }
+  (draft as { status: string }).status = "finished";
+  (draft as { winner?: PlayerId }).winner = playerId as PlayerId;
+  return playerId as PlayerId;
+}
+
+/**
  * rule 472 / 323.1 — the victory check of a Cleanup. The ONLY place a points
  * win sets `status = "finished"` / `winner`. rule 320 / 321: no Cleanup happens
  * while a Chain Item is resolving, so by default this is a no-op mid-resolution

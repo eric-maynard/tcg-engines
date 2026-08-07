@@ -427,7 +427,8 @@ function triggerMatchesEvent(
         return false;
       }
     } else if (event.type === "die") {
-      if (event.owner !== card.owner) {
+      // rule 740.1.a — friendliness follows CONTROL as the unit died.
+      if ((event.controller ?? event.owner) !== card.owner) {
         return false;
       }
       if (on === "friendly-other-units" && event.cardId === card.id) {
@@ -561,7 +562,17 @@ function triggerMatchesEvent(
     ) {
       return false;
     }
-    const subjectOwner = "owner" in event ? event.owner : "playerId" in event ? event.playerId : undefined;
+    // rule 740.1.a — "friendly"/"enemy" follow CONTROL, not deck ownership. The
+    // leave-board choke point stamps the controller-as-it-left on `die`/
+    // `leave-board`, so a stolen unit dying is friendly to whoever controlled it.
+    const subjectOwner =
+      "controller" in event && typeof event.controller === "string"
+        ? event.controller
+        : "owner" in event
+          ? event.owner
+          : "playerId" in event
+            ? event.playerId
+            : undefined;
     if (desc.controller === "friendly" && subjectOwner !== undefined && subjectOwner !== card.owner) {
       return false;
     }

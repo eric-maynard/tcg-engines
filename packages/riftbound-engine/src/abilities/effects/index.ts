@@ -29,6 +29,7 @@ import { handle_grantKeyword } from "./grant-keyword";
 import { handle_grantKeywords } from "./grant-keywords";
 import { handle_addResource } from "./add-resource";
 import { handle_extraTurn } from "./extra-turn";
+import { handle_winGame } from "./win-game";
 import { handle_banish } from "./banish";
 import { handle_counter } from "./counter";
 import { handle_createToken } from "./create-token";
@@ -47,10 +48,6 @@ import { handle_doTimes } from "./do-times";
 import { handle_fight } from "./fight";
 import { handle_play } from "./play";
 import { handle_look } from "./look";
-import {
-  handle_playBanishedCard,
-  handle_playBanishedPass,
-} from "./play-banished-pass";
 import { handle_mill } from "./mill";
 import { handle_reveal } from "./reveal";
 import { handle_revealHand } from "./reveal-hand";
@@ -67,6 +64,7 @@ import { handle_spendBuff } from "./spend-buff";
 import { handle_predict } from "./predict";
 import { handle_addRestriction } from "./add-restriction";
 import { handle_nameCard } from "./name-card";
+import { handle_orderTop } from "./order-top";
 import { handle_removeRestriction } from "./remove-restriction";
 import { handle_turnStatic } from "./turn-static";
 import { handle_revealRuneBranch } from "./reveal-rune-branch";
@@ -109,6 +107,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "grant-keywords": handle_grantKeywords,
   "add-resource": handle_addResource,
   "extra-turn": handle_extraTurn,
+  "win-game": handle_winGame,
   "banish": handle_banish,
   "counter": handle_counter,
   "create-token": handle_createToken,
@@ -129,9 +128,6 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "fight": handle_fight,
   "play": handle_play,
   "look": handle_look,
-  // rule 337.1.b (ogn-115-298) — replay the public banish pass as plays.
-  "play-banished-pass": handle_playBanishedPass,
-  "play-banished-card": handle_playBanishedCard,
   // rule 440.1 — [Burn N]: put the top N cards of a Main Deck into its trash.
   "mill": handle_mill,
   "reveal": handle_reveal,
@@ -150,6 +146,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "predict": handle_predict,
   "add-restriction": handle_addRestriction,
   "name-card": handle_nameCard,
+  "order-top": handle_orderTop,
   "remove-restriction": handle_removeRestriction,
   // rule 364.3 (ogn-053-298) — turn-scoped continuous (static-like) effect.
   "turn-static": handle_turnStatic,
