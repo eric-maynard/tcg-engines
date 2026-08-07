@@ -612,7 +612,7 @@ export interface VerbOptions {
 
 export type PlayOptions = VerbOptions & Pick<PlayArgs, "to" | "accelerate" | "payOptional" | "sacrifice" | "targets" | "x" | "repeat" | "params">;
 export type CastOptions = VerbOptions & Pick<PlayArgs, "targets" | "x" | "repeat" | "flow" | "payOptional" | "params">;
-export type ActivateOptions = VerbOptions & Pick<PlayArgs, "sacrifice" | "discard" | "source" | "targets" | "params" | "x">;
+export type ActivateOptions = VerbOptions & Pick<PlayArgs, "sacrifice" | "discard" | "source" | "targets" | "params">;
 
 export class SeatHandle {
   readonly game: Game;
@@ -935,27 +935,9 @@ export class SeatHandle {
    */
   async activate(card: CardRef, abilityIndex?: number, opts: ActivateOptions = {}): Promise<Extract<ActResult, { ok: true }>> {
     const idx = abilityIndex ?? this.firstActivatableIndex(card) ?? 0;
-    return this.verb("activateAbility", card, { ...opts, abilityIndex: idx, x: opts.x ?? this.defaultActivationX(card, idx) }, `activate(${card}#${idx})`, opts, (o) =>
+    return this.verb("activateAbility", card, { ...opts, abilityIndex: idx }, `activate(${card}#${idx})`, opts, (o) =>
       o.key === `activateAbility:${card}#${idx}`,
     );
-  }
-
-  /**
-   * rule 444.2: on a "Pay any amount of X" activated ability an unspecified X
-   * means the smallest amount that actually does something — 1 when the pool
-   * covers it, else 0. Tests that care about a particular X pass `{x}`.
-   */
-  private defaultActivationX(card: CardRef, abilityIndex: number): number {
-    const key = `activateAbility:${card}#${abilityIndex}`;
-    const opt = this.legal().find((o) => o.key === key);
-    if (!opt) {
-      return 0;
-    }
-    const field = opt.fields.find((f) => f.name === "xAmount");
-    if (field) {
-      return (field.max ?? 0) >= 1 ? 1 : 0;
-    }
-    return opt.variants.some((v) => v.params.xAmount === 1) ? 1 : 0;
   }
 
   private firstActivatableIndex(card: CardRef): number | undefined {

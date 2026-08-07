@@ -120,6 +120,12 @@ export interface LookEffect {
    * `"play"` banishes it then plays it (optionally at `reduceCost` less).
    */
   readonly onPicked?: "recycle" | "banish" | "discard" | "draw" | "play";
+  /**
+   * rule 416.1 — where the looked-at cards that were NOT picked go.
+   * Defaults to `"recycle"` (bottom of the Main Deck); `"trash"` is
+   * ven-156-166 Lightning Rush's "Put the rest into your trash".
+   */
+  readonly onRest?: "recycle" | "draw" | "trash";
   readonly reduceCost?: Cost;
   /**
    * rule-id: ven-089-166-look-then-empower — effect run once the pick has
