@@ -11,10 +11,11 @@ const abilities: Ability[] = [
   {
     effect: {
       keyword: "EntersReady",
+      // "Your tokens" — every token you play, gear tokens included, so no
+      // card-type restriction here.
       target: {
         controller: "friendly",
         filter: "token",
-        type: "unit",
       },
       type: "grant-keyword",
     },

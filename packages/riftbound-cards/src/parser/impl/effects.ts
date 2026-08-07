@@ -7,6 +7,7 @@ import type {
   Effect,
   SequenceEffect,
 } from "@tcg/riftbound-types/abilities/effect-types";
+import { parseCost } from "../parsers/cost-parser";
 import { parseEffect } from "./effect";
 import {
   parseChoiceEffect,
@@ -182,6 +183,10 @@ export function parseEffects(text: string): Effect | undefined {
   return parseSentenceSequence(cleaned, false);
 }
 
+/** "You may pay :rb_rune_order: to ready it." — optional cost + pronoun rider. */
+const PAY_TO_RIDER_RE =
+  /^You may pay\s+((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)|exhaust):)+)\s+to\s+(.+?\s+(?:it|them))\.?$/i;
+
 const CHANNEL_FALLBACK_RE =
   /^If you (?:can'?t|couldn'?t)(?:\s+channel\s+(\d+)\s+runes?(?:\s+this way)?)?,\s*(.+?)\.?$/i;
 
@@ -229,6 +234,26 @@ function parseSentenceSequence(cleaned: string, strict: boolean): Effect | undef
           then: fallback,
           type: "conditional",
         } as unknown as Effect);
+        continue;
+      }
+    }
+    // rule 383.3.b (rule-id: sfd-154-221) — "Play a … token. You may pay [X]
+    // to <do something to> it.": the rider is an opt-in cost charged when the
+    // spell resolves, and "it" names the token the previous sentence made, so
+    // it rides along as the create-token's `then` (the engine executes that
+    // with the created ids bound).
+    const payRider = prev?.type === "create-token" ? PAY_TO_RIDER_RE.exec(sentence.trim()) : null;
+    if (payRider && prev) {
+      const inner = parseEffect(`${payRider[2].trim().replace(/\.$/, "")}.`);
+      if (inner) {
+        effects[effects.length - 1] = {
+          ...prev,
+          then: {
+            condition: { cost: parseCost(payRider[1]), type: "pay-cost" },
+            then: inner,
+            type: "conditional",
+          },
+        } as unknown as Effect;
         continue;
       }
     }

@@ -461,8 +461,13 @@ export function evaluateEffectCondition(
       const want = condition.controller as "friendly" | "enemy" | undefined;
       const bound = ctx.boundTargets?.[0];
       if (!bound) return false;
-      const owner = ctx.cards.getCardOwner(bound as CoreCardId) ?? "";
-      return want === "friendly" ? owner === ctx.playerId : owner !== ctx.playerId;
+      // rule 740.1.a (sfd-162-221) — "friendly"/"enemy" is about CONTROL, not
+      // ownership: a unit I control but do not own is friendly to me.
+      const controller =
+        ctx.cards.getCardController?.(bound as CoreCardId) ??
+        ctx.cards.getCardOwner(bound as CoreCardId) ??
+        "";
+      return want === "friendly" ? controller === ctx.playerId : controller !== ctx.playerId;
     }
     case "while-alone": {
       // rule-id: ogn-046-298 — "if it is the only unit you control there": the
@@ -605,14 +610,13 @@ export function tokenEntersReadyFromStaticGrant(
   ctx: EffectContext,
   tokenType: string,
 ): boolean {
-  if (tokenType === "gear") {
-    return false;
-  }
+  // rule 365.1: only a permanent ON THE BOARD has an active passive — an
+  // unplayed champion sitting in the champion zone grants nothing.
   const registry = getGlobalCardRegistry();
+  const tokenKind = tokenType === "gear" ? "gear" : "unit";
   const boardIds: string[] = [
     ...ctx.zones.getCardsInZone("base" as CoreZoneId, ctx.playerId as CorePlayerId),
     ...ctx.zones.getCardsInZone("legendZone" as CoreZoneId, ctx.playerId as CorePlayerId),
-    ...ctx.zones.getCardsInZone("championZone" as CoreZoneId, ctx.playerId as CorePlayerId),
   ] as string[];
   for (const bfId of Object.keys(ctx.draft.battlefields)) {
     for (const id of ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
@@ -640,7 +644,9 @@ export function tokenEntersReadyFromStaticGrant(
       if (target?.controller && target.controller !== "friendly") {
         continue;
       }
-      if (target?.type && target.type !== "unit") {
+      // rule-id: sfd-171-221 — "Your TOKENS enter ready" names every token,
+      // gear included; a grant that does name a card type only covers that type.
+      if (target?.type && target.type !== tokenKind) {
         continue;
       }
       if (target?.filter && target.filter !== "token") {

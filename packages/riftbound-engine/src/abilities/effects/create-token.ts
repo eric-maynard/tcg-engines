@@ -248,11 +248,20 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
       };
     }
   }
+  // rule 354.2 (sfd-154-221) — the tokens this step minted are the sequence's
+  // pending value ("Play a … token. You may pay [order] to ready IT"), so a
+  // later `pending-value` step binds them instead of scanning the board.
+  const sink = (ctx as { playedSink?: { ids: string[] } }).playedSink;
+  if (sink && createdIds.length > 0) {
+    sink.ids.push(...createdIds);
+  }
   // rule-id: sfd-081-221 — a follow-up instruction printed on the same
   // sentence ("… and each opponent may …") rides along as `then`, and waits
   // when this effect itself parked a prompt.
   const then = (effect as { then?: ExecutableEffect }).then;
   if (then && !ctx.draft.pendingChoice) {
-    h.executeEffect(then, ctx);
+    // rule-id: sfd-154-221 — a rider that acts on the token ("… to ready it")
+    // names the ids this effect just minted, so bind them for the rider.
+    h.executeEffect(then, createdIds.length > 0 ? { ...ctx, boundTargets: createdIds } : ctx);
   }
 }
