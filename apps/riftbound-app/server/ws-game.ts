@@ -3,7 +3,6 @@
  * undo/redo, pings, leave).
  */
 
-import type { PlayerId } from "@tcg/core";
 import type { ServerWebSocket } from "bun";
 import { actorName, makeLogEntry } from "../src/narrator";
 import { SERVER_ONLY_MOVES } from "./config";
@@ -12,7 +11,7 @@ import { gameLogger } from "./log";
 import { buildPregamePayload, handlePregameMessage } from "./pregame";
 import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
 import { type RouteCtx, type RouteResult, type WsData, broadcast, gameSessions } from "./state";
-import { autoResolveCombat, finalizeEndTurn, preparePlayerRotation, sandboxAutoPlay } from "./turn";
+import { applySessionMove, sandboxAutoPlay } from "./turn";
 
 // GET /ws/game/:id?player=X — upgrade to game WebSocket
 export async function handleGameUpgrade(req: Request, url: URL, ctx: RouteCtx): RouteResult {
@@ -82,24 +81,14 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
     // Capture previous phase for phase change detection
     const prevPhase = session.engine.getState().turn.phase;
 
-    // For endTurn, set the next player on the flow manager BEFORE executing
-    // So the flow's phase callbacks (channel, draw, ready) target the right player.
-    const isEndTurn = moveId === "endTurn";
-    const nextPlayer = isEndTurn ? preparePlayerRotation(session, playerId) : undefined;
-
-    const result = session.engine.executeMove(moveId, {
-      params,
-      playerId: playerId as PlayerId,
-    });
+    // One sequencing path: the engine's shared TurnDriver executes the move
+    // (endTurn rotation included) and fires the automatic procedures.
+    const result = applySessionMove(session, playerId, moveId as string, params as Record<string, unknown>);
 
     if (!result.success) {
-      // If endTurn failed, restore the current player on the flow manager
-      if (isEndTurn) {
-        session.engine.getFlowManager()?.setCurrentPlayer(playerId as PlayerId);
-      }
-      const wsError = (result as { error: string }).error;
-      const wsErrorCode = (result as { errorCode: string }).errorCode;
-      gameLogger.logMoveRejected(gameId, moveId as string, playerId, params as Record<string, unknown>, wsError ?? "unknown");
+      const wsError = result.error ?? "unknown";
+      const wsErrorCode = result.errorCode;
+      gameLogger.logMoveRejected(gameId, moveId as string, playerId, params as Record<string, unknown>, wsError);
       ws.send(JSON.stringify({
         error: wsError,
         errorCode: wsErrorCode,
@@ -111,10 +100,8 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
 
     // Move narration is produced from engine replay history in buildHistoryLog
     gameLogger.logMove(gameId, moveId as string, playerId, params as Record<string, unknown>, { success: true });
-
-    // After unit movement, auto-detect and resolve contested battlefields
-    if (moveId === "standardMove" || moveId === "gankingMove") {
-      autoResolveCombat(session, playerId);
+    for (const run of result.procedures) {
+      gameLogger.logMove(gameId, run.moveId, run.seat, run.params, { success: run.success });
     }
 
     // Detect game completion
@@ -130,11 +117,6 @@ export function gameWsMessage(ws: ServerWebSocket<WsData>, msg: Record<string, u
         session.engine.getReplayHistory().length,
         durationMs,
       );
-    }
-
-    // Finalize turn cycling (same logic as REST endpoint)
-    if (isEndTurn && nextPlayer) {
-      finalizeEndTurn(session, nextPlayer);
     }
 
     session.seq++;

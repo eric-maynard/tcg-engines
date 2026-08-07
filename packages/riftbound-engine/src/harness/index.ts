@@ -81,8 +81,8 @@ export {
   spellSupportsX,
 } from "./decision";
 export type { DecisionContext, NarrowResult } from "./decision";
-export { endTurn, nextPlayerAfter, PROCEDURE_MOVES, runProcedures } from "./turn-driver";
-export type { EndTurnResult, ProcedureRun } from "./turn-driver";
+export { applyMove, endTurn, nextPlayerAfter, PROCEDURE_MOVES, runProcedures } from "./turn-driver";
+export type { ApplyMoveOptions, ApplyMoveResult, EndTurnResult, ProcedureRun } from "./turn-driver";
 export { observe, listZoneSummaries, isPrivateZone, canSee } from "./observation";
 export { getInternalState, hashEngine, takeSnapshot } from "./internal";
 export type { FullSnapshot, HarnessEngine } from "./internal";

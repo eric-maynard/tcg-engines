@@ -14,7 +14,7 @@ import { gameLogger } from "./log";
 import { createGameFromDecks } from "./pregame";
 import { buildAvailableMoves, buildGameSnapshot, buildHistoryLog } from "./snapshot";
 import { type DeckConfig, type RouteCtx, type RouteResult, gameSessions } from "./state";
-import { autoResolveCombat, finalizeEndTurn, preparePlayerRotation } from "./turn";
+import { applySessionMove } from "./turn";
 
 export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): RouteResult {
   const { pathname } = url;
@@ -98,23 +98,14 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
     // Capture previous phase for phase change detection
     const prevPhase = session.engine.getState().turn.phase;
 
-    // For endTurn, set the next player on the flow manager BEFORE executing
-    // So the flow's phase callbacks (channel, draw, ready) target the right player.
-    const isEndTurn = body.moveId === "endTurn";
-    const nextPlayer = isEndTurn ? preparePlayerRotation(session, body.playerId) : undefined;
-
-    const result = session.engine.executeMove(body.moveId, {
-      params: body.params,
-      playerId: body.playerId as PlayerId,
-    });
+    // Same sequencing path as the WebSocket handler: the engine's shared TurnDriver.
+    const result = applySessionMove(session, body.playerId, body.moveId, body.params ?? {});
 
     if (result.success) {
       // Move narration is produced from engine replay history in buildHistoryLog
       gameLogger.logMove(gameId, body.moveId, body.playerId, body.params, { success: true });
-
-      // After unit movement, auto-detect and resolve contested battlefields
-      if (body.moveId === "standardMove" || body.moveId === "gankingMove") {
-        autoResolveCombat(session, body.playerId);
+      for (const run of result.procedures) {
+        gameLogger.logMove(gameId, run.moveId, run.seat, run.params, { success: run.success });
       }
 
       // Detect game completion
@@ -130,10 +121,6 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
           session.engine.getReplayHistory().length,
           durationMs,
         );
-      }
-
-      if (isEndTurn && nextPlayer) {
-        finalizeEndTurn(session, nextPlayer);
       }
 
       // Broadcast to connected WebSocket clients so they stay in sync
@@ -161,12 +148,8 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
       return json({ phaseChange, state: buildGameSnapshot(session, body.playerId), success: true });
     }
 
-    // If endTurn failed, restore the current player on the flow manager
-    if (isEndTurn) {
-      session.engine.getFlowManager()?.setCurrentPlayer(body.playerId as PlayerId);
-    }
-    const moveError = (result as { error: string }).error;
-    const moveErrorCode = (result as { errorCode: string }).errorCode;
+    const moveError = result.error;
+    const moveErrorCode = result.errorCode;
     gameLogger.logMoveRejected(gameId, body.moveId, body.playerId, body.params, moveError ?? "unknown");
     return json({ error: moveError, errorCode: moveErrorCode, success: false }, 400);
   }

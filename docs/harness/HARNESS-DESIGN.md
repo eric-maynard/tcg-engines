@@ -48,9 +48,11 @@ Rules of the layering:
   `describeCard(id)`), so the same grouping/derivation code runs over an engine or over a UI snapshot
   (`__rbGameState` + `__rbAvailableMoves`).
 - L2 only talks to L0/L1. It never touches the engine (one escape hatch: `game.engine` for tests that must).
-- The **TurnDriver** (`harness/turn-driver.ts`) is the single implementation of "end the turn" and "run automatic
-  procedures"; `testing/playtest/game-setup.ts advanceTurn` delegates to it. `apps/riftbound-app/server/turn.ts`
-  should migrate to it (out of scope: apps/ is read-only for this task).
+- The **TurnDriver** (`harness/turn-driver.ts`) is the single implementation of "apply a move": `applyMove` =
+  execute the move (endTurn via the FlowManager rotation) + run the automatic procedures. `EngineBackend`,
+  `testing/playtest/game-setup.ts advanceTurn` and `apps/riftbound-app/server/turn.ts applySessionMove` (WS + REST
+  move handlers, sandbox Goldfish) all delegate to it; the server stages nothing itself. Guarded by
+  `__tests__/parity/server-path-parity.test.ts` (harness verbs vs a server-like driver, identical menus per step).
 
 ---
 
@@ -366,7 +368,7 @@ Errors map 1:1 to `HarnessError.code`. Per-move JSON Schemas generated from `Rif
 7. Opt-in / trigger targeting at finalisation instead of resolution (D20/D12 timing divergence).
 8. `activateAbility` has no `targets/modes/destination` params (pushed to resolution prompts); `playFromChampionZone`/`revealHidden` lack cost/target params.
 9. Compound optional costs (Accelerate + another option), alternative costs beyond `viaFlow`, payment plans (which power pays a rainbow pip — today a `[rainbow]` pip is literally `power.rainbow`).
-10. Server `turn.ts` should import `turn-driver.ts` (apps/ untouched here); `autoResolveCombat` there reads `state.zones` which does not exist on `getState()` (dead code).
+10. ~~Server `turn.ts` should import `turn-driver.ts`~~ — done: `server/turn.ts applySessionMove` → `applyMove`; the dead `autoResolveCombat` and the duplicated endTurn rotation are gone.
 11. `RuleEngine` reducer exceptions leave `internalState` partially mutated (no rollback) — harness reports `ENGINE_REJECTED/EXECUTION_ERROR` but cannot guarantee atomicity.
 12. A sanctioned `TestAccess` port on `RuleEngine` to replace the `internalState` cast (one cast lives in `harness/internal.ts`).
 13. `choose-mode` has no producer: the `choice` effect executor auto-picks option 0 (`abilities/effects/choice.ts`), so modal spells (Party Favors, Rocket Barrage) never prompt. The harness derives/answers the shape (tested by state injection).

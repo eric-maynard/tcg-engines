@@ -643,10 +643,12 @@ describe("Effect-driven Moves ignore Standard Move restrictions but are still Mo
     expect(game.locationOf("scout")).toBe("bf2");
     expect(game.gameState.battlefields.bf2).toMatchObject({ contested: true, contestedBy: P1 });
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1); // anchor stayed
-    // Neutral Open again on P2's turn: beginning the staged showdown is surfaced to the TURN player (P2).
+    // Neutral Open again on P2's turn: the staged showdown at bf2 has begun in that Cleanup (344.2) — or, on
+    // an engine that models 323.12 as an explicit step, is surfaced to the TURN player (P2) only.
     expect(game.turnPlayer()).toBe(P2);
-    expect(game.p2.can("startShowdown")).toBe(true);
-    expect(game.p2.option("startShowdown")?.key).toBe("startShowdown:bf2");
+    const begun = game.gameState.interaction?.showdownStack?.[0];
+    expect(begun ? begun.battlefieldId : game.p2.option("startShowdown")?.key).toBe(begun ? "bf2" : "startShowdown:bf2");
+    expect(game.p1.can("startShowdown")).toBe(false);
     expect(game.p1.points()).toBe(0); // arriving is not conquering
     expect(game.gameState.battlefields.bf2?.controller).toBeNull();
   });
@@ -669,7 +671,8 @@ describe("Effect-driven Moves ignore Standard Move restrictions but are still Mo
     await game.settle();
     expect(game.locationOf("scout")).toBe("bf2");
     expect(game.gameState.battlefields.bf2).toMatchObject({ contested: true, contestedBy: P1 });
-    expect(game.p2.can("startShowdown")).toBe(true);
+    const begun = game.gameState.interaction?.showdownStack?.[0];
+    expect(begun ? begun.battlefieldId : game.p2.option("startShowdown")?.key).toBe(begun ? "bf2" : "startShowdown:bf2");
     expect(game.p1.can("startShowdown")).toBe(false);
   });
 });

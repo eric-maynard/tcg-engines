@@ -2,9 +2,13 @@
  * TurnDriver — the single implementation of "end the turn" and "run the
  * automatic procedures the engine models as moves".
  *
- * Mirrors apps/riftbound-app/server/turn.ts (preparePlayerRotation +
- * endTurn + finalizeEndTurn) and testing/playtest/game-setup.ts advanceTurn,
- * which now delegates here so headless play, the tracer and the harness agree.
+ * `applyMove` is THE sequencing path shared by the harness (EngineBackend),
+ * apps/riftbound-app/server (ws + REST move handlers, goldfish auto-play) and
+ * testing/playtest: execute one move (endTurn via the rotation below), then
+ * fire the automatic procedures the engine models as moves. Everything else —
+ * contesting, staging/beginning showdowns, combat roles, focus — is engine
+ * state produced by the move reducers themselves, so every caller observes the
+ * same `enumerateMoves` menu afterwards.
  */
 
 import type { PlayerId } from "@tcg/core";
@@ -141,4 +145,51 @@ export function runProcedures(engine: HarnessEngine, maxSteps = 16): ProcedureRu
     }
   }
   return runs;
+}
+
+export interface ApplyMoveOptions {
+  /** Fire PROCEDURE_MOVES after a successful move (default true). */
+  readonly autoProcedures?: boolean;
+}
+
+export interface ApplyMoveResult {
+  success: boolean;
+  error?: string;
+  errorCode?: string;
+  /** endTurn only: the seat whose turn it now is. */
+  next?: string;
+  /** Automatic procedures that ran after the move (empty on failure). */
+  procedures: ProcedureRun[];
+}
+
+/**
+ * Execute one move as `seat` and run the automatic follow-ups. `endTurn`
+ * goes through the rotation-aware `endTurn()` above; every other move is a
+ * plain `executeMove`. This is the only place a driver (harness, app server,
+ * bots) should sequence the engine — never re-implement contest / showdown /
+ * combat staging on the calling side.
+ */
+export function applyMove(
+  engine: HarnessEngine,
+  players: readonly string[],
+  seat: string,
+  moveId: string,
+  params: Record<string, unknown>,
+  opts: ApplyMoveOptions = {},
+): ApplyMoveResult {
+  let next: string | undefined;
+  if (moveId === "endTurn") {
+    const r = endTurn(engine, players, (params.playerId as string | undefined) ?? seat);
+    if (!r.success) {
+      return { error: r.error, errorCode: r.errorCode, next: r.next, procedures: [], success: false };
+    }
+    next = r.next;
+  } else {
+    const r = engine.executeMove(moveId, { params, playerId: seat as PlayerId });
+    if (!r.success) {
+      return { error: r.error, errorCode: r.errorCode, procedures: [], success: false };
+    }
+  }
+  const procedures = opts.autoProcedures === false ? [] : runProcedures(engine);
+  return { next, procedures, success: true };
 }

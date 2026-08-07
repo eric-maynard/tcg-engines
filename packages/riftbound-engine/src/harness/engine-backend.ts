@@ -6,7 +6,6 @@
  * transcript recording.
  */
 
-import type { PlayerId } from "@tcg/core";
 import type { CardDefinitionRegistry } from "../operations/card-lookup";
 import { getGlobalCardRegistry, setGlobalCardRegistry } from "../operations/card-lookup";
 import { buildCardState } from "./card-state";
@@ -28,7 +27,7 @@ import { getInternalState, hashSnapshot, takeSnapshot } from "./internal";
 import type { Invariant } from "./invariants";
 import { DEFAULT_INVARIANTS, runInvariants } from "./invariants";
 import { observe, zoneCards } from "./observation";
-import { endTurn as driverEndTurn, runProcedures } from "./turn-driver";
+import { applyMove } from "./turn-driver";
 import type { Transcript, TranscriptOrigin, TranscriptStep } from "./transcript-types";
 import type {
   ActResult,
@@ -411,39 +410,24 @@ export class EngineBackend implements GameBackend {
   ): ActResult {
     const actor = move.playerId || seat;
     const params = { ...move.params } as Record<string, unknown>;
-    let success: boolean;
-    let error: string | undefined;
-    let errorCode: string | undefined;
-    if (move.moveId === "endTurn") {
-      const r = driverEndTurn(this.engine, this.players, (params.playerId as string) ?? actor);
-      success = r.success;
-      error = r.error;
-      errorCode = r.errorCode;
-    } else {
-      const r = this.engine.executeMove(move.moveId, { params, playerId: actor as PlayerId });
-      success = r.success;
-      if (!r.success) {
-        error = r.error;
-        errorCode = r.errorCode;
-      }
-    }
-    if (!success) {
+    const r = applyMove(this.engine, this.players, actor, move.moveId, params, {
+      autoProcedures: this.autoProcedures,
+    });
+    if (!r.success) {
       return {
         decision: this.decision(),
         error: {
           code: "ENGINE_REJECTED",
-          detail: { errorCode, moveId: move.moveId, params },
-          message: `${move.moveId} rejected: ${error ?? errorCode ?? "unknown"}`,
+          detail: { errorCode: r.errorCode, moveId: move.moveId, params },
+          message: `${move.moveId} rejected: ${r.error ?? r.errorCode ?? "unknown"}`,
         },
         ok: false,
         seq: this.seqNo,
       };
     }
     const executed: ExecutedMove[] = [{ moveId: move.moveId, params, seat: actor }];
-    if (this.autoProcedures) {
-      for (const run of runProcedures(this.engine)) {
-        executed.push({ auto: true, moveId: run.moveId, params: run.params, seat: run.seat });
-      }
+    for (const run of r.procedures) {
+      executed.push({ auto: true, moveId: run.moveId, params: run.params, seat: run.seat });
     }
     this.seqNo += 1;
     const cur = takeSnapshot(this.engine);

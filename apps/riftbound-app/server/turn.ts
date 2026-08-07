@@ -1,12 +1,22 @@
 /**
- * Turn rotation, end-turn finalization, goldfish auto-play, and post-move
- * auto combat resolution.
+ * Server move sequencing = the engine's shared TurnDriver
+ * (packages/riftbound-engine/src/harness/turn-driver.ts `applyMove`).
+ *
+ * The server never stages contests, showdowns or combat itself: a move's
+ * reducer produces that state, and the driver fires the automatic procedures
+ * (resolveFullCombat / endShowdown / resolveChain) right after every move —
+ * exactly what the headless harness does. What stays here is app policy:
+ * match-log lines and the sandbox Goldfish, both of which act only through
+ * `applySessionMove`.
  */
 
-import type { PlayerId } from "@tcg/core";
+import { applyMove } from "@tcg/riftbound/harness";
+import type { ApplyMoveResult, ProcedureRun } from "@tcg/riftbound/harness";
 import { actorName, makeLogEntry } from "../src/narrator";
 import { buildAvailableMoves, buildGameSnapshot } from "./snapshot";
 import type { GameSession } from "./state";
+
+export type SessionMoveResult = ApplyMoveResult;
 
 /**
  * Determine the next player in a two-player game.
@@ -16,80 +26,66 @@ export function getNextPlayer(session: GameSession, currentPlayerId: string): st
   return currentPlayerId === p1 ? p2 : p1;
 }
 
-/**
- * Prepare the flow manager for a player rotation BEFORE executing the endTurn move.
- *
- * The endTurn move calls flow.endPhase(), which triggers the full phase chain
- * inside executeMove: main → ending → (turn ends) → awaken → beginning →
- * channel → draw → main. The flow's onBegin callbacks (channel runes, draw
- * cards, ready units) use context.getCurrentPlayer(), so we must set the next
- * player on the flow manager BEFORE the move executes. Otherwise those callbacks
- * would operate on the wrong player.
- */
-export function preparePlayerRotation(session: GameSession, currentPlayerId: string): string {
-  const nextPlayer = getNextPlayer(session, currentPlayerId);
-  const flowManager = session.engine.getFlowManager();
-  flowManager?.setCurrentPlayer(nextPlayer as PlayerId);
-  return nextPlayer;
+function logProcedures(session: GameSession, runs: readonly ProcedureRun[]): void {
+  for (const run of runs) {
+    if (!run.success) {
+      continue;
+    }
+    if (run.moveId === "resolveFullCombat") {
+      session.log.push(
+        makeLogEntry(`Combat resolved at ${String(run.params.battlefieldId ?? "")}.`, { rewindable: true }),
+      );
+    }
+  }
 }
 
 /**
- * Finalize the end-turn after the endTurn move has executed.
- *
- * The engine's FlowManager now runs the full turn cycle (ending → cleanup →
- * awaken → beginning → channel → draw → main); this function only verifies
- * the flow landed on the expected player/phase and appends the turn-passed
- * log entry.
+ * THE server entry point for executing a move on a session: one call into the
+ * shared driver (endTurn rotation, the move itself, automatic procedures),
+ * plus the match-log lines the app narrates on top.
  */
-export function finalizeEndTurn(session: GameSession, nextPlayer: string): void {
-  // The endTurn move calls flow.endPhase(), and with the FlowManager now in
-  // The `mainGame` segment (see finalizePregame), the flow cascades the full
-  // Phase chain itself: main → ending (rule 517: clear damage/stun/mightMod,
-  // Empty rune pools) → cleanup → next-turn awaken (rule 515.1: ready all) →
-  // Beginning (rule 728.1.b Temporary sweep + rule 630.2 Hold scoring) →
-  // Channel (rule 515.3 / 644.7) → draw (rule 515.4.b) → main. Nothing to
-  // Reimplement here.
-  const stateAfter = session.engine.getState();
-  // rule-id: 517.1-end-of-turn-triggers — the Ending Step holds while
-  // end-of-turn triggers sit on the chain; the flow finishes the rotation on
-  // its own once the chain resolves, so don't patch over it.
-  if (stateAfter.turn.phase === "ending") {
-    return;
+export function applySessionMove(
+  session: GameSession,
+  playerId: string,
+  moveId: string,
+  params: Record<string, unknown>,
+): SessionMoveResult {
+  const result = applyMove(session.engine, session.players, playerId, moveId, params);
+  if (!result.success) {
+    return result;
   }
-  // Rule 734: turn.onEnd may have redirected to an additional-turn owner.
-  const actualNext = stateAfter.turn.activePlayer || nextPlayer;
-  // rule-id: 515.2.a-beginning-step-triggers — the Beginning Phase holds
-  // while start-of-turn triggers sit on the chain; the flow cascades to main
-  // once the chain resolves, so don't patch the phase over it.
-  if (stateAfter.turn.phase !== "main" && stateAfter.turn.phase !== "beginning") {
-    console.warn(
-      `Flow state mismatch after endTurn: expected phase=main, ` +
-      `got activePlayer=${stateAfter.turn.activePlayer} phase=${stateAfter.turn.phase}. ` +
-      "Patching state as safety net.",
-    );
-    session.engine.applyPatches([
-      { op: "replace", path: ["turn", "activePlayer"], value: actualNext },
-      { op: "replace", path: ["turn", "phase"], value: "main" },
-    ]);
+  if (moveId === "endTurn") {
+    const after = session.engine.getState();
+    // rule 517.1 / 515.2.a — Ending/Beginning steps legitimately hold while
+    // their triggers sit on the chain; the flow finishes the rotation itself.
+    if (after.turn.phase !== "ending") {
+      const actualNext = after.turn.activePlayer || result.next || getNextPlayer(session, playerId);
+      session.log.push(makeLogEntry(`Turn passed to ${session.playerNames[actualNext] ?? actualNext}.`));
+    }
   }
-
-  session.log.push(
-    makeLogEntry(
-      `Turn passed to ${session.playerNames[actualNext] ?? actualNext}.`,
-    ),
-  );
+  logProcedures(session, result.procedures);
+  return result;
 }
 
 /**
  * Auto-play for the Goldfish in sandbox mode.
  *
- * Handles chain priority, showdown focus, and full turn end.
- * Loops until the Goldfish has no more automatic actions to take.
+ * Policy only (which legal move the Goldfish takes); every action goes
+ * through `applySessionMove`, so procedures and turn rotation behave exactly
+ * as they do for a human seat. Loops until the Goldfish has nothing to do.
  */
 export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
   const MAX_ITERATIONS = 20; // Safety valve to prevent infinite loops
   let acted = true;
   let iterations = 0;
+  const act = (seat: string, moveId: string, params: Record<string, unknown>, line?: string): boolean => {
+    const r = applySessionMove(session, seat, moveId, params);
+    if (r.success && line) {
+      session.log.push(makeLogEntry(line, { rewindable: true }));
+    }
+    return r.success;
+  };
+  const goldName = actorName(goldfish, session.playerNames);
 
   while (acted && iterations < MAX_ITERATIONS) {
     acted = false;
@@ -111,135 +107,61 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
       chain.items.length > 0 &&
       chain.items.every((it: { controller?: string; triggered?: boolean }) => it.controller === goldfish && it.triggered)
     ) {
-      const r = session.engine.executeMove("passChainPriority", {
-        params: { playerId: human },
-        playerId: human as PlayerId,
-      });
-      if (r.success) { acted = true; continue; }
+      if (act(human, "passChainPriority", { playerId: human })) { acted = true; continue; }
     }
 
     // Auto-pass chain priority if Goldfish has it
     if (state.interaction?.chain?.active && state.interaction.chain.activePlayer === goldfish) {
-      const result = session.engine.executeMove("passChainPriority", {
-        params: { playerId: goldfish },
-        playerId: goldfish as PlayerId,
-      });
-      if (result.success) {
-        session.log.push(
-          makeLogEntry(
-            `${actorName(goldfish, session.playerNames)} passed priority.`,
-            { rewindable: true },
-          ),
-        );
+      if (act(goldfish, "passChainPriority", { playerId: goldfish }, `${goldName} passed priority.`)) {
         acted = true;
         continue;
       }
     }
 
-    const goldMoves = session.engine.enumerateMoves(goldfish as PlayerId, { validOnly: true });
+    const goldMoves = buildAvailableMoves(session, goldfish);
 
     // Auto-resolve any pending choice addressed to the goldfish (discard,
-    // pick-from-revealed, choose-target). Without this the game deadlocks —
-    // pendingChoice blocks every other move for both players.
+    // pick-from-revealed, choose-target, combat-damage split). Without this the
+    // game deadlocks — pendingChoice blocks every other move for both players.
     const pending = (state as { pendingChoice?: { prompter?: string; playerId?: string } }).pendingChoice;
     if (pending && (pending.prompter ?? pending.playerId) === goldfish) {
       const pick = goldMoves.find((m) => m.moveId === "resolvePendingChoice");
-      if (pick) {
-        const r = session.engine.executeMove("resolvePendingChoice", {
-          params: pick.params as Record<string, unknown>,
-          playerId: goldfish as PlayerId,
-        });
-        if (r.success) {
-          session.log.push(makeLogEntry(
-            `${actorName(goldfish, session.playerNames)} resolved a choice.`,
-            { rewindable: true },
-          ));
-          acted = true;
-          continue;
-        }
+      if (pick && act(goldfish, "resolvePendingChoice", pick.params, `${goldName} resolved a choice.`)) {
+        acted = true;
+        continue;
       }
     }
 
     // Auto-pass showdown focus if Goldfish has it
     const passFocus = goldMoves.find((m) => m.moveId === "passShowdownFocus");
-    if (passFocus) {
-      session.engine.executeMove("passShowdownFocus", {
-        params: passFocus.params as Record<string, unknown>,
-        playerId: goldfish as PlayerId,
-      });
-      session.log.push(
-        makeLogEntry(
-          `${actorName(goldfish, session.playerNames)} passed focus.`,
-          { rewindable: true },
-        ),
-      );
+    if (passFocus && act(goldfish, "passShowdownFocus", passFocus.params, `${goldName} passed focus.`)) {
       acted = true;
       continue;
     }
 
-    // Auto-resolve combat / conquer when the human player isn't the one to do
-    // it. resolveFullCombat has no player param — the enumerator offers it to
-    // whichever player is enumerated, so on the goldfish's turn it falls to the
-    // goldfish. conquerBattlefield is per-player.
     if (state.turn.activePlayer === goldfish) {
-      const combat = goldMoves.find((m) => m.moveId === "resolveFullCombat");
-      if (combat) {
-        const r = session.engine.executeMove("resolveFullCombat", {
-          params: combat.params as Record<string, unknown>,
-          playerId: goldfish as PlayerId,
-        });
-        if (r.success) {
-          session.log.push(makeLogEntry(
-            `Combat resolved at ${(combat.params as { battlefieldId?: string }).battlefieldId}.`,
-            { rewindable: true },
-          ));
-          acted = true;
-          continue;
-        }
-      }
-      const conquer = goldMoves.find(
-        (m) => m.moveId === "conquerBattlefield" &&
-          (m.params as { playerId?: string }).playerId === goldfish,
-      );
-      if (conquer) {
-        const r = session.engine.executeMove("conquerBattlefield", {
-          params: conquer.params as Record<string, unknown>,
-          playerId: goldfish as PlayerId,
-        });
-        if (r.success) {
-          session.log.push(makeLogEntry(
-            `${actorName(goldfish, session.playerNames)} conquered a battlefield.`,
-            { rewindable: true },
-          ));
-          acted = true;
-          continue;
-        }
-      }
-    }
-
-    // Auto end turn if it's the Goldfish's turn
-    if (state.turn.activePlayer === goldfish) {
-      const nextForGoldfish = preparePlayerRotation(session, goldfish);
-      const endResult = session.engine.executeMove("endTurn", {
-        params: { playerId: goldfish },
-        playerId: goldfish as PlayerId,
-      });
-      if (endResult.success) {
-        finalizeEndTurn(session, nextForGoldfish);
-        session.log.push(
-          makeLogEntry(
-            `${actorName(goldfish, session.playerNames)} ended their turn.`,
-            { rewindable: true },
-          ),
-        );
+      // rule 323.12 — a staged showdown the Cleanup left for the turn player to
+      // begin (several staged at once): the Goldfish just takes the first.
+      const begin = goldMoves.find((m) => m.moveId === "startShowdown");
+      if (begin && act(goldfish, "startShowdown", begin.params)) {
         acted = true;
         continue;
       }
-      // rule-id: 515.3.b/515.4.b-turn-player-channels-draws — endTurn is rejected while a
-      // chain is open (e.g. goldfish start-of-turn triggers). Restore the flow's
-      // current player so the pending channel/draw onBegin callbacks still
-      // target the goldfish, not the human, once the chain resolves.
-      session.engine.getFlowManager()?.setCurrentPlayer(goldfish as PlayerId);
+      const conquer = goldMoves.find(
+        (m) => m.moveId === "conquerBattlefield" && (m.params as { playerId?: string }).playerId === goldfish,
+      );
+      if (conquer && act(goldfish, "conquerBattlefield", conquer.params, `${goldName} conquered a battlefield.`)) {
+        acted = true;
+        continue;
+      }
+
+      // Auto end turn if it's the Goldfish's turn. endTurn is rejected while a
+      // chain is open (rule 515.3.b / 515.4.b); the driver restores the flow's
+      // current player itself in that case.
+      if (act(goldfish, "endTurn", { playerId: goldfish }, `${goldName} ended their turn.`)) {
+        acted = true;
+        continue;
+      }
     }
   }
 
@@ -259,40 +181,6 @@ export function sandboxAutoPlay(session: GameSession, goldfish: string): void {
           type: "state_update",
         }));
       } catch { /* Disconnected */ }
-    }
-  }
-}
-
-/**
- * After unit movement, check if opposing units share a battlefield
- * and auto-resolve combat (contest + resolveFullCombat).
- */
-export function autoResolveCombat(session: GameSession, movingPlayerId: string): void {
-  const state = session.engine.getState();
-
-  for (const [bfId, bf] of Object.entries(state.battlefields || {})) {
-    if (bf.contested) {
-      continue; // Already contested, will be resolved at end of turn or separately
-    }
-
-    // Check if both players have units at this battlefield
-    const bfZoneId = `battlefield-${bfId}`;
-    const zones = state.zones ?? {};
-    const unitsAtBf = (zones as Record<string, { owner: string }[]>)[bfZoneId] ?? [];
-    const owners = new Set(unitsAtBf.map((c: { owner: string }) => c.owner));
-
-    if (owners.size >= 2) {
-      // Contest the battlefield
-      session.engine.executeMove("contestBattlefield", {
-        params: { battlefieldId: bfId, playerId: movingPlayerId },
-        playerId: movingPlayerId as PlayerId,
-      });
-
-      // Immediately resolve combat
-      session.engine.executeMove("resolveFullCombat", {
-        params: { battlefieldId: bfId },
-        playerId: movingPlayerId as PlayerId,
-      });
     }
   }
 }

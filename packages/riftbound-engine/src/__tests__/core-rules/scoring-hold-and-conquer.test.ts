@@ -518,8 +518,8 @@ describe("Scored-this-turn is tracked PER PLAYER: the opponent may Conquer a bat
   /**
    * P1 conquers A (0→1). P1 recalls the conqueror; in response P2's Reaction moves D2 onto A. After the chain:
    * U1 is in base, D2 stands alone at A which nobody controls → P2 applied Contested → cleanup stages a
-   * Non-Combat Showdown at A. The engine surfaces the start of a staged showdown as the turn player's
-   * `startShowdown:<bf>` step (323.12: "the Turn Player chooses one of those Battlefields"), so P1 takes it.
+   * Non-Combat Showdown at A, which that Cleanup begins on its own (344.2). Older engines surfaced it as the
+   * turn player's manual `startShowdown:<bf>` step instead, so the tests take that step only if it is offered.
    */
   async function untilP2StandsAloneAtA() {
     const game = await scenario()
@@ -554,8 +554,9 @@ describe("Scored-this-turn is tracked PER PLAYER: the opponent may Conquer a bat
   test("P2 (not the turn player) establishes Control of A after the showdown and Conquers: P2 0→1 although P1 already scored A this turn; then P1 re-takes A by combat and does NOT score again (P1 stays 1)", async () => {
     const game = await untilP2StandsAloneAtA();
     expect(game.turnPlayer()).toBe(P1);
-    expect(game.p1.can("startShowdown")).toBe(true);
-    await game.p1.choose("startShowdown:A");
+    if (game.p1.can("startShowdown")) {
+      await game.p1.choose("startShowdown:A");
+    }
     expect(contextOf(game)).toBe("showdown");
     expect(game.gameState.interaction?.showdownStack?.[0]?.battlefieldId).toBe("A");
     await game.settle(); // everyone passes focus → showdown closes
@@ -583,7 +584,9 @@ describe("Scored-this-turn is tracked PER PLAYER: the opponent may Conquer a bat
     // Expected: showdownStack[0] = { battlefieldId: A, focusPlayer: P2, isCombatShowdown: false }; P2 is the acting seat.
     // Actual: focusPlayer = P1 (the player who executed startShowdown) and isCombatShowdown = true with no opposing units.
     const game = await untilP2StandsAloneAtA();
-    await game.p1.choose("startShowdown:A");
+    if (game.p1.can("startShowdown")) {
+      await game.p1.choose("startShowdown:A");
+    }
     const sd = game.gameState.interaction?.showdownStack?.[0];
     expect(sd?.battlefieldId).toBe("A");
     expect(sd?.isCombatShowdown).toBe(false);

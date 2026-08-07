@@ -331,17 +331,11 @@ export const startShowdown: Defs["startShowdown"] = {
       return [];
     }
     const interaction = state.interaction ?? createInteractionState();
-    const openNow = getActiveShowdown(interaction);
-    if (openNow?.active) {
-      // rule 344.2 — already begun by Cleanup; only the Turn Player's no-op
-      // confirm of that Non-Combat Showdown is offered.
-      if (
-        openNow.isCombatShowdown === true ||
-        state.turn.activePlayer !== (context.playerId as string)
-      ) {
-        return [];
-      }
-      return [{ battlefieldId: openNow.battlefieldId, playerId: context.playerId as string }];
+    // rule 344.2 — a Showdown the Cleanup already began is in progress; there
+    // is nothing to start, so nothing is offered (the condition still tolerates
+    // a stale confirm of that same Non-Combat Showdown as a no-op).
+    if (getActiveShowdown(interaction)?.active) {
+      return [];
     }
     if (getTurnState(interaction) !== "neutral-open") {
       return [];

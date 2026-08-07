@@ -375,8 +375,8 @@ export function createPlayableGame(
 }
 
 /**
- * Drive end-of-turn → start-of-next-turn. Mirrors server.ts
- * preparePlayerRotation + executeMove("endTurn") + finalizeEndTurn: the
+ * Drive end-of-turn → start-of-next-turn through the shared TurnDriver
+ * (harness/turn-driver.ts — the same path the app server uses): the
  * FlowManager cascades main → ending → cleanup → awaken → beginning →
  * channel → draw → main on its own once the next player is set.
  *
