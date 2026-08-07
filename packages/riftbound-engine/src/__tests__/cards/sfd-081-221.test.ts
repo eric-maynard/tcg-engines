@@ -172,7 +172,7 @@ describe("Card Sharp (sfd-081-221)", () => {
     expect(goldOf(game, P1)).toEqual([]);
   });
 
-  test.failing("BUG: a cashed-in Gold token must cease to exist (186.1) — it lingers in the trash instead", async () => {
+  test("a cashed-in Gold token must cease to exist (186.1) — it lingers in the trash instead", async () => {
     // Expected: after "Kill this" the token is in no zone at all. Actual: Card Sharp's Gold sits in P1's trash
     // as a card named "Gold" (a sandbox `addToken` Gold does vanish — the two paths disagree).
     const game = await board().build();

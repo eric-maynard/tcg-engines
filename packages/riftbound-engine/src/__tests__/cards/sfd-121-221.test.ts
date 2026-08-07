@@ -196,7 +196,8 @@ describe("Black Market Broker (sfd-121-221)", () => {
     await game.advanceTurn();
     expect(game.state(gold).isReady).toBe(true);
     await game.p1.activate(gold);
-    expect(game.zoneOf(gold)).not.toBe("base");
+    // rule 186.1 — the cashed-in token ceases to exist rather than landing in a zone.
+    expect(game.has(gold) ? game.zoneOf(gold) : "gone").not.toBe("base");
     expect(game.p1.power("rainbow")).toBe(1);
   });
 });

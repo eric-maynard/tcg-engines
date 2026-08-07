@@ -130,7 +130,8 @@ describe("Bushwhack (sfd-004-221)", () => {
     expect(game.p1.can("activate", gold)).toBe(true);
     await game.p1.activate(gold);
     await game.settle();
-    expect(game.zoneOf(gold)).not.toBe("base");
+    // rule 186.1 — the cashed-in token ceases to exist rather than landing in a zone.
+    expect(game.has(gold) ? game.zoneOf(gold) : "gone").not.toBe("base");
     expect(game.p1.power("rainbow")).toBe(1);
   });
 });

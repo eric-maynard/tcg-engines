@@ -845,6 +845,29 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       { cost: { energy: 5, power: ["rainbow", "rainbow"] }, keyword: "Flow", type: "keyword" },
     ],
   },
+  // rule 356.2.b / 204.2 — Ruthless Strike: "As an additional cost to play
+  // this, you may discard 1. … If you paid the additional cost, deal 5 to it
+  // instead." The generator emits `abilities: [null]`; the parser drops the
+  // optional-cost clause, so the cost option and the paid rider are spelled
+  // out here.
+  "ven-008-166": {
+    abilities: [
+      {
+        effect: { additionalCost: { discard: 1 }, optional: true, type: "additional-cost-option" },
+        type: "static",
+      },
+      {
+        effect: {
+          condition: { type: "paid-additional-cost" },
+          else: { amount: 3, target: { location: "battlefield", type: "unit" }, type: "damage" },
+          then: { amount: 5, target: { location: "battlefield", type: "unit" }, type: "damage" },
+          type: "conditional",
+        },
+        timing: "action",
+        type: "spell",
+      },
+    ],
+  },
   // rule 355.8 / rule 206 — Decree of Unity: "Kill an enemy Chaos ([chaos]) unit
   // or gear." The generator emits `abilities: []` with parseSuccess:false; the
   // rules-text parser has no "unit or gear" mixed-type + domain-adjective form,

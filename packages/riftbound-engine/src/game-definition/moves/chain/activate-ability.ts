@@ -313,7 +313,8 @@ export function collectFriendlyBoardCards(
   };
   push(ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId));
   push(ctx.zones.getCardsInZone("legendZone" as CoreZoneId, playerId as CorePlayerId));
-  push(ctx.zones.getCardsInZone("championZone" as CoreZoneId, playerId as CorePlayerId));
+  // rule 108.3 — the champion zone is not the board: a champion waiting there
+  // has not been played, so its abilities are not on any friendly permanent.
   for (const bfId of Object.keys(ctx.battlefields)) {
     push(ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId, playerId as CorePlayerId));
   }
@@ -1226,6 +1227,14 @@ export const activateAbility: Defs["activateAbility"] = {
           cardId: killId as CoreCardId,
           targetZoneId: "trash" as CoreZoneId,
         });
+        // rule 186.1 — a token that leaves the board ceases to exist; paying a
+        // "Kill this" cost with a token must not leave a card in the trash.
+        // Cleanup does not run on the cost-payment path, so sweep it here.
+        if ((killId as string).startsWith("token-")) {
+          (
+            context.zones as { removeCardFromGame?: (p: { cardId: CoreCardId }) => void }
+          ).removeCardFromGame?.({ cardId: killId as CoreCardId });
+        }
       }
     }
 
