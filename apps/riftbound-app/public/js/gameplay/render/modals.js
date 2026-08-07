@@ -94,13 +94,28 @@ function renderPendingChoiceModal() {
   const cardPicks = picks.filter(m => m.params?.pickedCardId);
   const otherPicks = picks.filter(m => !m.params?.pickedCardId);
 
-  if (cardPicks.length) {
+  // Rule 355.13 (ogn-062-298): a look/reveal prompt must show EVERY card that
+  // was looked at, not just the ones an eligibility filter kept ("Look at the
+  // top 5 … you may play a unit from among them"). The modal covers the board,
+  // so a card absent here is invisible to the player. Ineligible reveals render
+  // dimmed and inert next to the pickable ones.
+  const revealedIds = (Array.isArray(pending.revealed) ? pending.revealed : []).map(String);
+  const pickIdxOf = new Map(cardPicks.map((m, i) => [String(m.params.pickedCardId), i]));
+  const shownIds = [
+    ...revealedIds,
+    ...cardPicks.map(m => String(m.params.pickedCardId)).filter(id => !revealedIds.includes(id)),
+  ];
+
+  if (shownIds.length) {
     html += `<div class="choice-modal-cards">`;
-    for (let i = 0; i < cardPicks.length; i++) {
-      const cid = cardPicks[i].params.pickedCardId;
+    for (const cid of shownIds) {
       const card = findCard(cid);
       const imgId = (card?.definitionId ?? cid).replace(/^player-[12]-(?:main|rune)-\d+-/, "");
-      html += `<img class="choice-modal-card" data-pick-idx="${i}" src="/card-image/${esc(imgId)}"
+      const idx = pickIdxOf.get(cid);
+      const attrs = idx == null
+        ? `class="choice-modal-card choice-modal-card-ineligible" style="opacity:.4;cursor:default"`
+        : `class="choice-modal-card" data-pick-idx="${idx}"`;
+      html += `<img ${attrs} src="/card-image/${esc(imgId)}"
         alt="${esc(card?.name ?? cid)}" title="${esc(card?.name ?? cid)}">`;
     }
     html += `</div>`;
@@ -191,7 +206,17 @@ function describePlayVariant(m, card) {
   const parts = [];
   if (spec?.energy) parts.push(`${spec.energy} energy`);
   if (spec?.power?.length) parts.push(spec.power.join(" + "));
+  if (spec?.xp) parts.push(`${spec.xp} XP`);
   const extra = parts.length ? parts.join(" + ") : "additional cost";
+  // Rule unl-164-219: only the Accelerate cost makes the unit enter ready; an
+  // XP (or other) additional cost is a different option and must not borrow
+  // Accelerate's label or its "enters ready" rider.
+  if (spec?.xp && !spec.energy && !spec.power?.length) {
+    return {
+      label: `Play + pay ${spec.xp} XP`,
+      detail: `${baseCost} energy + ${spec.xp} XP as an additional cost`,
+    };
+  }
   return {
     label: `Play + Accelerate`,
     detail: `${baseCost} + ${extra} — enters ready`,

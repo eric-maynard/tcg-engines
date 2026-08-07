@@ -587,6 +587,51 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     return;
   }
 
+  // rule-id: sfd-129-221 (Temptation) — rule 449.1: "move an enemy unit to a
+  // location where there's a unit with the same controller". The destination
+  // restriction is stated by the effect, so only the base / battlefields where
+  // the MOVED unit's controller already has ANOTHER unit are offered; its
+  // current location never counts, and a unit that is its controller's only
+  // unit has no legal destination (the instruction does nothing).
+  if (dest === "location-with-same-controller-unit") {
+    const cardId = moveTargets[0];
+    if (cardId === undefined) {
+      return;
+    }
+    const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
+    const movedController = arrivingController(ctx, cardId);
+    const sameSide = movedController === ctx.playerId ? "friendly" : "enemy";
+    const occupied = new Set(
+      resolveTarget({ controller: sameSide, quantity: "all", type: "unit" } as TargetDescriptor, {
+        cards: ctx.cards,
+        draft: ctx.draft,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        sourceZone: ctx.sourceZone,
+        zones: ctx.zones,
+      })
+        .filter((id) => id !== cardId)
+        .map((id) => ctx.zones.getCardZone(id as CoreCardId) as string | undefined)
+        .filter((z): z is string => z !== undefined),
+    );
+    const options = [
+      "base",
+      ...Object.keys(ctx.draft.battlefields ?? {}).map((bfId) => `battlefield-${bfId}`),
+    ].filter((z) => z !== currentZone && occupied.has(z));
+    if (options.length === 0) {
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      cardId,
+      options,
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      then: (effect as unknown as { then?: ExecutableEffect }).then,
+      type: "choose-destination",
+    } as RiftboundGameState["pendingChoice"];
+    return;
+  }
+
   if (dest === "choose") {
     // Rule 355.4 — no stated destination: the controller chooses base or
     // any battlefield other than the unit's current zone. Options must be

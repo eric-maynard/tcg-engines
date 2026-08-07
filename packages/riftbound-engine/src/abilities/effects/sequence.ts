@@ -30,16 +30,43 @@ type SequenceSlots = {
 const isSameLocationTarget = (t: SubTarget): boolean =>
   typeof t === "object" && t.location === "same";
 
+/** Descriptors that name a fixed referent — never a controller choice (rule 355.10). */
+const PROMPTLESS_TARGET_TYPES: readonly string[] = [
+  "self",
+  "player",
+  "battlefield",
+  "pending-value",
+  "trigger-source",
+];
+
+/** Steps that gather their own candidates (private zones, modes, nested shapes). */
+const PROMPTLESS_STEP_TYPES: readonly string[] = [
+  "choice",
+  "conditional",
+  "counter",
+  "for-each",
+  "optional",
+  "play",
+  "sequence",
+];
+
 const isLeadTarget = (t: SubTarget): boolean =>
   typeof t === "object" && t.type !== "pending-value" && t.location !== "same";
 
 export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
   const seq = effect as unknown as {
+    boundTargetsOverride?: readonly string[];
     effects?: ExecutableEffect[];
     independentExecution?: boolean;
     pendingValue?: { source: number };
   };
+  // rule 820.2.a (sfd-129-221) — a suspended Repeat remainder carries its own
+  // slots' ids; whatever the prompt bound (the unit that just moved) is not
+  // this execution's target.
+  if (seq.boundTargetsOverride !== undefined) {
+    ctx = { ...ctx, boundTargets: [...seq.boundTargetsOverride] } as EffectContext;
+  }
   // rule 820.2.a — a continuation parked behind a modal prompt is its OWN
   // execution and makes its own choices: it must not inherit the target the
   // prompt just picked, or a repeated modal effect would silently re-hit the
@@ -365,6 +392,44 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           return;
         }
       }
+      // rule 402.2 / 355.10 (sfd-132-221 Beast Below) — "return another friendly
+      // unit AND an enemy unit": every step of a sequence carries its OWN
+      // caster-chosen single target, so a step whose slot was never locked must
+      // ask its controller instead of silently taking the first candidate. Only
+      // the lead descriptor is lifted into the resolution prompt, so the later
+      // steps prompt from here; the rest of the sequence rides on `then`.
+      const subQuantity = (subTarget as { quantity?: unknown } | undefined)?.quantity;
+      if (
+        typeof subTarget === "object" &&
+        subTarget !== null &&
+        (subQuantity === undefined || subQuantity === 1) &&
+        !PROMPTLESS_TARGET_TYPES.includes(subTarget.type ?? "") &&
+        !PROMPTLESS_STEP_TYPES.includes(sub.type) &&
+        subCtx.boundTargets === undefined &&
+        ctx.draft.pendingChoice === undefined
+      ) {
+        const options = resolveTarget(
+          { ...(subTarget as TargetDescriptor), quantity: "all" },
+          { ...resolverCtx, choosing: true } as Parameters<typeof resolveTarget>[1],
+        );
+        if (options.length > 1) {
+          const rest = seq.effects.slice(i + 1);
+          ctx.draft.pendingChoice = {
+            effect: sub,
+            options,
+            playerId: ctx.playerId,
+            remaining: 1,
+            sourceCardId: ctx.sourceCardId,
+            type: "choose-target",
+            // The remainder makes its OWN choices — it must not inherit the id
+            // this prompt just bound, or the next step would re-hit that card.
+            ...(rest.length > 0
+              ? { then: { effects: rest, independentExecution: true, type: "sequence" } }
+              : {}),
+          } as typeof ctx.draft.pendingChoice;
+          return;
+        }
+      }
       prevPerformed =
         typeof subTarget === "object" &&
         subTarget.type !== "self" &&
@@ -394,16 +459,35 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // "Discard 2, THEN draw 2" must not draw while the discard is unanswered
       // (it would leak the drawn cards into the pick).
       if (
+        // rule 820.2.a (sfd-129-221 Temptation) — and so does a
+        // `choose-destination`: each Repeat execution picks its own
+        // destination, so a later one must not overwrite the parked prompt.
         (parked?.type === "choose-mode" ||
           parked?.type === "confirm" ||
-          parked?.type === "reveal-and-pick") &&
+          parked?.type === "reveal-and-pick" ||
+          (parked?.type === "choose-destination" && indepSlots !== undefined)) &&
         parked.then === undefined
       ) {
         const rest = seq.effects.slice(i + 1);
         if (rest.length > 0) {
+          // rule 820.2.a (sfd-129-221) — when the Repeat executions each own a
+          // positional target slot, the suspended remainder must carry ITS
+          // slots' ids, otherwise it would re-resolve from the board and hit
+          // the execution that just happened.
+          const k = indepSlots ? indepSlots.findIndex((s) => s.index === i) : -1;
+          const carry =
+            k >= 0 && ctx.boundTargets ? ctx.boundTargets.slice(k + 1) : undefined;
           ctx.draft.pendingChoice = {
             ...(parked as object),
-            then: { effects: rest, independentExecution: true, type: "sequence" },
+            then:
+              carry !== undefined && carry.length > 0
+                ? {
+                    boundTargetsOverride: carry,
+                    effects: rest,
+                    independentTargets: true,
+                    type: "sequence",
+                  }
+                : { effects: rest, independentExecution: true, type: "sequence" },
             // The continuation is the REST OF THE SEQUENCE, not the prompt's
             // own follow-up: it must still run when an optional prompt is
             // declined ("you may [Predict], then reveal the top card").
