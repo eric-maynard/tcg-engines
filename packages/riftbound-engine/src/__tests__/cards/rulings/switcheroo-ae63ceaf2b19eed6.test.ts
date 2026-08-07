@@ -75,11 +75,7 @@ describe("Ruling ae63ceaf2b19eed6 — Switcheroo applies ±X modifiers from CURR
     expect(game.state("big")).toMatchObject({ might: 6, mightModifier: 0 });
   });
 
-  // Expected (355.8): "two units at the same battlefield" are caster-chosen targets locked when the spell is
-  // played — with three units at bf1 the cast must let P1 name WHICH two (here small + middling: X = 1).
-  // Actual: the play offers no target choice at all; on resolution the engine auto-picks the first two
-  // units it finds at a battlefield, so P1 cannot direct the swap.
-  test.failing("BUG: ruling ae63ceaf2b19eed6 — the caster chooses the two units: with 3 units at bf1, Switcheroo on [small(3), middling(4)] → small 4, middling 3, big untouched", async () => {
+  test("ruling ae63ceaf2b19eed6 — the caster chooses the two units: with 3 units at bf1, Switcheroo on [small(3), middling(4)] → small 4, middling 3, big untouched", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2, power: { chaos: 2 } })
       .battlefield("bf1", { controller: P2 })

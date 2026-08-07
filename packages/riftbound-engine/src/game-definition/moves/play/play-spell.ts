@@ -41,6 +41,7 @@ import {
 } from "./cost";
 import type { SpellEffectTargetShape } from "./targeting";
 import {
+  chosenMoveDestinations,
   collectIndependentTargetSlots,
   collectSequenceTargetSlots,
   findAllAtOneBattlefieldTarget,
@@ -170,6 +171,10 @@ export const playSpell: Defs["playSpell"] = {
     }
     // rule-id: ogn-026-298 — "opponents can't play cards this turn".
     if (state.cannotPlayCardsThisTurn?.[context.params.playerId as string]) {
+      return false;
+    }
+    // rule-id: unl-190-219 — "its controller can't play spells this turn".
+    if (state.cannotPlaySpellsThisTurn?.[context.params.playerId as string]) {
       return false;
     }
     // rule 419.1 — a board static may forbid PLAYING this card (ven-132-166).
@@ -419,7 +424,17 @@ export const playSpell: Defs["playSpell"] = {
       const pool = resolveTarget(
         { ...spellTgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
         conditionResolverCtx,
-      );
+      ).filter((id) => {
+        // rule 355.4.a (unl-101-219) — a caster-chosen move destination must
+        // differ from the unit's current location; a unit with none is not a
+        // legal choice.
+        const dests = chosenMoveDestinations(
+          spellAbility?.effect as SpellEffectTargetShape | undefined,
+          id as string,
+          conditionResolverCtx,
+        );
+        return dests === undefined || dests.length > 0;
+      });
       if (!pool.includes(context.params.targets[0] as string)) {
         return false;
       }
@@ -468,6 +483,47 @@ export const playSpell: Defs["playSpell"] = {
           zone?.startsWith("battlefield-") !== true ||
           context.zones.getCardZone(supplied[1] as CoreCardId) !== zone
         ) {
+          return false;
+        }
+      }
+    }
+    // rule-id: sfd-145-221 (rule 355.8 / 433) — a `target1`/`target2` effect
+    // (swap-might) names TWO caster-chosen targets: the
+    // supplied set must be exactly two distinct cards, each legal for its own
+    // descriptor, and `location:"same"` on the second means "same zone as the
+    // first".
+    {
+      const pairEffect = spellAbility?.effect as
+        | { type?: string; target1?: unknown; target2?: unknown }
+        | undefined;
+      const t1 = pairEffect?.type === "swap-might" ? pairEffect.target1 : undefined;
+      const t2 = pairEffect?.type === "swap-might" ? pairEffect.target2 : undefined;
+      const supplied = (context.params.targets ?? []) as string[];
+      if (
+        typeof t1 === "object" &&
+        t1 !== null &&
+        typeof t2 === "object" &&
+        t2 !== null &&
+        supplied.length > 0
+      ) {
+        if (supplied.length !== 2 || supplied[0] === supplied[1]) {
+          return false;
+        }
+        const firstPool = resolveTarget(
+          { ...(t1 as object), quantity: "all" } as Parameters<typeof resolveTarget>[0],
+          conditionResolverCtx,
+        ) as string[];
+        if (!firstPool.includes(supplied[0] as string)) {
+          return false;
+        }
+        const zone = context.zones.getCardZone(supplied[0] as CoreCardId);
+        const secondPool = resolveTarget(
+          { ...(t2 as object), quantity: "all" } as Parameters<typeof resolveTarget>[0],
+          (t2 as { location?: string }).location === "same"
+            ? { ...conditionResolverCtx, sameZone: zone as string, sourceZone: zone as string }
+            : conditionResolverCtx,
+        ) as string[];
+        if (!secondPool.includes(supplied[1] as string)) {
           return false;
         }
       }
@@ -798,6 +854,20 @@ export const playSpell: Defs["playSpell"] = {
         spellEffect?.type === "fight" && typeof spellEffect.defender === "object"
           ? spellEffect.defender
           : undefined;
+      // rule-id: sfd-145-221 (rule 355.8 / 433) — "Swap the Might of two units
+      // at the same battlefield": a `swap-might` / `increase-might-to` effect
+      // names TWO caster-chosen targets through `target1`/`target2` (Swap only —
+      // `increase-might-to` picks programmatically). Enumerate
+      // one Play per legal pair so both are locked on the chain item.
+      const isSwap = spellEffect?.type === "swap-might";
+      const pairFirst =
+        isSwap && typeof spellEffect?.target1 === "object" && spellEffect.target1 !== null
+          ? (spellEffect.target1 as { quantity?: unknown; location?: string })
+          : undefined;
+      const pairSecond =
+        isSwap && typeof spellEffect?.target2 === "object" && spellEffect.target2 !== null
+          ? (spellEffect.target2 as { quantity?: unknown; location?: string })
+          : undefined;
       // rule-id: sfd-011-221 (rule 355.8 / 434 / 435) — "Choose a unit and an
       // Equipment with the same controller": an `attach-or-detach` effect names
       // TWO caster-chosen targets, so enumerate one Play per same-controller
@@ -946,6 +1016,43 @@ export const playSpell: Defs["playSpell"] = {
         }
       } else if (
         !isCardTarget &&
+        pairFirst &&
+        pairSecond &&
+        pairFirst.quantity !== "all" &&
+        pairSecond.quantity !== "all"
+      ) {
+        const firsts = resolveTarget(
+          { ...pairFirst, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+          resolverCtx,
+        );
+        // rule 433.1 — Swap is symmetric, so [a,b] and [b,a] are the same
+        // play; a directional pair (increase-might-to) keeps both orders.
+        const symmetric = spellEffect?.type === "swap-might";
+        const seenPairs = new Set<string>();
+        for (const a of firsts) {
+          const zone = context.zones.getCardZone(a as CoreCardId);
+          const seconds = resolveTarget(
+            { ...pairSecond, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+            pairSecond.location === "same"
+              ? { ...resolverCtx, sameZone: zone as string, sourceZone: zone as string }
+              : resolverCtx,
+          );
+          for (const b of seconds) {
+            if (b === a) continue;
+            if (symmetric) {
+              const key = [a as string, b as string].sort().join("|");
+              if (seenPairs.has(key)) continue;
+              seenPairs.add(key);
+            }
+            baseVariants.push({
+              cardId: cardId as string,
+              playerId: context.playerId as string,
+              targets: [a as string, b as string],
+            });
+          }
+        }
+      } else if (
+        !isCardTarget &&
         sameLead &&
         sameDesc &&
         typeof sameLead === "object" &&
@@ -983,7 +1090,12 @@ export const playSpell: Defs["playSpell"] = {
         const validTargets = resolveTarget(
           { ...tgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
           resolverCtx,
-        );
+        ).filter((id) => {
+          // rule 355.4.a (unl-101-219) — only offer units that have a legal
+          // destination other than where they already are.
+          const dests = chosenMoveDestinations(spellEffect, id as string, resolverCtx);
+          return dests === undefined || dests.length > 0;
+        });
         // Rule 355.14.b/c / 355.15 (unl-192-219): when the enumerated target
         // is the might-reference of a split-damage effect, the caster ALSO
         // chooses up to N enemy split targets at finalization (N = ref's
@@ -1143,6 +1255,23 @@ export const playSpell: Defs["playSpell"] = {
         // battlefield": the battlefield is the caster's play-time choice.
         // Enumerate one Play per battlefield, locking it as targets [bfId];
         // the affected units are re-derived at resolution.
+        for (const bfId of Object.keys(state.battlefields)) {
+          baseVariants.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: [bfId],
+          });
+        }
+      } else if (
+        spellEffect?.type === "reveal-hand" &&
+        (spellEffect as { battlefield?: string }).battlefield === "choose" &&
+        Object.keys(state.battlefields ?? {}).length > 0
+      ) {
+        // rule 419.3 (unl-139-219 Bone Skewer) — "Choose a battlefield. An
+        // opponent reveals their hand…": the BATTLEFIELD is the caster's
+        // play-time choice, locked as targets [bfId]. The hand card is never a
+        // play-time target (rule 355.10.a — hand cards are never targets); it
+        // is picked as the effect resolves.
         for (const bfId of Object.keys(state.battlefields)) {
           baseVariants.push({
             cardId: cardId as string,
@@ -1383,7 +1512,12 @@ export const playSpell: Defs["playSpell"] = {
         const validTargets = resolveTarget(
           { ...tgt, quantity: "all" } as Parameters<typeof resolveTarget>[0],
           resolverCtx,
-        );
+        ).filter((id) => {
+          // rule 355.4.a (unl-101-219) — only offer units that have a legal
+          // destination other than where they already are.
+          const dests = chosenMoveDestinations(spellEffect, id as string, resolverCtx);
+          return dests === undefined || dests.length > 0;
+        });
         for (const targetId of validTargets) {
           results.push({
             cardId: cardId as string,
@@ -1563,11 +1697,17 @@ export const playSpell: Defs["playSpell"] = {
     // chain (targets locked at play time), not when it later resolves.
     if (targets && targets.length > 0) {
       const trigCtx = { cards: context.cards, counters: context.counters, draft, zones };
-      for (const targetId of targets) {
-        fireTriggers(
-          { cardId: targetId, chooserId: playerId, sourceType: "spell", type: "choose" },
-          trigCtx,
-        );
+      // rule 820.1.d / 820.2 — [Repeat] executes the instructions an additional
+      // time and the choices for EVERY execution are made while playing the
+      // card, so choosing the same card for each execution is a separate
+      // targeting event: fire `choose` once per execution.
+      for (let execution = 0; execution <= repeatN; execution++) {
+        for (const targetId of targets) {
+          fireTriggers(
+            { cardId: targetId, chooserId: playerId, sourceType: "spell", type: "choose" },
+            trigCtx,
+          );
+        }
       }
     }
 

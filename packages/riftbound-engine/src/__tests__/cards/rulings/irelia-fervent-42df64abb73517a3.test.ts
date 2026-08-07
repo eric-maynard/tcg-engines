@@ -44,9 +44,7 @@ describe("Ruling 42df64abb73517a3 — Repeat spell choosing Irelia twice trigger
     expect(game.state("irelia").might).toBe(4);
   });
 
-  test.failing("BUG: ruling 42df64abb73517a3 — Repeat paid and Irelia chosen for both executions: TWO targeting triggers hit the chain (+1 +1 → 6), then the spell gives +2 +2 → 10 (+6 total); engine fires her trigger only once (ends at 9)", async () => {
-    // Expected: chain = [feral, irelia, irelia] right after the cast; Irelia 6 after both triggers, 10 after
-    // the spell. Actual: a single trigger — chain [feral, irelia], Irelia ends the chain at 9.
+  test("ruling 42df64abb73517a3 — Repeat paid and Irelia chosen for both executions: TWO targeting triggers hit the chain (+1 +1 → 6), then the spell gives +2 +2 → 10 (+6 total)", async () => {
     const game = await board().build();
     await game.p1.cast("feral", { repeat: 1, targets: "irelia" });
     expect(game.p1.energy()).toBe(0); // 2 + Repeat [2]
@@ -65,7 +63,7 @@ describe("Ruling 42df64abb73517a3 — Repeat spell choosing Irelia twice trigger
     expect(game.state("other").might).toBe(2);
   });
 
-  test.failing("BUG: ruling 42df64abb73517a3 — bottom line only: repeated Feral Strength on Irelia leaves her at 4 + 6 = 10 Might this turn; engine gives 9", async () => {
+  test("ruling 42df64abb73517a3 — bottom line only: repeated Feral Strength on Irelia leaves her at 4 + 6 = 10 Might this turn", async () => {
     const game = await board().build();
     await game.p1.cast("feral", { repeat: 1, targets: "irelia" });
     await game.settle();
