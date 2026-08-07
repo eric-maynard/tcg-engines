@@ -113,10 +113,12 @@ describe("Ruling edfd3defc2005bb9 — Baited Hook: killed unit's Deathknell reso
   //  6.   Cloud Drake finalizes next (P1 chooses its location) and enters the board immediately.
   //  7.   Drake's "When you play me, draw 1" is appended above Rex's Deathknell.
   //  8.   Resolution newest-first: Drake's draw resolves first; Rex's 4 damage resolves LAST.
-  // Actual: Ruined Rex's keyword-only Deathknell never triggers, and Hook draws the picked card instead of
-  // banishing/playing it.
-  test.failing("BUG: ruling edfd3defc2005bb9 — (Ruined Rex/Cloud Drake) Deathknell finalizes first but resolves after the played unit's play trigger (engine: Rex never triggers; Hook draws instead of plays)", async () => {
-    const game = await board(RUINED_REX, CLOUD_DRAKE).build();
+  // Two enemy units so Rex's "deal 4 to an enemy unit" is a real choice at finalization (a single legal
+  // target is auto-selected without a prompt) — rule 340.1.
+  test("ruling edfd3defc2005bb9 — (Ruined Rex/Cloud Drake) Deathknell finalizes first but resolves after the played unit's play trigger", async () => {
+    const game = await board(RUINED_REX, CLOUD_DRAKE)
+      .unit(P2, "base", { might: 4, name: "Enemy Bystander" }, "bystander")
+      .build();
     const handBefore = game.p1.hand().length;
     await activateHook(game);
     // Steps 1–2: Rex is dead and its Deathknell is pending while Hook keeps resolving.
