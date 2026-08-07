@@ -25,6 +25,9 @@ export interface TriggerMatcherState {
   readonly cardsPlayedThisTurn?: Record<string, number>;
   readonly turn?: { readonly activePlayer?: string };
   readonly turnEventCounts?: Record<string, number>;
+  readonly interaction?: {
+    readonly showdownStack?: readonly { readonly active?: boolean }[];
+  };
 }
 
 /**
@@ -187,9 +190,13 @@ function restrictionSatisfied(
     case "once-each-turn":
       // TODO(once-each-turn): per-card fire tracking not yet implemented.
       return false;
-    case "during-showdown":
-      // TODO(during-showdown): showdown state not exposed here.
-      return false;
+    case "during-showdown": {
+      // rule 553: a showdown lasts from the moment it opens until every
+      // Relevant Player passes in succession, so "during a showdown" is
+      // satisfied whenever an active showdown is on the stack.
+      const stack = state?.interaction?.showdownStack;
+      return Array.isArray(stack) && stack.some((s) => s?.active !== false);
+    }
     case "on-opponent-turn": {
       // ven-176-166 (Viktor, Innovator): satisfied when the turn's active
       // player is not this card's controller. Active player is threaded via

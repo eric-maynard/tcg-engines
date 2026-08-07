@@ -123,6 +123,21 @@ function isCardJustPlayed(card, zone) {
   return _justPlayedCardIds.has(card.id);
 }
 
+/**
+ * rule 432.1.a — Shield N raises a DEFENDER's current Might and Assault N an
+ * ATTACKER's while that unit is in combat, so the board card must show it.
+ * The engine applies these only inside combat resolution (never on
+ * meta.mightModifier), so the value is derived here from meta.combatRole.
+ */
+function combatRoleMightBonus(card) {
+  const role = card?.meta?.combatRole;
+  if (role !== "attacker" && role !== "defender") return 0;
+  if (typeof getCardKeywords !== "function") return 0;
+  const wanted = role === "attacker" ? "assault" : "shield";
+  const kw = getCardKeywords(card).find((k) => k.name.toLowerCase() === wanted);
+  return kw ? (kw.value || 1) : 0;
+}
+
 function renderCardElement(card, isFacedown = false, zone = "") {
   if (isFacedown) {
     return `<div class="card facedown"><div class="card-back"></div></div>`;
@@ -190,15 +205,19 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   }
 
   // rule-827 (ven-021-166): effective Might = base + mightModifier + staticMightBonus + buff.
+  // (combat-role keyword bonus added below via combatRoleMightBonus)
   // Render a badge only when the effective value differs from the printed base so
   // Empower / modify-might effects are visible on the board card.
   // rule-buff-might (unl-162-219): Buff is a separate +1 term (engine: `meta.buffed ? 1 : 0`),
   // not folded into mightModifier, so it must be added here to show on the board.
   // rule-sfd-068-221: attached Equipment bonus is a separate term (server-computed
   // meta.equipmentMightBonus from equippedWith) and must be included too.
+  // rule 432.1.a: while a unit is in combat in the matching role its CURRENT
+  // Might already includes Shield (defender) / Assault (attacker); the engine
+  // only applies those inside combat resolution, so fold them in for display.
   const baseMight = card.might;
   const effMight = baseMight != null
-    ? Math.max(0, baseMight + (card.meta?.mightModifier ?? 0) + (card.meta?.staticMightBonus ?? 0) + (card.meta?.buffed ? 1 : 0) + (card.meta?.equipmentMightBonus ?? 0))
+    ? Math.max(0, baseMight + (card.meta?.mightModifier ?? 0) + (card.meta?.staticMightBonus ?? 0) + (card.meta?.buffed ? 1 : 0) + (card.meta?.equipmentMightBonus ?? 0) + combatRoleMightBonus(card))
     : null;
   const mightBadge = (effMight != null && effMight !== baseMight)
     ? `<div class="card-might" title="Effective Might">${effMight}</div>`
