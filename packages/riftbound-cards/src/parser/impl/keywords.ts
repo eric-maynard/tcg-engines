@@ -218,7 +218,18 @@ export const KEYWORD_TRIGGER_EVENTS: Readonly<Record<string, string>> = {
   // condition handling.
 };
 
-export function expandHuntKeywords(abilities: Ability[]): Ability[] {
+/**
+ * rule 729 — `skipKeywords` suppresses the expansion for keywords the engine's
+ * trigger runner already synthesises from the printed
+ * `{type:"keyword", keyword, effect}` ability itself
+ * (trigger-runner KEYWORD_SELF_TRIGGER_EVENTS). Expanding those onto a
+ * hand-authored list puts the same ability in the registry payload twice.
+ */
+export function expandHuntKeywords(
+  abilities: Ability[],
+  options: { readonly skipKeywords?: readonly string[] } = {},
+): Ability[] {
+  const skipKeywords = options.skipKeywords ?? [];
   const result: Ability[] = [];
   // A hand-authored card may already spell out the triggered sibling next to
   // the keyword; never install a second copy of the same event+effect.
@@ -253,7 +264,7 @@ export function expandHuntKeywords(abilities: Ability[]): Ability[] {
       } as TriggeredAbility);
       continue;
     }
-    const event = kw ? KEYWORD_TRIGGER_EVENTS[kw] : undefined;
+    const event = kw && !skipKeywords.includes(kw) ? KEYWORD_TRIGGER_EVENTS[kw] : undefined;
     if (event) {
       const effect = (ab as { effect?: Effect }).effect;
       if (effect && !alreadyTriggered(event, effect)) {

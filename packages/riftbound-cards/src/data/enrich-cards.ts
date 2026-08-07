@@ -21,14 +21,20 @@ import { expandHuntKeywords } from "../parser/impl/keywords";
 function enrichCard(raw: Card): Card {
   const card = normalizeSpellTiming(raw);
   // Skip if the card declares an explicit abilities array (hand-authored opt-out).
-  // rule 808.1 / 729 / 823: effect-keyword shorthands (Deathknell, Vision, Hunt)
-  // still need their `triggered` sibling — the engine's trigger matcher only
-  // walks `type === "triggered"` abilities — so run that expansion here too.
+  // rule 823 / 808.1: Hunt and Deathknell still need their `triggered` sibling
+  // here — the engine's trigger matcher only walks `type === "triggered"`
+  // abilities. rule 729: Vision does not — the trigger runner synthesises the
+  // play-self trigger from the printed keyword ability itself (and covers
+  // play-token-unit too), so expanding it here would put the same ability in
+  // the registry payload twice.
   if (card.abilities !== undefined) {
     if (card.abilities.length === 0) {
       return card;
     }
-    const expanded = expandHuntKeywords(card.abilities as Parameters<typeof expandHuntKeywords>[0]);
+    const expanded = expandHuntKeywords(
+      card.abilities as Parameters<typeof expandHuntKeywords>[0],
+      { skipKeywords: ["Vision"] },
+    );
     return expanded.length === card.abilities.length
       ? card
       : ({ ...card, abilities: expanded } as Card);
