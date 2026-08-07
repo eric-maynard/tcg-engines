@@ -12,7 +12,7 @@ import { createInteractionState, getTurnState } from "../../../chain";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import {
-  hasStaticEffect,
+  staticEnterReadyApplies,
   consumeEntersReadyReplacement,
   createMetaAccessor,
   getPotentialRuneEnergy,
@@ -116,7 +116,11 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
     if (championZoneCards.length > 0) {
       const championId = championZoneCards[0];
       if (championId) {
-        deductCost(draft, playerId, championId as string, {}, createMetaAccessor(context.cards));
+        // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.
+        deductCost(draft, playerId, championId as string, {}, createMetaAccessor(context.cards), {
+          counters: context.counters,
+          zones: context.zones,
+        });
 
         zones.moveCard({
           cardId: championId,
@@ -130,7 +134,10 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
           ctx: { cards: context.cards, counters, zones },
         });
         const entersReady =
-          replacedReady || hasStaticEffect(championId as string, "enter-ready");
+          replacedReady ||
+          // rule 143.4 (rule-id: sfd-176-221): a conditional "I enter ready" is
+          // evaluated as the champion enters — an unmet "if" leaves him exhausted.
+          staticEnterReadyApplies(championId as string, draft, playerId, zones);
         if (!entersReady) {
           counters.setFlag(championId, "exhausted", true);
         }

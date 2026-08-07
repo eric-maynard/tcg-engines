@@ -22,6 +22,10 @@ import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId } from "../../zones/zone-configs";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canPayEquipCost, printedEquipCost } from "./equip-cost";
+import { getCardEffectiveMight } from "./play/cost";
+
+/** rule 710: a unit is [Mighty] while its current Might is 5 or more. */
+const MIGHTY_THRESHOLD = 5;
 
 /**
  * Check whether a unit has the given keyword, considering both its printed
@@ -131,7 +135,7 @@ export const equipmentMoves: Partial<
         // rule 476.1: [Equip] is an activated ability with a cost — it can only
         // be used when its printed cost is payable right now.
         const cost = printedEquipCost(id);
-        return !cost || canPayEquipCost(state, playerId, cost);
+        return !cost || canPayEquipCost(state, playerId, cost, 0, context.zones);
       });
       if (equipment.length === 0) {
         return [];
@@ -227,7 +231,7 @@ export const equipmentMoves: Partial<
 
       // rule 476.1: the printed [Equip] cost must be payable.
       const equipCost = printedEquipCost(context.params.equipmentId);
-      if (equipCost && !canPayEquipCost(state, context.params.playerId, equipCost)) {
+      if (equipCost && !canPayEquipCost(state, context.params.playerId, equipCost, 0, context.zones)) {
         return false;
       }
 
@@ -265,6 +269,13 @@ export const equipmentMoves: Partial<
           sourceType: "gear",
           type: "use-activated-ability",
         },
+      );
+
+      // rule 709/710: Might gained from an attachment can push the holder over
+      // the Mighty threshold, so sample its Might before the attach.
+      const mightBefore = getCardEffectiveMight(
+        unitId,
+        (id) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
       );
 
       // Mark equipment as attached to the unit. Equipment flagged with
@@ -308,6 +319,31 @@ export const equipmentMoves: Partial<
         },
         { cardId: unitId, equipmentId, playerId, type: "attach-equipment" },
       );
+
+      // rule 709/710 (rule-id: sfd-180-221): a unit is Mighty while it has 5+
+      // current Might, from ANY source — an Equipment's bonus included. The
+      // attach dispatch above has re-applied statics, so the holder's Might is
+      // final here; crossing < 5 → >= 5 raises become-mighty (Fiora, Worthy).
+      const mightAfter = getCardEffectiveMight(
+        unitId,
+        (id) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
+      );
+      if (mightBefore < MIGHTY_THRESHOLD && mightAfter >= MIGHTY_THRESHOLD) {
+        dispatchEvent(
+          {
+            cards: context.cards,
+            counters: context.counters,
+            draft,
+            zones: context.zones,
+          },
+          {
+            cardId: unitId,
+            owner:
+              (context.cards.getCardOwner(unitId as CoreCardId) as string | undefined) ?? playerId,
+            type: "become-mighty",
+          },
+        );
+      }
 
       // rule 477.1.b (ven-137-166 Shady Spectacles): "As this is attached to a
       // unit, choose another friendly unit. The equipped unit becomes a copy of
