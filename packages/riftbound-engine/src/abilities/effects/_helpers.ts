@@ -469,7 +469,11 @@ export function evaluateEffectCondition(
       if (!bound) return false;
       // rule 740.1.a (sfd-162-221) — "friendly"/"enemy" is about CONTROL, not
       // ownership: a unit I control but do not own is friendly to me.
+      // rule 359.3.f — "If it WAS a friendly unit" after killing it reads
+      // last-known information: control reverts to the owner as the card
+      // leaves the board, so the snapshot taken by the kill wins.
       const controller =
+        (ctx.draft.lastKilledUnitId === bound ? ctx.draft.lastKilledUnitController : undefined) ??
         ctx.cards.getCardController?.(bound as CoreCardId) ??
         ctx.cards.getCardOwner(bound as CoreCardId) ??
         "";
