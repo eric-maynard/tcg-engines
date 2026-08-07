@@ -79,9 +79,10 @@ describe("Baccai Sandspinner (ven-001-166)", () => {
     await game.settle();
     expect(game.state("spinner").isEmpowered).toBe(true);
     expect(game.state("spinner").keywords).toEqual(expect.arrayContaining(["Deflect", "Assault"]));
-    // 5 runes but only 4 energy → not activatable.
+    // rule 357.1.a: 5 runes keeps the cost at [5], and 4 floating energy plus a
+    // ready rune exhausted during Pay Costs covers it — so it IS activatable.
     const short = await withRunes(5, 4).build();
-    expect(short.p1.can("activate", "spinner")).toBe(false);
+    expect(short.p1.can("activate", "spinner")).toBe(true);
   });
 
   test("[Empower] costs [3] less with 4 or fewer runes — exactly 4 runes + 2 energy must be enough and charge only 2 (827.1.c.3)", async () => {

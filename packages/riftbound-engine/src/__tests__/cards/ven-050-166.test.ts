@@ -82,7 +82,7 @@ describe("Grumpy Rockbear (ven-050-166)", () => {
   // BUG — expected (357.1.a): 6 READY runes → cost 12 − 6 = 6, payable by exhausting those same six
   // runes during Pay Costs, so the ability is legal with an empty pool. Actual: affordability compares
   // the REDUCED cost against floating energy only (or the unreduced 12 against pool + runes) → not offered.
-  test.failing("BUG: 6 ready runes and nothing floating — cost 6 is exactly payable out of those runes", async () => {
+  test("6 ready runes and nothing floating — cost 6 is exactly payable out of those runes", async () => {
     const game = await scenario().runes(P1, "mind", 6).unit(P1, "base", CARD, "bear").build();
     expect(game.p1.can("activate", "bear")).toBe(true);
   });

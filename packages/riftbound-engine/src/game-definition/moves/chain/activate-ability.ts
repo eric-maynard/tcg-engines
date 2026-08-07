@@ -26,7 +26,7 @@ import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { removeFromBoard } from "../../../operations/leave-board";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { getDeflectSurcharge, getPotentialRuneEnergy } from "../play/cost";
+import { getDeflectSurcharge } from "../play/cost";
 import type { SpellEffectTargetShape } from "../play/targeting";
 import {
   findSequenceLeadTarget,
@@ -81,6 +81,24 @@ function activationSourceType(hostCardId: string): string | undefined {
     return "gear";
   }
   return cardType ?? undefined;
+}
+
+/**
+ * rule 357.1.a — during Pay Costs the activating player may exhaust ready runes
+ * for energy, and `deductAbilityCost` auto-exhausts them to cover a shortfall,
+ * so activation affordability must credit those ready runes (ven-050-166: six
+ * ready runes make the [Empower] [12 − runes] cost of 6 exactly payable with an
+ * empty pool). Play moves deliberately do NOT credit them — see
+ * `getPotentialRuneEnergy` — because their reducers do not auto-exhaust.
+ */
+function readyRuneEnergy(
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  counters: { getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined },
+  playerId: string,
+): number {
+  return zones
+    .getCardsInZone("runePool" as CoreZoneId, playerId as CorePlayerId)
+    .filter((runeId) => counters.getFlag(runeId, "exhausted") !== true).length;
 }
 
 export function abilityUseKey(hostCardId: string, abilityIndex: number): string {
@@ -529,16 +547,145 @@ export function blockedWhileEmpowered(
 }
 
 /**
+ * rule 356.6 (rule-id: ven-163-166) — "[Empower] costs of your units here cost
+ * [1] or [rainbow] less": a board static discounting an [Empower] ACTIVATION
+ * cost (never a play cost) by one resource. Returns how many such discounts
+ * apply to this host's Empower ability.
+ */
+export function empowerCostDiscount(
+  ability: { effect?: unknown },
+  hostCardId: string,
+  playerId: string,
+  zones: {
+    getCardsInZone: (zone: CoreZoneId, player?: CorePlayerId) => readonly CoreCardId[];
+    getCardZone?: (card: CoreCardId) => string | undefined;
+  },
+  cards: {
+    getCardOwner: (card: CoreCardId) => CorePlayerId | undefined;
+    getCardController?: (card: CoreCardId) => CorePlayerId | undefined;
+  },
+): number {
+  if ((ability.effect as { type?: string } | undefined)?.type !== "empower") {
+    return 0;
+  }
+  const hostZone = zones.getCardZone?.(hostCardId as CoreCardId);
+  const registry = getGlobalCardRegistry();
+  let discount = 0;
+  for (const bfCardId of zones.getCardsInZone("battlefieldRow" as CoreZoneId)) {
+    const controller =
+      cards.getCardController?.(bfCardId) ?? cards.getCardOwner(bfCardId as CoreCardId);
+    if (controller !== playerId) {
+      continue;
+    }
+    for (const bfAbility of registry.getAbilities(bfCardId as string) ?? []) {
+      const a = bfAbility as { type?: string; effect?: Record<string, unknown> };
+      if (a.type !== "static" || a.effect?.type !== "empower-cost-reduction") {
+        continue;
+      }
+      const target = a.effect.target as { controller?: string; location?: string } | undefined;
+      // "your units HERE" — only units standing at this battlefield qualify.
+      if (target?.location === "here" && hostZone !== `battlefield-${bfCardId as string}`) {
+        continue;
+      }
+      discount += 1;
+    }
+  }
+  return discount;
+}
+
+/**
+ * "[1] or [rainbow] less" removes ONE resource from the cost: the energy part
+ * first, otherwise a single Power pip.
+ */
+function applyResourceDiscount(
+  cost: Record<string, unknown> | undefined,
+  discount: number,
+): Record<string, unknown> | undefined {
+  if (!cost || discount <= 0) {
+    return cost;
+  }
+  const next = { ...cost };
+  let remaining = discount;
+  const energy = (next.energy as number) ?? 0;
+  const fromEnergy = Math.min(remaining, energy);
+  if (fromEnergy > 0) {
+    next.energy = energy - fromEnergy;
+    remaining -= fromEnergy;
+  }
+  const power = next.power as string[] | undefined;
+  if (remaining > 0 && power && power.length > 0) {
+    next.power = power.slice(remaining);
+  }
+  return next;
+}
+
+/** Can this pool pay one whole alternative cost right now? */
+function costOptionAffordable(
+  option: Record<string, unknown>,
+  pool: { energy: number; power: Record<string, number | undefined> },
+  potentialEnergy: number,
+): boolean {
+  if (pool.energy + potentialEnergy < ((option.energy as number) ?? 0)) {
+    return false;
+  }
+  const power = option.power as string[] | undefined;
+  if (power) {
+    const needed: Record<string, number> = {};
+    for (const domain of power) {
+      needed[domain] = (needed[domain] ?? 0) + 1;
+    }
+    if (!canAffordPower(pool.power, needed)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * rule 827.1.c.2 (rule-id: ven-074-166) — an either/or activation cost
+ * ("[Empower] — [1] or [body]") lists several COMPLETE costs and exactly one of
+ * them is paid: never both, never neither. The controller's pool decides which
+ * one; a cost payable out of banked resources wins over one that would need
+ * runes exhausted, and when several are payable the first printed one is used.
+ */
+function selectCostOption(
+  ability: { costOptions?: unknown },
+  pool: { energy: number; power: Record<string, number | undefined> } | undefined,
+  potentialEnergy: number,
+  discount = 0,
+): Record<string, unknown> | undefined {
+  const raw = ability.costOptions;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return undefined;
+  }
+  const options = raw as Record<string, unknown>[];
+  if (!pool) {
+    return options[0];
+  }
+  const afford = (o: Record<string, unknown>, extra: number) =>
+    costOptionAffordable(applyResourceDiscount(o, discount) ?? o, pool, extra);
+  return (
+    options.find((o) => afford(o, 0)) ?? options.find((o) => afford(o, potentialEnergy)) ?? options[0]
+  );
+}
+
+/**
  * rule 827.1.c.3 (rule-id: ven-001-166) — "This ability costs [N] less if
  * COND" is part of the ability's cost, so both the affordability checks and
  * the payment must use the reduced cost when COND holds.
  */
 export function effectiveAbilityCost(
-  ability: { cost?: unknown; costModifier?: unknown },
+  ability: { cost?: unknown; costModifier?: unknown; costOptions?: unknown },
   playerId: string,
   zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  pool?: { energy: number; power: Record<string, number | undefined> },
+  potentialEnergy = 0,
+  discount = 0,
 ): Record<string, unknown> | undefined {
-  const cost = ability.cost as Record<string, unknown> | undefined;
+  const chosenOption = selectCostOption(ability, pool, potentialEnergy, discount);
+  const baseCost = ability.cost as Record<string, unknown> | undefined;
+  const merged = chosenOption ? { ...(baseCost ?? {}), ...chosenOption } : baseCost;
+  const cost = applyResourceDiscount(merged, discount);
   const mod = ability.costModifier as
     | { condition?: { type?: string; amount?: number }; reduction?: number }
     | undefined;
@@ -795,9 +942,22 @@ export const activateAbility: Defs["activateAbility"] = {
 
     // Check if player can afford the cost
     const effectiveCost = effectiveAbilityCost(
-      ability as { cost?: unknown; costModifier?: unknown },
+      ability as { cost?: unknown; costModifier?: unknown; costOptions?: unknown },
       playerId as string,
       context.zones,
+      state.runePools[playerId],
+      readyRuneEnergy(
+        context.zones,
+        context.counters as { getFlag: (c: CoreCardId, f: string) => boolean | undefined },
+        playerId,
+      ),
+      empowerCostDiscount(
+        ability as { effect?: unknown },
+        cardId as string,
+        playerId as string,
+        context.zones,
+        context.cards,
+      ),
     );
     if (effectiveCost) {
       const cost = effectiveCost;
@@ -809,7 +969,7 @@ export const activateAbility: Defs["activateAbility"] = {
       const energyCost = (cost.energy as number) ?? 0;
       // Rule 357.1.a: ready runes may be exhausted for energy during Pay
       // Costs, so count them toward affordability (parity with play* moves).
-      const potentialEnergy = getPotentialRuneEnergy(
+      const potentialEnergy = readyRuneEnergy(
         context.zones,
         context.counters as { getFlag: (c: CoreCardId, f: string) => boolean | undefined },
         playerId,
@@ -1200,9 +1360,22 @@ export const activateAbility: Defs["activateAbility"] = {
 
         // Check cost affordability
         const effectiveCost = effectiveAbilityCost(
-          ability as { cost?: unknown; costModifier?: unknown },
+          ability as { cost?: unknown; costModifier?: unknown; costOptions?: unknown },
           playerId as string,
           context.zones,
+          state.runePools[playerId],
+          readyRuneEnergy(
+            context.zones,
+            context.counters as { getFlag: (c: CoreCardId, f: string) => boolean | undefined },
+            playerId,
+          ),
+          empowerCostDiscount(
+            ability as { effect?: unknown },
+            entry.hostCardId as string,
+            playerId as string,
+            context.zones,
+            context.cards,
+          ),
         );
         if (effectiveCost) {
           const cost = effectiveCost;
@@ -1213,7 +1386,7 @@ export const activateAbility: Defs["activateAbility"] = {
           const energyCost = (cost.energy as number) ?? 0;
           // Rule 357.1.a: ready runes may be exhausted for energy during Pay
           // Costs, so count them toward affordability (parity with play* moves).
-          const potentialEnergy = getPotentialRuneEnergy(
+          const potentialEnergy = readyRuneEnergy(
             context.zones,
             context.counters as { getFlag: (c: CoreCardId, f: string) => boolean | undefined },
             playerId,
@@ -1525,9 +1698,22 @@ export const activateAbility: Defs["activateAbility"] = {
 
     // Pay cost
     const costToPay = effectiveAbilityCost(
-      ability as { cost?: unknown; costModifier?: unknown },
+      ability as { cost?: unknown; costModifier?: unknown; costOptions?: unknown },
       playerId as string,
       context.zones,
+      draft.runePools[playerId],
+      readyRuneEnergy(
+        context.zones,
+        context.counters as { getFlag: (c: CoreCardId, f: string) => boolean | undefined },
+        playerId,
+      ),
+      empowerCostDiscount(
+        ability as { effect?: unknown },
+        cardId as string,
+        playerId as string,
+        context.zones,
+        context.cards,
+      ),
     );
     if (costToPay) {
       const cost = costToPay;
