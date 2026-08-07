@@ -66,7 +66,7 @@ describe("Production Surge (sfd-076-221)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: 'Draw 1.' — the caster must draw exactly one card in the same resolution; only the token instruction runs", async () => {
+  test("'Draw 1.' — the caster must draw exactly one card in the same resolution; only the token instruction runs", async () => {
     // Expected: hand = [top of deck], deck −1. Actual: the parser split the text into two `spell`
     // abilities and the engine resolves only the first (create-token), so nothing is drawn.
     const game = await board().build();

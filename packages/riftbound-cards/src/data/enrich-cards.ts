@@ -49,32 +49,72 @@ function enrichCard(raw: Card): Card {
  * spell abilities: the engine resolves exactly one spell ability per card.
  * Collapse identical repeats into a single `sequence` flagged
  * `independentTargets` so each step keeps its own caster-chosen target (the
- * same unit may be picked twice — no "another" restriction). Spell abilities
- * that differ (level gates, distinct instructions) are left alone.
+ * same unit may be picked twice — no "another" restriction). Distinct
+ * instructions split across sentences (sfd-076-221 "Play a … token." /
+ * "Draw 1.") collapse the same way, without that flag. Gated alternatives
+ * ("[Level 6] … instead", conditional/cost-riding spells) are left alone.
  */
 function mergeRepeatedSpellAbilities<T>(abilities: readonly T[]): T[] {
-  const spells = abilities.filter((a) => (a as { type?: string })?.type === "spell");
-  if (spells.length < 2 || spells.length !== abilities.length) {
+  const isPlainSpell = (a: unknown): boolean => {
+    const ab = a as
+      | {
+          type?: string;
+          effect?: { type?: string };
+          condition?: unknown;
+          cost?: unknown;
+          repeat?: unknown;
+          repeatCost?: unknown;
+        }
+      | undefined;
+    return (
+      ab?.type === "spell" &&
+      ab.effect !== undefined &&
+      ab.effect.type !== "raw" &&
+      ab.condition === undefined &&
+      ab.cost === undefined &&
+      ab.repeat === undefined &&
+      ab.repeatCost === undefined
+    );
+  };
+  const spells = abilities.filter(isPlainSpell);
+  if (spells.length < 2) {
     return [...abilities];
   }
   const first = JSON.stringify(spells[0]);
-  if (!spells.every((a) => JSON.stringify(a) === first)) {
-    return [...abilities];
+  const allIdentical =
+    spells.length === abilities.length && spells.every((a) => JSON.stringify(a) === first);
+  const stepsOf = (a: T): unknown[] => {
+    const e = (a as { effect: { type?: string; effects?: unknown[] } }).effect;
+    // Flatten a sequence this merge itself accumulated; leave a parsed
+    // sequence that already carries its own targeting flags intact.
+    const accumulated =
+      e.type === "sequence" &&
+      Array.isArray(e.effects) &&
+      (allIdentical || !("independentTargets" in e));
+    return accumulated ? [...(e.effects as unknown[])] : [e];
+  };
+  const out: T[] = [];
+  for (const ability of abilities) {
+    const prev = out[out.length - 1];
+    if (
+      prev !== undefined &&
+      isPlainSpell(prev) &&
+      isPlainSpell(ability) &&
+      (prev as { timing?: string }).timing === (ability as { timing?: string }).timing
+    ) {
+      out[out.length - 1] = {
+        ...(prev as Record<string, unknown>),
+        effect: {
+          effects: [...stepsOf(prev), ...stepsOf(ability)],
+          ...(allIdentical ? { independentTargets: true } : {}),
+          type: "sequence",
+        },
+      } as T;
+      continue;
+    }
+    out.push(ability);
   }
-  const lead = spells[0] as { effect?: unknown };
-  if (lead.effect === undefined) {
-    return [...abilities];
-  }
-  return [
-    {
-      ...(lead as Record<string, unknown>),
-      effect: {
-        effects: spells.map((a) => (a as { effect: unknown }).effect),
-        independentTargets: true,
-        type: "sequence",
-      },
-    } as T,
-  ];
+  return out;
 }
 
 /**

@@ -207,7 +207,7 @@ describe("Forecaster (sfd-065-221)", () => {
     expect(game.zoneOf("mech")).toBe("base");
   });
 
-  test.failing("BUG: a Mech TOKEN is played too — Assembly Rig's 3-Might Mech token should predict on entering (817.1.b, 'Play a … Mech unit token')", async () => {
+  test("a Mech TOKEN is played too — Assembly Rig's 3-Might Mech token should predict on entering (817.1.b, 'Play a … Mech unit token')", async () => {
     // Expected: after the Rig's ability resolves and the Mech token is played to base, P1 is asked to
     // look at / recycle the top card. Actual: the token shows the Vision keyword but no trigger fires.
     const game = await scenario()

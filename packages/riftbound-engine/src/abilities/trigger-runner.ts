@@ -36,7 +36,9 @@ const GRANTED_KEYWORD_TRIGGERS: Readonly<Record<string, TriggerableAbility>> = {
   Vision: {
     // Rule 729: When you play me, look at the top card of your Main Deck. You may recycle it.
     effect: { amount: 1, from: "deck", then: { recycle: 1 }, type: "look" },
-    trigger: { event: "play-self", on: "self" },
+    // rule 817.1.b: a unit TOKEN is played too ("Play a 3 [Might] Mech unit
+    // token"), so its Vision looks as well — `play-token-unit` is that play.
+    trigger: { event: "play-self-or-play-token-unit", on: "self" },
     type: "triggered",
   },
 };
@@ -48,7 +50,7 @@ const GRANTED_KEYWORD_TRIGGERS: Readonly<Record<string, TriggerableAbility>> = {
  */
 const KEYWORD_SELF_TRIGGER_EVENTS: Readonly<Record<string, string>> = {
   Deathknell: "die",
-  Vision: "play-self",
+  Vision: "play-self-or-play-token-unit",
 };
 
 /**
@@ -219,7 +221,12 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
         !abilities.some(
           (other) =>
             other.type === "triggered" &&
-            other.trigger?.event === event &&
+            // Compare per "-or-" alternative: the parser expands [Vision] to a
+            // bare `play-self` trigger while the synthesised one also covers
+            // `play-token-unit`, and they are still the same one ability.
+            (other.trigger?.event ?? "")
+              .split("-or-")
+              .some((x) => event.split("-or-").includes(x)) &&
             JSON.stringify((other as { effect?: unknown }).effect) === JSON.stringify(effect),
         )
       ) {
@@ -1075,7 +1082,12 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
   // rule-id: ogn-100-298 — static keyword grants are otherwise only refreshed
   // in post-move cleanup, so a unit entering play under "Other friendly units
   // have [Vision]" would not yet carry the grant when its play-self fires.
-  if (event.type === "play-self" && ctx.cards.updateCardMeta) {
+  // A unit token entering the board is played the same way (rule 817.1.b), so
+  // it needs the same refresh before its own triggers are matched.
+  if (
+    (event.type === "play-self" || event.type === "play-token-unit") &&
+    ctx.cards.updateCardMeta
+  ) {
     recalculateStaticEffects({
       cards: {
         getCardMeta: ctx.cards.getCardMeta,
