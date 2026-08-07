@@ -44,6 +44,13 @@ export interface TargetDescriptor {
    * target: re-resolve from the board and drop the already-bound ids.
    */
   readonly excludeBound?: boolean;
+  /**
+   * rule 383.3.b.1 — the descriptor names a COST payment ("disempower
+   * something you control to …"), which is always the controller's own
+   * deliberate choice: prompt even when exactly one candidate is legal
+   * instead of silently auto-binding it.
+   */
+  readonly promptWhenSingle?: boolean;
 }
 
 /** Single filter clause — string state literal or object predicate. */
@@ -83,6 +90,13 @@ export interface TargetResolverContext {
    * battlefield"). When set, only cards in that one zone match.
    */
   readonly battlefieldZone?: string;
+  /**
+   * rule-id: ven-154-166 (rule 355.8 / 359.3.e) — current Might of the
+   * caster-chosen reference unit for a `mightLessThanReference` filter
+   * ("Kill an enemy unit with less Might than it"). Unset during legality
+   * probes, where no reference has been picked yet.
+   */
+  readonly referenceMight?: number;
   /**
    * rule 811.1.d / 811.1.d.2 — a card played from a Facedown Zone may only
    * choose targets at the battlefield it was facedown at. When set, board
@@ -234,7 +248,14 @@ export function resolveTarget(
     // an any-of type list. Runes live in each player's runePool, not on the
     // board, so pull them in when the list names them.
     const want = new Set(target.types);
-    const pool = want.has("rune") ? [...candidates, ...getRunePoolCardIds(ctx)] : candidates;
+    // rule 355.9.a.4 (rule-id: ven-082-166) — "a legend, unit, or gear": legends
+    // live in the Legend Zones, which the board scan never visits, so pull them
+    // in exactly like runes when the type list names them.
+    const pool = [
+      ...candidates,
+      ...(want.has("rune") ? getRunePoolCardIds(ctx) : []),
+      ...(want.has("legend") ? getLegendZoneCardIds(ctx) : []),
+    ];
     filtered = pool.filter((id) => {
       const ct = registry.get(id)?.cardType;
       if (!ct) return false;
@@ -787,8 +808,43 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
     );
     return effectiveMight(def, meta) < srcMight;
   }
+  // rule 206 (ven-080-166 Noxian Demolitionist) — "with Energy cost no more
+  // than my Might": the ceiling is the SOURCE's Might as it reads when the
+  // instruction executes, and "no more than" makes cost == Might legal.
+  if ((filter as { energyCostAtMostSelfMight?: boolean }).energyCostAtMostSelfMight === true) {
+    const srcId = ctx.sourceCardId;
+    if (srcId === undefined) {
+      return true;
+    }
+    const srcMight = effectiveMight(
+      registry.get(srcId),
+      ctx.cards.getCardMeta?.(srcId as CoreCardId) as Partial<RiftboundCardMeta> | undefined,
+    );
+    return registry.getEnergyCost(cardId) <= srcMight;
+  }
+  // rule-id: ven-154-166 (rule 355.8 / 359.3.e) — "with less Might than it":
+  // compared against the caster-chosen REFERENCE unit's current Might; equal
+  // Might is not less. With no reference pinned (legality probes) every
+  // candidate stays in the pool.
+  if ((filter as { mightLessThanReference?: boolean }).mightLessThanReference === true) {
+    return ctx.referenceMight === undefined || effectiveMight(def, meta) < ctx.referenceMight;
+  }
   if ("might" in filter) {
     return matchesComparison(effectiveMight(def, meta), filter.might);
+  }
+  // rule 206 / rule-id: ven-080-166 — "with Energy cost no more than my Might":
+  // the ceiling is the SOURCE's Might as it reads when the ability resolves,
+  // compared against the candidate's PRINTED Energy cost.
+  if ((filter as { energyCostAtMostSelfMight?: boolean }).energyCostAtMostSelfMight === true) {
+    const srcId = ctx.sourceCardId;
+    if (srcId === undefined) {
+      return true;
+    }
+    const srcMight = effectiveMight(
+      registry.get(srcId),
+      ctx.cards.getCardMeta?.(srcId as CoreCardId) as Partial<RiftboundCardMeta> | undefined,
+    );
+    return registry.getEnergyCost(cardId) <= srcMight;
   }
   // rule 206: "costing no more than [3] and no more than [rainbow]" compares
   // the PRINTED cost, Energy and Power as two independent comparisons.

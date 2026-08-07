@@ -405,18 +405,11 @@ export function executeResolvedItem(
   const triggerSourceId = typeof trigEvt?.cardId === "string" ? trigEvt.cardId : undefined;
   // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): a card played from Hidden
   // may only choose targets at the battlefield it was facedown at.
-  const playedFromHiddenAt =
+  const hiddenZone =
     typeof trigEvt?.fromHiddenAt === "string" ? `battlefield-${trigEvt.fromHiddenAt}` : undefined;
-  // rule 811.1.d.2.a (ven-034-166, the Smoke and Mirrors ruling) — a spell that
-  // PULLS its chosen object INTO the facedown battlefield names that battlefield
-  // as the DESTINATION, not as the pool the object is chosen from, so 811.1.d.2's
-  // "targets must be there" restriction does not apply to its choice at all.
-  const hiddenZone = hiddenChoiceIsPulledIn(effect as SpellEffectTargetShape)
-    ? undefined
-    : playedFromHiddenAt;
   // rule 811.1 (unl-042-219) — played from Hidden, not from hand: collapse any
   // "if you played this from your hand" gate to its `else` branch now.
-  if (playedFromHiddenAt !== undefined) {
+  if (hiddenZone !== undefined) {
     effect = resolvePlayedFromHandGates(effect, false);
   }
 
@@ -614,7 +607,10 @@ export function executeResolvedItem(
     );
     // rule-id: ogn-097-298 — Rule 723.1.d (811.1.d.2): played-from-Hidden
     // targets must be at the associated battlefield.
-    if (hiddenZone) {
+    // rule 811.1.d.2.a (ven-034-166) — except when the spell PULLS its chosen
+    // object into that battlefield: the battlefield is then the destination and
+    // the object is chosen freely from anywhere.
+    if (hiddenZone && !hiddenChoiceIsPulledIn(effect as SpellEffectTargetShape)) {
       options = options.filter(
         (id) => baseCtx.zones.getCardZone(id as CoreCardId) === hiddenZone,
       );
@@ -721,7 +717,15 @@ export function executeResolvedItem(
         return;
       }
       boundTargets = [];
-    } else if (options.length >= 2 || (fixedMoveDest !== undefined && options.length === 1)) {
+    } else if (
+      options.length >= 2 ||
+      (fixedMoveDest !== undefined && options.length === 1) ||
+      // rule 383.3.b.1 (rule-id: ven-082-166) — paying a cost is the
+      // controller's own deliberate choice, so it is prompted even when only
+      // one legal payment exists.
+      ((target as { promptWhenSingle?: boolean }).promptWhenSingle === true &&
+        options.length === 1)
+    ) {
       // rule 355.10 (unl-112-219) — dragging a unit to a destination the
       // trigger already fixed is still the controller's public choice, so it is
       // prompted even when 355.4.a leaves exactly one legal candidate.
@@ -906,6 +910,48 @@ function firePlayedCardTriggers(
 }
 
 /**
+ * rule 571 / rule-id: ven-022-166 — "If a card would go to your trash from
+ * anywhere other than your Main Deck, banish it instead." A blanket zone-change
+ * replacement owned by a permanent on the board rather than a per-event
+ * `{type:"replacement"}` ability. Recognised from an explicit
+ * `{type:"trash-to-banish"}` static effect or from the printed clause while the
+ * card's text is still `raw`.
+ */
+function hasTrashToBanishReplacement(
+  state: RiftboundGameState,
+  context: Parameters<typeof buildEffectContext>[3],
+  ownerId: string,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  const zoneIds = [
+    "base",
+    ...Object.keys(state.battlefields ?? {}).map((bfId) => `battlefield-${bfId}`),
+  ];
+  for (const zoneId of zoneIds) {
+    for (const cardId of context.zones.getCardsInZone(
+      zoneId as CoreZoneId,
+      ownerId as CorePlayerId,
+    )) {
+      for (const ability of registry.getAbilities(cardId as string) ?? []) {
+        const effect = (ability as { effect?: { type?: string; text?: string } })?.effect;
+        if (effect?.type === "trash-to-banish") {
+          return true;
+        }
+        if (
+          typeof effect?.text === "string" &&
+          /if a card would go to your trash from anywhere other than your main deck, banish it instead/i.test(
+            effect.text,
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * rule-id: unl-007-219 — a spell card stays in the "chain" zone while its
  * chain item is pending; once it leaves the chain (resolved or countered)
  * place it in the owner's trash (or banishment for [Flow] plays). If the
@@ -914,6 +960,7 @@ function firePlayedCardTriggers(
 export function settleResolvedSpellCard(
   resolved: ChainItem,
   context: Parameters<typeof buildEffectContext>[3],
+  draft?: RiftboundGameState,
 ): void {
   if (resolved.type !== "spell") {
     return;
@@ -921,9 +968,20 @@ export function settleResolvedSpellCard(
   if (context.zones.getCardZone(resolved.cardId as CoreCardId) !== ("chain" as CoreZoneId)) {
     return;
   }
+  let targetZone = (resolved.resolveTo ?? "trash") as string;
+  // rule 571 / rule-id: ven-022-166 — the spell leaves the CHAIN, not the Main
+  // Deck, so a controller-wide "would go to your trash … banish it instead"
+  // replacement redirects it to banishment.
+  if (
+    targetZone === "trash" &&
+    draft !== undefined &&
+    hasTrashToBanishReplacement(draft, context, resolved.controller as string)
+  ) {
+    targetZone = "banishment";
+  }
   context.zones.moveCard({
     cardId: resolved.cardId as CoreCardId,
-    targetZoneId: (resolved.resolveTo ?? "trash") as CoreZoneId,
+    targetZoneId: targetZone as CoreZoneId,
   });
 }
 
@@ -970,7 +1028,7 @@ export const passChainPriority: Defs["passChainPriority"] = {
       if (resolved) {
         withChainItemResolution(() => {
           executeResolvedItem(resolved, draft, context);
-          settleResolvedSpellCard(resolved, context);
+          settleResolvedSpellCard(resolved, context, draft);
         });
         runPostResolutionVictoryCheck(draft);
 
@@ -1027,7 +1085,7 @@ export const resolveChain: Defs["resolveChain"] = {
     if (resolved) {
       withChainItemResolution(() => {
         executeResolvedItem(resolved, draft, context);
-        settleResolvedSpellCard(resolved, context);
+        settleResolvedSpellCard(resolved, context, draft);
       });
       runPostResolutionVictoryCheck(draft);
 
