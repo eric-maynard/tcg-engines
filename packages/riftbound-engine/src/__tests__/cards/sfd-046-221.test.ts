@@ -117,7 +117,7 @@ describe("Poro Snax (sfd-046-221)", () => {
     expect(noEnergy.zoneOf("snax")).toBe("base"); // nothing was paid
   });
 
-  test.failing("BUG: pooled [rainbow] power should pay the activated ability's [calm] pip (135.2.e.5.b) — the engine refuses the activation", async () => {
+  test("pooled [rainbow] power should pay the activated ability's [calm] pip (135.2.e.5.b) — the engine refuses the activation", async () => {
     // Expected: with 1 energy + 1 rainbow power the cash-in is legal and spends both.
     // Actual: activateAbility is not offered (rainbow only pays card power costs today).
     const rainbow = await onBoard(1, { rainbow: 1 }).build();

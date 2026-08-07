@@ -163,7 +163,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     expect(game.p2.resources()).toEqual({ energy: 1, power: { mind: 1 } });
   });
 
-  test.failing("BUG: (b) P2 — the player playing it — may pay Accelerate [1][mind]; then the Watcher enters READY and P2's pool is drained (356.2.b.1)", async () => {
+  test("(b) P2 — the player playing it — may pay Accelerate [1][mind]; then the Watcher enters READY and P2's pool is drained (356.2.b.1)", async () => {
     // Expected: a P2 opt-in for Accelerate around the destination choice; yes ⇒ ready, P2 at 0/0.
     const game = await possessed();
     await shiftStolen(game);
@@ -258,7 +258,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     expect(game.state("ownWatcher").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: (d) with a spare [1][mind] P1 is offered Accelerate on the free replay; paying it → enters ready and the [1][mind] is spent (356.2.b.1)", async () => {
+  test("(d) with a spare [1][mind] P1 is offered Accelerate on the free replay; paying it → enters ready and the [1][mind] is spent (356.2.b.1)", async () => {
     // Expected: an opt-in prompt for P1; yes ⇒ ready, P1 at 1 energy / 0 mind. Actual: no prompt at all.
     const game = await ownBoard({ p1Mind: 1 }).build();
     await game.p1.cast("shift", { targets: ["ownWatcher", "victim"] });

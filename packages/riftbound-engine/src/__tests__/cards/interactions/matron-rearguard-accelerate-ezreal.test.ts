@@ -110,7 +110,7 @@ describe("Spectral Matron → Legion Rearguard (Accelerate) × Ezreal, Prodigy",
     expect(game.p1.resources()).toEqual({ energy: 1, power: { fury: 1, order: 0 } });
   });
 
-  test.failing("BUG: paying Accelerate on the free Rearguard costs exactly [1][fury] and it enters READY (356.1.b.3, 805.2.b)", async () => {
+  test("paying Accelerate on the free Rearguard costs exactly [1][fury] and it enters READY (356.1.b.3, 805.2.b)", async () => {
     // Expected: base cost ignored (0) + optional Accelerate [1][fury] = total [1][fury]; paid → ready.
     // Actual: Rearguard is never played from the trash (see above).
     const game = await board({ energy: 1, power: { fury: 1 } }).build();
@@ -120,7 +120,7 @@ describe("Spectral Matron → Legion Rearguard (Accelerate) × Ezreal, Prodigy",
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0, order: 0 } });
   });
 
-  test.failing("BUG: a universal ([rainbow]) power may be spent as the Fury pip of Accelerate (135.2.e.5.b) → ready", async () => {
+  test("a universal ([rainbow]) power may be spent as the Fury pip of Accelerate (135.2.e.5.b) → ready", async () => {
     // Expected: [1] + rainbow-as-Fury pays Accelerate; Rearguard enters ready, pool emptied.
     // Actual: Rearguard is never played from the trash.
     const game = await board({ energy: 1, power: { rainbow: 1 } }).build();
@@ -142,7 +142,7 @@ describe("Spectral Matron → Legion Rearguard (Accelerate) × Ezreal, Prodigy",
     expect(game.p1.power("calm")).toBe(1);
   });
 
-  test.failing("BUG: with Ezreal, Prodigy the Accelerate cost drops to just [fury] — paying only the pip still enters READY (356.4.c, 356.4.f.1)", async () => {
+  test("with Ezreal, Prodigy the Accelerate cost drops to just [fury] — paying only the pip still enters READY (356.4.c, 356.4.f.1)", async () => {
     // Expected: Ezreal removes the [1]; P1 (0 spare energy, 1 fury) pays [fury] → ready, fury 0.
     // Actual: Rearguard is never played from the trash; Ezreal's discount static is not implemented.
     const game = await board({ energy: 0, power: { fury: 1 } }, true).build();
@@ -152,7 +152,7 @@ describe("Spectral Matron → Legion Rearguard (Accelerate) × Ezreal, Prodigy",
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0, order: 0 } });
   });
 
-  test.failing("BUG: with Ezreal, Prodigy P1 may instead drop the pip and pay just [1] → READY with no Fury power at all", async () => {
+  test("with Ezreal, Prodigy P1 may instead drop the pip and pay just [1] → READY with no Fury power at all", async () => {
     // Expected: the discount removes the [rainbow]-class component (the Fury pip); P1 pays [1] → ready.
     // Actual: Rearguard is never played from the trash; Ezreal's discount static is not implemented.
     const game = await board({ energy: 1 }, true).build();

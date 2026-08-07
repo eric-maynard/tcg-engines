@@ -122,10 +122,18 @@ export function canAffordPower(
       rainbowNeed += count;
       continue;
     }
-    if ((remaining[d] ?? 0) < count) {
-      return false;
+    const have = remaining[d] ?? 0;
+    const used = Math.min(have, count);
+    remaining[d] = have - used;
+    const short = count - used;
+    if (short > 0) {
+      // rule 135.2.e.5.b: universal ([rainbow]) Power in the pool pays a pip of
+      // any Domain, so it covers a named-domain shortfall.
+      if ((remaining.rainbow ?? 0) < short) {
+        return false;
+      }
+      remaining.rainbow = (remaining.rainbow ?? 0) - short;
     }
-    remaining[d] -= count;
   }
   const leftover = Object.values(remaining).reduce((a, b) => a + b, 0);
   return leftover >= rainbowNeed;

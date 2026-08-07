@@ -32,7 +32,12 @@ import type {
 import { buildEffectContext, executeResolvedItem } from "./chain-moves";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canAffordPower } from "./chain/effect-context";
-import { getCardEffectiveMight, getOptionalPlayCost, staticEnterReadyApplies } from "./play/cost";
+import {
+  discountOptionalPlayCost,
+  getCardEffectiveMight,
+  getOptionalPlayCost,
+  staticEnterReadyApplies,
+} from "./play/cost";
 import { isLegalMultiTargetSet } from "./play/targeting";
 
 const isBoardZone = (z: string): boolean => z === "base" || z.startsWith("battlefield-");
@@ -183,6 +188,60 @@ function pendingPlayOptionalCost(
   })
     ? cost
     : undefined;
+}
+
+/**
+ * rule 356.2.b.1 (rule-id: sfd-200-221-accelerate-on-free-replay) — a unit an
+ * effect made someone play (Arcane Shift's "its owner plays it, ignoring its
+ * cost") entered exhausted (rule 143.4); its [Accelerate] cost is an optional
+ * additional cost of THAT play, so its player is offered the opt-in now and
+ * paying readies it. Skipped when it is already ready, unpayable, or another
+ * prompt is pending.
+ */
+function maybeOfferAccelerate(
+  draft: RiftboundGameState,
+  cardId: string,
+  playerId: string,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): void {
+  if (draft.pendingChoice) {
+    return;
+  }
+  if (getGlobalCardRegistry().get(cardId)?.cardType !== "unit") {
+    return;
+  }
+  if (context.counters?.getFlag?.(cardId as CoreCardId, "exhausted") !== true) {
+    return;
+  }
+  const optional = getOptionalPlayCost(cardId);
+  if (optional?.kind !== "accelerate") {
+    return;
+  }
+  const printed = { energy: optional.cost?.energy ?? 0, power: optional.cost?.power ?? [] };
+  if (printed.energy === 0 && printed.power.length === 0) {
+    return;
+  }
+  // rule 356.4.c (sfd-149-221): friendly "optional additional costs you pay
+  // cost [1] or [rainbow] less" statics shave this cost before it is offered.
+  const board =
+    context.cards && context.zones ? { cards: context.cards, zones: context.zones } : undefined;
+  const cost = discountOptionalPlayCost(draft, playerId, printed, board) ?? printed;
+  if (!canPayOptInCost(draft, playerId, cardId, cost, { counters: context.counters ?? {} })) {
+    return;
+  }
+  draft.pendingChoice = {
+    playerId,
+    resolved: {
+      cardId,
+      controller: playerId,
+      effect: { type: "enter-ready" },
+      optInCost: cost,
+      type: "ability",
+    },
+    sourceCardId: cardId,
+    type: "opt-in",
+  } as typeof draft.pendingChoice;
 }
 
 /**
@@ -1111,9 +1170,14 @@ export const pendingChoiceMoves: Partial<
             ? choice.boundTargets.filter((id) => id !== picked)
             : [picked];
         draft.pendingChoice = undefined;
+        // rule 359.3.f.3 (unl-112-219) — "…to THAT battlefield": information
+        // read from the trigger condition survives the target prompt, so the
+        // triggering move's destination must reach the effect context.
+        const promptTriggerToZone = (choice as { triggerToZone?: string }).triggerToZone;
         const effectCtx = {
           ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
           boundTargets,
+          ...(typeof promptTriggerToZone === "string" ? { triggerToZone: promptTriggerToZone } : {}),
         };
         executeEffect(choice.effect as ExecutableEffect, effectCtx);
         // rule-id: ogn-063-298 — recalc statics after the picked effect so a
@@ -1291,6 +1355,12 @@ export const pendingChoiceMoves: Partial<
             draft.cardsPlayedThisTurn[choice.playerId] =
               (draft.cardsPlayedThisTurn[choice.playerId] ?? 0) + 1;
           }
+          // rule 356.2.b.1 — [Accelerate] is an optional additional cost of the
+          // play, so the player who PLAYS the card (here: the one who chose the
+          // destination, even on a free "its owner plays it" replay) may pay it
+          // to have the unit enter ready. Offered only when they can pay it and
+          // no other prompt is already parked.
+          maybeOfferAccelerate(draft, choice.cardId as string, choice.playerId, context);
         }
         return;
       }
