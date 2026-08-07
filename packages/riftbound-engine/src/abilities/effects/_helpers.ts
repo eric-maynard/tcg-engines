@@ -398,6 +398,14 @@ export function evaluateEffectCondition(
       const player = ctx.draft.players[ctx.playerId];
       return (player?.xp ?? 0) >= threshold;
     }
+    // rule 824.1.c (unl-038-219) — "[Level N]": the dependent instruction is
+    // active only while the controller has N or more XP, checked as the effect
+    // executes rather than when the card was played.
+    case "while-level": {
+      const threshold = (condition.threshold as number) ?? 0;
+      const player = ctx.draft.players[ctx.playerId];
+      return (player?.xp ?? 0) >= threshold;
+    }
     case "controls-unit": {
       const baseCards = ctx.zones.getCardsInZone(
         "base" as CoreZoneId,
