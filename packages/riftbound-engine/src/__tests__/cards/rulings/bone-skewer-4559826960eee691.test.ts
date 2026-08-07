@@ -73,7 +73,7 @@ describe("Ruling 4559826960eee691 — Bone Skewer × Nami, Headstrong: optional 
   // whether to pay the optional [calm]; P2 says yes; the total cost (incl. that [calm]) is set to 0 so P2's
   // calm stays at 1; Nami lands at bf1 stunned (Skewer) and her "if you paid" trigger stuns P1's soldier.
   // Actual: Bone Skewer is a stub (Hidden only) — it resolves doing nothing; no reveal, no pick, Nami stays in hand.
-  test.failing("BUG: ruling 4559826960eee691 — P2 declares the optional cost, pays nothing (cost zeroed), and Nami's stun still triggers (engine: Bone Skewer effect unimplemented)", async () => {
+  test("ruling 4559826960eee691 — P2 declares the optional cost, pays nothing (cost zeroed), and Nami's stun still triggers", async () => {
     const game = await board().build();
     await castSkewerAtBf1(game);
     await pickNamiFromRevealedHand(game);
@@ -107,7 +107,7 @@ describe("Ruling 4559826960eee691 — Bone Skewer × Nami, Headstrong: optional 
 
   // Contrast. Expected: if P2 declines the optional cost, Nami is still played free and stunned by Skewer,
   // but her own stun trigger does not fire — P1's soldier is untouched. Actual: Skewer does nothing.
-  test.failing("BUG: ruling 4559826960eee691 — contrast: P2 declines the optional cost → Nami enters stunned, no enemy stun (engine: Bone Skewer effect unimplemented)", async () => {
+  test("ruling 4559826960eee691 — contrast: P2 declines the optional cost → Nami enters stunned, no enemy stun", async () => {
     const game = await board().build();
     await castSkewerAtBf1(game);
     await pickNamiFromRevealedHand(game);
@@ -131,7 +131,7 @@ describe("Ruling 4559826960eee691 — Bone Skewer × Nami, Headstrong: optional 
 
   // The premise both cases rely on. Expected: after Skewer resolves P1 is looking at P2's hand and may pick a
   // UNIT from it (Nami offered, the decoy spell not). Actual: no prompt — straight back to P1's main phase.
-  test.failing("BUG: ruling 4559826960eee691 — Skewer reveals P2's hand and lets P1 choose a unit from it (engine: no reveal/pick)", async () => {
+  test("ruling 4559826960eee691 — Skewer reveals P2's hand and lets P1 choose a unit from it", async () => {
     const game = await board().build();
     await castSkewerAtBf1(game);
     await pickNamiFromRevealedHand(game);

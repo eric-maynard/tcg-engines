@@ -25,18 +25,57 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
     .getCardsInZone("hand" as CoreZoneId, revealer as CorePlayerId)
     .map((id) => id as string);
 
-  const { filter } = effect as unknown as { filter?: { excludeCardTypes?: string[] } };
-  const onPicked = ((effect as unknown as { onPicked?: "recycle" | "banish" | "discard" })
-    .onPicked ?? "recycle") as "recycle" | "banish" | "discard";
+  const { filter } = effect as unknown as {
+    filter?: { excludeCardTypes?: string[]; cardTypes?: string[] };
+  };
+  const revealEff = effect as unknown as {
+    chooseBattlefield?: boolean;
+    optional?: boolean;
+    playIgnoreCost?: boolean;
+    playStun?: boolean;
+  };
+  const onPicked = ((effect as unknown as { onPicked?: "recycle" | "banish" | "discard" | "play" })
+    .onPicked ?? "recycle") as "recycle" | "banish" | "discard" | "play";
+
+  // rule 355.10 / 419.3 (unl-139-219 Bone Skewer) — "Choose a battlefield …
+  // They play that unit to THAT battlefield": the destination is picked by
+  // this effect's controller before the hand is revealed. With two or more
+  // battlefields the controller is prompted; a single one is auto-chosen.
+  let playTo: string | undefined;
+  if (revealEff.chooseBattlefield === true) {
+    const bound = ctx.boundTargets?.[0];
+    const bfIds = Object.keys(ctx.draft.battlefields ?? {});
+    if (bound !== undefined) {
+      playTo = bound.startsWith("battlefield-") ? bound : `battlefield-${bound}`;
+    } else if (bfIds.length >= 2) {
+      ctx.draft.pendingChoice = {
+        effect,
+        options: bfIds,
+        playerId: ctx.playerId,
+        remaining: 1,
+        sourceCardId: ctx.sourceCardId,
+        type: "choose-target",
+      } as NonNullable<typeof ctx.draft.pendingChoice>;
+      return;
+    } else if (bfIds[0] !== undefined) {
+      playTo = `battlefield-${bfIds[0]}`;
+    } else {
+      return;
+    }
+  }
 
   // If the revealer has no cards in hand, or every revealed card is
   // excluded by the filter, there is no valid pick — skip so play can
   // continue (otherwise pendingChoice deadlocks the game).
   const revealRegistry = getGlobalCardRegistry();
   const excluded = filter?.excludeCardTypes ?? [];
+  const allowed = filter?.cardTypes;
   const validPicks = revealed.filter((id) => {
     const t = revealRegistry.get(id)?.cardType;
-    return !t || !excluded.includes(t);
+    if (t && excluded.includes(t)) {
+      return false;
+    }
+    return !(t && allowed && allowed.length > 0 && !allowed.includes(t));
   });
   if (validPicks.length === 0) {
     return;
@@ -45,9 +84,17 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
   ctx.draft.pendingChoice = {
     filter,
     onPicked,
+    ...(playTo !== undefined ? { playTo } : {}),
+    // rule 356.5.a (unl-139-219) — "ignoring any and all costs".
+    ...(revealEff.playIgnoreCost === true ? { playIgnoreCost: true } : {}),
+    // rule 423 (unl-139-219) — "When they do, Stun it."
+    ...(revealEff.playStun === true ? { playStun: true } : {}),
+    // rule 355.13 — "You may choose a unit from it".
+    ...(revealEff.optional === true ? { optional: true } : {}),
     prompter: ctx.playerId,
     revealed,
     revealer,
+    sourceCardId: ctx.sourceCardId,
     type: "reveal-and-pick",
   };
 }

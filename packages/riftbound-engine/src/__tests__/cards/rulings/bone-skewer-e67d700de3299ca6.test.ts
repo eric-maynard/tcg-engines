@@ -73,7 +73,7 @@ describe("Ruling e67d700de3299ca6 — Bone Skewer may choose an 'untargetable' u
   // offered set is exactly P2's hand units {runner, grunt} — Ruin Runner included (its passive is inactive
   // in hand; hand cards are not targets), the spell excluded. Actual: Bone Skewer's effect is
   // unimplemented (only [Hidden] is modelled) — it resolves doing nothing and no pick ever appears.
-  test.failing("BUG: ruling e67d700de3299ca6 — P1's 'choose a unit from it' pick offers Ruin Runner (and Grunt, not the spell) from P2's revealed hand (engine: effect unimplemented)", async () => {
+  test("BUG: ruling e67d700de3299ca6 — P1's 'choose a unit from it' pick offers Ruin Runner (and Grunt, not the spell) from P2's revealed hand (engine: effect unimplemented)", async () => {
     const game = await board().build();
     const d = await skewerAtBf1(game);
     const offered = d.options.map((o) => o.card ?? o.key);
@@ -86,7 +86,7 @@ describe("Ruling e67d700de3299ca6 — Bone Skewer may choose an 'untargetable' u
 
   // Expected: choosing Ruin Runner works — P2 plays it to bf1 ignoring any and all costs (P2 has 0/0),
   // it arrives under P2's control at bf1 and is Stunned; Bone Skewer → P1's trash. Actual: see above.
-  test.failing("BUG: ruling e67d700de3299ca6 — choosing Ruin Runner: P2 plays it to bf1 for free, it is stunned there; Skewer → trash", async () => {
+  test("BUG: ruling e67d700de3299ca6 — choosing Ruin Runner: P2 plays it to bf1 for free, it is stunned there; Skewer → trash", async () => {
     const game = await board().build();
     await skewerAtBf1(game);
     await game.p1.pick("runner");
@@ -102,7 +102,7 @@ describe("Ruling e67d700de3299ca6 — Bone Skewer may choose an 'untargetable' u
   // Expected: choosing the hand Runner is not "targeting" it — no Deflect-style surcharge or illegality;
   // the cast itself only ever chooses a battlefield (bf1/bf2), never a card in a hand (355.10.a, 355.5).
   // Actual: the cast offers no choices at all (effect unimplemented).
-  test.failing("BUG: ruling e67d700de3299ca6 — at play time Bone Skewer only chooses a battlefield; no hand card is ever a play-time target", async () => {
+  test("BUG: ruling e67d700de3299ca6 — at play time Bone Skewer only chooses a battlefield; no hand card is ever a play-time target", async () => {
     const game = await board().build();
     const field = game.p1.option("cast", "skewer")?.fields.find((f) => f.name === "targets");
     const offered = (field?.options ?? []).flatMap((v) => (Array.isArray(v) ? v : [v]) as string[]);
