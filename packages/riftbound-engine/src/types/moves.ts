@@ -187,6 +187,12 @@ export interface RiftboundMoves {
      * you spend"). Each named unit loses its buff as the cost is paid.
      */
     spentBuffIds?: CardId[];
+    /**
+     * rule 356.1 (unl-089-219) — `true` when the player elects the card's
+     * ALTERNATE play cost ("If you've spent [4] or more to play a spell this
+     * turn, you may play me for [mind]"), which replaces the printed cost.
+     */
+    altCost?: boolean;
   };
 
   /**

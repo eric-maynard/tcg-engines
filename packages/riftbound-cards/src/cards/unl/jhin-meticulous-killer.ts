@@ -12,8 +12,9 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *
  * Modeled as:
  *   - Vision keyword-effect (look at top, may recycle).
- *   - A conditional static AltPlayCost grant. The actual alt-cost mechanic
- *     is not in the Effect union; this captures the intent.
+ *   - rule 356.1 — an ALTERNATE play cost: while the controller has spent [4]
+ *     or more Energy to play a spell this turn, they may pay [mind] instead of
+ *     the printed [4]. Read by `getAlternatePlayCost` in the engine's cost path.
  */
 const abilities: Ability[] = [
   {
@@ -28,14 +29,12 @@ const abilities: Ability[] = [
   },
   {
     condition: {
-      count: { gte: 4 },
-      event: "spent-power",
-      type: "this-turn",
+      amount: 4,
+      type: "spell-energy-spent-this-turn",
     },
     effect: {
-      keyword: "AltPlayCost",
-      target: "self",
-      type: "grant-keyword",
+      cost: { energy: 0, power: ["mind"] },
+      type: "alternate-play-cost",
     },
     type: "static",
   },

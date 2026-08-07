@@ -56,6 +56,7 @@ import {
   canAffordCard,
   deductCost,
   discountOptionalPlayCost,
+  getAlternatePlayCost,
   getPlayEnergyDiscountOverflow,
   hasPlayFromTrashGrant,
 } from "./cost";
@@ -643,14 +644,27 @@ export const playUnit: Defs["playUnit"] = {
         getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
       );
     }
+    // rule 356.1 (unl-089-219) — the elected alternate play cost replaces the
+    // printed cost; it is legal only while its condition holds.
+    let altCost: { energy?: number; power?: readonly string[] } | undefined;
+    if (context.params.altCost === true) {
+      altCost = getAlternatePlayCost(
+        state,
+        context.params.playerId as string,
+        context.params.cardId as string,
+      );
+      if (!altCost) {
+        return false;
+      }
+    }
     if (
       !canAffordCard(
         state,
         context.params.playerId,
         context.params.cardId,
         payable
-          ? { additionalCost: { energy: payable.energy, power: payable.power }, board }
-          : { board },
+          ? { additionalCost: { energy: payable.energy, power: payable.power }, board, ...(altCost ? { altCost } : {}) }
+          : { board, ...(altCost ? { altCost } : {}) },
         createMetaAccessor(context.cards),
         getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
       )
@@ -840,6 +854,31 @@ export const playUnit: Defs["playUnit"] = {
             } satisfies RiftboundMoves["playUnit"])
           : undefined;
 
+      // rule 356.1 (unl-089-219) — "If you've spent [4] or more to play a
+      // spell this turn, you may play me for [mind]": an alternate play cost
+      // is a second, cheaper way to play the same card, offered alongside the
+      // printed-cost play (and available even when that one is unaffordable).
+      const alt = standardTiming
+        ? getAlternatePlayCost(state, context.playerId as string, cardId as string)
+        : undefined;
+      const altVariant =
+        alt &&
+        canAffordCard(
+          state,
+          context.playerId as string,
+          cardId as string,
+          { altCost: alt, board },
+          metaForAfford,
+          potential,
+        )
+          ? ({
+              altCost: true,
+              cardId: cardId as string,
+              location: "base",
+              playerId: context.playerId as string,
+            } satisfies RiftboundMoves["playUnit"])
+          : undefined;
+
       // rule-id: ven-096-166 — gate on canAffordCard with board access so
       // self-scaled / friendly static cost reductions are visible here.
       if (
@@ -854,6 +893,9 @@ export const playUnit: Defs["playUnit"] = {
       ) {
         if (paidVariant && standardTiming) {
           results.push(paidVariant);
+        }
+        if (altVariant) {
+          results.push(altVariant);
         }
         results.push(...discardVariants);
         results.push(...buffVariants);
@@ -916,6 +958,9 @@ export const playUnit: Defs["playUnit"] = {
         location: "base",
         playerId: context.playerId as string,
       });
+      if (altVariant) {
+        results.push(altVariant);
+      }
 
       // rule 356.2.b / 414.4 (sfd-079-221) — "you may exhaust your legend as an
       // additional cost": offer the paid variant only while a legend is ready.
@@ -1141,7 +1186,7 @@ export const playUnit: Defs["playUnit"] = {
     );
   },
   reducer: (draft, context) => {
-    const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId, sacrificeIds, discardId, spentBuffIds } =
+    const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId, sacrificeIds, discardId, spentBuffIds, altCost } =
       context.params;
     const { zones, counters } = context;
     // rule 340.2.a / 347.1 — playing this unit as a Focus action during a
@@ -1238,12 +1283,16 @@ export const playUnit: Defs["playUnit"] = {
       createMetaAccessor(context.cards),
     );
 
+    // rule 356.1 (unl-089-219) — the elected alternate play cost replaces the
+    // printed cost. Re-derived here, never trusted from the caller.
+    const altCostSpec = altCost === true ? getAlternatePlayCost(draft, playerId, cardId) : undefined;
     deductCost(
       draft,
       playerId,
       cardId,
       {
         board,
+        ...(altCostSpec ? { altCost: altCostSpec } : {}),
         ...(energyDiscount > 0 ? { additionalCost: { energy: -energyDiscount } } : {}),
         ...(waivePower ? { waivePower } : {}),
       },

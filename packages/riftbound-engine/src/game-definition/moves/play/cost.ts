@@ -1354,6 +1354,11 @@ export interface CostExtras {
    * [1]") apply at pay time (rule 466). Omitted → no board statics apply.
    */
   board?: Pick<CostReductionContext, "zones" | "cards">;
+  /**
+   * rule 356.1 (rule-id: unl-089-219) — an ALTERNATE play cost ("you may play
+   * me for [mind]") replaces the card's printed cost entirely for this play.
+   */
+  altCost?: { energy?: number; power?: readonly string[] };
 }
 
 const NO_BOARD_REDUCTION: StaticCostReduction = { minimum: 0, power: {}, reduction: 0 };
@@ -2084,12 +2089,84 @@ export function getFlowCostForPlay(
  * the printed cost; when playing via [Flow] from the trash, the card's Flow
  * keyword cost replaces the printed cost.
  */
+/**
+ * rule 356.1 (rule-id: unl-089-219) — read a card's ALTERNATE play cost
+ * ("If you've spent [4] or more to play a spell this turn, you may play me for
+ * [mind]"), declared as
+ * `{type:"static", condition:{type:"spell-energy-spent-this-turn", amount},
+ *   effect:{type:"alternate-play-cost", cost:{energy?, power?}}}`.
+ *
+ * Returns the replacement cost only when the condition is currently met; an
+ * unrecognised condition denies the alternate cost (a cheaper play must never
+ * be offered on a guess).
+ */
+export function getAlternatePlayCost(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+): { energy?: number; power?: readonly string[] } | undefined {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  for (const ability of abilities) {
+    if (ability.type !== "static") {
+      continue;
+    }
+    const effect = ability.effect as
+      | { type?: string; cost?: { energy?: number; power?: readonly string[] } }
+      | undefined;
+    if (effect?.type !== "alternate-play-cost") {
+      continue;
+    }
+    const condition = (ability as { condition?: { type?: string; amount?: number } }).condition;
+    if (condition !== undefined) {
+      if (condition.type !== "spell-energy-spent-this-turn") {
+        continue;
+      }
+      const spent = state.spellEnergySpentThisTurn?.[playerId] ?? 0;
+      if (spent < (condition.amount ?? 0)) {
+        continue;
+      }
+    }
+    return effect.cost ?? { energy: 0 };
+  }
+  return undefined;
+}
+
+/**
+ * rule-id: unl-089-219 — remember the Energy paid to play a SPELL so
+ * "if you've spent [4] or more to play a spell this turn" can be evaluated
+ * later in the turn. Kept as the largest single-spell spend.
+ */
+function recordSpellEnergySpent(
+  draft: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  energy: number,
+): void {
+  if (energy <= 0 || getGlobalCardRegistry().getCardType(cardId) !== "spell") {
+    return;
+  }
+  const ledger = (draft as { spellEnergySpentThisTurn?: Record<string, number> })
+    .spellEnergySpentThisTurn ?? {};
+  ledger[playerId] = Math.max(ledger[playerId] ?? 0, energy);
+  (draft as { spellEnergySpentThisTurn?: Record<string, number> }).spellEnergySpentThisTurn =
+    ledger;
+}
+
 export function getBaseCostForPlay(
   cardId: string,
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
 ): { energy: number; power: Partial<Record<string, number>> } {
   const registry = getGlobalCardRegistry();
+  // rule 356.1 (rule-id: unl-089-219) — an alternate play cost supplants the
+  // printed cost; discounts still apply on top of it.
+  if (extras.altCost) {
+    const power: Partial<Record<string, number>> = {};
+    for (const domain of extras.altCost.power ?? []) {
+      power[domain] = (power[domain] ?? 0) + 1;
+    }
+    return { energy: extras.altCost.energy ?? 0, power };
+  }
   if (extras.viaFlow) {
     const flow = getFlowCostForPlay(cardId, getCardMeta);
     if (flow) {
@@ -2439,6 +2516,9 @@ export function deductCost(
     consumeRestrictedEnergy(draft, playerId, cardId, Math.min(adjustedEnergy, pool.energy));
   }
   pool.energy = extras.ignoreEnergyCost ? pool.energy : Math.max(0, pool.energy - adjustedEnergy);
+  if (!extras.ignoreEnergyCost) {
+    recordSpellEnergySpent(draft, playerId, cardId, adjustedEnergy);
+  }
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
   // rule 356.4.f / 809.1.d: a [rainbow] discount cancels the Deflect surcharge
   // (an additional cost added before discounts) before any printed pip.

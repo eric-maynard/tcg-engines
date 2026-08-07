@@ -659,6 +659,12 @@ export interface ChooseTargetChoice {
    * is recorded on `replacementOrderChoices`; no effect is executed here.
    */
   readonly replacementOrderFor?: CardId;
+  /**
+   * rule 809.1.c.1: at least one option carries [Deflect] against this chooser,
+   * so the surcharge is owed when the pick is made (charged in
+   * `pending-choice.ts`, not when the prompt was raised).
+   */
+  readonly deflectTax?: true;
 }
 
 /**

@@ -1010,6 +1010,9 @@ const DEFAULT_PREFS: { param: string; keep: (v: unknown) => boolean }[] = [
   { keep: (v) => v !== true, param: "paidAdditionalCost" },
   { keep: (v) => !v, param: "repeatCount" },
   { keep: (v) => v !== true, param: "viaFlow" },
+  // rule 356.1 (unl-089-219) — an alternate play cost is opt-in: plain
+  // `play(card)` takes the printed cost unless the test asks for it.
+  { keep: (v) => v !== true, param: "altCost" },
   { keep: (v) => v === undefined, param: "sacrificeId" },
   { keep: (v) => v === undefined, param: "discardId" },
   { keep: (v) => v === undefined, param: "chosenTargetId" },
