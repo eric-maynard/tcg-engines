@@ -88,11 +88,12 @@ export interface Cost {
  * Variable-X cost specification.
  *
  * `resource` identifies what kind of resource is being paid per point of X.
- * Currently only `"rainbow-energy"` is supported: each X point consumes
- * 1 energy from the paying player's rune pool (rainbow is universal).
+ * `"power"` / `"rainbow-energy"` — each X point consumes 1 Power of any Domain
+ * (rule 135.2.e.5.a: a [rainbow] cost is paid with any Domain's Power).
+ * `"energy"` — each X point consumes 1 Energy from the rune pool.
  */
 export interface XCost {
-  readonly resource: "rainbow-energy";
+  readonly resource: "energy" | "power" | "rainbow-energy";
 }
 
 /**

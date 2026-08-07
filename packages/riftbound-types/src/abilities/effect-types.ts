@@ -423,6 +423,11 @@ export interface AddResourceEffect {
   readonly type: "add-resource";
   readonly energy?: number;
   readonly power?: Domain[];
+  /**
+   * rule 429.1 — how many times the listed `power` pips are added. Defaults to
+   * 1; "[Add] that much [rainbow]" passes a `{ variable: "x" }` expression.
+   */
+  readonly amount?: number | { readonly variable: string };
 }
 
 /**
