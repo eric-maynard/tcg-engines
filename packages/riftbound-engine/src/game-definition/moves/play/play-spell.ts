@@ -50,8 +50,10 @@ import {
   collectIndependentTargetSlots,
   collectSequenceTargetSlots,
   findAllAtOneBattlefieldTarget,
+  enumerateReferencePairs,
   findAmountReferenceDamageTarget,
   findAmountReferenceTarget,
+  findReferencePair,
   findConditionalBranchTarget,
   findReplacementChosenTarget,
   findSequenceLeadTarget,
@@ -772,6 +774,23 @@ export const playSpell: Defs["playSpell"] = {
         }
       }
     }
+    // rule-id: ven-154-166 (rule 355.8) — "Choose a friendly unit. Kill an
+    // enemy unit with less Might than it": the supplied set must be exactly
+    // [reference, victim] and the victim must be legal FOR THAT reference
+    // (a same-or-bigger enemy is not a legal choice).
+    {
+      const pair = findReferencePair(spellAbility?.effect as SpellEffectTargetShape | undefined);
+      const supplied = (context.params.targets ?? []) as string[];
+      if (pair && supplied.length > 0) {
+        const legal = enumerateReferencePairs(pair, conditionResolverCtx);
+        if (
+          supplied.length !== 2 ||
+          !legal.some(([r, v]) => r === supplied[0] && v === supplied[1])
+        ) {
+          return false;
+        }
+      }
+    }
     // rule-id: ogs-008-024 (rule 355.8) — a `fight` spell names TWO
     // caster-chosen targets, so the supplied set must be exactly
     // [attacker, defender]: distinct, and each legal for its own descriptor.
@@ -1214,8 +1233,20 @@ export const playSpell: Defs["playSpell"] = {
       // same unit may be chosen for more than one of them (no "another"
       // restriction). Enumerate one Play per pick tuple; a shorter tuple
       // leaves the remaining instructions unchosen (they do nothing).
+      // rule-id: ven-154-166 (rule 355.8) — a reference-pair spell locks BOTH
+      // caster choices on the chain item as targets [reference, victim];
+      // enumerate one Play per legal pair.
+      const refPair = findReferencePair(spellEffect);
       const indepSlots = collectIndependentTargetSlots(spellEffect);
-      if (indepSlots && indepSlots.length >= 2) {
+      if (refPair) {
+        for (const [refId, victimId] of enumerateReferencePairs(refPair, resolverCtx)) {
+          baseVariants.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: [refId, victimId],
+          });
+        }
+      } else if (indepSlots && indepSlots.length >= 2) {
         const pools = indepSlots.map(
           (s) =>
             resolveTarget(
@@ -1944,6 +1975,20 @@ export const playSpell: Defs["playSpell"] = {
         },
       };
       if (!spellEffectHasLegalTargets(spellEffect, resolverCtx)) {
+        continue;
+      }
+      // rule-id: ven-154-166 (rule 355.8) — a Flow play makes the same two
+      // caster choices as a play from hand: lock [reference, victim].
+      const flowRefPair = findReferencePair(spellEffect);
+      if (flowRefPair) {
+        for (const [refId, victimId] of enumerateReferencePairs(flowRefPair, resolverCtx)) {
+          results.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: [refId, victimId],
+            viaFlow: true,
+          });
+        }
         continue;
       }
       // rule-id: sfd-017-221 (rule 355.8) — lift a sequence's lead target.

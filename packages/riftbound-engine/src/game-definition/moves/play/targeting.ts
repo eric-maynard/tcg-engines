@@ -6,7 +6,7 @@
 import { isAllAtOneBattlefield, resolveTarget } from "../../../abilities/target-resolver";
 import { type CounterTargetContext, isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
-import { getDeflectSurcharge } from "./cost";
+import { getCardEffectiveMight, getDeflectSurcharge } from "./cost";
 
 export type SpellEffectTargetDescriptor =
   | string
@@ -329,6 +329,50 @@ export function findAmountReferenceDamageTarget(
 }
 
 /**
+ * rule-id: ven-154-166 (rule 355.8) — "Choose a friendly unit. Kill an enemy
+ * unit with less Might than it": the effect carries an explicit `reference`
+ * descriptor ALONGSIDE its own single-card target, so the spell names TWO
+ * caster-chosen targets, locked as [reference, victim]. A `reference` paired
+ * with a programmatic (`quantity`-carrying) or `chosen-battlefield` selection
+ * (unl-107-219 Stare Down) is not this shape.
+ */
+export function findReferencePair(
+  effect: SpellEffectTargetShape | undefined,
+): { reference: Exclude<SpellEffectTargetDescriptor, string>; target: Exclude<SpellEffectTargetDescriptor, string> } | undefined {
+  const ref = effect?.reference;
+  const tgt = effect?.target;
+  if (!ref || typeof ref === "string" || !tgt || typeof tgt === "string") return undefined;
+  if (tgt.quantity !== undefined || effect?.from !== undefined) return undefined;
+  return { reference: ref, target: tgt };
+}
+
+/**
+ * rule 355.8 (ven-154-166) — the pairs a reference-pair spell may legally
+ * choose: every [reference, victim] whose victim satisfies the target
+ * descriptor read against that reference's current Might.
+ */
+export function enumerateReferencePairs(
+  pair: { reference: object; target: object },
+  ctx: Parameters<typeof resolveTarget>[1],
+): [string, string][] {
+  const refs = resolveTarget(
+    { ...pair.reference, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+    ctx,
+  ) as string[];
+  const out: [string, string][] = [];
+  for (const refId of refs) {
+    const victims = resolveTarget(
+      { ...pair.target, quantity: "all" } as Parameters<typeof resolveTarget>[0],
+      { ...ctx, referenceMight: getCardEffectiveMight(refId, (c) => ctx.cards.getCardMeta?.(c)) },
+    ) as string[];
+    for (const victim of victims) {
+      if (victim !== refId) out.push([refId, victim]);
+    }
+  }
+  return out;
+}
+
+/**
  * rule-id: ogn-256-298 (Fox-Fire) — aggregate legality of a multi-target pick
  * set ("any number of units at a battlefield with total Might 4 or less"):
  * "at a battlefield" (singular) pins every pick to ONE battlefield zone, and
@@ -594,6 +638,15 @@ export function spellEffectHasLegalTargets(
     );
     if (branches.length > 0) {
       return branches.every((b) => spellEffectHasLegalTargets(b, ctx, affordable));
+    }
+  }
+  // rule 355.8 (rule-id: ven-154-166) — a reference-pair spell needs a legal
+  // [reference, victim] PAIR: friendly units with no smaller enemy (and enemies
+  // with no bigger friendly) make the play illegal.
+  {
+    const pair = findReferencePair(effect);
+    if (pair) {
+      return enumerateReferencePairs(pair, ctx).length > 0;
     }
   }
   // rule-id: ogn-198-298 (rule 355.10.a) — an off-board play ("play a unit

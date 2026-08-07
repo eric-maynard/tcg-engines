@@ -33,6 +33,15 @@ export function bindChosenTarget(effect: Effect, chosen: AnyTarget): Effect {
     const [first, ...rest] = e.effects;
     return { ...e, effects: [bindChosenTarget(first, chosen), ...rest] } as unknown as Effect;
   }
+  // rule-id: ven-154-166 (rule 355.8) — "…with less Might than IT": the
+  // comparison's referent is the chosen unit, carried as `reference`.
+  const withRef = e as { reference?: unknown };
+  if (isPronounTarget(withRef.reference)) {
+    const bound = { ...e, reference: chosen } as unknown as Effect;
+    return isPronounTarget((bound as unknown as { target?: unknown }).target)
+      ? ({ ...(bound as unknown as object), target: chosen } as unknown as Effect)
+      : bound;
+  }
   if ("target" in e && isPronounTarget(e.target)) {
     return { ...e, target: chosen } as unknown as Effect;
   }

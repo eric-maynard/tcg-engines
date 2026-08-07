@@ -230,6 +230,46 @@ function handleEachOpponentKill(
   }
 }
 
+/**
+ * rule-id: ven-154-166 (rule 355.8 / 359.3.e) — "Choose a friendly unit. Kill
+ * an enemy unit with less Might than it": the two play-time choices arrive as
+ * boundTargets [reference, victim]. The reference is only MEASURED (never
+ * killed), and the "less Might" requirement is re-checked here: a victim
+ * pumped in response to match or exceed the reference — or a reference that
+ * left the board — means no kill, though the spell still resolves.
+ */
+function handleReferenceKill(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  h: EffectHelpers,
+): void {
+  const [refId, victimId] = ctx.boundTargets ?? [];
+  if (refId === undefined || victimId === undefined) {
+    return;
+  }
+  const refDesc = (effect as { reference?: object }).reference as object;
+  const resolverCtx = {
+    cards: ctx.cards,
+    draft: ctx.draft,
+    playerId: ctx.playerId,
+    sourceCardId: ctx.sourceCardId,
+    sourceZone: ctx.sourceZone,
+    zones: ctx.zones,
+  };
+  const refs = resolveTarget({ ...refDesc, quantity: "all" } as never, resolverCtx as never);
+  if (!refs.includes(refId)) {
+    return;
+  }
+  const victims = resolveTarget({ ...(effect.target as object), quantity: "all" } as never, {
+    ...resolverCtx,
+    referenceMight: h.getEffectiveMight(refId, ctx),
+  } as never);
+  if (!victims.includes(victimId)) {
+    return;
+  }
+  killUnits([victimId], ctx, h);
+}
+
 export function handle_kill(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   if ((effect as { chooser?: string }).chooser === "each-other-player") {
     handleEachOtherChoosesKill(effect, ctx, h);
@@ -241,6 +281,10 @@ export function handle_kill(effect: ExecutableEffect, ctx: EffectContext, h: Eff
   }
   if (isEachOpponentsOwn(effect)) {
     handleEachOpponentKill(effect, ctx, h);
+    return;
+  }
+  if (typeof (effect as { reference?: unknown }).reference === "object") {
+    handleReferenceKill(effect, ctx, h);
     return;
   }
   killUnits(getTargetIds(effect, ctx), ctx, h);

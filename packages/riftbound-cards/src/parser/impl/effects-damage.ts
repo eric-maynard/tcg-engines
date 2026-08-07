@@ -231,6 +231,13 @@ export function parseKillEffect(text: string): KillEffect | SequenceEffect | und
         gearTarget.filter = {
           energyCost: { lte: Number(energyLteMatch[1] ?? energyLteMatch[2]) },
         };
+      } else if (
+        // rule-id: ven-080-166 — "with Energy cost no more than my Might": the
+        // ceiling is read off the source when the ability resolves, so it stays
+        // a symbolic filter rather than a number.
+        /with\s+Energy cost\s+no more than\s+my\s+(?::rb_might:|\[?Might\]?)/i.test(withClause ?? "")
+      ) {
+        gearTarget.filter = { energyCostAtMostSelfMight: true };
       }
       return { target: gearTarget as unknown as AnyTarget, type: "kill" };
     }
@@ -242,6 +249,18 @@ export function parseKillEffect(text: string): KillEffect | SequenceEffect | und
       (target as { filter?: unknown }).filter = {
         might: { lte: Number.parseInt(mightLteMatch[1], 10) },
       };
+    }
+    // rule-id: ven-154-166 (rule 355.8) — "Kill an enemy unit with less Might
+    // than IT": "it" is the unit named by the "Choose a friendly unit."
+    // preamble, so the kill carries a caster-chosen `reference` (bound by
+    // bindChosenTarget) and the victim is filtered against that unit's Might.
+    if (/with\s+less\s+(?::rb_might:|\[?Might\]?)\s+than\s+it\b/i.test(withClause ?? "")) {
+      (target as { filter?: unknown }).filter = { mightLessThanReference: true };
+      return {
+        reference: { type: "unit" },
+        target: target as AnyTarget,
+        type: "kill",
+      } as unknown as KillEffect;
     }
     // rule-id: ogn-256-298 (Fox-Fire) — "any number of units ... with total
     // Might N or less": caster picks 0..n targets whose SUMMED Might ≤ N.
@@ -295,12 +314,25 @@ export function parsePreventDamageEffect(text: string): PreventDamageEffect | un
   if (!match) {
     return undefined;
   }
-  const effect: { type: "prevent-damage"; amount?: "all"; duration?: "turn" | "next" } = {
+  const effect: {
+    type: "prevent-damage";
+    amount?: "all" | number;
+    duration?: "turn" | "next";
+    target?: AnyTarget;
+  } = {
     type: "prevent-damage",
   };
   if (match[1].toLowerCase() === "all") {
     effect.amount = "all";
+  } else if (match[2] && /^\d+$/.test(match[2])) {
+    // rule 437.1.b.1.a — "Prevent the next 7 damage": the Prevent Value is a number.
+    effect.amount = Number(match[2]);
   }
   effect.duration = text.toLowerCase().includes("this turn") ? "turn" : "next";
+  // rule 355 — "…that would be dealt to it": the shield lands on the unit named
+  // by the "Choose a unit." preamble (bindChosenTarget rewrites this pronoun).
+  if (/\bdealt to (?:it|that unit)\b/i.test(text)) {
+    effect.target = { type: "unit" } as AnyTarget;
+  }
   return effect as PreventDamageEffect;
 }
