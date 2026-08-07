@@ -31,6 +31,7 @@ import { handle_extraTurn } from "./extra-turn";
 import { handle_banish } from "./banish";
 import { handle_counter } from "./counter";
 import { handle_createToken } from "./create-token";
+import { handle_eachOpponentMay } from "./each-opponent-may";
 import { handle_attach } from "./attach";
 import { handle_attach_or_detach } from "./attach-or-detach";
 import { handle_detach } from "./detach";
@@ -104,6 +105,8 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "banish": handle_banish,
   "counter": handle_counter,
   "create-token": handle_createToken,
+  // rule-id: sfd-081-221 — "each opponent may …".
+  "each-opponent-may": handle_eachOpponentMay,
   "attach": handle_attach,
   "attach-or-detach": handle_attach_or_detach,
   "detach": handle_detach,

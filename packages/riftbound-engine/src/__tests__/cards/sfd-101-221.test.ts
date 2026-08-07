@@ -122,7 +122,7 @@ describe("Fae Dragon (sfd-101-221)", () => {
     expect(game.p1.gear()).toHaveLength(0);
   });
 
-  test.failing("BUG: When you spend a buff — paying Wallop's optional cost with a friendly buff plays one exhausted Gold token", async () => {
+  test("When you spend a buff — paying Wallop's optional cost with a friendly buff plays one exhausted Gold token", async () => {
     // Expected: buff removed, Wallop free, and a Gold gear token (exhausted) in P1's base once the
     // trigger resolves. Actual: the buff is spent but no spend-buff trigger reaches the Dragon.
     const game = await scenario()
@@ -141,7 +141,7 @@ describe("Fae Dragon (sfd-101-221)", () => {
     expect(game.state(gold[0] as string)).toMatchObject({ cardType: "gear", isExhausted: true, isToken: true, owner: P1 });
   });
 
-  test.failing("BUG: each buff spent is its own trigger — Kraken Hunter spending two buffs plays TWO Gold tokens", async () => {
+  test("each buff spent is its own trigger — Kraken Hunter spending two buffs plays TWO Gold tokens", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .unit(P1, "base", CARD, "fae")
@@ -156,7 +156,7 @@ describe("Fae Dragon (sfd-101-221)", () => {
     expect(goldOf(game, "p1")).toHaveLength(2);
   });
 
-  test.failing("BUG: a 'spend a buff to …' instruction (Wildclaw Shaman) is also a spend → one Gold token", async () => {
+  test("a 'spend a buff to …' instruction (Wildclaw Shaman) is also a spend → one Gold token", async () => {
     const game = await scenario()
       .resources(P1, { energy: 4 })
       .unit(P1, "base", CARD, "fae")

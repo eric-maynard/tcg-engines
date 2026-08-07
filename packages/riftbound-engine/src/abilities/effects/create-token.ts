@@ -79,7 +79,7 @@ function applyPlayTokenReplacement(ctx: EffectContext): number {
   return 0;
 }
 
-export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   if (!ctx.createCardInZone) {
     return;
   }
@@ -106,6 +106,9 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     targetZone = "base";
   }
 
+  // rule-id: sfd-081-221 — a token an effect plays "for" another player (the
+  // source's controller while an opponent's prompt resolves) names its owner.
+  const ownerId = ((effect as { ownerId?: string }).ownerId ?? ctx.playerId) as typeof ctx.playerId;
   const registry = getGlobalCardRegistry();
   // Rule unl-160-219: chain-moves stamps ability-minted tokens with
   // definitionId `token-def-<slug>`; the snapshot builder resolves that
@@ -156,7 +159,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     // A process-wide sequence keeps ids unique when two create-token effects
     // resolve within the same millisecond (e.g. a [Repeat]ed spell).
     const tokenId = `token-${tokenSlug}-${Date.now()}-${tokenSeq++}`;
-    ctx.createCardInZone(tokenId, targetZone, ctx.playerId);
+    ctx.createCardInZone(tokenId, targetZone, ownerId);
     createdIds.push(tokenId);
     // Rule 143.4 / 185.2.d: token units enter play exhausted; gear tokens
     // enter ready unless the effect says otherwise (sfd-004-221).
@@ -209,7 +212,7 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     // Rule unl-058-219: creating a unit token is "playing a token unit" —
     // fire after registry registration so trigger effects can resolve it.
     if (tokenDef.type !== "gear") {
-      ctx.fireTriggers?.({ cardId: tokenId, playerId: ctx.playerId, type: "play-token-unit" });
+      ctx.fireTriggers?.({ cardId: tokenId, playerId: ownerId, type: "play-token-unit" });
     }
   }
   // rule-id: ogs-015-024 (rule 439.2.b.1) — with no zone specified, a unit
@@ -231,5 +234,12 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         type: "choose-destination",
       };
     }
+  }
+  // rule-id: sfd-081-221 — a follow-up instruction printed on the same
+  // sentence ("… and each opponent may …") rides along as `then`, and waits
+  // when this effect itself parked a prompt.
+  const then = (effect as { then?: ExecutableEffect }).then;
+  if (then && !ctx.draft.pendingChoice) {
+    h.executeEffect(then, ctx);
   }
 }

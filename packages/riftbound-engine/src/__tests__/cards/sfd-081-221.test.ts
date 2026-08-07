@@ -64,7 +64,7 @@ describe("Card Sharp (sfd-081-221)", () => {
     });
   });
 
-  test.failing("BUG: parsed ability should carry the printed 'you MAY' and the per-opponent offer, not a bare create-token", async () => {
+  test("parsed ability should carry the printed 'you MAY' and the per-opponent offer, not a bare create-token", async () => {
     // Expected: the registry payload marks the controller's token optional and models "each opponent may …
     // for each opponent who did". Actual: a single unconditional create-token for the controller.
     const ability = (await loadDefaultCardPool()).get(CARD)?.abilities?.[0] as Record<string, unknown> | undefined;
@@ -110,7 +110,7 @@ describe("Card Sharp (sfd-081-221)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: 'you MAY' — the controller is asked and can decline, ending with no Gold at all", async () => {
+  test("'you MAY' — the controller is asked and can decline, ending with no Gold at all", async () => {
     // Expected: a yes/no for P1; answering no creates nothing. Actual: no prompt, the token is always made.
     const game = await board().build();
     const asked = await playSharp(game, () => false);
@@ -119,7 +119,7 @@ describe("Card Sharp (sfd-081-221)", () => {
     expect(goldOf(game, P2)).toEqual([]);
   });
 
-  test.failing("BUG: 'each opponent may' — the opponent gets their own yes/no; accepting gives THEM an exhausted Gold", async () => {
+  test("'each opponent may' — the opponent gets their own yes/no; accepting gives THEM an exhausted Gold", async () => {
     // Expected: P2 is prompted; on yes P2 controls one exhausted Gold token. Actual: P2 is never asked.
     const game = await board().build();
     const asked = await playSharp(game, () => true);
@@ -129,7 +129,7 @@ describe("Card Sharp (sfd-081-221)", () => {
     expect(game.state(theirs[0] as string)).toMatchObject({ controller: P2, isExhausted: true, isToken: true });
   });
 
-  test.failing("BUG: 'for each opponent who did' — when the opponent accepts you play a second exhausted Gold (2 for you, 1 for them)", async () => {
+  test("'for each opponent who did' — when the opponent accepts you play a second exhausted Gold (2 for you, 1 for them)", async () => {
     const game = await board().build();
     await playSharp(game, () => true);
     expect(goldOf(game, P2)).toHaveLength(1);
@@ -138,7 +138,7 @@ describe("Card Sharp (sfd-081-221)", () => {
     expect(mine.every((id) => game.state(id).isExhausted)).toBe(true);
   });
 
-  test.failing("BUG: three players — both opponents accept → you finish with 3 Gold, each of them with 1", async () => {
+  test("three players — both opponents accept → you finish with 3 Gold, each of them with 1", async () => {
     const game = await scenario({ players: 3 }).resources(P1, { energy: 3 }).hand(P1, CARD, "sharp").build();
     const asked = await playSharp(game, () => true);
     expect(new Set(asked)).toEqual(new Set([P1, P2, P3]));
@@ -158,7 +158,7 @@ describe("Card Sharp (sfd-081-221)", () => {
 
   test("on your next turn the readied Gold cashes in: the token ceases to exist and you gain 1 power (rainbow)", async () => {
     const game = await board().build();
-    await playSharp(game);
+    await playSharp(game, (seat) => seat === P1); // only my own Gold, so this test tracks exactly one token
     const [gold] = goldOf(game, P1) as [string];
     await game.advanceTurn(); // → P2
     expect(game.state(gold).isExhausted).toBe(true); // only YOUR awaken readies your permanents
@@ -189,7 +189,7 @@ describe("Card Sharp (sfd-081-221)", () => {
 
   test("[Reaction] on the Gold: with it ready, you may cash it on the OPPONENT's turn while their spell is on the chain — but not in their Open state", async () => {
     const game = await board().resources(P2, { energy: 0 }).hand(P2, FRIGID_TOUCH, "ft").build();
-    await playSharp(game);
+    await playSharp(game, (seat) => seat === P1); // only my own Gold, so this test tracks exactly one token
     const [gold] = goldOf(game, P1) as [string];
     await game.advanceTurn(); // P2
     await game.advanceTurn(); // P1 (gold readies)

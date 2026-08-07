@@ -70,6 +70,10 @@ export type GameEvent =
   | { type: "draw"; playerId: string }
   | { type: "channel-rune"; playerId: string; runeId: string }
   | { type: "buff"; cardId: string; playerId?: string }
+  // rule 702.2.b — spending a buff (as a cost or an instruction) is its own
+  // event, fired once PER buff removed; `playerId` is the player who spent it
+  // ("When YOU spend a buff"), `cardId` the card whose cost/effect spent it.
+  | { type: "spend-buff"; cardId: string; playerId: string; spentFrom?: string }
   | { type: "start-of-turn"; playerId: string }
   // rule-id: 516-main-phase-start (ven-067-166 Bottled Constellation)
   | { type: "main-phase"; playerId: string }

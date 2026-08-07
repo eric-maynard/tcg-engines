@@ -9,20 +9,27 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  exhausted. For each opponent who did, you play a Gold gear token
  *  exhausted."
  *
- * Approximated as: on play, create a Gold token for self + for each opponent
- * (approximation — we don't model the per-player opt-in separately).
+ * rule 355.13 / 115: three independent "may"s. The controller's own token is
+ * the ability's opt-in (`optional`); each opponent then answers for themselves
+ * and every acceptance also plays a Gold for the controller.
  */
 const abilities: Ability[] = [
   {
     effect: {
       ready: false,
+      then: {
+        bonus: { ready: false, token: { name: "Gold", type: "gear" }, type: "create-token" },
+        effect: { ready: false, token: { name: "Gold", type: "gear" }, type: "create-token" },
+        type: "each-opponent-may",
+      },
       token: { name: "Gold", type: "gear" },
       type: "create-token",
     },
+    optional: true,
     trigger: { event: "play-self" },
     type: "triggered",
   },
-];
+] as unknown as Ability[];
 
 export const cardSharp: UnitCard = {
   abilities,

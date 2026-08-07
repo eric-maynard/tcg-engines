@@ -125,7 +125,8 @@ export const TRIGGER_PATTERNS: {
   { event: "discard", on: "self", pattern: /^When you discard me,\s*/i },
   { event: "buff", pattern: /^When you buff a (?:friendly )?unit,\s*/i },
   { event: "buff", on: "self", pattern: /^When I'm buffed,\s*/i },
-  { event: "spend-buff", pattern: /^When you spend a buff,\s*/i },
+  // rule 702.2.b — "When YOU spend a buff": scoped to this card's controller.
+  { event: "spend-buff", on: "controller", pattern: /^When you spend a buff,\s*/i },
   { event: "recycle", on: "controller", pattern: /^When you recycle one or more cards,\s*/i },
   { event: "choose-or-ready", on: "self", pattern: /^When you choose or ready me,\s*/i },
   { event: "attach-equipment", on: "self", pattern: /^When you attach an Equipment to me,\s*/i },

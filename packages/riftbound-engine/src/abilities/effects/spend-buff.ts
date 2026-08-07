@@ -81,6 +81,14 @@ export function handle_spendBuff(effect: ExecutableEffect, ctx: EffectContext, h
       spent as CoreCardId,
       { buffed: false } as unknown as Record<string, unknown>,
     );
+    // rule 702.2.b: a "spend a buff to …" instruction is a spend too — fire the
+    // event once per buff removed, before the nested effect resolves.
+    ctx.fireTriggers?.({
+      cardId: ctx.sourceCardId,
+      playerId: ctx.playerId,
+      spentFrom: spent,
+      type: "spend-buff",
+    });
     if (then) {
       h.executeEffect(then, ctx);
     }

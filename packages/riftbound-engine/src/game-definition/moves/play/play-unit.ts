@@ -1168,9 +1168,11 @@ export const playUnit: Defs["playUnit"] = {
         { buffed: false } as Partial<RiftboundCardMeta>,
       );
     }
-    if (spentBuffs.length > 0) {
+    // rule 702.2.b: each buff spent is its own event ("When you spend a buff"
+    // fires once per buff, so spending two buffs mints two Gold tokens).
+    for (const id of spentBuffs) {
       fireTriggers(
-        { cardId, playerId, type: "spend-buff" },
+        { cardId, playerId, spentFrom: id as string, type: "spend-buff" },
         { cards: context.cards, counters, draft, zones },
       );
     }
