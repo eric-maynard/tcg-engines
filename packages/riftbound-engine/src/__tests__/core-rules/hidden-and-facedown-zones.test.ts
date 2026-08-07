@@ -915,7 +915,7 @@ describe("107.3.b / 107.3.b.1 / 107.3.b.2 / 421.4: facedown capacity can be rais
     expect(game.p1.power()).toBe(1);
   });
 
-  test.failing("BUG (capability probe): 107.3.b.2 — when M leaves the board the maximum drops to 1 < 2 occupants and P1 (the zone's controller) must immediately CHOOSE one of H1/H2 to trash (revealed); the other stays facedown; not both, not random, not deferred to end of turn", async () => {
+  test("(capability probe): 107.3.b.2 — when M leaves the board the maximum drops to 1 < 2 occupants and P1 (the zone's controller) must immediately CHOOSE one of H1/H2 to trash (revealed); the other stays facedown; not both, not random, not deferred to end of turn", async () => {
     // Expected: after M dies a pick decision for P1 over {H1, H2}; picking H2 trashes exactly H2.
     // Actual: capacity boost is never applied, so the position cannot even be reached.
     const game = await boosterBoard().hand(P1, ACTION_PING_2, "ownZap").build();

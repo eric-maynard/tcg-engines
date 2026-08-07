@@ -80,11 +80,19 @@ function sweepOffBoardTokens(ctx: CleanupContext): boolean {
     return false;
   }
   let removed = false;
+  // Trash/hand/deck are per-player zones: a zone read without an owner misses
+  // their contents, so sweep each player's copy as well as the bare zone id.
+  const owners: (CorePlayerId | undefined)[] = [
+    undefined,
+    ...Object.keys(ctx.draft.players ?? {}).map((p) => p as CorePlayerId),
+  ];
   for (const zoneId of TOKEN_SWEEP_ZONE_IDS) {
-    for (const cardId of ctx.zones.getCardsInZone(zoneId as CoreZoneId)) {
-      if ((cardId as string).startsWith("token-")) {
-        remove({ cardId });
-        removed = true;
+    for (const owner of owners) {
+      for (const cardId of ctx.zones.getCardsInZone(zoneId as CoreZoneId, owner)) {
+        if ((cardId as string).startsWith("token-")) {
+          remove({ cardId });
+          removed = true;
+        }
       }
     }
   }
