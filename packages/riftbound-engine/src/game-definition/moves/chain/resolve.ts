@@ -141,6 +141,40 @@ export function executeResolvedItem(
         return;
       }
     }
+    // rule 355.8 — an ability that must choose a Game Object with no legal
+    // candidate does nothing, so a "you may" version offers no prompt either.
+    // rule-id: unl-205-219 (Abandoned Hall) — "they may give a unit they
+    // control here +1": the spell's player may control no unit at the Hall.
+    // Effects that gather their candidates from a private zone ("play a unit
+    // from your trash") describe them with the same `target` shape but the
+    // board resolver can't see them — never judge those legal/illegal here.
+    const optTarget =
+      leadEffect?.type === "play" ||
+      (leadEffect as { from?: unknown } | undefined)?.from !== undefined
+        ? undefined
+        : (leadEffect as { target?: TargetDescriptor } | undefined)?.target;
+    if (
+      optTarget !== undefined &&
+      typeof optTarget.type === "string" &&
+      // Kept deliberately narrow: only "a unit YOU control …" descriptors, where
+      // an empty candidate set is unambiguous and cannot depend on board state
+      // the resolver reads differently at resolution time.
+      optTarget.controller === "friendly" &&
+      optTarget.type !== "self" &&
+      optTarget.type !== "trigger-source" &&
+      optTarget.type !== "player" &&
+      optTarget.type !== "battlefield" &&
+      optTarget.quantity === undefined
+    ) {
+      const optCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
+      const optCandidates = resolveTarget({ ...optTarget, quantity: "all" }, {
+        ...optCtx,
+        choosing: true,
+      } as Parameters<typeof resolveTarget>[1]);
+      if (optCandidates.length === 0) {
+        return;
+      }
+    }
     draft.pendingChoice = {
       type: "opt-in",
       playerId: resolved.controller,
@@ -578,7 +612,11 @@ export function executeResolvedItem(
     }
   }
   const preLen = draft.interaction?.chain?.items.length ?? 0;
-  if (!mistargeted) {
+  // rule 359.3.e.5 (ogn-242-298) — illegality is judged per INSTRUCTION: a
+  // sequence whose lead step lost its only target ("Kill a friendly unit.
+  // Look at the top 5 cards…") still performs its remaining instructions.
+  // A single-instruction effect resolves but does nothing.
+  if (!mistargeted || effect.type === "sequence") {
     executeEffect(effect, effectCtx);
   }
   firePlayedCardTriggers(resolved, draft, context, preLen);

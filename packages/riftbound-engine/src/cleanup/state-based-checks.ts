@@ -822,10 +822,19 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     // pendingChoice (e.g. the replayed unit's choose-destination) means the
     // last chain item has not finished resolving, so the state is still
     // Closed even though the chain itself has emptied.
+    // rule 309.1 / 190.4.c — units reaped in THIS pass have not had their `die`
+    // event dispatched yet, so the Deathknell / dies-triggers they generate are
+    // not on the chain when step 6 runs. Those pending items keep the turn in a
+    // Closed State, so defer the 323.6 check to the next maintenance pass (the
+    // runner always makes one after a pass that killed something).
+    // rule-id: sfd-165-221 (Glasc Mixologist) — his Deathknell may play a unit
+    // back to the battlefield he just died at, which requires that battlefield
+    // to still be controlled by his controller.
     const isOpenState =
       !ctx.draft.interaction?.chain?.active &&
       (ctx.draft.interaction?.showdownStack?.length ?? 0) === 0 &&
-      !ctx.draft.pendingChoice;
+      !ctx.draft.pendingChoice &&
+      killed.length === 0;
     if (bf.controller && isOpenState) {
       // rule 323.6 / 127.1: "have a Unit there" follows CONTROL, not ownership — a unit
       // stolen by e.g. Hostile Takeover holds the battlefield for its new controller.

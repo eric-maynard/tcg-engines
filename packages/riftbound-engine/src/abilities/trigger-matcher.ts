@@ -83,6 +83,12 @@ export interface TriggerableAbility {
     readonly event: string;
     readonly on?: string;
     readonly restrictions?: readonly TriggerRestriction[];
+    /**
+     * rule-id: unl-205-219 — "When a player plays a spell, THEY may …": the
+     * ability is controlled by the player who caused the event, not by the
+     * controller of the card printing it.
+     */
+    readonly controllerFromEvent?: boolean;
   };
   readonly effect: unknown;
   readonly optional?: boolean;

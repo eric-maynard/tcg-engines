@@ -186,6 +186,13 @@ export interface Trigger {
 
   /** Additional condition that must be true */
   readonly condition?: Condition;
+
+  /**
+   * The triggered ability belongs to the player who caused the event, not to
+   * the controller of the card that carries it — "When a player plays a spell,
+   * *they* may …" (rule 583.1: the ability's controller is who the text names).
+   */
+  readonly controllerFromEvent?: boolean;
 }
 
 /**

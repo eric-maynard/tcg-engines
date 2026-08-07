@@ -14,6 +14,7 @@ const abilities: Ability[] = [
       amount: 1,
       duration: "turn",
       target: {
+        controller: "friendly",
         location: "here",
         type: "unit",
       },
@@ -21,6 +22,9 @@ const abilities: Ability[] = [
     },
     optional: true,
     trigger: {
+      // "they may give a unit THEY control here": the trigger belongs to the
+      // player who played the spell, not to the Hall's controller.
+      controllerFromEvent: true,
       event: "play-spell",
       on: { cardType: "spell", controller: "any" },
     },

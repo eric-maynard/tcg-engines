@@ -39,6 +39,18 @@ function trashBoard() {
     .trash(P1, IMMORTAL_PHOENIX, "phoenix");
 }
 
+/**
+ * A unit played from the trash while its own dies-trigger is still pending may choose the
+ * battlefield it died at (rule 309.1 / 323.6 — the turn is Closed, so control was not lost);
+ * these cases want it in base.
+ */
+async function pickBase(game: { decision: () => { kind: string } | null; p1: { pick: (k: string) => Promise<unknown> }; settle: () => Promise<unknown> }): Promise<void> {
+  if (game.decision()?.kind === "pick") {
+    await game.p1.pick("base");
+    await game.settle();
+  }
+}
+
 describe("Immortal Phoenix — which kill sources count as 'you kill a unit with a spell'", () => {
   test("(a) Sky Splitter's damage kills an enemy unit in cleanup → kill attributed to the spell (428.5.c); P1 is offered the [1][fury] replay and Phoenix lands in base", async () => {
     // victim → trash, then a yes/no "Pay [1][fury]…" prompt for P1; yes → Phoenix from
@@ -110,6 +122,9 @@ describe("Immortal Phoenix — which kill sources count as 'you kill a unit with
       expect(game.p1.power("fury")).toBe((before.power.fury ?? 0) - 1);
       expect(game.chain().map((i) => i.cardId)).toEqual(["phoenix"]);
       await game.settle();
+      // rule 309.1 / 323.6: while the trigger was pending the turn was Closed, so P1 still
+      // controls the now-empty bf1 — the replay may choose it or base (355.2.a).
+      await pickBase(game);
       expect(game.zoneOf("phoenix")).toBe("base");
       expect(game.p1.units("base")).toContain("phoenix");
       expect(game.chain()).toHaveLength(0);
@@ -123,6 +138,7 @@ describe("Immortal Phoenix — which kill sources count as 'you kill a unit with
       await game.settle();
       await game.p1.yes();
       await game.settle();
+      await pickBase(game);
       expect(game.zoneOf("phoenix")).toBe("base");
       expect(game.state("phoenix").damage).toBe(0);
       expect(game.violations()).toEqual([]);
@@ -135,6 +151,7 @@ describe("Immortal Phoenix — which kill sources count as 'you kill a unit with
       await game.settle();
       await game.p1.yes();
       await game.settle();
+      await pickBase(game);
       expect(game.zoneOf("phoenix")).toBe("base");
       expect(game.state("phoenix").isExhausted).toBe(true);
     });

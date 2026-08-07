@@ -102,7 +102,7 @@ describe("Ruling a8538a3f0ddb9031 — Abandoned Hall does not trigger off a coun
     expect(game.state("guard").might).toBe(2);
   });
 
-  test.failing("BUG: ruling a8538a3f0ddb9031 — after the counter, nobody can buff the Hall unit: Dredge Up wasn't played, and Wind Wall's trigger belongs to P2 ('they'), who controls no unit here; engine instead asks P1 to use the Hall", async () => {
+  test("ruling a8538a3f0ddb9031 — after the counter, nobody can buff the Hall unit: Dredge Up wasn't played, and Wind Wall's trigger belongs to P2 ('they'), who controls no unit here; engine instead asks P1 to use the Hall", async () => {
     // Expected: no prompt for P1 at all; the line ends in P1's open main phase with guard at 2 Might.
     // Actual: the engine routes Wind Wall's Hall trigger to P1 (the Hall's controller) as a yes/no opt-in.
     const game = await board().build();

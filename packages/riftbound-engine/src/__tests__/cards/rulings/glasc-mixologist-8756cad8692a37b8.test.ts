@@ -55,7 +55,7 @@ async function passAll(game: Game): Promise<void> {
 }
 
 describe("Ruling 8756cad8692a37b8 — Glasc Mixologist's Deathknell may play the unit to the battlefield where he died", () => {
-  test.failing("BUG: ruling 8756cad8692a37b8 — with the Deathknell pending on the chain the turn is Closed, so P1 keeps control of the now-empty bf1 (323.6 needs an Open State); engine drops control immediately", async () => {
+  test("ruling 8756cad8692a37b8 — with the Deathknell pending on the chain the turn is Closed, so P1 keeps control of the now-empty bf1 (323.6 needs an Open State); engine drops control immediately", async () => {
     const game = await glascDies();
     // The Deathknell is a chain item now; nobody has an open main phase.
     expect(game.chain().map((c) => c.cardId)).toEqual(["glasc"]);
@@ -64,7 +64,7 @@ describe("Ruling 8756cad8692a37b8 — Glasc Mixologist's Deathknell may play the
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: ruling 8756cad8692a37b8 — P1 may play Skulker from trash for free and bf1 (still P1's) is offered as its destination; it lands there and bf1 stays P1's; engine resolves the Deathknell onto the wrong object and loses bf1", async () => {
+  test("ruling 8756cad8692a37b8 — P1 may play Skulker from trash for free and bf1 (still P1's) is offered as its destination; it lands there and bf1 stays P1's; engine resolves the Deathknell onto the wrong object and loses bf1", async () => {
     // Expected: P1 opt-in → choose Skulker (the only ≤3-cost unit in P1's trash) → destination pick offering
     // base AND battlefield-bf1 → Skulker at bf1, exhausted, P1 still controls bf1, P1 paid nothing.
     const game = await glascDies();

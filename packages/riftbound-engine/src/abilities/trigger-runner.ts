@@ -52,6 +52,32 @@ const KEYWORD_SELF_TRIGGER_EVENTS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Who controls the triggered ability once it goes on the Chain.
+ *
+ * Normally the controller of the card carrying the ability. But a text that
+ * names the acting player — "When a player plays a spell, THEY may …"
+ * (rule-id: unl-205-219 Abandoned Hall) — belongs to whoever caused the event,
+ * so "a unit they control here" and the "you may" prompt both follow that
+ * player. Opted into per-ability via `trigger.controllerFromEvent`.
+ */
+function triggerControllerFor(match: MatchedTrigger): string {
+  const trigger = (match.ability as { trigger?: { controllerFromEvent?: boolean } }).trigger;
+  if (trigger?.controllerFromEvent !== true) {
+    return match.cardOwner;
+  }
+  const evt = match.event as {
+    playerId?: string;
+    owner?: string;
+    movedBy?: string;
+    killedBy?: string;
+    chooserId?: string;
+  };
+  return (
+    evt.playerId ?? evt.owner ?? evt.movedBy ?? evt.killedBy ?? evt.chooserId ?? match.cardOwner
+  );
+}
+
+/**
  * rule-id: unl-095-219 (rule 364.3) — triggered abilities an effect installed
  * on this card for a duration ("When it wins a combat this turn, gain 2 XP").
  */
@@ -144,6 +170,11 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
         effect: a.effect,
         optional: a.optional,
         trigger: {
+          // rule-id: unl-205-219 — keep the "the acting player controls this
+          // trigger" flag; dropping it here re-routes the ability to the card's
+          // own controller.
+          controllerFromEvent: (a.trigger as { controllerFromEvent?: boolean })
+            .controllerFromEvent,
           event: a.trigger.event,
           on: a.trigger.on,
           restrictions: (a.trigger as { restrictions?: readonly { type: string; count?: number }[] })
@@ -1182,7 +1213,7 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
         ctx.draft.interaction!,
         {
           cardId: match.cardId,
-          controller: match.cardOwner,
+          controller: triggerControllerFor(match),
           effect,
           // rule-id: sfd-119-221 — "you may pay [N] to …": carry the cost so
           // the opt-in prompt charges it instead of resolving for free.

@@ -102,7 +102,7 @@ describe("Ruling 8bb44b90da8bab68 — Glasc dies as the lone defender; Deathknel
   // Expected (466.3): the combat's result is only determined after pending triggers — while Glasc's
   // Deathknell is on the chain nobody has won: bf1 is still P2's and P1 has scored nothing.
   // Actual: resolveFullCombat hands bf1 to P1 and awards the conquer point before the trigger resolves.
-  test.failing("BUG: ruling 8bb44b90da8bab68 — with the Deathknell still pending, the original combat has no winner yet (bf1 still P2's, P1 on 0)", async () => {
+  test("ruling 8bb44b90da8bab68 — with the Deathknell still pending, the original combat has no winner yet (bf1 still P2's, P1 on 0)", async () => {
     const game = await board().build();
     await fightUntilDeathknellPending(game);
     expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
@@ -131,7 +131,7 @@ describe("Ruling 8bb44b90da8bab68 — Glasc dies as the lone defender; Deathknel
   // Expected (466.3.d / 466.3.d.1): both players now have units at bf1 → "No Result": bf1 stays P2's,
   // P1 gains no point, and a fresh showdown+combat is staged at bf1 (Brute attacking, Revived defending).
   // Actual: P1 already conquered and scored bf1 during combat resolution; no second combat.
-  test.failing("BUG: ruling 8bb44b90da8bab68 — No Result: nobody wins the original combat and a second combat is immediately staged at bf1", async () => {
+  test("ruling 8bb44b90da8bab68 — No Result: nobody wins the original combat and a second combat is immediately staged at bf1", async () => {
     const game = await board().build();
     await fightUntilDeathknellPending(game);
     await resolveDeathknellToBf1(game);
