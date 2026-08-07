@@ -25,7 +25,7 @@ import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getPotentialRuneEnergy } from "../play/cost";
 import type { SpellEffectTargetShape } from "../play/targeting";
-import { spellEffectHasLegalTargets } from "../play/targeting";
+import { findSequenceLeadTarget, spellEffectHasLegalTargets } from "../play/targeting";
 import { buildEffectContext, canAffordPower } from "./effect-context";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -55,6 +55,28 @@ function abilityTimingClass(
  * `{amount, from, cardType?}` for "Recycle a <noun> from your trash"
  * (sfd-019-221 Assembly Rig). Hand/board recycle costs are paid elsewhere.
  */
+/**
+ * rule 377.2.b — "Use only once per turn" is a condition on ACTIVATING: the
+ * per-turn tally lives in `turnEventCounts` (reset every turn by the flow) and
+ * is keyed by the HOST card, so a copy of the ability on another card keeps its
+ * own allowance.
+ */
+export function abilityUseKey(hostCardId: string, abilityIndex: number): string {
+  return `activate|${hostCardId}|${abilityIndex}`;
+}
+
+function oncePerTurnExhausted(
+  state: { turnEventCounts?: Record<string, number> },
+  restrictions: readonly { type: string }[] | undefined,
+  hostCardId: string,
+  abilityIndex: number,
+): boolean {
+  if (!restrictions?.some((r) => r.type === "once-per-turn")) {
+    return false;
+  }
+  return (state.turnEventCounts?.[abilityUseKey(hostCardId, abilityIndex)] ?? 0) >= 1;
+}
+
 function normalizeRecycleCost(raw: unknown): { amount: number; cardType?: string } | undefined {
   if (typeof raw === "number") {
     return raw > 0 ? { amount: raw } : undefined;
@@ -94,7 +116,13 @@ function eligibleRecycleCards(
  * (self / player / battlefield / "all" / multi-pick targets stay as-is).
  */
 function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
-  const t = (effect as { target?: unknown } | undefined)?.target;
+  let t = (effect as { target?: unknown } | undefined)?.target;
+  // rule 355.7/355.8: a sequence ability ("Kill a friendly unit. Look at the
+  // top 5 …") still declares its one caster-chosen target at finalization, so
+  // opponents may react before it resolves — same lead-slot rule as spells.
+  if (!t && (effect as { type?: string } | undefined)?.type === "sequence") {
+    t = findSequenceLeadTarget(effect as SpellEffectTargetShape);
+  }
   if (!t || typeof t !== "object") {
     return undefined;
   }
@@ -427,6 +455,10 @@ export const activateAbility: Defs["activateAbility"] = {
         return false;
       }
     }
+    // rule 377.2.b: "Use only once per turn" — already used this turn.
+    if (oncePerTurnExhausted(state, abilityRestrictions, cardId as string, abilityIndex as number)) {
+      return false;
+    }
     // Rule 827.1.c.1: [Empower] carries an implicit "Play only if not
     // Empowered" — reject activation when the host is already Empowered.
     if (abilityRestrictions?.some((r) => r.type === "not-empowered")) {
@@ -538,6 +570,17 @@ export const activateAbility: Defs["activateAbility"] = {
           | { buffed?: boolean }
           | undefined;
         if (hostMeta?.buffed !== true) {
+          return false;
+        }
+      }
+
+      // rule 827.1.d (ven-087-166 Hextech Disc): "Disempower this" is payable
+      // only while the host is [Empowered].
+      if (cost.disempower === "self") {
+        const hostMeta = context.cards.getCardMeta(cardId as CoreCardId) as
+          | { empowered?: boolean }
+          | undefined;
+        if (hostMeta?.empowered !== true) {
           return false;
         }
       }
@@ -755,6 +798,12 @@ export const activateAbility: Defs["activateAbility"] = {
             continue;
           }
         }
+        // rule 377.2.b: "Use only once per turn" — skip once used this turn.
+        if (
+          oncePerTurnExhausted(state, abilityRestrictions, entry.hostCardId as string, entry.abilityIndex)
+        ) {
+          continue;
+        }
         // Rule 827.1.c.1: [Empower] — skip when the host is already Empowered.
         if (abilityRestrictions?.some((r) => r.type === "not-empowered")) {
           const hostMeta = context.cards.getCardMeta(entry.hostCardId as CoreCardId) as
@@ -846,6 +895,17 @@ export const activateAbility: Defs["activateAbility"] = {
               | { buffed?: boolean }
               | undefined;
             if (hostMeta?.buffed !== true) {
+              continue;
+            }
+          }
+
+          // rule 827.1.d (ven-087-166 Hextech Disc): a "Disempower this" cost
+          // can only be paid by a host that is currently [Empowered].
+          if (cost.disempower === "self") {
+            const hostMeta = context.cards.getCardMeta(entry.hostCardId as CoreCardId) as
+              | { empowered?: boolean }
+              | undefined;
+            if (hostMeta?.empowered !== true) {
               continue;
             }
           }
@@ -1010,6 +1070,16 @@ export const activateAbility: Defs["activateAbility"] = {
       return;
     }
 
+    // rule 377.2.b: record the use of a once-per-turn ability against the HOST
+    // card before anything else — the allowance is spent on activation.
+    const useRestrictions = (ability as { restrictions?: readonly { type: string }[] }).restrictions;
+    if (useRestrictions?.some((r) => r.type === "once-per-turn")) {
+      const counts = (draft as { turnEventCounts?: Record<string, number> });
+      counts.turnEventCounts ??= {};
+      const key = abilityUseKey(cardId as string, abilityIndex as number);
+      counts.turnEventCounts[key] = (counts.turnEventCounts[key] ?? 0) + 1;
+    }
+
     // Pay cost
     if (ability.cost) {
       const cost = ability.cost as Record<string, unknown>;
@@ -1028,6 +1098,15 @@ export const activateAbility: Defs["activateAbility"] = {
         context.cards.updateCardMeta(
           cardId as CoreCardId,
           { buffed: false } as Partial<RiftboundCardMeta>,
+        );
+      }
+
+      // rule 827.1.d (ven-087-166 Hextech Disc): paying "Disempower this"
+      // removes the host's [Empowered] state, re-enabling its [Empower] cost.
+      if (cost.disempower === "self") {
+        context.cards.updateCardMeta(
+          cardId as CoreCardId,
+          { empowered: false } as unknown as Partial<RiftboundCardMeta>,
         );
       }
 

@@ -88,7 +88,7 @@ describe("Ruling 24995e96f6e7c30f — Baited Hook: the kill is an effect on a de
   // FINALIZED — i.e. P1 names Bait before P2 ever receives priority (either as part of `activate` or as an
   // immediate P1 prompt). Actual: the engine defers "Choose a target for Baited Hook" to resolution, after
   // both players have passed.
-  test.failing("BUG: ruling 24995e96f6e7c30f — the friendly unit to kill is declared at finalization, before P2's reaction window (engine asks only on resolution)", async () => {
+  test("ruling 24995e96f6e7c30f — the friendly unit to kill is declared at finalization, before P2's reaction window (engine asks only on resolution)", async () => {
     const game = await board().build();
     game.clearScript(P1);
     const field = game.p1.option("activate", "hook")?.fields.find((f) => f.name === "targets");

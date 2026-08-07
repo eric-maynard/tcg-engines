@@ -39,15 +39,16 @@ describe("Baited Hook (ogn-242-298)", () => {
     expect(poor.p1.can("play", "hook")).toBe(false);
   });
 
-  test("activation: pays [1] + [order] and exhausts; on resolution you choose and kill a friendly unit", async () => {
+  // rule 355.7: "Kill a friendly unit" is the ability's effect, so its target is
+  // declared when the ability is finalized on the chain and killed on resolution.
+  test("activation: pays [1] + [order] and exhausts; the friendly unit to kill is declared at activation", async () => {
     const game = await board().build();
-    await game.p1.activate("hook");
+    await game.p1.activate("hook", 0, { targets: "bait" });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });
     expect(game.state("hook").isExhausted).toBe(true);
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "hook", controller: P1, triggered: false })]);
+    expect(game.zoneOf("bait")).toBe("base"); // not killed until the ability resolves
     await game.settle();
-    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, source: { cardId: "hook", pendingChoiceType: "choose-target" } });
-    await game.p1.pick("bait");
     expect(game.zoneOf("bait")).toBe("trash");
     expect(game.zoneOf("keep")).toBe("base");
   });
@@ -65,9 +66,7 @@ describe("Baited Hook (ogn-242-298)", () => {
     // Expected: killed Bait has 2 Might → eligible: Three (3), Skulker (3), One (1); Four (4) is NOT offered;
     // "you may" → declinable. Actual: a mandatory "pick a revealed card to draw" over all 5 cards.
     const game = await board().build();
-    await game.p1.activate("hook");
-    await game.settle();
-    await game.p1.pick("bait");
+    await game.p1.activate("hook", 0, { targets: "bait" });
     await game.settle();
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1, allowDecline: true });
@@ -82,9 +81,7 @@ describe("Baited Hook (ogn-242-298)", () => {
     // bottom of the deck; hand unchanged. Actual: the picked card is simply drawn to hand.
     const game = await board().build();
     const handBefore = game.p1.hand().length;
-    await game.p1.activate("hook");
-    await game.settle();
-    await game.p1.pick("bait");
+    await game.p1.activate("hook", 0, { targets: "bait" });
     await game.settle();
     await game.p1.pick("three");
     await game.settle();
@@ -98,9 +95,7 @@ describe("Baited Hook (ogn-242-298)", () => {
 
   test("the un-chosen looked-at cards are recycled to the bottom of the Main Deck", async () => {
     const game = await board().build();
-    await game.p1.activate("hook");
-    await game.settle();
-    await game.p1.pick("bait");
+    await game.p1.activate("hook", 0, { targets: "bait" });
     await game.settle();
     await game.p1.pick("three");
     await game.settle();
