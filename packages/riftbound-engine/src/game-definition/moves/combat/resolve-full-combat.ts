@@ -198,6 +198,13 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       return;
     }
 
+    // rule 434 / 190.3.a (unl-140-219 Conscription) — a unit fights for its
+    // CONTROLLER, not its owner: a conscripted unit attacks alongside its new
+    // controller's units and is recalled with them, while still being owned
+    // (and trashed) by its original owner.
+    const sideOf = (cardId: CoreCardId): string =>
+      ((cards.getCardController?.(cardId) ?? cards.getCardOwner(cardId)) as string | undefined) ?? "";
+
     // Get all unit card IDs at this battlefield
     const battlefieldZoneId = `battlefield-${battlefieldId}` as CoreZoneId;
     const unitIds = zones.getCardsInZone(battlefieldZoneId);
@@ -365,7 +372,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           : {}),
       };
 
-      const role = owner === attackingPlayer ? "attacker" : "defender";
+      const role = sideOf(cardId) === attackingPlayer ? "attacker" : "defender";
       const staticGranted = new Set(
         grantedKeywords.filter((gk) => gk.duration === "static").map((gk) => gk.keyword),
       );
@@ -400,8 +407,28 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // exists. Ask before any damage is written; the answer is stored on the
     // battlefield and this move re-runs (its condition is blocked while a
     // pendingChoice exists) with both allocations in hand.
-    const plans = planCombatDamageAssignments(attackerUnits, defenderUnits);
+    // rule 766 / 767 — "You ignore [Tank] while assigning combat damage here"
+    // (ven-004-166): only that unit's controller, and only at ITS battlefield.
+    const ignoresTankHere = (playerId: string | undefined): boolean =>
+      playerId !== undefined &&
+      [...attackerUnits, ...defenderUnits].some(
+        (u) =>
+          ((cards.getCardController?.(u.id as CoreCardId) ?? u.owner) as string) === playerId &&
+          (getGlobalCardRegistry().getAbilities(u.id) ?? []).some(
+            (a) =>
+              a.type === "static" &&
+              (a.effect as { type?: string; keyword?: string } | undefined)?.type ===
+                "ignore-keyword" &&
+              (a.effect as { keyword?: string }).keyword === "Tank",
+          ),
+      );
     const defendingPlayer = defenderUnits[0]?.owner;
+    const attackerIgnoresTank = ignoresTankHere(attackingPlayer as string);
+    const defenderIgnoresTank = ignoresTankHere(defendingPlayer as string | undefined);
+    const plans = planCombatDamageAssignments(attackerUnits, defenderUnits, {
+      attackerIgnoresTank,
+      defenderIgnoresTank,
+    });
     const raiseAssignment = (
       side: "attacker" | "defender",
       playerId: string,
@@ -440,6 +467,8 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     battlefield.combatDefenderDamageAllocation = undefined;
     // Run the combat resolver
     const result = resolveCombat(attackerUnits, defenderUnits, {
+      attackerIgnoresTank,
+      defenderIgnoresTank,
       ...(chosenAttackerAssignment ? { attackerAssignment: { ...chosenAttackerAssignment } } : {}),
       ...(chosenDefenderAssignment ? { defenderAssignment: { ...chosenDefenderAssignment } } : {}),
     });
@@ -559,7 +588,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         .getCardsInZone(battlefieldZoneId)
         .filter(
           (id) =>
-            cards.getCardOwner(id) !== attackingPlayer &&
+            sideOf(id) !== attackingPlayer &&
             (registry.getCardType(id as string) === "unit" ||
               (registry.get(id as string)?.might ?? 0) > 0),
         ).length === 0;
@@ -583,8 +612,8 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     const unitsHereNow = zones
       .getCardsInZone(battlefieldZoneId)
       .filter((id) => (registry.get(id as string)?.might ?? 0) > 0 || registry.getCardType(id as string) === "unit");
-    const attackersLeft = unitsHereNow.filter((id) => cards.getCardOwner(id) === attackingPlayer);
-    const defendersLeft = unitsHereNow.filter((id) => cards.getCardOwner(id) !== attackingPlayer);
+    const attackersLeft = unitsHereNow.filter((id) => sideOf(id) === attackingPlayer);
+    const defendersLeft = unitsHereNow.filter((id) => sideOf(id) !== attackingPlayer);
     // rule 466.3.d: both players have units here but the Combat Cleanup left no
     // defender behind (a pending Deathknell put a fresh unit here afterwards) —
     // the combat has No Result: nobody conquers, nobody is recalled, and
@@ -706,7 +735,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           tieReplacement !== undefined
             ? registry.getCardType(id as string) === "unit" ||
               (registry.get(id as string)?.might ?? 0) > 0
-            : cards.getCardOwner(id) === attackingPlayer,
+            : sideOf(id) === attackingPlayer,
         )) {
         // rule 466.7.a: a recalled attacker leaves the combat, so its
         // designation must be cleared too — it is no longer here below.

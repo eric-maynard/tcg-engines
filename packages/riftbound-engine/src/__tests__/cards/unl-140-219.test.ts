@@ -101,7 +101,7 @@ describe("Conscription (unl-140-219)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: control has no expiry: next turn cycle the conscript readies and attacks FOR P1; when it dies it goes to its OWNER's (P2's) trash", async () => {
+  test("control has no expiry: next turn cycle the conscript readies and attacks FOR P1; when it dies it goes to its OWNER's (P2's) trash", async () => {
     const game = await board().build();
     await game.p1.cast("con", { targets: "small" });
     await game.settle();

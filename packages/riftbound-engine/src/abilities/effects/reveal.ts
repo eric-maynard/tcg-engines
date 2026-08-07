@@ -123,6 +123,15 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
   ) {
     const registry = getGlobalCardRegistry();
     const recyclesMisses = revEff.then.recycle !== undefined;
+    // rule 403 / 405 (ven-033-166 Pakaa Protector) — "Otherwise, put it in your
+    // trash and give me +2 [Might] this turn": a miss can be TRASHED instead of
+    // recycled, and the clause may carry a rider that only fires on a miss.
+    const missHandling = revEff.then as {
+      otherwise?: unknown;
+      trash?: unknown;
+    };
+    const trashesMisses = missHandling.trash !== undefined;
+    let missed = false;
     const top = ctx.zones
       .getCardsInZone("mainDeck" as CoreZoneId, actor as CorePlayerId)
       .slice(0, Math.max(1, revEff.amount ?? 1));
@@ -135,13 +144,23 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
           cardId: cardId as CoreCardId,
           targetZoneId: "hand" as CoreZoneId,
         });
+      } else if (trashesMisses) {
+        missed = true;
+        ctx.zones.moveCard({
+          cardId: cardId as CoreCardId,
+          targetZoneId: "trash" as CoreZoneId,
+        });
       } else if (recyclesMisses) {
+        missed = true;
         ctx.zones.moveCard({
           cardId: cardId as CoreCardId,
           position: "bottom",
           targetZoneId: "mainDeck" as CoreZoneId,
         });
       }
+    }
+    if (missed && missHandling.otherwise) {
+      _h.executeEffect(missHandling.otherwise as ExecutableEffect, ctx);
     }
     return;
   }

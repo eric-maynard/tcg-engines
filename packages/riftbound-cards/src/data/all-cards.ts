@@ -800,6 +800,14 @@ export function getRawCards(): Card[] {
  * these from rules text, and VEN has no hand-authored .ts file to carry them.
  */
 const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
+  // rule 766 / 767 — Dune Surfer: "You ignore [Tank] while assigning combat
+  // damage here." The generator emits `abilities: []` and the rules-text parser
+  // has no "ignore <keyword>" shape, so the static is declared here. Only the
+  // controller's assignment, and only at the battlefield the Surfer is at —
+  // both scoped by the reader in resolve-full-combat.ts.
+  "ven-004-166": {
+    abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
+  },
   // rule 419.4 / 187.2 — Jayce, Brilliant Inventor: "When you play me or the
   // first time you play a non-token gear each turn, you may ready something
   // besides me that's exhausted." The generator emits `abilities: []`, and the
@@ -829,6 +837,59 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
           restrictions: [{ type: "first-time-each-turn" }, { type: "non-token" }],
         },
         type: "triggered",
+      },
+    ],
+  },
+  // rule 424 / 403 — Pakaa Protector: "When I move, reveal the top card of your
+  // Main Deck. If it's a unit, draw it. Otherwise, put it in your trash and give
+  // me +2 [Might] this turn." The generator emits `abilities: [null]` and the
+  // rules-text parser leaves the effect as a `raw` no-op. Same bounded-reveal
+  // shape as sfd-041-221 Apprentice Smith, with the miss trashed (not recycled)
+  // and a miss-only Might rider.
+  "ven-033-166": {
+    abilities: [
+      {
+        effect: {
+          amount: 1,
+          from: "deck",
+          then: {
+            draw: 1,
+            otherwise: { amount: 2, duration: "turn", target: "self", type: "modify-might" },
+            trash: "rest",
+          },
+          type: "reveal",
+          until: "unit",
+        },
+        trigger: { event: "move", on: "self" },
+        type: "triggered",
+      },
+    ],
+  },
+  // rule 356.4.c — Ezreal, Prodigy (VEN promo printing of sfd-149-221, same
+  // text): the rules-text parser produces only the play-self trigger, dropping
+  // "Optional additional costs you pay cost [1] or [rainbow] less". Mirrors the
+  // hand-authored sfd definition.
+  "ven-sp5-006": {
+    abilities: [
+      {
+        effect: {
+          effects: [
+            { amount: 1, type: "discard" },
+            { amount: 2, type: "draw" },
+          ],
+          type: "sequence",
+        },
+        trigger: { event: "play-self" },
+        type: "triggered",
+      },
+      {
+        effect: {
+          alternative: { power: ["rainbow"] },
+          by: { energy: 1 },
+          target: "optional additional costs you pay",
+          type: "cost-reduction",
+        },
+        type: "static",
       },
     ],
   },
