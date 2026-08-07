@@ -244,9 +244,53 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       if (indepSlots) {
         const k = indepSlots.findIndex((s) => s.index === i);
         if (k >= 0) {
-          const id = ctx.boundTargets?.[k];
+          let id = ctx.boundTargets?.[k];
+          // rule 355.8 (ogn-029-298) — every instruction that names a target
+          // must choose one if a legal choice exists. A slot the caster left
+          // unlocked at play time is chosen HERE (prompting when there is more
+          // than one candidate) instead of being silently skipped; only
+          // "up to"/"any number" slots (355.13) may end up with nothing.
           if (id === undefined) {
-            continue;
+            const desc = indepSlots[k]?.target as TargetDescriptor | undefined;
+            const q = (desc as { quantity?: { upTo?: number } } | undefined)?.quantity;
+            const optional =
+              typeof q === "object" && q !== null && (q as { upTo?: number }).upTo !== undefined;
+            const options =
+              desc === undefined || optional
+                ? []
+                : (resolveTarget({ ...desc, quantity: "all" }, {
+                    ...resolverCtx,
+                    choosing: true,
+                  } as Parameters<typeof resolveTarget>[1]) as string[]);
+            if (options.length === 0) {
+              continue;
+            }
+            if (options.length > 1) {
+              if (ctx.draft.pendingChoice !== undefined) {
+                continue;
+              }
+              const rest = seq.effects.slice(i + 1);
+              ctx.draft.pendingChoice = {
+                effect: sub,
+                options,
+                playerId: ctx.playerId,
+                remaining: 1,
+                sourceCardId: ctx.sourceCardId,
+                ...(rest.length > 0
+                  ? {
+                      then: {
+                        boundTargetsOverride: (ctx.boundTargets ?? []).slice(k + 1),
+                        effects: rest,
+                        independentTargets: true,
+                        type: "sequence",
+                      },
+                    }
+                  : {}),
+                type: "choose-target",
+              } as typeof ctx.draft.pendingChoice;
+              return;
+            }
+            id = options[0] as string;
           }
           const { boundTargets: _drop, ...rest } = ctx;
           subCtx = { ...rest, boundTargets: [id] };
@@ -595,6 +639,26 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             // declined ("you may [Predict], then reveal the top card").
             thenIsSequenceRest: true,
           } as typeof ctx.draft.pendingChoice;
+        }
+        return;
+      }
+      // rule 436 / 359.3.e (unl-136-219 Scryer's Bloom) — "[Predict 2], THEN
+      // draw 1": the parked prompt already owns a `then` (the next Predict
+      // step), so the sequence remainder cannot ride there. Defer it until the
+      // whole prompt chain has been answered, or the draw would happen while
+      // the player is still deciding what to leave on top.
+      if (parked?.type === "reveal-and-pick" && parked.then !== undefined) {
+        const rest = seq.effects.slice(i + 1);
+        if (rest.length > 0) {
+          const restSeq = { effects: rest, independentExecution: true, type: "sequence" };
+          ctx.draft.deferredSequenceRest = [
+            ...(ctx.draft.deferredSequenceRest ?? []),
+            {
+              effect: restSeq,
+              playerId: ctx.playerId,
+              ...(ctx.sourceCardId !== undefined ? { sourceCardId: ctx.sourceCardId } : {}),
+            },
+          ];
         }
         return;
       }

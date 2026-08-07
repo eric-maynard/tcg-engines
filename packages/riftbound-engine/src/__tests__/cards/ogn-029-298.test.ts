@@ -76,6 +76,28 @@ describe("Falling Star (ogn-029-298)", () => {
     expect(game.zoneOf("big")).toBe("trash");
   });
 
+  test("rule 355.8: locking only ONE target still resolves the second instruction — the caster is prompted for it", async () => {
+    const game = await board().build();
+    await game.p1.cast("fs", { targets: "atBf" });
+    await game.settle();
+    expect(game.decision()?.kind).toBe("pick");
+    await game.p1.pick("atBase");
+    await game.settle();
+    expect(game.state("atBf").damage).toBe(3);
+    expect(game.state("atBase").damage).toBe(3);
+  });
+
+  test("rule 355.8: with only one unit on board both instructions auto-target it (6 total, no prompt)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 2, power: { fury: 2 } })
+      .unit(P2, "base", { might: 6 }, "big")
+      .hand(P1, FALLING_STAR, "fs")
+      .build();
+    await game.p1.cast("fs", { targets: "big" });
+    await game.settle();
+    expect(game.zoneOf("big")).toBe("trash");
+  });
+
   test("no [Action]/[Reaction] in printed text ⇒ standard timing (rule 155): NOT castable during a showdown, nor on the opponent's turn", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2, power: { fury: 2 } })
