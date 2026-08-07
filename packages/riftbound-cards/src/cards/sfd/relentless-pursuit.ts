@@ -25,10 +25,10 @@ const abilities: Ability[] = [
             duration: "turn",
             effect: { target: "self", to: "base", type: "move" },
             optional: true,
-            // rule 469.1 — the granted trigger is the hit-and-run payoff: it
-            // asks only after a conquer this unit fought for, never when it
-            // simply walked onto an open battlefield.
-            trigger: { afterAttack: true, event: "conquer", on: "self" },
+            // rule 469.1 — "When I conquer" has no "after an attack" rider:
+            // taking an EMPTY battlefield is a conquer too, so the offer must
+            // appear for a unit that simply walked onto an open battlefield.
+            trigger: { event: "conquer", on: "self" },
             type: "delayed-trigger",
           },
         ],

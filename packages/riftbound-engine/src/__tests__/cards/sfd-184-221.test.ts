@@ -24,8 +24,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type { ActionDecision, Game } from "../../harness";
-import { P1, P2, peekDefaultCardPool, scenario } from "../../harness";
+import type { ActionDecision, Game, Policy } from "../../harness";
+import { P1, P2, passivePolicy, peekDefaultCardPool, scenario } from "../../harness";
 
 const CARD = "sfd-184-221";
 const BF_SWORD = "sfd-161-221"; // Equipment · Order · +3 Might · [Equip] [order]
@@ -53,10 +53,14 @@ async function pursue(game: Game, unit: string, dest: string): Promise<void> {
   await game.p1.pick(dest);
 }
 
-/** Settle, and settle once more if the harness handed back an auto-begun non-combat showdown (344.2). */
+/** Say no to every optional prompt of P1's (attach / move-home), pass everything else. */
+const declineOptional: Policy = (d, g) =>
+  d.kind === "yes-no" ? false : d.kind === "pick" && d.allowDecline ? "decline" : d.kind === "pick" ? d.options[0]?.key : passivePolicy(d, g);
+
+/** Settle declining optional riders, and settle once more if an auto-begun non-combat showdown (344.2) was handed back. */
 async function drain(game: Game): Promise<void> {
-  await game.settle({ policy: "first" });
-  await game.settle({ policy: "first" });
+  await game.settle({ policy: declineOptional });
+  await game.settle({ policy: declineOptional });
 }
 
 /** Accept whatever shape the optional-attach prompt takes (yes/no then pick, or a declinable pick). */
@@ -207,10 +211,16 @@ describe("Relentless Pursuit (sfd-184-221)", () => {
       .hand(P1, CARD, "rp")
       .build();
     await pursue(game, "runner", "battlefield-bf2");
-    // Only priority/focus passes from here on — a yes/no or an equipment pick would stop settle as "unanswered".
+    // No equipment pick may appear; taking the empty bf2 is a conquer (469.1) so
+    // the granted "you may move me home" offer legitimately does — decline it.
     const first = await game.settle();
     const second = first.reason === "open" && game.decision()?.kind === "action" && (game.decision() as ActionDecision).context !== "main" ? await game.settle() : first;
-    expect(second.reason).toBe("open");
+    if (game.decision()?.kind === "yes-no") {
+      await game.p1.no();
+    } else {
+      expect(second.reason).toBe("open");
+    }
+    await game.settle();
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
     expect(game.locationOf("runner")).toBe("bf2");
     expect(game.state("theirs").attachedTo).toBeUndefined();
@@ -245,20 +255,40 @@ describe("Relentless Pursuit (sfd-184-221)", () => {
     expect(game.p1.points()).toBe(1);
   });
 
-  test("clause 3 is 'this turn' only: a unit Pursued to an empty battlefield that conquers on a LATER turn gets no move-home offer", async () => {
+  test("clause 3 says 'When I conquer' with no 'after an attack' — taking the EMPTY bf2 is a conquer too (469.1, cf. Plundering Poro), so the move-home offer must appear; declining keeps the Runner there", async () => {
+    // Expected: after the Runner walks onto open bf2 and P1 scores it, P1 gets the optional "move me to my base"
+    // prompt (we decline → Runner stays, 1 point). Actual: the granted trigger is gated on conquer-after-attack.
     const game = await board().build();
-    await pursue(game, "bystander", "battlefield-bf2"); // bystander takes empty bf2 this turn
-    await drain(game);
-    expect(game.locationOf("bystander")).toBe("bf2");
+    await pursue(game, "runner", "battlefield-bf2");
+    let offered = false;
+    const watch: Policy = (d) => {
+      if (d.seat === P1 && game.gameState.battlefields.bf2?.controller === P1 && (d.kind === "yes-no" || (d.kind === "pick" && d.allowDecline))) {
+        offered = true;
+      }
+      return declineOptional(d, game);
+    };
+    await game.settle({ policy: watch });
+    await game.settle({ policy: watch });
+    expect(game.gameState.battlefields.bf2?.controller).toBe(P1);
+    expect(game.p1.points()).toBe(1);
+    expect(offered).toBe(true);
+    expect(game.locationOf("runner")).toBe("bf2");
+  });
+
+  test("clause 3 is 'this turn' only: the Pursued Runner (given Ganking) parks on empty bf2, and when it ganks into bf1 and conquers on P1's NEXT turn nobody is asked anything", async () => {
+    const game = await board().unit(P1, "base", { might: 3, name: "Striker" }, "striker", { grantedKeywords: [{ duration: "permanent", keyword: "Ganking" }] }).build();
+    await pursue(game, "striker", "battlefield-bf2");
+    await drain(game); // decline attach / any same-turn move-home offer
+    expect(game.locationOf("striker")).toBe("bf2");
     await game.advanceToTurnOf(P2);
     await game.advanceToTurnOf(P1);
-    // Runner (no grant, and any grant on bystander has expired) attacks bf1 the plain way.
-    await game.p1.move("runner", "bf1");
+    await game.p1.gank("striker", "bf1");
     const stop = await game.settle();
     expect(game.zoneOf("guard")).toBe("trash");
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
-    expect(stop.reason).toBe("open"); // nobody is asked anything
-    expect(game.locationOf("runner")).toBe("bf1");
+    expect(stop.reason).toBe("open"); // the grant expired with the turn it was given in
+    expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
+    expect(game.locationOf("striker")).toBe("bf1");
   });
 
   test("[Action] timing: not castable on the opponent's turn in an open state", async () => {

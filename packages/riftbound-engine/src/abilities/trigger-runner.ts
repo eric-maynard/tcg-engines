@@ -320,6 +320,22 @@ export function evaluateTriggerCondition(
     // absent the enumeration hasn't run and the payoff must NOT fire for free.
     return (event as { paidAdditionalCost?: boolean }).paidAdditionalCost === true;
   }
+  if (c.type === "spell-energy-spent") {
+    // rule 135.2 (rule-id: unl-005-219) — "When you play a spell, if you spent
+    // [N] or more": the Energy actually paid for THAT spell (a paid [Repeat]
+    // counts, rule 820.1.d). Energy or power spent on anything else this turn
+    // is irrelevant, so read the per-card ledger, never a turn tally.
+    const needed = (c as { amount?: number }).amount ?? 1;
+    const playedId = (event as { cardId?: string }).cardId;
+    if (playedId === undefined) {
+      return false;
+    }
+    const paid =
+      (state as { spellEnergySpentByCard?: Record<string, number> }).spellEnergySpentByCard?.[
+        playedId
+      ] ?? 0;
+    return paid >= needed;
+  }
   if (c.type === "excess-damage-assigned") {
     // rule-id: ogn-034-298 (Tryndamere) / unl Trapping Grounds — rule 626.1.d.2:
     // "if you assigned N or more excess damage" reads the excess the attackers
