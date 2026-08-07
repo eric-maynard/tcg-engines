@@ -142,11 +142,15 @@
         <div class="zone-row hand-zone" id="opponent-hand" style="justify-content:center;flex:1;"></div>
         <div class="player-info" id="opponentInfo" style="flex-shrink:0;"></div>
       </div>
+      <!-- [rule:ui-opponent-info-not-occluded] The rune pool is a normal flex
+           child of the base row (like the player's), never absolutely positioned
+           over #opponentInfo — opaque 112x172 rune stacks used to paint on top of
+           the opponent's name/VP/energy strip as soon as they held any rune. -->
       <div style="display:flex; gap:6px; align-items:center; min-height:0;">
         <div id="opponent-legendChampion" class="legend-champion-zone"></div>
-        <div class="zone-row" id="opponent-base" style="justify-content:center;"></div>
+        <div class="zone-row" id="opponent-base" style="justify-content:center;flex:1;"></div>
+        <div class="rune-pool-grid" id="opponent-runePool"></div>
       </div>
-      <div class="rune-pool-grid" id="opponent-runePool" style="position:absolute;top:4px;right:8px;"></div>
     </div>
 
     <!-- Phase Indicator Bar -->
