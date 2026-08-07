@@ -38,7 +38,7 @@ async function passAll(game: Game): Promise<void> {
 }
 
 describe("Ruling 48502d761b95e448 — Call to Battle's chosen destination can't be the unit's current battlefield", () => {
-  test.failing("BUG: ruling 48502d761b95e448 — Scout at bf1 (P1 controls bf1/bf2/bf3): the destination choice offers only bf2 and bf3 — never bf1 (its current location) and never base; engine crashes resolving the move ('zone battlefield does not exist')", async () => {
+  test("ruling 48502d761b95e448 — Scout at bf1 (P1 controls bf1/bf2/bf3): the destination choice offers only bf2 and bf3 — never bf1 (its current location) and never base; engine crashes resolving the move ('zone battlefield does not exist')", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .battlefield("bf1", { controller: P1 })
@@ -65,7 +65,7 @@ describe("Ruling 48502d761b95e448 — Call to Battle's chosen destination can't 
     expect(game.zoneOf("ctb")).toBe("trash");
   });
 
-  test.failing("BUG: ruling 48502d761b95e448 — if the only battlefield P1 controls IS the unit's current one, that unit has no valid destination and cannot be chosen (spell can't be finalized for it); a base unit still can; engine offers both", async () => {
+  test("ruling 48502d761b95e448 — if the only battlefield P1 controls IS the unit's current one, that unit has no valid destination and cannot be chosen (spell can't be finalized for it); a base unit still can; engine offers both", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .battlefield("bf1", { controller: P1 })

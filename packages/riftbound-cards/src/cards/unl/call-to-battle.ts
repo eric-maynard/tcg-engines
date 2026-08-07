@@ -1,7 +1,30 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { SpellCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * "Move a unit you control to a battlefield you control. …"
+ *
+ * rule 355.4 / 355.4.a — the caster CHOOSES the destination, so it must be a
+ * location other than the unit's current one; a unit with no such destination
+ * cannot be chosen at all. That is the `{ battlefield: "controlled" }`
+ * destination shape (a real destination choice restricted to controlled
+ * battlefields), not the parser's bare `to: "battlefield"` (not a zone id).
+ */
+const abilities: Ability[] = [
+  {
+    effect: {
+      target: { controller: "friendly", type: "unit" },
+      to: { battlefield: "controlled" },
+      type: "move",
+    },
+    timing: "action",
+    type: "spell",
+  },
+];
+
 export const callToBattle: SpellCard = {
+  abilities,
   cardNumber: 101,
   cardType: "spell",
   domain: "body",

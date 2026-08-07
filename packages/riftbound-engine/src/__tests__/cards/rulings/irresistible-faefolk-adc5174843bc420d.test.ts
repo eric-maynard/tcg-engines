@@ -74,7 +74,7 @@ describe("Ruling adc5174843bc420d — Faefolk's 'that battlefield' is fixed at t
 
   // Expected (control, no response): P1 may choose the enemy Foe and it moves from bf2 to bf1 — the
   // battlefield Faefolk moved to. Actual: trigger never fires; Foe stays at bf2.
-  test.failing("BUG: ruling adc5174843bc420d — control: with no response, P1 chooses Foe and it moves to bf1", async () => {
+  test("ruling adc5174843bc420d — control: with no response, P1 chooses Foe and it moves to bf1", async () => {
     const game = await board().build();
     await game.p1.move("fae", "bf1");
     await chooseFoe(game);
@@ -88,7 +88,7 @@ describe("Ruling adc5174843bc420d — Faefolk's 'that battlefield' is fixed at t
   // first (LIFO) and Faefolk returns to P1's hand. The trigger still resolves: P1 chooses Foe and it
   // moves to bf1 even though Faefolk is no longer there. Actual: no trigger, so P2 never even gets a
   // reaction window on P1's turn.
-  test.failing("BUG: ruling adc5174843bc420d — P2 Gusts Faefolk in response; Faefolk → hand, but Foe STILL moves to bf1", async () => {
+  test("ruling adc5174843bc420d — P2 Gusts Faefolk in response; Faefolk → hand, but Foe STILL moves to bf1", async () => {
     const game = await board().build();
     await game.p1.move("fae", "bf1");
     // If the engine asks the optional "you may" question up front, P1 opts in before passing.
