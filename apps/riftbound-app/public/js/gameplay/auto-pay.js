@@ -30,7 +30,10 @@
  * @returns {{ energy: number, power: string[] }}
  */
 function describeCardCost(card) {
-  const energy = typeof card?.energyCost === "number" ? card.energyCost : 0;
+  // rule 356.4 — prefer the server-priced cost (static reductions applied).
+  const energy = typeof card?.effectiveEnergyCost === "number"
+    ? card.effectiveEnergyCost
+    : (typeof card?.energyCost === "number" ? card.energyCost : 0);
   const power = Array.isArray(card?.powerCost) ? card.powerCost.slice() : [];
   return { energy, power };
 }

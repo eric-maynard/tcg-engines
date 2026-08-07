@@ -63,6 +63,20 @@ function getCardKeywords(card) {
   const keywords = [];
   const seen = new Set();
 
+  // rule 704 (sfd-131-221 Ancient Warmonger): a keyword whose value is a count
+  // ("I have [Assault] equal to the number of enemy units here") prints with no
+  // numeric suffix, so the rulesText regex below can only guess 1. The engine
+  // recomputes the real value into meta.grantedKeywords, so those entries are
+  // authoritative and must be read FIRST — text parsing only fills the gaps.
+  const granted = card.meta?.grantedKeywords || [];
+  for (const gk of granted) {
+    const key = gk.keyword.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      keywords.push({ name: gk.keyword, value: gk.value ?? 1 });
+    }
+  }
+
   // Parse from rulesText using [Keyword] or [Keyword N] pattern
   const text = card.rulesText || "";
   const kwRegex = /\[(Tank|Assault|Shield|Backline|Ganking|Evasive|Rush|Ward)(?:\s+(\d+))?\]/gi;
@@ -74,16 +88,6 @@ function getCardKeywords(card) {
     if (!seen.has(key)) {
       seen.add(key);
       keywords.push({ name, value });
-    }
-  }
-
-  // Merge granted keywords from meta (runtime grants)
-  const granted = card.meta?.grantedKeywords || [];
-  for (const gk of granted) {
-    const key = gk.keyword.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      keywords.push({ name: gk.keyword, value: gk.value || 1 });
     }
   }
 

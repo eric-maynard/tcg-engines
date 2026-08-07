@@ -244,6 +244,18 @@ function moveTargetList(m) {
   return c ? [c] : [];
 }
 
+/**
+ * rule 356.4 (sfd-076-221 Production Surge) — the energy the engine will
+ * actually charge. The server prices hand cards with the board's static cost
+ * reductions applied (`effectiveEnergyCost`); the printed `energyCost` is only
+ * the fallback for zones the server does not price.
+ */
+function payableEnergyCost(card) {
+  const eff = card?.effectiveEnergyCost;
+  if (typeof eff === "number") return eff;
+  return typeof card?.energyCost === "number" ? card.energyCost : 0;
+}
+
 function isBaseCostVariant(m) {
   return !m.params?.paidAdditionalCost && !m.params?.repeatCount;
 }
@@ -274,13 +286,27 @@ function variantsExtending(moves, chosen) {
   });
 }
 
-/** Variant binding exactly `chosen` (order-insensitive), preferring the base-cost play. */
+/**
+ * Variant binding exactly `chosen` (order-insensitive) at the PRINTED cost.
+ *
+ * rule 356.1 — a play only happens at base cost when the engine actually
+ * enumerated a base-cost variant for that target set. For a single-target
+ * spell with [Repeat] (sfd-040-221 Thwonk!) every 2-target variant pays a
+ * Repeat cost, so falling back to `matches[0]` here would label a Repeat
+ * variant "Play" and silently charge the extra cost. No base variant = no
+ * base play.
+ */
 function exactTargetVariant(moves, chosen) {
   const matches = (moves || []).filter(m => {
     const t = moveTargetList(m);
     return t.length === chosen.length && containsTargetMultiset(t, chosen);
   });
-  return matches.find(isBaseCostVariant) || matches[0] || null;
+  return matches.find(isBaseCostVariant) || null;
+}
+
+/** True when `a` and `b` are the same ids in the same order. */
+function sameTargetOrder(a, b) {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
 }
 
 /**
@@ -290,13 +316,27 @@ function exactTargetVariant(moves, chosen) {
  * variant and Repeat would be unreachable.
  */
 function repeatVariantsFor(moves, chosen) {
-  return (moves || [])
+  const matches = (moves || [])
     .filter(m => {
       const t = moveTargetList(m);
       if (t.length !== chosen.length || !containsTargetMultiset(t, chosen)) return false;
       return (m.params?.repeatCount ?? 0) > 0;
     })
     .sort((a, b) => (a.params?.repeatCount ?? 0) - (b.params?.repeatCount ?? 0));
+
+  // The engine enumerates one variant per ORDERING of the same target multiset,
+  // which would render a duplicate "Repeat xN" button per ordering. Keep one per
+  // repeatCount, preferring the ordering the player actually clicked.
+  const byCount = new Map();
+  for (const m of matches) {
+    const n = m.params?.repeatCount ?? 0;
+    const existing = byCount.get(n);
+    if (!existing || (!sameTargetOrder(moveTargetList(existing), chosen) &&
+                      sameTargetOrder(moveTargetList(m), chosen))) {
+      byCount.set(n, m);
+    }
+  }
+  return [...byCount.values()].sort((a, b) => (a.params?.repeatCount ?? 0) - (b.params?.repeatCount ?? 0));
 }
 
 /**
@@ -618,7 +658,11 @@ function showLegendAbilityActionBar(cardName, abilityMoves) {
   for (let i = 0; i < abilityMoves.length; i++) {
     const move = abilityMoves[i];
     const idx = move.params?.abilityIndex ?? i;
-    html += `<button class="action-bar-btn" style="background:#2a2050;border-color:#b080e0;color:#d0b0f0;" onclick='executeInteractionMove("activateAbility", ${idx})'>Activate Ability ${idx + 1}</button>`;
+    const segs = typeof activatedAbilitySegments === "function"
+      ? activatedAbilitySegments(findCard(move.params?.cardId))
+      : [];
+    const seg = segs.length === 1 ? segs[0] : segs[idx];
+    html += `<button class="action-bar-btn" style="background:#2a2050;border-color:#b080e0;color:#d0b0f0;" onclick='executeInteractionMove("activateAbility", ${idx})' title="${esc(seg || "")}">${esc(seg || `Activate Ability ${idx + 1}`)}</button>`;
   }
 
   btns.innerHTML = html;
@@ -633,11 +677,12 @@ function enterChampionSelected(cardId) {
 
   if (playMoves.length === 0) {
     const card = findCard(cardId);
-    if (card && card.energyCost > 0) {
+    const needed = payableEnergyCost(card);
+    if (card && needed > 0) {
       const pool = gameState?.runePools?.[viewingPlayer];
       const totalEnergy = pool?.energy ?? 0;
-      if (totalEnergy < card.energyCost) {
-        showToast(`Not enough energy (${totalEnergy}/${card.energyCost}) — exhaust runes first`);
+      if (totalEnergy < needed) {
+        showToast(`Not enough energy (${totalEnergy}/${needed}) — exhaust runes first`);
       }
     }
     selectedCard = cardId;
@@ -692,10 +737,11 @@ function enterHandCardSelected(cardId) {
 
     // Fall back to the existing manual cost-payment mode (users who prefer clicking
     // runes manually still get the old flow).
-    if (card && card.energyCost > 0) {
+    const needed = payableEnergyCost(card);
+    if (card && needed > 0) {
       const pool = gameState?.runePools?.[viewingPlayer];
       const totalEnergy = pool?.energy ?? 0;
-      if (totalEnergy < card.energyCost) {
+      if (totalEnergy < needed) {
         const runeExhaustMoves = availableMoves.filter(m =>
           m.moveId === "exhaustRune" || m.moveId === "recycleRune"
         );
@@ -703,7 +749,7 @@ function enterHandCardSelected(cardId) {
           enterCostPaymentMode(cardId, card, totalEnergy);
           return;
         }
-        showToast(`Not enough energy (${totalEnergy}/${card.energyCost}) — no runes available`);
+        showToast(`Not enough energy (${totalEnergy}/${needed}) — no runes available`);
       }
     }
     // No playable moves for this card, just select it for info
@@ -741,7 +787,7 @@ function enterCostPaymentMode(cardId, card, currentEnergy) {
     validTargets: [],
     matchingMoves: [],
     pendingCardId: cardId,
-    pendingCardCost: card.energyCost,
+    pendingCardCost: payableEnergyCost(card),
   };
   selectedCard = cardId;
 
@@ -757,7 +803,7 @@ function showCostPaymentActionBar(card, currentEnergy) {
   const btns = document.getElementById("actionBarBtns");
 
   const displayName = (card.name || card.id).replace(/^player-[12]-/, "");
-  const cost = card.energyCost || interaction.pendingCardCost;
+  const cost = payableEnergyCost(card) || interaction.pendingCardCost;
   const isAffordable = currentEnergy >= cost;
   const countClass = isAffordable ? "affordable" : "insufficient";
 
@@ -812,6 +858,55 @@ function clearRuneTappableHighlights() {
   document.querySelectorAll(".rune-tappable").forEach(el => el.classList.remove("rune-tappable"));
 }
 
+// Ability buttons rendered into the on-card action bar, in render order; the
+// click handler needs the whole move list (targets are chosen after the click),
+// which an inline onclick string cannot carry.
+let abilityBarGroups = [];
+
+/** activateAbility moves whose source is this card (rule 331). */
+function abilityMovesFor(cardId) {
+  return availableMoves.filter(m => m.moveId === "activateAbility" && m.params?.cardId === cardId);
+}
+
+/**
+ * Buttons for a card's own activated abilities, labelled with the printed
+ * "COST: effect" text so [Empower] / [Exhaust] abilities are discoverable where
+ * the card is, not only in the sidebar.
+ */
+function abilityBarHtml(cardId) {
+  abilityBarGroups = [];
+  const moves = abilityMovesFor(cardId);
+  if (moves.length === 0) return "";
+  const groups = {};
+  for (const m of moves) {
+    const key = `${m.params?.abilityIndex ?? ""}#${m.params?.sourceCardId ?? ""}`;
+    (groups[key] ??= []).push(m);
+  }
+  let html = "";
+  for (const variants of Object.values(groups)) {
+    const p = variants[0].params ?? {};
+    const src = findCard(p.sourceCardId && p.sourceCardId !== cardId ? p.sourceCardId : cardId);
+    const segs = typeof activatedAbilitySegments === "function" ? activatedAbilitySegments(src) : [];
+    const seg = segs.length === 1 ? segs[0] : segs[Number.isInteger(p.abilityIndex) ? p.abilityIndex : 0];
+    const label = seg || "Activate Ability";
+    html += `<button class="action-bar-btn" style="background:#2a2050;border-color:#b080e0;color:#d0b0f0;"
+      data-ability-group="${abilityBarGroups.length}" title="${esc(label)}">${esc(label)}</button>`;
+    abilityBarGroups.push({ moves: variants, sourceCardId: cardId });
+  }
+  return html;
+}
+
+/** Attach handlers for the ability buttons written by abilityBarHtml. */
+function wireAbilityBarButtons(container) {
+  if (!container) return;
+  container.querySelectorAll("[data-ability-group]").forEach(el => {
+    el.addEventListener("click", () => {
+      const g = abilityBarGroups[Number(el.dataset.abilityGroup)];
+      if (g && typeof beginTargetingOrPlay === "function") beginTargetingOrPlay(g.moves, g.sourceCardId);
+    });
+  });
+}
+
 /** Enter cardSelected mode for a base card (standardMove to battlefield) */
 function enterBaseCardSelected(cardId) {
   // Find standardMove entries that include this card
@@ -820,7 +915,7 @@ function enterBaseCardSelected(cardId) {
     (m.params?.unitIds?.includes(cardId) || m.params?.unitId === cardId)
   );
 
-  if (moveMoves.length === 0) {
+  if (moveMoves.length === 0 && abilityMovesFor(cardId).length === 0) {
     selectedCard = cardId;
     render();
     return;
@@ -846,7 +941,11 @@ function enterBaseCardSelected(cardId) {
 
   render();
   applyValidTargetHighlights();
-  showActionBar(card?.name || cardId, moveMoves, "Move to battlefield");
+  showActionBar(
+    card?.name || cardId,
+    moveMoves,
+    moveMoves.length ? "Move to battlefield" : `Unit: ${String(card?.name || cardId).replace(/^player-[12]-/, "")}`,
+  );
 }
 
 /** Enter selected mode for a rune in rune pool (left-click = exhaust) */
@@ -889,7 +988,7 @@ function enterBattlefieldCardSelected(cardId, zone) {
   );
 
   const allMoves = [...gankMoves, ...recallMoves];
-  if (allMoves.length === 0) {
+  if (allMoves.length === 0 && abilityMovesFor(cardId).length === 0) {
     selectedCard = cardId;
     render();
     return;
@@ -963,8 +1062,10 @@ function showActionBar(cardName, moves, hint) {
       html += `<button class="action-bar-btn" onclick='onZoneClick("${esc(bfId)}")'>${esc("Move to " + bfName)}</button>`;
     }
   }
+  html += abilityBarHtml(interaction.sourceCardId);
 
   btns.innerHTML = html;
+  wireAbilityBarButtons(btns);
   bar.classList.remove("hidden");
 }
 
@@ -985,8 +1086,10 @@ function showBattlefieldCardActionBar(cardName, gankMoves, recallMoves) {
     const bfName = getBattlefieldName(bfId);
     html += `<button class="action-bar-btn" onclick='onZoneClick("${esc(bfId)}")'>${esc("Gank to " + bfName)}</button>`;
   }
+  html += abilityBarHtml(interaction.sourceCardId);
 
   btns.innerHTML = html;
+  wireAbilityBarButtons(btns);
   bar.classList.remove("hidden");
 }
 

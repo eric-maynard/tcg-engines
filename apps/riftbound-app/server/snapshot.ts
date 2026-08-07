@@ -3,8 +3,13 @@
  */
 
 import type { Card } from "@tcg/riftbound-types/cards";
-import { effectiveVictoryScore, getGlobalCardRegistry } from "@tcg/riftbound";
-import type { RiftboundCardMeta } from "@tcg/riftbound";
+import {
+  applyStaticCostReduction,
+  computeStaticCostReduction,
+  effectiveVictoryScore,
+  getGlobalCardRegistry,
+} from "@tcg/riftbound";
+import type { CostReductionContext, RiftboundCardMeta } from "@tcg/riftbound";
 import type { PlayerId } from "@tcg/core";
 import { type LogEntry, actorName, makeLogEntry } from "../src/narrator";
 import { registry } from "./cards";
@@ -323,6 +328,34 @@ export function buildHistoryLog(session: GameSession): LogEntry[] {
   return entries.slice(-80);
 }
 
+/**
+ * rule 356.4 (sfd-076-221 Production Surge) — the client must show what the
+ * engine will actually charge, not the printed cost. The engine's static cost
+ * reduction needs a board view; build a minimal one over the internal snapshot
+ * so `buildGameSnapshot` can price the cards in hand.
+ */
+function buildCostReductionContext(
+  internal: ReturnType<typeof getInternalSnapshot>,
+  battlefields: unknown,
+): CostReductionContext {
+  const controllerOf = (id: string) =>
+    internal.cards[id]?.controller ?? internal.cards[id]?.owner ?? "";
+  return {
+    cards: {
+      getCardController: (id: string) => controllerOf(id),
+      getCardOwner: (id: string) => internal.cards[id]?.owner ?? "",
+    },
+    draft: { battlefields: battlefields ?? {} },
+    zones: {
+      getCardsInZone: (zoneId: string, playerId?: string) =>
+        Object.entries(internal.cards)
+          .filter(([id, c]) =>
+            c.zone === zoneId && (playerId === undefined || controllerOf(id) === playerId))
+          .map(([id]) => id),
+    },
+  } as unknown as CostReductionContext;
+}
+
 /** Build a renderable game snapshot for the UI */
 export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) {
   const { engine } = session;
@@ -338,6 +371,7 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
     name: string;
     cardType: string;
     energyCost?: number;
+    effectiveEnergyCost?: number;
     powerCost?: string[];
     might?: number;
     domain?: unknown;
@@ -352,6 +386,20 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
   const redactFor = !session.sandbox && viewingPlayer ? viewingPlayer : undefined;
   const isPrivateZone = (zoneId: string) =>
     zoneId === "hand" || zoneId === "mainDeck" || zoneId === "runeDeck";
+
+  const costCtx = buildCostReductionContext(internal, state.battlefields);
+  // rule 356.4 — only hand cards are ever priced by the UI's pay bar.
+  const effectiveCostFor = (zoneId: string, cardId: string, controller: string, printed?: number) => {
+    if (zoneId !== "hand" || typeof printed !== "number" || !controller) {return undefined;}
+    try {
+      return applyStaticCostReduction(
+        printed,
+        computeStaticCostReduction(costCtx, controller, cardId),
+      );
+    } catch {
+      return undefined;
+    }
+  };
 
   for (const [zoneId, zone] of Object.entries(internal.zones)) {
     zones[zoneId] = zone.cardIds.map((cardId, idx) => {
@@ -432,6 +480,12 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
           cardInstance?.definitionId ??
           "",
         domain: def?.domain,
+        effectiveEnergyCost: effectiveCostFor(
+          zoneId,
+          cardId,
+          cardInstance?.controller ?? owner,
+          def?.energyCost,
+        ),
         energyCost: def?.energyCost,
         id: cardId,
         meta: {

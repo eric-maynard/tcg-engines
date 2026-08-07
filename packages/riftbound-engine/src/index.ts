@@ -31,6 +31,13 @@ export { DeckBuilder } from "./deckbuilder";
 // Card registry export
 export { getGlobalCardRegistry } from "./operations/card-lookup";
 
+// Static cost reduction (used by the app to show the cost the engine will charge)
+export {
+  applyStaticCostReduction,
+  computeStaticCostReduction,
+} from "./operations/static-cost-reduction";
+export type { CostReductionContext } from "./operations/static-cost-reduction";
+
 // Game definition export
 export { riftboundDefinition } from "./game-definition/definition";
 
