@@ -208,13 +208,25 @@ export function killUnits(
   // rule 370.1.a.2 / 740.2.a — note every target before the first one moves.
   const snaps = snapshotBatch(ctx, targets);
   ctx.draft.lastKilledUnitMight = undefined;
+  ctx.draft.lastKilledUnitId = undefined;
+  ctx.draft.lastKilledUnitController = undefined;
   for (const targetId of targets) {
     // rule-id: unl-186-219 — "if it had N [Might] or less" reads the unit's
     // Might as it last existed on the board (last-known information).
-    ctx.draft.lastKilledUnitMight = snaps.get(targetId)?.might ?? h.getEffectiveMight(targetId, ctx);
+    const killedMight = snaps.get(targetId)?.might ?? h.getEffectiveMight(targetId, ctx);
     // rule 370.1.a.1 / 369.1 — board `die` replacements (Zhonya's Hourglass)
     // apply inside leaveBoard: the death never happens, no Deathknell.
-    results.push(leaveBoard(ctx, targetId, "trash", cause, { lki: snaps.get(targetId) }));
+    const result = leaveBoard(ctx, targetId, "trash", cause, { lki: snaps.get(targetId) });
+    // rule 359.3.e.14.b (sfd-163-221) — a REPLACED (or impossible) death is not
+    // a kill: a linked "If you do" must see no killed unit and no killed Might.
+    if (result.left) {
+      ctx.draft.lastKilledUnitMight = killedMight;
+      // rule 359.3.f (sfd-162-221) — last-known control for a linked
+      // "if it was a friendly/enemy unit" clause.
+      ctx.draft.lastKilledUnitId = targetId;
+      ctx.draft.lastKilledUnitController = snaps.get(targetId)?.controller;
+    }
+    results.push(result);
   }
   // rule-id: ogn-246-298 — a kill effect is a death: emit `die` (with the
   // batch's LKI) so Deathknell / "when a friendly unit dies" triggers fire.

@@ -18,6 +18,27 @@ function countAnchoredAtTarget(amount: unknown): boolean {
 }
 
 export function handle_modifyMight(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+  // rule 355.10 (sfd-163-221) — "give +[Might] … to ANOTHER friendly unit" is a
+  // resolution-time choice by the controller: it is not the spell's declared
+  // target (that slot named the victim), so ask when several units qualify.
+  if ((effect as { chooseTarget?: boolean }).chooseTarget === true && !ctx.draft.pendingChoice) {
+    const target = effect.target as Record<string, unknown>;
+    // The pool is every legal candidate, not the resolver's default single pick.
+    const options = getTargetIds({ ...effect, target: { ...target, quantity: "all" } }, ctx);
+    if (options.length > 1) {
+      ctx.draft.pendingChoice = {
+        // The re-run binds exactly the picked id, so the "another" exclusion
+        // (which re-scans the board) must not drop it again.
+        effect: { ...effect, chooseTarget: false, target: { ...target, excludeBound: false } },
+        options,
+        playerId: ctx.playerId,
+        remaining: 1,
+        sourceCardId: ctx.sourceCardId,
+        type: "choose-target",
+      } as typeof ctx.draft.pendingChoice;
+      return;
+    }
+  }
   const targets = getTargetIds(effect, ctx);
   const perTargetCount = countAnchoredAtTarget(effect.amount);
   const baseAmount = perTargetCount ? 0 : resolveAmount(effect.amount ?? 0, ctx);
