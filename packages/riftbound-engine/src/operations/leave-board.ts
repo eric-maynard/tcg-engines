@@ -110,6 +110,12 @@ export interface LeaveResult {
   readonly lki: LKISnapshot;
   /** Source of the replacement that applied instead, if any. */
   readonly replacedBy?: string;
+  /**
+   * rule 427.2.a / 808.1.d.1 — a blanket "goes to your trash → banish it
+   * instead" (ven-022-166) rerouted this departure, so the card was never
+   * "killed and sent to the trash": no `die` event is published for it.
+   */
+  readonly trashReplaced?: boolean;
   /** rule 186.1: a token whose removal waits for its events to fire. */
   tokenPending?: boolean;
 }
@@ -666,9 +672,8 @@ export function leaveBoard(
   let finalTo = to;
   if (to === "trash" && ctx.zones.getCardsInZone !== undefined) {
     const getCardsInZone = ctx.zones.getCardsInZone.bind(ctx.zones);
-    // WIP guard: helper not exported in this tree yet — treat as "no replacement" until its owner lands it.
-    const hasT2B = (replacementEffects as { hasTrashToBanishReplacement?: (d: unknown, z: unknown, o: unknown) => boolean }).hasTrashToBanishReplacement;
-    if (hasT2B?.(ctx.draft, { getCardsInZone }, lki.owner)) {
+    const getCardOwner = ctx.cards?.getCardOwner?.bind(ctx.cards);
+    if (replacementEffects.hasTrashToBanishReplacement(ctx.draft, { getCardOwner, getCardsInZone }, lki.owner)) {
       finalTo = "banishment";
     }
   }
@@ -686,7 +691,14 @@ export function leaveBoard(
     markNewObjectForChainTargets(ctx.draft, cardId);
   }
 
-  const result: LeaveResult = { cardId, cause, left: true, lki, to: finalTo };
+  const result: LeaveResult = {
+    cardId,
+    cause,
+    left: true,
+    lki,
+    to: finalTo,
+    ...(finalTo !== to ? { trashReplaced: true } : {}),
+  };
 
   // rule 186.1 — a token in a non-board zone ceases to exist. Kill-family
   // deaths keep it until their `die` event has been published (428.1.a.1.b:
@@ -716,6 +728,20 @@ export function buildLeaveEvent(result: LeaveResult, batchIndex?: number): GameE
   const { cause, lki } = result;
   if (!result.left) {
     return undefined;
+  }
+  // rule 428.1 / 427.2.a / 808.1.d.1 — a kill is board → TRASH. When a blanket
+  // destination replacement sent the card to banishment instead it was not
+  // killed: Deathknell and other `die` listeners see nothing.
+  if (isKillCause(cause) && result.trashReplaced === true) {
+    return {
+      cardId: result.cardId,
+      cause: "banish",
+      controller: lki.controller,
+      from: lki.zone,
+      owner: lki.owner,
+      to: result.to,
+      type: "leave-board",
+    } as GameEvent;
   }
   if (isKillCause(cause)) {
     return {

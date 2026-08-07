@@ -520,6 +520,54 @@ export function markReplacementConsumed(
 }
 
 /**
+ * rule 571 / 428.1 (rule-id: ven-022-166) — "If a card would go to YOUR trash
+ * from anywhere other than your Main Deck, banish it instead."
+ *
+ * A blanket destination replacement: it is not tied to one event kind, so the
+ * departure choke point (`operations/leave-board.ts leaveBoard`) asks for it
+ * directly instead of going through `checkReplacement`. `owner` is the owner of
+ * the departing card — the trash it would land in.
+ *
+ * Only sources whose owner is that same player match ("your trash"). Cards at a
+ * battlefield are considered only when the caller can name their owner; base
+ * cards are scanned per player, which covers gear like Endless Riches.
+ */
+export function hasTrashToBanishReplacement(
+  draft: RiftboundGameState,
+  zones: {
+    getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
+    getCardOwner?: (cardId: CoreCardId) => string | undefined;
+  },
+  owner: string | undefined,
+): boolean {
+  if (owner === undefined || owner === "") {
+    return false;
+  }
+  const registry = getGlobalCardRegistry();
+  const candidates: string[] = zones
+    .getCardsInZone("base" as CoreZoneId, owner as CorePlayerId)
+    .map((id) => id as string);
+  if (zones.getCardOwner) {
+    for (const bfId of Object.keys(draft.battlefields ?? {})) {
+      for (const raw of zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
+        if (zones.getCardOwner(raw) === owner) {
+          candidates.push(raw as string);
+        }
+      }
+    }
+  }
+  for (const cardId of candidates) {
+    for (const raw of registry.getAbilities(cardId) ?? []) {
+      const ability = raw as unknown as { type?: string; replaces?: string };
+      if (ability.type === "replacement" && ability.replaces === "to-trash") {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Clear all `"next"`-duration replacement consumed markers. Invoked during
  * end-of-turn cleanup so that new "next-time" replacements created next
  * turn start fresh. (Turn-scoped replacements like Tactical Retreat's
