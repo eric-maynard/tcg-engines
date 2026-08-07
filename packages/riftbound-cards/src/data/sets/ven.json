@@ -3317,9 +3317,7 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nChoose a unit at a battlefield. If it has 3 [Might] or less, banish it. Otherwise, return it to its owner's hand.",
-      "abilities": [
-        null
-      ],
+      "abilities": [{"_rule": "355.10 / 359.3 - one caster-chosen unit AT A BATTLEFIELD (either side); the 3-Might test is made on RESOLUTION, so both branches carry the same descriptor", "type": "spell", "timing": "action", "effect": {"type": "conditional", "condition": {"type": "target-might", "comparison": {"lte": 3}}, "then": {"type": "banish", "target": {"type": "unit", "location": "battlefield"}}, "else": {"type": "return-to-hand", "target": {"type": "unit", "location": "battlefield"}}}}],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/ef118660422af84f6183d375b68ce1872acb1e2e-744x1039.png?accountingTag=RB",
       "illustrator": null,
@@ -3965,8 +3963,40 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "I don't deal combat damage unless I'm at a battlefield with exactly one other unit you control.",
-      "abilities": [],
-      "parseSuccess": false,
+      "abilities": [
+        {
+          "_rule": "rule-id: ven-129-166 (rule 465.2) — the count is read when combat damage is calculated: unless I'm at a battlefield with EXACTLY one other friendly unit here, I carry the NoCombatDamage marker. Modelled as a conditional static so a companion dying mid-showdown turns my combat damage off before blows land.",
+          "type": "static",
+          "condition": {
+            "type": "not",
+            "condition": {
+              "type": "and",
+              "conditions": [
+                {
+                  "type": "while-at-battlefield"
+                },
+                {
+                  "type": "exists-here",
+                  "target": {
+                    "type": "unit",
+                    "controller": "friendly",
+                    "excludeSelf": true,
+                    "quantity": {
+                      "exactly": 1
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "effect": {
+            "type": "grant-keyword",
+            "keyword": "NoCombatDamage",
+            "target": "self"
+          }
+        }
+      ],
+      "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/a93887af1128d19cdec798611ffdd29900ac5d85-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null
