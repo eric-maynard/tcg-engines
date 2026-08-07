@@ -800,8 +800,22 @@ export class RuleEngine<
       playerId: contextInput.playerId,
     });
 
-    const contextWithOperations = this.buildMoveContext(contextInput);
-    const result = moveDef.condition(this.currentState, contextWithOperations);
+    // A throwing condition must never escape executeMove: callers (HTTP/WS
+    // handlers) treat an uncaught throw as a fatal error and can lose the
+    // whole session. Surface it as an ordinary move rejection instead.
+    let result: ReturnType<NonNullable<typeof moveDef.condition>>;
+    try {
+      const contextWithOperations = this.buildMoveContext(contextInput);
+      result = moveDef.condition(this.currentState, contextWithOperations);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Move condition threw: ${moveId}`, { moveId, reason });
+      return {
+        error: `Move '${moveId}' condition threw: ${reason}`,
+        errorCode: "CONDITION_ERROR",
+        success: false,
+      };
+    }
 
     if (result === true) {
       // Log success (TRACE level)

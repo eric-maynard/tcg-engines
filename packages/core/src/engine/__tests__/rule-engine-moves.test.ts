@@ -486,3 +486,51 @@ describe("RuleEngine - Move Execution", () => {
     });
   });
 });
+
+describe("RuleEngine - throwing move conditions", () => {
+  const gameDefWithThrowingCondition = (): GameDefinition<TestGameState, TestMoves> => ({
+    moves: {
+      drawCard: {
+        condition: () => {
+          throw new Error("boom");
+        },
+        reducer: () => {},
+      },
+      endGame: { reducer: () => {} },
+      nextPhase: { reducer: () => {} },
+      playCard: { reducer: () => {} },
+    } satisfies GameMoveDefinitions<TestGameState, TestMoves>,
+    name: "Test Game",
+    setup: (players) => ({
+      currentPlayerIndex: 0,
+      deck: ["card1"],
+      phase: "setup",
+      players: players.map((p) => ({ hand: [], id: p.id, name: p.name || "Player", score: 0 })),
+      turnNumber: 1,
+    }),
+  });
+
+  const players = [
+    { id: createPlayerId("p1"), name: "Alice" },
+    { id: createPlayerId("p2"), name: "Bob" },
+  ];
+
+  it("returns a CONDITION_ERROR rejection instead of throwing out of executeMove", () => {
+    const engine = new RuleEngine(gameDefWithThrowingCondition(), players);
+
+    const result = engine.executeMove("drawCard", { params: {}, playerId: createPlayerId("p1") });
+
+    expect(result.success).toBe(false);
+    expect((result as { errorCode: string }).errorCode).toBe("CONDITION_ERROR");
+    expect((result as { error: string }).error).toContain("boom");
+  });
+
+  it("keeps the engine usable after a throwing condition", () => {
+    const engine = new RuleEngine(gameDefWithThrowingCondition(), players);
+
+    engine.executeMove("drawCard", { params: {}, playerId: createPlayerId("p1") });
+    const after = engine.executeMove("nextPhase", { params: {}, playerId: createPlayerId("p1") });
+
+    expect(after.success).toBe(true);
+  });
+});

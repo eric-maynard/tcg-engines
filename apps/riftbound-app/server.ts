@@ -104,14 +104,23 @@ const server = Bun.serve({
         return;
       }
 
-      // ---- Lobby messages ----
-      if (ws.data.lobbyId) {
-        lobbyWsMessage(ws, msg);
-        return;
-      }
+      // An uncaught throw inside Bun's `websocket.message` terminates the
+      // process, which drops every in-memory game session. Any handler bug
+      // must degrade to a per-message error, never kill the server.
+      try {
+        // ---- Lobby messages ----
+        if (ws.data.lobbyId) {
+          lobbyWsMessage(ws, msg);
+          return;
+        }
 
-      // ---- Game messages ----
-      gameWsMessage(ws, msg);
+        // ---- Game messages ----
+        gameWsMessage(ws, msg);
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        console.error(`WS message handler threw (${String(msg.type)}): ${reason}`);
+        ws.send(JSON.stringify({ error: `Internal error: ${reason}`, requestId: msg.requestId, type: "error" }));
+      }
     },
 
     open(ws: ServerWebSocket<WsData>) {
