@@ -55,6 +55,21 @@ export function parseDamageEffect(text: string): DamageEffect | SequenceEffect |
     return { amount, split: true, target: target as AnyTarget, type: "damage" } as DamageEffect;
   }
 
+  // rule-id: ven-017-166 (rule 428.1) — "Deal damage to a unit equal to the
+  // damage marked on it": a dynamic amount read off the chosen unit's own
+  // damage tally, never a printed number.
+  const markedDamageMatch = text.match(
+    /^Deal damage to (.+?) equal to the damage marked on (?:it|them|that unit)\.?$/i,
+  );
+  if (markedDamageMatch) {
+    const target = parseCardTarget(markedDamageMatch[1]);
+    return {
+      amount: { damage: target as AnyTarget },
+      target: target as AnyTarget,
+      type: "damage",
+    } as DamageEffect;
+  }
+
   // Handle "deal damage equal to my/its Might/[Assault]/[keyword] to TARGET" pattern
   const mightDamageMatch = text.match(
     /^Deal damage equal to (?:my|its|his|her)\s+(?:Might|\[(\w+(?:-\w+)?)\])\s+to\s+(.+?)\.?$/i,

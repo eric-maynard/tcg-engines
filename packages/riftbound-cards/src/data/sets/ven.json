@@ -2128,12 +2128,20 @@
             "duration": "turn",
             "target": {
               "controller": "enemy",
+              "filter": { "domain": "body" },
               "type": "unit"
             },
             "type": "modify-might"
           },
           "timing": "reaction",
           "type": "spell"
+        },
+        {
+          "effect": {
+            "text": "Ignore [Deflect] while paying this spell's cost.",
+            "type": "ignore-deflect"
+          },
+          "type": "static"
         }
       ],
       "parseSuccess": true,

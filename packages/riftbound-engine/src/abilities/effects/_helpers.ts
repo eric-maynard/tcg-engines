@@ -149,6 +149,35 @@ export function resolveAmount(
   if ("keywordValue" in amount) {
     return getKeywordTotalValue(ctx.sourceCardId, String(amount.keywordValue), ctx);
   }
+  // rule 428.1 / 359.3.e (rule-id: ven-017-166) — "damage equal to the damage
+  // marked on it": the tally is read ONCE, as this instruction executes, off
+  // the unit the effect is acting on (the bound target); the damage this
+  // instruction then deals never feeds back into the amount.
+  if ("damage" in amount) {
+    const damageRef = amount.damage;
+    let refId: string | undefined =
+      damageRef === "self" ? ctx.sourceCardId : ctx.boundTargets?.[0];
+    if (refId === undefined && typeof damageRef === "object" && damageRef !== null) {
+      refId = resolveTarget(
+        { ...(damageRef as TargetDescriptor), quantity: "all" },
+        {
+          cards: ctx.cards,
+          draft: ctx.draft,
+          playerId: ctx.playerId,
+          sourceCardId: ctx.sourceCardId,
+          sourceZone: ctx.sourceZone,
+          zones: ctx.zones,
+        },
+      )[0];
+    }
+    if (refId === undefined) {
+      return 0;
+    }
+    const marked = (
+      ctx.cards.getCardMeta?.(refId as CoreCardId) as { damage?: number } | undefined
+    )?.damage;
+    return marked ?? 0;
+  }
   if ("might" in amount) {
     const mightRef = amount.might;
     if (mightRef === "self") {
@@ -575,6 +604,17 @@ export function evaluateEffectCondition(
         | Partial<RiftboundCardMeta>
         | undefined;
       return meta?.stunned === true;
+    }
+    case "target-empowered": {
+      // rule 442.1 (ven-037-166) — "choose an enemy gear. If it's [Empowered],
+      // disempower it. Otherwise, kill it": the branch reads the chosen
+      // (bound) permanent's Empowered status at resolution, not the source's.
+      const bound = ctx.boundTargets?.[0];
+      if (!bound) return false;
+      const meta = ctx.cards.getCardMeta?.(bound as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      return meta?.empowered === true;
     }
     case "target-might": {
       // rule 355.9.a.1 (ven-127-166 Lacerate) — "Choose a unit … Then kill it
