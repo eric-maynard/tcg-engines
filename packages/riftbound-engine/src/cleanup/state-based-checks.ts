@@ -654,6 +654,25 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     stateChanged = true;
   }
 
+  // Step 4c — rule 719.3.a: "When the Top-Most Card changes locations, all
+  // Attached cards change locations with it." Movers relocate the host only
+  // (swaps, effect moves, standard moves), so the Equipment is dragged along
+  // here rather than in every mover. Runs before the loose-gear recall below,
+  // which skips Equipment whose host is on the board.
+  for (const zoneId of getBoardZoneIds(ctx)) {
+    for (const hostId of ctx.zones.getCardsInZone(zoneId as CoreZoneId)) {
+      const hostMeta = ctx.cards.getCardMeta(hostId) as Partial<RiftboundCardMeta> | undefined;
+      for (const equipId of hostMeta?.equippedWith ?? []) {
+        const equipZone = ctx.zones.getCardZone?.(equipId as CoreCardId) as string | undefined;
+        const equipOnBoard = equipZone === "base" || equipZone?.startsWith("battlefield-") === true;
+        if (equipOnBoard && equipZone !== zoneId) {
+          ctx.zones.moveCard({ cardId: equipId as CoreCardId, targetZoneId: zoneId as CoreZoneId });
+          stateChanged = true;
+        }
+      }
+    }
+  }
+
   // Step 5: Auto-recall gear from battlefields to base (rule 518)
   for (const bfId of Object.keys(ctx.draft.battlefields)) {
     const bfZoneId = `battlefield-${bfId}` as CoreZoneId;

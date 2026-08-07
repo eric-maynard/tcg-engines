@@ -63,6 +63,26 @@ describe("Azir, Ascendant (sfd-050-221)", () => {
     expect(game.state("dirk").attachedTo).toBe("azir");
   });
 
+  test("rule 719.3.a — Azir's attached Equipment changes locations with him when the swap moves him", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 0, power: { calm: 1, fury: 1 } })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", CARD, "azir")
+      .unit(P1, "base", { might: 2, name: "Pawn" }, "pawn")
+      .gear(P1, DIRK, "dirk")
+      .script(P1, ["pawn"])
+      .build();
+    await game.p1.do("equipCard", { equipmentId: "dirk", unitId: "azir" });
+    await game.settle();
+    expect(game.state("dirk").attachedTo).toBe("azir");
+    expect(game.zoneOf("dirk")).toBe("battlefield-bf1");
+    await game.p1.activate("azir");
+    await game.settle({ policy: "first" });
+    expect(game.zoneOf("azir")).toBe("base");
+    expect(game.state("dirk").attachedTo).toBe("azir");
+    expect(game.zoneOf("dirk")).toBe("base");
+  });
+
   test("'Use only once per turn' — after one activation resolves it is not offered again this turn (rule 377.2.b)", async () => {
     // Expected: second activation illegal in the same turn even with calm power to spare.
     // Actual: the ability is offered again.

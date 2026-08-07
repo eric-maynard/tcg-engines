@@ -355,7 +355,15 @@ function triggerMatchesEvent(
   // already get a dedicated `play-spell` event on resolution — don't double-fire.
   const typedPlay =
     event.type === "play-card" && event.cardType !== "spell" ? `play-${event.cardType}` : undefined;
-  if (!triggerEvents.includes(mapped) && !(typedPlay && triggerEvents.includes(typedPlay))) {
+  // rule 185.2.a (unl-109-219) — tokens are not cards, but they can still be
+  // Played: playing a unit token IS playing a unit, so a `play-unit` trigger
+  // matches the `play-token-unit` event (a `play-card` trigger still does not).
+  const tokenUnitPlay = event.type === "play-token-unit" && triggerEvents.includes("play-unit");
+  if (
+    !triggerEvents.includes(mapped) &&
+    !(typedPlay && triggerEvents.includes(typedPlay)) &&
+    !tokenUnitPlay
+  ) {
     return false;
   }
 
