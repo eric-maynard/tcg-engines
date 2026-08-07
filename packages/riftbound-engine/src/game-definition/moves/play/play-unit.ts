@@ -622,11 +622,14 @@ export const playUnit: Defs["playUnit"] = {
         context.params.playerId as CorePlayerId,
       );
       const hasFriendlyUnits = unitsAtBattlefield.length > 0;
-      // Reaction timing is always legal per `isLegalTiming("reaction", ...)`
-      // Regardless of chain/showdown state, so we treat Ambush as
-      // Permanently reaction-legal and rely on `canPlayViaAmbush`'s
-      // Friendly-units check.
-      if (!canPlayViaAmbush(hasAmbush, hasFriendlyUnits, true)) {
+      // rule 813.1.c.1 / 310.1.a: Ambush grants [Reaction] TIMING, not a
+      // permission to act when this player may not act at all. Reaction
+      // windows are Closed states (priority holder) and Showdowns (Focus
+      // holder); a Neutral Open State belongs to the turn player alone, so
+      // the opponent may not Ambush in during it.
+      const ambushWindowOpen =
+        standardTimingOk || reactionWindowOpen(state, context.params.playerId as string);
+      if (!canPlayViaAmbush(hasAmbush, hasFriendlyUnits, ambushWindowOpen)) {
         return false;
       }
     } else if (!reactionTimingOk) {
@@ -1083,7 +1086,10 @@ export const playUnit: Defs["playUnit"] = {
       // Rule ven-123-166 / 577.3.c: offer Ambush plays to any battlefield
       // where the player already has friendly units (reaction timing —
       // legal even outside the active player's main phase / neutral-open).
-      if (registry.hasKeyword(cardId as string, "Ambush")) {
+      // rule 310.1.a: but Reaction TIMING is not a permission to act — only
+      // offer it in a window this player may act in (own neutral-open, chain
+      // priority, or showdown Focus), never in the opponent's Neutral Open.
+      if (registry.hasKeyword(cardId as string, "Ambush") && (standardTiming || reactionWindow)) {
         for (const bfId of Object.keys(state.battlefields ?? {})) {
           const bfZoneId = getBattlefieldZoneId(bfId);
           const friendly = context.zones.getCardsInZone(

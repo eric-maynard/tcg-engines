@@ -357,11 +357,13 @@ describe("Ambush: can be played as Reaction at a battlefield where you have unit
 
   // Rule 577.3.c: the engine's `playUnit` move now honors Ambush by letting
   // A unit be played directly to a battlefield where the player has friendly
-  // Units, without requiring main-phase timing on the player's own turn.
+  // Units, without requiring main-phase timing.
+  // rule 813.1.c.1 / 310.1.a: Ambush is Reaction TIMING, so the window still
+  // has to be one this player may act in — here P2's own beginning phase.
   it("Rule 577.3.c: playUnit with Ambush allows a unit to be played to a battlefield where the player has friendly units", () => {
     const engine = createMinimalGameState({
-      currentPlayer: P1,
-      phase: "main",
+      currentPlayer: P2,
+      phase: "beginning",
       runePools: { [P2]: { energy: 2, power: {} } },
     });
     createBattlefield(engine, "bf-1", { controller: null });

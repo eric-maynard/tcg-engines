@@ -47,15 +47,23 @@ describe("Rengar, Trophy Hunter (unl-120-219)", () => {
 
   // rule 577.3.c / 813.1.c — [Ambush] is printed here as a self-granting
   // static, which must still read as the printed keyword.
-  test("[Ambush]: playable on the opponent's turn to a battlefield where you have units", async () => {
+  // rule 813.1.c.1 / 310.1.a — [Ambush] is Reaction TIMING: it works in a
+  // Closed state or a Showdown, not in the opponent's Neutral Open State.
+  test("[Ambush]: playable on the opponent's turn to a battlefield where you have units, once P1 holds Focus in P2's showdown", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P1, { energy: 5, power: { body: 5 } })
       .battlefield("bf1", { controller: P1 })
       .unit(P1, "bf1", { might: 2, name: "Scout" }, "scout")
+      .unit(P2, "base", { might: 2, name: "Raider" }, "raider")
       .hand(P1, CARD, "rengar")
       .build();
 
+    // no window yet: P2's Neutral Open State is P2's alone (310.1.a)
+    expect(game.p1.can("play", "rengar")).toBe(false);
+
+    await game.p2.move("raider", "bf1");
+    await game.p2.passFocus();
     await game.p1.play("rengar", { to: "bf1" });
     await game.settle();
     expect(game.locationOf("rengar")).toBe("bf1");
