@@ -471,7 +471,14 @@ function getSelfConditionalEnergyReduction(
     if (effect?.type !== "cost-reduction" || effect.target !== "self") {
       continue;
     }
-    if (effect.scope !== undefined || effect.by !== undefined || !condition) {
+    // rule 824 (rule-id: unl-059-219) — `scope:"instead"` is the stacking rule
+    // of a [Level N] tier, not a "for each …" scaling scope: it must not divert
+    // the tier to the scaled path, which would drop the discount entirely.
+    if (
+      (effect.scope !== undefined && effect.scope !== "instead") ||
+      effect.by !== undefined ||
+      !condition
+    ) {
       continue;
     }
     // rule 356.4 / 355.10.a (rule-id: unl-168-219) — "This costs [2] less if you
@@ -2142,18 +2149,29 @@ function getSelfConditionalPowerReduction(
   extras: CostExtras,
 ): Partial<Record<string, number>> {
   const out: Partial<Record<string, number>> = {};
+  // rule 824 (rule-id: unl-059-219) — a tier worded "… less INSTEAD" replaces
+  // the lower tiers' pips rather than stacking with them, so the active
+  // "instead" tiers are collected apart and only the largest is waived.
+  const instead: Partial<Record<string, number>>[] = [];
   for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
     if (ability?.type !== "static") {
       continue;
     }
     const { effect, condition } = ability as {
-      effect?: { type?: string; target?: unknown; scope?: unknown; by?: unknown; reduction?: unknown; amount?: unknown };
+      effect?: { type?: string; target?: unknown; scope?: unknown; by?: unknown; reduction?: unknown; amount?: unknown; instead?: unknown };
       condition?: Record<string, unknown>;
     };
     if (effect?.type !== "cost-reduction" || effect.target !== "self") {
       continue;
     }
-    if (effect.scope !== undefined || effect.by !== undefined || !condition) {
+    // rule 824 (rule-id: unl-059-219) — `scope:"instead"` is the stacking rule
+    // of a [Level N] tier, not a "for each …" scaling scope: it must not divert
+    // the tier to the scaled path, which would drop the discount entirely.
+    if (
+      (effect.scope !== undefined && effect.scope !== "instead") ||
+      effect.by !== undefined ||
+      !condition
+    ) {
       continue;
     }
     if (
@@ -2168,13 +2186,22 @@ function getSelfConditionalPowerReduction(
     ) {
       continue;
     }
-    for (const [domain, n] of Object.entries(
-      decodeCostAmount(effect.reduction ?? effect.amount).power,
-    )) {
+    const pips = decodeCostAmount(effect.reduction ?? effect.amount).power;
+    if (effect.instead === true) {
+      instead.push(pips);
+      continue;
+    }
+    for (const [domain, n] of Object.entries(pips)) {
       if (n && n > 0) {
         out[domain] = (out[domain] ?? 0) + n;
       }
     }
+  }
+  if (instead.length > 0) {
+    const totalPips = (p: Partial<Record<string, number>>): number =>
+      Object.values(p).reduce((a, n) => a + (n ?? 0), 0);
+    const best = instead.reduce((a, b) => (totalPips(b) > totalPips(a) ? b : a));
+    return Object.fromEntries(Object.entries(best).filter(([, n]) => (n ?? 0) > 0));
   }
   return out;
 }
@@ -3011,23 +3038,48 @@ export function getPlayEnergyDiscountOverflow(
   return Math.max(0, -discounted);
 }
 
-export function canAffordCard(
+/**
+ * rule 356 — the RESOURCE half of a play's Total Cost after every base-cost
+ * modification, additional cost, increase and discount: Energy, named-Domain
+ * pips, any-Domain pips (`any` — [rainbow] pips, Deflect, X paid in Power,
+ * enemy surcharges) and hybrid pips (a multi-domain card's printed pips,
+ * payable only from its own Domains — rule 135.2.e.6.c).
+ */
+export interface PlayResourceCost {
+  /** rule 356.5 — nothing at all is paid ("if you do, ignore my cost"). */
+  readonly free: boolean;
+  /** rule 356.1.b.2 — the Energy component is ignored (not checked, not paid). */
+  readonly ignoreEnergy: boolean;
+  readonly energy: number;
+  /** Named-Domain pips (never `rainbow`). */
+  readonly named: Partial<Record<string, number>>;
+  /** Pips payable with Power of ANY Domain. */
+  readonly any: number;
+  /** Pips payable only from `domains` (or pooled [rainbow] Power). */
+  readonly hybrid?: { readonly domains: readonly string[]; readonly n: number };
+}
+
+const FREE_PLAY: PlayResourceCost = { any: 0, energy: 0, free: true, ignoreEnergy: false, named: {} };
+
+/**
+ * rule 356 — Determine Total Cost (resources). The ONE computation behind
+ * both the affordability gate (`canAffordCard`) and the payment
+ * (`deductCost`); `consume` spends one-shot "next card costs N less" riders
+ * and must only be set on a draft inside the pay path.
+ */
+export function computePlayResourceCost(
   state: RiftboundGameState,
   playerId: string,
   cardId: string,
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
-  potentialEnergy = 0,
-): boolean {
-  const pool = state.runePools[playerId];
-  if (!pool) {
-    return false;
-  }
+  consume = false,
+): PlayResourceCost {
   // rule 356.5 — the elected additional cost waives the card's cost entirely.
   if (extras.ignoreBaseCost) {
-    return true;
+    return FREE_PLAY;
   }
-
+  const pool = state.runePools[playerId];
   const modifier = getCostModifier(cardId, getCardMeta);
   const baseCost = getBaseCostForPlay(cardId, extras, getCardMeta, pool);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
@@ -3048,13 +3100,14 @@ export function canAffordCard(
     getSelfScaledEnergyReduction(state, playerId, cardId, extras) +
     getSelfConditionalEnergyReduction(state, playerId, cardId, extras) +
     getSelfLegionEnergyReduction(state, playerId, cardId);
-  const nextPlay = takeNextPlayDiscount(state, playerId, cardId, false);
+  // rule 356.4.b / 356.6: the one-shot "next spell costs [N] less" (spent only when `consume`).
+  const nextPlay = takeNextPlayDiscount(state, playerId, cardId, consume);
   const nextPlayEnergy = nextPlay.energy;
   // rule 356.4.e: a discount's minimum binds only that discount, and the payer
   // orders discounts — floored board auras go first so unfloored ones aren't lost.
   const discounted =
     applyStaticCostReduction(Math.max(0, baseCost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy;
-  const adjustedEnergy = Math.max(
+  const energy = Math.max(
     0,
     Math.max(0, discounted) +
       xEnergy +
@@ -3063,19 +3116,8 @@ export function canAffordCard(
       applyDiscountOverflowToAdditionalCost(extras.additionalCost?.energy ?? 0, discounted),
   );
 
-  // Rule 357.1.a: ready runes can be exhausted for energy during Pay Costs,
-  // so treat their yield as available when testing affordability.
-  // rule 429.4: Energy earmarked "use only to play spells / gear" is invisible
-  // to a play of any other card type.
-  const availableEnergy =
-    Math.max(0, pool.energy - getLockedEnergy(state, playerId, cardId)) + potentialEnergy;
-  // rule 356.1.b: "ignoring its Energy cost" skips only that component.
-  if (!extras.ignoreEnergyCost && availableEnergy < adjustedEnergy) {
-    return false;
-  }
-
-  // Check power (domain requirements are not affected by cost modifiers,
-  // only by board statics that waive power pips).
+  // Power (domain requirements are not affected by cost modifiers, only by
+  // board statics that waive power pips).
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
   // rule 356.4.f / 809.1.d: a [rainbow] discount cancels the Deflect surcharge
   // (an additional cost added before discounts) before any printed pip.
@@ -3089,7 +3131,7 @@ export function canAffordCard(
     ),
     getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards, cardId),
   );
-  const basePower = reducePowerCost(baseCost.power, deflect.waived, pool.power);
+  const basePower = reducePowerCost(baseCost.power, deflect.waived, pool?.power ?? {});
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
   // rule 356.3 — an enemy static's [rainbow] surcharge is an added pip, not a
   // printed one, so it is never covered by a hybrid/domain restriction.
@@ -3099,21 +3141,15 @@ export function canAffordCard(
     ...Object.keys(repeatPower),
     ...Object.keys(extraPower),
   ]);
-  // Rule 135.2.e.5.a: [rainbow] pips are payable with Power of any Domain —
-  // check named domains first, then cover rainbow from whatever is left.
+  // Rule 135.2.e.5.a: [rainbow] pips are payable with Power of any Domain.
   // Rule 721.1.c / 721.1.c.1 (unl-030-219): the Deflect surcharge is Power of
   // any Domain, so it joins the rainbow requirement rather than energy.
-  let rainbowNeed = deflect.surcharge + xPower;
+  let any = deflect.surcharge + xPower;
   // Rule 135.2.e.6.c (rule-id: ven-150-166): a multi-domain card's printed
   // pips are hybrid — payable only from the card's own Domains.
   const hybridDomains = getHybridPipDomains(cardId);
   let hybridNeed = 0;
-  const remaining: Record<string, number> = {};
-  for (const [d, v] of Object.entries(pool.power)) {
-    if (typeof v === "number" && v > 0) {
-      remaining[d] = v;
-    }
-  }
+  const named: Partial<Record<string, number>> = {};
   for (const domain of powerDomains) {
     const need =
       (basePower[domain] ?? 0) +
@@ -3123,10 +3159,60 @@ export function canAffordCard(
       const printed = need - (extraPower[domain] ?? 0);
       if (hybridDomains) {
         hybridNeed += printed;
-        rainbowNeed += need - printed;
+        any += need - printed;
       } else {
-        rainbowNeed += need;
+        any += need;
       }
+      continue;
+    }
+    if (need > 0) {
+      named[domain] = need;
+    }
+  }
+  return {
+    any,
+    energy,
+    free: false,
+    ignoreEnergy: extras.ignoreEnergyCost === true,
+    named,
+    ...(hybridDomains && hybridNeed > 0 ? { hybrid: { domains: hybridDomains, n: hybridNeed } } : {}),
+  };
+}
+
+/**
+ * rule 357.1 — can `playerId`'s Rune Pool (plus `potentialEnergy` the caller
+ * vouches is addable) cover `cost`? rule 429.4: Energy earmarked "use only to
+ * play <another card type>" is invisible to this play. Named pips fall back to
+ * pooled [rainbow] Power (135.2.e.5.b); any-Domain and hybrid pips are covered
+ * from whatever is left.
+ */
+export function canPayResourceCost(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  cost: PlayResourceCost,
+  potentialEnergy = 0,
+): boolean {
+  const pool = state.runePools[playerId];
+  if (!pool) {
+    return false;
+  }
+  if (cost.free) {
+    return true;
+  }
+  const availableEnergy =
+    Math.max(0, pool.energy - getLockedEnergy(state, playerId, cardId)) + potentialEnergy;
+  if (!cost.ignoreEnergy && availableEnergy < cost.energy) {
+    return false;
+  }
+  const remaining: Record<string, number> = {};
+  for (const [d, v] of Object.entries(pool.power)) {
+    if (typeof v === "number" && v > 0) {
+      remaining[d] = v;
+    }
+  }
+  for (const [domain, need] of Object.entries(cost.named)) {
+    if (!need) {
       continue;
     }
     const available = remaining[domain] ?? 0;
@@ -3144,20 +3230,21 @@ export function canAffordCard(
     }
     remaining[domain] = available - need;
   }
-  if (hybridDomains && hybridNeed > 0) {
+  const hybridNeed = cost.hybrid?.n ?? 0;
+  if (cost.hybrid && hybridNeed > 0) {
     // Rule 135.2.e.6.c: only the card's own Domains (or pooled [rainbow]
     // Power, Rule 135.2.e.5.b) may cover hybrid pips.
     let hybridAvailable = remaining.rainbow ?? 0;
-    for (const d of hybridDomains) {
+    for (const d of cost.hybrid.domains) {
       hybridAvailable += remaining[d] ?? 0;
     }
     if (hybridAvailable < hybridNeed) {
       return false;
     }
   }
-  if (rainbowNeed + hybridNeed > 0) {
+  if (cost.any + hybridNeed > 0) {
     const leftover = Object.values(remaining).reduce((a, b) => a + b, 0);
-    if (leftover < rainbowNeed + hybridNeed) {
+    if (leftover < cost.any + hybridNeed) {
       return false;
     }
   }
@@ -3165,125 +3252,43 @@ export function canAffordCard(
 }
 
 /**
- * Deduct a card's cost from the player's rune pool.
+ * rule 357.1 — spend `cost` from `playerId`'s Rune Pool (earmarked Energy
+ * first, rule 429.4), recording the Energy/Power ledgers other cards read
+ * ("if you've spent [4] or more to play a spell this turn", "spent [A][A]").
+ * Never drives a pool negative: callers gate on `canPayResourceCost`.
  */
-export function deductCost(
+export function payResourceCost(
   draft: RiftboundGameState,
   playerId: string,
   cardId: string,
-  extras: CostExtras,
-  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+  cost: PlayResourceCost,
 ): void {
-  const cost = getBaseCostForPlay(cardId, extras, getCardMeta, draft.runePools[playerId]);
   const pool = draft.runePools[playerId];
-  if (!pool) {
-    return;
-  }
-  // rule 356.5 — the elected additional cost waives the card's cost entirely.
-  if (extras.ignoreBaseCost) {
+  if (!pool || cost.free) {
     return;
   }
   // rule 364.3.a — tally the pips this play actually drains from the pool.
   const powerPipsBefore = totalPowerPips(pool.power);
-
-  const modifier = getCostModifier(cardId, getCardMeta);
-  const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
-  const xAmount = Math.max(0, extras.xAmount ?? 0);
-  // rule 204.3.b / 135.2.e: an X paid in [rainbow] never touches Energy.
-  const xPower = xAmount > 0 && xCostIsPower(cardId) ? xAmount : 0;
-  const xEnergy = xAmount - xPower;
-  const repeatN = Math.max(0, extras.repeatCount ?? 0);
-  // rule-id: unl-146-219 — include board-granted Repeat instances.
-  const repeatTiers =
-    repeatN > 0 ? getEffectiveSpellRepeatCost(draft, playerId, cardId, extras.board) : undefined;
-  const repeatSurcharge = getRepeatEnergySurcharge(cardId, repeatN, repeatTiers);
-  const boardReduction = getBoardCostReduction(draft, playerId, cardId, extras);
-  // rule 356.3 — opponents' static cost increases, added after all discounts.
-  const boardIncrease = getBoardCostIncrease(draft, playerId, cardId, extras);
-  // rule-id: ven-096-166 — self static "I cost [N] less for each …".
-  const selfScaled =
-    getSelfScaledEnergyReduction(draft, playerId, cardId, extras) +
-    getSelfConditionalEnergyReduction(draft, playerId, cardId, extras) +
-    getSelfLegionEnergyReduction(draft, playerId, cardId);
-  // rule 356.4.b / 356.6: the one-shot "next spell costs [N] less" is spent here.
-  const nextPlay = takeNextPlayDiscount(draft, playerId, cardId, true);
-  const nextPlayEnergy = nextPlay.energy;
-  // rule 356.4.e: floored board auras first, then unfloored discounts (see canAffordCard).
-  const discounted =
-    applyStaticCostReduction(Math.max(0, cost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy;
-  const adjustedEnergy = Math.max(
-    0,
-    Math.max(0, discounted) +
-      xEnergy +
-      repeatSurcharge +
-      boardIncrease.energy +
-      applyDiscountOverflowToAdditionalCost(extras.additionalCost?.energy ?? 0, discounted),
-  );
-
   // rule 356.1.b: "ignoring its Energy cost" skips only that component.
-  if (!extras.ignoreEnergyCost) {
+  if (!cost.ignoreEnergy) {
     // rule 429.4: earmarked Energy is spent first on the plays it allows.
-    consumeRestrictedEnergy(draft, playerId, cardId, Math.min(adjustedEnergy, pool.energy));
+    consumeRestrictedEnergy(draft, playerId, cardId, Math.min(cost.energy, pool.energy));
+    pool.energy = Math.max(0, pool.energy - cost.energy);
+    recordSpellEnergySpent(draft, playerId, cardId, cost.energy);
   }
-  pool.energy = extras.ignoreEnergyCost ? pool.energy : Math.max(0, pool.energy - adjustedEnergy);
-  if (!extras.ignoreEnergyCost) {
-    recordSpellEnergySpent(draft, playerId, cardId, adjustedEnergy);
-  }
-  // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
-  // rule 356.4.f / 809.1.d: a [rainbow] discount cancels the Deflect surcharge
-  // (an additional cost added before discounts) before any printed pip.
-  const deflect = offsetDeflectWithWaivedRainbow(
-    // rule 466 (rule-id: sfd-055-221) — a self scaled discount can waive power
-    // pips as well as energy.
-    waivedPower(
-      boardReduction,
-      extras,
-      mergePower(nextPlay.power ?? {}, getSelfScaledPowerReduction(draft, playerId, cardId, extras)),
-    ),
-    getDeflectSurcharge(draft, playerId, extras.targets, extras.board?.cards, cardId),
-  );
-  const basePower = reducePowerCost(cost.power, deflect.waived, pool.power);
-  const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
-  // rule 356.3 — enemy static surcharge pips are added, never printed pips.
-  const extraPower = mergePower(additionalCostPower(extras), boardIncrease.power);
-  const powerDomains = new Set([
-    ...Object.keys(basePower),
-    ...Object.keys(repeatPower),
-    ...Object.keys(extraPower),
-  ]);
-  // Rule 721.1.c / 721.1.c.1 (unl-030-219): Deflect surcharge is paid in
-  // Power of any Domain, never energy.
-  let rainbowOwed = deflect.surcharge + xPower;
-  // Rule 135.2.e.6.c (rule-id: ven-150-166): a multi-domain card's printed
-  // pips are hybrid — paid only from the card's own Domains.
-  const hybridDomains = getHybridPipDomains(cardId);
-  let hybridOwed = 0;
-  for (const domain of powerDomains) {
-    const amount =
-      (basePower[domain] ?? 0) +
-      (repeatPower[domain] ?? 0) +
-      (extraPower[domain] ?? 0);
-    if (domain === "rainbow") {
-      const printed = amount - (extraPower[domain] ?? 0);
-      if (hybridDomains) {
-        hybridOwed += printed;
-        rainbowOwed += amount - printed;
-      } else {
-        rainbowOwed += amount;
-      }
+  for (const [domain, amount] of Object.entries(cost.named)) {
+    if (!amount || amount <= 0) {
       continue;
     }
-    if (amount > 0) {
-      const key = domain as keyof typeof pool.power;
-      const have = pool.power[key] ?? 0;
-      pool.power[key] = Math.max(0, have - amount);
-      // Rule 135.2.e.5.b (unl-022-219): pooled [rainbow] Power covers any
-      // domain shortfall.
-      const shortfall = amount - have;
-      if (shortfall > 0) {
-        const wildPool = pool.power as Partial<Record<string, number>>;
-        wildPool.rainbow = Math.max(0, (wildPool.rainbow ?? 0) - shortfall);
-      }
+    const key = domain as keyof typeof pool.power;
+    const have = pool.power[key] ?? 0;
+    pool.power[key] = Math.max(0, have - amount);
+    // Rule 135.2.e.5.b (unl-022-219): pooled [rainbow] Power covers any
+    // domain shortfall.
+    const shortfall = amount - have;
+    if (shortfall > 0) {
+      const wildPool = pool.power as Partial<Record<string, number>>;
+      wildPool.rainbow = Math.max(0, (wildPool.rainbow ?? 0) - shortfall);
     }
   }
   // Rule 135.2.e.5.a: [rainbow] pips are paid with any Domain's Power — after
@@ -3291,17 +3296,63 @@ export function deductCost(
   const anyPool = pool.power as Partial<Record<string, number>>;
   // Rule 135.2.e.6.c: hybrid pips first, restricted to the card's own
   // Domains (pooled [rainbow] Power as fallback per Rule 135.2.e.5.b).
+  let hybridOwed = cost.hybrid?.n ?? 0;
+  const hybridDomains = cost.hybrid?.domains;
   while (hybridDomains && hybridOwed > 0) {
     if (!drainOnePowerPip(anyPool, (d) => d === "rainbow" || hybridDomains.includes(d))) {
       break;
     }
     hybridOwed--;
   }
-  while (rainbowOwed > 0) {
+  let anyOwed = cost.any;
+  while (anyOwed > 0) {
     if (!drainOnePowerPip(anyPool, () => true)) {
       break;
     }
-    rainbowOwed--;
+    anyOwed--;
   }
   recordPowerSpent(draft, playerId, powerPipsBefore - totalPowerPips(pool.power));
+}
+
+/**
+ * Check if player can afford a card's cost from their rune pool — thin wrapper
+ * over `computePlayResourceCost` + `canPayResourceCost` (the same computation
+ * `deductCost` pays, so the two can never drift).
+ */
+export function canAffordCard(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+  potentialEnergy = 0,
+): boolean {
+  if (!state.runePools[playerId]) {
+    return false;
+  }
+  const cost = computePlayResourceCost(state, playerId, cardId, extras, getCardMeta, false);
+  return canPayResourceCost(state, playerId, cardId, cost, potentialEnergy);
+}
+
+/**
+ * Deduct a card's cost from the player's rune pool — `computePlayResourceCost`
+ * (consuming one-shot riders) + `payResourceCost`.
+ */
+export function deductCost(
+  draft: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+  _addContext?: unknown,
+): void {
+  if (!draft.runePools[playerId]) {
+    return;
+  }
+  // rule 356.5 — an ignored cost pays nothing and consumes no rider.
+  if (extras.ignoreBaseCost) {
+    return;
+  }
+  const cost = computePlayResourceCost(draft, playerId, cardId, extras, getCardMeta, true);
+  payResourceCost(draft, playerId, cardId, cost);
 }

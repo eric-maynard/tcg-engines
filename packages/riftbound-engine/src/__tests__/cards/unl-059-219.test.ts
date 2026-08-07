@@ -92,7 +92,7 @@ describe("Master Yi, Unstoppable (unl-059-219)", () => {
     expect((await inHand(5, 10, 1).build()).p1.can("play", "yi")).toBe(false);
   });
 
-  test.failing("BUG: [Level 6] I cost [4][calm][calm] less INSTEAD — at 6 (and 10) XP he costs exactly 8 energy + 1 calm", async () => {
+  test("[Level 6] I cost [4][calm][calm] less INSTEAD — at 6 (and 10) XP he costs exactly 8 energy + 1 calm", async () => {
     // Expected: 8 + [calm]. Actual: full 12 + 3 calm demanded (no Level cost reduction implemented).
     for (const xp of [6, 10]) {
       const game = await inHand(xp, 8, 1).build();
@@ -112,7 +112,7 @@ describe("Master Yi, Unstoppable (unl-059-219)", () => {
     expect(game.zoneOf("yi")).toBe("hand");
   });
 
-  test.failing("BUG: [Level 11] I cost [6][calm][calm][calm] less INSTEAD — at 11 XP he is 6 energy and NO power; 5 energy is one short", async () => {
+  test("[Level 11] I cost [6][calm][calm][calm] less INSTEAD — at 11 XP he is 6 energy and NO power; 5 energy is one short", async () => {
     // Expected: 6 + no pips. Actual: 12 + 3 calm demanded.
     const game = await inHand(11, 6, 0).build();
     expect(game.p1.can("play", "yi")).toBe(true);
@@ -123,7 +123,7 @@ describe("Master Yi, Unstoppable (unl-059-219)", () => {
     expect((await inHand(11, 5, 3).build()).p1.can("play", "yi")).toBe(false);
   });
 
-  test.failing("BUG: at 16+ XP the Level-11 discount still applies (Level 16 is a separate line, not a replacement) — 6 energy, no power, with 4 calm left untouched", async () => {
+  test("at 16+ XP the Level-11 discount still applies (Level 16 is a separate line, not a replacement) — 6 energy, no power, with 4 calm left untouched", async () => {
     // Expected: pool 6 energy + 4 calm → after play {0, calm 4}. Actual: not playable at 6 energy at all.
     const game = await inHand(20, 6, 4).build();
     await game.p1.play("yi");
@@ -141,7 +141,7 @@ describe("Master Yi, Unstoppable (unl-059-219)", () => {
     expect((await scenario().resources(P1, { energy: 11, power: { calm: 3 } }).champion(P1, CARD, "yi").build()).p1.can("playChampion")).toBe(false);
   });
 
-  test.failing("BUG: the Level ladder also prices the Champion-Zone play — at 11 XP playChampion is legal with 6 energy and no power", async () => {
+  test("the Level ladder also prices the Champion-Zone play — at 11 XP playChampion is legal with 6 energy and no power", async () => {
     // Expected: offered and paid at 6. Actual: playFromChampionZone demands the printed 12 (+ pips).
     const game = await scenario().xp(P1, 11).resources(P1, { energy: 6 }).champion(P1, CARD, "yi").build();
     expect(game.p1.can("playChampion")).toBe(true);
