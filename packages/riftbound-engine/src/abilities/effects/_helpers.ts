@@ -430,6 +430,9 @@ export function evaluateEffectCondition(
           cards: ctx.cards,
           draft: ctx.draft,
           playerId: ctx.playerId,
+          // rule-id: ven-148-166 — "if you have exactly two units THERE" counts
+          // at the anchored location, so `location: "same"` needs the anchor.
+          sameZone: ctx.sameZone,
           sourceCardId: ctx.sourceCardId,
           sourceZone: ctx.sourceZone,
           zones: ctx.zones,

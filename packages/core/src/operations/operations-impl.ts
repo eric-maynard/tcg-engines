@@ -191,6 +191,15 @@ export const createZoneOperations = <TCardDef, TCardMeta>(
 
     moveCard: ({ cardId, targetZoneId, position = "bottom" }) => {
       logger?.trace("Moving card", { cardId, position, targetZoneId });
+      // Validate the destination BEFORE detaching the card from its source zone.
+      // These zone ops mutate engine state outside immer, so a throw here is not
+      // rolled back: splicing first would leave the card in no zone at all and
+      // soft-lock the game (it would be gone from every zone while the chain
+      // item that moved it stays live and re-throws forever).
+      const targetZone = state.zones[targetZoneId as string];
+      if (!targetZone) {
+        throw new Error(`Target zone ${targetZoneId} does not exist`);
+      }
       // Find current zone and remove card
       let sourceZoneId: string | undefined;
       for (const zoneId in state.zones) {
@@ -220,11 +229,6 @@ export const createZoneOperations = <TCardDef, TCardMeta>(
       }
 
       // Add to target zone
-      const targetZone = state.zones[targetZoneId as string];
-      if (!targetZone) {
-        throw new Error(`Target zone ${targetZoneId} does not exist`);
-      }
-
       let targetPosition: number | undefined;
 
       if (position === "top") {

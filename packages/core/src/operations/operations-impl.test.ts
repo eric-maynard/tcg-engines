@@ -108,6 +108,24 @@ describe("Operations Implementation", () => {
         expect(state.cards["card-1"].zone).toBe("play" as ZoneId);
       });
 
+      it("should leave the card in its source zone when the target zone does not exist", () => {
+        const state = createTestInternalState();
+        const ops = createZoneOperations(state);
+
+        // Zone ops mutate engine state outside immer, so a mid-move throw is
+        // never rolled back: the move must be atomic or the card vanishes from
+        // every zone and the game soft-locks.
+        expect(() =>
+          ops.moveCard({
+            cardId: "card-1" as CardId,
+            targetZoneId: "battlefield" as ZoneId,
+          }),
+        ).toThrow("Target zone battlefield does not exist");
+
+        expect(state.zones.hand.cardIds).toContain("card-1");
+        expect(state.cards["card-1"].zone).toBe("hand" as ZoneId);
+      });
+
       it("should move card to top of deck", () => {
         const state = createTestInternalState();
         const ops = createZoneOperations(state);

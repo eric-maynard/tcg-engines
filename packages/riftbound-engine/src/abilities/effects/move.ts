@@ -280,7 +280,7 @@ function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void
   } as RiftboundGameState["pendingChoice"];
 }
 
-export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   if ((effect as unknown as { swap?: boolean }).swap === true) {
     handleSwapLocations(effect, ctx);
     return;
@@ -444,6 +444,34 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
           },
         )
       : [];
+    // rule-id: ven-148-166 (rule 355.4) — "to a battlefield WHERE YOU HAVE
+    // UNITS" is a presence test, not a control test: an uncontrolled or
+    // contested battlefield still qualifies as long as a friendly unit stands
+    // there, and a battlefield you control but have vacated does not.
+    const friendlyUnits =
+      which === "friendly-units"
+        ? resolveTarget(
+            { controller: "friendly", quantity: "all", type: "unit" } as TargetDescriptor,
+            {
+              cards: ctx.cards,
+              draft: ctx.draft,
+              playerId: ctx.playerId,
+              sourceCardId: ctx.sourceCardId,
+              sourceZone: ctx.sourceZone,
+              zones: ctx.zones,
+            },
+          )
+        : [];
+    // rule-id: ven-148-166 (rule 387) — "Move an enemy unit to a battlefield…
+    // If you have exactly two units THERE…": the rider is anchored at the
+    // destination, so it can only run once the destination is known.
+    const thenAtDestination = (effect as unknown as { then?: ExecutableEffect }).then;
+    const runThenAt = (movedId: string, zone: string): void => {
+      if (!thenAtDestination) {
+        return;
+      }
+      h.executeEffect(thenAtDestination, { ...ctx, boundTargets: [movedId], sameZone: zone });
+    };
     for (const cardId of moveTargets) {
       const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
       const moverMight = mightGate ? getEffectiveMight(cardId, ctx) : 0;
@@ -462,7 +490,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
           const total = there.reduce((sum, id) => sum + getEffectiveMight(id, ctx), 0);
           return moverMight > total;
         })
-        .filter(([, bf]) => {
+        .filter(([bfId, bf]) => {
           switch (which) {
             case "controlled":
               return bf.controller === ctx.playerId;
@@ -472,6 +500,10 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
               return bf.controller === null;
             case "contested":
               return bf.contested === true;
+            case "friendly-units":
+              return friendlyUnits.some(
+                (id) => ctx.zones.getCardZone(id as CoreCardId) === `battlefield-${bfId}`,
+              );
             default:
               return true;
           }
@@ -486,14 +518,17 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         // rule-id: unl-144-219 — Rule 450: arriving at a non-controlled
         // battlefield applies Contested so combat is staged.
         markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, cardId));
+        runThenAt(cardId, landed);
         continue;
       }
       ctx.draft.pendingChoice = {
         cardId,
         options,
         playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        ...(thenAtDestination !== undefined ? { then: thenAtDestination } : {}),
         type: "choose-destination",
-      };
+      } as RiftboundGameState["pendingChoice"];
     }
     return;
   }
@@ -634,7 +669,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     });
     if (met) {
       const { boundTargets: _drop, ...rest } = ctx;
-      _h.executeEffect(thenIfEnemyAlone, rest);
+      h.executeEffect(thenIfEnemyAlone, rest);
     }
   }
 }

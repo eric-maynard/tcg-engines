@@ -520,7 +520,7 @@ export function chosenMoveDestinations(
   } else if (to !== null && typeof to === "object" && typeof to.battlefield === "string") {
     const which = to.battlefield;
     zones = battlefields
-      .filter(([, bf]) => {
+      .filter(([bfId, bf]) => {
         switch (which) {
           case "controlled":
             return bf.controller === ctx.playerId;
@@ -528,6 +528,20 @@ export function chosenMoveDestinations(
             return bf.controller !== null && bf.controller !== ctx.playerId;
           case "open":
             return bf.controller === null || bf.controller === undefined;
+          // rule-id: ven-148-166 (rule 355.4) — "a battlefield WHERE YOU HAVE
+          // UNITS" is a presence test, not a control test. Without this case a
+          // Shadow Dash with no friendly units anywhere would still enumerate
+          // every battlefield and be offered as a legal cast.
+          case "friendly-units":
+            return ctx.zones
+              .getCardsInZone(
+                `battlefield-${bfId}` as Parameters<typeof ctx.zones.getCardsInZone>[0],
+              )
+              .some(
+                (id) =>
+                  (ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id)) ===
+                  ctx.playerId,
+              );
           default:
             return true;
         }

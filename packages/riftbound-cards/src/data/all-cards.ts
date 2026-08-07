@@ -807,6 +807,63 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   // ability that chooses me would stun me, give me -[Might], or return me to
   // hand, give me +3 [Might] instead." Only the -Might half is modelled today;
   // the stun / return-to-hand halves need their own replacement events.
+  // rule 355.4 / 387 — Shadow Dash: "Move an enemy unit to a battlefield where
+  // you have units. If you have exactly two units there, they each get +1
+  // [Might] this turn." The generator emits `abilities: [null]`; the destination
+  // is a presence-filtered battlefield choice and the rider is anchored at that
+  // destination, neither of which the rules-text parser can express.
+  "ven-148-166": {
+    abilities: [
+      {
+        effect: {
+          target: { controller: "enemy", type: "unit" },
+          then: {
+            condition: {
+              comparison: { eq: 2 },
+              target: { controller: "friendly", location: "same", quantity: "all", type: "unit" },
+              type: "count",
+            },
+            then: {
+              amount: 1,
+              duration: "turn",
+              target: {
+                controller: "friendly",
+                excludeBound: true,
+                location: "same",
+                quantity: "all",
+                type: "unit",
+              },
+              type: "modify-might",
+            },
+            type: "conditional",
+          },
+          to: { battlefield: "friendly-units" },
+          type: "move",
+        },
+        type: "spell",
+      },
+      { cost: { energy: 5, power: ["rainbow", "rainbow"] }, keyword: "Flow", type: "keyword" },
+    ],
+  },
+  // rule 355.8 / rule 206 — Decree of Unity: "Kill an enemy Chaos ([chaos]) unit
+  // or gear." The generator emits `abilities: []` with parseSuccess:false; the
+  // rules-text parser has no "unit or gear" mixed-type + domain-adjective form,
+  // so without this the spell resolves as a no-op with no target prompt.
+  "ven-131-166": {
+    abilities: [
+      {
+        effect: {
+          target: {
+            controller: "enemy",
+            filter: { domain: "chaos" },
+            types: ["unit", "gear"],
+          },
+          type: "kill",
+        },
+        type: "spell",
+      },
+    ],
+  },
   "ven-181-166": {
     abilities: [
       { keyword: "Empower", type: "keyword", value: 2 },
