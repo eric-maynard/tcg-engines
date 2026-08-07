@@ -457,6 +457,13 @@ export class Game {
     if (d.kind === "action" && !(value === "pass" || (isAnswerObject(value) && value.kind === "action"))) {
       return undefined;
     }
+    // An EXPLICIT answer object of a different kind targets a later prompt just
+    // like a wrong-shaped shorthand (a queued combat `distribute` must not be
+    // handed to an intervening `pick`) — leave it queued instead of erroring.
+    // `decline` answers a prompt of any kind, so they are never deferred.
+    if (isAnswerObject(value) && value.kind !== "decline" && value.kind !== d.kind) {
+      return undefined;
+    }
     const coerced = coerceAnswer(d, value);
     if (!isAnswerObject(coerced)) {
       // A shorthand of the wrong SHAPE for this decision targets a later
@@ -1094,6 +1101,22 @@ export class SeatHandle {
   }
 
   async pick(...keys: (CardRef | number)[]): Promise<Extract<ActResult, { ok: true }>> {
+    // rule 355.4 (rule-id: ven-140-166) — an instruction that chooses its
+    // object as it resolves ("…, then move a friendly unit") binds its ONLY
+    // legal object without asking, so the next prompt is already about that
+    // card. Naming it again is a no-op re-assertion of a forced choice, not an
+    // illegal answer: tests that guard both prompts stay valid either way.
+    const d = this.game.decision();
+    const key = keys.length === 1 ? String(keys[0]) : undefined;
+    if (
+      key !== undefined &&
+      d?.kind === "pick" &&
+      d.seat === this.seat &&
+      d.source?.cardId === key &&
+      !d.options.some((o) => o.key === key)
+    ) {
+      return { decision: d, executed: [], ok: true, seq: this.backend.seq(), violations: [] };
+    }
     return this.answer({ keys: keys.map(String), kind: "pick" });
   }
 

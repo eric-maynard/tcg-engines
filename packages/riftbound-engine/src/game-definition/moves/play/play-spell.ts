@@ -2031,6 +2031,21 @@ export const playSpell: Defs["playSpell"] = {
             viaFlow: true,
           });
         }
+        // rule 355.13 / 419.2.a (rule-id: ven-140-166) — "up to N" / "any"
+        // permits choosing ZERO objects, so a Flow play offers the empty
+        // choice too (and stays legal with no candidate on the board at all).
+        const flowQty = tgt.quantity as { atLeast?: number; upTo?: number } | undefined;
+        if (
+          tgt.quantity === "any" ||
+          (typeof flowQty === "object" && flowQty?.upTo !== undefined && flowQty.atLeast === undefined)
+        ) {
+          results.push({
+            cardId: cardId as string,
+            playerId: context.playerId as string,
+            targets: [],
+            viaFlow: true,
+          });
+        }
       } else {
         results.push({
           cardId: cardId as string,
