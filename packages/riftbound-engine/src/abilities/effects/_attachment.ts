@@ -81,6 +81,8 @@ export function detachEquipment(ctx: EffectContext, equipmentId: string): void {
   update(equipmentId as CoreCardId, { attachedTo: undefined, copiedFromCardId: undefined });
 
   if (unitId) {
+    // rule 477.1.b: "for as long as this is attached" — detaching ends the copy.
+    getGlobalCardRegistry().revertCopy(unitId);
     const held = meta(ctx, unitId)?.equippedWith;
     const current = Array.isArray(held) ? (held as string[]) : [];
     update(unitId as CoreCardId, {

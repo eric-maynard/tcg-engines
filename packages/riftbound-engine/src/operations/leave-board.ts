@@ -475,11 +475,19 @@ export function detachOnLeave(ctx: LeaveBoardContext, cardId: string): void {
     const held = (metaOf(ctx, holder).equippedWith ?? []) as string[];
     update(holder as CoreCardId, { equippedWith: held.filter((e) => e !== cardId) });
     update(cardId as CoreCardId, { attachedTo: undefined, copiedFromCardId: undefined });
+    // rule 477.1.b: a "becomes a copy … for as long as this is attached" copy
+    // ends the moment the link is severed (Shady Spectacles).
+    getGlobalCardRegistry().revertCopy(holder);
   }
   const worn = [...((meta.equippedWith ?? []) as string[])];
   for (const equipId of worn) {
     update(equipId as CoreCardId, { attachedTo: undefined, copiedFromCardId: undefined });
     ctx.zones.moveCard({ cardId: equipId as CoreCardId, targetZoneId: "base" as CoreZoneId });
+  }
+  if (worn.length > 0) {
+    // rule 477.1.b: the holder leaving the board detaches everything, so any
+    // copy granted by one of those attachments ends too.
+    getGlobalCardRegistry().revertCopy(cardId);
   }
   if (worn.length > 0) {
     update(cardId as CoreCardId, { equippedWith: undefined });
