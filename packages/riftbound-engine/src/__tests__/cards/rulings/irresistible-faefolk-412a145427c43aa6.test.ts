@@ -55,7 +55,7 @@ describe("Ruling 412a145427c43aa6 — playing Faefolk to a battlefield is not a 
   // Expected (contrast the ruling relies on): a Standard Move base → bf1 IS a move to a battlefield, so the
   // trigger fires: P1 may pick an ENEMY unit (scout or reserve) and it is moved to bf1. Actual: the
   // engine fires nothing on the move — no prompt appears and the enemy units stay where they are.
-  test.failing("BUG: ruling 412a145427c43aa6 (contrast) — a Standard Move of Faefolk from base to bf1 DOES trigger: P1 may drag an enemy unit to bf1", async () => {
+  test("ruling 412a145427c43aa6 (contrast) — a Standard Move of Faefolk from base to bf1 DOES trigger: P1 may drag an enemy unit to bf1", async () => {
     const game = await board("base").build();
     await game.p1.move("fae", "bf1");
     expect(game.zoneOf("fae")).toBe("battlefield-bf1");

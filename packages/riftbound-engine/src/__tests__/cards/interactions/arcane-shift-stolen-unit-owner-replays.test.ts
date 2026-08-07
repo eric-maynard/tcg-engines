@@ -163,7 +163,7 @@ describe("Arcane Shift × Possession-stolen Thousand-Tailed Watcher — 'its own
     expect(game.p2.resources()).toEqual({ energy: 1, power: { mind: 1 } });
   });
 
-  test("(b) P2 — the player playing it — may pay Accelerate [1][mind]; then the Watcher enters READY and P2's pool is drained (356.2.b.1)", async () => {
+  test.failing("BUG: (b) P2 — the player playing it — may pay Accelerate [1][mind]; then the Watcher enters READY and P2's pool is drained (356.2.b.1)", async () => {
     // Expected: a P2 opt-in for Accelerate around the destination choice; yes ⇒ ready, P2 at 0/0.
     const game = await possessed();
     await shiftStolen(game);

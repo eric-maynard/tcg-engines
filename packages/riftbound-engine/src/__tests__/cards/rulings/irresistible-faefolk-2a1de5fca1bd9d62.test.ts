@@ -85,7 +85,7 @@ describe("Ruling 2a1de5fca1bd9d62 — Faefolk into an open battlefield, enemy pu
 
   // Expected: P1 opts in and picks Victim (any enemy unit is offered) → Victim moves bf2 → bf1, "that
   // battlefield". Actual: no trigger; additionally the parsed effect would move the target to BASE.
-  test.failing("BUG: ruling 2a1de5fca1bd9d62 — P1 chooses the enemy Victim and it is moved to bf1 (that battlefield), not to base", async () => {
+  test("ruling 2a1de5fca1bd9d62 — P1 chooses the enemy Victim and it is moved to bf1 (that battlefield), not to base", async () => {
     const game = await board().build();
     await game.p1.move("faefolk", "bf1");
     await pullVictim(game);
@@ -97,7 +97,7 @@ describe("Ruling 2a1de5fca1bd9d62 — Faefolk into an open battlefield, enemy pu
   // Expected (464.2.c.1/2): opposing units now share the contested bf1 → combat is staged; P1 — whose
   // Faefolk applied Contested — is the ATTACKER (Faefolk = attacker, has Focus), P2's Victim DEFENDS.
   // Actual: no trigger fires, Victim never arrives, no combat.
-  test.failing("BUG: ruling 2a1de5fca1bd9d62 — the staged combat has P1 attacking (Faefolk attacker, Focus with P1) and the pulled Victim defending", async () => {
+  test("ruling 2a1de5fca1bd9d62 — the staged combat has P1 attacking (Faefolk attacker, Focus with P1) and the pulled Victim defending", async () => {
     const game = await board().build();
     await game.p1.move("faefolk", "bf1");
     await pullVictim(game);

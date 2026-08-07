@@ -37,13 +37,27 @@ BLOCK=$(awk '/^packages\/.*\.test\.ts:$/{f=$0; sub(/:$/,"",f)} /^\(fail\)/{print
 if [ -n "$BLOCK" ]; then out blocking_failures "$BLOCK"; grep -B1 -A0 "^(fail)" "$LOG" | grep "^(fail)" | head -12 | sed 's/^/fail=/' ; grep -c "marked as failing but it passed" "$LOG" | sed 's/^/need_flip_count=/'; out committed false; rm -f "$LOG"; exit 0; fi
 rm -f "$LOG"
 if printf '%s\n' "${FILES[@]}" | grep -q '^packages/riftbound-cards/'; then PAR=$( cd "$WT" && bun test packages/riftbound-cards/src/parser/__tests__/ 2>&1 | tail -3 | tr '\n' ' '); out parser_tests "$PAR"; echo "$PAR" | grep -q ' 0 fail' || { out committed false; exit 0; }; fi
-# commit exactly these files in the main tree
-git add -A -- "${FILES[@]}" 2>/dev/null
-if git diff --cached --quiet -- "${FILES[@]}"; then out committed false; out reason nothing_staged; exit 0; fi
-git commit -q -m "$MSG" -- "${FILES[@]}" && out committed true && out sha "$(git rev-parse --short HEAD)"
-GIT_TERMINAL_PROMPT=0 git push origin HEAD 2>&1 | tail -1 | sed 's/^/push=/'
+# commit exactly the TESTED bytes: commit inside the side worktree (detached at HEAD_SHA + copied files),
+# then fast-forward the main branch ref to it and resync the main index for those paths.
+BR=$(git -C "$REPO" symbolic-ref --short HEAD 2>/dev/null || echo "")
+[ -n "$BR" ] || { out committed false; out reason main_detached; exit 0; }
+[ "$(git -C "$REPO" rev-parse HEAD)" = "$HEAD_SHA" ] || { out committed false; out reason head_moved_retry; exit 0; }
+git -C "$WT" add -A -- "${FILES[@]}" 2>/dev/null
+if git -C "$WT" diff --cached --quiet; then out committed false; out reason nothing_staged; exit 0; fi
+git -C "$WT" commit -q -m "$MSG" || { out committed false; out reason wt_commit_failed; exit 0; }
+NEW=$(git -C "$WT" rev-parse HEAD)
+git -C "$REPO" update-ref "refs/heads/$BR" "$NEW" "$HEAD_SHA" || { out committed false; out reason ref_update_failed; exit 0; }
+git -C "$REPO" reset -q -- "${FILES[@]}" >/dev/null 2>&1   # index ← new HEAD for these paths; working tree untouched
+out committed true; out sha "$(git -C "$REPO" rev-parse --short HEAD)"
+GIT_TERMINAL_PROMPT=0 git -C "$REPO" push origin "$BR" 2>&1 | tail -1 | sed 's/^/push=/'
 # sync + bounce from the VERIFIED worktree at the new HEAD (never the dirty main tree → no mixed snapshots on the devbox)
 NEW_SHA=$(git rev-parse HEAD); git -C "$WT" reset -q --hard "$NEW_SHA" >/dev/null 2>&1
 rsync -a --delete "$WT/packages/" emaynard-tcg:/root/tcg/tcg-engines/packages/ --exclude node_modules >/dev/null 2>&1 && rsync -a "$WT/apps/riftbound-app/" emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/ --exclude data --exclude node_modules --exclude downloads >/dev/null 2>&1 && out synced "$NEW_SHA"
-out app "$(ssh -o ConnectTimeout=10 emaynard-tcg 'kill $(cat /tmp/app.pid) 2>/dev/null; sleep 3; curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/play' 2>/dev/null)"
+# Bounce policy: restarting the app drops in-memory sandbox games and breaks multi-turn browser tests, so
+# (a) never bounce while a browser pass holds /tmp/rb-browser-pass.lock (younger than 4h), and
+# (b) otherwise bounce at most once per 15 minutes. Files are already synced; the app picks them up on next bounce.
+BL=/tmp/rb-browser-pass.lock; LB=/tmp/rb-last-bounce
+if [ -e "$BL" ] && [ $(( $(date +%s) - $(stat -c %Y "$BL") )) -lt 14400 ]; then out app "deferred(browser-pass-active)";
+elif [ -e "$LB" ] && [ $(( $(date +%s) - $(stat -c %Y "$LB") )) -lt 900 ]; then out app "deferred(rate-limit)";
+else touch "$LB"; out app "$(ssh -o ConnectTimeout=10 emaynard-tcg 'kill $(cat /tmp/app.pid) 2>/dev/null; sleep 3; curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/play' 2>/dev/null)"; fi
 bun "$REPO/.claude/fix-queue/fix-queue.ts" metrics 2>/dev/null | sed 's/^/metrics=/' || true
