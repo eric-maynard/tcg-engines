@@ -118,6 +118,18 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       effectText = effectText.slice(exhaustSelfToMatch[0].length);
     }
 
+    // rule 204.3.a / 383.3.b (rule-id: sfd-128-221): "you may kill me to X" —
+    // killing the source is the trigger's COST, paid to finalize the item onto
+    // the Chain (before anyone holds priority over it), not the first step of
+    // its resolution. No Game Object is chosen, so the payment happens on the
+    // opt-in answer.
+    const killSelfToMatch =
+      optional && !condition ? effectText.match(/^kill (?:this|me|myself) to\s+/i) : null;
+    if (killSelfToMatch) {
+      condition = { cost: { kill: "self" }, type: "pay-cost" } as unknown as { type: string };
+      effectText = effectText.slice(killSelfToMatch[0].length);
+    }
+
     // Check for "pay :rb_X:. If you do, Y" pattern: treat as optional cost
     // That gates the rest of the effect on having been paid.
     const payIfYouDoMatch = effectText.match(

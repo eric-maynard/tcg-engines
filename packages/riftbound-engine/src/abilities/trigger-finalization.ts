@@ -174,6 +174,11 @@ function costChoosesObjects(cost: unknown): boolean {
     return false;
   }
   const c = cost as Record<string, unknown>;
+  // rule 204.3.a (rule-id: sfd-128-221) — "kill me to …" names no Game Object
+  // to choose, so it is a simple cost payable during finalization.
+  if (c.kill === "self") {
+    return false;
+  }
   return (
     c.recycle !== undefined ||
     c.kill !== undefined ||

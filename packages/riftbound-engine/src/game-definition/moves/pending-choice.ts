@@ -1503,6 +1503,25 @@ export const pendingChoiceMoves: Partial<
               if (cost.exhaust === true) {
                 context.counters.setFlag(choice.sourceCardId as CoreCardId, "exhausted", true);
               }
+              // rule 204.3.a / 383.3.b.1 (rule-id: sfd-128-221) — "you may kill
+              // me to …": the kill is the COST, so the source is already in the
+              // trash while its ability still sits on the Chain awaiting
+              // priority; it can no longer be removed in response.
+              if (cost.kill === "self") {
+                executeEffect(
+                  { target: { type: "self" }, type: "kill" } as unknown as ExecutableEffect,
+                  buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+                );
+              }
+              // rule 383.3.b / 427.1 (rule-id: ven-102-166) — "you may banish me
+              // to …": same shape, but the source is banished rather than killed
+              // (no Deathknell), and it is already gone while the ability waits.
+              if (cost.banish === "self") {
+                executeEffect(
+                  { target: { type: "self" }, type: "banish" } as unknown as ExecutableEffect,
+                  buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+                );
+              }
             }
           }
           const interaction = draft.interaction;
@@ -1708,8 +1727,26 @@ export const pendingChoiceMoves: Partial<
             postChoiceCleanup(draft, context);
           }
         } else if (choice.suspendedDeathCardId) {
-          // rule 372 (ogn-023-298): a declined "you may pay … instead" death
-          // replacement — the suspended unit now dies via state-based checks.
+          // rule 371.2.b / 372 (ogn-023-298): a declined "you may pay … instead"
+          // death replacement. A death the cleanup pass found re-runs by itself;
+          // a suspended KILL instruction (or kill cost — rule 428.1.a.1) has no
+          // lethal damage to re-detect, so run it now with the shield spent.
+          const suspendedKill = (choice as { suspendedKill?: { by?: string; source?: string } })
+            .suspendedKill;
+          if (suspendedKill) {
+            executeEffect(
+              { target: { type: "unit" }, type: "kill" } as unknown as ExecutableEffect,
+              {
+                ...buildEffectContext(
+                  draft,
+                  suspendedKill.by ?? choice.playerId,
+                  suspendedKill.source ?? choice.sourceCardId,
+                  context,
+                ),
+                boundTargets: [choice.suspendedDeathCardId as string],
+              },
+            );
+          }
           postChoiceCleanup(draft, context);
         }
         return;
