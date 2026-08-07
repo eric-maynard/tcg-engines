@@ -29,6 +29,13 @@ export function handle_buff(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   }
   const buffTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
   for (const targetId of buffTargets) {
+    // rule 701 / 124.1 (sfd-098-221) — buffs exist only on permanents: a
+    // unit that left the board in response ("buff me" from the trash) gets
+    // nothing, rather than a buff tracked on the card in a non-board zone.
+    const zone = ctx.zones.getCardZone?.(targetId as CoreCardId) as string | undefined;
+    if (zone !== undefined && zone !== "base" && !zone.startsWith("battlefield-")) {
+      continue;
+    }
     // Enforce max 1 buff per unit (rule)
     const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
       | Partial<RiftboundCardMeta>

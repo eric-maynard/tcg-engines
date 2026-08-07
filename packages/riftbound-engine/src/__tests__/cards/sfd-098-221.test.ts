@@ -172,9 +172,7 @@ describe("Sea Monkey (sfd-098-221)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: 'buff ME' must do nothing once Sea Monkey has left the board — killed in response, it sits in the trash unbuffed (701: buffs are removed when a unit leaves play)", async () => {
-    // Expected: the trigger resolves with its source gone → no buff anywhere. Actual: the card in the
-    // trash is flagged buffed.
+  test("'buff ME' must do nothing once Sea Monkey has left the board — killed in response, it sits in the trash unbuffed (701: buffs are removed when a unit leaves play)", async () => {
     const game = await scenario().resources(P1, { energy: 3 }).hand(P1, CARD, "monkey").hand(P2, ZAP, "zap").build();
     await game.p1.play("monkey", { payOptional: true, to: "base" });
     await game.p1.passPriority();

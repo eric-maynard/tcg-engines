@@ -62,6 +62,22 @@ GameEvent), `burnOut`/`refillDeckOrBurnOut` (431.3), `effectiveVictoryScore` (ba
 All nine former `victoryPoints` writers route through it; `scorePoint` is never enumerated. Remaining G1-adjacent
 work lives in other gaps: excess-damage conquer prompts (G2/G12), `win-combat`-first-time restriction (G14).
 
+**G5 / WP3 landed** (b7d20e7, eb119c2, 8f0d410): `E/operations/leave-board.ts` is the leave-play / die choke point —
+`snapshotLKI`/`snapshotBatch` (428.1.a.1.b / 740.2.a: zone, controller, owner, Might, buffed/stunned/exhausted, damage,
+attachments, unitsHere, wasAlone, triggerDoubler → `draft.lki`, batch on `draft.leavingBatch`), `applyDieReplacement`
+(board 370–373 via the existing matcher), `detachOnLeave` (457.1/719.5 both sides), `resetObjectState` (124.1 incl.
+control revert 191.1), `leaveBoard(ctx, id, to, cause)` and `emitLeaveEvents`/`removeFromBoard` (one `die` with
+`diedAt/killedBy/killSource/wasBuffed/wasStunned/controller/owner/wasAlone/attachments/cause`, `discard`, or new
+`leave-board` GameEvent; tokens cease after their event, 186.1). Routed: `effects/kill.ts` (`killUnits` exported), SBA
+deaths in `performCleanup` (pre-snapshotted batch) + `dispatchUnitDied`, flow [Temporary] kill, `activate-ability`
+kill/discard costs, `play-unit` discard cost, `effects/{banish,return-to-hand,recycle,discard}.ts`, owner-choice recycle
+in `pending-choice.ts`, sandbox `killUnit/discardCard/banishCard/recycleCard`; `trigger-runner` reads LKI for the dying
+card's controller, `wasAlone`, and Karthus-style doublers dying in the same batch. `E/operations/damage-store.ts`
+(`get/set/add/remove/clearDamage`) is the single damage writer (counter bag = store, `meta.damage` = mirror) for
+effects/combat/sandbox/Ending-Step heal; `counterMoves` run post-move maintenance. Not yet done here: die-replacement
+ordering/optional prompts beyond the SBA path (G10/G2), reveal-and-pick recycle of BOARD cards in `pending-choice.ts`
+(WP2's rewrite), `effects/play.ts` fresh-object reset → `resetObjectState` (WP5).
+
 ---
 
 ## Per-gap detail
