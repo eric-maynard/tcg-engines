@@ -204,7 +204,11 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     return;
   }
   const turnOrder = Object.keys(ctx.draft.players);
-  const dest = toLocation === "base" ? "base" : "choose";
+  // rule-id: unl-184-219 (rule 355.2.b) — `toLocation: { battlefield: "any" }`
+  // ("plays it to any battlefield"): the effect makes every battlefield a legal
+  // destination, so the base is not offered and controlled-only filtering does
+  // not apply.
+  const dest = toLocation === "base" ? "base" : isAnyBattlefieldDest(toLocation) ? "any-battlefield" : "choose";
   for (const targetId of targets) {
     const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId;
     if (playerCannotPlay(ctx, owner)) {
@@ -729,6 +733,15 @@ function isControlledBattlefieldDest(toLocation: unknown): boolean {
     typeof toLocation === "object" &&
     toLocation !== null &&
     (toLocation as { battlefield?: unknown }).battlefield === "controlled"
+  );
+}
+
+/** rule-id: unl-184-219 (rule 355.2.b) — `toLocation: { battlefield: "any" }`. */
+function isAnyBattlefieldDest(toLocation: unknown): boolean {
+  return (
+    typeof toLocation === "object" &&
+    toLocation !== null &&
+    (toLocation as { battlefield?: unknown }).battlefield === "any"
   );
 }
 

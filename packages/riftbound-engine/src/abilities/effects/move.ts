@@ -561,6 +561,32 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     return;
   }
 
+  // rule-id: unl-184-219 (rule 355.2.b) — "plays it to ANY battlefield": the
+  // effect makes every battlefield a legal destination (controlled or not,
+  // empty or not) and the base is not one of them.
+  if (dest === "any-battlefield") {
+    const cardId = moveTargets[0];
+    if (cardId === undefined) {
+      return;
+    }
+    const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
+    const options = Object.keys(ctx.draft.battlefields)
+      .map((bfId) => `battlefield-${bfId}`)
+      .filter((z) => z !== currentZone);
+    if (options.length === 0) {
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      cardId,
+      options,
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      then: (effect as unknown as { then?: ExecutableEffect }).then,
+      type: "choose-destination",
+    } as RiftboundGameState["pendingChoice"];
+    return;
+  }
+
   if (dest === "choose") {
     // Rule 355.4 — no stated destination: the controller chooses base or
     // any battlefield other than the unit's current zone. Options must be
