@@ -50,7 +50,7 @@ describe("Yordle Explorer (sfd-100-221)", () => {
     expect((await scenario().resources(P1, { energy: 3, power: { body: 2 } }).hand(P1, CARD, "explorer").build()).p1.can("play", "explorer")).toBe(false);
   });
 
-  test.failing("BUG: playing the Explorer ITSELF (printed Power cost 0) must not draw", async () => {
+  test("playing the Explorer ITSELF (printed Power cost 0) must not draw", async () => {
     // Expected: empty hand, untouched deck, empty chain after the Explorer lands. Actual: its own
     // arrival satisfies the unconditioned play-card trigger and P1 draws 1.
     const game = await scenario().resources(P1, { energy: 4 }).hand(P1, CARD, "explorer").build();
@@ -110,7 +110,7 @@ describe("Yordle Explorer (sfd-100-221)", () => {
     expect(game.p1.hand()).toHaveLength(2);
   });
 
-  test.failing("BUG: a ONE-pip card (Dauntless Vanguard, 4 + [body]) is below the threshold — no trigger, no draw", async () => {
+  test("a ONE-pip card (Dauntless Vanguard, 4 + [body]) is below the threshold — no trigger, no draw", async () => {
     // Expected: hand stays empty and nothing goes on the chain. Actual: the parsed trigger has no
     // power-cost condition, so ANY card P1 plays draws 1.
     const game = await withExplorer({ energy: 4, power: { body: 1 } }).hand(P1, VANGUARD, "dv").build();
@@ -121,7 +121,7 @@ describe("Yordle Explorer (sfd-100-221)", () => {
     expect(game.p1.hand()).toHaveLength(0);
   });
 
-  test.failing("BUG: a card with NO Power cost (Shipyard Skulker, 3 energy) draws nothing, however much energy it costs", async () => {
+  test("a card with NO Power cost (Shipyard Skulker, 3 energy) draws nothing, however much energy it costs", async () => {
     // Expected: no draw. Actual: draws 1 (unconditional play-card trigger).
     const game = await withExplorer({ energy: 3 }).hand(P1, SKULKER, "skulker").build();
     await game.p1.play("skulker");
@@ -130,7 +130,7 @@ describe("Yordle Explorer (sfd-100-221)", () => {
     expect(game.p1.hand()).toHaveLength(0);
   });
 
-  test.failing("BUG: paid additional costs are not 'Power cost' (206) — Nilah with Accelerate spends 2 [body] but has 1 printed pip → no draw", async () => {
+  test("paid additional costs are not 'Power cost' (206) — Nilah with Accelerate spends 2 [body] but has 1 printed pip → no draw", async () => {
     // Expected: Nilah enters ready, pool empty, and NO card is drawn. Actual: draws 1.
     const game = await withExplorer({ energy: 4, power: { body: 2 } }).hand(P1, NILAH, "nilah").build();
     await game.p1.play("nilah", { accelerate: true, to: "base" });
@@ -141,7 +141,7 @@ describe("Yordle Explorer (sfd-100-221)", () => {
     expect(game.p1.hand()).toHaveLength(0);
   });
 
-  test.failing("BUG: Frostcoat Cub paying its optional [mind] still has printed Power cost 0 → no draw", async () => {
+  test("Frostcoat Cub paying its optional [mind] still has printed Power cost 0 → no draw", async () => {
     // Expected: Cub's own -2 trigger may prompt, but the Explorer never triggers. Actual: draws 1.
     const game = await withExplorer({ energy: 3, power: { mind: 1 } }).hand(P1, CUB, "cub").script(P1, ["explorer"]).build();
     await game.p1.play("cub", { payOptional: true });
@@ -202,7 +202,7 @@ describe("Yordle Explorer (sfd-100-221)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: registry payload — the play-card trigger must carry a 'Power cost ≥ 2' condition on the played card", async () => {
+  test("registry payload — the play-card trigger must carry a 'Power cost ≥ 2' condition on the played card", async () => {
     // Expected: a triggered draw-1 on `play-card` by the controller WITH a restriction/condition
     // comparing the played card's printed power cost to 2. Actual: the condition is dropped entirely.
     const pool = await loadDefaultCardPool();
