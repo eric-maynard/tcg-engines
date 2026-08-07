@@ -185,6 +185,11 @@ export interface RevealHandEffect {
     readonly excludeCardTypes?: readonly string[];
     /** Card types that ARE valid picks ("choose a unit from it"). */
     readonly cardTypes?: readonly string[];
+    /**
+     * rule 135.2 (ven-085-166) — "choose a Mind card from it": a DOMAIN
+     * allow-list. A multi-domain card matches when any of its domains is here.
+     */
+    readonly domains?: readonly string[];
   };
   readonly onPicked?: "recycle" | "banish" | "discard" | "play";
   /**
