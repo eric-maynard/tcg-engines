@@ -219,8 +219,11 @@ function setupState(pg: Pregame) {
 
 /** Roll for everyone; the roll winner names `first` as First Player. */
 function rollAndChoose(pg: Pregame, first: string) {
-  for (const p of pg.players) {
-    expect(mv(pg.engine, "rollForFirst", p).success).toBe(true);
+  // rule 115: a tie clears the rolls and everyone rolls again.
+  for (let round = 0; round < 50 && setupState(pg)?.rollWinner === undefined; round++) {
+    for (const p of pg.players) {
+      expect(mv(pg.engine, "rollForFirst", p).success).toBe(true);
+    }
   }
   const winner = setupState(pg)?.rollWinner as string;
   expect(winner).toBeDefined();
@@ -615,7 +618,7 @@ describe("Chosen Champion: a CHAMPION unit whose champion tag matches the Champi
 // ===========================================================================
 
 describe("Battlefields: exactly three per deck, distinct names, Domain Identity if applicable (103.4, 103.4.a, 103.4.b, 103.4.c, 485.4.a, 486.4.a)", () => {
-  test.failing("BUG: 103.4.c — two battlefields sharing a name must be rejected by validateDeck (no duplicate-battlefield check exists)", async () => {
+  test.failing("BUG: 103.4.c — two battlefields sharing a name must be rejected by validateDeck", async () => {
     // Expected: valid === false with a duplicate-battlefield error for [Ridge, Ridge, Marsh].
     // Actual: validateDeck only checks domain and (mode) count; duplicates pass.
     const cfg = legalConfig();
@@ -821,7 +824,7 @@ describe("Opening hand: decks are shuffled, then each player draws exactly 4 fro
     }
   });
 
-  test.failing("BUG: 116 — the opening draw happens once: a second drawInitialHand(P1) must be refused (or be a no-op); the engine draws 4 more (hand 8)", async () => {
+  test("116 — the opening draw happens once: a second drawInitialHand(P1) must be refused (or be a no-op); the engine draws 4 more (hand 8)", async () => {
     // Expected: success === false (or hand still 4). Actual: no condition on drawInitialHand → hand becomes 8, deck 31.
     const pg = newPregame({ seed: "double-draw" });
     rollAndChoose(pg, P1);
@@ -925,7 +928,7 @@ describe("Mulligan limits: up to two cards, performed once per player, from that
     expect(hand.filter((id) => original.includes(id)).length).toBeGreaterThanOrEqual(2);
   });
 
-  test.failing("BUG: 117.1 'up to two' — a 3-card mulligan request must be REJECTED (success:false, state unchanged); the engine silently truncates to the first two and succeeds", async () => {
+  test("117.1 'up to two' — a 3-card mulligan request must be REJECTED (success:false, state unchanged); the engine silently truncates to the first two and succeeds", async () => {
     // Expected: success === false and hand/deck byte-identical. Actual: slice(0, 2) → a 2-card mulligan is performed.
     const { pg } = pregameThroughDraw({ seed: "mull-three-reject" });
     const hand = zone(pg, "hand", P1);
@@ -936,7 +939,7 @@ describe("Mulligan limits: up to two cards, performed once per player, from that
     expect(r.success).toBe(false);
   });
 
-  test.failing("BUG: 117 (once per player) — after a completed 1-card mulligan a SECOND mulligan by the same player must be refused; the engine performs it (no 'London' chaining allowed)", async () => {
+  test("117 (once per player) — after a completed 1-card mulligan a SECOND mulligan by the same player must be refused; the engine performs it (no 'London' chaining allowed)", async () => {
     // Expected: second call success === false, zones unchanged. Actual: no condition → another draw+recycle happens.
     const { pg } = pregameThroughDraw({ seed: "mull-twice" });
     const [h0] = zone(pg, "hand", P1) as [string];
@@ -949,7 +952,7 @@ describe("Mulligan limits: up to two cards, performed once per player, from that
     expect(second.success).toBe(false);
   });
 
-  test.failing("BUG: 117.1 'cards in their hand' — returning an id that is NOT in P1's hand (a P1 deck card, or a P2 hand card) must be rejected with no zone changes; the engine draws for P1 and moves the foreign card anyway", async () => {
+  test("117.1 'cards in their hand' — returning an id that is NOT in P1's hand (a P1 deck card, or a P2 hand card) must be rejected with no zone changes; the engine draws for P1 and moves the foreign card anyway", async () => {
     // Expected: both calls fail; every zone unchanged. Actual: P1 draws a replacement and the named card is
     // spliced to the bottom of the (shared) main-deck zone regardless of where it was or who owns it.
     const { pg } = pregameThroughDraw({ seed: "mull-foreign" });
@@ -1003,7 +1006,7 @@ describe("Mulligans happen in Turn Order starting with the First Player, and the
     expect(game.p1.hand()).toHaveLength(5);
   });
 
-  test.failing("BUG: 117 'in turn order' — with P2 chosen as First Player, P1 attempting its mulligan BEFORE P2 must be refused (success:false, nothing moves); the engine performs it", async () => {
+  test("117 'in turn order' — with P2 chosen as First Player, P1 attempting its mulligan BEFORE P2 must be refused (success:false, nothing moves); the engine performs it", async () => {
     // Expected: r.success === false and P1's hand unchanged until P2 has mulliganed. Actual: mulligan has no
     // condition at all (setup.pendingMulligan is never populated), so any player may mulligan at any time.
     const { pg } = pregameThroughDraw({ first: P2, seed: "out-of-order" });
@@ -1177,7 +1180,7 @@ describe("Battlefield selection: Duel = random 1 of 3, Match = chosen 1 of 3; th
     expect(zone(pg, "battlefieldRow", P2)).toEqual([c1]);
   });
 
-  test.failing("BUG: 485.5 / 486.5 / 113 — the two unselected battlefields are 'removed' / 'set aside', NOT put in the trash (where they would be public, countable trash cards); the engine moves them to the trash zone", async () => {
+  test("485.5 / 486.5 / 113 — the two unselected battlefields are 'removed' / 'set aside', NOT put in the trash (where they would be public, countable trash cards); the engine moves them to the trash zone", async () => {
     // Expected: B1/B3 in no player-facing zone (not trash/hand/mainDeck/banishment/battlefieldRow).
     // Actual: selectBattlefield's reducer does zones.moveCard(→ "trash") for each discardId.
     const pg = throughChampions("set-aside");
@@ -1278,7 +1281,7 @@ describe("Turn Order is decided by a FAIR random method: the higher d20 wins, ti
     expect(mv(pg.engine, "rollForFirst", P2).success).toBe(false);
   });
 
-  test.failing("BUG: 115 (fair random method) — on EQUAL rolls nobody wins: rollWinner stays undefined, the step returns to rollForFirst with rolls cleared, and chooseFirstPlayer is refused for both; the engine awards ties to players[0]", async () => {
+  test("115 (fair random method) — on EQUAL rolls nobody wins: rollWinner stays undefined, the step returns to rollForFirst with rolls cleared, and chooseFirstPlayer is refused for both; the engine awards ties to players[0]", async () => {
     // Expected: tie → re-roll. Actual: `ties go to first player alphabetically` — P1 is rollWinner on a tie.
     const { pg } = findRollSeed("tie", (a, b) => a === b);
     const s = setupState(pg);

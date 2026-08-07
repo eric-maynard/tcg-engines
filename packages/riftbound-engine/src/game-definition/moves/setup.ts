@@ -111,16 +111,31 @@ export const setupMoves: Partial<
       const allRolled = playerIds.every((pid) => draft.setup!.rolls[pid] !== undefined);
 
       if (allRolled) {
-        // Determine winner (highest roll wins; ties go to first player alphabetically)
+        // Determine winner: the strictly highest roll wins.
         let winner = playerIds[0] ?? "";
         let highestRoll = draft.setup.rolls[winner] ?? 0;
+        let tied = false;
 
         for (const pid of playerIds) {
+          if (pid === winner) {
+            continue;
+          }
           const pidRoll = draft.setup.rolls[pid] ?? 0;
           if (pidRoll > highestRoll) {
             highestRoll = pidRoll;
             winner = pid;
+            tied = false;
+          } else if (pidRoll === highestRoll) {
+            tied = true;
           }
+        }
+
+        if (tied) {
+          // rule 115: turn order is decided by a fair random method — a tie for
+          // the highest roll picks nobody, so every player rolls again.
+          draft.setup.rolls = {};
+          draft.setup.step = "rollForFirst";
+          return;
         }
 
         draft.setup.rollWinner = winner as PlayerId;
@@ -211,11 +226,13 @@ export const setupMoves: Partial<
         id: battlefieldId,
       };
 
-      // Discard the unchosen battlefields
+      // rule 113 / 485.5 / 486.5: the unselected battlefields are SET ASIDE (removed
+      // from the game), not trashed — trash is a public, countable zone and its cards
+      // remain interactable.
       for (const discardId of discardIds) {
         zones.moveCard({
           cardId: discardId as CoreCardId,
-          targetZoneId: "trash" as CoreZoneId,
+          targetZoneId: "setAside" as CoreZoneId,
         });
       }
     },
@@ -343,6 +360,17 @@ export const setupMoves: Partial<
    * Draws 4 cards from the main deck to form the starting hand (Rule 116).
    */
   drawInitialHand: {
+    // rule 116: the opening draw happens exactly once per player. A player who
+    // already holds cards has drawn (or mulliganed) — drawing again is illegal.
+    condition: (_state, context) => {
+      const { playerId } = context.params;
+      const hand = context.zones.getCardsInZone(
+        "hand" as CoreZoneId,
+        playerId as CorePlayerId,
+      );
+      return (hand?.length ?? 0) === 0;
+    },
+
     reducer: (_draft, context) => {
       const { playerId } = context.params;
       const { zones } = context;
@@ -367,9 +395,59 @@ export const setupMoves: Partial<
    * @param keepCards - Array of card IDs to keep (rest are mulliganed, max 2 returned)
    */
   mulligan: {
-    reducer: (_draft, context) => {
+    // rule 117: mulligans are taken "in turn order" — the First Player goes
+    // first and no later player may act until they have. A player also
+    // mulligans only once.
+    condition: (state, context) => {
+      const playerId = context.params.playerId as string;
+
+      // rule 117.1: the set-aside cards must be "cards in their hand" — a card
+      // in any other zone, or another player's hand card, is not a legal choice
+      // (hand is a shared zone, so the lookup is owner-scoped).
+      const requested = (context.params.keepCards ?? []) as string[];
+
+      // rule 117.1: "up to two" — naming more than two cards is not a legal
+      // mulligan request; it is refused, never silently truncated.
+      if (requested.length > 2) {
+        return false;
+      }
+
+      if (requested.length > 0 && typeof context.zones?.getCardsInZone === "function") {
+        const hand = new Set<string>(
+          context.zones
+            .getCardsInZone("hand" as CoreZoneId, playerId as CorePlayerId)
+            .map((id) => id as string),
+        );
+        if (!requested.every((cardId) => hand.has(cardId))) {
+          return false;
+        }
+      }
+
+      const setup = state.setup;
+      const first = setup?.firstPlayer;
+      // rule 117: each player mulligans exactly once — a completed mulligan is
+      // final, so no "London"-style chaining. This holds even before a First
+      // Player is known, so it is checked ahead of the turn-order gate.
+      const done = setup?.mulliganedBy ?? [];
+      if (done.includes(playerId as never)) {
+        return false;
+      }
+      if (!setup || first === undefined) {
+        return true;
+      }
+      return playerId === first || done.includes(first);
+    },
+
+    reducer: (draft, context) => {
       const { playerId, keepCards = [] } = context.params;
       const { zones } = context;
+
+      if (draft.setup) {
+        draft.setup.mulliganedBy ??= [];
+        if (!draft.setup.mulliganedBy.includes(playerId as never)) {
+          draft.setup.mulliganedBy.push(playerId as never);
+        }
+      }
 
       // Cap at 2 cards returned (Rule 117.1)
       const toReturn = (keepCards as string[]).slice(0, 2);
