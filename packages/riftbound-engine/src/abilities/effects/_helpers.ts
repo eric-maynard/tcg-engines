@@ -388,6 +388,11 @@ export function evaluateEffectCondition(
       const registry = getGlobalCardRegistry();
       return ids.some((id) => registry.get(id)?.cardType === want);
     }
+    // rule 811.1 (unl-042-219) — "if you played this from your hand". A play
+    // from Hidden collapses this gate in `chain/resolve.ts` before resolution,
+    // so anything still reaching the evaluator was played from hand.
+    case "played-from-hand":
+      return true;
     case "has-xp": {
       const threshold = (condition.threshold as number) ?? 1;
       const player = ctx.draft.players[ctx.playerId];

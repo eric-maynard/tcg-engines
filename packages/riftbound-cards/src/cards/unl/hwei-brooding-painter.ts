@@ -21,27 +21,30 @@ const abilities: Ability[] = [
       effects: [
         { amount: 1, type: "draw" },
         { amount: 1, type: "discard" },
+        // rule 422 — the branch is dictated by the DISCARDED card's type, not
+        // chosen by the player: discarding a unit can never draw a card.
         {
-          options: [
-            { effect: { amount: 1, type: "draw" }, label: "Spell" },
-            {
-              effect: {
-                target: { controller: "friendly", quantity: 2, type: "rune" },
-                type: "ready",
-              },
-              label: "Gear",
-            },
-            {
-              effect: {
+          condition: { cardType: "spell", type: "discarded-card-type" },
+          else: {
+            condition: { cardType: "gear", type: "discarded-card-type" },
+            else: {
+              condition: { cardType: "unit", type: "discarded-card-type" },
+              then: {
                 amount: 3,
                 duration: "turn",
                 target: "self",
                 type: "modify-might",
               },
-              label: "Unit",
+              type: "conditional",
             },
-          ],
-          type: "choice",
+            then: {
+              target: { controller: "friendly", quantity: 2, type: "rune" },
+              type: "ready",
+            },
+            type: "conditional",
+          },
+          then: { amount: 1, type: "draw" },
+          type: "conditional",
         },
       ],
       type: "sequence",

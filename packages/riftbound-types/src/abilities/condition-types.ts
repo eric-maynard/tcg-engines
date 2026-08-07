@@ -329,6 +329,16 @@ export interface ChanneledFewerThanCondition {
 }
 
 /**
+ * "Do the following based on the discarded card's type" — rule 422
+ * (unl-080-219 Hwei): true when the card discarded by the most recent discard
+ * instruction of this effect's controller has the given card type.
+ */
+export interface DiscardedCardTypeCondition {
+  readonly type: "discarded-card-type";
+  readonly cardType: string;
+}
+
+/**
  * If the effect's chosen target is controlled by the given player.
  * Evaluated against the caster-bound target of the enclosing spell/ability
  * (rule 355.8 last-known-information for "if it was a friendly/enemy …").
@@ -522,6 +532,7 @@ export type Condition =
   | FewerRunesThanOpponentCondition
   | RunesAtLeastCondition
   | ChanneledFewerThanCondition
+  | DiscardedCardTypeCondition
   | TargetControllerCondition
   | TargetAttackingCondition
   | ThisKillsTargetCondition

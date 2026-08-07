@@ -2216,6 +2216,14 @@ export const pendingChoiceMoves: Partial<
         // that omit the full zone bag don't crash. Rule ogn-202-298: tag the
         // batch position so "discard one or more" fires once per instruction.
         if (choice.onPicked === "discard" && typeof context.zones.getCardsInZone === "function") {
+          // rule 422 (unl-080-219) — remember what this discard instruction
+          // put in the trash so a follow-up clause can branch on its type.
+          const log = draft as { lastDiscardedCardIds?: Record<string, string[]> };
+          const prior = taken === 0 ? [] : (log.lastDiscardedCardIds?.[choice.revealer] ?? []);
+          log.lastDiscardedCardIds = {
+            ...log.lastDiscardedCardIds,
+            [choice.revealer]: [...prior, id as string],
+          };
           fireTriggers(
             { batchIndex: taken, cardId: id, playerId: choice.revealer, type: "discard" },
             { cards: context.cards, counters: context.counters, draft, zones: context.zones },

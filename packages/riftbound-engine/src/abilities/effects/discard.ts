@@ -13,6 +13,12 @@ export function discardCards(cardIds: readonly string[], ctx: EffectContext): vo
   if (cardIds.length === 0) {
     return;
   }
+  // rule 422 (unl-080-219) — remember what was discarded so a follow-up
+  // clause can branch on the discarded card's type.
+  (ctx.draft as { lastDiscardedCardIds?: Record<string, string[]> }).lastDiscardedCardIds = {
+    ...(ctx.draft as { lastDiscardedCardIds?: Record<string, string[]> }).lastDiscardedCardIds,
+    [ctx.playerId]: [...cardIds],
+  };
   removeFromBoard(
     ctx,
     cardIds,
