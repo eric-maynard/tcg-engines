@@ -146,7 +146,7 @@ describe("Rocket Barrage (sfd-077-221)", () => {
     expect(unitOnly.zoneOf("own")).toBe("trash");
   });
 
-  test.failing("BUG: a mode with no legal target may not be chosen (355.3/355.8) — with only gear around, 'Deal 4' must not be offered", async () => {
+  test("a mode with no legal target may not be chosen (355.3/355.8) — with only gear around, 'Deal 4' must not be offered", async () => {
     // Expected: the mode prompt lists only mode 1 (or the kill resolves as the forced sole mode).
     // Actual: both modes are offered; picking "Deal 4" makes the spell do nothing.
     const game = await scenario().resources(P1, { energy: 4, power: { mind: 1 } }).gear(P2, PORO_SNAX, "snax").hand(P1, CARD, "rb").build();

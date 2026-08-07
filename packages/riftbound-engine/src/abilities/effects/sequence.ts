@@ -317,7 +317,9 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       if (
         prevPerformed !== undefined &&
         sub.type === "conditional" &&
-        (sub as { condition?: { type?: string } }).condition?.type === "paid-additional-cost"
+        ["did-perform", "paid-additional-cost"].includes(
+          (sub as { condition?: { type?: string } }).condition?.type ?? "",
+        )
       ) {
         subCtx = { ...subCtx, ifYouDoPerformed: prevPerformed } as EffectContext;
       }

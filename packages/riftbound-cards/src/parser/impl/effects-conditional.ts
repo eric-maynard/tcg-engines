@@ -55,6 +55,10 @@ export function parseIfYouDoEffect(text: string): Effect | undefined {
   let leftCore = leftText;
   leftCore = leftCore.replace(/^as an additional cost to play (?:this|me),?\s*/i, "");
   leftCore = leftCore.replace(/^as you play (?:me|this),?\s*/i, "");
+  // rule 355.9 — only an "as an additional cost"/"as you play me" framing is a
+  // cost elected while PLAYING the card (`paid-additional-cost`). A plain
+  // "you may X. If you do, Y" gates on X having been performed on resolution.
+  const isAdditionalCost = leftCore !== leftText || /as an additional cost/i.test(leftText);
   // Trigger prefixes like "When I ...," are consumed by the outer trigger
   // Parser, but for defensive handling of cleaned text, strip them here too.
   leftCore = leftCore.replace(/^when i [^,]+,\s*/i, "");
@@ -80,11 +84,11 @@ export function parseIfYouDoEffect(text: string): Effect | undefined {
 
   const conditional: {
     type: "conditional";
-    condition: { type: "paid-additional-cost" };
+    condition: { type: "paid-additional-cost" | "did-perform" };
     then: Effect;
     else?: Effect;
   } = {
-    condition: { type: "paid-additional-cost" },
+    condition: { type: isAdditionalCost ? "paid-additional-cost" : "did-perform" },
     then: rightEffect,
     type: "conditional",
   };

@@ -57,7 +57,7 @@ function goldTokens(game: G, seat: "p1" | "p2") {
 }
 
 describe("Pickpocket (sfd-074-221)", () => {
-  test.failing("BUG: parsed ability should keep the 'Energy cost no more than [1]' filter on the kill target and gate Gold on 'if you do'", async () => {
+  test("parsed ability should keep the 'Energy cost no more than [1]' filter on the kill target and gate Gold on 'if you do'", async () => {
     // Expected: kill target {type:"gear", filter/costAtMost: 1 …} and a conditional keyed on the kill having happened.
     // Actual: target is a bare {type:"gear"} (any cost) and the condition is "paid-additional-cost".
     const def = (await loadDefaultCardPool()).get(CARD);

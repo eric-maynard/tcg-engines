@@ -563,6 +563,11 @@ export function evaluateEffectCondition(
         | undefined;
       return meta?.empowered === true;
     }
+    case "did-perform":
+    // rule 355.9 — "X. If you do, Y": Y happens only when the preceding
+    // optional step X was actually performed. Same evidence as the
+    // additional-cost flag below, which the sequence handler also sets.
+    // falls through
     case "paid-additional-cost": {
       // rule-id: ven-083-166 / rule 560 — playSpell records whether the
       // caster elected the optional additional cost; absent means unpaid.

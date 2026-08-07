@@ -1,6 +1,43 @@
 // Effect handler: "choice"
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import type { TargetDescriptor } from "../target-resolver";
+import { resolveTarget } from "../target-resolver";
 import { type EffectHelpers } from "./_helpers";
+
+/**
+ * rule 355.3 / 355.8 — a mode whose effect has no legal target may not be
+ * chosen. Modes without a card target (player/self/battlefield descriptors,
+ * resourceful effects) are always choosable.
+ */
+function modeHasLegalTarget(option: { effect?: ExecutableEffect }, ctx: EffectContext): boolean {
+  const tgt = option.effect?.target as TargetDescriptor | string | undefined;
+  if (tgt === undefined || typeof tgt === "string") {
+    return true;
+  }
+  // Only board-object descriptors are judged here: everything else (players,
+  // runes, cards in private zones, the source itself) is either always legal
+  // or lives in a zone the board resolver does not scan.
+  const kind = (tgt as { type?: string }).type;
+  if (kind !== "unit" && kind !== "gear" && kind !== "unit-or-gear") {
+    return true;
+  }
+  if (ctx.boundTargets && ctx.boundTargets.length > 0) {
+    return true;
+  }
+  return (
+    resolveTarget({ ...(tgt as TargetDescriptor), quantity: "all" }, {
+      cards: ctx.cards,
+      choosing: true,
+      draft: ctx.draft,
+      playerId: ctx.playerId,
+      sameZone: ctx.sameZone,
+      sourceCardId: ctx.sourceCardId,
+      sourceZone: ctx.sourceZone,
+      triggerSourceId: ctx.triggerSourceId,
+      zones: ctx.zones,
+    } as Parameters<typeof resolveTarget>[1]).length > 0
+  );
+}
 
 export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
@@ -27,9 +64,17 @@ export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: E
     }
     ctx.cards.updateCardMeta?.(sourceId, { modesChosenTurn: currentTurn });
   }
-  const availableIndices = options.map((_, i) => i).filter((i) => !alreadyChosen.includes(i));
+  let availableIndices = options.map((_, i) => i).filter((i) => !alreadyChosen.includes(i));
   if (availableIndices.length === 0) {
     return;
+  }
+  // rule 355.3 / 355.8 (sfd-077-221) — drop modes with no legal target; if no
+  // mode has one the effect still resolves and simply does nothing.
+  const targetable = availableIndices.filter((i) =>
+    modeHasLegalTarget(options[i] as { effect?: ExecutableEffect }, ctx),
+  );
+  if (targetable.length > 0) {
+    availableIndices = targetable;
   }
   // rule-id: sfd-091-221 (rule 355.8) — "draw 1 or buff me": the controller
   // picks which mode resolves. With ≥2 modes and no other prompt in flight,

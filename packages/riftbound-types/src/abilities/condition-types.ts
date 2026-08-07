@@ -184,12 +184,31 @@ export interface PaidAdditionalCostCondition {
 }
 
 /**
+ * "X. If you do, Y" — the preceding optional action was actually performed
+ * (rule 355.9). Distinct from `paid-additional-cost`, which reads a cost the
+ * player elected while PLAYING the card.
+ */
+export interface DidPerformCondition {
+  readonly type: "did-perform";
+}
+
+/**
  * If you spent at least X power this turn
  */
 export interface SpentPowerCondition {
   readonly type: "spent-power";
   readonly amount: number;
   readonly domain?: string;
+}
+
+/**
+ * The card that produced the `play-card` / `play-self` event has a PRINTED
+ * Power cost of at least `amount` pips (rule 206.1 — Power cost is the printed
+ * cost, so additional costs and Accelerate pips never count toward it).
+ */
+export interface PlayedPowerCostCondition {
+  readonly type: "played-power-cost";
+  readonly amount: number;
 }
 
 // ============================================================================
@@ -471,7 +490,9 @@ export type Condition =
   // Cost conditions
   | PayCostCondition
   | PaidAdditionalCostCondition
+  | DidPerformCondition
   | SpentPowerCondition
+  | PlayedPowerCostCondition
 
   // Score conditions
   | ScoreWithinCondition
