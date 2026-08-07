@@ -11,7 +11,15 @@ export function handle_nameCard(effect: ExecutableEffect, ctx: EffectContext, _h
     (effect as unknown as { cardType?: "spell" | "unit" | "gear" | "tag" }).cardType ?? "spell";
   // rule 762: "name a tag" enumerates printed tags, not card names.
   const registry = getGlobalCardRegistry();
-  const options = cardType === "tag" ? registry.listTags() : registry.listNames(cardType);
+  // rule 762 (rule-id: unl-177-219) — some cards restrict the naming to a
+  // printed list ("choose Bird, Cat, Dog, or Poro"); only those are legal.
+  const restricted = (effect as unknown as { options?: readonly string[] }).options;
+  const options =
+    Array.isArray(restricted) && restricted.length > 0
+      ? [...restricted]
+      : cardType === "tag"
+        ? registry.listTags()
+        : registry.listNames(cardType);
   if (options.length === 0) {
     return;
   }

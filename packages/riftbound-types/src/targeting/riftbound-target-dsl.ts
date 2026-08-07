@@ -162,6 +162,14 @@ export interface KeywordFilter {
 }
 
 /**
+ * Exclude-keyword filter — matches cards WITHOUT a keyword, printed or
+ * granted ("a friendly unit without [Temporary]").
+ */
+export interface ExcludeKeywordFilter {
+  readonly excludeKeyword: string;
+}
+
+/**
  * Name filter - matches card name
  */
 export interface NameFilter {
@@ -204,6 +212,7 @@ export type Filter =
   | EnergyCostFilter
   | PowerCostFilter
   | KeywordFilter
+  | ExcludeKeywordFilter
   | NameFilter
   | InCombatWithFilter;
 

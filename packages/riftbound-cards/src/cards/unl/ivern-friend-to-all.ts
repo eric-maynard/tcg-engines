@@ -53,6 +53,20 @@ const tagsCheck = {
 
 const abilities: Ability[] = [
   {
+    // rule 135.2.b.3 / 762 — "As you play me, choose Bird, Cat, Dog, or Poro.
+    // I gain that tag." The choice is restricted to those four tags and is
+    // recorded on Ivern himself as he is played.
+    effect: {
+      asYouPlay: true,
+      cardType: "tag",
+      gainsNamedTag: true,
+      options: ["Bird", "Cat", "Dog", "Poro"],
+      type: "name-card",
+    },
+    trigger: { event: "play-self", on: "self" },
+    type: "triggered",
+  },
+  {
     condition: tagsCheck,
     effect: { amount: 1, type: "score" },
     trigger: { event: "conquer", on: "self" },
