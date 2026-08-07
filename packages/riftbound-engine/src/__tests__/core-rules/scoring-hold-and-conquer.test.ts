@@ -579,7 +579,7 @@ describe("Scored-this-turn is tracked PER PLAYER: the opponent may Conquer a bat
     expect(game.p2.points()).toBe(1);
   });
 
-  test.failing("BUG: 345 — as the staged Non-Combat Showdown at A begins, P2 (who applied Contested) must gain Focus even on P1's turn; engine hands Focus to the turn player and flags the showdown as a combat showdown", async () => {
+  test("345 — as the staged Non-Combat Showdown at A begins, P2 (who applied Contested) must gain Focus even on P1's turn; engine hands Focus to the turn player and flags the showdown as a combat showdown", async () => {
     // Expected: showdownStack[0] = { battlefieldId: A, focusPlayer: P2, isCombatShowdown: false }; P2 is the acting seat.
     // Actual: focusPlayer = P1 (the player who executed startShowdown) and isCombatShowdown = true with no opposing units.
     const game = await untilP2StandsAloneAtA();
@@ -592,7 +592,7 @@ describe("Scored-this-turn is tracked PER PLAYER: the opponent may Conquer a bat
     expect(contextOf(game)).toBe("showdown");
   });
 
-  test.failing("BUG: 323.12 / 344.2 — once the chain has resolved and the turn is Neutral Open, the staged showdown at A must BEGIN as part of cleanup; engine leaves it staged behind a manual `startShowdown` while P1 may take unrelated discretionary actions", async () => {
+  test("323.12 / 344.2 — once the chain has resolved and the turn is Neutral Open, the staged showdown at A must BEGIN as part of cleanup; engine leaves it staged behind a manual `startShowdown` while P1 may take unrelated discretionary actions", async () => {
     // Expected: immediately after the chain empties, a showdown is in progress at A (state = Showdown Open),
     // so P1 cannot, e.g., Standard Move (144.1.c) until it closes.
     // Actual: no showdown is open; `standardMove:to:A` and `startShowdown:A` sit side by side in P1's menu.

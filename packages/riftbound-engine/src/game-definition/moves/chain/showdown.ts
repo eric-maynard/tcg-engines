@@ -53,35 +53,48 @@ export function openPendingContestedShowdown(
   if (getTurnState(interaction) !== "neutral-open") {
     return;
   }
+  // rule 320.1 — a resolution still waiting on a choice (e.g. a destination)
+  // has not finished; its Cleanup, and any Showdown it stages, comes after.
+  if (draft.pendingChoice) {
+    return;
+  }
   if (getActiveShowdown(interaction)?.active) {
-    return;
-  }
-  const pending = Object.entries(draft.battlefields ?? {}).find(
-    ([, bf]) => bf?.contested === true && bf.showdownComplete !== true,
-  );
-  if (!pending) {
-    return;
-  }
-  const [battlefieldId, bf] = pending;
-  const attacker = bf.contestedBy;
-  if (!attacker) {
-    return;
-  }
-  // rule 323.12 — the staged showdown is begun by the TURN player's cleanup
-  // step: one contested by the non-turn player (an off-turn Reaction move)
-  // stays staged for the turn player to begin.
-  if (attacker !== draft.turn.activePlayer) {
     return;
   }
   const { cards, counters, zones } = context;
   const ownerOf = (id: string): string | undefined =>
     (cards.getCardController?.(id as never) ??
       (cards.getCardOwner(id as never) as string | undefined)) ?? undefined;
-  const occupants = zones.getCardsInZone(`battlefield-${battlefieldId}` as never) as string[];
-  const isCombat = occupants.some((id) => ownerOf(id) !== undefined && ownerOf(id) !== attacker);
+  // rule 344.2 — a staged Showdown opens during the next Cleanup no matter who
+  // applied Contested; the Turn Player only picks WHICH battlefield when
+  // several are staged (323.12 / 323.13), never whether one begins at all.
+  const staged = Object.entries(draft.battlefields ?? {})
+    .filter(([, bf]) => bf?.contested === true && bf.showdownComplete !== true && bf.contestedBy)
+    .map(([battlefieldId, bf]) => {
+      const occupants = zones.getCardsInZone(`battlefield-${battlefieldId}` as never) as string[];
+      const attacker = bf.contestedBy as string;
+      return {
+        attacker,
+        battlefieldId,
+        bf,
+        isCombat: occupants.some((id) => ownerOf(id) !== undefined && ownerOf(id) !== attacker),
+        occupants,
+      };
+    });
+  // rule 323.12 runs BEFORE 323.13: a showdown-only battlefield begins first,
+  // and only once none is staged does a staged Combat begin. A Combat the
+  // NON-turn player staged (an off-turn Reaction move) waits for the Turn
+  // Player's own step instead — 323.13 makes that choice theirs.
+  const pending =
+    staged.find((x) => !x.isCombat) ??
+    staged.find((x) => x.attacker === draft.turn.activePlayer);
+  if (!pending) {
+    return;
+  }
+  const { battlefieldId, bf, attacker, isCombat, occupants } = pending;
   const playerIds = Object.keys(draft.players);
   const defender = bf.controller ?? playerIds.find((p) => p !== attacker) ?? attacker;
-  draft.interaction = startShowdownState(
+  const started = startShowdownState(
     interaction,
     battlefieldId,
     attacker,
@@ -90,6 +103,13 @@ export function openPendingContestedShowdown(
     attacker,
     defender,
   );
+  // rule 344.2 — nobody chose this one; the Cleanup began it.
+  draft.interaction = {
+    ...started,
+    showdownStack: started.showdownStack.map((sd, i) =>
+      i === started.showdownStack.length - 1 ? { ...sd, autoBegun: true } : sd,
+    ),
+  };
   const triggerCtx = { cards, counters, draft, zones } as never;
   fireTriggers({ battlefieldId, isCombat, playerId: attacker, type: "showdown-begin" }, triggerCtx);
   if (!isCombat) {
@@ -252,6 +272,13 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
           zones: context.zones,
         });
       }
+      // rule 323.13 / 344.2 — the Cleanup that follows a closed Showdown begins
+      // the next staged one (e.g. a Combat that waited behind a Non-Combat
+      // Showdown at another battlefield).
+      openPendingContestedShowdown(
+        draft,
+        context as unknown as Parameters<typeof openPendingContestedShowdown>[1],
+      );
     }
   },
 };
@@ -273,10 +300,18 @@ export const startShowdown: Defs["startShowdown"] = {
     // in a Neutral Open state (no chain, no showdown). Also blocks nested
     // showdowns — a second showdown cannot stack while one is already open.
     const interaction = state.interaction ?? createInteractionState();
-    if (getTurnState(interaction) !== "neutral-open") {
-      return false;
+    const openNow = getActiveShowdown(interaction);
+    if (openNow?.active) {
+      // rule 344.2 — the Cleanup already began this Non-Combat Showdown on its
+      // own; the Turn Player confirming it is a no-op. Any other battlefield,
+      // an open Combat, or a non-turn player still gets nothing.
+      return (
+        openNow.isCombatShowdown !== true &&
+        openNow.battlefieldId === context.params.battlefieldId &&
+        state.turn.activePlayer === context.params.playerId
+      );
     }
-    if (getActiveShowdown(interaction)?.active) {
+    if (getTurnState(interaction) !== "neutral-open") {
       return false;
     }
     // rule 323.12 — beginning a staged Showdown is the TURN player's step;
@@ -307,10 +342,19 @@ export const startShowdown: Defs["startShowdown"] = {
       return [];
     }
     const interaction = state.interaction ?? createInteractionState();
-    if (getTurnState(interaction) !== "neutral-open") {
-      return [];
+    const openNow = getActiveShowdown(interaction);
+    if (openNow?.active) {
+      // rule 344.2 — already begun by Cleanup; only the Turn Player's no-op
+      // confirm of that Non-Combat Showdown is offered.
+      if (
+        openNow.isCombatShowdown === true ||
+        state.turn.activePlayer !== (context.playerId as string)
+      ) {
+        return [];
+      }
+      return [{ battlefieldId: openNow.battlefieldId, playerId: context.playerId as string }];
     }
-    if (getActiveShowdown(interaction)?.active) {
+    if (getTurnState(interaction) !== "neutral-open") {
       return [];
     }
     // rule 323.12 — only the turn player is offered the staged-showdown choice.
@@ -331,8 +375,24 @@ export const startShowdown: Defs["startShowdown"] = {
     const { playerId, battlefieldId } = context.params;
     const playerIds = Object.keys(draft.players);
 
+    // rule 344.2 — Cleanup already opened this Showdown; nothing to redo.
+    const already = getActiveShowdown(draft.interaction ?? createInteractionState());
+    if (already?.active && already.battlefieldId === battlefieldId) {
+      return;
+    }
+
     const bf = draft.battlefields[battlefieldId];
-    const isCombat = bf?.contested ?? false;
+    const ownerOf = (id: string): string | undefined =>
+      (context.cards.getCardController?.(id as never) ??
+        (context.cards.getCardOwner(id as never) as string | undefined)) ?? undefined;
+    const occupants = context.zones.getCardsInZone(
+      `battlefield-${battlefieldId}` as never,
+    ) as unknown as string[];
+    // rule 344 — a Showdown is a COMBAT showdown only when units controlled by
+    // different players share the battlefield; Contested alone does not make one.
+    const isCombat = occupants.some(
+      (id) => ownerOf(id) !== undefined && ownerOf(id) !== (bf?.contestedBy ?? playerId),
+    );
     // Rule 464.2.c (Vendetta): Attacker = player who applied Contested;
     // Defender = the player who did NOT apply Contested (bf.controller when
     // set, otherwise the other player). Rule 550.2: non-combat → all players.
@@ -346,18 +406,46 @@ export const startShowdown: Defs["startShowdown"] = {
     draft.interaction = startShowdownState(
       interaction,
       battlefieldId,
-      playerId,
+      // rule 345: as a Showdown begins, the player who applied Contested gains
+      // Focus — even when the Turn Player is the one who began it.
+      attacker,
       relevantPlayers,
       isCombat,
       attacker,
       defender,
     );
+    const triggerCtx = {
+      cards: context.cards,
+      counters: context.counters,
+      draft,
+      zones: context.zones,
+    };
     // rule-id: unl-079-219 (Rule 340): "When a showdown begins here" fires
     // for combat and non-combat showdowns alike.
-    fireTriggers(
-      { battlefieldId, isCombat, playerId, type: "showdown-begin" },
-      { cards: context.cards, counters: context.counters, draft, zones: context.zones },
-    );
+    fireTriggers({ battlefieldId, isCombat, playerId, type: "showdown-begin" }, triggerCtx);
+    if (!isCombat) {
+      return;
+    }
+    // rule 625.1.c.1 / 625.1.c.2 — beginning a Combat Showdown assigns combat
+    // roles and fires "attack" / "defend".
+    for (const id of occupants) {
+      const owner = ownerOf(id);
+      if (owner === undefined) {
+        continue;
+      }
+      const role = owner === attacker ? "attacker" : "defender";
+      context.cards.updateCardMeta?.(id as never, { combatRole: role } as never);
+      fireTriggers(
+        {
+          alone: occupants.filter((o) => ownerOf(o) === owner).length === 1,
+          battlefieldId,
+          cardId: id,
+          owner,
+          type: role === "attacker" ? "attack" : "defend",
+        },
+        triggerCtx,
+      );
+    }
   },
 };
 

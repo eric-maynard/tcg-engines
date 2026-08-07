@@ -139,6 +139,8 @@ export class Game {
   readonly backend: EngineBackend;
   private readonly scripts = new Map<Seat, { answers: ScriptedAnswer[]; strict: boolean }>();
   private readonly handles = new Map<Seat, SeatHandle>();
+  /** Battlefield whose Cleanup-begun showdown settle() already handed back once. */
+  private autoShowdownHandedBack: string | undefined;
 
   constructor(backend: EngineBackend, scripts?: ReadonlyMap<Seat, ScriptSpec>) {
     this.backend = backend;
@@ -475,6 +477,21 @@ export class Game {
       if (!answer) {
         if (d.kind === "action" && (d.context === "main" || d.context === "free")) {
           return { decision: d, reason: "open", steps };
+        }
+        // rule 344.2 — a Non-Combat Showdown the Cleanup began on its own
+        // (nobody chose it) is handed back once so the caller can observe it;
+        // settling again passes focus as usual.
+        if (d.kind === "action") {
+          const sd = this.gameState.interaction?.showdownStack?.at(-1);
+          if (
+            sd?.active &&
+            sd.autoBegun === true &&
+            sd.isCombatShowdown !== true &&
+            this.autoShowdownHandedBack !== sd.battlefieldId
+          ) {
+            this.autoShowdownHandedBack = sd.battlefieldId;
+            return { decision: d, reason: "open", steps };
+          }
         }
         const p = policy(d, this);
         if (p !== undefined) {

@@ -186,7 +186,7 @@ describe("Rocket Barrage (sfd-077-221)", () => {
     expect(game.zoneOf("rb")).toBe("trash");
   });
 
-  test.failing("BUG: [Repeat] same mode twice on one target (820.2.a): 4 + 4 kills an 8-Might base unit", async () => {
+  test("[Repeat] same mode twice on one target (820.2.a): 4 + 4 kills an 8-Might base unit", async () => {
     // Expected: "big" (8 Might) takes 4 twice within one resolution and dies. Actual: only 4 damage.
     const game = await board(8, 2).build();
     await game.p1.cast("rb", { repeat: 1 });

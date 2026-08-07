@@ -23,6 +23,8 @@ type TriggerCtx = Parameters<typeof fireTriggers>[1];
  */
 export function contestBattlefieldOnArrival(args: {
   arrivingUnitIds: string[];
+  /** rule 344.2 — true when a Cleanup begins this showdown, not a player's step. */
+  autoBegun?: boolean;
   battlefieldId: string;
   cards: TriggerCtx["cards"];
   counters: TriggerCtx["counters"];
@@ -30,7 +32,7 @@ export function contestBattlefieldOnArrival(args: {
   playerId: string;
   zones: TriggerCtx["zones"];
 }): void {
-  const { arrivingUnitIds, battlefieldId, cards, counters, draft, playerId, zones } = args;
+  const { arrivingUnitIds, autoBegun, battlefieldId, cards, counters, draft, playerId, zones } = args;
   const bf = draft.battlefields?.[battlefieldId];
   if (!bf || bf.controller === playerId) {
     return;
@@ -55,7 +57,7 @@ export function contestBattlefieldOnArrival(args: {
   const playerIds = Object.keys(draft.players);
   const defender = bf.controller ?? playerIds.find((p) => p !== playerId) ?? playerId;
   const interaction = draft.interaction ?? createInteractionState();
-  draft.interaction = startShowdownState(
+  const started = startShowdownState(
     interaction,
     battlefieldId,
     playerId,
@@ -64,6 +66,14 @@ export function contestBattlefieldOnArrival(args: {
     playerId,
     defender,
   );
+  draft.interaction = autoBegun
+    ? {
+        ...started,
+        showdownStack: started.showdownStack.map((sd, i) =>
+          i === started.showdownStack.length - 1 ? { ...sd, autoBegun: true } : sd,
+        ),
+      }
+    : started;
 
   const triggerCtx = { cards, counters, draft, zones } as TriggerCtx;
   // rule 340 / 548.2: "When a showdown begins here" fires for combat and

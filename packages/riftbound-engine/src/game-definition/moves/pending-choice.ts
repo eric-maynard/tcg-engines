@@ -57,7 +57,7 @@ const isBoardZone = (z: string): boolean => z === "base" || z.startsWith("battle
  */
 function liftModalTarget(
   draft: RiftboundGameState,
-  choice: { sourceCardId: string; playerId: string; controllerId?: string },
+  choice: { sourceCardId: string; playerId: string; controllerId?: string; then?: unknown },
   effect: ExecutableEffect,
   // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
   context: any,
@@ -105,6 +105,10 @@ function liftModalTarget(
     playerId: controller,
     remaining: 1,
     sourceCardId: choice.sourceCardId,
+    // rule 820.2 (unl-182-219) — the suspended continuation (e.g. the later
+    // [Repeat] executions) rides along on the lifted target prompt; dropping
+    // it here would silently lose those executions.
+    ...(choice.then !== undefined ? { then: choice.then } : {}),
     type: "choose-target",
   };
   return true;
@@ -1346,6 +1350,21 @@ export const pendingChoiceMoves: Partial<
           ...(typeof promptTriggerToZone === "string" ? { triggerToZone: promptTriggerToZone } : {}),
         };
         executeEffect(choice.effect as ExecutableEffect, effectCtx);
+        // rule 820.2 (unl-182-219) — resume a suspended continuation carried on
+        // this prompt (the remaining [Repeat] executions); if the picked effect
+        // parked its own prompt, hand the continuation to that one instead.
+        const carried = (choice as { then?: unknown }).then;
+        if (carried !== undefined) {
+          const nested = draft.pendingChoice as { then?: unknown } | undefined;
+          if (!nested) {
+            executeEffect(carried as ExecutableEffect, effectCtx);
+          } else if (nested.then === undefined) {
+            draft.pendingChoice = {
+              ...(nested as object),
+              then: carried,
+            } as typeof draft.pendingChoice;
+          }
+        }
         // rule-id: ogn-063-298 — recalc statics after the picked effect so a
         // just-buffed unit picks up "friendly buffed units have [Deflect]".
         // Skip while a re-prompt (split/assign) is still pending.

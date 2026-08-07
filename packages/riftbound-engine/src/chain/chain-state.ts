@@ -129,6 +129,12 @@ export interface ShowdownState {
 
   /** The defending player (if combat showdown) */
   readonly defendingPlayer?: string;
+
+  /**
+   * rule 344.2 — set when a Cleanup began this Showdown on its own (no player
+   * chose it), so callers can tell it apart from one begun by an explicit step.
+   */
+  readonly autoBegun?: boolean;
 }
 
 /**
