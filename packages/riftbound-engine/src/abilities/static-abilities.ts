@@ -594,6 +594,25 @@ function resolveStaticTargetsFromDescriptor(
               return false;
             }
           }
+          // rule-id: unl-076-219 — "your units with [KEYWORD]": printed keywords
+          // and keywords granted by other continuous effects both count.
+          const keyword = (t.filter as { keyword?: string }).keyword;
+          if (keyword !== undefined) {
+            const wantedKw = keyword.toLowerCase();
+            const printed = registry.hasKeyword(c.id, keyword);
+            const meta = ctx.cards.getCardMeta(c.id as CoreCardId) as
+              | { grantedKeywords?: readonly { keyword?: string }[] }
+              | undefined;
+            const granted = (meta?.grantedKeywords ?? []).some(
+              (g) => (g.keyword ?? "").toLowerCase() === wantedKw,
+            );
+            const onDef = ((def as { keywords?: readonly string[] } | undefined)?.keywords ?? []).some(
+              (k) => k.toLowerCase() === wantedKw,
+            );
+            if (!printed && !granted && !onDef) {
+              return false;
+            }
+          }
         }
       }
       return true;

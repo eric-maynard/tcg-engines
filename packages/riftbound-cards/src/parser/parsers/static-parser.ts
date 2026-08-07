@@ -34,7 +34,22 @@ const REMINDER_TEXT_PATTERN = /\([^)]*\)/g;
  * keep the descriptive `per` string.
  */
 function parseForEachQualifier(qualifier: string): Target | undefined {
-  const q = qualifier.trim().replace(/\.$/, "").toLowerCase();
+  const raw = qualifier.trim().replace(/\.$/, "");
+  const q = raw.toLowerCase();
+
+  // rule-id: unl-076-219 — "of your units with [KEYWORD] at my battlefield".
+  // "at my battlefield" / "here" both mean the source's own location.
+  const keywordHere = /^(?:of\s+)?your units? with \[([\w-]+)\](?:\s+(?:at my battlefield|here))?$/i.exec(
+    raw,
+  );
+  if (keywordHere) {
+    return {
+      controller: "friendly",
+      filter: { keyword: keywordHere[1] },
+      location: "here",
+      type: "unit",
+    } as unknown as Target;
+  }
 
   // rule-id: ven-097-166 — "other unit you control here with my name".
   if (/^other units? (?:you control|friendly)? ?here with my name$/.test(q) || /^other units? here with my name (?:you control)?$/.test(q)) {
