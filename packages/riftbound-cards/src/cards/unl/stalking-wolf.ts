@@ -1,4 +1,5 @@
 import type { Ability } from "@tcg/riftbound-types";
+import type { Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
@@ -9,9 +10,10 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * As an additional cost to play me, kill a Bird/Cat/Dog/Poro you
  * control. You may play me to its battlefield.
  *
- * Ambush + a virtual "AmbushKillPet" marker. The kill-a-friendly
- * additional cost will be wired up once the engine learns to read it
- * from the card meta.
+ * rule 356.2.a.1 / 204.2 — the kill carries no "may", so it is a MANDATORY
+ * additional cost: with no Bird/Cat/Dog/Poro under your control the Wolf
+ * cannot be played at all. rule 355.10.c — the victim is a cost, not a
+ * target, so only pets YOU control qualify. The tag list is a disjunction.
  */
 const abilities: Ability[] = [
   {
@@ -24,10 +26,16 @@ const abilities: Ability[] = [
   },
   {
     effect: {
-      keyword: "AmbushKillPet",
-      target: "self",
-      type: "grant-keyword",
-    },
+      additionalCost: {
+        kill: {
+          controller: "friendly",
+          filter: { tag: ["Bird", "Cat", "Dog", "Poro"] },
+          type: "unit",
+        },
+      },
+      optional: false,
+      type: "additional-cost-option",
+    } as unknown as Effect,
     type: "static",
   },
 ];

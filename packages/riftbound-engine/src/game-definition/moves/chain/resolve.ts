@@ -160,6 +160,15 @@ function resolvePlayedFromHandGates<T>(effect: T, playedFromHand: boolean): T {
   return out as T;
 }
 
+/** rule 420.1 — a permanent is on the board while it sits in a base or at a battlefield. */
+function sourceStillOnBoard(
+  cardId: string,
+  context: Parameters<typeof buildEffectContext>[3],
+): boolean {
+  const zone = context.zones.getCardZone(cardId as CoreCardId) as string | undefined;
+  return typeof zone === "string" && (zone === "base" || zone.startsWith("battlefield-"));
+}
+
 /**
  * Execute a resolved chain item's effect.
  * Skips execution if the item was countered (rule 543).
@@ -232,8 +241,17 @@ export function executeResolvedItem(
       typeof optTarget.type === "string" &&
       // Kept deliberately narrow: only "a unit YOU control …" descriptors, where
       // an empty candidate set is unambiguous and cannot depend on board state
-      // the resolver reads differently at resolution time.
-      optTarget.controller === "friendly" &&
+      // the resolver reads differently at resolution time — plus "an enemy unit
+      // HERE", whose candidate set is empty whenever the source has left the
+      // board (rule-id: unl-166-219 — Sinister Poro killed as an additional
+      // cost while its own attack trigger is still on the chain).
+      (optTarget.controller === "friendly" ||
+        (optTarget.controller === "enemy" &&
+          optTarget.location === "here" &&
+          // rule 383.3.a (unl-105-219) — while the source is still on the board
+          // "here" is a real place, so the controller is still asked whether to
+          // use the ability; only a source that already left has no "here" at all.
+          !sourceStillOnBoard(resolved.cardId, context))) &&
       optTarget.type !== "self" &&
       optTarget.type !== "trigger-source" &&
       optTarget.type !== "player" &&
@@ -811,13 +829,21 @@ export function executeResolvedItem(
   // there" is its own instruction, aimed at the battlefield chosen when the
   // spell was played. Losing the primary unit mistargets only that instruction;
   // the splash still resolves on the units left behind.
+  // rule 359.3.e.5 / 359.3.e.12 (unl-200-219) — "Choose a unit. Play a ready
+  // Reflection token. It becomes a copy of that unit": the token is played by an
+  // instruction that names no target, so losing the chosen unit skips only the
+  // copy step. `create-token` reads its target purely as the copy source.
   const splashRider =
     mistargeted &&
     typeof (effect as { splashOthers?: unknown }).splashOthers === "number" &&
     typeof (effect as { _splashZone?: unknown })._splashZone === "string";
   if (splashRider) {
     executeEffect({ ...(effect as object), _splashOnly: true } as ExecutableEffect, effectCtx);
-  } else if (!mistargeted || (effect.type === "sequence" && effect.target === undefined)) {
+  } else if (
+    !mistargeted ||
+    effect.type === "create-token" ||
+    (effect.type === "sequence" && effect.target === undefined)
+  ) {
     executeEffect(effect, effectCtx);
   }
   firePlayedCardTriggers(resolved, draft, context, preLen);
