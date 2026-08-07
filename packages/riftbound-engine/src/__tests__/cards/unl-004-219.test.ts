@@ -141,14 +141,17 @@ describe("Prepared Neophyte (unl-004-219)", () => {
 
   // BUG — expected: the condition is scoped to THIS turn — after the turn passes to P2 the bonus is
   // gone (1), and P2 paying 4 for THEIR spell does nothing for my Neophyte. Actual: 5 throughout.
-  test.failing("BUG: 'this turn' + 'you' — off on the next turn and unaffected by the OPPONENT's 4-energy spell; engine shows 5", async () => {
-    const game = await board(4).resources(P2, { energy: 4 }).hand(P1, study(4), "mine").hand(P2, study(4, "Their Study"), "theirs").build();
+  test("'this turn' + 'you' — off on the next turn and unaffected by the OPPONENT's 4-energy spell", async () => {
+    // rule 316.3: every rune pool empties as the Main Phase opens, so P2 has to
+    // channel their own Energy on their turn rather than carry a preset pool over.
+    const game = await board(4).runes(P2, "fury", 4).hand(P1, study(4), "mine").hand(P2, study(4, "Their Study"), "theirs").build();
     await game.p1.cast("mine");
     await game.settle();
     expect(game.state("neo").might).toBe(5);
     await game.advanceTurn();
     expect(game.turnPlayer()).toBe(P2);
     expect(game.state("neo").might).toBe(1);
+    await game.p2.tapRunes(4);
     await game.p2.cast("theirs");
     await game.settle();
     expect(game.p2.energy()).toBe(0);
