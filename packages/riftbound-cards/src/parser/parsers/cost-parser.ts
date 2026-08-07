@@ -108,8 +108,21 @@ export function parseAdditionalCostText(text: string): Partial<Cost> {
   // Build the cost object with all properties at once
   const recycleMatch = text.match(/Recycle\s+(\d+)\s+cards?/i);
   const hasKillFriendlyUnit = /Kill\s+a\s+friendly\s+unit/i.test(text);
+  // rule 827.1.c.2 — a non-resource cost worded "Discard a spell" / "Discard 1"
+  // (Mel ven-110a-166, ven-133-166): a typed discard names the card type the
+  // hand card must have, a numeric one just counts cards.
+  const discardTypeMatch = text.match(/Discard\s+(?:a|an|one|1)\s+(gear|unit|card|spell|legend)s?\b/i);
+  const discardCountMatch = discardTypeMatch ? null : text.match(/Discard\s+(\d+)\b/i);
 
   return {
+    ...(discardTypeMatch
+      ? ({
+          discard: { amount: 1, cardType: discardTypeMatch[1].toLowerCase() },
+        } as unknown as Partial<Cost>)
+      : undefined),
+    ...(discardCountMatch
+      ? ({ discard: { amount: Number.parseInt(discardCountMatch[1], 10) } } as unknown as Partial<Cost>)
+      : undefined),
     ...(recycleMatch ? { recycle: Number.parseInt(recycleMatch[1], 10) } : undefined),
     ...(hasKillFriendlyUnit
       ? {
