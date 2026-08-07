@@ -275,6 +275,8 @@ export interface RiftboundMoves {
     playerId: PlayerId;
     location: LocationId;
     paidAdditionalCost?: boolean;
+    /** rule 356.2.b (ven-023a-166) — card discarded to pay a "you may discard N" additional cost. */
+    discardId?: CardId;
   };
 
   // ============================================

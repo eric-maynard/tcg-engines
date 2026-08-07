@@ -3,6 +3,7 @@
  */
 
 import type {
+  CardId as CoreCardId,
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
@@ -12,6 +13,7 @@ import { createInteractionState, getTurnState } from "../../../chain";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { canPlayViaAmbush } from "../../../keywords/keyword-effects";
+import { removeFromBoard } from "../../../operations/leave-board";
 import { contestBattlefieldOnArrival } from "../movement/contest-arrival";
 import { cleanupAndFireDeaths, type PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
 import {
@@ -185,6 +187,21 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
     // be declared paid when the card has one and the pool can cover it.
     if (context.params.paidAdditionalCost === true) {
       const championId = championZoneCards[0];
+      // rule 356.2.b / 355.10.a.1 (ven-023a-166) — "you may discard N as an
+      // additional cost to play me" is offered on the Champion-Zone play too;
+      // the declared fodder must be another card in this player's own hand.
+      const discardCost =
+        championId === undefined ? undefined : getOptionalPlayCost(championId as string);
+      if (discardCost?.kind === "discard" && (discardCost.discard ?? 0) === 1) {
+        const discardId = context.params.discardId as string | undefined;
+        if (!discardId || discardId === (championId as string)) {
+          return false;
+        }
+        if (context.zones.getCardZone(discardId as CoreCardId) !== "hand") {
+          return false;
+        }
+        return context.cards.getCardOwner(discardId as CoreCardId) === context.params.playerId;
+      }
       const optional =
         championId === undefined ? undefined : championOptionalRuneCost(championId as string);
       if (!optional) {
@@ -247,6 +264,7 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
       playerId: PlayerId;
       location: string;
       paidAdditionalCost?: boolean;
+      discardId?: string;
     }[] = [];
     for (const cardId of championZoneCards) {
       // rule 824 (rule-id: unl-059-219) — a Champion-Zone play is still
@@ -286,6 +304,25 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
       // rule 356.2 / 355.10.a.1 (rule-id: unl-052-219) — offer the champion's
       // own optional additional cost here too; it is only a variant when the
       // pool can actually cover the base cost plus the extra.
+      // rule 356.2.b / 355.10.a.1 (ven-023a-166) — one paid variant per other
+      // card in hand for a "you may discard 1 as an additional cost" champion.
+      const discardCost = getOptionalPlayCost(cardId as string);
+      if (discardCost?.kind === "discard" && (discardCost.discard ?? 0) === 1) {
+        for (const fodder of context.zones.getCardsInZone(
+          "hand" as CoreZoneId,
+          context.playerId as CorePlayerId,
+        )) {
+          if ((fodder as string) === (cardId as string)) {
+            continue;
+          }
+          results.push({
+            discardId: fodder as string,
+            location: "base",
+            paidAdditionalCost: true,
+            playerId: context.playerId as PlayerId,
+          });
+        }
+      }
       const optional = championOptionalRuneCost(cardId as string);
       if (
         optional &&
@@ -311,7 +348,7 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
     return results;
   },
   reducer: (draft, context) => {
-    const { playerId, location, paidAdditionalCost } = context.params;
+    const { playerId, location, paidAdditionalCost, discardId } = context.params;
     const { zones, counters } = context;
 
     const championZoneCards = zones.getCardsInZone(
@@ -347,6 +384,28 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
             }
             paidOptional = true;
             paidAccelerate = optional.kind === "accelerate";
+          }
+        }
+
+        // rule 356.2.b / 357.2 (ven-023a-166) — a "you may discard N" additional
+        // cost is paid BEFORE the champion lands, so the fodder is already in the
+        // trash when the play trigger's "if you paid" rider is checked.
+        const discardCost = paidAdditionalCost
+          ? getOptionalPlayCost(championId as string)
+          : undefined;
+        if (discardCost?.kind === "discard" && discardId) {
+          const owner = context.cards.getCardOwner(discardId as CoreCardId);
+          const inHand = zones.getCardZone(discardId as CoreCardId) === "hand";
+          if (owner === playerId && inHand && discardId !== championId) {
+            // rule 422 — a discard paid as a cost is still a discard event.
+            removeFromBoard(
+              { cards: context.cards, counters, draft, zones },
+              [discardId as string],
+              "trash",
+              { by: playerId as string, kind: "discard", source: championId as string },
+              (event) => fireTriggers(event, { cards: context.cards, counters, draft, zones }),
+            );
+            paidOptional = true;
           }
         }
 

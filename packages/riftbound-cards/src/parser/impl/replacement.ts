@@ -35,6 +35,25 @@ export function parseAdditionalCostAbility(text: string): Ability | undefined {
     } as Ability;
   }
 
+  // rule 356.2.b (ven-023a-166) — "You may discard N as an additional cost to
+  // play me." The optional discard is chosen as the card is played and the
+  // discarded card hits the trash before the permanent lands (357.2); it never
+  // discounts the printed cost, so emit the same `{discard: N}` descriptor
+  // `getOptionalPlayCost` reads, with `optional: true`.
+  const youMayDiscardMatch = text.match(
+    /^You may discard\s+(\d+)\s+as an additional cost to play (?:me|this)\.?$/i,
+  );
+  if (youMayDiscardMatch) {
+    return {
+      effect: {
+        additionalCost: { discard: Number.parseInt(youMayDiscardMatch[1], 10) },
+        optional: true,
+        type: "additional-cost-option",
+      } as unknown as Effect,
+      type: "static",
+    } as Ability;
+  }
+
   // "You may pay COST as an additional cost to play me."
   // Captures the cost tokens so downstream consumers can read them.
   const youMayPayMatch = text.match(
