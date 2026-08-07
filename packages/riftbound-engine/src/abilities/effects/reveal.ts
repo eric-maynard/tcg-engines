@@ -5,7 +5,7 @@ import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { findAllReplacements, type ReplacementContext } from "../replacement-effects";
 import { type EffectHelpers } from "./_helpers";
-import { handle_look } from "./look";
+import { fireMandatoryRevealAbilities, handle_look } from "./look";
 
 /**
  * rule 369.1 / 370.1 (sfd-018-221 Void Hatchling) — "If you would reveal cards
@@ -126,6 +126,9 @@ export function handle_reveal(effect: ExecutableEffect, ctx: EffectContext, _h: 
     const top = ctx.zones
       .getCardsInZone("mainDeck" as CoreZoneId, actor as CorePlayerId)
       .slice(0, Math.max(1, revEff.amount ?? 1));
+    // rule 424 / 429.2 — the revealed cards' own mandatory on-reveal abilities
+    // resolve immediately, before the reveal's draw/recycle follow-up.
+    fireMandatoryRevealAbilities(top.map((c) => c as string), actor, ctx, _h);
     for (const cardId of top) {
       if (registry.get(cardId as string)?.cardType === revEff.until) {
         ctx.zones.moveCard({

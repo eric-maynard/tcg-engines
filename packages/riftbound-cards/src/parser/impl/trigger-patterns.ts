@@ -40,6 +40,13 @@ export const TRIGGER_PATTERNS: {
   // rule-id: ogn-067-298 — "to a battlefield" is captured (group 1) so the
   // parser can gate the trigger on a while-at-battlefield condition.
   { event: "play-self", pattern: /^When you play (?:me|this)(\s+to a battlefield)?,\s*/i },
+  // rule 424 — Reveal is a state applied only by a REVEAL instruction; drawing
+  // or looking is not revealing. "As I'm revealed" fires from inside the deck.
+  {
+    event: "reveal",
+    on: "self",
+    pattern: /^As (?:I'm|I am|you reveal me)(?: revealed)?(?: from (?:your|my|the top of your|the top of my) (?:Main )?[Dd]eck)?,\s*/i,
+  },
   { event: "become-mighty", on: "self", pattern: /^When I become \[Mighty\],\s*/i },
   { event: "attack", on: "self", pattern: /^When I attack,\s*/i },
   { event: "defend", on: "self", pattern: /^When I defend,\s*/i },
@@ -201,6 +208,9 @@ export const TRIGGER_PATTERNS: {
   },
   // Compound trigger: "When I attack or defend, ..."
   { event: "attack-or-defend", on: "self", pattern: /^When I attack or defend,\s*/i },
+  // rule-id: ven-135-166 (Kennen) — "When you play me or I attack": both halves
+  // name THIS card, so the compound stays `on: "self"`.
+  { event: "play-self-or-attack", on: "self", pattern: /^When you play (?:me|this) or I attack,\s*/i },
   // "When a friendly unit attacks or defends alone, ..."
   {
     event: "attack-or-defend-alone",

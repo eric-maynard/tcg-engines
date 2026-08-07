@@ -218,11 +218,32 @@ export function parseModifyMightEffect(text: string): ModifyMightEffect | Sequen
   let target: AnyTarget;
   const tribalMatch = targetStr.match(/^your\s+(.+)$/i);
   if (tribalMatch) {
-    const tribeName = tribalMatch[1].trim();
+    let tribeName = tribalMatch[1].trim();
+    // rule 740.1.a — "your other units" names every unit you control except
+    // me; "other" is an exclude-self marker, never a tribal tag.
+    const excludesSelf = /^other\s+/i.test(tribeName);
+    if (excludesSelf) {
+      tribeName = tribeName.replace(/^other\s+/i, "").trim();
+    }
+    if (/^units?$/i.test(tribeName)) {
+      return {
+        amount,
+        ...(durationStr ? { duration: "turn" as const } : {}),
+        ...(minimumStr !== undefined ? { minimum: Number.parseInt(minimumStr, 10) } : {}),
+        target: {
+          controller: "friendly",
+          ...(excludesSelf ? { excludeSelf: true } : {}),
+          quantity: "all",
+          type: "unit",
+        } as AnyTarget,
+        type: "modify-might",
+      } as ModifyMightEffect;
+    }
     // Rule 419.2.a / 355.10.d: "your <Tribe>s" is a criteria-based mass selection,
     // not a caster Choice — mark quantity:"all" so the play is legal with zero matches.
     target = {
       controller: "friendly",
+      ...(excludesSelf ? { excludeSelf: true } : {}),
       filter: { tag: tribeName },
       quantity: "all",
       type: "unit",

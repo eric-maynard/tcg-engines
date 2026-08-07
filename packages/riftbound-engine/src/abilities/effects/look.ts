@@ -30,6 +30,51 @@ function asYouLookAbility(cardId: string): unknown {
   return undefined;
 }
 
+/**
+ * rule 424 / 429.2 (sfd-175-221 Undertitan) — a MANDATORY "as I'm revealed from
+ * your deck" ability resolves immediately, from inside the deck, with no chain
+ * window and no prompt. Only self-scoped, non-optional reveal triggers qualify.
+ */
+export function mandatoryRevealEffects(cardId: string): unknown[] {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  const out: unknown[] = [];
+  for (const a of abilities as readonly {
+    type?: string;
+    optional?: boolean;
+    trigger?: { event?: string; on?: unknown };
+    effect?: unknown;
+  }[]) {
+    if (
+      a.type === "triggered" &&
+      a.optional !== true &&
+      a.trigger?.event === "reveal" &&
+      (a.trigger.on ?? "self") === "self" &&
+      a.effect !== undefined
+    ) {
+      out.push(a.effect);
+    }
+  }
+  return out;
+}
+
+/** Runs every mandatory on-reveal ability of the cards just revealed from `owner`'s deck. */
+export function fireMandatoryRevealAbilities(
+  revealedIds: readonly string[],
+  owner: string,
+  ctx: EffectContext,
+  h: EffectHelpers,
+): void {
+  for (const revealedId of revealedIds) {
+    for (const effect of mandatoryRevealEffects(revealedId)) {
+      h.executeEffect(effect as ExecutableEffect, {
+        ...ctx,
+        boundTargets: [revealedId as CoreCardId],
+        playerId: owner as CorePlayerId,
+        sourceCardId: revealedId as CoreCardId,
+      });
+    }
+  }
+}
 
 export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // rule-id: sfd-122-221-repeat-look — a look that fires while an earlier
@@ -68,9 +113,17 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // does not re-offer forever.
   const offered = ((effect as { revealOffered?: readonly string[] }).revealOffered ?? []) as readonly string[];
   if (from === "mainDeck") {
+    const handled = [...offered];
     for (const revealedId of topN) {
-      if (offered.includes(revealedId)) {
+      if (handled.includes(revealedId)) {
         continue;
+      }
+      // Mandatory on-reveal abilities resolve before any choice about the
+      // revealed cards is offered (rule 429.2).
+      const mandatory = mandatoryRevealEffects(revealedId);
+      if (mandatory.length > 0) {
+        fireMandatoryRevealAbilities([revealedId], looker, ctx, _h);
+        handled.push(revealedId);
       }
       const asYouLook = asYouLookAbility(revealedId);
       if (!asYouLook) {
@@ -82,7 +135,10 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         playerId: looker as CorePlayerId,
         sourceCardId: revealedId as CoreCardId,
         // The looking effect itself resumes after the answer either way.
-        then: { ...(effect as object), revealOffered: [...offered, revealedId] },
+        then: {
+          ...(effect as object),
+          revealOffered: handled.includes(revealedId) ? handled : [...handled, revealedId],
+        },
         type: "confirm",
         // biome-ignore lint/suspicious/noExplicitAny: branded id types
       } as any;
@@ -148,6 +204,12 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     onPicked,
     ...(onRest ? { onRest } : {}),
     ...(playEnergyReduction !== undefined ? { playEnergyReduction } : {}),
+    // rule 355.2.b (sfd-170-221) — "If it is a unit, you may play it here":
+    // the source's own battlefield is a valid location for the instructed
+    // play, even a contested one the player does not control.
+    ...(onPicked === "play" && (ctx.sourceZone ?? "").startsWith("battlefield-")
+      ? { playHere: ctx.sourceZone }
+      : {}),
     // rule-id: ogn-115-298 — "plays those cards, ignoring Energy costs".
     ...(onPicked === "play" && lookEff.ignoreEnergyCost ? { playIgnoreEnergy: true } : {}),
     // rule 356.1.b.1 (ogn-242-298) — "play it, ignoring its cost": nothing is
