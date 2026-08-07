@@ -26,6 +26,9 @@ const abilities: Ability[] = [
       onRest: "draw",
       optional: true,
       reduceCost: { energy: 2 },
+      // rule 424 — this is a public REVEAL from a deck, not a private look, so
+      // reveal replacements (Void Hatchling, sfd-018-221) can see it.
+      reveal: true,
       type: "look",
     } as unknown as Effect,
     timing: "action",

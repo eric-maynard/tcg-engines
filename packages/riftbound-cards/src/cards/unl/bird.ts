@@ -11,4 +11,7 @@ export const bird: UnitCard = {
   rarity: "common",
   rulesText: "[Deflect] (Opponents must pay [rainbow] to choose me with a spell or ability.)",
   setId: "UNL",
+  // rule 187.7: a 1 [Might] Bird token carries the Bird tag, so tag-filtered
+  // auras (Brush: "Bird … units here have +1 [Might]") see it.
+  tags: ["Bird"],
 };
