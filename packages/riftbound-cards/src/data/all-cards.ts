@@ -808,6 +808,29 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-004-166": {
     abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
   },
+  // rule 383.2.a.1 / 442.1 — Tomb-Raider Barbara: "When you play me, if you
+  // control 7 or more runes, choose an enemy gear. If it's [Empowered],
+  // disempower it. Otherwise, kill it." The rune rider sits inside the trigger
+  // condition (below 7 runes nothing reaches the chain); the branch is decided
+  // at resolution from the CHOSEN gear's status, so the conditional carries the
+  // caster-chosen target and the branches carry none. The parser leaves the
+  // whole clause as a `raw` no-op, so it is declared here.
+  "ven-037-166": {
+    abilities: [
+      {
+        condition: { amount: 7, type: "runes-at-least" },
+        effect: {
+          condition: { type: "target-empowered" },
+          else: { type: "kill" },
+          target: { controller: "enemy", type: "gear" },
+          then: { type: "disempower" },
+          type: "conditional",
+        },
+        trigger: { event: "play-self" },
+        type: "triggered",
+      },
+    ],
+  },
   // rule 356.3 — Helm of Suppression: "Opponents' spells cost [1] more. If this
   // is [Empowered], they cost [1][rainbow] more instead." The parser has no
   // "instead" cost-increase shape, so both tiers are declared here as mutually
@@ -832,6 +855,26 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
           target: { controller: "enemy", type: "spell" },
           type: "cost-increase",
         },
+        type: "static",
+      },
+    ],
+  },
+  // rule 827.1.c.2 — Legion Marauder: "[Empower] — [1] or [body]". The parser
+  // has no either/or activation-cost shape, so the two complete costs are
+  // declared as `costOptions` (exactly one of them is paid; see
+  // activate-ability.ts selectCostOption) alongside the [Empowered] +1 static.
+  "ven-074-166": {
+    abilities: [
+      {
+        cost: {},
+        costOptions: [{ energy: 1 }, { power: ["body"] }],
+        effect: { target: "self", type: "empower" },
+        restrictions: [{ type: "not-empowered" }],
+        type: "activated",
+      },
+      {
+        condition: { type: "while-empowered" },
+        effect: { amount: 1, target: { type: "unit" }, type: "modify-might" },
         type: "static",
       },
     ],
