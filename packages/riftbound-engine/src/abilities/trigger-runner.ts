@@ -13,6 +13,7 @@ import type {
 import { addToChain, createInteractionState } from "../chain/chain-state";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { getLKI, getLeavingBatch } from "../operations/leave-board";
+import { scoreWithinConditionMet } from "../operations/score-within";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { DelayedTrigger } from "../types/game-state";
 import type { EffectContext, ExecutableEffect } from "./effect-executor";
@@ -329,6 +330,16 @@ export function evaluateTriggerCondition(
     // below N XP the ability simply does not trigger.
     const threshold = (c as { threshold?: number }).threshold ?? 0;
     return (state.players[controllerId]?.xp ?? 0) >= threshold;
+  }
+  if (c.type === "score-within") {
+    // rule 383.2.a.1 (rule-id: unl-116-219, Poppy Paragon) — "if an opponent's
+    // score is within N points of the Victory Score" sits in the trigger
+    // Condition: out of range the ability is never put on the chain at all.
+    return scoreWithinConditionMet(
+      c as { points?: number; range?: number; whose?: string },
+      state as never,
+      controllerId,
+    );
   }
   if (c.type === "paid-additional-cost") {
     // Zaun Punk (sfd-160-221) et al: the payoff fires only when the optional
