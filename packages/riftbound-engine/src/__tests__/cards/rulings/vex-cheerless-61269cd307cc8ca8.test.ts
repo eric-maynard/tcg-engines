@@ -83,7 +83,7 @@ describe("Ruling 61269cd307cc8ca8 — Hidden cards flipped against a Vex in comb
   // Expected (356.1 → 356.3): base cost ignored (0), then Vex's +[1][rainbow] increase applies → the flip
   // costs exactly 1 energy + 1 power; P2's 1E/1R pool is drained to 0/0 when the Blade hits the chain.
   // Actual: the engine plays hidden cards for a flat 0 and never applies Vex's enemy-spell surcharge.
-  test.failing("BUG: ruling 61269cd307cc8ca8 — enemy Vex attacking: flipping Hidden Blade costs [1][rainbow]; P2's 1E/1R pool is drained (engine charges 0)", async () => {
+  test("enemy Vex attacking: flipping Hidden Blade costs [1][rainbow]; P2's 1E/1R pool is drained", async () => {
     const game = await vexAttacks({ energy: 1, rainbow: 1 }).build();
     await game.p1.move("vex", "bf1");
     await game.p1.passFocus();
@@ -94,7 +94,7 @@ describe("Ruling 61269cd307cc8ca8 — Hidden cards flipped against a Vex in comb
 
   // Expected: with an empty pool P2 cannot afford the [1][rainbow] surcharge, so the flip is not legal
   // and the Blade stays facedown. Actual: the reveal is offered and succeeds for free.
-  test.failing("BUG: ruling 61269cd307cc8ca8 — enemy Vex attacking: with 0 energy / 0 power P2 CANNOT flip the hidden Blade at all", async () => {
+  test("enemy Vex attacking: with 0 energy / 0 power P2 CANNOT flip the hidden Blade at all", async () => {
     const game = await vexAttacks({ energy: 0 }).build();
     await game.p1.move("vex", "bf1");
     await game.p1.passFocus();
@@ -107,7 +107,7 @@ describe("Ruling 61269cd307cc8ca8 — Hidden cards flipped against a Vex in comb
 
   // Expected: with a larger pool only the surcharge is taken — 3E/2R → 2E/1R (no discount step applies,
   // 356.4). Actual: nothing is deducted.
-  test.failing("BUG: ruling 61269cd307cc8ca8 — enemy Vex attacking: from 3E/2R exactly [1] and 1 power are taken (→ 2E/1R)", async () => {
+  test("enemy Vex attacking: from 3E/2R exactly [1] and 1 power are taken (→ 2E/1R)", async () => {
     const game = await vexAttacks({ energy: 3, rainbow: 2 }).build();
     await game.p1.move("vex", "bf1");
     await game.p1.passFocus();

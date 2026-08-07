@@ -12,6 +12,8 @@ import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../.
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { addToChain, createInteractionState, getTurnState } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { computeStaticCostIncrease } from "../../../operations/static-cost-reduction";
+import type { CostReductionContext } from "../../../operations/static-cost-reduction";
 import { getBattlefieldZoneId, getFacedownZoneId } from "../../../zones/zone-configs";
 import {
   hasStaticEffect,
@@ -254,6 +256,135 @@ function payGrantedAccelerate(
     if ((pool.power[rainbow] ?? 0) > 0) {
       pool.power[rainbow] = Math.max(0, (pool.power[rainbow] ?? 0) - 1);
     }
+  }
+}
+
+/**
+ * rule 356.1 / 356.3 / 356.4 (rule-id: sfd-146-221) — playing a card from
+ * Hidden "ignores its base cost" (base → 0, rule 811.1.b / 356.1), but cost
+ * INCREASES from opponents' statics are still applied on top (356.3), and no
+ * discount may be applied to what is left (356.4). So the price of a flip is
+ * exactly the static increase — e.g. Vex's "enemy spells cost [1][rainbow]
+ * more" makes a facedown flip cost [1][rainbow].
+ */
+function revealSurcharge(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  ctx: {
+    cards: {
+      getCardController?: (id: CoreCardId) => string | undefined;
+      getCardMeta?: (id: CoreCardId) => unknown;
+      getCardOwner: (id: CoreCardId) => string | undefined;
+      updateCardMeta?: (id: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
+    };
+    zones: { getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => readonly CoreCardId[] };
+  },
+): { energy: number; pips: string[] } {
+  const increase = computeStaticCostIncrease(
+    {
+      cards: {
+        getCardController: ctx.cards.getCardController,
+        getCardMeta: (id: CoreCardId) =>
+          ctx.cards.getCardMeta?.(id) as Partial<RiftboundCardMeta> | undefined,
+        getCardOwner: ctx.cards.getCardOwner,
+        updateCardMeta: (id: CoreCardId, meta: Partial<RiftboundCardMeta>) =>
+          ctx.cards.updateCardMeta?.(id, meta),
+      },
+      draft: state,
+      zones: ctx.zones,
+    } as CostReductionContext,
+    playerId,
+    cardId,
+  );
+  const pips: string[] = [];
+  for (const [domain, count] of Object.entries(increase.power)) {
+    for (let i = 0; i < (count ?? 0); i++) {
+      pips.push(domain);
+    }
+  }
+  return { energy: Math.max(0, increase.energy), pips };
+}
+
+/** Remaining Power per domain, as a mutable tally. */
+function powerTally(pool: { power: Partial<Record<string, number>> } | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [d, v] of Object.entries(pool?.power ?? {})) {
+    if (typeof v === "number" && v > 0) {
+      out[d] = v;
+    }
+  }
+  return out;
+}
+
+/**
+ * rule 135.2.e.5.a — a named-domain pip is payable from that domain or from
+ * pooled [rainbow]; a [rainbow] pip is payable from ANY domain. Returns the
+ * domains actually spent, or undefined when the pool can't cover the cost.
+ */
+function planPipPayment(
+  remaining: Record<string, number>,
+  pips: readonly string[],
+): string[] | undefined {
+  const spent: string[] = [];
+  for (const pip of pips) {
+    if (pip === "rainbow") {
+      const key = Object.entries(remaining)
+        .filter(([, v]) => v > 0)
+        .sort(([, a], [, b]) => b - a)[0]?.[0];
+      if (key === undefined) {
+        return undefined;
+      }
+      remaining[key] -= 1;
+      spent.push(key);
+      continue;
+    }
+    if ((remaining[pip] ?? 0) > 0) {
+      remaining[pip] -= 1;
+      spent.push(pip);
+      continue;
+    }
+    if ((remaining.rainbow ?? 0) > 0) {
+      remaining.rainbow -= 1;
+      spent.push("rainbow");
+      continue;
+    }
+    return undefined;
+  }
+  return spent;
+}
+
+/** rule 356.3 — can this player pay the flip surcharge? */
+function canAffordRevealSurcharge(
+  state: RiftboundGameState,
+  playerId: string,
+  cost: { energy: number; pips: readonly string[] },
+): boolean {
+  if (cost.energy === 0 && cost.pips.length === 0) {
+    return true;
+  }
+  const pool = state.runePools[playerId];
+  if (!pool || pool.energy < cost.energy) {
+    return false;
+  }
+  return planPipPayment(powerTally(pool), cost.pips) !== undefined;
+}
+
+/** rule 356.3 — deduct the flip surcharge from the player's pool. */
+function payRevealSurcharge(
+  draft: RiftboundGameState,
+  playerId: string,
+  cost: { energy: number; pips: readonly string[] },
+): void {
+  const pool = draft.runePools[playerId];
+  if (!pool) {
+    return;
+  }
+  pool.energy = Math.max(0, pool.energy - cost.energy);
+  const spent = planPipPayment(powerTally(pool), cost.pips);
+  for (const domain of spent ?? []) {
+    const key = domain as keyof typeof pool.power;
+    pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
   }
 }
 
@@ -530,6 +661,17 @@ export const revealHidden: Defs["revealHidden"] = {
     ) {
       return false;
     }
+    // rule 356.1 / 356.3 (rule-id: sfd-146-221) — the flip ignores the base
+    // cost but must still pay any static increase an opponent imposes.
+    if (
+      !canAffordRevealSurcharge(
+        state,
+        context.params.playerId as string,
+        revealSurcharge(state, context.params.playerId as string, context.params.cardId as string, context),
+      )
+    ) {
+      return false;
+    }
     return true;
   },
   // rule-id: sfd-017-221 — Rule 723.1.c.3: surface hidden cards as playable
@@ -553,6 +695,17 @@ export const revealHidden: Defs["revealHidden"] = {
         }
         // rule 811.1.d — no legal target at the facedown battlefield ⇒ not offered.
         if (!hiddenSpellHasLegalTargets(state, hid as string, playerId, meta.hiddenAt, context)) {
+          continue;
+        }
+        // rule 356.3 (rule-id: sfd-146-221) — an unaffordable static surcharge
+        // makes the flip illegal, so don't offer it.
+        if (
+          !canAffordRevealSurcharge(
+            state,
+            playerId,
+            revealSurcharge(state, playerId, hid as string, context),
+          )
+        ) {
           continue;
         }
         results.push({ cardId: hid as string, playerId });
@@ -586,6 +739,10 @@ export const revealHidden: Defs["revealHidden"] = {
     const registry = getGlobalCardRegistry();
     const def = registry.get(cardId);
     const cardType = def?.cardType;
+
+    // rule 356.1 / 356.3 / 356.4 (rule-id: sfd-146-221) — base cost ignored,
+    // opponents' static increases still paid, no discounts applied.
+    payRevealSurcharge(draft, playerId, revealSurcharge(draft, playerId, cardId, { cards, zones }));
 
     // Clear hidden state — the card is no longer facedown regardless
     // Of its eventual destination.
