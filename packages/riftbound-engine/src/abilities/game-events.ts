@@ -82,7 +82,10 @@ export type GameEvent =
   // unit is at a battlefield ("When you [Stun] an enemy unit at a battlefield").
   | { type: "stun"; cardId: string; owner?: string; stunnedBy?: string; battlefieldId?: string }
   | { type: "grant-keyword"; cardId: string; keyword: string }
-  | { type: "win-combat"; cardId: string; battlefieldId: string }
+  // rule 466.3.a — emitted once per surviving unit of the winning player;
+  // `playerId` is that player, so "When you win a combat" (on: "controller")
+  // only matches their cards.
+  | { type: "win-combat"; cardId: string; battlefieldId: string; playerId?: string }
   // rule-id: unl-079-219 — fired whenever a showdown (combat OR non-combat)
   // opens at a battlefield ("When a showdown begins here").
   | { type: "showdown-begin"; battlefieldId: string; playerId: string; isCombat: boolean }
