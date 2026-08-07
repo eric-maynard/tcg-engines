@@ -148,7 +148,7 @@ describe("Ornn, Blacksmith (sfd-058-221)", () => {
     expect(game.p1.trash()).toEqual([]);
   });
 
-  test.failing("BUG: playing Ornn from the Champion Zone is still 'playing me' (355.10.a.1) — the look trigger must fire", async () => {
+  test("playing Ornn from the Champion Zone is still 'playing me' (355.10.a.1) — the look trigger must fire", async () => {
     // Expected: after playChampion the triggered ability is on the chain / a reveal pick appears.
     // Actual: cost is paid and Ornn lands in base, but no trigger at all.
     const game = await scenario()

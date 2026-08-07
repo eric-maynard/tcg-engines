@@ -9,6 +9,7 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { createInteractionState, getTurnState } from "../../../chain";
+import { fireTriggers } from "../../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import {
   hasStaticEffect,
@@ -132,6 +133,22 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
           replacedReady || hasStaticEffect(championId as string, "enter-ready");
         if (!entersReady) {
           counters.setFlag(championId, "exhausted", true);
+        }
+
+        // rule 355.10.a.1: playing a champion from the Champion Zone is still
+        // "playing" it — "when you play me" triggers must fire exactly as they
+        // do for a play from hand.
+        fireTriggers(
+          { cardId: championId, playerId, type: "play-self" },
+          { cards: context.cards, counters, draft, zones },
+        );
+        fireTriggers(
+          { cardId: championId, cardType: "unit", playerId, type: "play-card" },
+          { cards: context.cards, counters, draft, zones },
+        );
+
+        if (draft.cardsPlayedThisTurn) {
+          draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
         }
       }
     }

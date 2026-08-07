@@ -395,6 +395,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                     cardId,
                     targetZoneId: "trash" as CoreZoneId,
                   });
+                  // rule 186.1 — a token in a non-board zone ceases to exist.
+                  // The Beginning-Phase kill runs outside performCleanup, so
+                  // sweepOffBoardTokens would not see it until the next move.
+                  if ((cardId as string).startsWith("token-")) {
+                    context.zones.removeCardFromGame?.({ cardId });
+                  }
                 }
               }
 
