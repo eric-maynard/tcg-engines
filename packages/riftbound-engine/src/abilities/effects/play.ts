@@ -72,6 +72,14 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     playFromTrash(effect, ctx);
     return;
   }
+  // rule-id: unl-148-219 (rules 355.10 / 397) — "Play a unit banished with
+  // this. (You must pay its costs.)": banishment is not a board zone the
+  // target resolver scans, so gather the linked candidates the controller can
+  // actually pay for and let them choose one.
+  if (from === "banishment" && typeof (effect as { target?: unknown }).target === "object") {
+    playFromBanishment(effect, ctx);
+    return;
+  }
   // rule-id: unl-179-219 (rule 356.1.b) — "play a unit from your hand to your
   // base, ignoring its Energy cost": the hand is not a board zone, and the
   // destination and remaining (Power) cost are both fixed, so the controller
@@ -681,6 +689,83 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
       (effect as { recycleAfter?: unknown }).recycleAfter === true,
       ctx,
     );
+  }
+}
+
+/**
+ * rule-id: unl-148-219 (Cursed Sarcophagus) — "Play a unit banished with this.
+ * (You must pay its costs.)"
+ *
+ * rule 397: `linkedToSource` limits the candidates to the objects this card's
+ * own linked trigger banished (`exiledByThis`), so a card that was already in
+ * banishment, or one banished by anything else, is never offered.
+ * rule 349/356: nothing is waived — a candidate the controller cannot pay for
+ * in full is not a legal pick, and the pick charges the cost. The unit stays in
+ * banishment until it enters the base exhausted (rule 143.4), which is what the
+ * shared off-board pick path (`playFrom: "trash"`) already does.
+ */
+function playFromBanishment(effect: ExecutableEffect, ctx: EffectContext): void {
+  const registry = getGlobalCardRegistry();
+  const target = (effect as { target?: unknown }).target as { type?: string } | undefined;
+  const ignoreCost = (effect as { ignoreCost?: unknown }).ignoreCost;
+  const extras: CostExtras =
+    ignoreCost === true
+      ? { ignoreBaseCost: true }
+      : ignoreCost === "energy"
+        ? { ignoreEnergyCost: true }
+        : {};
+  const linked =
+    (effect as { linkedToSource?: unknown }).linkedToSource === true
+      ? new Set(
+          ((
+            ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId) as
+              | { exiledByThis?: readonly string[] }
+              | undefined
+          )?.exiledByThis ?? []) as readonly string[],
+        )
+      : undefined;
+  const banishment = ctx.zones.getCardsInZone(
+    "banishment" as CoreZoneId,
+    ctx.playerId as CorePlayerId,
+  ) as readonly string[];
+  const candidates = banishment.filter((id) => {
+    if (linked !== undefined && !linked.has(id)) {
+      return false;
+    }
+    const cardType = registry.getCardType(id);
+    if (target?.type && target.type !== "card" && target.type !== cardType) {
+      return false;
+    }
+    return canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta);
+  });
+  let chosen = ctx.boundTargets?.find((id) => candidates.includes(id));
+  if (chosen === undefined) {
+    if (candidates.length === 0) {
+      return;
+    }
+    if (!ctx.draft.pendingChoice) {
+      ctx.draft.pendingChoice = {
+        onPicked: "play",
+        optional: true,
+        // The shared off-board play path: the picked card is left where it is
+        // and moved straight onto the board when the play finalizes.
+        playFrom: "trash",
+        playIgnoreCost: extras.ignoreBaseCost === true,
+        playIgnoreEnergy: extras.ignoreEnergyCost === true,
+        prompter: ctx.playerId,
+        remaining: 1,
+        revealed: [...candidates],
+        revealer: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        type: "reveal-and-pick",
+      } as typeof ctx.draft.pendingChoice;
+      return;
+    }
+    chosen = candidates[0] as string;
+  }
+  deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
+  if (registry.getCardType(chosen) === "unit") {
+    enterUnitFromEffect(chosen, "base", ctx);
   }
 }
 

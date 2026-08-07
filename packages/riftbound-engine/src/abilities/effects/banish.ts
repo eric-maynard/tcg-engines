@@ -18,7 +18,13 @@ export function handle_banish(effect: ExecutableEffect, ctx: EffectContext, _h: 
   // When the source later leaves the board.
   const banishRegistry = getGlobalCardRegistry();
   const banishSourceDef = banishRegistry.get(ctx.sourceCardId);
-  if (banishSourceDef?.tracksExiledCards === true && targets.length > 0) {
+  // rule 397 (rule-id: unl-148-219) — a Linked ability ("play a unit banished
+  // WITH THIS") needs the same list without the Zero Drive's return-on-leave
+  // behaviour, so the banish effect itself can ask for the tagging.
+  const tracksLinked =
+    banishSourceDef?.tracksExiledCards === true ||
+    (effect as { trackLinked?: unknown }).trackLinked === true;
+  if (tracksLinked && targets.length > 0) {
     const sourceMeta = ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId) as
       | Partial<RiftboundCardMeta>
       | undefined;

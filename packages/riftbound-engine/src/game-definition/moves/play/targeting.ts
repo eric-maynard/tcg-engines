@@ -383,7 +383,9 @@ function counterCtx(ctx: Parameters<typeof resolveTarget>[1]): CounterTargetCont
 export function offBoardPlayZone(effect: SpellEffectTargetShape | undefined): string | undefined {
   if (effect?.type !== "play") return undefined;
   const from = (effect as { from?: unknown }).from;
-  if (from !== "trash" && from !== "hand") return undefined;
+  // rule-id: unl-148-219 — banishment is off-board too ("play a unit banished
+  // with this").
+  if (from !== "trash" && from !== "hand" && from !== "banishment") return undefined;
   const tgt = effect.target;
   // "play THIS from your trash" (a bare `self`) names a known card.
   if (tgt === undefined || typeof tgt === "string") return undefined;
@@ -413,6 +415,13 @@ function offBoardPlayHasCandidates(
   zone: string,
   ctx: Parameters<typeof resolveTarget>[1],
 ): boolean {
+  // rule 358.3.a (rule-id: unl-148-219) — a Linked play ("a unit banished WITH
+  // THIS") reads its candidate list only as the ability RESOLVES; with nothing
+  // linked the instruction is simply impossible and skipped, so it never blocks
+  // activating the ability.
+  if ((effect as { linkedToSource?: unknown }).linkedToSource === true) {
+    return true;
+  }
   const tgt = effect.target as { type?: string } | undefined;
   const registry = getGlobalCardRegistry();
   const cards = ctx.zones.getCardsInZone(

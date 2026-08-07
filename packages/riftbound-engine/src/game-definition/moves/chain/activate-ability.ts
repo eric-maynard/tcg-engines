@@ -28,7 +28,12 @@ import { removeFromBoard } from "../../../operations/leave-board";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getDeflectSurcharge, getPotentialRuneEnergy } from "../play/cost";
 import type { SpellEffectTargetShape } from "../play/targeting";
-import { findSequenceLeadTarget, spellEffectHasLegalTargets } from "../play/targeting";
+import {
+  findSequenceLeadTarget,
+  offBoardPlayIsCasterChosen,
+  offBoardPlayZone,
+  spellEffectHasLegalTargets,
+} from "../play/targeting";
 import { buildEffectContext, canAffordPower } from "./effect-context";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -276,6 +281,14 @@ function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
     t = findSequenceLeadTarget(effect as SpellEffectTargetShape);
   }
   if (!t || typeof t !== "object") {
+    return undefined;
+  }
+  // rule 355.10.a (rule-id: unl-148-219 / ogn-198-298) — an off-board play
+  // ("play a unit banished with this") names a card in that zone, not a board
+  // object: the choice belongs to the ability's resolution, so it is not a
+  // caster-chosen target to enumerate at finalization.
+  const offBoard = effect as SpellEffectTargetShape | undefined;
+  if (offBoardPlayZone(offBoard) !== undefined && !offBoardPlayIsCasterChosen(offBoard)) {
     return undefined;
   }
   const d = t as TargetDescriptor & { quantity?: unknown };
