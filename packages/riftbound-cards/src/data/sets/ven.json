@@ -4466,7 +4466,6 @@
             "target": "self",
             "type": "ready"
           },
-          "timing": "action",
           "type": "activated"
         }
       ],

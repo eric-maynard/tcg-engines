@@ -189,6 +189,95 @@ function costChoosesObjects(cost: unknown): boolean {
 }
 
 /**
+ * rule 383.3.b.1 (rule-id: ven-082-166) — "disempower something you control TO
+ * empower …": a cost written INSIDE the instructions is paid when the item is
+ * FINALIZED, before anyone gets Priority; only the payoff waits for resolution.
+ * Such a step is flagged `costStep: true` in the ability payload. The payment it
+ * names is the controller's own choice, so it is asked here and performed, and
+ * the paid steps then leave the stored effect: resolution runs only what is
+ * left, choosing its own Game Objects (rule 402.2).
+ * Returns true when it raised a prompt (the payment is made on the answer).
+ */
+function payFinalizationCostSteps(
+  draft: RiftboundGameState,
+  ctx: FinalizationContext,
+  itemId: string,
+): boolean {
+  const live = chainItems(draft)?.find((it) => it.id === itemId);
+  const effect = live?.effect as { effects?: unknown[]; type?: string } | undefined;
+  if (!live || effect?.type !== "sequence" || !Array.isArray(effect.effects)) {
+    return false;
+  }
+  const steps = [...effect.effects] as Record<string, unknown>[];
+  let paid = 0;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i] as Record<string, unknown>;
+    if (step?.costStep !== true) {
+      break;
+    }
+    let bound = live.targets?.[i];
+    const descriptor = step.target as TargetDescriptor | undefined;
+    if (bound === undefined && typeof descriptor === "object" && descriptor !== null) {
+      const options = resolveTarget({ ...descriptor, quantity: "all" }, {
+        cards: ctx.cards,
+        choosing: true,
+        draft,
+        playerId: live.controller,
+        sourceCardId: live.cardId,
+        sourceZone: ctx.zones.getCardZone?.(live.cardId as CoreCardId),
+        zones: ctx.zones,
+      } as Parameters<typeof resolveTarget>[1]) as string[];
+      if (options.length === 0) {
+        break;
+      }
+      if (
+        options.length > 1 ||
+        (descriptor as { promptWhenSingle?: boolean }).promptWhenSingle === true
+      ) {
+        draft.pendingChoice = {
+          bindSlotIndex: i,
+          bindToChainItemId: itemId,
+          effect: step as never,
+          options: options as never,
+          playerId: live.controller as never,
+          remaining: 1,
+          sourceCardId: live.cardId as never,
+          type: "choose-target",
+        };
+        return true;
+      }
+      bound = options[0] as string;
+      patchItem(draft, itemId, { targets: [...(live.targets ?? []), bound] });
+    }
+    // Performed through the ordinary resolution path (a one-instruction item) so
+    // the payment runs through the same handlers, events and cleanup.
+    executeResolvedItem(
+      {
+        ...live,
+        effect: step as never,
+        optional: false,
+        targets: bound === undefined ? undefined : [bound],
+      } as ChainItem,
+      draft,
+      toResolveContext(ctx),
+    );
+    paid += 1;
+  }
+  if (paid > 0) {
+    const latest = chainItems(draft)?.find((it) => it.id === itemId);
+    const remaining = steps.slice(paid);
+    const remainingTargets = (latest?.targets ?? []).slice(paid);
+    patchItem(draft, itemId, {
+      effect: (remaining.length === 1
+        ? remaining[0]
+        : { ...((latest?.effect ?? effect) as object), effects: remaining }) as never,
+      targets: remainingTargets.length > 0 ? remainingTargets : undefined,
+    });
+  }
+  return false;
+}
+
+/**
  * rule 402.2 — the distinct caster-chosen single-pick slots of a sequence that
  * names MORE than one Game Object ("return another friendly unit and an enemy
  * unit", sfd-132-221). Single-slot effects go through `executeResolvedItem`'s
@@ -385,6 +474,12 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
       ) {
         return;
       }
+    }
+
+    // Step 3 — rule 383.3.b.1: base costs written inside the instructions are
+    // paid now, with the payment the controller just chose.
+    if (payFinalizationCostSteps(draft, ctx, item.id)) {
+      return;
     }
 
     // Step 4 — rule 337.4: finalized; Priority already sits with the newest

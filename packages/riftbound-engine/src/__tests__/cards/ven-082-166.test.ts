@@ -184,7 +184,7 @@ describe("Profiteer (ven-082-166)", () => {
     expect(sawCostPrompt).toBe(true);
   });
 
-  test.failing("BUG: timing (383.3.b.1) — the disempower is paid when the trigger is finalized, before P2 gets priority; the empower waits for resolution", async () => {
+  test("timing (383.3.b.1) — the disempower is paid when the trigger is finalized, before P2 gets priority; the empower waits for resolution", async () => {
     // Expected: after P1's finalization answers, chain = [Profiteer trigger], payer already un-Empowered,
     // legend not yet Empowered; P2 may respond; after both pass the legend is Empowered.
     const game = await board().build();

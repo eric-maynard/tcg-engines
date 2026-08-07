@@ -217,7 +217,7 @@ describe("Dominus (ven-142-166)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: the granted Ready ability is modelled with timing:'action' and offered during a showdown, but its text has no [Action][>] (806.1.d / 310.1.a / 381) — inside a showdown (P1 holding Focus, 2 power) it must NOT be activatable; back in Neutral Open after combat it is", async () => {
+  test("the granted Ready ability is modelled with timing:'action' and offered during a showdown, but its text has no [Action][>] (806.1.d / 310.1.a / 381) — inside a showdown (P1 holding Focus, 2 power) it must NOT be activatable; back in Neutral Open after combat it is", async () => {
     // Expected: "[rainbow][rainbow]: Ready me." is a plain activated ability → controller's turn, Neutral Open only.
     // Actual: `activateAbility:striker#1` is in P1's showdown menu.
     const game = await scenario()

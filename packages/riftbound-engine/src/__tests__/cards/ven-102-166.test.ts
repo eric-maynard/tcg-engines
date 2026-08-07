@@ -103,7 +103,7 @@ describe("Ravenbloom Prefect (ven-102-166)", () => {
     expect(game.p2.gear()).toEqual([]);
   });
 
-  test.failing("BUG: 'banish me' is the trigger's cost (383.3.b) — once P1 opts in, the Prefect is already gone while the ability still waits on the chain for P2's response", async () => {
+  test("BUG: 'banish me' is the trigger's cost (383.3.b) — once P1 opts in, the Prefect is already gone while the ability still waits on the chain for P2's response", async () => {
     // Expected: after P1 accepts, prefect ∈ P1 banishment while the chain item is still pending
     // (P2 has priority) and the trinket is still on the board until resolution.
     // Actual: the opt-in is only asked at resolution and banishes nothing.
