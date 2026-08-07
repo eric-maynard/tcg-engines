@@ -372,6 +372,13 @@ export function executeResolvedItem(
   if (typeof trigEvt?.diedAt === "string" && trigEvt.cardId === resolved.cardId) {
     (baseCtx as { sourceZone?: string }).sourceZone = trigEvt.diedAt;
   }
+  // rule 359.3.f.3 (unl-082-219, the rule's own example) — "when I move from a
+  // location, … there": "there" is the ORIGIN, snapshotted when the move
+  // happened. Expose it so `location: "origin"` effects ignore where the mover
+  // ended up (or that it was bounced away in response).
+  if (typeof trigEvt?.from === "string") {
+    (baseCtx as { triggerFrom?: string }).triggerFrom = trigEvt.from;
+  }
   const triggerZones = trigEvt
     ? [trigEvt.from, trigEvt.to].filter((z): z is string => typeof z === "string")
     : undefined;
@@ -763,7 +770,17 @@ export function executeResolvedItem(
   // rule 359.3.e.4 (sfd-162-221) — when the sequence itself owns the target
   // ("Kill a unit …. If it was an enemy unit, …"), every instruction depends on
   // that one choice, so an illegal target means the whole item does nothing.
-  if (!mistargeted || (effect.type === "sequence" && effect.target === undefined)) {
+  // rule 359.3.e.5 / 359.3.e.8 (unl-072-219) — "…and 1 to each other enemy unit
+  // there" is its own instruction, aimed at the battlefield chosen when the
+  // spell was played. Losing the primary unit mistargets only that instruction;
+  // the splash still resolves on the units left behind.
+  const splashRider =
+    mistargeted &&
+    typeof (effect as { splashOthers?: unknown }).splashOthers === "number" &&
+    typeof (effect as { _splashZone?: unknown })._splashZone === "string";
+  if (splashRider) {
+    executeEffect({ ...(effect as object), _splashOnly: true } as ExecutableEffect, effectCtx);
+  } else if (!mistargeted || (effect.type === "sequence" && effect.target === undefined)) {
     executeEffect(effect, effectCtx);
   }
   firePlayedCardTriggers(resolved, draft, context, preLen);

@@ -10,39 +10,36 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * for this ability.
  *
  * Activated ability:
- * - Cost: exhaust a friendly unit (chosen) AND exhaust self
+ * - Cost: [Exhaust] this gear.
  * - Timing: action
- * - Effect: move another friendly unit to the chosen (exhausted) unit's
- *   location. Uses a pending-value binding so the move target references
- *   the chosen unit from the cost step.
- *
- * FIXME: The existing `Cost` shape doesn't expose the chosen target to
- * the effect. We model this via a `variable: "exhausted-target"` location
- * reference the engine must resolve at execution time.
+ * - Effect: `to: "exhausted-ally"` — the engine exhausts a ready friendly unit
+ *   other than the moved one (rule 355.10.c.1: chosen, not targeted) and that
+ *   unit's location IS the destination (rule 449.1), so a battlefield where you
+ *   exhausted nothing can never be reached and a base can.
  */
 const abilities: Ability[] = [
   {
     cost: {
       exhaust: true,
-      spend: {
-        amount: 1,
-        target: { controller: "friendly", type: "unit" },
-        type: "rune",
-      },
     },
     effect: {
+      costExhaust: {
+        controller: "friendly",
+        filter: "ready",
+        type: "unit",
+      },
       target: {
         controller: "friendly",
         excludeSelf: true,
         type: "unit",
       },
-      to: { battlefield: "any" },
+      to: "exhausted-ally",
       type: "move",
     },
     timing: "action",
     type: "activated",
   },
-];
+] as unknown as Ability[];
 
 export const forgottenSignpost: GearCard = {
   abilities,

@@ -247,7 +247,10 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     typeof rawAmount === "number"
       ? rawAmount
       : resolveAmount(rawAmount as Record<string, unknown>, ctx);
-  const targets = getTargetIds(effect, ctx);
+  // rule 359.3.e.5 (unl-072-219) — the primary unit was pulled away in response:
+  // only its instruction is illegal, so deal nothing to it and keep the splash.
+  const splashOnly = (effect as { _splashOnly?: boolean })._splashOnly === true;
+  const targets = splashOnly ? [] : getTargetIds(effect, ctx);
   const hits: { targetId: string; amount: number }[] = targets.map((targetId) => ({
     amount: amount > 0 ? amount + bonusDamage : amount,
     targetId,
@@ -256,8 +259,14 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
   // each other enemy unit there": splash every OTHER enemy unit sharing the
   // chosen target's battlefield zone.
   const splashOthers = (effect as { splashOthers?: unknown }).splashOthers;
-  if (typeof splashOthers === "number" && splashOthers > 0 && targets.length > 0) {
-    const zone = ctx.zones.getCardZone(targets[0] as CoreCardId);
+  if (typeof splashOthers === "number" && splashOthers > 0) {
+    // rule 359.3.e.5 / 359.3.e.8 (unl-072-219) — "there" is the battlefield the
+    // spell was aimed at when it was played, not wherever the chosen unit
+    // stands at resolution: pulling the chosen unit away in response
+    // mistargets only IT, and the splash still lands on the units left behind.
+    const zone =
+      (effect as { _splashZone?: string })._splashZone ??
+      (targets[0] === undefined ? undefined : ctx.zones.getCardZone(targets[0] as CoreCardId));
     if (zone?.startsWith("battlefield-")) {
       const others = resolveTarget(
         { controller: "enemy", quantity: "all", type: "unit" },
