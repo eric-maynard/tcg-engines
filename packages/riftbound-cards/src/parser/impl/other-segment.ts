@@ -3,7 +3,7 @@
  */
 
 import type { Ability, SpellAbility } from "@tcg/riftbound-types";
-import { parseStaticAbility } from "../parsers/static-parser";
+import { applyIncludeSelfQualifier, parseStaticAbility } from "../parsers/static-parser";
 import { parseActivatedAbility } from "./activated";
 import { parseEffects } from "./effects";
 import { stripReminders } from "./normalize";
@@ -60,7 +60,9 @@ export function parseOtherSegment(text: string): Ability | undefined {
   // Try static ability
   const staticResult = parseStaticAbility(cleaned);
   if (staticResult) {
-    return staticResult.ability;
+    // rule 208.2 — "(including me)" is a scope qualifier that `stripReminders`
+    // removed; recover it from the printed segment.
+    return applyIncludeSelfQualifier(staticResult.ability, text);
   }
 
   // Try standalone effect (treat as spell with action timing)

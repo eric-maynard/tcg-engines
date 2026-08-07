@@ -11,8 +11,14 @@
  * Handles italic markers like `_ (...)_`
  */
 export function stripReminders(text: string): string {
+  // rule 208.2 (sfd-089-221) — "(including me)" is a scope qualifier, not
+  // reminder text: it widens an aura onto its own source. Keep it here so the
+  // downstream static parser can record it; that parser strips it before
+  // pattern-matching.
+  const INCLUDING_ME = "including-me";
+  const guarded = text.replace(/\(\s*including me\s*\)/gi, INCLUDING_ME);
   // Strip italic-wrapped reminder text like `_ (...)_` or `_(...)_`
-  let cleaned = text.replace(/_?\s*\([^)]*\)\s*_?/g, "");
+  let cleaned = guarded.replace(/_?\s*\([^)]*\)\s*_?/g, "");
   // Also strip standalone parenthetical reminders
   cleaned = cleaned.replace(/\s*\([^)]*\)\s*/g, " ");
   return cleaned.trim();

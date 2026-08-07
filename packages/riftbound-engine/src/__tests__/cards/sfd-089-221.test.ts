@@ -65,14 +65,14 @@ describe("Rumble, Scrapper (sfd-089-221)", () => {
 
   // BUG — expected: "(including me)" lifts Rumble himself to 5 even though his only tag is Rumble.
   // Actual: the parsed static filters on tag Mech and Rumble stays at 4.
-  test.failing("BUG: '(including me)' — Rumble should read 5 Might under his own static, but stays 4", async () => {
+  test("'(including me)' — Rumble should read 5 Might under his own static, but stays 4", async () => {
     const game = await scenario().unit(P1, "base", CARD, "rum").build();
     expect(game.state("rum")).toMatchObject({ baseMight: 4, might: 5 });
   });
 
   // BUG — same root cause, shown where it hurts: at 5 Might an enemy Void Seeker (deal 4) leaves
   // him alive with 4 damage; at the engine's 4 Might it is exactly lethal and he dies.
-  test.failing("BUG: enemy Void Seeker's 4 damage should NOT kill a 5-Might (including me) Rumble at a battlefield", async () => {
+  test("enemy Void Seeker's 4 damage should NOT kill a 5-Might (including me) Rumble at a battlefield", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P2, { energy: 3, power: { fury: 1 } })

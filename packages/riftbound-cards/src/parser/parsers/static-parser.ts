@@ -133,7 +133,13 @@ const FRIENDLY_PLAY_LOCATION_PATTERN =
  * Remove reminder text from ability text
  */
 function removeReminderText(text: string): string {
-  return text.replace(REMINDER_TEXT_PATTERN, "").trim();
+  // rule 208.2 (sfd-089-221) — `stripReminders` preserves the "(including me)"
+  // scope qualifier as the bare token `including-me`; drop it here so the
+  // sentence still matches the aura patterns.
+  return text
+    .replace(REMINDER_TEXT_PATTERN, "")
+    .replace(/\s*\bincluding-me\b/gi, "")
+    .trim();
 }
 
 /**
@@ -279,7 +285,7 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
   // Grants, etc.).
   const direct = parseStaticAbilityInner(cleanText, text);
   if (direct) {
-    return direct;
+    return withIncludeSelf(direct, text);
   }
 
   // Fallback: strip a leading "While you control this battlefield," prefix and
@@ -291,19 +297,61 @@ export function parseStaticAbility(text: string): StaticAbilityParseResult | und
     const inner = cleanText.slice(whileControlBfMatch[0].length).trim();
     const innerResult = parseStaticAbilityInner(inner, text);
     if (innerResult) {
-      return {
-        ...innerResult,
-        ability: {
-          ...innerResult.ability,
-          condition: {
-            type: "while-control-battlefield",
-          } as unknown as Condition,
-        } as StaticAbility,
-      };
+      return withIncludeSelf(
+        {
+          ...innerResult,
+          ability: {
+            ...innerResult.ability,
+            condition: {
+              type: "while-control-battlefield",
+            } as unknown as Condition,
+          } as StaticAbility,
+        },
+        text,
+      );
     }
   }
   return undefined;
 }
+
+function withIncludeSelf(
+  result: StaticAbilityParseResult,
+  printedText: string,
+): StaticAbilityParseResult {
+  return {
+    ...result,
+    ability: applyIncludeSelfQualifier(result.ability, printedText) as StaticAbility,
+  };
+}
+
+/**
+ * rule 208.2 (sfd-089-221) — "(including me)" is a scope qualifier, not reminder
+ * text: an aura whose subject would not otherwise describe its own source
+ * ("Your Mechs have +1 Might (including me)." on a card tagged Rumble) still
+ * applies to that source. Reminder-stripping removes the parenthetical before the
+ * pattern match, so the qualifier is recovered from the printed text here and
+ * recorded on the target descriptor.
+ */
+export function applyIncludeSelfQualifier<T>(ability: T, printedText: string): T {
+  if (!/\bincluding[- ]me\b/i.test(printedText)) {
+    return ability;
+  }
+  const a = ability as unknown as { type?: string; effect?: { target?: unknown } };
+  if (a?.type !== "static") {
+    return ability;
+  }
+  const effect = a.effect;
+  const target = effect?.target;
+  if (!effect || !target || typeof target !== "object") {
+    return ability;
+  }
+  return {
+    ...(a as object),
+    effect: { ...effect, target: { ...(target as object), includeSelf: true } },
+  } as unknown as T;
+}
+
+
 
 function parseStaticAbilityInner(
   cleanText: string,

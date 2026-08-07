@@ -444,6 +444,7 @@ function resolveStaticTargetsFromDescriptor(
     type?: string;
     controller?: string;
     excludeSelf?: boolean;
+    includeSelf?: boolean;
     location?: string;
     filter?: unknown;
     quantity?: unknown;
@@ -460,6 +461,7 @@ function resolveStaticTargetsFromDescriptor(
     t.controller !== undefined ||
     t.filter !== undefined ||
     t.excludeSelf === true ||
+    t.includeSelf === true ||
     t.location !== undefined ||
     t.quantity === "all";
   if (!isGroup) {
@@ -478,6 +480,12 @@ function resolveStaticTargetsFromDescriptor(
   const registry = getGlobalCardRegistry();
   return boardCards
     .filter((c) => {
+      // rule 208.2 (sfd-089-221) — "(including me)": the source is addressed by
+      // its own aura even when it does not match the aura's subject (Rumble is
+      // tagged Rumble, not Mech).
+      if (t.includeSelf && c.id === source.id) {
+        return true;
+      }
       const def = registry.get(c.id);
       const cardType = def?.cardType;
       if (t.type === "unit" && cardType !== "unit") {
