@@ -94,6 +94,9 @@ describe("Disarming Rake (sfd-032-221)", () => {
     if (game.decision()?.kind === "yes-no") {
       await game.p1.yes(); // opt-in asked up front; the kill itself still waits for resolution
     }
+    if (game.decision()?.kind === "pick") {
+      await game.p1.pick("theirs"); // rule 402 (finalization): the target is chosen before priority
+    }
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "rake", controller: P1, triggered: true })]);
     expect(game.actingSeat()).toBe(P1);
     await game.p1.passPriority();

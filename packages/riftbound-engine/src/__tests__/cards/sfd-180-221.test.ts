@@ -98,7 +98,10 @@ describe("Fiora, Worthy (sfd-180-221)", () => {
     expect(await untilFioraAsks(game)).toBe(true);
     expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1 });
     await game.p1.yes();
-    expect(game.p1.power("order")).toBe(0);
+    expect(game.p1.power("order")).toBe(0); // rule 383.3.b.1: the cost is paid at finalization
+    // …but the ready itself only happens when the chain item resolves.
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.state("squire").isReady).toBe(true);
     expect(game.state("fiora").isExhausted).toBe(true); // "ready IT", not Fiora
     await game.settle();

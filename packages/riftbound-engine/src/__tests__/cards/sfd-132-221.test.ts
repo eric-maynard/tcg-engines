@@ -30,10 +30,13 @@ function base(energy = 7, power: Record<string, number> = { chaos: 2 }) {
   return scenario().resources(P1, { energy, power }).battlefield("bf1", { controller: P2 }).hand(P1, CARD, "bb");
 }
 
-/** Answer Beast Below's target prompt(s) whatever their shape (two sequential picks or one combined). */
+/**
+ * Answer Beast Below's target prompt(s) whatever their shape (two sequential picks or one combined).
+ * rule 402.2: the prompts are part of FINALIZING the trigger, so they are pending right after the
+ * play — nothing is settled (no priority passes) before or between them.
+ */
 async function pickTargets(game: Game, friendly: string, enemy: string): Promise<void> {
   for (let i = 0; i < 3; i++) {
-    await game.settle();
     const d = game.decision();
     if (d?.kind !== "pick" || d.seat !== P1) {
       return;
@@ -168,10 +171,9 @@ describe("Beast Below (sfd-132-221)", () => {
     expect(game.p1.hand()).toEqual([]);
   });
 
-  test.failing("BUG: targets must be chosen when the trigger is finalized (402.2), before P2's priority; P2 Gusting its targeted unit away then leaves only the friendly bounced and no re-target (359.3.e.5) — the engine asks nothing and picks at resolution", async () => {
-    // Expected: P1 pick prompt right after the play; after Gust removes foeBf, Beast Below returns
-    // only ally and foeHome is untouched. Actual: no prompt at finalization (targets are resolved
-    // programmatically when the trigger resolves), so the locked-target scenario cannot even start.
+  test("targets are chosen when the trigger is finalized (402.2), before P2's priority; P2 Gusting its targeted unit away then leaves only the friendly bounced and no re-target (359.3.e.5)", async () => {
+    // P1's pick prompt comes right after the play; after Gust removes foeBf, Beast Below returns
+    // only ally and foeHome is untouched.
     const game = await base()
       .resources(P2, { energy: 1 })
       .hand(P2, GUST, "gust")

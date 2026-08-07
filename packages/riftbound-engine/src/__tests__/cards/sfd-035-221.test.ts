@@ -183,14 +183,14 @@ describe("Guardian of the Passage (sfd-035-221)", () => {
       .build();
     await game.p2.endTurn();
     expect(game.chain().map((c) => c.cardId).sort()).toEqual(["gp1", "gp2"]);
+    // rule 402 (finalization): each trigger's opt-in and choice are made as it goes on the chain, before any priority
     for (let i = 0; i < 2; i++) {
-      await game.settle();
       expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
       await game.p1.yes();
-      await game.settle();
       const d = game.decision();
-      if (d?.kind === "pick" && d.options.length > 1) {
-        await game.p1.pick(d.options[0]?.key as string);
+      if (d?.kind === "pick") {
+        // both triggers finalize while the trash still holds both cards — choose a different card for each
+        await game.p1.pick(i === 0 ? "tunit" : "tgear");
       }
     }
     await game.settle();

@@ -75,6 +75,9 @@ describe("Irresistible Faefolk (unl-112-219)", () => {
     const offered = d?.kind === "pick" ? d.options.map((o) => o.card ?? o.key).sort() : [];
     expect(offered).toEqual(["wall", "weak"]); // never fae / ally
     await game.p1.pick("weak");
+    // rule 402 (finalization): the pick happens on the chain; the move itself waits for the item to resolve.
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.locationOf("weak")).toBe("bf1");
     expect(game.state("weak")).toMatchObject({ controller: P2, isExhausted: true, owner: P2 });
     // P1's units applied the contest → P1 attacks, the pulled unit defends (464.2.c.1 / 464.2.c.3.a).
@@ -118,6 +121,8 @@ describe("Irresistible Faefolk (unl-112-219)", () => {
     await game.settle();
     await game.p1.yes();
     await game.p1.pick("wall");
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.locationOf("wall")).toBe("bf1");
     expect(game.p2.units("bf2")).toEqual([]);
     await game.settle();
@@ -161,6 +166,8 @@ describe("Irresistible Faefolk (unl-112-219)", () => {
     await game.settle();
     await game.p1.yes();
     await game.p1.pick("weak");
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.locationOf("weak")).toBe("bf2");
     expect(game.locationOf("fae")).toBe("bf2");
     expect(game.cardsAt("bf1")).toEqual([]);
@@ -178,6 +185,8 @@ describe("Irresistible Faefolk (unl-112-219)", () => {
     await game.settle();
     await game.p1.yes();
     await game.p1.pick("weak");
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.locationOf("weak")).toBe("bf1");
     expect(game.state("weak").controller).toBe(P2);
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P2, controller: P1 });

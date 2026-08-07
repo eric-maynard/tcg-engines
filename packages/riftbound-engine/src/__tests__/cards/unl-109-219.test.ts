@@ -183,10 +183,9 @@ describe("Blood Rose (unl-109-219)", () => {
     expect(game.p1.energy()).toBe(1);
   });
 
-  test.failing("BUG: 383.3.a/b — the may/pay decision belongs to FINALIZATION: P1 is asked (and pays) before anyone gets priority; declining removes the trigger from the chain (383.3.a.2)", async () => {
-    // Expected: right after play(squire) the pending decision is the Rose's yes/no; paying drops
-    // energy to 0 while the ability still sits on the chain awaiting priority passes.
-    // Actual: both players must pass priority first; the prompt only appears on resolution.
+  test("383.3.a/b — the may/pay decision belongs to FINALIZATION: P1 is asked (and pays) before anyone gets priority; declining removes the trigger from the chain (383.3.a.2)", async () => {
+    // Right after play(squire) the pending decision is the Rose's yes/no; paying drops energy to 0
+    // while the ability still sits on the chain awaiting priority passes.
     const game = await withRose(3).build();
     await game.p1.play("squire");
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "rose" } });

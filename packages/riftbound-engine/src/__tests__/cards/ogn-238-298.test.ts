@@ -79,6 +79,9 @@ describe("Leona, Determined (ogn-238-298)", () => {
     const keys = d?.kind === "pick" ? d.options.map((o) => o.key).sort() : [];
     expect(keys).toEqual(["gnat", "wall"]);
     await game.p1.pick("wall");
+    // rule 402 (finalization): the target is bound as the trigger is put on the chain; the stun lands on resolution
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect((game.decision() as ActionDecision).context).toBe("showdown");
     expect(game.state("wall").isStunned).toBe(true);
     expect(game.state("gnat").isStunned).toBe(false);

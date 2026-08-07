@@ -177,10 +177,9 @@ describe("Sandshifter (sfd-158-221)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: 355.5.b / 383.3 — the kill target must be chosen as the trigger is put on the chain, before P2 receives priority", async () => {
-    // Expected: right after play(ss) P1 is asked to pick the target (inbase | atbf) while the item is
-    // still pending; only then does anyone get priority, so P2 can respond knowing the victim.
-    // Actual: the chain item is finalized target-less; the pick only appears on resolution (timing RES).
+  test("355.5.b / 383.3 — the kill target is chosen as the trigger is put on the chain, before P2 receives priority", async () => {
+    // Right after play(ss) P1 is asked to pick the target (inbase | atbf) while the item is still
+    // pending; only then does anyone get priority, so P2 can respond knowing the victim.
     const game = await board().build();
     await game.p1.play("ss");
     const d = game.decision();
@@ -193,10 +192,9 @@ describe("Sandshifter (sfd-158-221)", () => {
     expect(game.zoneOf("inbase")).toBe("trash");
   });
 
-  test.failing("BUG: with the target locked at finalization, P2 pumping THAT unit (Discipline → 4) makes it illegal on resolution and NOTHING dies — the other small enemy is not a fallback", async () => {
-    // Expected: P1 names inbase; P2 Disciplines inbase (2→4); on resolution inbase is illegal → no kill;
-    // atbf (3) was never chosen and survives. Actual: choice happens on resolution, so the harness'
-    // scripted "inbase" is rejected and atbf is force-killed instead.
+  test("with the target locked at finalization, P2 pumping THAT unit (Discipline → 4) makes it illegal on resolution and NOTHING dies — the other small enemy is not a fallback (359.3.e.5)", async () => {
+    // P1 names inbase; P2 Disciplines inbase (2→4); on resolution inbase is illegal → no kill;
+    // atbf (3) was never chosen and survives.
     const game = await board().resources(P2, { energy: 2 }).hand(P2, DISCIPLINE, "disc").build();
     await game.p1.play("ss", { answers: ["inbase"] });
     if (game.actingSeat() === P1) {

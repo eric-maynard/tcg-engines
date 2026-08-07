@@ -33,6 +33,7 @@ import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getCardEffectiveMight, getDeflectSurcharge, xCostIsPower } from "../play/cost";
 import {
+  collectSequenceTargetSlots,
   findAmountReferenceTarget,
   findSequenceLeadTarget,
   hiddenChoiceIsPulledIn,
@@ -171,23 +172,18 @@ function sourceStillOnBoard(
 }
 
 /**
- * Execute a resolved chain item's effect.
- * Skips execution if the item was countered (rule 543).
+ * rule 383.3.a / 402.4 — whether a "you may …" triggered item can be performed
+ * at all: an unpayable leading cost (no buff to spend, too little XP, too few
+ * cards to discard) or an unambiguously empty candidate set means the
+ * controller is never asked. Shared by the finalization dialog and the
+ * legacy resolution-time opt-in.
  */
-export function executeResolvedItem(
+export function optInIsPerformable(
   resolved: ChainItem,
   draft: RiftboundGameState,
   context: Parameters<typeof buildEffectContext>[3],
-): void {
-  // Countered items don't execute their effects
-  if (resolved.countered) {
-    return;
-  }
-
-  // Rule 583 (unl-021-219): a "you may …" trigger reaches resolution but its
-  // effect runs only if the controller opts in. Pause via an `opt-in` pending
-  // choice; on accept the reducer re-enters here with `optional` cleared.
-  if (resolved.optional) {
+): boolean {
+  {
     // rule-id: ogn-147-298 — "you may spend a buff to …": when no friendly
     // buff can be spent the cost is unpayable, so don't offer the opt-in
     // prompt at all — the trigger simply has no effect.
@@ -203,7 +199,7 @@ export function executeResolvedItem(
         buildEffectContext(draft, resolved.controller, resolved.cardId, context),
       )
     ) {
-      return;
+      return false;
     }
     // rule-id: unl-119-219 — "you may spend 3 XP to …": an unpayable XP cost
     // likewise suppresses the opt-in prompt.
@@ -211,7 +207,7 @@ export function executeResolvedItem(
       leadEffect?.type === "spend-xp" &&
       !canSpendXp(leadEffect, buildEffectContext(draft, resolved.controller, resolved.cardId, context))
     ) {
-      return;
+      return false;
     }
     // rule 422.3 (ogn-252-298): "you may discard N to …" with fewer than N
     // cards in hand is an unpayable cost — no opt-in prompt at all.
@@ -222,7 +218,7 @@ export function executeResolvedItem(
         resolved.controller as CorePlayerId,
       );
       if (hand.length < optDiscard) {
-        return;
+        return false;
       }
     }
     // rule 355.8 — an ability that must choose a Game Object with no legal
@@ -265,8 +261,72 @@ export function executeResolvedItem(
         choosing: true,
       } as Parameters<typeof resolveTarget>[1]);
       if (optCandidates.length === 0) {
-        return;
+        return false;
       }
+    }
+  }
+  return true;
+}
+
+/** The effect node (the effect itself or a nested sequence step) whose `target` is `target`. */
+function stepOwningTarget(effect: unknown, target: unknown): unknown {
+  if (!effect || typeof effect !== "object") {
+    return undefined;
+  }
+  const node = effect as { target?: unknown; defender?: unknown; effects?: unknown[] };
+  if (node.target === target || node.defender === target) {
+    return node;
+  }
+  for (const sub of Array.isArray(node.effects) ? node.effects : []) {
+    const hit = stepOwningTarget(sub, target);
+    if (hit !== undefined) {
+      return hit;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * rule 402.2 — outcome of running the choice-planning half of
+ * `executeResolvedItem` for a Pending Item (`finalizeOnly`): `remove` when no
+ * legal choice exists (402.4) or a mandatory surcharge is unpayable (404.2);
+ * otherwise the Game Objects bound without a prompt (undefined = the effect
+ * has no caster-chosen single slot). A raised prompt is left on
+ * `draft.pendingChoice`, tagged with the item id.
+ */
+export interface FinalizeOutcome {
+  readonly remove?: true;
+  readonly targets?: readonly string[];
+}
+
+/**
+ * Execute a resolved chain item's effect.
+ * Skips execution if the item was countered (rule 543).
+ *
+ * With `opts.finalizeOnly` the item is a Pending trigger being FINALIZED
+ * (rule 402.2): only the caster-chosen target planning runs — prompts are bound
+ * to the chain item instead of executing — and nothing resolves.
+ */
+export function executeResolvedItem(
+  resolved: ChainItem,
+  draft: RiftboundGameState,
+  context: Parameters<typeof buildEffectContext>[3],
+  opts: { readonly finalizeOnly?: boolean } = {},
+): FinalizeOutcome | undefined {
+  const finalizeOnly = opts.finalizeOnly === true;
+  const bindTag = finalizeOnly ? { bindToChainItemId: resolved.id } : {};
+  // Countered items don't execute their effects
+  if (resolved.countered) {
+    return undefined;
+  }
+
+  // Rule 583 (unl-021-219): a "you may …" trigger reaches resolution but its
+  // effect runs only if the controller opts in. Pause via an `opt-in` pending
+  // choice; on accept the reducer re-enters here with `optional` cleared.
+  // (Finalized triggers already answered this at finalization — rule 402.1.)
+  if (resolved.optional && !finalizeOnly) {
+    if (!optInIsPerformable(resolved, draft, context)) {
+      return undefined;
     }
     draft.pendingChoice = {
       type: "opt-in",
@@ -274,7 +334,7 @@ export function executeResolvedItem(
       sourceCardId: resolved.cardId,
       resolved: { ...resolved, optional: false },
     };
-    return;
+    return undefined;
   }
 
   // rule 204.3.b (ogn-268-298): "Pay any amount of [rainbow] to …" is a
@@ -288,7 +348,7 @@ export function executeResolvedItem(
   // rule 204.3.b / 444.1: an X pledged when the spell was played is paid HERE,
   // out of Power, capped by what the pool actually holds now.
   let pledgePaid: number | undefined;
-  if (xCostIsPower(resolved.cardId) && xStore?._xPledged === true) {
+  if (!finalizeOnly && xCostIsPower(resolved.cardId) && xStore?._xPledged === true) {
     const power = draft.runePools[resolved.controller]?.power ?? {};
     const available = Object.values(power).reduce<number>((a, b) => a + (b ?? 0), 0);
     pledgePaid = Math.min(Math.max(0, xStore._variables?.x ?? 0), available);
@@ -303,6 +363,7 @@ export function executeResolvedItem(
     }
   }
   if (
+    !finalizeOnly &&
     pledgePaid === undefined &&
     xCostIsPower(resolved.cardId) &&
     xStore?._variables?.x === undefined
@@ -317,13 +378,16 @@ export function executeResolvedItem(
       sourceCardId: resolved.cardId,
       type: "pay-x",
     };
-    return;
+    return undefined;
   }
 
   const rawEffect = resolved.effect as
     | (ExecutableEffect & { _variables?: Record<string, number> })
     | undefined;
   if (!rawEffect) {
+    if (finalizeOnly) {
+      return {};
+    }
     // No stored effect — try to look up from card registry (fallback for spells)
     const registry = getGlobalCardRegistry();
     const abilities = registry.getAbilities(resolved.cardId) ?? [];
@@ -340,7 +404,7 @@ export function executeResolvedItem(
     // lookup) still completes the act of being played — its play triggers
     // must fire exactly as on the normal path.
     firePlayedCardTriggers(resolved, draft, context, fallbackPreLen);
-    return;
+    return undefined;
   }
 
   // Strip any bound variables (e.g., X-cost value) before executing — they
@@ -521,11 +585,47 @@ export function executeResolvedItem(
       if (lockedMight.eq !== undefined && might !== lockedMight.eq) return false;
       return true;
     };
+    // rule 359.3.e.4–5 / 359.3.f.2 — a trigger finalized through the dialog
+    // chose its Game Objects against the descriptor as it read THEN; on
+    // resolution each one must still satisfy that descriptor as it reads NOW
+    // ("an enemy unit here" after the source or the target moved, "with less
+    // Might than me" after a pump). Illegal ones are dropped, never replaced.
+    const finalizedTrigger = resolved.triggered === true && resolved.status === "finalized";
+    const fightDefenderDesc =
+      effect.type === "fight" && typeof (effect as { attacker?: unknown }).attacker === "string"
+        ? ((effect as { defender?: unknown }).defender as TargetDescriptor | undefined)
+        : undefined;
+    const slotDescriptors: TargetDescriptor[] = !finalizedTrigger || reachesPrivateZones
+      ? []
+      : typeof (effect.target ?? fightDefenderDesc) === "object"
+        ? [(effect.target ?? fightDefenderDesc) as TargetDescriptor]
+        : ((collectSequenceTargetSlots(effect as unknown as SpellEffectTargetShape) ??
+            []) as TargetDescriptor[]);
+    const slotPools = slotDescriptors
+      .filter((d) => typeof d.type === "string" && d.type !== "self" && d.type !== "trigger-source")
+      .map((d) => {
+        let pool = resolveTarget({ ...d, quantity: "all" }, {
+          ...resolverCtx,
+          choosing: true,
+          triggerSourceId,
+          triggerZones,
+        } as Parameters<typeof resolveTarget>[1]) as string[];
+        // rule 811.1.d.2 — chosen from a facedown battlefield: must still be there.
+        if (hiddenZone && !hiddenChoiceIsPulledIn(effect as SpellEffectTargetShape)) {
+          pool = pool.filter((x) => baseCtx.zones.getCardZone(x as CoreCardId) === hiddenZone);
+        }
+        return pool;
+      });
+    const stillChoosable = (id: string): boolean =>
+      slotPools.length === 0 ||
+      draft.battlefields?.[id] !== undefined ||
+      slotPools.some((pool) => pool.includes(id));
     const legal = boundTargets.filter(
       (id) =>
         stillOnBoard(id) &&
         locationStillMatches(id) &&
         mightStillMatches(id) &&
+        stillChoosable(id) &&
         !(
           controllerOf(id) !== resolved.controller &&
           (isUntargetable(id, resolverCtx) || isProtectedFromEnemyChoice(id, resolverCtx))
@@ -655,7 +755,7 @@ export function executeResolvedItem(
       if (deflectTax) {
         const payable = options.filter((id) => surchargeOf(id) <= available);
         if (payable.length === 0) {
-          return;
+          return finalizeOnly ? { remove: true } : undefined;
         }
         options = payable;
       }
@@ -673,6 +773,11 @@ export function executeResolvedItem(
         ? ((quantity as { upTo: number }).upTo as number)
         : undefined;
     if (upTo !== undefined && upTo > 1 && options.length >= 2) {
+      // Multi-pick shapes ("up to N" / "any number of") keep their
+      // accumulate-until-declined prompt at resolution for now.
+      if (finalizeOnly) {
+        return {};
+      }
       draft.pendingChoice = {
         type: "choose-target",
         playerId: resolved.controller,
@@ -685,9 +790,12 @@ export function executeResolvedItem(
         picked: [],
         ...(deflectTax ? { deflectTax: true as const } : {}),
       };
-      return;
+      return undefined;
     }
     if (anyNumber) {
+      if (finalizeOnly) {
+        return {};
+      }
       const legal = options.filter((id) =>
         isLegalMultiTargetSet(target as Parameters<typeof isLegalMultiTargetSet>[0], [id], {
           getCardZone: (c) => baseCtx.zones.getCardZone(c as CoreCardId),
@@ -714,7 +822,7 @@ export function executeResolvedItem(
           picked: [],
           ...(deflectTax ? { deflectTax: true as const } : {}),
         };
-        return;
+        return undefined;
       }
       boundTargets = [];
     } else if (
@@ -736,6 +844,8 @@ export function executeResolvedItem(
         effect,
         options,
         remaining: 1,
+        // rule 402.2 — while finalizing, the pick is bound onto the item.
+        ...bindTag,
         // rule 359.3.f.3 (unl-112-219) — "move an enemy unit to THAT
         // battlefield": the destination is fixed by the triggering move, so it
         // must survive the target prompt.
@@ -744,8 +854,28 @@ export function executeResolvedItem(
         // at PICK time; the prompt carries the obligation to `pending-choice.ts`.
         ...(deflectTax ? { deflectTax: true as const } : {}),
       };
-      return;
+      return undefined;
     } else {
+      // rule 402.4 — a Pending trigger with no legal option for a choice it
+      // must make is removed from the Chain (never finalized, not countered).
+      // "Up to one …" may legally choose nothing (rule 355.13), so it stays.
+      // Only an unambiguous BOARD choice counts: descriptors reaching a private
+      // zone or owned by a `play`/"from …" step gather their own candidates at
+      // resolution and are left to it.
+      if (finalizeOnly && options.length === 0) {
+        const owner = stepOwningTarget(effect, target) as
+          | { type?: string; from?: unknown; player?: unknown }
+          | undefined;
+        const loc = (target as { location?: unknown }).location;
+        const boardChoice =
+          upTo === undefined &&
+          (target as { optional?: boolean }).optional !== true &&
+          !(typeof loc === "string" && ["hand", "deck", "trash", "anywhere", "banishment"].includes(loc)) &&
+          owner?.type !== "play" &&
+          owner?.from === undefined &&
+          owner?.player === undefined;
+        return boardChoice ? { remove: true } : {};
+      }
       boundTargets = options;
       if (deflectTax && boundTargets.length > 0) {
         payAnyDomainPower(
@@ -783,12 +913,18 @@ export function executeResolvedItem(
         effect,
         options: withMatches,
         remaining: 1,
+        ...bindTag,
       };
-      return;
+      return undefined;
     }
     if (withMatches.length === 1) {
       boundTargets = [withMatches[0] as string];
     }
+  }
+  // rule 402.2 / 337.4 — finalization stops here: the bound Game Objects ride
+  // on the item and the effect itself waits for resolution.
+  if (finalizeOnly) {
+    return boundTargets ? { targets: boundTargets } : {};
   }
 
   const effectCtx: EffectContext = {
@@ -816,7 +952,10 @@ export function executeResolvedItem(
   // rule-id: sfd-142-221 (383.4.b.2) / sfd-052-221 (355.14.b) — play-time
   // targets (spell or activated ability) already fired `choose` at
   // finalization; only fire here for targets picked at resolution.
-  const choseAtFinalize = !resolved.triggered && !!resolved.targets;
+  // rule 402.2 — a trigger finalized through the dialog chose (and fired
+  // `choose` for) its targets then, too.
+  const choseAtFinalize =
+    !!resolved.targets && (!resolved.triggered || resolved.status === "finalized");
   if (!choseAtFinalize && boundTargets && boundTargets.length > 0) {
     const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
     // rule-id: sfd-142-221 — carry the source kind so "choose me with a
@@ -905,6 +1044,15 @@ function firePlayedCardTriggers(
   if (chain && postLen > preLen && chain.items.length > postLen) {
     const items = chain.items as ChainItem[];
     const pendingPlays = items.splice(preLen, postLen - preLen);
+    // rule 337.1.b — those plays were appended first, so their finalization
+    // (the location prompt as they resolve) precedes the triggers' dialog.
+    const blockers = pendingPlays.map((it) => it.id);
+    for (let i = preLen; i < items.length; i++) {
+      const it = items[i] as ChainItem;
+      if (it.status === "pending") {
+        items[i] = { ...it, finalizeAfter: [...(it.finalizeAfter ?? []), ...blockers] };
+      }
+    }
     items.push(...pendingPlays);
   }
 }

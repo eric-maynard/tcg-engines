@@ -55,7 +55,12 @@ function modeTargetOptions(node: AnyEffect, index: number, ctx: EffectContext): 
   if (!tgt || typeof tgt !== "object") {
     return [];
   }
-  if (tgt.type !== "unit" && tgt.type !== "gear" && tgt.type !== "unit-or-gear") {
+  // rule 355.10 (sfd-039-221 "ready or exhaust a legend") — any single board
+  // object the mode names is the caster's choice; fixed referents are not.
+  if (
+    typeof tgt.type !== "string" ||
+    ["self", "trigger-source", "player", "battlefield", "pending-value"].includes(tgt.type)
+  ) {
     return [];
   }
   if (tgt.quantity !== undefined && tgt.quantity !== 1) {
@@ -117,7 +122,21 @@ export function raisePlayTimeModeChoice(
     if (next.player !== undefined) {
       return false;
     }
-    const options = playTimeModeOptions(next as unknown as ExecutableEffect, ctx, locked());
+    // rule 355.8 (sfd-049-221) — "choose one you've not chosen this turn": modes
+    // recorded on the source this turn are excluded alongside those locked for
+    // earlier executions of this same play (turn-stamped record, rule 517.2.b).
+    const meta = ctx.cards.getCardMeta?.(sourceCardId as Parameters<typeof ctx.cards.getCardOwner>[0]) as
+      | { modesChosenThisTurn?: number[]; modesChosenTurn?: number }
+      | undefined;
+    const currentTurn = (ctx.draft as { turn?: { number?: number } }).turn?.number ?? 0;
+    const chosenThisTurn =
+      next.notChosenThisTurn === true && meta?.modesChosenTurn === currentTurn
+        ? (meta.modesChosenThisTurn ?? [])
+        : [];
+    const options = playTimeModeOptions(next as unknown as ExecutableEffect, ctx, [
+      ...locked(),
+      ...chosenThisTurn,
+    ]);
     if (options.length === 0) {
       return false;
     }

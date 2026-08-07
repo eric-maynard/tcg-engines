@@ -64,7 +64,7 @@ describe("Not So Fast × Royal Entourage (legend target) / Void Seeker (unit tar
     // no legend is ever offered and neither legend changes state.
     const game = await board().build();
     await game.p1.play("royal", { to: "base" });
-    const r = await game.settle(); // both pass → trigger resolves → mode prompt
+    const r = await game.settle(); // rule 402: the mode prompt is already pending (finalization)
     expect(r.reason).toBe("unanswered");
     expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "mode" });
     await game.p1.chooseMode(1); // "exhaust"
@@ -82,6 +82,8 @@ describe("Not So Fast × Royal Entourage (legend target) / Void Seeker (unit tar
   test("Case 1 (b): Not So Fast is NOT legal against Royal Entourage's trigger — it chooses a legend, not a unit or gear (355.9.b, 355.8)", async () => {
     const game = await board().build();
     await game.p1.play("royal", { to: "base" });
+    await game.p1.chooseMode(1); // rule 402 (finalization): mode and legend are chosen before anyone gets priority
+    await game.p1.pick("p2Legend");
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2);
     expect(game.chain().map((i) => i.cardId)).toEqual(["royal"]);

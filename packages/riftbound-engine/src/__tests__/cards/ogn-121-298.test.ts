@@ -54,12 +54,12 @@ describe("Teemo, Strategist (ogn-121-298)", () => {
   test("'choose an enemy unit here': with two attackers the defender picks one; units elsewhere are not offered", async () => {
     const game = await board().build();
     await game.p2.move(["a1", "a2"], "bf1");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
-    const d = game.decision();
+    const d = game.decision(); // rule 402 (finalization): the target is chosen before priority
     expect(d).toMatchObject({ kind: "pick", seat: P1 });
     expect(d && d.kind === "pick" ? d.options.map((o) => o.card).sort() : []).toEqual(["a1", "a2"]);
     await game.p1.pick("a2");
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.state("a2").damage).toBe(3);
     expect(game.state("a1").damage).toBe(0);
   });

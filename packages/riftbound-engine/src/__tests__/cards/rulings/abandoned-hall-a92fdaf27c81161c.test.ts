@@ -68,7 +68,7 @@ describe("Ruling a92fdaf27c81161c — Abandoned Hall can buff a unit a spell jus
     // The guard is on the board at the Hall before the trigger's "you may" is even asked.
     expect(game.zoneOf("guard")).toBe("battlefield-hall");
     expect(game.chain().some((c) => c.cardId === "hall" && c.triggered)).toBe(true); // trigger still waiting
-    await game.settle(); // both pass on the Hall trigger → it resolves and asks
+    // rule 383.3.a / 402.1: the Hall trigger is finalized now — its "you may" is asked before anyone passes.
     expect(game.zoneOf("guard")).toBe("battlefield-hall");
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
     expect(game.decision()?.prompt).toContain("Abandoned Hall");
@@ -78,6 +78,7 @@ describe("Ruling a92fdaf27c81161c — Abandoned Hall can buff a unit a spell jus
     if (d?.kind === "pick" && d.seat === P1 && d.options.some((o) => (o.card ?? o.key) === "guard")) {
       await game.p1.pick("guard");
     }
+    await game.settle(); // both pass on the finalized Hall trigger → it resolves
     expect(game.state("guard").might).toBe(4); // 3 printed + 1 from Abandoned Hall
     expect(game.state("guard").damage).toBe(0); // replayed as a fresh object
   });
@@ -108,6 +109,7 @@ describe("Ruling a92fdaf27c81161c — Abandoned Hall can buff a unit a spell jus
     if (d?.kind === "pick" && d.seat === P1 && d.options.some((o) => (o.card ?? o.key) === "guard")) {
       await game.p1.pick("guard");
     }
+    await game.settle(); // rule 402: chosen at finalization, applied on resolution
     expect(game.state("guard").might).toBe(4);
     // Decline anything else this turn, then roll to P2's turn.
     game.script(P1, ["no", "no", "decline", "decline"]);

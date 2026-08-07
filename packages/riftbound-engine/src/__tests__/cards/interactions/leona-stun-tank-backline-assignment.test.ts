@@ -46,6 +46,10 @@ async function attackAndStun(game: G, target: "guardian" | "promoter"): Promise<
   expect(game.decision()?.kind).toBe("pick");
   expect(game.actingSeat()).toBe(P1);
   await game.p1.pick(target);
+  // rule 402 (finalization): the target is bound at once; the stun itself still waits for the
+  // chain item to resolve — both players pass so it resolves without ending the showdown.
+  await game.acting().passPriority();
+  await game.acting().passPriority();
 }
 
 describe("Leona, Determined × Sunlit Guardian × Enthusiastic Promoter — stun vs Tank/Backline assignment", () => {

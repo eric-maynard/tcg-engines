@@ -245,7 +245,8 @@ describe("Hard Bargain (sfd-136-221)", () => {
       .hand(P2, SHIELDBEARER, "solari")
       .hand(P1, CARD, "hb")
       .build();
-    await game.p2.play("solari", { to: "base" });
+    // rule 402 (finalization): the stun target is chosen as the trigger is put on the chain, before priority
+    await game.p2.play("solari", { to: "base", answers: ["victim"] });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "solari", triggered: true })]);
     if (game.actingSeat() === P2) {
       await game.p2.passPriority();

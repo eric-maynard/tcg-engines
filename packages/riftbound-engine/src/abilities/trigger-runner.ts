@@ -22,7 +22,8 @@ import { executeEffect } from "./effect-executor";
 import type { GameEvent } from "./game-events";
 import { evaluateLegionCondition } from "./legion-conditions";
 import { recalculateStaticEffects } from "./static-abilities";
-import { lockTriggerTargets, triggerTargetsSatisfiable } from "./trigger-target-lock";
+import { isResolvingChainItem } from "../chain/resolution-guard";
+import { finalizePendingItems, insideMoveReducer } from "./trigger-finalization";
 import type {
   CardWithAbilities,
   MatchedTrigger,
@@ -1384,47 +1385,8 @@ function expandKeywordDoubling(
   return out;
 }
 
-/**
- * rule 383.3.a.2 / 402.1.a — ask the controller of the oldest still-optional
- * "you may" trigger on the Chain whether to perform it, while it is being
- * FINALIZED. Accepting clears the item's `optional` flag (it then resolves
- * without asking again); declining removes it, so no Priority round ever
- * happens over a trigger that will do nothing. Re-entrant: `pending-choice.ts`
- * calls it again after each answer until no optional item is left.
- *
- * Items carrying an `optInCost` ("you may pay [N] to …") are left alone — their
- * cost is charged at resolution by `executeResolvedItem`.
- */
-const FINALIZATION_OPT_IN_EVENTS = new Set(["hold"]);
-
-export function promptFinalizationOptIn(draft: unknown): void {
-  const state = draft as RiftboundGameState;
-  if (state.pendingChoice) {
-    return;
-  }
-  const item = state.interaction?.chain?.items.find(
-    (it) =>
-      (it as { optional?: boolean }).optional === true &&
-      (it as { triggered?: boolean }).triggered === true &&
-      (it as { optInCost?: unknown }).optInCost === undefined &&
-      // Mirrors `trigger-target-lock.ts FINALIZATION_LOCK_EVENTS`: only the
-      // event kinds whose finalization is already modelled ask here; every
-      // other kind keeps the engine's resolution-time convention.
-      FINALIZATION_OPT_IN_EVENTS.has(
-        ((it as { triggerEvent?: { type?: string } }).triggerEvent?.type ?? ""),
-      ),
-  );
-  if (!item) {
-    return;
-  }
-  (state as { pendingChoice?: unknown }).pendingChoice = {
-    finalizationChainItemId: item.id,
-    playerId: item.controller,
-    resolved: { ...item, optional: false },
-    sourceCardId: item.cardId,
-    type: "opt-in",
-  };
-}
+/** The finalization dialog lives in `trigger-finalization.ts`; re-exported for move code. */
+export { finalizePendingItems, removeUnfinalizedItem } from "./trigger-finalization";
 
 export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): number {
   // rule 359.2 / rule-id: sfd-195-221 — a `choose` event names the chooser but
@@ -1708,13 +1670,6 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
         continue;
       }
       const effect = match.ability.effect as unknown;
-      // rule 402.4 — a multi-slot trigger whose choices cannot ALL be made
-      // legally is removed instead of going on the Chain (no partial half).
-      if (
-        !triggerTargetsSatisfiable(effect, ctx.draft, { cards: ctx.cards, zones: ctx.zones }, match.cardId, triggerControllerFor(match))
-      ) {
-        continue;
-      }
       const optInCost = extractPayCost(match.ability.condition);
       (ctx.draft as RiftboundGameState & {
         interaction: NonNullable<RiftboundGameState["interaction"]>;
@@ -1727,9 +1682,16 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
           // rule-id: sfd-119-221 — "you may pay [N] to …": carry the cost so
           // the opt-in prompt charges it instead of resolving for free.
           ...(optInCost ? { optInCost } : {}),
+          // rule 383.3.e.2 — refunded if the item leaves the Chain unfinalized.
+          ...(isOncePerTurnTrigger(match.ability)
+            ? { onceKey: triggerFireKey(match.ability.trigger, { id: match.cardId }) }
+            : {}),
           // Rule 583 (unl-021-219): carry the "you may" flag onto the chain so
           // executeResolvedItem can prompt the controller to opt in or decline.
           optional: match.ability.optional === true || optInCost !== undefined,
+          // rule 337.1 / 402: a Pending Item until the finalization dialog
+          // (`trigger-finalization.ts`) has asked its questions.
+          status: "pending",
           // rule-id: ven-021-166 — carry the firing event so "moved to or from"
           // target qualifiers can resolve against its from/to zones.
           triggerEvent: match.event,
@@ -1739,13 +1701,13 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
         turnOrder,
       );
     }
-    // rule 355.5 / 808.1.d.2: each freshly finalized item chooses its own
-    // Game Object now, before anyone receives priority.
-    lockTriggerTargets(ctx.draft, { cards: ctx.cards, zones: ctx.zones });
-    // rule 383.3.a.2 (sfd-035-221) — a "you may" trigger decides whether it is
-    // performed while it is being FINALIZED, so no Priority round happens over
-    // a trigger that will do nothing.
-    promptFinalizationOptIn(ctx.draft);
+    // rule 337.1 / 337.4 — Pending Items are finalized before anyone receives
+    // Priority. Inside a move reducer the move's wrapper does it once the
+    // reducer has finished (so a prompt cannot cut through the effect that is
+    // still executing); triggers fired from flow hooks finalize right here.
+    if (!insideMoveReducer() && !isResolvingChainItem()) {
+      finalizePendingItems(ctx.draft, ctx);
+    }
   }
 
   for (const match of inlineMatches) {

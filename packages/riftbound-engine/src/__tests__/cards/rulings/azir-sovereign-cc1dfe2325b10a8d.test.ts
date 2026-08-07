@@ -82,6 +82,7 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
     await game.p1.move("azir", "bf1");
     expect(game.state("azir").combatRole).toBe("attacker");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "azir", controller: P1, triggered: true })]);
+    await game.p1.yes(); // rule 402 (finalization): the "you may" is answered before priority
     await game.p1.passPriority();
     expect(game.p2.can("reveal", "blade")).toBe(true);
     await game.p2.reveal("blade");
@@ -102,6 +103,7 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
   test("ruling cc1dfe2325b10a8d — Case A: after Hidden Blade kills Azir, his trigger moves nothing; the token stays in base (engine sends it to Azir's trash)", async () => {
     const game = await bladeBoard().build();
     await game.p1.move("azir", "bf1");
+    await game.p1.yes(); // rule 402 (finalization)
     await game.p1.passPriority();
     await game.p2.reveal("blade");
     await game.p2.pick("azir");
@@ -138,15 +140,17 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
       ["azir", P1, true],
       ["fan", P2, true],
     ]);
-    // Both pass → the Fan's trigger (top) resolves: P2 may kill it to send the attacking Azir home.
-    await game.p2.passPriority();
-    await game.p1.passPriority();
+    // rule 402 (finalization): both "you may"s are answered before priority
+    await game.p1.yes();
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P2 });
     await game.p2.yes();
     const d = game.decision();
     if (d?.kind === "pick" && d.seat === P2 && d.options.some((o) => (o.card ?? o.key) === "azir")) {
       await game.p2.pick("azir");
     }
+    // Both pass → the Fan's trigger (top) resolves: it is killed and the attacking Azir is sent home.
+    await game.p2.passPriority();
+    await game.p1.passPriority();
     expect(game.zoneOf("fan")).toBe("trash");
     expect(game.zoneOf("azir")).toBe("base");
     // Azir's own trigger is still on the chain, unresolved.
@@ -156,13 +160,14 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
   test("Case B: with Azir back in base when his trigger resolves, there is no 'this battlefield' — the Sand Soldier token does not move to bf1 and stays in base (359.3.f.2, 359.3.e.6)", async () => {
     const game = await fanBoard().build();
     await game.p1.move("azir", "bf1");
-    await game.p2.passPriority();
-    await game.p1.passPriority();
+    await game.p1.yes(); // rule 402 (finalization)
     await game.p2.yes();
     const d = game.decision();
     if (d?.kind === "pick" && d.seat === P2 && d.options.some((o) => (o.card ?? o.key) === "azir")) {
       await game.p2.pick("azir");
     }
+    await game.p2.passPriority();
+    await game.p1.passPriority();
     expect(game.zoneOf("azir")).toBe("base");
     await resolveAzirTrigger(game);
     expect(game.chain()).toEqual([]);

@@ -22,18 +22,23 @@ function attackBoard() {
     .unit(P2, "base", { might: 4, name: "Home" }, "home");
 }
 
-async function attackAndResolveTrigger() {
+/** Attacks into bf1 and stops on the trigger's target prompt (rule 402: asked at finalization). */
+async function attackAndFinalizeTrigger() {
   const game = await attackBoard().build();
   await game.p1.move("ahri", "bf1");
   expect(game.chain()).toEqual([expect.objectContaining({ cardId: "ahri", triggered: true })]);
-  await game.p1.passPriority();
-  await game.p2.passPriority();
   return game;
+}
+
+/** Both players pass so the (already finalized) chain item resolves; the showdown stays open. */
+async function resolveChainItem(game: Awaited<ReturnType<typeof attackAndFinalizeTrigger>>) {
+  await game.acting().passPriority();
+  await game.acting().passPriority();
 }
 
 describe("Ahri, Inquisitive (ogn-119-298)", () => {
   test("When I attack: the trigger targets only enemy units HERE (not other battlefields or bases)", async () => {
-    const game = await attackAndResolveTrigger();
+    const game = await attackAndFinalizeTrigger();
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1, source: { cardId: "ahri" } });
     const keys = d?.kind === "pick" ? d.options.map((o) => o.key).sort() : [];
@@ -41,8 +46,9 @@ describe("Ahri, Inquisitive (ogn-119-298)", () => {
   });
 
   test("gives the chosen enemy -2 Might this turn (4 → 2), other units untouched", async () => {
-    const game = await attackAndResolveTrigger();
+    const game = await attackAndFinalizeTrigger();
     await game.p1.pick("big");
+    await resolveChainItem(game);
     expect(game.state("big").might).toBe(2);
     expect(game.state("big").baseMight).toBe(4);
     expect(game.state("small").might).toBe(2);
@@ -65,8 +71,9 @@ describe("Ahri, Inquisitive (ogn-119-298)", () => {
   });
 
   test("'to a minimum of 1 Might': a 2-Might enemy drops only to 1", async () => {
-    const game = await attackAndResolveTrigger();
+    const game = await attackAndFinalizeTrigger();
     await game.p1.pick("small");
+    await resolveChainItem(game);
     expect(game.state("small").might).toBe(1);
     expect(game.state("big").might).toBe(4);
   });

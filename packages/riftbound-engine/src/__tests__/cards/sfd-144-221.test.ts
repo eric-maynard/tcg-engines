@@ -59,12 +59,12 @@ describe("Spirit Wheel (sfd-144-221)", () => {
       ["Discipline", false],
       ["Spirit Wheel", true],
     ]);
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1 });
     await game.p1.yes();
-    expect(game.p1.energy()).toBe(0);
+    expect(game.p1.energy()).toBe(0); // rule 383.3.b.1: cost paid at finalization
     expect(game.state("wheel").isExhausted).toBe(true);
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.p1.hand()).toHaveLength(1); // drawn before Discipline resolved
     expect(game.chain().map((c) => c.name)).toEqual(["Discipline"]);
     expect(game.state("ally").might).toBe(2);
@@ -77,8 +77,6 @@ describe("Spirit Wheel (sfd-144-221)", () => {
   test("declining: no energy paid, wheel stays ready, only Discipline's own draw", async () => {
     const game = await board(3).build();
     await game.p1.cast("disc", { targets: "ally" });
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     await game.p1.no();
     await game.settle();
     expect(game.p1.energy()).toBe(1);
@@ -90,8 +88,6 @@ describe("Spirit Wheel (sfd-144-221)", () => {
     const game = await board(2).build();
     await game.p1.cast("disc", { targets: "ally" });
     expect(game.p1.energy()).toBe(0);
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     if (game.decision()?.kind === "yes-no") {
       expect(game.decision()).toMatchObject({ canAccept: false });
       expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
@@ -105,8 +101,6 @@ describe("Spirit Wheel (sfd-144-221)", () => {
   test("an already-EXHAUSTED wheel cannot pay its cost: still no extra draw even with spare energy", async () => {
     const game = await board(5, { exhausted: true }).build();
     await game.p1.cast("disc", { targets: "ally" });
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     if (game.decision()?.kind === "yes-no") {
       expect((await game.p1.try((p) => p.yes())).ok).toBe(false);
       await game.p1.no();
@@ -206,8 +200,6 @@ describe("Spirit Wheel (sfd-144-221)", () => {
   test("across turns: an exhausted wheel readies in my Awaken and pays again on my next turn", async () => {
     const game = await board(3).runes(P1, "chaos", 2).hand(P1, DISCIPLINE, "disc2").build();
     await game.p1.cast("disc", { targets: "ally" });
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     await game.p1.yes();
     await game.settle();
     expect(game.state("wheel").isExhausted).toBe(true);
@@ -217,8 +209,6 @@ describe("Spirit Wheel (sfd-144-221)", () => {
     await game.p1.tapRunes(3);
     const before = game.p1.hand().length;
     await game.p1.cast("disc2", { targets: "ally" });
-    await game.p1.passPriority();
-    await game.p2.passPriority();
     expect(game.decision()).toMatchObject({ canAccept: true, kind: "yes-no", seat: P1 });
     await game.p1.yes();
     await game.settle();

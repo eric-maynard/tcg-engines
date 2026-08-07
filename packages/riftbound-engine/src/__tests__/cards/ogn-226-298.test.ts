@@ -69,6 +69,7 @@ describe("Spectral Matron (ogn-226-298)", () => {
     await game.p1.play("sm", { to: "bf1" });
     await game.settle();
     await game.p1.yes();
+    await game.settle(); // rule 402: the "you may" is answered at finalization; the trash pick waits for resolution
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1 });
     expect(d?.kind === "pick" && d.options.map((o) => o.card).sort()).toEqual(["fae", "skulker"]);
@@ -82,6 +83,7 @@ describe("Spectral Matron (ogn-226-298)", () => {
     await game.p1.play("sm", { to: "bf1" });
     await game.settle();
     await game.p1.yes();
+    await game.settle(); // rule 402 (finalization)
     await game.p1.pick("skulker");
     const dest = game.decision();
     if (dest?.kind === "pick" && dest.seat === P1) {

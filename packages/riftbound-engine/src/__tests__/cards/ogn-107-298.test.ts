@@ -22,19 +22,17 @@ function board(mind = 1) {
     .hand(P1, FILLER, "plain");
 }
 
-/** Ava attacks bf1; both pass on the trigger → the optional prompt is up. */
+/** Ava attacks bf1; the optional prompt is up immediately (rule 402: finalization). */
 async function attack(mind = 1) {
   const game = await board(mind).build();
   await game.p1.move("ava", "bf1");
-  expect(game.chain()).toEqual([expect.objectContaining({ cardId: "ava", triggered: true })]);
-  await game.p1.passPriority();
-  await game.p2.passPriority();
   return game;
 }
 
 describe("Ava Achiever (ogn-107-298)", () => {
   test("When I attack: an optional 'pay [mind]' trigger is offered to the attacker", async () => {
     const game = await attack();
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "ava", triggered: true })]);
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "ava", pendingChoiceType: "opt-in" } });
   });
 
@@ -48,10 +46,12 @@ describe("Ava Achiever (ogn-107-298)", () => {
 
   test("accepting pays [mind] and plays the [Hidden] unit from hand HERE (at bf1), ignoring its cost", async () => {
     // Expected: mind 1 → 0, Pakaa Cub (3 energy) enters bf1 with 0 energy spent; the non-Hidden
-    // card is not eligible and stays in hand. Actual: the power is deducted but the play effect
-    // does nothing — the Cub stays in hand.
+    // card is not eligible and stays in hand.
     const game = await attack();
     await game.p1.yes();
+    // rule 383.3.b.1: the cost is paid at finalization; the effect waits for resolution.
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     if (game.decision()?.kind === "pick") {
       await game.p1.pick("cub");
     }

@@ -205,7 +205,7 @@ describe("Crumbling Sands (ven-039-166)", () => {
     const game = await board().resources(P2, { energy: 5 }).hand(P2, SHIELDBEARER, "sol").build();
     await game.p2.cast("boltA", { targets: "victim" });
     await game.settle(); // arm the condition so only the targeting rule is under test
-    await game.p2.play("sol");
+    await game.p2.play("sol", { answers: ["victim"] }); // rule 402 (finalization): the stun target is picked before priority
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sol", triggered: true })]);
     await game.p2.passPriority();
     expect(game.actingSeat()).toBe(P1);

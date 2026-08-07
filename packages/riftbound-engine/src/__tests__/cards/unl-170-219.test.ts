@@ -174,10 +174,10 @@ describe("Atakhan (unl-170-219)", () => {
       .unit(P2, "bf1", { might: 3, name: "B" }, "b")
       .build();
     await game.p1.move("ata", "bf1");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
-    expect(game.decision()?.kind).toBe("pick");
+    expect(game.decision()?.kind).toBe("pick"); // rule 402 (finalization): the pick comes before priority
     await game.acting().pick("b");
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.zoneOf("b")).toBe("trash");
     expect(game.zoneOf("a")).toBe("battlefield-bf1"); // only ONE unit is killed by the trigger
     await game.settle();

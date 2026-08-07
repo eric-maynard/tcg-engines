@@ -111,13 +111,13 @@ describe("Lucian, Gunslinger (sfd-028-221)", () => {
         .unit(P1, "base", { might: 1, name: "Buddy" }, "buddy"),
     ).build();
     await game.p1.move(["lucian", "buddy"], "bf1");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
-    const d = game.decision();
+    const d = game.decision(); // rule 402 (finalization): the target is chosen before priority
     expect(d).toMatchObject({ kind: "pick", seat: P1 });
     const offered = d?.kind === "pick" ? d.options.map((o) => o.card) : [];
     expect(new Set(offered)).toEqual(new Set(["def", "other"]));
     await game.p1.pick("other");
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.state("other").damage).toBe(1);
     expect(game.state("def").damage).toBe(0);
     expect(game.state("home").damage).toBe(0);

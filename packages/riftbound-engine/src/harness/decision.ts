@@ -447,11 +447,16 @@ function modeLabel(effect: unknown, idx: number): string {
 export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice): Decision {
   const seat = getPendingChoiceChooser(pc);
   const flat = ctx.legal(seat, ["resolvePendingChoice"]);
+  // rule 402 — a prompt bound to a still-pending chain item (leading "you may",
+  // targets, modes, base cost) is part of FINALIZING it, not of resolving it.
+  const fin = pc as { finalizationChainItemId?: string; bindToChainItemId?: string };
+  const chainItemId = fin.finalizationChainItemId ?? fin.bindToChainItemId;
   const source = {
     cardId: (pc as { sourceCardId?: string }).sourceCardId,
+    ...(chainItemId !== undefined ? { chainItemId } : {}),
     pendingChoiceType: pc.type,
   };
-  const base = { seat, source, timing: "RES" as const };
+  const base = { seat, source, timing: chainItemId !== undefined ? ("FIN" as const) : ("RES" as const) };
 
   switch (pc.type) {
     case "reveal-and-pick": {

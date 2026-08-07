@@ -69,9 +69,10 @@ describe("Ruling 2a1de5fca1bd9d62 — Faefolk into an open battlefield, enemy pu
     await game.p1.move("faefolk", "bf1");
     expect(game.locationOf("faefolk")).toBe("bf1");
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P1, controller: null });
-    // Faefolk's own "when I move to a battlefield" trigger goes on the chain
-    // first, so P1's action decision is chain priority inside that showdown.
-    expect(game.decision()).toMatchObject({ kind: "action", seat: P1 });
+    // Faefolk's own "when I move to a battlefield" trigger goes on the chain first and is
+    // FINALIZED at once, so P1's opt-in is asked before anyone gets priority.
+    // rule 402 (finalization)
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, timing: "FIN" });
   });
 
   // Expected: "When I move to a battlefield" is fulfilled → Faefolk's (optional) triggered ability is

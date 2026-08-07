@@ -276,11 +276,12 @@ describe("pending-choice decisions (one per engine PendingChoice type)", () => {
       .hand(P1, PIT_ROOKIE, "rookie")
       .build();
     await game.p1.play("rookie");
-    await game.settle();
+    // rule 402.2: the play trigger's target is asked while it is finalized (timing FIN).
     const d = game.decision() as PickDecision;
-    expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "target", source: { cardId: "rookie", pendingChoiceType: "choose-target" } });
+    expect(d).toMatchObject({ kind: "pick", seat: P1, semantics: "target", source: { cardId: "rookie", pendingChoiceType: "choose-target" }, timing: "FIN" });
     expect(d.options.map((o) => o.key).sort()).toEqual(["a", "b"]);
     await game.p1.pick("b");
+    await game.settle();
     expect(game.state("b").isBuffed).toBe(true);
     expect(game.state("a").isBuffed).toBe(false);
 
@@ -326,7 +327,8 @@ describe("pending-choice decisions (one per engine PendingChoice type)", () => {
       .build();
     await game.p1.play("wc");
     await game.settle();
-    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "wc", pendingChoiceType: "opt-in" }, timing: "RES" });
+    // rule 402.1: the leading "you may" is decided while the trigger is finalized (timing FIN).
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "wc", pendingChoiceType: "opt-in" }, timing: "FIN" });
     await game.p1.no();
     expect(game.decision()?.kind).toBe("action");
     expect(game.gameState.pendingChoice).toBeUndefined();

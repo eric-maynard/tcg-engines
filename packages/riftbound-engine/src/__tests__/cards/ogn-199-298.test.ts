@@ -54,13 +54,16 @@ describe("Tideturner (ogn-199-298)", () => {
   });
 
   test("accepting → choose a unit YOU control at ANOTHER location (only 'far'), then swap: Tideturner → bf1, Far → base", async () => {
-    // Expected: after "yes" P1 picks among own units not at Tideturner's location (far; not near, not
-    // the enemy foe); Tideturner moves to bf1 and Far moves to base. Actual: answering yes resolves
-    // the trigger with no pick and nothing moves.
+    // After "yes" (asked while the trigger is finalized, rule 402.1) and both passes, P1 picks among
+    // own units not at Tideturner's location (far; not near, not the enemy foe); Tideturner moves to
+    // bf1 and Far moves to base.
     const game = await board().build();
     await game.p1.play("tt", { to: "base" });
     await game.settle();
     await game.p1.yes();
+    // rule 402: the item resolves after both pass; the swap partner is picked as it resolves.
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1 });
     expect(d?.kind === "pick" && d.options.map((o) => o.card).sort()).toEqual(["far"]);
@@ -103,6 +106,9 @@ describe("Tideturner (ogn-199-298)", () => {
     await game.p1.reveal("tt");
     await game.settle();
     await game.p1.yes();
+    // rule 402: opt-in at finalization; the swap partner is picked as the item resolves.
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     const d = game.decision();
     expect(d?.kind === "pick" && d.options.map((o) => o.card).sort()).toEqual(["near"]);
     await game.p1.pick("near");

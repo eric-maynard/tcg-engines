@@ -84,12 +84,12 @@ describe("Yuumi, Magical Cat (unl-056-219)", () => {
       .unit(P1, "base", { might: 2, name: "Homebody" }, "home")
       .build();
     await game.p1.move(["yuumi", "a", "b"], "bf1");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
-    const d = game.decision();
+    const d = game.decision(); // rule 402 (finalization): the target is chosen when the trigger goes on the chain
     expect(d).toMatchObject({ kind: "pick", max: 1, seat: P1 });
     expect(d?.kind === "pick" ? d.options.map((o) => o.card).sort() : []).toEqual(["a", "b"]);
     await game.p1.pick("a");
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.state("a")).toMatchObject({ grantedKeywords: [tankGrant], might: 5 });
     expect(game.state("b")).toMatchObject({ grantedKeywords: [], might: 2 });
   });
@@ -102,8 +102,7 @@ describe("Yuumi, Magical Cat (unl-056-219)", () => {
       .unit(P1, "base", { might: 2, name: "Homebody" }, "home")
       .build();
     await game.p1.move("yuumi", "bf1");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
+    expect(game.chain()).toEqual([]); // rule 402.4: no legal target ⇒ removed unfinalized (no priority window over it)
     expect(game.state("home")).toMatchObject({ grantedKeywords: [], might: 2 });
     expect(game.state("yuumi")).toMatchObject({ grantedKeywords: [], might: 1 });
     await game.settle();

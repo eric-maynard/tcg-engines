@@ -49,6 +49,9 @@ describe("Blitzcrank, Impassive (ogn-067-298)", () => {
     expect(d?.kind).toBe("pick");
     expect(d?.kind === "pick" && d.options.map((o) => o.card).sort()).toEqual(["homebody", "raider"]);
     await game.p1.pick("raider");
+    // rule 402 (finalization): the target is picked on the chain; the move happens when the item resolves.
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.locationOf("raider")).toBe("bf1");
     expect(game.locationOf("homebody")).toBe("base");
     expect(game.locationOf("blitz")).toBe("bf1");

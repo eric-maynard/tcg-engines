@@ -646,11 +646,10 @@ describe("383.4.a.2 / 337.2 / 337.4 / 359.3.c: a unit's Play Effect is a trigger
     expect(game.state("X").damage).toBe(0); // MUST NOT: trigger damage before P2 ever had priority
   });
 
-  test.failing("BUG: 402.2 / 383.3 — the trigger's target is chosen while FINALIZING the trigger (before anyone receives Priority); engine defers the choice to resolution", async () => {
-    // Expected: right after play(T) the pending Play Effect asks P1 to choose its target (pick
-    // decision, seat P1, X among the options) and only then does P1 receive Priority with a
-    // finalized item whose target is locked in. Actual: no prompt — P1 immediately holds chain
-    // priority and the "Choose a target" prompt only appears when the item resolves.
+  test("402.2 / 383.3 — the trigger's target is chosen while FINALIZING the trigger (before anyone receives Priority)", async () => {
+    // Right after play(T) the pending Play Effect asks P1 to choose its target (pick decision,
+    // seat P1, X among the options) and only then does P1 receive Priority with a finalized item
+    // whose target is locked in.
     const game = await playTriggerBoard().build();
     await game.p1.play("T");
     const d = game.decision();
@@ -665,6 +664,11 @@ describe("383.4.a.2 / 337.2 / 337.4 / 359.3.c: a unit's Play Effect is a trigger
   test("LIFO with a response: P1 passes → P2 plays Reaction B (+2 Might on X) → chain [T-trigger, B]; all-pass resolves B first (X Might 4), Priority returns to P1, another all-pass resolves the trigger: X takes 2 and survives (340.1, 340.4)", async () => {
     const game = await playTriggerBoard().build();
     await game.p1.play("T");
+    // rule 402.2: the target is chosen while the trigger is finalized, before any Priority.
+    const d = game.decision();
+    expect(d).toMatchObject({ kind: "pick", seat: P1 });
+    expect(d?.kind === "pick" ? d.options.map((o) => o.card) : []).toContain("X");
+    await game.p1.pick("X");
     await game.p1.passPriority();
     expect(priorityOf(game)).toBe(P2);
     expect(game.p2.can("cast", "B")).toBe(true);
@@ -681,12 +685,8 @@ describe("383.4.a.2 / 337.2 / 337.4 / 359.3.c: a unit's Play Effect is a trigger
 
     await game.p1.passPriority();
     expect(game.state("X").damage).toBe(0);
-    await game.p2.passPriority(); // trigger resolves (engine asks for the target now)
-    const d = game.decision();
-    if (d?.kind === "pick" && d.seat === P1) {
-      expect(d.options.map((o) => o.card)).toContain("X");
-      await game.p1.pick("X");
-    }
+    await game.p2.passPriority(); // trigger resolves against the locked target — no new prompt
+    expect(game.decision()?.kind).toBe("action");
     expect(game.chain()).toEqual([]);
     expect(game.state("X").damage).toBe(2);
     expect(game.state("X").might).toBe(4);
@@ -705,10 +705,9 @@ describe("383.3.a / 383.3.a.2 / 402.1: a 'you may' Play Effect is accepted or de
     return scenario().hand(P1, MAY_DRAWER, "O").hand(P2, REACTION_BUFF, "B").unit(P2, "base", { might: 2 }, "X");
   }
 
-  test.failing("BUG: branch A (383.3.a.2 / 402.1.a) — P1 is asked 'perform it?' while finalizing; declining removes the item: chain empty, Neutral Open, P1 acting, P2 never received Priority, hand unchanged. Engine only asks at resolution, after a full priority round", async () => {
-    // Expected: play(O) → yes/no prompt for P1 immediately; no() → nothing on the chain, no
-    // Closed-state priority round over a declined item. Actual: the trigger is finalized
-    // unconditionally, P1 then P2 receive chain priority, and the opt-in prompt appears on resolve.
+  test("branch A (383.3.a.2 / 402.1.a) — P1 is asked 'perform it?' while finalizing; declining removes the item: chain empty, Neutral Open, P1 acting, P2 never received Priority, hand unchanged", async () => {
+    // play(O) → yes/no prompt for P1 immediately; no() → nothing on the chain, no Closed-state
+    // priority round over a declined item.
     const game = await mayBoard().build();
     const hand0 = game.p1.hand().length;
     await game.p1.play("O");
@@ -722,10 +721,9 @@ describe("383.3.a / 383.3.a.2 / 402.1: a 'you may' Play Effect is accepted or de
     expect(game.p1.hand()).toHaveLength(hand0 - 1); // O left the hand; nothing drawn
   });
 
-  test.failing("BUG: branch B (383.3.a / 402.1) — accepting at finalization leaves a finalized trigger on the chain in a Closed State with P1 holding Priority and P2 still able to respond before the draw. Engine has no finalization prompt", async () => {
-    // Expected: play(O) → yes/no for P1 → yes() → chain [O-trigger], Neutral Closed, priority P1,
-    // hand not yet grown. Actual: no yes/no decision exists at this point (it is an action/chain
-    // decision), so the expectation on the prompt fails.
+  test("branch B (383.3.a / 402.1) — accepting at finalization leaves a finalized trigger on the chain in a Closed State with P1 holding Priority and P2 still able to respond before the draw", async () => {
+    // play(O) → yes/no for P1 → yes() → chain [O-trigger], Neutral Closed, priority P1, hand not
+    // yet grown.
     const game = await mayBoard().build();
     const hand0 = game.p1.hand().length;
     await game.p1.play("O");

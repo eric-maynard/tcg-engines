@@ -640,8 +640,9 @@ describe("'You may pay [1]. If you do, …' inside a resolving trigger is skippa
     const game = await build().build();
     const hand = game.p1.hand().length;
     await game.p1.move("raider", "bf1");
-    expect(game.chain()).toHaveLength(1); // the attack trigger is a real chain item
-    expect(decisionOf(game)?.context).toBe("chain");
+    expect(game.chain()).toHaveLength(1); // the attack trigger is a real (still pending) chain item
+    // rule 383.3.b.1 / 404: the pay-or-decline question is part of FINALIZING the trigger, so it is
+    // asked right away, before any chain priority.
     const s = await game.settle();
     if (s.reason === "unanswered") {
       // The engine may still ask; the only legal answer is "no".

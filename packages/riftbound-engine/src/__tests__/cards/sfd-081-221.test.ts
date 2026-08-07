@@ -87,6 +87,8 @@ describe("Card Sharp (sfd-081-221)", () => {
     await game.p1.play("sharp");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sharp", controller: P1, triggered: true, type: "ability" })]);
     expect(goldOf(game, P1)).toEqual([]);
+    await game.p1.yes(); // rule 402 (finalization): the opt-in is answered before anyone gets priority
+    expect(goldOf(game, P1)).toEqual([]); // still nothing — the effect waits for resolution
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2); // the opponent may respond first
   });

@@ -44,6 +44,25 @@ export interface ChainItem {
   /** Whether this is a triggered ability (auto-added, not player-initiated) */
   readonly triggered?: boolean;
   /**
+   * rule 337.1 / 402–404: a triggered item is appended as a Pending Item and
+   * only becomes a Finalized Chain Item once its controller has decided a
+   * leading "you may" (402.1), chosen its targets/modes (402.2) and paid any
+   * base cost (404) — all before anyone receives Priority (337.4). Undefined on
+   * items whose producer already finalized them (played cards, activations).
+   */
+  readonly status?: "pending" | "finalized";
+  /**
+   * rule 337.1.b / 354.2 — chain items appended BEFORE this pending trigger
+   * (a play an effect instructed mid-resolution) that must leave the Chain
+   * before this item's finalization dialog opens.
+   */
+  readonly finalizeAfter?: readonly string[];
+  /**
+   * rule 383.3.e.2 — the "once each turn" tally key this trigger consumed when
+   * it was queued; refunded if the item leaves the Chain unfinalized.
+   */
+  readonly onceKey?: string;
+  /**
    * rule-id: ven-021-166 — the GameEvent that fired this trigger, so target
    * qualifiers like "a battlefield I moved to or from" can resolve against
    * the event's from/to zones at chain-resolution time.

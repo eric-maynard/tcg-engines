@@ -63,13 +63,11 @@ async function resolveTopOfChain(game: Game): Promise<void> {
 async function attackAndShootDecoy(game: Game): Promise<void> {
   await game.p1.move("lucian", "bf1");
   expect(game.chain()).toEqual([expect.objectContaining({ cardId: "lucian", triggered: true })]);
-  game.script(P1, ["decoy"]);
-  await resolveTopOfChain(game);
-  // The target may instead be asked on resolution.
+  // rule 402 (finalization): the target is chosen as the trigger goes on the chain, before priority.
   if (game.decision()?.kind === "pick") {
     await game.p1.pick("decoy");
   }
-  game.clearScript(P1);
+  await resolveTopOfChain(game);
   expect(game.chain()).toEqual([]);
   expect(game.zoneOf("decoy")).toBe("trash"); // any Assault value ≥ 1 kills the 1-Might decoy
 }

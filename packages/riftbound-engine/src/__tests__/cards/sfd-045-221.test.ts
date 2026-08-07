@@ -119,6 +119,7 @@ describe("Not So Fast (sfd-045-221)", () => {
     const game = await board().hand(P1, SHIELDBEARER, "solari").build();
     await game.p1.play("solari", { to: "base" });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "solari", triggered: true })]);
+    await game.p1.pick("theirs"); // rule 402 (finalization): the stun's target is chosen before anyone gets priority
     await game.p1.passPriority();
     expect(game.p2.can("cast", "nsf")).toBe(true);
     await game.p2.cast("nsf", { targets: "solari" });

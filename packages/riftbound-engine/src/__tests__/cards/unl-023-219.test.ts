@@ -142,12 +142,9 @@ describe("Katarina, Reckless (unl-023-219)", () => {
     const energy = game.p1.energy();
     await game.p1.reveal("marai");
     expect(game.p1.energy()).toBe(energy);
-    expect(game.chain().map((c) => [c.cardId, c.triggered])).toEqual([
-      ["marai", true],
-      ["kat", true],
-    ]);
-    await game.settle();
-    const d = game.decision();
+    // rule 402.4: Marai's "an enemy unit here" has no legal target at bf1 ⇒ removed unfinalized
+    expect(game.chain().map((c) => [c.cardId, c.triggered])).toEqual([["kat", true]]);
+    const d = game.decision(); // rule 402 (finalization): Katarina's target is picked before priority
     expect(d).toMatchObject({ kind: "pick", seat: P1 });
     expect(d?.kind === "pick" ? d.options.map((o) => o.card).sort() : []).toEqual(["far", "home"]); // enemy UNITS anywhere, no gear, no friendlies
     await game.p1.pick("far");

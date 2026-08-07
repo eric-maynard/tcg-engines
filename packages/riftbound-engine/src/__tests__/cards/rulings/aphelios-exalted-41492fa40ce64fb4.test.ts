@@ -60,8 +60,7 @@ describe("Ruling 41492fa40ce64fb4 — Aphelios, Exalted × Svellsongur / Shady S
     await game.p1.passPriority();
     await game.p2.passPriority();
     expect(apheliosTriggers(game)).toHaveLength(1);
-    await game.p1.passPriority();
-    await game.p2.passPriority();
+    // rule 402 (finalization): the "choose one" mode is chosen as the trigger goes on the chain, before priority.
     // Aphelios's "choose one" is P1's decision.
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1 });

@@ -55,13 +55,13 @@ describe("Crackshot Corsair (ogn-130-298)", () => {
       .unit(P2, "base", { might: 1 }, "home")
       .build();
     await game.p1.move("cc", "bf1");
-    await game.p1.passPriority();
-    await game.p2.passPriority();
-    const d = game.decision();
+    const d = game.decision(); // rule 402 (finalization): the target is chosen before priority
     expect(d?.kind).toBe("pick");
     const offered = d?.kind === "pick" ? d.options.map((o) => o.card) : [];
     expect(new Set(offered)).toEqual(new Set(["a", "b"]));
     await game.p1.pick("b");
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.state("b").damage).toBe(1);
     expect(game.state("a").damage).toBe(0);
   });

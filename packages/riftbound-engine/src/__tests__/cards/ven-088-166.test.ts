@@ -140,7 +140,8 @@ describe("Jayce, Hammer in Hand (ven-088-166)", () => {
     expect(game.phase()).toBe("beginning");
     expect(game.state("jayce").isReady).toBe(true);
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "jayce", controller: P1, triggered: true })]);
-    expect(game.decision()).toMatchObject({ context: "chain", kind: "action", seat: P1 });
+    // rule 402 (finalization): the "choose one —" mode question is asked as the item is finalized, before priority
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "mode", timing: "FIN" });
   });
 
   // Expected: once both pass, P1 is asked to choose one of three modes. Actual: the raw effect resolves

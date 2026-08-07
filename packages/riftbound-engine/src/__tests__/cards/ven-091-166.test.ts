@@ -25,10 +25,11 @@ describe("Corrupted Dragon (ven-091-166)", () => {
       .build();
 
     await game.p1.move("dragon", "bf1");
-    const stop = await game.settle();
-    expect(stop.reason).toBe("unanswered");
-    await game.p1.yes();
+    await game.p1.yes(); // rule 402 (finalization): the opt-in is asked before priority
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     const d = game.decision();
+    expect(d?.timing).toBe("RES");
     expect(d?.kind).toBe("pick");
     const keys = (d as { options?: { key: string }[] } | undefined)?.options?.map((o) => o.key) ?? [];
     expect(keys).toContain("small");
@@ -49,8 +50,9 @@ describe("Corrupted Dragon (ven-091-166)", () => {
       .build();
 
     await game.p1.move("dragon", "bf1");
-    await game.settle();
-    await game.p1.yes();
+    await game.p1.yes(); // rule 402 (finalization)
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     await game.p1.decline();
 
     expect(game.locationOf("small")).toBe("bf1");

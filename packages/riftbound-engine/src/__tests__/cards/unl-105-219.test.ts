@@ -44,6 +44,15 @@ async function moveAndAccept(game: Game, to: string): Promise<Decision | null> {
   return game.decision();
 }
 
+/**
+ * Resolve just the newest chain item (both players pass) without settling the whole showdown.
+ * rule 402 (finalization): the trigger's answers are given up front; its EFFECT still waits for resolution.
+ */
+async function resolveChainItem(game: Game): Promise<void> {
+  await game.acting().passPriority();
+  await game.acting().passPriority();
+}
+
 /** Open a staged combat if the engine left it as a turn-player option, then resolve it. */
 async function fight(game: Game, bf: string): Promise<void> {
   await game.settle();
@@ -92,6 +101,7 @@ describe("Imposing Challenger (unl-105-219)", () => {
     if (d?.kind === "pick" && d.semantics === "target") {
       await game.p1.pick("small");
     }
+    await resolveChainItem(game);
     expect(game.decision()).toMatchObject({ kind: "pick", seat: P1, semantics: "destination" });
     await game.p1.pick("battlefield-bf2");
     expect(game.state("small")).toMatchObject({ controller: P2, zone: "battlefield-bf2" });
@@ -138,6 +148,7 @@ describe("Imposing Challenger (unl-105-219)", () => {
     if (d?.kind === "pick" && d.semantics === "target") {
       await game.p1.pick("small");
     }
+    await resolveChainItem(game);
     await game.p1.pick("battlefield-bf2");
     expect(game.gameState.battlefields.bf2).toMatchObject({ contested: true, contestedBy: P2, controller: P1 });
     await game.settle(); // bf1: no defender left → conquer
@@ -163,8 +174,9 @@ describe("Imposing Challenger (unl-105-219)", () => {
     if (d?.kind === "pick" && d.semantics === "target") {
       expect(cards(d)).toEqual(["small"]);
     } else {
-      // auto-taken single target → we must be choosing SMALL's destination
-      expect(d).toMatchObject({ kind: "pick", semantics: "destination", source: { cardId: "small" } });
+      // auto-taken single target → on resolution we must be choosing SMALL's destination
+      await resolveChainItem(game);
+      expect(game.decision()).toMatchObject({ kind: "pick", semantics: "destination", source: { cardId: "small" } });
     }
   });
 
@@ -201,8 +213,9 @@ describe("Imposing Challenger (unl-105-219)", () => {
     let d = await moveAndAccept(game, "bf1");
     if (d?.kind === "pick" && d.semantics === "target") {
       await game.p1.pick("small");
-      d = game.decision();
     }
+    await resolveChainItem(game);
+    d = game.decision();
     expect(d).toMatchObject({ kind: "pick", semantics: "destination" });
     expect(keys(d)).toEqual(["battlefield-bf2", "battlefield-bf3"]);
   });

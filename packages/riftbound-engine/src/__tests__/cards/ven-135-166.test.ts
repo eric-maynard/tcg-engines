@@ -56,10 +56,11 @@ describe("Kennen, Keeper of Balance (ven-135-166)", () => {
       .unit(P1, "base", KENNEN, "kennen")
       .build();
     await game.p1.move("kennen", "bf1");
-    await game.settle();
+    // rule 402 (finalization): the pay-[2] yes/no and the target are answered on the chain, before priority.
     await game.p1.yes();
-    await game.settle();
     await game.p1.pick("foe");
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     expect(game.state("foe").isStunned).toBe(true);
   });
 

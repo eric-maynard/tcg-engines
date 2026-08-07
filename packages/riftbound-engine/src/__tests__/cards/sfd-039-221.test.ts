@@ -54,6 +54,8 @@ describe("Royal Entourage (sfd-039-221)", () => {
     const game = await board().build();
     await game.p1.play("re");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "re", controller: P1, triggered: true })]);
+    await game.p1.chooseMode(0); // rule 402 (finalization): mode and target are chosen before anyone gets priority
+    await game.p1.pick("monk");
     expect(game.actingSeat()).toBe(P1);
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2); // opponent may respond before it resolves
@@ -72,6 +74,7 @@ describe("Royal Entourage (sfd-039-221)", () => {
     expect(target.seat).toBe(P1);
     expect(target.options.map((o) => o.card).sort()).toEqual(["loose", "monk"]);
     await game.p1.pick("loose");
+    await game.settle(); // rule 402: choices made at finalization; the item resolves after both pass
     expect(game.state("loose").isExhausted).toBe(true);
     expect(game.state("monk").isExhausted).toBe(false);
     expect(game.chain()).toHaveLength(0);
@@ -83,6 +86,7 @@ describe("Royal Entourage (sfd-039-221)", () => {
     await game.settle();
     await game.p1.chooseMode(1);
     await game.p1.pick("loose");
+    await game.settle();
     expect(game.state("loose").isExhausted).toBe(true);
     await game.advanceTurn();
     expect(game.turnPlayer()).toBe(P2);
@@ -100,6 +104,7 @@ describe("Royal Entourage (sfd-039-221)", () => {
     await game.settle();
     await game.p1.chooseMode(0);
     await game.p1.pick("monk");
+    await game.settle();
     expect(game.state("monk").isExhausted).toBe(false);
     // Second activation: Royal Entourage itself (unbuffed) is now a legal buff recipient.
     await game.p1.activate("monk", 0, { targets: "re" });
@@ -115,6 +120,7 @@ describe("Royal Entourage (sfd-039-221)", () => {
     await game.settle();
     await game.p1.chooseMode(0);
     await game.p1.pick("loose");
+    await game.settle();
     expect(game.state("loose").isExhausted).toBe(false);
     expect(game.state("monk").isExhausted).toBe(false);
     expect(game.state("bystander").isExhausted).toBe(false);

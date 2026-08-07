@@ -95,6 +95,10 @@ describe("Ruling adc5174843bc420d — Faefolk's 'that battlefield' is fixed at t
     if (game.decision()?.kind === "yes-no" && game.decision()?.seat === P1) {
       await game.p1.yes();
     }
+    // rule 402 (finalization): the enemy unit is chosen before anyone gets priority.
+    if (game.decision()?.kind === "pick" && game.decision()?.seat === P1) {
+      await game.p1.pick("foe");
+    }
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2);
     expect(game.p2.can("cast", "gust")).toBe(true);

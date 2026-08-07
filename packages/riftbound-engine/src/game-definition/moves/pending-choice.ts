@@ -27,7 +27,7 @@ import { openPendingContestedShowdown } from "./chain/showdown";
 import { resolveTarget } from "../../abilities/target-resolver";
 import * as triggerRunner from "../../abilities/trigger-runner";
 import { fireTriggers } from "../../abilities/trigger-runner";
-import { lockTriggerTargets } from "../../abilities/trigger-target-lock";
+import { continueRevealSlotLock } from "./play/reveal-target-lock";
 import { addToChain, createInteractionState, removeChainItem } from "../../chain";
 import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
@@ -740,6 +740,17 @@ export function isValidPendingPick(choice: PendingChoice, cardId: string): boole
   if (allowedTypes && allowedTypes.length > 0) {
     const cardType = getGlobalCardRegistry().get(cardId)?.cardType;
     if (cardType && !allowedTypes.includes(cardType)) {
+      return false;
+    }
+  }
+  // rule 135.2 (ven-085-166 Decree of Strength) — "choose a Mind card from
+  // it": the filter is a DOMAIN allow-list; a multi-domain card qualifies when
+  // any of its domains is listed.
+  const allowedDomains = choice.filter?.domains;
+  if (allowedDomains && allowedDomains.length > 0) {
+    const d = getGlobalCardRegistry().get(cardId)?.domain;
+    const ds = d === undefined ? [] : Array.isArray(d) ? d : [d];
+    if (!ds.some((x) => allowedDomains.includes(x))) {
       return false;
     }
   }
@@ -1477,24 +1488,38 @@ export const pendingChoiceMoves: Partial<
         const finalizeId = (choice as { finalizationChainItemId?: string })
           .finalizationChainItemId;
         if (finalizeId !== undefined) {
-          const interaction = draft.interaction;
-          if (interaction?.chain) {
-            draft.interaction =
-              context.params.accept === true
-                ? {
-                    ...interaction,
-                    chain: {
-                      ...interaction.chain,
-                      items: interaction.chain.items.map((it) =>
-                        it.id === finalizeId ? { ...it, optional: false } : it,
-                      ),
-                    },
-                  }
-                : removeChainItem(interaction, finalizeId);
+          let accepted = context.params.accept === true;
+          // rule 383.3.b.1 / 404.1 — a base cost ("you may pay [N] to …") is
+          // paid NOW, as part of finalizing; unpayable ⇒ the item cannot be
+          // finalized and leaves the Chain (404.2).
+          const cost = optInCostOf(choice);
+          if (accepted && cost) {
+            if (
+              !canPayOptInCost(draft, choice.playerId, choice.sourceCardId, cost, context, optInEffectOf(choice))
+            ) {
+              accepted = false;
+            } else {
+              deductAbilityCost(draft, choice.playerId, cost, context.zones, context.counters);
+              if (cost.exhaust === true) {
+                context.counters.setFlag(choice.sourceCardId as CoreCardId, "exhausted", true);
+              }
+            }
           }
-          // WIP guard: the finalization opt-in helper (rule 383.3.a) is not exported in this tree yet;
-          // call it only if the owning lane has landed it.
-          (triggerRunner as { promptFinalizationOptIn?: (d: unknown) => void }).promptFinalizationOptIn?.(draft);
+          const interaction = draft.interaction;
+          if (accepted && interaction?.chain) {
+            draft.interaction = {
+              ...interaction,
+              chain: {
+                ...interaction.chain,
+                items: interaction.chain.items.map((it) =>
+                  it.id === finalizeId ? { ...it, optInCost: undefined, optional: false } : it,
+                ),
+              },
+            };
+          } else if (!accepted) {
+            // rule 383.3.a.2 / 383.3.e.2 — considered to have not triggered.
+            triggerRunner.removeUnfinalizedItem(draft, finalizeId);
+          }
           if (!draft.pendingChoice) {
             postChoiceCleanup(draft, context);
           }
@@ -1797,7 +1822,12 @@ export const pendingChoiceMoves: Partial<
             node._chosenTargets = [picked];
           }
           fireTriggers(
-            { cardId: picked, chooserId: choice.playerId, sourceType: "spell", type: "choose" },
+            {
+              cardId: picked,
+              chooserId: choice.playerId,
+              sourceType: item.triggered === true ? "ability" : "spell",
+              type: "choose",
+            },
             { cards: context.cards, counters: context.counters, draft, zones: context.zones },
           );
           raisePlayTimeModeChoice(
@@ -1822,9 +1852,18 @@ export const pendingChoiceMoves: Partial<
           let triggeredItem = false;
           if (items && idx >= 0) {
             triggeredItem = items[idx]?.triggered === true;
-            items[idx] = { ...items[idx], targets: [picked] };
+            // rule 402.2 (sfd-132-221) — slot N of a multi-slot trigger keeps
+            // the earlier slots' picks in front of it.
+            const slot = choice.bindSlotIndex;
+            const targets =
+              slot !== undefined
+                ? [...(items[idx]?.targets ?? []).slice(0, slot), picked]
+                : [picked];
+            items[idx] = { ...items[idx], targets };
           }
           draft.pendingChoice = undefined;
+          // rule 809.1.c.1 — the [Deflect] surcharge is owed as the target is chosen.
+          chargePromptedDeflectTax(draft, choice, [picked], context.cards);
           fireTriggers(
             {
               cardId: picked,
@@ -1836,8 +1875,11 @@ export const pendingChoiceMoves: Partial<
             },
             { cards: context.cards, counters: context.counters, draft, zones: context.zones },
           );
-          // rule 355.5: several simultaneous triggers each choose in turn.
-          lockTriggerTargets(draft, { cards: context.cards, zones: context.zones });
+          // rule 355.5 / 811.1.b (ogn-220-298): the next slot of a multi-target
+          // card played from [Hidden] is asked right away.
+          if (!draft.pendingChoice) {
+            continueRevealSlotLock(draft, { cards: context.cards, zones: context.zones });
+          }
           postChoiceCleanup(draft, context);
           return;
         }

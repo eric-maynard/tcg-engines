@@ -70,10 +70,9 @@ async function drive(game: Game, wants: string[]): Promise<void> {
 async function playAndResolve(game: Game, target: string, payer = "payer"): Promise<void> {
   const wants = [payer, target];
   await game.p1.play("prof");
-  await drive(game, wants);
-  await game.settle();
-  await drive(game, wants);
-  await game.settle();
+  await drive(game, wants); // rule 402 (finalization): the opt-in is asked before priority
+  await game.acting().passPriority();
+  await game.acting().passPriority();
   await drive(game, wants);
   await game.settle({ policy: "first" }); // drain any follow-on prompt (e.g. a Predict)
 }
@@ -166,6 +165,7 @@ describe("Profiteer (ven-082-166)", () => {
     // Expected: at the cost prompt the options include `payer` but not `theirAmped`. Actual: no prompt at all.
     const game = await board().build();
     await game.p1.play("prof");
+    await game.p1.yes(); // rule 402 (finalization): the opt-in is asked before priority
     let sawCostPrompt = false;
     for (let i = 0; i < 8 && !sawCostPrompt; i++) {
       const d = game.decision();
@@ -175,6 +175,8 @@ describe("Profiteer (ven-082-166)", () => {
         sawCostPrompt = true;
         expect(d.options.some((o) => o.card === "theirAmped" || o.key === "theirAmped")).toBe(false);
         expect(d.options.some((o) => o.card === "prof" || o.key === "prof")).toBe(false); // not Empowered itself
+      } else if (d?.kind === "action" && d.context === "chain") {
+        await game.acting().passPriority();
       } else {
         await game.settle();
       }
@@ -224,10 +226,9 @@ describe("Profiteer (ven-082-166)", () => {
       .build();
     const wants = ["payer", "mage"];
     await game.p1.play("prof");
-    await drive(game, wants);
-    await game.settle();
-    await drive(game, wants);
-    await game.settle();
+    await drive(game, wants); // rule 402 (finalization): the opt-in is asked before priority
+    await game.acting().passPriority();
+    await game.acting().passPriority();
     await drive(game, wants);
     await game.settle();
     expect(game.state("mage")).toMatchObject({ isEmpowered: true, might: 4 });

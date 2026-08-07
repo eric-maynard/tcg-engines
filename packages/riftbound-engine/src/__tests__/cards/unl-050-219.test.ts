@@ -140,7 +140,9 @@ describe("Iascylla (unl-050-219)", () => {
       await game.settle();
     }
     expect(game.decision()?.kind).toBe("pick");
-    await game.p1.pick("home");
+    await game.p1.pick("home"); // rule 402 (finalization): the target is chosen before priority
+    await game.acting().passPriority();
+    await game.acting().passPriority(); // both pass → the move resolves
     // Home now stands at bf1, still P2's (moved, not stolen), contesting P1's battlefield as the attacker.
     expect(game.state("home")).toMatchObject({ controller: P2, zone: "battlefield-bf1" });
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P2, controller: P1 });

@@ -238,6 +238,7 @@ describe("Kato the Arm (sfd-112-221)", () => {
   test("the opponent gets priority on the move trigger before the pump lands (they could answer with a Reaction)", async () => {
     const game = await board().build();
     await game.p1.move("kato", "own");
+    await game.p1.pick("buddy"); // rule 402 (finalization): the target is chosen before priority
     await game.p1.passPriority();
     expect(game.actingSeat()).toBe(P2);
     expect((game.decision() as ActionDecision).context).toBe("chain");
