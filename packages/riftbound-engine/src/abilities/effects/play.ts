@@ -70,6 +70,14 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     playFromHandToBase(effect, ctx);
     return;
   }
+  // rule-id: sfd-111-221 (rule 355.2 / 356.1.b) — "play a unit from hand to a
+  // battlefield you control, reducing its cost by [3]": the destination is
+  // restricted to the controller's own battlefields (never an enemy's), and a
+  // reduction leaves the rest of the cost payable, so the play is charged here.
+  if (from === "hand" && isControlledBattlefieldDest(toLocation)) {
+    playFromHandToControlledBattlefield(effect, ctx);
+    return;
+  }
   if (from === "hand" && !ctx.boundTargets) {
     const candidates = playCandidatesFromHand(effect, ctx);
     if (candidates.length === 0) {
@@ -392,6 +400,94 @@ function playFromHandToBase(effect: ExecutableEffect, ctx: EffectContext): void 
   }
   deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
   enterUnitFromEffect(chosen, "base", ctx);
+}
+
+/** rule-id: sfd-111-221 — `toLocation: { battlefield: "controlled" }`. */
+function isControlledBattlefieldDest(toLocation: unknown): boolean {
+  return (
+    typeof toLocation === "object" &&
+    toLocation !== null &&
+    (toLocation as { battlefield?: unknown }).battlefield === "controlled"
+  );
+}
+
+/**
+ * rule 355.2 (rule-id: sfd-111-221) — the battlefield zones the effect's
+ * controller currently controls and that can legally receive a unit play.
+ */
+function controlledBattlefieldZones(ctx: EffectContext): string[] {
+  const battlefields =
+    (ctx.draft as { battlefields?: Record<string, { controller?: string | null }> }).battlefields ?? {};
+  return Object.entries(battlefields)
+    .filter(([id, bf]) => bf?.controller === ctx.playerId && !battlefieldForbidsUnitPlays(id))
+    .map(([id]) => `battlefield-${id}`);
+}
+
+/**
+ * rule-id: sfd-111-221 — "You may play a unit from hand to a battlefield you
+ * control, reducing its cost by [3]". Rule 355.10.a: the hand is not a board
+ * zone, so the controller picks the unit as this effect resolves; rule 356.1.b:
+ * the reduction only discounts the Energy component, the rest is still paid;
+ * rule 355.2: the destination is limited to their own battlefields, and is
+ * prompted for only when more than one qualifies.
+ */
+function playFromHandToControlledBattlefield(effect: ExecutableEffect, ctx: EffectContext): void {
+  if (playerCannotPlay(ctx, ctx.playerId)) {
+    return;
+  }
+  const destinations = controlledBattlefieldZones(ctx);
+  if (destinations.length === 0) {
+    return;
+  }
+  const reduce = (effect as { reduceCost?: { energy?: number } }).reduceCost;
+  const extras: CostExtras =
+    reduce?.energy !== undefined ? { additionalCost: { energy: -reduce.energy } } : {};
+  const candidates = playCandidatesFromHand(effect, ctx).filter(
+    (id) =>
+      getGlobalCardRegistry().getCardType(id) === "unit" &&
+      canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta),
+  );
+  // The prompt hands the pick back through `then` as the trigger source.
+  const fromPick = (effect as { pickedFromPrompt?: boolean }).pickedFromPrompt
+    ? ctx.triggerSourceId
+    : undefined;
+  const chosen = [fromPick, ...(ctx.boundTargets ?? [])].find(
+    (id): id is string => id !== undefined && candidates.includes(id),
+  );
+  if (chosen === undefined) {
+    if (candidates.length === 0 || ctx.draft.pendingChoice) {
+      return;
+    }
+    // The pick itself does nothing (the card is already in hand); the play
+    // happens in `then`, which receives the picked card as its trigger source.
+    ctx.draft.pendingChoice = {
+      onPicked: "draw",
+      optional: true,
+      prompter: ctx.playerId,
+      remaining: 1,
+      revealed: [...candidates],
+      revealer: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      then: { ...(effect as object), pickedFromPrompt: true },
+      type: "reveal-and-pick",
+    } as typeof ctx.draft.pendingChoice;
+    return;
+  }
+  deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
+  if (destinations.length === 1) {
+    enterUnitFromEffect(chosen, destinations[0] as string, ctx);
+    return;
+  }
+  // rule 355.2: more than one controlled battlefield — the controller chooses.
+  // The choose-destination branch of `pending-choice.ts` finalizes the play
+  // (exhaust, play-self / play-card triggers) for a card entering from hand.
+  ctx.draft.pendingChoice = {
+    cardId: chosen,
+    options: destinations,
+    playerId: ctx.playerId,
+    sourceCardId: ctx.sourceCardId,
+    type: "choose-destination",
+  } as typeof ctx.draft.pendingChoice;
 }
 
 /**

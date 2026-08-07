@@ -403,6 +403,28 @@ export function evaluateEffectCondition(
             sum + ctx.zones.getCardsInZone("hand" as CoreZoneId, pid as CorePlayerId).length,
           0,
         );
+      } else if (target && (target as { location?: string }).location === "facedown") {
+        // rule-id: unl-014-219 (rule 811.1) — a facedown card is a board object
+        // its hider controls, but it lives in `facedown-<bf>`, a zone kept out
+        // of getBoardCardIds so hidden cards are never ordinary targets; count
+        // those zones directly.
+        const controller = (target as { controller?: string }).controller;
+        const pids =
+          controller === "enemy"
+            ? Object.keys(ctx.draft.players).filter((p) => p !== ctx.playerId)
+            : [ctx.playerId];
+        n = 0;
+        for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+          for (const id of ctx.zones.getCardsInZone(`facedown-${bfId}` as CoreZoneId)) {
+            const owner =
+              ctx.cards.getCardController?.(id as CoreCardId) ??
+              ctx.cards.getCardOwner(id as CoreCardId) ??
+              "";
+            if (pids.includes(owner)) {
+              n += 1;
+            }
+          }
+        }
       } else {
         n = resolveTarget({ quantity: "all", ...target } as TargetDescriptor, {
           cards: ctx.cards,
