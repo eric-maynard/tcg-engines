@@ -8,18 +8,15 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * When you conquer here, put the top 2 cards of your Main Deck into
  * your trash.
  *
- * Approximated as a triggered look that discards (recycles to trash)
- * the top 2 cards. Engine "mill" semantics are represented via
- * look->recycle-to-trash once implemented; for now the ability object
- * captures the intent with a best-effort look-then sequence.
+ * rule 440.1 / 424.1 — this is a straight mill: the cards go from the deck to
+ * the trash without ever being looked at or revealed, so "as you look at or
+ * reveal me" replacements (e.g. Nocturne, Horrifying) never apply.
  */
 const abilities: Ability[] = [
   {
     effect: {
       amount: 2,
-      from: "deck",
-      then: { recycle: "rest" },
-      type: "look",
+      type: "mill",
     },
     trigger: {
       event: "conquer",

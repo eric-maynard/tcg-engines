@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-205-298",
+  "title": "BUG: the third move in a turn scores exactly 1 point",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-205-298.test.ts",
+    "testName": "BUG: the third move in a turn scores exactly 1 point"
+  },
+  "id": "b1d13c9c1b2a",
+  "createdAt": "2026-08-06T17:51:09.023Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.023Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.621Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.335Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.621Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.335Z"
+  }
+}

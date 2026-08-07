@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-114-221",
+  "title": "BUG: [Action] timing — legal with Focus in your own combat showdown; there an attacking Lucian (2 + Assault = 3) deals 3, killing Raider before combat damage",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-114-221.test.ts",
+    "testName": "BUG: [Action] timing — legal with Focus in your own combat showdown; there an attacking Lucian (2 + Assault = 3) deals 3, killing Raider before combat damage"
+  },
+  "id": "8b788a89aa40",
+  "createdAt": "2026-08-07T01:17:36.536Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:17:36.536Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

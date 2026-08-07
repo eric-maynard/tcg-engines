@@ -1,0 +1,38 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 0167a87fe08432da — Tactical Retreat applied first saves the unit to base, healed+exhausted, not banished (engine: banished)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/smite-0167a87fe08432da.test.ts",
+    "testName": "BUG: ruling 0167a87fe08432da — Tactical Retreat applied first saves the unit to base, healed+exhausted, not banished (engine: banished)"
+  },
+  "id": "0ecf6b3793df",
+  "createdAt": "2026-08-06T20:11:47.411Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.411Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:58:11.663Z",
+      "event": "grabbed:w4-i14"
+    },
+    {
+      "at": "2026-08-07T00:01:51.297Z",
+      "event": "done",
+      "note": "rule 372: prompt the dying unit's controller to order N runtime die-replacements (Tactical Retreat vs Smite), not just board+bound"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i14",
+  "claimedAt": "2026-08-06T23:58:11.663Z",
+  "resolution": {
+    "note": "rule 372: prompt the dying unit's controller to order N runtime die-replacements (Tactical Retreat vs Smite), not just board+bound",
+    "files": [
+      "packages/riftbound-engine/src/cleanup/state-based-checks.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/smite-0167a87fe08432da.test.ts"
+    ],
+    "at": "2026-08-07T00:01:51.297Z"
+  }
+}

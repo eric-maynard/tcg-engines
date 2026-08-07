@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-113-221",
+  "title": "BUG: while P1 holds priority over Lucian's pending conquer trigger, P2 is also offered its [Reaction] (312.2 — only the priority holder may play)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-113-221.test.ts",
+    "testName": "BUG: while P1 holds priority over Lucian's pending conquer trigger, P2 is also offered its [Reaction] (312.2 — only the priority holder may play)"
+  },
+  "id": "250ee2c5bb31",
+  "createdAt": "2026-08-07T01:04:24.760Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:04:24.760Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

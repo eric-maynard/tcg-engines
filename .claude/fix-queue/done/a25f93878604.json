@@ -1,0 +1,41 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 445563aa61a7f05a (premise) — Rockfall Path must not be a legal destination for playing a unit; engine offers it",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/temporal-breach-445563aa61a7f05a.test.ts",
+    "testName": "BUG: ruling 445563aa61a7f05a (premise) — Rockfall Path must not be a legal destination for playing a unit; engine offers it"
+  },
+  "id": "a25f93878604",
+  "createdAt": "2026-08-06T19:56:55.634Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:56:55.634Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:40:22.071Z",
+      "event": "grabbed:w3-i9"
+    },
+    {
+      "at": "2026-08-06T23:44:33.319Z",
+      "event": "done",
+      "note": "Temporal Breach: play toLocation:same replays banished unit to its origin zone; Rockfall Path forbids unit plays"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i9",
+  "claimedAt": "2026-08-06T23:40:22.071Z",
+  "resolution": {
+    "note": "Temporal Breach: play toLocation:same replays banished unit to its origin zone; Rockfall Path forbids unit plays",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/play.ts",
+      "packages/riftbound-engine/src/abilities/effects/banish.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
+      "packages/riftbound-engine/src/types/game-state.ts"
+    ],
+    "at": "2026-08-06T23:44:33.319Z"
+  }
+}

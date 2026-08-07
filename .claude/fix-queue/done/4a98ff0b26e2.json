@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-168-298",
+  "title": "BUG: targets only units AT A BATTLEFIELD — a unit in a base is never a legal choice",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-168-298.test.ts",
+    "testName": "BUG: targets only units AT A BATTLEFIELD — a unit in a base is never a legal choice"
+  },
+  "id": "4a98ff0b26e2",
+  "createdAt": "2026-08-06T17:39:26.573Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.573Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.612Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.483Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.612Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.483Z"
+  }
+}

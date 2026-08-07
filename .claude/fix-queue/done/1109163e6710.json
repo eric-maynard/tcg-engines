@@ -1,0 +1,39 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: the replayed Phoenix is a new object — the 5 damage from Sky Splitter is cleared by the trash round-trip (124.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/immortal-phoenix-kill-source-matrix.test.ts",
+    "testName": "BUG: the replayed Phoenix is a new object — the 5 damage from Sky Splitter is cleared by the trash round-trip (124.1)"
+  },
+  "id": "1109163e6710",
+  "createdAt": "2026-08-06T18:35:08.346Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.346Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T22:29:11.188Z",
+      "event": "grabbed:w4-i6"
+    },
+    {
+      "at": "2026-08-06T22:32:27.742Z",
+      "event": "done",
+      "note": "clear damage counter (not just meta.damage) on death/replacement so a replayed unit returns undamaged; costPaid invariant ignores self cost-reduction"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i6",
+  "claimedAt": "2026-08-06T22:29:11.188Z",
+  "resolution": {
+    "note": "clear damage counter (not just meta.damage) on death/replacement so a replayed unit returns undamaged; costPaid invariant ignores self cost-reduction",
+    "files": [
+      "packages/riftbound-engine/src/cleanup/state-based-checks.ts",
+      "packages/riftbound-engine/src/harness/invariants.ts",
+      "packages/riftbound-engine/src/__tests__/cards/interactions/immortal-phoenix-kill-source-matrix.test.ts"
+    ],
+    "at": "2026-08-06T22:32:27.742Z"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-083-221",
+  "title": "BUG: the added Energy is real and immediate — X=2 from two calm power funds a 2-cost Feral Strength in the same turn",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-083-221.test.ts",
+    "testName": "BUG: the added Energy is real and immediate — X=2 from two calm power funds a 2-cost Feral Strength in the same turn"
+  },
+  "id": "2b0ac089e060",
+  "createdAt": "2026-08-07T01:20:34.439Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.439Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

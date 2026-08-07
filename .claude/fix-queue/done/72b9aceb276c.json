@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-060-221",
+  "title": "BUG: the lock follows her position live — recalled to base mid-turn, the opponent's later conquer scores again",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-060-221.test.ts",
+    "testName": "BUG: the lock follows her position live — recalled to base mid-turn, the opponent's later conquer scores again"
+  },
+  "id": "72b9aceb276c",
+  "createdAt": "2026-08-07T01:20:34.443Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.443Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.609Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.098Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.609Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.098Z"
+  }
+}

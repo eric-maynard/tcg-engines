@@ -1,0 +1,29 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-223-298",
+  "title": "BUG: played to a battlefield, it also buffs all OTHER FRIENDLY units THERE (only there, not enemies)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-223-298.test.ts",
+    "testName": "BUG: played to a battlefield, it also buffs all OTHER FRIENDLY units THERE (only there, not enemies)"
+  },
+  "id": "39ec88bb5cf1",
+  "createdAt": "2026-08-06T17:51:09.031Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.031Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:42:20.961Z",
+      "event": "done(unclaimed)",
+      "note": "stale queue entry: repro already fixed and flipped to test() in HEAD; verified green in cards/+core-rules run"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "stale queue entry: repro already fixed and flipped to test() in HEAD; verified green in cards/+core-rules run",
+    "at": "2026-08-07T01:42:20.961Z"
+  }
+}

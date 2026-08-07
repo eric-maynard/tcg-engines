@@ -100,7 +100,7 @@ describe("applyBattlefieldPermanentEffects", () => {
     clearGlobalCardRegistry();
   });
 
-  test("increase-victory-score bumps every player's modifier by amount", () => {
+  test("increase-victory-score is derived from the board (365.1), not baked into the modifier", () => {
     registry.register("bf-climb", {
       abilities: [
         {
@@ -121,9 +121,10 @@ describe("applyBattlefieldPermanentEffects", () => {
 
     applyBattlefieldPermanentEffects(state);
 
-    expect(state.players.p1?.victoryScoreModifier).toBe(1);
-    expect(state.players.p2?.victoryScoreModifier).toBe(1);
+    expect(state.players.p1?.victoryScoreModifier ?? 0).toBe(0);
+    expect(state.players.p2?.victoryScoreModifier ?? 0).toBe(0);
     expect(getEffectiveVictoryScore(state, "p1")).toBe(9);
+    expect(getEffectiveVictoryScore(state, "p2")).toBe(9);
   });
 
   test("increase-hidden-capacity bumps the source battlefield's bonus", () => {

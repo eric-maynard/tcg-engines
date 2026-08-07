@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-270-298",
+  "title": "BUG: moving it into an enemy-held battlefield contests it — combat follows and the buffed 3-Might unit beats a 2-Might defender",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-270-298.test.ts",
+    "testName": "BUG: moving it into an enemy-held battlefield contests it — combat follows and the buffed 3-Might unit beats a 2-Might defender"
+  },
+  "id": "6650020bae92",
+  "createdAt": "2026-08-06T18:35:08.356Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.356Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.602Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.483Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.602Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.483Z"
+  }
+}

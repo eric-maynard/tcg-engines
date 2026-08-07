@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-190-298",
+  "title": "BUG: dying in combat also triggers Deathknell (323.4) — the 3-Might attacker that killed him takes 4 and dies",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-190-298.test.ts",
+    "testName": "BUG: dying in combat also triggers Deathknell (323.4) — the 3-Might attacker that killed him takes 4 and dies"
+  },
+  "id": "f7518a1604e7",
+  "createdAt": "2026-08-06T17:39:26.577Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.577Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:45:03.895Z",
+      "event": "grabbed:w7-i22"
+    },
+    {
+      "at": "2026-08-07T02:35:32.145Z",
+      "event": "done",
+      "note": ""
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i22",
+  "claimedAt": "2026-08-07T01:45:03.895Z",
+  "resolution": {
+    "note": "",
+    "at": "2026-08-07T02:35:32.145Z"
+  }
+}

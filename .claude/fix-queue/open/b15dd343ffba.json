@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-012-221",
+  "title": "BUG: a token 'played' by an effect is not a card (350.2) — Bushwhack + its Gold token = ONE card → ram costs 4, not 3",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-012-221.test.ts",
+    "testName": "BUG: a token 'played' by an effect is not a card (350.2) — Bushwhack + its Gold token = ONE card → ram costs 4, not 3"
+  },
+  "id": "b15dd343ffba",
+  "createdAt": "2026-08-07T00:42:07.691Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:42:07.691Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

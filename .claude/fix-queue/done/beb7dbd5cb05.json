@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "ogs-007-024",
+  "title": "Assault 2 not applied to Garen's own Might for lethal-damage/survival when attacking",
+  "expected": "Root cause at HEAD (f63bf1b): packages/riftbound-engine/src/combat/combat-resolver.ts `lethalThreshold()` (HEAD lines ~87-95) added only `Shield` for role===\"defender\" and nothing for attackers, while `calculateUnitMight()` (line ~109) does add Assault to damage dealt — so an attacking Garen deals 7 but is kill-checked (checkKills → lethalThreshold(unit,\"attacker\"), line 250/257) against printed 5, dying to 6 damage. distributeDamage(attackers, ..., \"attacker\") (line 237→178) had the same gap. The repo test src/__tests__/cards/ogs-007-024.test.ts:54 was `test.failing(\"BUG: Assault 2 also raises his lethal threshold...\")` at HEAD. NOTE: the working tree already carries an UNCOMMITTED fix (git diff shows `else if (role === \"attacker\") might += getKeywordValue(unit, \"Assault\")` added at combat-resolver.ts:97-98 and the test flipped to plain `test`); with that diff `bun test ogs-007-024.test.ts` is 6 pass / 0 fail. Bug is real in committed code; fix is in-flight but not committed.",
+  "observed": "Garen (fresh, undamaged) attacked alone into two enemy 3-Might Mech tokens at Aspirant's Climb. He dealt 7 damage (Mechs took 4 and 3, both died — so Assault WAS added to damage dealt) but Garen himself went to trash with damage counter 6; battlefield left empty/uncontrolled, no point scored. The mirror case as defender (Shield 2) correctly survived 6 damage, so only the attacker-side threshold is wrong. Matches the repo's own test.failing in __tests__/cards/ogs-007-024.test.ts.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/combat/combat-resolver.ts:93",
+  "id": "beb7dbd5cb05",
+  "createdAt": "2026-08-06T20:43:38.886Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.886Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:20:21.672Z",
+      "event": "grabbed:w7-i16"
+    },
+    {
+      "at": "2026-08-07T00:23:57.212Z",
+      "event": "done",
+      "note": "already fixed at HEAD: lethalThreshold adds Assault for attackers; ogs-007-024 green"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i16",
+  "claimedAt": "2026-08-07T00:20:21.672Z",
+  "resolution": {
+    "note": "already fixed at HEAD: lethalThreshold adds Assault for attackers; ogs-007-024 green",
+    "files": [
+      "packages/riftbound-engine/src/combat/combat-resolver.ts"
+    ],
+    "at": "2026-08-07T00:23:57.212Z"
+  }
+}

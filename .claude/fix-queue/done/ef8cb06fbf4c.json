@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "unl-011-219",
+  "title": "Fresh Beans' triggered ability never fires when a unit is played during a showdown",
+  "expected": "Fresh Beans (unl-011-219) rulesText parses via trigger-patterns.ts:278-283 to event play-unit with restrictions [{type:\"during-showdown\"}]. trigger-matcher.ts:171-173 handles `case \"during-showdown\": return false;` unconditionally (TODO: showdown state not exposed), so the restriction can never be satisfied and the triggered ability never fires, matching the observed no-prompt/no-exhaust behavior.",
+  "observed": "4 Recruit unit tokens entered base during the showdown (passShowdownFocus still available, UI banner 'Showdown in progress — your focus'); Fresh Beans stayed exhausted:false, no chain item, no pendingChoice, hand size unchanged (6). Root cause in engine: abilities/trigger-matcher.ts restriction `case \"during-showdown\": return false` (TODO) — the parsed trigger (event play-unit + restriction during-showdown from trigger-patterns.ts) can never match.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/trigger-matcher.ts:171",
+  "id": "ef8cb06fbf4c",
+  "createdAt": "2026-08-06T20:43:38.885Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.885Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:21:31.437Z",
+      "event": "grabbed:w3-i10"
+    },
+    {
+      "at": "2026-08-07T00:27:25.674Z",
+      "event": "done",
+      "note": "trigger-matcher: during-showdown restriction reads interaction.showdownStack instead of always false"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i10",
+  "claimedAt": "2026-08-07T00:21:31.437Z",
+  "resolution": {
+    "note": "trigger-matcher: during-showdown restriction reads interaction.showdownStack instead of always false",
+    "files": [
+      "packages/riftbound-engine/src/abilities/trigger-matcher.ts",
+      "packages/riftbound-engine/src/__tests__/cards/unl-011-219.test.ts"
+    ],
+    "at": "2026-08-07T00:27:25.674Z"
+  }
+}

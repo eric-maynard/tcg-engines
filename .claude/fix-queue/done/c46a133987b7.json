@@ -1,0 +1,41 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 4559826960eee691 — P2 declares the optional cost, pays nothing (cost zeroed), and Nami's stun still triggers (engine: Bone Skewer effect unimplemented)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-4559826960eee691.test.ts",
+    "testName": "BUG: ruling 4559826960eee691 — P2 declares the optional cost, pays nothing (cost zeroed), and Nami's stun still triggers (engine: Bone Skewer effect unimplemented)"
+  },
+  "id": "c46a133987b7",
+  "createdAt": "2026-08-06T19:55:38.084Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:55:38.084Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:37:13.413Z",
+      "event": "grabbed:w7-i13"
+    },
+    {
+      "at": "2026-08-06T23:40:22.727Z",
+      "event": "done",
+      "note": "instructed play prompts the owner for an optional additional cost; cost zeroed but counts as paid (356.4.f.1)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i13",
+  "claimedAt": "2026-08-06T23:37:13.413Z",
+  "resolution": {
+    "note": "instructed play prompts the owner for an optional additional cost; cost zeroed but counts as paid (356.4.f.1)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts",
+      "packages/riftbound-engine/src/types/game-state.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-4559826960eee691.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-e67d700de3299ca6.test.ts"
+    ],
+    "at": "2026-08-06T23:40:22.727Z"
+  }
+}

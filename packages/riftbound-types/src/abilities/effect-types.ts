@@ -698,6 +698,12 @@ export interface PreventDamageEffect {
   readonly target?: AnyTarget;
   readonly amount?: number | "all";
   readonly duration?: "turn" | "next";
+  /**
+   * rule 437.5.b — "prevent the next damage that would be dealt to it": the
+   * shield's Prevent Value is All for exactly one damage instance, so no
+   * amount is ever lethal to the unit while it is armed.
+   */
+  readonly instance?: boolean;
 }
 
 /**

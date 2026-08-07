@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-077-221",
+  "title": "BUG: [Repeat] 'Kill a gear' twice on two different gear kills both (820.2.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-077-221.test.ts",
+    "testName": "BUG: [Repeat] 'Kill a gear' twice on two different gear kills both (820.2.a)"
+  },
+  "id": "d39053911194",
+  "createdAt": "2026-08-07T01:14:13.015Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.015Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

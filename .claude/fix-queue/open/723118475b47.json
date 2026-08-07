@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-077-221",
+  "title": "BUG: [Repeat] same mode twice on one target (820.2.a): 4 + 4 kills an 8-Might base unit",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-077-221.test.ts",
+    "testName": "BUG: [Repeat] same mode twice on one target (820.2.a): 4 + 4 kills an 8-Might base unit"
+  },
+  "id": "723118475b47",
+  "createdAt": "2026-08-07T01:14:13.015Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.015Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

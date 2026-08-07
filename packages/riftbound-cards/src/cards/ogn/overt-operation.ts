@@ -9,7 +9,8 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * buff all friendly units."
  *
  * Modeled as a sequence:
- *   1. For each friendly unit, an optional spend-buff-then-ready.
+ *   1. An OPTIONAL spend-buff over every buffed friendly unit, readying them
+ *      (rule 355.13 — the controller is asked, the option is never auto-taken).
  *   2. Buff all friendly units.
  */
 const abilities: Ability[] = [
@@ -17,16 +18,10 @@ const abilities: Ability[] = [
     effect: {
       effects: [
         {
-          effect: {
-            effect: {
-              target: { type: "unit" },
-              then: { target: { type: "unit" }, type: "ready" },
-              type: "spend-buff",
-            },
-            type: "optional",
-          },
-          target: { controller: "friendly", type: "unit" },
-          type: "for-each",
+          optional: true,
+          target: { controller: "friendly", filter: "buffed", quantity: "all", type: "unit" },
+          then: { target: { type: "unit" }, type: "ready" },
+          type: "spend-buff",
         },
         {
           target: { controller: "friendly", quantity: "all", type: "unit" },

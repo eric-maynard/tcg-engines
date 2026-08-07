@@ -1,0 +1,36 @@
+{
+  "source": "playtest",
+  "title": "In the AFTER screenshot the two units at Back-Alley Bar (Unsung Hero and the just-played Ravenbloom Student) are rendered as tiny thumbnails overflowing the bottom-right of the battlefield panel and clipped so only the top ~20px strip is visible; the newly played unit is essentially invisible/unidentifiable on the board.",
+  "expected": "Screenshot 28.png (zoomed) confirms: Back-Alley Bar's player-side unit row shows Unsung Hero + the exhausted Ravenbloom Student clipped to a ~25px top strip at the bottom-right of the panel. Source cause: gameplay.css:1143-1158 `.bf-units { flex: 1 1 56px; min-height: 0; overflow-y: auto; }` splits the .bf-body height equally between the (empty) opponent-side and player-side rows, while `.bf-units .card` is fixed at 90x126px (gameplay.css:490-494) and `.battlefield { overflow: hidden }` (gameplay.css:927) inside a `.battlefield-row` of min-height 180px (gameplay.css:119). At the 1920x1080 logical layout each .bf-units row gets ~45px for a 126px card, so the unit is clipped/scrolled out of view by default; board.js:137-139 renders playerUnits into that container with no size adaptation. Public battlefield state is effectively hidden right after the play.",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/public/css/gameplay.css:1143",
+  "rule": "Back-Alley Bar ogn-277-298 / public-zone visibility",
+  "id": "033a1aa647e4",
+  "createdAt": "2026-08-06T20:43:38.887Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.887Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:35:40.869Z",
+      "event": "grabbed:w3-i11"
+    },
+    {
+      "at": "2026-08-07T00:36:44.204Z",
+      "event": "done",
+      "note": "battlefield unit cards: height cap + contain-fit art so squeezed .bf-units rows show whole, identifiable cards instead of a clipped sliver"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i11",
+  "claimedAt": "2026-08-07T00:35:40.869Z",
+  "resolution": {
+    "note": "battlefield unit cards: height cap + contain-fit art so squeezed .bf-units rows show whole, identifiable cards instead of a clipped sliver",
+    "files": [
+      "apps/riftbound-app/public/css/gameplay.css"
+    ],
+    "at": "2026-08-07T00:36:44.204Z"
+  }
+}

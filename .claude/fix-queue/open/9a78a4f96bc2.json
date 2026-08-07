@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-079-221",
+  "title": "BUG: parsed abilities should be [optional additional cost: exhaust your legend] + [play trigger, if paid: move any number of friendly units to an OPEN battlefield]",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-079-221.test.ts",
+    "testName": "BUG: parsed abilities should be [optional additional cost: exhaust your legend] + [play trigger, if paid: move any number of friendly units to an OPEN battlefield]"
+  },
+  "id": "9a78a4f96bc2",
+  "createdAt": "2026-08-07T01:04:24.773Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:04:24.773Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

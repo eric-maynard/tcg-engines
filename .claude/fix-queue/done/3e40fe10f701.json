@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling cf6487465e162f43 — Burn 2 (Kennen) mills Nocturne from the top straight to trash; no banish/play offer (engine: Burn does nothing)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/nocturne-horrifying-cf6487465e162f43.test.ts",
+    "testName": "BUG: ruling cf6487465e162f43 — Burn 2 (Kennen) mills Nocturne from the top straight to trash; no banish/play offer (engine: Burn does nothing)"
+  },
+  "id": "3e40fe10f701",
+  "createdAt": "2026-08-06T19:54:39.766Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:54:39.766Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.599Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.168Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.599Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.168Z"
+  }
+}

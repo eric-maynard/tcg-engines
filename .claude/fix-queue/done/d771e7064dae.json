@@ -1,0 +1,29 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-094-221",
+  "title": "BUG: a Dragon in your HAND or TRASH is not 'controlled' — Direwing must enter exhausted",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-094-221.test.ts",
+    "testName": "BUG: a Dragon in your HAND or TRASH is not 'controlled' — Direwing must enter exhausted"
+  },
+  "id": "d771e7064dae",
+  "createdAt": "2026-08-07T00:39:32.316Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:39:32.316Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T02:35:33.727Z",
+      "event": "done(unclaimed)",
+      "note": ""
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "",
+    "at": "2026-08-07T02:35:33.727Z"
+  }
+}

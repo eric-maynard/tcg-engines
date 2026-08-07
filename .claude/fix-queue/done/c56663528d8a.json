@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-014-221",
+  "title": "BUG: enemy units are bound too ('Units' is unscoped): the opponent cannot move to base on their turn",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-014-221.test.ts",
+    "testName": "BUG: enemy units are bound too ('Units' is unscoped): the opponent cannot move to base on their turn"
+  },
+  "id": "c56663528d8a",
+  "createdAt": "2026-08-06T20:56:21.111Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:56:21.111Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.616Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.830Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.616Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.830Z"
+  }
+}

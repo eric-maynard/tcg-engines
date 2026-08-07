@@ -1,0 +1,37 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling adc5174843bc420d — control: with no response, P1 chooses Foe and it moves to bf1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/irresistible-faefolk-adc5174843bc420d.test.ts",
+    "testName": "BUG: ruling adc5174843bc420d — control: with no response, P1 chooses Foe and it moves to bf1"
+  },
+  "id": "ea042e8310d9",
+  "createdAt": "2026-08-06T19:41:44.525Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:41:44.525Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:14:59.113Z",
+      "event": "grabbed:w3-i7"
+    },
+    {
+      "at": "2026-08-06T23:17:44.203Z",
+      "event": "done",
+      "note": "already fixed upstream: faefolk move-trigger tests all pass, no test.failing left"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i7",
+  "claimedAt": "2026-08-06T23:14:59.113Z",
+  "resolution": {
+    "note": "already fixed upstream: faefolk move-trigger tests all pass, no test.failing left",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/irresistible-faefolk-adc5174843bc420d.test.ts"
+    ],
+    "at": "2026-08-06T23:17:44.203Z"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 346.1 — after a chain opened by a TRIGGERED ability empties during a showdown, Focus must stay with P1 (engine passes Focus to P2)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/combat-flow-and-resolution.test.ts",
+    "testName": "BUG: 346.1 — after a chain opened by a TRIGGERED ability empties during a showdown, Focus must stay with P1 (engine passes Focus to P2)"
+  },
+  "id": "e2d4196f83ae",
+  "createdAt": "2026-08-06T20:11:47.426Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.426Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.610Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.176Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.610Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.176Z"
+  }
+}

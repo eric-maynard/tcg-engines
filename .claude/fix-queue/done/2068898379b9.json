@@ -1,0 +1,43 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-050-221",
+  "title": "BUG: swaps places — Azir moves to the chosen unit's battlefield and that unit moves to Azir's original location (base)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-050-221.test.ts",
+    "testName": "BUG: swaps places — Azir moves to the chosen unit's battlefield and that unit moves to Azir's original location (base)"
+  },
+  "id": "2068898379b9",
+  "createdAt": "2026-08-06T19:03:47.639Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:03:47.639Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T23:09:27.982Z",
+      "event": "grabbed:w7-i10"
+    },
+    {
+      "at": "2026-08-06T23:13:18.635Z",
+      "event": "done",
+      "note": "Azir: explicit activated ability (swap + optional equipment attach) and engine once-per-turn activation gate"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i10",
+  "claimedAt": "2026-08-06T23:09:27.982Z",
+  "resolution": {
+    "note": "Azir: explicit activated ability (swap + optional equipment attach) and engine once-per-turn activation gate",
+    "files": [
+      "packages/riftbound-cards/src/cards/sfd/azir-ascendant.ts",
+      "packages/riftbound-engine/src/abilities/effects/move.ts",
+      "packages/riftbound-engine/src/abilities/effects/attach.ts",
+      "packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts",
+      "packages/riftbound-types/src/abilities/effect-types.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-050-221.test.ts"
+    ],
+    "at": "2026-08-06T23:13:18.635Z"
+  }
+}

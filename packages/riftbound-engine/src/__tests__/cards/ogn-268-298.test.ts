@@ -54,7 +54,7 @@ describe("Bullet Time (ogn-268-298)", () => {
     expect(game.state("mine").damage).toBe(0);
   });
 
-  test.failing("BUG: the variable payment is [rainbow] POWER (any domain), not energy (rules 204.3.b, 135.2.e)", async () => {
+  test("the variable payment is [rainbow] POWER (any domain), not energy (rules 204.3.b, 135.2.e)", async () => {
     // Expected: with 1 energy + 2 rainbow, X=2 is legal; afterwards energy 0 (base cost) and power 0.
     // Likewise 2 fury power pays X=2. Actual: X is capped by and deducted from ENERGY, so with
     // 1 energy the only legal X is 0 and the power is never touched.

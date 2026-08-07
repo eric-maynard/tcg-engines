@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-018-298",
+  "title": "BUG: an opponent's hidden card at the Saboteur's battlefield cannot be revealed",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-018-298.test.ts",
+    "testName": "BUG: an opponent's hidden card at the Saboteur's battlefield cannot be revealed"
+  },
+  "id": "24eb5068dd80",
+  "createdAt": "2026-08-06T17:15:21.553Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.553Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.613Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.563Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.613Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.563Z"
+  }
+}

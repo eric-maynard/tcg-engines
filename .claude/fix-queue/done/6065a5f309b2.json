@@ -1,0 +1,50 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 412a145427c43aa6 (contrast) — a Standard Move of Faefolk from base to bf1 DOES trigger: P1 may drag an enemy unit to bf1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/irresistible-faefolk-412a145427c43aa6.test.ts",
+    "testName": "BUG: ruling 412a145427c43aa6 (contrast) — a Standard Move of Faefolk from base to bf1 DOES trigger: P1 may drag an enemy unit to bf1"
+  },
+  "id": "6065a5f309b2",
+  "createdAt": "2026-08-06T19:58:23.275Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:58:23.275Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:43:57.387Z",
+      "event": "grabbed:w4-i12"
+    },
+    {
+      "at": "2026-08-06T23:44:42.566Z",
+      "event": "done",
+      "note": "flip test.failing→test: move-to-battlefield trigger already fires on Standard Move"
+    },
+    {
+      "at": "2026-08-06T23:46:45.649Z",
+      "event": "reopened:w4-i12 — passes only with another lane in-flight card-def edit"
+    },
+    {
+      "at": "2026-08-06T23:47:00.574Z",
+      "event": "grabbed:w4-i13"
+    },
+    {
+      "at": "2026-08-06T23:49:35.633Z",
+      "event": "done",
+      "note": "already fixed by move-to-battlefield matcher; flipped repro"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i13",
+  "claimedAt": "2026-08-06T23:47:00.574Z",
+  "resolution": {
+    "note": "already fixed by move-to-battlefield matcher; flipped repro",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/irresistible-faefolk-412a145427c43aa6.test.ts"
+    ],
+    "at": "2026-08-06T23:49:35.633Z"
+  }
+}

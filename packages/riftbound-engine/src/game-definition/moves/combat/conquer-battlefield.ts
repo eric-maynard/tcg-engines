@@ -162,13 +162,13 @@ export const conquerBattlefield: Defs["conquerBattlefield"] = {
       player.victoryPoints += 1;
     }
 
-    // Track as scored this turn to prevent double-scoring
-    if (!drewInstead) {
-      if (!draft.scoredThisTurn[playerId]) {
-        draft.scoredThisTurn[playerId] = [];
-      }
-      draft.scoredThisTurn[playerId].push(battlefieldId);
+    // Track as scored this turn to prevent double-scoring. rule 469.1 / 470:
+    // the Final Point draw-instead (471.1.b.1) replaces the POINT, not the
+    // Score, so the battlefield is recorded either way.
+    if (!draft.scoredThisTurn[playerId]) {
+      draft.scoredThisTurn[playerId] = [];
     }
+    draft.scoredThisTurn[playerId].push(battlefieldId);
 
     // Emit "conquer" event so triggered abilities fire
     // (e.g. Blade Dancer's "When you conquer, pay 1 to ready me")

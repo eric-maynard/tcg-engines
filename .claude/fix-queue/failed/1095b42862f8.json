@@ -1,0 +1,34 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: ORDER — Herald's Deathknell resolves FIRST and can only play a unit from the PRE-DRAW hand (energy ignored, power paid); THEN Sacrifice draws 2 and channels 1 exhausted (340.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/sacrifice-rift-herald-deathknell-first.test.ts",
+    "testName": "BUG: ORDER — Herald's Deathknell resolves FIRST and can only play a unit from the PRE-DRAW hand (energy ignored, power paid); THEN Sacrifice draws 2 and channels 1 exhausted (340.1)"
+  },
+  "id": "1095b42862f8",
+  "createdAt": "2026-08-06T18:35:08.349Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.349Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T22:49:14.955Z",
+      "event": "grabbed:w8-i4"
+    },
+    {
+      "at": "2026-08-06T22:50:24.230Z",
+      "event": "failed",
+      "note": "fix (kill-cost trigger must go on the chain AFTER the spell finalizes) is in flight in play-spell.ts in another lane's working tree; verified the test passes with it. Landing it from here would ship their unfinished edit (it currently regresses the file's first test)."
+    }
+  ],
+  "status": "failed",
+  "claimedBy": "w8-i4",
+  "claimedAt": "2026-08-06T22:49:14.955Z",
+  "resolution": {
+    "note": "fix (kill-cost trigger must go on the chain AFTER the spell finalizes) is in flight in play-spell.ts in another lane's working tree; verified the test passes with it. Landing it from here would ship their unfinished edit (it currently regresses the file's first test).",
+    "at": "2026-08-06T22:50:24.230Z"
+  }
+}

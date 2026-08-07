@@ -101,7 +101,14 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       const sub = seq.effects[i];
       // rule-id: ogn-147-298 — "spend a buff to buff me and ready me": the
       // spend-buff cost gates every remaining step, not just its own `then`.
-      if (sub.type === "spend-buff" && !findSpendableBuff(sub, ctx)) {
+      // rule 355.13 (ogn-153-298): an OPTIONAL spend-buff is not a cost, so it
+      // never gates the steps after it ("Then buff all friendly units" happens
+      // whether or not a buff was spent).
+      if (
+        sub.type === "spend-buff" &&
+        (sub as { optional?: boolean }).optional !== true &&
+        !findSpendableBuff(sub, ctx)
+      ) {
         break;
       }
       // rule-id: unl-119-219 — "spend 3 XP to deal damage": an unpayable
@@ -276,7 +283,9 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       const parked = ctx.draft.pendingChoice as
         | { type?: string; then?: unknown }
         | undefined;
-      if (parked?.type === "choose-mode" && parked.then === undefined) {
+      // rule 355.13 (ogn-153-298) — a `confirm` prompt suspends the rest too:
+      // the later steps resume from the prompt's `then` after the answer.
+      if ((parked?.type === "choose-mode" || parked?.type === "confirm") && parked.then === undefined) {
         const rest = seq.effects.slice(i + 1);
         if (rest.length > 0) {
           ctx.draft.pendingChoice = {

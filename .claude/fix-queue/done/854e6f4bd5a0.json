@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-143-298",
+  "title": "BUG: Awaken Phase readying (rule 415.3.a) is 'you ready' — exhausted friendly units should get +1 Might on your new turn",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-143-298.test.ts",
+    "testName": "BUG: Awaken Phase readying (rule 415.3.a) is 'you ready' — exhausted friendly units should get +1 Might on your new turn"
+  },
+  "id": "854e6f4bd5a0",
+  "createdAt": "2026-08-06T17:39:26.581Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.581Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.594Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:13.701Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.594Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:13.701Z"
+  }
+}

@@ -5,6 +5,7 @@
  * Victory is achieved by reaching the victory score (8 points for 1v1).
  */
 
+import { getBattlefieldVictoryScoreBonus } from "../../operations/battlefield-setup-effects";
 import type { PlayerId, RiftboundGameState } from "../../types";
 
 /**
@@ -18,7 +19,9 @@ import type { PlayerId, RiftboundGameState } from "../../types";
 export function getEffectiveVictoryScore(state: RiftboundGameState, playerId: PlayerId): number {
   const player = state.players[playerId];
   const modifier = player?.victoryScoreModifier ?? 0;
-  return state.victoryScore + modifier;
+  // rule 194.3.a / 365.1: an in-play battlefield's "Increase the points needed
+  // to win the game by 1" is a passive, derived from the board every time.
+  return state.victoryScore + modifier + getBattlefieldVictoryScoreBonus(state);
 }
 
 /**

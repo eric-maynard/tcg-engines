@@ -63,7 +63,7 @@ describe("Pack of Wonders (ogn-181-298)", () => {
     expect(game.p1.hand()).toContain("trinket");
   });
 
-  test.failing("BUG: can return a friendly FACEDOWN card to its owner's hand", async () => {
+  test("can return a friendly FACEDOWN card to its owner's hand", async () => {
     // Expected: the facedown card at bf1 is a legal choice and goes back to P1's hand.
     // Actual: the parsed target is `permanent` (units/gear on the board) — facedown cards are never offered.
     const game = await board().build();

@@ -124,12 +124,11 @@ export const scorePoint: Defs["scorePoint"] = {
     // battlefield scored this turn; otherwise draw a card instead. The
     // battlefield is intentionally NOT pushed to scoredThisTurn — a later
     // scorePoint this turn (after the others) is still legal.
-    if (
+    // rule 469.1 / 470: the draw replaces the POINT, not the Score — the
+    // battlefield is still recorded and the Conquer triggers still fire.
+    const drewFinalPointInstead =
       method === "conquer" &&
-      finalPointConquerDrawsInstead(draft, playerId, battlefieldId, { cards, zones })
-    ) {
-      return;
-    }
+      finalPointConquerDrawsInstead(draft, playerId, battlefieldId, { cards, zones });
 
     // Rule 630.1.a: In team-based modes, conquering a battlefield whose
     // Previous controller was a teammate does not grant a victory
@@ -145,7 +144,11 @@ export const scorePoint: Defs["scorePoint"] = {
       areAllies(draft, playerId, prevController as string);
 
     // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
-    if (!teamDisqualified && !applyScoreReplacement(draft, playerId, { cards, zones })) {
+    if (
+      !drewFinalPointInstead &&
+      !teamDisqualified &&
+      !applyScoreReplacement(draft, playerId, { cards, zones })
+    ) {
       player.victoryPoints += 1;
     }
 

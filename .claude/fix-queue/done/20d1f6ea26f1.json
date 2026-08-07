@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogs-008-024",
+  "title": "BUG: '+3 Might this turn' comes first — small (2→5) vs foe (4): foe takes 5 and dies, small takes 4 < 5 and lives",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogs-008-024.test.ts",
+    "testName": "BUG: '+3 Might this turn' comes first — small (2→5) vs foe (4): foe takes 5 and dies, small takes 4 < 5 and lives"
+  },
+  "id": "20d1f6ea26f1",
+  "createdAt": "2026-08-06T18:35:08.357Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.357Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.607Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.866Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.607Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.866Z"
+  }
+}

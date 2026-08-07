@@ -343,7 +343,7 @@ describe("469.1 / 469.2 / 470 / 471.2.c — a same-turn control flip: re-establi
   // Expected (471.2.c "these will only trigger when the Battlefield is Scored"): U4 taking already-scored B is not a
   // Conquer, so U4's "When I conquer, draw 1" must NOT fire — exactly one extra card (U2's) all turn.
   // Actual: the non-combat-showdown control change re-emits a `conquer` event → U4 draws as well.
-  test.failing("BUG: 471.2.c — 'When I conquer' must not trigger when control of an already-scored battlefield is re-established the same turn; engine fires it", async () => {
+  test("471.2.c — 'When I conquer' must not trigger when control of an already-scored battlefield is re-established the same turn; engine fires it", async () => {
     const game = await flipBoard();
     await game.p2.endTurn();
     await game.settle();
@@ -589,7 +589,7 @@ describe("471.1.a.1 / 471.1.b(.1) — the Final Point: a lone Conquer draws inst
   // Expected (471.1.b.1): P1 on 7 with nothing held conquers empty A → has NOT scored every battlefield → draws 1
   // INSTEAD of the point (stays 7); the conquer trigger still fires (+1 more card); A is marked scored; no winner.
   // Actual: the showdown-conquer path pays the point unconditionally → 8, game over, trigger never resolves.
-  test.failing("BUG: 471.1.b.1 — run (b) LONE CONQUER at 7 must draw instead of taking the Final Point (trigger still fires, A scored, game continues); engine awards the win", async () => {
+  test("471.1.b.1 — run (b) LONE CONQUER at 7 must draw instead of taking the Final Point (trigger still fires, A scored, game continues); engine awards the win", async () => {
     const game = await scenario()
       .points(P1, 7)
       .points(P2, 3)
@@ -614,7 +614,7 @@ describe("470 / 471.1.b.1 — two conquers in one turn at match point: the first
   // Expected: (1) conquer empty A → draw instead, 7, A scored; (2) attack B, kill the defender, 466.5.d conquer →
   // every battlefield (A,B) scored this turn → Final Point → 8 → P1 wins; no second draw.
   // Actual: step (1) already awards the 8th point and ends the game.
-  test.failing("BUG: 471.1.b.1 — first lone conquer must draw (not win); only the second conquer of the last unscored battlefield takes the Final Point", async () => {
+  test("471.1.b.1 — first lone conquer must draw (not win); only the second conquer of the last unscored battlefield takes the Final Point", async () => {
     const game = await scenario()
       .points(P1, 7)
       .points(P2, 2)
@@ -795,7 +795,7 @@ describe("194.3.a / 483.3.a — a raised Victory Score (9) shifts BOTH the win c
   // game by 1" makes the effective Victory Score 9, so conquering to 8 does not win.
   // Actual: the engine applies `increase-victory-score` only once during full game setup (victoryScoreModifier); a
   // battlefield that is simply in play contributes nothing → P1 wins at 8.
-  test.failing("BUG: 194.3.a / 365.1 — an in-play battlefield static 'increase the points needed to win by 1' is not derived from the board (only from game setup); reaching 8 still wins", async () => {
+  test("194.3.a / 365.1 — an in-play battlefield static 'increase the points needed to win by 1' is not derived from the board (only from game setup); reaching 8 still wins", async () => {
     const game = await scenario()
       .points(P1, 7)
       .points(P2, 2)
@@ -982,7 +982,7 @@ describe("485.7 / 315.3.b / 315.2.a — the second player's first turn: 3 runes 
   // and does NOT fire again on P2's second turn (still 1). P1 likewise got exactly 1 on its own first turn.
   // Actual: the `once-per-game` trigger restriction is unknown to the trigger matcher, which then blocks the trigger
   // entirely — nobody ever gains the point.
-  test.failing("BUG: 315.2.a — a 'first Beginning Phase: that player gains 1 point' battlefield trigger never fires (once-per-game restriction unsupported)", async () => {
+  test("315.2.a — a 'first Beginning Phase: that player gains 1 point' battlefield trigger never fires (once-per-game restriction unsupported)", async () => {
     const game = await scenario()
       .turn(1)
       .active(P1)
@@ -1005,7 +1005,7 @@ describe("485.7 / 315.3.b / 315.2.a — the second player's first turn: 3 runes 
   // Actual: neither denial nor the once-per-game trigger exists in the engine; P2 is 0 for the wrong reason, so this
   // is pinned to the observable that distinguishes the two: with NO denier P2 must be on 1 (see previous test) while
   // WITH the denier P2 must be on 0 — asserted together.
-  test.failing("BUG: 054.1 / 315.2.a — the first-Beginning-Phase point is denied by an opposing can't-gain-points static and never regained after the denier dies", async () => {
+  test("054.1 / 315.2.a — the first-Beginning-Phase point is denied by an opposing can't-gain-points static and never regained after the denier dies", async () => {
     const build = (withDenier: boolean) => {
       const b = scenario()
         .turn(1)

@@ -1,0 +1,40 @@
+{
+  "source": "playtest",
+  "cardId": "unl-150-219",
+  "title": "Triggered ability \"When an opponent plays a unit while I'm at a battlefield, [Stun] it. They can't move it this turn.\" never fires",
+  "expected": "vex-apathetic.ts:4-18 defines the UnitCard with only rulesText and no `abilities` array at all — neither Deflect nor the \"When an opponent plays a unit while I'm at a battlefield, Stun it / can't move\" trigger is implemented as an executable ability. No engine-side special-casing of unl-150-219 exists (only a rulings test references it). So the trigger cannot fire; card-layer bug confirmed.",
+  "observed": "Player-2 played Vanguard Attendant to base while Vex sat at battlefield-player-1-bf-ogn-277-298: no chain item, no pendingChoice, unit meta.stunned=false, standardMove was enumerated for it and executing standardMove succeeded (unit moved to player-2-bf-ogn-277-298). Parsed ability in unl.json is a static 'sequence' with effects:[] (description only) — the trigger was not parsed into an executable ability.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/unl/vex-apathetic.ts",
+  "id": "4eeb0063cd2e",
+  "createdAt": "2026-08-06T20:43:38.886Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.886Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:29:22.202Z",
+      "event": "grabbed:w10-i12"
+    },
+    {
+      "at": "2026-08-07T00:33:20.907Z",
+      "event": "done",
+      "note": "Vex: stun trigger now also grants turn-duration NoMove; movement moves honour it"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w10-i12",
+  "claimedAt": "2026-08-07T00:29:22.202Z",
+  "resolution": {
+    "note": "Vex: stun trigger now also grants turn-duration NoMove; movement moves honour it",
+    "files": [
+      "packages/riftbound-cards/src/cards/unl/vex-apathetic.ts",
+      "packages/riftbound-engine/src/game-definition/moves/movement/standard-move.ts",
+      "packages/riftbound-engine/src/game-definition/moves/movement/ganking-move.ts",
+      "packages/riftbound-engine/src/__tests__/cards/unl-150-219.test.ts"
+    ],
+    "at": "2026-08-07T00:33:20.907Z"
+  }
+}

@@ -406,6 +406,14 @@ export interface SetupState {
   readonly secondPlayer?: PlayerId;
   readonly completedBy: PlayerId[];
   readonly pendingMulligan: PlayerId[];
+
+  /**
+   * Battlefield kept by each player during setup, keyed by player id.
+   * rule 485.4.a: each player selects exactly one — "only 1 will be used".
+   * rule 485.5: the selections are placed simultaneously, so a choice stays
+   * hidden from the other players until everyone has locked one in.
+   */
+  readonly battlefieldChoices?: Record<string, string>;
 }
 
 /**
@@ -477,6 +485,13 @@ export interface RevealAndPickChoice {
    * Energy cost" — Power pips are still paid in full.
    */
   readonly playIgnoreEnergy?: boolean;
+
+  /**
+   * rule 594 (ogn-112-298 Kai'Sa, Evolutionary): "play a spell from your trash
+   * … Then recycle it" — the spell goes to the bottom of its owner's Main Deck
+   * when it leaves the chain instead of back to the trash.
+   */
+  readonly playRecycleAfter?: boolean;
 
   /**
    * rule 355.8 (ogn-008-298 Get Excited!): play-time targets chosen for the
@@ -673,6 +688,27 @@ export interface ChooseModeChoice {
 }
 
 /**
+ * rule 355.13 (ogn-153-298): a plain "you may …" instruction inside a
+ * resolving effect. The chooser answers yes/no; `effect` runs only on yes,
+ * and `then` (the remainder of a suspended sequence) runs either way.
+ */
+export interface ConfirmChoice {
+  readonly type: "confirm";
+  /** Player who accepts or declines (the effect's controller). */
+  readonly playerId: PlayerId;
+  /** Card that produced the effect. */
+  readonly sourceCardId: CardId;
+  /** Executed with `boundTargets` when the answer is yes. */
+  readonly effect: unknown;
+  /** Targets bound to `effect` on accept. */
+  readonly boundTargets?: readonly CardId[];
+  /** Rest of the suspended sequence; runs after either answer. */
+  readonly then?: unknown;
+  /** Human-readable prompt text. */
+  readonly prompt?: string;
+}
+
+/**
  * Rule 583 (unl-021-219): a "you may …" triggered ability has resolved off the
  * chain and its controller must accept or decline before the effect runs.
  */
@@ -755,6 +791,7 @@ export type PendingChoice =
   | ChooseTargetChoice
   | ChooseDestinationChoice
   | ChooseModeChoice
+  | ConfirmChoice
   | OptInChoice
   | WeaponmasterEquipChoice;
 
@@ -859,6 +896,19 @@ export interface RiftboundGameState {
 
   /** Turn number of each player's first turn (for first-turn-process rules) */
   readonly firstTurnNumber?: Record<string, number>;
+
+  /**
+   * rule 487.7 / 644.7 — the player who channels the extra rune on their first
+   * turn: the LAST player in Turn Order (the second player in a duel). When
+   * unset every player booked in `firstTurnNumber` gets the bonus.
+   */
+  extraRunePlayerId?: PlayerId;
+
+  /**
+   * rule 487.7 — in multiplayer modes the first player skips their first Draw
+   * Phase. Holds that player until the skip is consumed, then clears.
+   */
+  skipFirstDrawFor?: PlayerId;
 
   /** Additional costs paid for the current card being played */
   readonly additionalCostsPaid?: Record<string, boolean>;

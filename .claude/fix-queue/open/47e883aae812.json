@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-077-221",
+  "title": "BUG: the surviving unit's 4 damage is healed in the Expiration Step (317.2.b) — the engine leaves the damage counter at 4",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-077-221.test.ts",
+    "testName": "BUG: the surviving unit's 4 damage is healed in the Expiration Step (317.2.b) — the engine leaves the damage counter at 4"
+  },
+  "id": "47e883aae812",
+  "createdAt": "2026-08-07T01:16:42.693Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:16:42.693Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-199-298",
+  "title": "BUG: accepting → choose a unit YOU control at ANOTHER location (only 'far'), then swap: Tideturner → bf1, Far → base",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-199-298.test.ts",
+    "testName": "BUG: accepting → choose a unit YOU control at ANOTHER location (only 'far'), then swap: Tideturner → bf1, Far → base"
+  },
+  "id": "b81308d70c5f",
+  "createdAt": "2026-08-06T17:51:09.035Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.035Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.619Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.101Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.619Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.101Z"
+  }
+}

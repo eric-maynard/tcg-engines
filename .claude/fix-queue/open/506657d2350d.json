@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-112-221",
+  "title": "BUG: the copied Deflect is functional — this turn an opponent must pay an extra power to target the buddy (809)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-112-221.test.ts",
+    "testName": "BUG: the copied Deflect is functional — this turn an opponent must pay an extra power to target the buddy (809)"
+  },
+  "id": "506657d2350d",
+  "createdAt": "2026-08-07T01:36:10.440Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:36:10.440Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

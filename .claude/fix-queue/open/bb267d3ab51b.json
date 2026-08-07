@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-077-221",
+  "title": "BUG: Deflect (809) — with the enemy Deflect unit as the only possible choice and no spare power, the Barrage cannot be cast at it / cannot hurt it",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-077-221.test.ts",
+    "testName": "BUG: Deflect (809) — with the enemy Deflect unit as the only possible choice and no spare power, the Barrage cannot be cast at it / cannot hurt it"
+  },
+  "id": "bb267d3ab51b",
+  "createdAt": "2026-08-07T01:17:36.534Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:17:36.534Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

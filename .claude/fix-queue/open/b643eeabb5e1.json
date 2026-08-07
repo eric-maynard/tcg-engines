@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-112-221",
+  "title": "BUG: 'give … my keywords' — the recipient gains Deflect (Kato's printed keyword) this turn, not a '$self-keywords' placeholder",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-112-221.test.ts",
+    "testName": "BUG: 'give … my keywords' — the recipient gains Deflect (Kato's printed keyword) this turn, not a '$self-keywords' placeholder"
+  },
+  "id": "b643eeabb5e1",
+  "createdAt": "2026-08-07T01:36:10.440Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:36:10.440Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

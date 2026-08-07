@@ -860,7 +860,7 @@ describe("Additional Turns (734, 736–738, 317.3)", () => {
   // Expected (738, second example): each Additional Turn is inserted DIRECTLY after the current turn, so the
   // one created later (P2's, via a Reaction) is taken first: after P1 ends → P2*, P1*, P2, P1.
   // Actual: the engine keeps a FIFO queue → P1*, P2*, P1, P2.
-  test.failing("BUG: 738 — multiple additional turns are dequeued FIFO; the later-created additional turn should be taken first", async () => {
+  test("738 — multiple additional turns are dequeued LIFO: the later-created additional turn is taken first", async () => {
     const game = await scenario()
       .turn(5)
       .active(P1)
@@ -913,7 +913,7 @@ describe("Additional Turns (734, 736–738, 317.3)", () => {
   // Expected (737): the queue is [P1 > P2* > P2 > P1 > …]; after the additional turn P2* is removed the queue
   // "proceeds with its previously queued turns", i.e. P2's REGULAR turn, then P1. Actual: the engine resumes
   // seat rotation from the additional turn's owner, giving P2*, P1, P2 — P2's regular turn is skipped.
-  test.failing("BUG: 737 — after an opponent-owned additional turn the engine rotates from that player (P2*, P1, …) instead of resuming the previously queued turn (P2*, P2, P1)", async () => {
+  test("737 — after an opponent-owned additional turn the engine rotates from that player (P2*, P1, …) instead of resuming the previously queued turn (P2*, P2, P1)", async () => {
     const game = await scenario()
       .turn(5)
       .active(P1)

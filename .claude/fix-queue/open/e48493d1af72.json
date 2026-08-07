@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-100-221",
+  "title": "BUG: playing the Explorer ITSELF (printed Power cost 0) must not draw",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-100-221.test.ts",
+    "testName": "BUG: playing the Explorer ITSELF (printed Power cost 0) must not draw"
+  },
+  "id": "e48493d1af72",
+  "createdAt": "2026-08-07T01:32:39.994Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:32:39.994Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

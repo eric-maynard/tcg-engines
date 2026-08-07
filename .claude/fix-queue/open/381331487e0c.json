@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-026-221",
+  "title": "BUG: '(+1 [Might] while WE're attackers)' — Rumble is one of 'your Mechs' and should carry Assault himself (card data lacks the Mech tag)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-026-221.test.ts",
+    "testName": "BUG: '(+1 [Might] while WE're attackers)' — Rumble is one of 'your Mechs' and should carry Assault himself (card data lacks the Mech tag)"
+  },
+  "id": "381331487e0c",
+  "createdAt": "2026-08-07T01:36:36.173Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:36:36.173Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

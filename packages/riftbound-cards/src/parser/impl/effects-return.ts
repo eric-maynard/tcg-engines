@@ -193,7 +193,7 @@ export function parseReturnToHandEffect(text: string): ReturnToHandEffect | unde
   // Compound type pattern: "Return [another] friendly gear, unit, or facedown card to its owner's hand."
   // Treats the union of types as `permanent` (units + gear + facedown).
   const compoundMatch = text.match(
-    /^Return (?:(another)\s+)?(?:(friendly|enemy)\s+)?(?:gear,?\s+unit,?\s*(?:or\s+)?(?:facedown\s+card)?|unit,?\s+gear,?\s*(?:or\s+)?(?:facedown\s+card)?)\s+to\s+(?:its owner's|my owner's|your|their owner's)\s+hand\.?$/i,
+    /^Return (?:(another)\s+)?(?:(friendly|enemy)\s+)?(?:gear,?\s+unit,?\s*(?:or\s+)?(facedown\s+card)?|unit,?\s+gear,?\s*(?:or\s+)?(facedown\s+card)?)\s+to\s+(?:its owner's|my owner's|your|their owner's)\s+hand\.?$/i,
   );
   if (compoundMatch) {
     const target: Record<string, unknown> = { type: "permanent" };
@@ -202,6 +202,16 @@ export function parseReturnToHandEffect(text: string): ReturnToHandEffect | unde
     }
     if (compoundMatch[2]) {
       target.controller = compoundMatch[2].toLowerCase();
+    }
+    // rule 811.1: a facedown card has no printed characteristics, so it is
+    // neither a unit nor a gear and never lands in the `permanent` pool —
+    // when the text names it, union in a dedicated facedown branch.
+    if (compoundMatch[3] ?? compoundMatch[4]) {
+      const facedown: Record<string, unknown> = { ...target, type: "facedown" };
+      return {
+        target: { anyOf: [target, facedown], type: "permanent" } as unknown as AnyTarget,
+        type: "return-to-hand",
+      };
     }
     return { target: target as unknown as AnyTarget, type: "return-to-hand" };
   }

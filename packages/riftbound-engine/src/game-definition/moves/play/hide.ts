@@ -14,6 +14,8 @@ import { addToChain, createInteractionState, getTurnState } from "../../../chain
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { getBattlefieldZoneId, getFacedownZoneId } from "../../../zones/zone-configs";
 import { hasStaticEffect, consumeEntersReadyReplacement } from "./cost";
+import { spellEffectHasLegalTargets } from "./targeting";
+import type { SpellEffectTargetShape } from "./targeting";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -321,6 +323,60 @@ export const hideCard: Defs["hideCard"] = {
 };
 
 /**
+ * rule 811.1.d / 811.1.d.2 — a card played from Hidden must choose its targets
+ * from options at the battlefield it was facedown at. rule 355.8: if no legal
+ * target exists under that restriction, the card can't be played at all.
+ */
+function hiddenSpellHasLegalTargets(
+  state: RiftboundGameState,
+  cardId: string,
+  playerId: string,
+  battlefieldId: string | undefined,
+  context: {
+    cards: {
+      getCardController?: (id: CoreCardId) => string | undefined;
+      getCardMeta?: (id: CoreCardId) => unknown;
+      getCardOwner: (id: CoreCardId) => string | undefined;
+    };
+    zones: {
+      getCardZone: (id: CoreCardId) => string | undefined;
+      getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => readonly CoreCardId[];
+    };
+  },
+): boolean {
+  if (battlefieldId === undefined) {
+    return true;
+  }
+  const registry = getGlobalCardRegistry();
+  if (registry.get(cardId)?.cardType !== "spell") {
+    return true;
+  }
+  const spellAbility = (registry.getAbilities(cardId) ?? []).find((a) => a.type === "spell");
+  const effect = spellAbility?.effect as SpellEffectTargetShape | undefined;
+  if (!effect) {
+    return true;
+  }
+  const bfZone = getBattlefieldZoneId(battlefieldId);
+  return spellEffectHasLegalTargets(effect, {
+    battlefieldZone: bfZone,
+    cards: {
+      getCardController: (c: CoreCardId) => context.cards.getCardController?.(c),
+      getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
+      getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
+    },
+    choosing: true,
+    draft: state,
+    playerId,
+    sourceCardId: cardId,
+    sourceZone: bfZone,
+    zones: {
+      getCardZone: (c: CoreCardId) => context.zones.getCardZone(c),
+      getCardsInZone: (z: CoreZoneId, p?: CorePlayerId) => context.zones.getCardsInZone(z, p),
+    },
+  } as Parameters<typeof spellEffectHasLegalTargets>[1]);
+}
+
+/**
  * Reveal and play a hidden card (rule 723.1.c.3).
  *
  * Playing a card from facedown OPENS a chain. For spell cards this
@@ -361,6 +417,18 @@ export const revealHidden: Defs["revealHidden"] = {
     if (revealIsPrevented(meta.hiddenAt, context.params.playerId as string, context)) {
       return false;
     }
+    // rule 811.1.d — no legal target at the facedown battlefield ⇒ can't be played.
+    if (
+      !hiddenSpellHasLegalTargets(
+        state,
+        context.params.cardId as string,
+        context.params.playerId as string,
+        meta.hiddenAt,
+        context,
+      )
+    ) {
+      return false;
+    }
     return true;
   },
   // rule-id: sfd-017-221 — Rule 723.1.c.3: surface hidden cards as playable
@@ -380,6 +448,10 @@ export const revealHidden: Defs["revealHidden"] = {
         }
         const meta = context.cards.getCardMeta(hid) as Partial<RiftboundCardMeta> | undefined;
         if (!meta?.hidden) {
+          continue;
+        }
+        // rule 811.1.d — no legal target at the facedown battlefield ⇒ not offered.
+        if (!hiddenSpellHasLegalTargets(state, hid as string, playerId, meta.hiddenAt, context)) {
           continue;
         }
         results.push({ cardId: hid as string, playerId });

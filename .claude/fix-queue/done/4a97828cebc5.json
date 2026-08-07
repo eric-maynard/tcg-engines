@@ -1,0 +1,44 @@
+{
+  "source": "playtest",
+  "cardId": "unl-095-219",
+  "title": "'When it wins a combat this turn, gain 2 XP.' clause is not implemented — parser output / chain effect for Grim Resolve contains only {type:'modify-might', amount:3, duration:'turn'}; no delayed/turn-scoped win-combat trigger is attached to the buffed unit.",
+  "expected": "Card def /root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/unl/grim-resolve.ts:4-16 has no hand-authored `abilities`, so enrich-cards.ts:30 runs parseAbilities on rulesText. Running the parser on the exact rulesText yields a single ability {type:'spell', timing:'action', effect:{type:'modify-might', amount:3, duration:'turn', target:{type:'unit',controller:'friendly'}}} — the \"When it wins a combat this turn, gain 2 XP\" sentence is silently dropped (spells.ts:170 parseEffects returns only the might buff). The pre-generated data/sets/unl.json:3848 entry likewise has only keyword Action + modify-might. Parser trigger patterns only know \"When I win a combat\" / \"When you win a combat\" (trigger-patterns.ts:40,104); there is no \"When it wins a combat this turn\" delayed-trigger pattern, and no engine special-case for unl-095-219. Hence no win-combat XP trigger is ever attached to the buffed unit and xp stays 0.",
+  "observed": "Combat resolved, Recruit killed, player-1 conquered the battlefield (VP 0->1, controller player-1, Poro survived with 0 damage) but players['player-1'].xp stayed 0. Chain item effect was only modify-might; no trigger fired.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/unl/grim-resolve.ts",
+  "id": "4a97828cebc5",
+  "createdAt": "2026-08-06T20:43:38.886Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.886Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:20:21.672Z",
+      "event": "grabbed:w7-i16"
+    },
+    {
+      "at": "2026-08-07T00:23:57.253Z",
+      "event": "done",
+      "note": "emit win-combat for surviving winners + new delayed-trigger effect; Grim Resolve explicit abilities"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i16",
+  "claimedAt": "2026-08-07T00:20:21.672Z",
+  "resolution": {
+    "note": "emit win-combat for surviving winners + new delayed-trigger effect; Grim Resolve explicit abilities",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/delayed-trigger.ts",
+      "packages/riftbound-engine/src/abilities/effects/index.ts",
+      "packages/riftbound-engine/src/abilities/trigger-runner.ts",
+      "packages/riftbound-engine/src/types/game-state.ts",
+      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts",
+      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
+      "packages/riftbound-cards/src/cards/unl/grim-resolve.ts",
+      "packages/riftbound-engine/src/__tests__/cards/unl-095-219.test.ts"
+    ],
+    "at": "2026-08-07T00:23:57.253Z"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: Ezreal alone (opponent's Spire): [4] + 0 + 0 + [1] — all three Repeats are payable with 5 energy and no power",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/curtain-call-marai-spire-ezreal-repeats.test.ts",
+    "testName": "BUG: Ezreal alone (opponent's Spire): [4] + 0 + 0 + [1] — all three Repeats are payable with 5 energy and no power"
+  },
+  "id": "ca10f72dd9b9",
+  "createdAt": "2026-08-06T18:35:08.343Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.343Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T22:19:04.887Z",
+      "event": "grabbed:w10-i6"
+    },
+    {
+      "at": "2026-08-06T22:22:21.884Z",
+      "event": "done",
+      "note": "Ezreal 'optional additional costs cost [1] or [rainbow] less': parse the static, apply pool-aware flexible reduction to Repeat tiers, offer [0]-cost tiers"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w10-i6",
+  "claimedAt": "2026-08-06T22:19:04.887Z",
+  "resolution": {
+    "note": "Ezreal 'optional additional costs cost [1] or [rainbow] less': parse the static, apply pool-aware flexible reduction to Repeat tiers, offer [0]-cost tiers",
+    "files": [
+      "packages/riftbound-cards/src/parser/parsers/static-parser.ts",
+      "packages/riftbound-engine/src/operations/static-cost-reduction.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts"
+    ],
+    "at": "2026-08-06T22:22:21.884Z"
+  }
+}

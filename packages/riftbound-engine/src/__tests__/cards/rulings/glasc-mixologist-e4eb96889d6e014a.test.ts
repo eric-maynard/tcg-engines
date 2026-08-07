@@ -88,8 +88,7 @@ describe("Ruling e4eb96889d6e014a — Glasc Mixologist's Deathknell may pick a u
 
   // Expected: when the pending Deathknell is finalized/resolved P1 may choose Skulker (cost 3, no power) from the
   // trash — it died in the same cleanup — and play it ignoring its cost; it returns to the board with P1 at 0 energy.
-  // Actual: the trigger reaches the chain but resolves as a no-op — no prompt, Skulker stays in the trash.
-  test.failing("BUG: ruling e4eb96889d6e014a — same cleanup: the Deathknell offers Skulker from the trash and plays it free (engine: Glasc's play-from-trash resolves as a no-op)", async () => {
+  test("ruling e4eb96889d6e014a — same cleanup: the Deathknell offers Skulker from the trash and plays it free", async () => {
     const game = await cleanupBoard().build();
     await resolveSpell(game, "flurry");
     expect(game.zoneOf("skulker")).toBe("trash");
@@ -112,8 +111,8 @@ describe("Ruling e4eb96889d6e014a — Glasc Mixologist's Deathknell may pick a u
   });
 
   // Expected: as above — Skulker (killed by the same instruction) is a legal pick and comes back free; the enemy
-  // bystander is not offered (not in YOUR trash). Actual: no prompt; the trigger resolves doing nothing.
-  test.failing("BUG: ruling e4eb96889d6e014a — one kill instruction: the Deathknell offers Skulker (not the enemy unit) and plays it free (engine: no-op)", async () => {
+  // bystander is not offered (not in YOUR trash).
+  test("ruling e4eb96889d6e014a — one kill instruction: the Deathknell offers Skulker (not the enemy unit) and plays it free", async () => {
     const game = await ruinationBoard().build();
     await resolveSpell(game, "ruin");
     if (game.decision()?.kind !== "pick") {

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-060-221",
+  "title": "BUG: the lock is live, not retroactive — conquer while she's out (0), kill her through Deflect, conquer again the same turn (1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-060-221.test.ts",
+    "testName": "BUG: the lock is live, not retroactive — conquer while she's out (0), kill her through Deflect, conquer again the same turn (1)"
+  },
+  "id": "3b06fd13bb42",
+  "createdAt": "2026-08-07T01:21:00.663Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:21:00.663Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

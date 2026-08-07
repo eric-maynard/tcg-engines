@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-103-221",
+  "title": "BUG: four Mighty units floor the Energy cost at 0 (356.6) — playable with 0 energy + 2 body, and nothing goes negative",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-103-221.test.ts",
+    "testName": "BUG: four Mighty units floor the Energy cost at 0 (356.6) — playable with 0 energy + 2 body, and nothing goes negative"
+  },
+  "id": "8fcd6e8bde08",
+  "createdAt": "2026-08-07T01:16:42.707Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:16:42.707Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

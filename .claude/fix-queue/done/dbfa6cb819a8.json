@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling adc5174843bc420d — moving Faefolk to a battlefield puts its triggered ability on the chain (engine never fires the trigger)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/irresistible-faefolk-adc5174843bc420d.test.ts",
+    "testName": "BUG: ruling adc5174843bc420d — moving Faefolk to a battlefield puts its triggered ability on the chain (engine never fires the trigger)"
+  },
+  "id": "dbfa6cb819a8",
+  "createdAt": "2026-08-06T19:41:44.525Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:41:44.525Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.617Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.947Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.617Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.947Z"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-094-221",
+  "title": "BUG: with NO other Dragon under your control Direwing must enter EXHAUSTED (rule 143.4) — engine treats the unknown `control` condition as unconditional",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-094-221.test.ts",
+    "testName": "BUG: with NO other Dragon under your control Direwing must enter EXHAUSTED (rule 143.4) — engine treats the unknown `control` condition as unconditional"
+  },
+  "id": "d02d6e99e747",
+  "createdAt": "2026-08-07T00:39:32.316Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:39:32.316Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T02:35:33.644Z",
+      "event": "done(unclaimed)",
+      "note": ""
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "",
+    "at": "2026-08-07T02:35:33.644Z"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-114-221",
+  "title": "BUG: current Might counts — a buffed Brawler (5) deals 5: Twin (4) dies and Brawler survives with 4",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-114-221.test.ts",
+    "testName": "BUG: current Might counts — a buffed Brawler (5) deals 5: Twin (4) dies and Brawler survives with 4"
+  },
+  "id": "85c28b7f58af",
+  "createdAt": "2026-08-07T01:17:36.536Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:17:36.536Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

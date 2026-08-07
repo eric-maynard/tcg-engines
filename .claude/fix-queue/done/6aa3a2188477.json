@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-244-298",
+  "title": "BUG: each player keeps exactly 2 units, 2 gear and 2 hand cards of their choice; the rest are recycled to the bottom of their Main Deck",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-244-298.test.ts",
+    "testName": "BUG: each player keeps exactly 2 units, 2 gear and 2 hand cards of their choice; the rest are recycled to the bottom of their Main Deck"
+  },
+  "id": "6aa3a2188477",
+  "createdAt": "2026-08-06T17:51:09.021Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.021Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.615Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.714Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.615Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.714Z"
+  }
+}

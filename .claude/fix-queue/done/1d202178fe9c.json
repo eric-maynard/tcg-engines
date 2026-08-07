@@ -1,0 +1,40 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: (d) target is locked in when played, so after Flash the Blade mistargets: unit survives in base, nobody draws, Blade → trash for 0 energy (359.3.e.5, 359.3.e.14.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/hidden-blade-facedown-ruin-runner-flash.test.ts",
+    "testName": "BUG: (d) target is locked in when played, so after Flash the Blade mistargets: unit survives in base, nobody draws, Blade → trash for 0 energy (359.3.e.5, 359.3.e.14.a)"
+  },
+  "id": "1d202178fe9c",
+  "createdAt": "2026-08-06T18:35:08.341Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.341Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T22:12:51.142Z",
+      "event": "grabbed:w3-i2"
+    },
+    {
+      "at": "2026-08-06T22:17:16.546Z",
+      "event": "done",
+      "note": "from-Hidden spells lock their target at play time; resolution re-checks target location (359.3.e.5)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i2",
+  "claimedAt": "2026-08-06T22:12:51.142Z",
+  "resolution": {
+    "note": "from-Hidden spells lock their target at play time; resolution re-checks target location (359.3.e.5)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/hide.ts",
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+      "packages/riftbound-engine/src/game-definition/moves/chain/resolve.ts",
+      "packages/riftbound-engine/src/types/game-state.ts"
+    ],
+    "at": "2026-08-06T22:17:16.546Z"
+  }
+}

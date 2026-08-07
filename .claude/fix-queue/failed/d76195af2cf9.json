@@ -1,0 +1,39 @@
+{
+  "source": "playtest",
+  "cardId": "unl-070-219",
+  "title": "Temporary granted by Turn to Dust expires at end of turn, so the gear is never killed",
+  "expected": "At HEAD (cbd38e3), packages/riftbound-engine/src/abilities/effects/grant-keyword.ts:34 is `const duration = (effect.duration ?? \"turn\")`. The parser emits Turn to Dust's effect as {type:'grant-keyword', keyword:'Temporary', target:{type:'gear'}} with no duration (verified by running parseAbilities on the rulesText), so the grant is recorded with duration:'turn'. riftbound-flow.ts:613-620 (ending phase) then filters out every grantedKeyword with duration === 'turn', so by the controller's next Beginning Phase the Temporary grant is gone and the kill loop at riftbound-flow.ts:274-312 (which checks grantedKeywords for 'Temporary') never matches the Serrated Dirk. This exactly matches the observed meta {keyword:'Temporary',duration:'turn'} disappearing after endTurn. Note: the working tree has an UNCOMMITTED edit at grant-keyword.ts:34-39 defaulting Temporary to 'permanent' (rule 816.1.b) which would fix this, but it is not in HEAD.",
+  "observed": "After resolution the gear's meta showed grantedKeywords:[{keyword:'Temporary',duration:'turn'}]; after endTurn the grantedKeywords entry was gone and at turn 5 beginning->main the Serrated Dirk was still in base (trash count unchanged at 1 = the spell itself). The kill never happened.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effects/grant-keyword.ts:34",
+  "id": "d76195af2cf9",
+  "createdAt": "2026-08-06T20:43:38.887Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.887Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-06T23:30:15.832Z",
+      "event": "grabbed:w9-i9"
+    },
+    {
+      "at": "2026-08-06T23:31:44.976Z",
+      "event": "done",
+      "note": "Temporary grants default to permanent duration (rule 816.1.b) + regression test"
+    },
+    {
+      "at": "2026-08-06T23:42:53.774Z",
+      "event": "failed",
+      "note": "Fix verified (grant-keyword.ts defaults Temporary to permanent per rule 816.1.b) + new repro test packages/riftbound-engine/src/__tests__/cards/unl-070-219.test.ts, both left in the working tree; land blocked because HEAD is red: rulings/nocturne-horrifying-cf6487465e162f43 contrast test fails on a clean checkout and that ruling file is write-protected. Re-grab and land once that lane commits."
+    }
+  ],
+  "status": "failed",
+  "claimedBy": "w9-i9",
+  "claimedAt": "2026-08-06T23:30:15.832Z",
+  "resolution": {
+    "note": "Fix verified (grant-keyword.ts defaults Temporary to permanent per rule 816.1.b) + new repro test packages/riftbound-engine/src/__tests__/cards/unl-070-219.test.ts, both left in the working tree; land blocked because HEAD is red: rulings/nocturne-horrifying-cf6487465e162f43 contrast test fails on a clean checkout and that ruling file is write-protected. Re-grab and land once that lane commits.",
+    "at": "2026-08-06T23:42:53.774Z"
+  }
+}

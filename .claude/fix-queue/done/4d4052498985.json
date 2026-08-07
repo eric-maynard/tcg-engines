@@ -1,0 +1,34 @@
+{
+  "source": "unit-bug",
+  "title": "BUG: (b) first Kog'Maw wave kills Karthus + Sentry; Sentry's Deathknell lands ABOVE the second Kog'Maw item (B draws 1 first); the second wave still resolves without Karthus and deals 4 again",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/do_not_commit/kk-head.test.ts",
+    "testName": "BUG: (b) first Kog'Maw wave kills Karthus + Sentry; Sentry's Deathknell lands ABOVE the second Kog'Maw item (B draws 1 first); the second wave still resolves without Karthus and deals 4 again"
+  },
+  "id": "4d4052498985",
+  "createdAt": "2026-08-06T21:53:38.637Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T21:53:38.637Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.621Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.296Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.621Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.296Z"
+  }
+}

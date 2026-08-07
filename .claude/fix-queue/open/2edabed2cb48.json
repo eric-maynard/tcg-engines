@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-070-221",
+  "title": "BUG: clause 2 — the CASTER also gets a Gold gear token in base, exhausted (even when the target was an enemy)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-070-221.test.ts",
+    "testName": "BUG: clause 2 — the CASTER also gets a Gold gear token in base, exhausted (even when the target was an enemy)"
+  },
+  "id": "2edabed2cb48",
+  "createdAt": "2026-08-07T00:57:36.973Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.973Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

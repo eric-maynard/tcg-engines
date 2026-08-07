@@ -1,5 +1,5 @@
 // Effect handler: "draw"
-import type { PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
+import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { hasPlayerWon } from "../../game-definition/win-conditions/victory";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
@@ -11,6 +11,23 @@ export function handle_draw(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     for (const pid of Object.keys(ctx.draft.players)) {
       handle_draw({ ...effect, player: "self" }, { ...ctx, playerId: pid }, _h);
     }
+    return;
+  }
+  // rule 359.3.e.14.a (ogn-213-298 Hidden Blade) — "Its controller draws 2":
+  // the drawer is the controller of the unit this effect acted on, not the
+  // caster. With nothing bound (the linked instruction did nothing) no one draws.
+  if (effect.player === "target-controller") {
+    const targetId = ctx.boundTargets?.[0];
+    if (targetId === undefined) {
+      return;
+    }
+    const pid =
+      ctx.cards.getCardController?.(targetId as CoreCardId) ??
+      ctx.cards.getCardOwner(targetId as CoreCardId);
+    if (pid === undefined) {
+      return;
+    }
+    handle_draw({ ...effect, player: "self" }, { ...ctx, playerId: pid }, _h);
     return;
   }
   const rawDrawCount = effect.amount ?? 1;

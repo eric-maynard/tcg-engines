@@ -1,0 +1,39 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: branch B (383.3.a / 402.1) \u2014 accepting at finalization leaves a finalized trigger on the chain in a Closed State with P1 holding Priority and P2 still able to respond before the draw. Engine has no finalization prompt",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/showdown-focus-and-triggers-on-chain.test.ts",
+    "testName": "BUG: branch B (383.3.a / 402.1) \u2014 accepting at finalization leaves a finalized trigger on the chain in a Closed State with P1 holding Priority and P2 still able to respond before the draw. Engine has no finalization prompt"
+  },
+  "id": "f689143f7648",
+  "createdAt": "2026-08-06T20:50:12.433Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.433Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T00:48:39.598Z",
+      "event": "grabbed:w9-i12"
+    },
+    {
+      "at": "2026-08-07T00:52:25.858Z",
+      "event": "done",
+      "note": "accepting a 'you may' trigger at finalization leaves it on the chain for a normal priority round"
+    },
+    {
+      "at": "2026-08-07T00:57:22.258236Z",
+      "event": "fail",
+      "note": "finalization opt-in (383.3.a) implemented and both branch tests passed, but it rippled: 19 sibling card tests across 7 files (ven-091-166, sfd-091-221, ogn-226-298, ogn-199-298, and the abandoned-hall / azir-sovereign / irresistible-faefolk rulings) are written against resolution-time opt-in ordering; land-patch reported blocking_failures so the change was fully reverted. Needs a dedicated patch that also rewrites those tests."
+    }
+  ],
+  "status": "failed",
+  "claimedBy": "w9-i12",
+  "claimedAt": "2026-08-07T00:48:39.598Z",
+  "resolution": {
+    "note": "finalization opt-in (383.3.a) implemented and both branch tests passed, but it rippled: 19 sibling card tests across 7 files (ven-091-166, sfd-091-221, ogn-226-298, ogn-199-298, and the abandoned-hall / azir-sovereign / irresistible-faefolk rulings) are written against resolution-time opt-in ordering; land-patch reported blocking_failures so the change was fully reverted. Needs a dedicated patch that also rewrites those tests.",
+    "at": "2026-08-07T00:57:22.258228Z"
+  }
+}

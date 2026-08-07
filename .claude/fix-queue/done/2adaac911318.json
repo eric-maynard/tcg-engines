@@ -1,0 +1,32 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-070-221",
+  "title": "BUG: Hidden with no unit at its battlefield — it cannot be played from facedown (811.1.d), even on a later turn",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-070-221.test.ts",
+    "testName": "BUG: Hidden with no unit at its battlefield — it cannot be played from facedown (811.1.d), even on a later turn"
+  },
+  "id": "2adaac911318",
+  "createdAt": "2026-08-07T01:04:24.772Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:04:24.772Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:48:32.431Z",
+      "event": "done(unclaimed)",
+      "note": "same 811.1.d reveal gate"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "same 811.1.d reveal gate",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-070-221.test.ts"
+    ],
+    "at": "2026-08-07T01:48:32.431Z"
+  }
+}

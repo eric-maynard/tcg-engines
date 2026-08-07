@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-010-221",
+  "title": "BUG: Void Rush (sfd-188-221) is never castable, so the Drone's stacked 3−2−2 → 0 (floored, no refund) deck play cannot happen",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-010-221.test.ts",
+    "testName": "BUG: Void Rush (sfd-188-221) is never castable, so the Drone's stacked 3−2−2 → 0 (floored, no refund) deck play cannot happen"
+  },
+  "id": "e0126df2b812",
+  "createdAt": "2026-08-07T00:48:39.543Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:48:39.543Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

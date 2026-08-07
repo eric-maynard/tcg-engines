@@ -212,9 +212,16 @@ export const playSpell: Defs["playSpell"] = {
     }
 
     // rule 204.3.b (ogn-268-298): a "pay any amount of [rainbow]" X is paid
-    // within the instructions on resolution — never at play time.
-    if (xCostIsPower(context.params.cardId) && (context.params.xAmount ?? 0) > 0) {
-      return false;
+    // within the instructions on resolution — never at play time. An
+    // `xAmount` given here is only a PLEDGE (the caller naming X up front);
+    // it must be coverable by Power the player has, never by Energy.
+    if (xCostIsPower(context.params.cardId)) {
+      const x = context.params.xAmount ?? 0;
+      const power = state.runePools[context.params.playerId]?.power ?? {};
+      const available = Object.values(power).reduce<number>((a, b) => a + (b ?? 0), 0);
+      if (x > available) {
+        return false;
+      }
     }
 
     // rule 356.2.a.1 / 357.2 (unl-173-219) — a MANDATORY kill additional cost
@@ -402,7 +409,12 @@ export const playSpell: Defs["playSpell"] = {
         !chainItems.some(
           (item) =>
             (item.cardId === t[0] || item.id === t[0]) &&
-            isLegalCounterTarget(spellAbility?.effect as { target?: unknown }, item),
+            isLegalCounterTarget(spellAbility?.effect as { target?: unknown }, item, undefined, {
+              controllerOf: (id) =>
+                context.cards.getCardController?.(id as CoreCardId) ??
+                context.cards.getCardOwner(id as CoreCardId),
+              playerId: context.playerId as string,
+            }),
         )
       ) {
         return false;
@@ -1290,7 +1302,13 @@ export const playSpell: Defs["playSpell"] = {
         // whenever it is unambiguous; further copies are named by chain-item id.
         const seen = new Set<string>();
         for (const item of interaction.chain?.items ?? []) {
-          if (!isLegalCounterTarget(spellEffect, item)) continue;
+          if (!isLegalCounterTarget(spellEffect, item, undefined, {
+              controllerOf: (id) =>
+                context.cards.getCardController?.(id as CoreCardId) ??
+                context.cards.getCardOwner(id as CoreCardId),
+              playerId: context.playerId as string,
+            }))
+            continue;
           const key = seen.has(item.cardId) ? item.id : item.cardId;
           if (seen.has(key)) continue;
           seen.add(key);
@@ -1611,7 +1629,10 @@ export const playSpell: Defs["playSpell"] = {
         repeatCount: repeatN,
         targets,
         viaFlow: viaFlow === true,
-        xAmount,
+        // rule 204.3.b (ogn-268-298): a [rainbow] X is NOT a play cost — the
+        // condition proved the Power is there, but it only leaves the pool
+        // when the spell resolves (chain/resolve.ts).
+        xAmount: xCostIsPower(cardId) ? undefined : xAmount,
       },
       createMetaAccessor(context.cards),
     );
@@ -1644,10 +1665,15 @@ export const playSpell: Defs["playSpell"] = {
         type: "sequence",
       };
     }
-    if (xValue > 0 && effectToStore) {
+    // rule 204.3.b (ogn-268-298): an X pledged up front for a [rainbow] X spell
+    // is carried to resolution and only PAID there — `_xPledged` tells
+    // chain/resolve.ts to charge the Power instead of prompting.
+    const pledgedPowerX = xCostIsPower(cardId) && xAmount !== undefined;
+    if ((xValue > 0 || pledgedPowerX) && effectToStore) {
       effectToStore = {
         ...(effectToStore as Record<string, unknown>),
         _variables: { x: xValue },
+        ...(pledgedPowerX ? { _xPledged: true } : {}),
       };
     }
 

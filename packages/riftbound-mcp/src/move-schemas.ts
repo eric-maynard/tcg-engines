@@ -119,6 +119,11 @@ export const ENUMERABLE_MOVES: Record<string, MoveCoverage> = {
     verb: "passFocus",
     via: 'act "pass" / {kind:"action", key:<passKey>}',
   },
+  equipCard: {
+    params: obj({ equipmentId: cardId, playerId: str, unitId: cardId }, ["playerId", "equipmentId", "unitId"]),
+    verb: "equipCard",
+    via: 'act {kind:"action", key:"equipCard:<equipment>", args:{unitId}}',
+  },
   playFromChampionZone: {
     params: obj({ location: str, playerId: str }, ["playerId", "location"]),
     tool: "play_card",
@@ -267,7 +272,6 @@ export const INTERNAL_MOVES: Record<string, string> = {
   drawInitialHand: "pregame setup",
   duplicateCard: "sandbox meta",
   emptyRunePool: "flow-directed (end of turn)",
-  equipCard: "effect-directed (Equip ability resolves via activateAbility)",
   exhaustCard: "sandbox/status",
   gainXp: "effect-directed",
   initializeMainDeck: "pregame setup",

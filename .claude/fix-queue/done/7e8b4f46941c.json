@@ -1,0 +1,34 @@
+{
+  "source": "unit-bug",
+  "title": "BUG: (a) with Karthus on board Kog'Maw's Deathknell triggers TWICE — two independent chain items (808.2, Karthus static) — engine adds only one",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/do_not_commit/kk-head.test.ts",
+    "testName": "BUG: (a) with Karthus on board Kog'Maw's Deathknell triggers TWICE — two independent chain items (808.2, Karthus static) — engine adds only one"
+  },
+  "id": "7e8b4f46941c",
+  "createdAt": "2026-08-06T21:53:38.636Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T21:53:38.636Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.606Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.789Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.606Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.789Z"
+  }
+}

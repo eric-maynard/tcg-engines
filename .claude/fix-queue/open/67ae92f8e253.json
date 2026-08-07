@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-107-221",
+  "title": "BUG: an Equipment detached from a unit AT A BATTLEFIELD is recalled to its controller's base in the next Cleanup (435.4.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-107-221.test.ts",
+    "testName": "BUG: an Equipment detached from a unit AT A BATTLEFIELD is recalled to its controller's base in the next Cleanup (435.4.a)"
+  },
+  "id": "67ae92f8e253",
+  "createdAt": "2026-08-07T00:57:36.961Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.961Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -9,10 +9,12 @@
  * of being re-evaluated by the runtime static-ability layer every pass.
  *
  * Supported static effect types:
- * - `increase-victory-score`: bumps every player's `victoryScoreModifier`
- *   by `amount`. Used by Aspirant's Climb.
  * - `increase-hidden-capacity`: bumps the source battlefield's
  *   `hiddenCapacityBonus` by `amount`. Used by Bandle Tree.
+ *
+ * `increase-victory-score` (Aspirant's Climb) is NOT baked in here: rule 365.1
+ * makes a passive active only while its source is on the board, so the bonus is
+ * derived from the current board by `getBattlefieldVictoryScoreBonus`.
  */
 
 import type { RiftboundGameState } from "../types";
@@ -42,16 +44,7 @@ export function applyBattlefieldPermanentEffects(state: RiftboundGameState): voi
         continue;
       }
 
-      if (effect.type === "increase-victory-score") {
-        const amount = effect.amount ?? 1;
-        for (const pid of Object.keys(state.players)) {
-          const player = state.players[pid];
-          if (!player) {
-            continue;
-          }
-          player.victoryScoreModifier = (player.victoryScoreModifier ?? 0) + amount;
-        }
-      } else if (effect.type === "increase-hidden-capacity") {
+      if (effect.type === "increase-hidden-capacity") {
         const amount = effect.amount ?? 1;
         const bf = state.battlefields[battlefieldId];
         if (bf) {
@@ -60,4 +53,30 @@ export function applyBattlefieldPermanentEffects(state: RiftboundGameState): voi
       }
     }
   }
+}
+
+/**
+ * rule 194.3.a / 365.1 — the effective Victory Score bonus contributed by the
+ * battlefields currently in play. A battlefield reading "Increase the points
+ * needed to win the game by 1." is a passive: it only counts while that
+ * battlefield is on the board, so the bonus is derived here rather than baked
+ * into a player's `victoryScoreModifier` at setup.
+ */
+export function getBattlefieldVictoryScoreBonus(state: {
+  readonly battlefields?: Record<string, unknown>;
+}): number {
+  const registry = getGlobalCardRegistry();
+  let bonus = 0;
+  for (const battlefieldId of Object.keys(state.battlefields ?? {})) {
+    for (const ability of registry.getAbilities(battlefieldId) ?? []) {
+      if (ability.type !== "static") {
+        continue;
+      }
+      const effect = ability.effect as StaticBattlefieldEffect | undefined;
+      if (effect?.type === "increase-victory-score") {
+        bonus += effect.amount ?? 1;
+      }
+    }
+  }
+  return bonus;
 }

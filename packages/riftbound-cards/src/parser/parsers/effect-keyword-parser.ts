@@ -218,7 +218,9 @@ function parseSimpleEffect(text: string): Effect | undefined {
     if (targetText.includes(" here")) {
       target.location = "here";
     } else if (targetText.includes("at my battlefield")) {
-      target.location = { battlefield: "controlled" };
+      // rule 428.1.a.1.b: "my battlefield" is the battlefield the source is
+      // (or last was) at; a base is not a battlefield, so nothing qualifies there.
+      target.location = "here-battlefield";
     }
 
     return { amount, target, type: "damage" };

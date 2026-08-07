@@ -1,0 +1,34 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: positive contrast — Mechs already exist when Rex dies alone: Rex's Deathknell lets P1 pick a Mech, deals 4 and kills it",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/ruination-ruined-rex-ferrous-forerunner.test.ts",
+    "testName": "BUG: positive contrast — Mechs already exist when Rex dies alone: Rex's Deathknell lets P1 pick a Mech, deals 4 and kills it"
+  },
+  "id": "7ade57a8b422",
+  "createdAt": "2026-08-06T18:35:08.344Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.344Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.607Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.946Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.607Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.946Z"
+  }
+}

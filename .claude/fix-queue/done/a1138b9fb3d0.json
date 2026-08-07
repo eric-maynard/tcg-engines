@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 6b057bff511d4123 — Vex in combat: Void Seeker on the Deflect Bird should cost 2 energy + [fury] with the Deflect [rainbow] fully offset; engine charges 3 + [fury] + 1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/vex-cheerless-6b057bff511d4123.test.ts",
+    "testName": "BUG: ruling 6b057bff511d4123 — Vex in combat: Void Seeker on the Deflect Bird should cost 2 energy + [fury] with the Deflect [rainbow] fully offset; engine charges 3 + [fury] + 1"
+  },
+  "id": "a1138b9fb3d0",
+  "createdAt": "2026-08-06T20:06:58.328Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.328Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.620Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.179Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.620Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.179Z"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-107-221",
+  "title": "BUG: the Equipment bonus counts — exactly lethal: a 5-might enemy dies to the 3+2 Knight",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-107-221.test.ts",
+    "testName": "BUG: the Equipment bonus counts — exactly lethal: a 5-might enemy dies to the 3+2 Knight"
+  },
+  "id": "de4a90f28ea9",
+  "createdAt": "2026-08-07T00:57:36.961Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.961Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

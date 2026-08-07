@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 0aacd2f79d3e8aec — the friendly unit is killed as a COST, up front: victim is in the trash while Heedless is still on the chain",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/heedless-resurrection-0aacd2f79d3e8aec.test.ts",
+    "testName": "BUG: ruling 0aacd2f79d3e8aec — the friendly unit is killed as a COST, up front: victim is in the trash while Heedless is still on the chain"
+  },
+  "id": "eb5fbe62ecc2",
+  "createdAt": "2026-08-06T19:56:55.635Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:56:55.635Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.614Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.676Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.614Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.676Z"
+  }
+}

@@ -98,7 +98,7 @@ describe("Lucian, Gunslinger × Cleave — Assault summing and attack-trigger ti
     expect(game.decision()).toMatchObject({ context: "chain", kind: "action" });
   });
 
-  test.failing("BUG: (a) with Cleave already applied the trigger deals his summed Assault = 4 (807.2, 807.3)", async () => {
+  test("(a) with Cleave already applied the trigger deals his summed Assault = 4 (807.2, 807.3)", async () => {
     // Expected: Assault 1 (printed) + Assault 3 (Cleave) = 4 damage on the wall when the trigger
     // resolves. Actual: the trigger is wired to Lucian's Might (2), not his Assault value.
     const game = await soloWall().build();
@@ -133,7 +133,7 @@ describe("Lucian, Gunslinger × Cleave — Assault summing and attack-trigger ti
 
   // ── (b) attack first, Cleave only in the showdown ───────────────────────────────────────────
 
-  test.failing("BUG: (b) attacking without Cleave, the trigger deals only his printed Assault = 1", async () => {
+  test("(b) attacking without Cleave, the trigger deals only his printed Assault = 1", async () => {
     // Expected: 1 damage (Assault with no value = 1, 807.1.b.3). Actual: 2 (his Might).
     const game = await soloWall().build();
     await game.p1.move("lucian", "bf1");

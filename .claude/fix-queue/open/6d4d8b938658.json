@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-063-221",
+  "title": "BUG: priority is exclusive (312.2) — while P2 still holds priority over its own Slow Draw, P1's [Reaction] must not yet be legal",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-063-221.test.ts",
+    "testName": "BUG: priority is exclusive (312.2) — while P2 still holds priority over its own Slow Draw, P1's [Reaction] must not yet be legal"
+  },
+  "id": "6d4d8b938658",
+  "createdAt": "2026-08-07T01:14:13.030Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.030Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

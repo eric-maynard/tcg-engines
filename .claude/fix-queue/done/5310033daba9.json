@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 29339d78dfd48122 — Ezreal does not reduce Cruel Patron's mandatory kill: Patron still has to kill a friendly unit (here Ezreal himself)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/ezreal-prodigy-29339d78dfd48122.test.ts",
+    "testName": "BUG: ruling 29339d78dfd48122 — Ezreal does not reduce Cruel Patron's mandatory kill: Patron still has to kill a friendly unit (here Ezreal himself)"
+  },
+  "id": "5310033daba9",
+  "createdAt": "2026-08-06T19:55:38.083Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:55:38.083Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.610Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.176Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.610Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.176Z"
+  }
+}

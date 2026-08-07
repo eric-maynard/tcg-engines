@@ -1,0 +1,42 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling cf6487465e162f43 — contrast: LOOKING at Nocturne on top (Mystic Poro's Vision) does offer 'banish me, then play me for [rainbow]'",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/nocturne-horrifying-cf6487465e162f43.test.ts",
+    "testName": "BUG: ruling cf6487465e162f43 — contrast: LOOKING at Nocturne on top (Mystic Poro's Vision) does offer 'banish me, then play me for [rainbow]'"
+  },
+  "id": "defaa7bfccba",
+  "createdAt": "2026-08-06T19:54:39.767Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:54:39.767Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:19:08.960Z",
+      "event": "grabbed:w3-i8"
+    },
+    {
+      "at": "2026-08-06T23:25:33.316Z",
+      "event": "done",
+      "note": "emit a reveal event when a look shows deck cards so 'as you look at or reveal me' triggers fire; look parks its own prompt behind them"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i8",
+  "claimedAt": "2026-08-06T23:19:08.960Z",
+  "resolution": {
+    "note": "emit a reveal event when a look shows deck cards so 'as you look at or reveal me' triggers fire; look parks its own prompt behind them",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/look.ts",
+      "packages/riftbound-engine/src/abilities/game-events.ts",
+      "packages/riftbound-engine/src/abilities/trigger-matcher.ts",
+      "packages/riftbound-engine/src/abilities/trigger-runner.ts",
+      "packages/riftbound-engine/src/events/dispatcher.ts",
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts"
+    ],
+    "at": "2026-08-06T23:25:33.316Z"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-079-221",
+  "title": "BUG: paid → move both Chimes to the OPEN battlefield (not the empty enemy-held or own-held ones); they contest and conquer it",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-079-221.test.ts",
+    "testName": "BUG: paid → move both Chimes to the OPEN battlefield (not the empty enemy-held or own-held ones); they contest and conquer it"
+  },
+  "id": "6d79af5e9b29",
+  "createdAt": "2026-08-07T01:04:24.773Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:04:24.773Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 42df64abb73517a3 — bottom line only: repeated Feral Strength on Irelia leaves her at 4 + 6 = 10 Might this turn; engine gives 9",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/irelia-fervent-42df64abb73517a3.test.ts",
+    "testName": "BUG: ruling 42df64abb73517a3 — bottom line only: repeated Feral Strength on Irelia leaves her at 4 + 6 = 10 Might this turn; engine gives 9"
+  },
+  "id": "f7c09942754d",
+  "createdAt": "2026-08-06T19:45:47.842Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:45:47.842Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.618Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.065Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.618Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.065Z"
+  }
+}

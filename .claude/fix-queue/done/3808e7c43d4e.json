@@ -1,0 +1,37 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 012ae43c41524a98 — an opponent's chosen SPELL still resolves even though Brynhir's trigger may resolve first (engine: PF unimplemented)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/promising-future-012ae43c41524a98.test.ts",
+    "testName": "BUG: ruling 012ae43c41524a98 — an opponent's chosen SPELL still resolves even though Brynhir's trigger may resolve first (engine: PF unimplemented)"
+  },
+  "id": "3808e7c43d4e",
+  "createdAt": "2026-08-06T20:07:40.914Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:07:40.914Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:52:14.113Z",
+      "event": "grabbed:w7-i14"
+    },
+    {
+      "at": "2026-08-06T23:52:18.398Z",
+      "event": "done",
+      "note": "already fixed at HEAD; repro tests pass and are flipped"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i14",
+  "claimedAt": "2026-08-06T23:52:14.113Z",
+  "resolution": {
+    "note": "already fixed at HEAD; repro tests pass and are flipped",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/karthus-eternal-e574b44846512539.test.ts"
+    ],
+    "at": "2026-08-06T23:52:18.398Z"
+  }
+}

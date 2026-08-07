@@ -1,0 +1,28 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 144.4.a.1 / 410.1.b.3 (3-player FFA) — a battlefield already holding units of two OTHER players is not a Standard Move destination; engine offers and executes the move, putting a third player's unit there",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/movement-standard-move.test.ts",
+    "testName": "BUG: 144.4.a.1 / 410.1.b.3 (3-player FFA) — a battlefield already holding units of two OTHER players is not a Standard Move destination; engine offers and executes the move, putting a third player's unit there"
+  },
+  "id": "4b8f8d476f18",
+  "createdAt": "2026-08-06T20:50:12.436Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.436Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T02:35:33.393Z",
+      "event": "done(unclaimed)",
+      "note": ""
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "",
+    "at": "2026-08-07T02:35:33.393Z"
+  }
+}

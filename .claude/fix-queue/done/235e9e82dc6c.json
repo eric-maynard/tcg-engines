@@ -1,0 +1,34 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: with Zhonya's — LeBlanc's Deathknell does NOT draw (she was never sent to trash) (808.1.d.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/cruel-patron-cost-kill-replaced-zhonyas.test.ts",
+    "testName": "BUG: with Zhonya's — LeBlanc's Deathknell does NOT draw (she was never sent to trash) (808.1.d.1)"
+  },
+  "id": "235e9e82dc6c",
+  "createdAt": "2026-08-06T17:51:09.029Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.029Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.614Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.636Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.614Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.636Z"
+  }
+}

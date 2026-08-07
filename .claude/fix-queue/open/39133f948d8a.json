@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-114-221",
+  "title": "BUG: 'friendly unit ANYWHERE' — a friendly unit at a DIFFERENT battlefield (bf2) may fight an enemy at bf1; the smaller friendly dies, the enemy keeps 2",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-114-221.test.ts",
+    "testName": "BUG: 'friendly unit ANYWHERE' — a friendly unit at a DIFFERENT battlefield (bf2) may fight an enemy at bf1; the smaller friendly dies, the enemy keeps 2"
+  },
+  "id": "39133f948d8a",
+  "createdAt": "2026-08-07T01:17:36.535Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:17:36.535Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

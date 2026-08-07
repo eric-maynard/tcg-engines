@@ -53,7 +53,7 @@ describe("Detonate (sfd-005-221)", () => {
     expect(game.zoneOf("det")).toBe("trash");
   });
 
-  test.failing("BUG: killing an ENEMY gear makes ITS controller (the opponent) draw 2 — the caster draws nothing (359.3.e.14)", async () => {
+  test("killing an ENEMY gear makes ITS controller (the opponent) draw 2 — the caster draws nothing (359.3.e.14)", async () => {
     // Expected: P2 (the killed gear's controller) draws 2, P1's hand only loses Detonate.
     // Actual: the draw is given to the caster — P1 draws 2 and P2 draws 0.
     const game = await board().build();

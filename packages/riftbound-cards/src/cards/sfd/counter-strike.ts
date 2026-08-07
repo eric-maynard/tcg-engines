@@ -1,7 +1,25 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { SpellCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+// rule 437.5.b / 437.7: "prevent it" is a delayed replacement with Prevent Value All
+// for one damage instance — the parser only sees the "Draw 1" clause, so spell it out.
+const abilities: Ability[] = [
+  {
+    effect: {
+      effects: [
+        { duration: "turn", instance: true, target: { type: "unit" }, type: "prevent-damage" },
+        { amount: 1, type: "draw" },
+      ],
+      type: "sequence",
+    },
+    timing: "reaction",
+    type: "spell",
+  },
+];
+
 export const counterStrike: SpellCard = {
+  abilities,
   cardNumber: 194,
   cardType: "spell",
   domain: ["calm", "body"],

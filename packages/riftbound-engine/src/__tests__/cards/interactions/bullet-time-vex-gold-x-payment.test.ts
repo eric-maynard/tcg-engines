@@ -62,7 +62,7 @@ function friendlyVexBoard(p1: { energy: number; rainbow?: number }) {
 describe("Bullet Time × Vex, Cheerless × Gold — what is a play cost and what is X", () => {
   // ── enemy Vex in combat: the surcharge ────────────────────────────────────────────────
 
-  test.failing("BUG: enemy Vex defending — Bullet Time is NOT playable with only [1] and no Power (needs [2] + 1 Power; 356.3)", async () => {
+  test("enemy Vex defending — Bullet Time is NOT playable with only [1] and no Power (needs [2] + 1 Power; 356.3)", async () => {
     // Expected: the +[1][rainbow] increase makes a 1-energy/0-power pool insufficient.
     // Actual: Vex's static cost increase is not applied; the cast is offered at [1].
     const game = await enemyVexBoard({ energy: 1 }).build();
@@ -72,7 +72,7 @@ describe("Bullet Time × Vex, Cheerless × Gold — what is a play cost and what
     await expect(game.p1.cast("bt", { targets: "bf1", x: 0 })).rejects.toThrow();
   });
 
-  test.failing("BUG: enemy Vex defending — putting Bullet Time on the chain drains exactly [2] + 1 Power of any domain (356.3, 135.2.e.5.a)", async () => {
+  test("enemy Vex defending — putting Bullet Time on the chain drains exactly [2] + 1 Power of any domain (356.3, 135.2.e.5.a)", async () => {
     // Expected: pool 2E/1R → 0E/0R once Bullet Time is on the chain, before anything resolves.
     // Actual: only [1] is taken (surcharge ignored) → 1E/1R remain.
     const game = await enemyVexBoard({ energy: 2, rainbow: 1 }).build();
@@ -84,7 +84,7 @@ describe("Bullet Time × Vex, Cheerless × Gold — what is a play cost and what
 
   // ── X is a resolution-time Power payment, not a play cost ─────────────────────────────
 
-  test.failing("BUG: X is not chosen or paid when Bullet Time is played — it goes on the chain with no X and the Power for X stays in the pool until resolution (204.3.b)", async () => {
+  test("X is not chosen or paid when Bullet Time is played — it goes on the chain with no X and the Power for X stays in the pool until resolution (204.3.b)", async () => {
     // Expected: cast needs only a battlefield choice; 2E+1R leave for the (surcharged) play cost,
     // the 2 rainbow earmarked for X are still there while P2 has its reaction window.
     // Actual: the engine demands X at play time and deducts it immediately — as ENERGY.
@@ -103,7 +103,7 @@ describe("Bullet Time × Vex, Cheerless × Gold — what is a play cost and what
     expect(game.zoneOf("grunt")).toBe("trash");
   });
 
-  test.failing("BUG: X is paid in Power, never Energy — with 0 Power beyond the surcharge, no amount of spare Energy can buy damage (444.1)", async () => {
+  test("X is paid in Power, never Energy — with 0 Power beyond the surcharge, no amount of spare Energy can buy damage (444.1)", async () => {
     // Expected: 6E/1R with enemy Vex → after the [2]+1R play cost there is 4E/0R; Energy cannot be
     // spent as [rainbow], so the only legal payment is 0 and nothing is damaged.
     // Actual: the engine lets X be bought with Energy (x up to remaining energy) and deals it.
@@ -132,7 +132,7 @@ describe("Bullet Time × Vex, Cheerless × Gold — what is a play cost and what
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: two Golds cracked after Bullet Time is already on the chain fund X = 2 at resolution → 2 damage to Vex and to the grunt (204.3.b, 429.3, 444.2)", async () => {
+  test("two Golds cracked after Bullet Time is already on the chain fund X = 2 at resolution → 2 damage to Vex and to the grunt (204.3.b, 429.3, 444.2)", async () => {
     // Expected: play for [2]+1R (pool now empty), crack both Golds (+2 rainbow), resolve, pay 2 →
     // every enemy unit at bf1 takes 2 (grunt dies, Vex 2 damage), pool empty again.
     // Actual: X had to be fixed (and paid from Energy) at play time, before the Golds existed as Power.
@@ -224,7 +224,7 @@ describe("Bullet Time × Vex, Cheerless × Gold — what is a play cost and what
     expect(game.p1.can("cast", "bt")).toBe(false);
   });
 
-  test.failing("BUG: friendly Vex does not make X cheaper — with [1] + 2 rainbow you pay [1] to play and 2 Power at resolution for exactly 2 damage to the attacker (204.3.b, 356.6)", async () => {
+  test("friendly Vex does not make X cheaper — with [1] + 2 rainbow you pay [1] to play and 2 Power at resolution for exactly 2 damage to the attacker (204.3.b, 356.6)", async () => {
     // Expected: X is a resolution-time Power payment untouched by Vex's discount; 2 rainbow → 2 damage.
     // Actual: X is capped by (and paid from) Energy at play time, so with [1] the only X is 0.
     const game = await friendlyVexBoard({ energy: 1, rainbow: 2 }).build();

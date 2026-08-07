@@ -1,0 +1,46 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-004-298",
+  "title": "BUG: the Assault-boosted attacker survives non-lethal return damage and conquers (rules 719.1.c, 626.1.d.1.a, 627.1/627.3)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-004-298.test.ts",
+    "testName": "BUG: the Assault-boosted attacker survives non-lethal return damage and conquers (rules 719.1.c, 626.1.d.1.a, 627.1/627.3)"
+  },
+  "id": "330c88cf3c6f",
+  "createdAt": "2026-08-06T17:15:21.547Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.547Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:48:12.268Z",
+      "event": "grabbed:w4-i2"
+    },
+    {
+      "at": "2026-08-06T20:56:32.492Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T01:42:42.742Z",
+      "event": "grabbed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:43:14.188Z",
+      "event": "done",
+      "note": "already fixed at HEAD: repro test is non-failing and green (Assault lethal threshold / stunned deals no combat damage)"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-07T01:42:42.742Z",
+  "claimedBy": "w9-i18",
+  "resolution": {
+    "note": "already fixed at HEAD: repro test is non-failing and green (Assault lethal threshold / stunned deals no combat damage)",
+    "files": [
+      "packages/riftbound-engine/src/combat/combat-resolver.ts"
+    ],
+    "at": "2026-08-07T01:43:14.188Z"
+  }
+}

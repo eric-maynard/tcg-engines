@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-018-221",
+  "title": "BUG: Blind Fury cast by the OPPONENT of a Hatchling: the Hatchling's controller (P2) looks at their top card and may recycle it BEFORE it is revealed to P1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-018-221.test.ts",
+    "testName": "BUG: Blind Fury cast by the OPPONENT of a Hatchling: the Hatchling's controller (P2) looks at their top card and may recycle it BEFORE it is revealed to P1"
+  },
+  "id": "b1fa0342e97f",
+  "createdAt": "2026-08-07T01:27:56.040Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:27:56.040Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

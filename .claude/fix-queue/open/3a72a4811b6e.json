@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-084-221",
+  "title": "BUG: 'this turn' — unused, the permission lapses: free now, full 7 energy on your next turn",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-084-221.test.ts",
+    "testName": "BUG: 'this turn' — unused, the permission lapses: free now, full 7 energy on your next turn"
+  },
+  "id": "3a72a4811b6e",
+  "createdAt": "2026-08-07T01:14:13.016Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.016Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

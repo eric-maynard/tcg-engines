@@ -1,0 +1,28 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 471.1.b.1 — at VictoryScore−1 a Conquer without having scored every battlefield draws 1 instead of scoring (engine awards the 8th point and ends the game)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/combat-flow-and-resolution.test.ts",
+    "testName": "BUG: 471.1.b.1 — at VictoryScore−1 a Conquer without having scored every battlefield draws 1 instead of scoring (engine awards the 8th point and ends the game)"
+  },
+  "id": "f756aa374b5d",
+  "createdAt": "2026-08-06T20:11:47.426Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.426Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T02:35:32.642Z",
+      "event": "done(unclaimed)",
+      "note": ""
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "",
+    "at": "2026-08-07T02:35:32.642Z"
+  }
+}

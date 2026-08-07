@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-181-298",
+  "title": "BUG: can return a friendly FACEDOWN card to its owner's hand",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-181-298.test.ts",
+    "testName": "BUG: can return a friendly FACEDOWN card to its owner's hand"
+  },
+  "id": "c827108e5a11",
+  "createdAt": "2026-08-06T17:51:09.025Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.025Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:45:54.314Z",
+      "event": "grabbed:w1-i11"
+    },
+    {
+      "at": "2026-08-07T01:48:32.308Z",
+      "event": "done",
+      "note": "facedown targets already resolvable; flipped repro"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i11",
+  "claimedAt": "2026-08-07T01:45:54.314Z",
+  "resolution": {
+    "note": "facedown targets already resolvable; flipped repro",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-181-298.test.ts"
+    ],
+    "at": "2026-08-07T01:48:32.308Z"
+  }
+}

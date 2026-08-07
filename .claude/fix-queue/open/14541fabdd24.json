@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "unl-182-219",
+  "title": "Modes/targets for Curtain Call are chosen at resolution instead of when the spell is played.",
+  "expected": "play-spell.ts reducer (lines 1543-1578) wraps a Repeat spell's `choice` effect into a bare `{type:\"sequence\", effects:[spellEffect × (1+repeatN)]}` and adds it to the chain with no mode selection — playSpell has no mode parameter at all (no \"mode\" token anywhere in play-spell.ts). The mode is only picked when the item resolves: abilities/effects/choice.ts:31-62 creates a `choose-mode` pendingChoice at execution time (\"the controller picks which mode resolves\"). In chain/resolve.ts:669-670, passChainPriority calls executeResolvedItem (which parks the choose-mode prompt) and then immediately settleResolvedSpellCard moves the card to trash while the pendingChoice is still outstanding. This contradicts rule 820.2 (choices for each Repeat execution are made during Make Relevant Choices when playing the card).",
+  "observed": "playSpell puts a 'sequence' of unresolved choice effects on the chain with no modes/targets; the choose-mode and choose-target pendingChoices only appear after passChainPriority resolves the spell (and the spell is already in trash — trash count 1 — while its choices are still being made).",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts:1544",
+  "id": "14541fabdd24",
+  "createdAt": "2026-08-06T23:55:41.369Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.369Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

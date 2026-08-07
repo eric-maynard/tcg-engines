@@ -55,7 +55,7 @@ describe("Hidden Blade × Zhonya's Hourglass / Flash — replaced kill vs. mista
   // Expected: "Its controller" = the killed unit's controller (P2) draws 2; the caster draws nothing.
   // Actual: the engine resolves the draw for the caster's opponent-of-record incorrectly — P1 (the
   // caster) draws 2 and P2 draws 0.
-  test.failing("BUG: control — 'Its controller draws 2' means the unit's controller (P2) draws 2, not the caster (359.3.e.14)", async () => {
+  test("control — 'Its controller draws 2' means the unit's controller (P2) draws 2, not the caster (359.3.e.14)", async () => {
     const game = await board().build();
     const p1Hand = game.p1.hand().length;
     const p2Hand = game.p2.hand().length;
@@ -105,7 +105,7 @@ describe("Hidden Blade × Zhonya's Hourglass / Flash — replaced kill vs. mista
 
   // Expected: the draw is linked to the unit ("its controller"), not to the kill action, so a
   // REPLACED kill still lets P2 draw 2 (359.3.e.14.b). Actual: P2 draws 0 (and the caster draws).
-  test.failing("BUG: A — even though the kill was replaced, the unit's controller P2 still draws 2 (359.3.e.14.b)", async () => {
+  test("A — even though the kill was replaced, the unit's controller P2 still draws 2 (359.3.e.14.b)", async () => {
     const game = await withHiddenHourglass().build();
     const p1Hand = game.p1.hand().length;
     const p2Hand = game.p2.hand().length;

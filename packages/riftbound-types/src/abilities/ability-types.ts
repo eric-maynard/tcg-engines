@@ -360,6 +360,13 @@ export interface SpellAbility {
 
   /** rule-id: ven-015-166 — "This can't be countered." (rule 544) */
   readonly uncounterable?: boolean;
+
+  /**
+   * rule 204.3.b / 135.2.e (rule-id: ogn-268-298) — "Pay any amount of
+   * [rainbow] to …": the variable X is Power of any Domain paid WITHIN the
+   * instructions (on resolution), never Energy and never a play cost.
+   */
+  readonly xCost?: "power";
 }
 
 // ============================================================================

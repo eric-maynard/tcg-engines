@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-071-221",
+  "title": "BUG: two Breakneck Mechs are two Deflect sources — Deflect 2, so one power is not enough (809.2)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-071-221.test.ts",
+    "testName": "BUG: two Breakneck Mechs are two Deflect sources — Deflect 2, so one power is not enough (809.2)"
+  },
+  "id": "ebf9081b2d30",
+  "createdAt": "2026-08-07T00:57:36.963Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.963Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

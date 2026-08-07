@@ -27,6 +27,7 @@ export type RiftboundZoneId =
   | "banishment"
   | "legendZone"
   | "championZone"
+  | "setAside"
   // Shared zones
   | "battlefieldRow"
   | "chain";
@@ -125,6 +126,20 @@ export const riftboundZones: Record<string, CardZoneConfig> = {
     name: "Champion Zone",
     ordered: false,
     visibility: "public",
+  },
+
+  /**
+   * Set Aside — battlefields removed during setup.
+   * rule 113 / 485.5 / 486.5: the unselected battlefields are set aside / removed;
+   * they are NOT trash cards (trash is public and countable), so they live in their
+   * own non-player-facing zone.
+   */
+  setAside: {
+    faceDown: true,
+    id: "setAside" as ZoneId,
+    name: "Set Aside",
+    ordered: false,
+    visibility: "secret",
   },
 
   // ============================================

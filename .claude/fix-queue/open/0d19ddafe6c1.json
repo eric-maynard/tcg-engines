@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-111-298",
+  "title": "Inherited abilities are listed in the Actions panel as identical 'Heimerdinger, Inventor' buttons with no indication of which source card/ability each one is.",
+  "expected": "The engine enumerator emits distinct inherited-ability moves with `cardId: hostCardId` plus `sourceCardId` when source != host (activate-ability.ts:996-1002). The UI label for activateAbility is `formatMoveDescription` case at actions.js:44: `${r(params.cardId)}${targets...}` — it uses only params.cardId (Heimerdinger) and ignores params.sourceCardId/abilityIndex. In the multi-option collapsible group (actions.js:416-437) each sub-button text is exactly that paramStr while the onclick embeds the full params JSON (including sourceCardId), so two inherited abilities render as identical 'Heimerdinger, Inventor' buttons differing only in hidden onclick sourceCardId. (The targeted-group path at actions.js:282 also keys on cardId#abilityIndex without sourceCardId.)",
+  "observed": "'Activate Ability (3 options)' expands to 'Seal of Discord', 'Heimerdinger, Inventor', 'Heimerdinger, Inventor' — the two Heimerdinger buttons differ only in hidden onclick sourceCardId (ogs-014-024 vs ogn-204-298).",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/public/js/gameplay/render/actions.js:44",
+  "id": "0d19ddafe6c1",
+  "createdAt": "2026-08-06T23:55:41.370Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.370Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

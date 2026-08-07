@@ -48,6 +48,28 @@ export function createPlayerView(state: RiftboundGameState, playerId: string): R
     );
   }
 
+  // rule 485.5: setup battlefields are "placed simultaneously" — a player's kept
+  // battlefield stays hidden from everyone else until every player has locked one in.
+  const choices = state.setup?.battlefieldChoices;
+  if (choices) {
+    const allChosen = Object.keys(state.players).every((pid) => choices[pid] !== undefined);
+    if (!allChosen) {
+      const hidden = new Set(
+        Object.entries(choices)
+          .filter(([pid]) => pid !== playerId)
+          .map(([, cardId]) => cardId),
+      );
+      if (hidden.size > 0) {
+        return {
+          ...state,
+          battlefields: Object.fromEntries(
+            Object.entries(state.battlefields).filter(([cardId]) => !hidden.has(cardId)),
+          ),
+        };
+      }
+    }
+  }
+
   // All fields in RiftboundGameState are currently public.
   // Return the state as-is. The core engine handles zone-level
   // Filtering (hand, deck, facedown zones) based on zone configs.

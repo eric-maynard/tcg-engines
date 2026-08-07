@@ -25,6 +25,8 @@ export interface TriggerMatcherState {
   readonly cardsPlayedThisTurn?: Record<string, number>;
   readonly turn?: { readonly activePlayer?: string };
   readonly turnEventCounts?: Record<string, number>;
+  /** Same keys as `turnEventCounts`, but never reset — game-long tallies. */
+  readonly gameEventCounts?: Record<string, number>;
   readonly interaction?: {
     readonly showdownStack?: readonly { readonly active?: boolean }[];
   };
@@ -186,6 +188,19 @@ function restrictionSatisfied(
         return false;
       }
       return (counts[turnEventCountKeyFor(trigger, event, card)] ?? 0) === 1;
+    }
+    case "once-per-game": {
+      // rule 315.2.a — "At the start of each player's FIRST Beginning Phase":
+      // a game-long tally, scoped to the player the event names so every player
+      // gets their own first occurrence. `fireTriggers` tallies before matching,
+      // so "first" is a count of exactly 1.
+      const counts = state?.gameEventCounts;
+      if (!counts) {
+        return false;
+      }
+      const pid = "owner" in event ? event.owner : "playerId" in event ? event.playerId : card.owner;
+      const key = typeof pid === "string" ? `${event.type}|p:${pid}` : event.type;
+      return (counts[key] ?? 0) === 1;
     }
     case "once-each-turn":
       // TODO(once-each-turn): per-card fire tracking not yet implemented.
@@ -543,6 +558,25 @@ export function abilityFunctionsFromTrash(ability: TriggerableAbility): boolean 
   );
 }
 
+/**
+ * rule 190.6.b — the player a matched trigger resolves FOR. Normally the card's
+ * controller, but a battlefield ability phrased for "each player" ("At the
+ * start of each player's first Beginning Phase, THAT PLAYER gains 1 point")
+ * resolves for the player the firing event names, not the battlefield's deck
+ * owner — an uncontrolled battlefield has no controller of its own.
+ */
+function subjectPlayerForTrigger(
+  trigger: TriggerableAbility["trigger"],
+  event: GameEvent,
+  card: CardWithAbilities,
+): string {
+  if (trigger.on !== "any-player" || card.zone !== "battlefieldRow") {
+    return card.owner;
+  }
+  const pid = "playerId" in event ? event.playerId : "owner" in event ? event.owner : undefined;
+  return typeof pid === "string" ? pid : card.owner;
+}
+
 export function findMatchingTriggers(
   event: GameEvent,
   boardCards: CardWithAbilities[],
@@ -587,7 +621,7 @@ export function findMatchingTriggers(
         matches.push({
           ability,
           cardId: card.id,
-          cardOwner: card.owner,
+          cardOwner: subjectPlayerForTrigger(ability.trigger, event, card),
           event,
         });
       }

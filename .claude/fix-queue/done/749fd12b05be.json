@@ -1,0 +1,44 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 67ba38e17c612ad4 — reanimated by The Harrowing while a different Shadow Assassin stays in the trash → enters READY",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/shadow-assassin-67ba38e17c612ad4.test.ts",
+    "testName": "BUG: ruling 67ba38e17c612ad4 — reanimated by The Harrowing while a different Shadow Assassin stays in the trash → enters READY"
+  },
+  "id": "749fd12b05be",
+  "createdAt": "2026-08-06T20:06:58.325Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.325Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:01:00.667Z",
+      "event": "grabbed:w1-i5"
+    },
+    {
+      "at": "2026-08-06T23:05:11.716Z",
+      "event": "done",
+      "note": "Harrowing target location:trash makes the trash unit caster-chosen; conditional enter-ready name-in-trash honoured on effect-plays"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i5",
+  "claimedAt": "2026-08-06T23:01:00.667Z",
+  "resolution": {
+    "note": "Harrowing target location:trash makes the trash unit caster-chosen; conditional enter-ready name-in-trash honoured on effect-plays",
+    "files": [
+      "packages/riftbound-cards/src/cards/ogn/the-harrowing.ts",
+      "packages/riftbound-cards/src/parser/parsers/static-parser.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/targeting.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+      "packages/riftbound-engine/src/abilities/effects/play.ts"
+    ],
+    "at": "2026-08-06T23:05:11.716Z"
+  }
+}

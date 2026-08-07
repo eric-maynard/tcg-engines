@@ -80,7 +80,21 @@ export function zoneCards(engine: HarnessEngine, zone: string, owner?: Seat): st
   if (!owner) {
     return [...z.cardIds];
   }
+  // rule 108.2: board presence follows CONTROL, not ownership — a card played
+  // from an opponent's deck (ogn-025-298 Blind Fury) sits on the caster's side
+  // while still being owned by its original player. Hidden/owned zones (hand,
+  // deck, trash, banishment) stay owner-split.
+  if (isBoardZone(zone)) {
+    return z.cardIds.filter((id) => {
+      const inst = internal.cards[id];
+      return (inst?.controller ?? inst?.owner) === owner;
+    });
+  }
   return z.cardIds.filter((id) => internal.cards[id]?.owner === owner);
+}
+
+function isBoardZone(zone: string): boolean {
+  return zone === "base" || zone.startsWith("battlefield-") || zone.startsWith("facedown-");
 }
 
 export function listZoneSummaries(engine: HarnessEngine, viewer: Viewer, forSeat?: Seat): ZoneSummary[] {

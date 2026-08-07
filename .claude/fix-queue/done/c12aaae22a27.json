@@ -1,0 +1,39 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: with all three Repeats paid the effect executes 4 times with 4 DIFFERENT modes: draw 1, 2 to the battlefield unit, 3 to the base unit, -4 Might to the battlefield unit",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/curtain-call-marai-spire-ezreal-repeats.test.ts",
+    "testName": "BUG: with all three Repeats paid the effect executes 4 times with 4 DIFFERENT modes: draw 1, 2 to the battlefield unit, 3 to the base unit, -4 Might to the battlefield unit"
+  },
+  "id": "c12aaae22a27",
+  "createdAt": "2026-08-06T18:35:08.343Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.343Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T22:15:14.080Z",
+      "event": "grabbed:w11-i4"
+    },
+    {
+      "at": "2026-08-06T22:20:01.177Z",
+      "event": "done",
+      "note": "Repeat sequence suspends on a modal prompt and resumes via choose-mode then, so each execution picks a different mode"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i4",
+  "claimedAt": "2026-08-06T22:15:14.080Z",
+  "resolution": {
+    "note": "Repeat sequence suspends on a modal prompt and resumes via choose-mode then, so each execution picks a different mode",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/sequence.ts",
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+      "packages/riftbound-engine/src/types/game-state.ts"
+    ],
+    "at": "2026-08-06T22:20:01.177Z"
+  }
+}

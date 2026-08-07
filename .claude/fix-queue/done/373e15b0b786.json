@@ -1,0 +1,38 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 61269cd307cc8ca8 — enemy Vex attacking: from 3E/2R exactly [1] and 1 power are taken (→ 2E/1R)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/vex-cheerless-61269cd307cc8ca8.test.ts",
+    "testName": "BUG: ruling 61269cd307cc8ca8 — enemy Vex attacking: from 3E/2R exactly [1] and 1 power are taken (→ 2E/1R)"
+  },
+  "id": "373e15b0b786",
+  "createdAt": "2026-08-06T19:45:47.841Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:45:47.841Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:06:58.947Z",
+      "event": "grabbed:w12-i6"
+    },
+    {
+      "at": "2026-08-06T23:09:04.689Z",
+      "event": "done",
+      "note": "revealHidden now pays static enemy cost increases (356.1/356.3/356.4)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w12-i6",
+  "claimedAt": "2026-08-06T23:06:58.947Z",
+  "resolution": {
+    "note": "revealHidden now pays static enemy cost increases (356.1/356.3/356.4)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/hide.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/vex-cheerless-61269cd307cc8ca8.test.ts"
+    ],
+    "at": "2026-08-06T23:09:04.689Z"
+  }
+}

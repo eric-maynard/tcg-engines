@@ -1,0 +1,48 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 466.1.a.1 — 'Heal all Units' has no location qualifier: a damaged unit in P1's BASE and a damaged P2 unit at ANOTHER battlefield are healed by the Combat Cleanup at bf1 (engine heals only the combatants)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/combat-damage-assignment-status-and-healing.test.ts",
+    "testName": "BUG: 466.1.a.1 — 'Heal all Units' has no location qualifier: a damaged unit in P1's BASE and a damaged P2 unit at ANOTHER battlefield are healed by the Combat Cleanup at bf1 (engine heals only the combatants)"
+  },
+  "id": "adec6f42fc32",
+  "createdAt": "2026-08-06T20:11:47.426Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.426Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T00:02:44.702Z",
+      "event": "grabbed:w6-i7"
+    },
+    {
+      "at": "2026-08-07T00:04:30.361Z",
+      "event": "done",
+      "note": "Combat Cleanup heals ALL board units, not just combatants (466.1.a.1)"
+    },
+    {
+      "at": "2026-08-07T00:10:22.929Z",
+      "event": "grabbed:w9-i11"
+    },
+    {
+      "at": "2026-08-07T00:13:00.019Z",
+      "event": "done",
+      "note": "Combat Cleanup 3c heals every unit on the board, not just combatants"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i11",
+  "claimedAt": "2026-08-07T00:10:22.929Z",
+  "resolution": {
+    "note": "Combat Cleanup 3c heals every unit on the board, not just combatants",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts",
+      "packages/riftbound-engine/src/__tests__/core-rules/combat-damage-assignment-status-and-healing.test.ts"
+    ],
+    "at": "2026-08-07T00:13:00.019Z"
+  },
+  "note": "reverted: fix belongs in resolve-full-combat.ts which another worker is concurrently rewriting; would ride along unfinished work"
+}

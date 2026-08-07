@@ -673,8 +673,11 @@ export class SeatHandle {
     const out: CardRef[] = [];
     for (const loc of locs) {
       const zone = loc === "base" ? "base" : `battlefield-${loc}`;
-      for (const id of this.game.cardsAt(zone, this.seat)) {
-        if (this.game.state(id).cardType === "unit") {
+      // rule 108.2 — a unit on the board belongs to whoever CONTROLS it, which
+      // is not always its owner (take-control, "play it" off an enemy deck).
+      for (const id of this.game.cardsAt(zone)) {
+        const s = this.game.state(id);
+        if (s.cardType === "unit" && (s.controller ?? s.owner) === this.seat) {
           out.push(id);
         }
       }

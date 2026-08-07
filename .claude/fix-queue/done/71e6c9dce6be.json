@@ -1,0 +1,39 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-068-221",
+  "title": "Gearhead's 'Each Equipment attached to me gives double its base Might bonus' is not applied",
+  "expected": "Reproduced with the harness: scenario with Gearhead (sfd-068-221) in base + Skyfall (+2) gear; after `equipCard` + settle, game.state(\"gh\") shows might=5, staticMightBonus=0, equippedWith=[\"sky\"] (expected 7). The parser emits the correct static ({type:\"modify-might\", source:\"equipment\", multiplier:2} — static-parser.ts:817-834) and static-abilities.ts:518-537 does implement the (multiplier-1)×base doubling, but it never runs after equipping: the equipCard reducer (game-definition/moves/equipment.ts:112-151) only calls fireTriggers({type:\"attach-equipment\"}) at line 142 directly — not dispatchEvent / cleanupAndFireDeaths — and equipmentMoves are not wrapped in withPostMoveCleanup, and \"attach-equipment\" is absent from EVENT_TYPES_NEEDING_RECALC (events/dispatcher.ts:82-112). So recalculateStaticEffects is not invoked and staticMightBonus stays 0 → 3+2=5. Note: with current code a subsequent standardMove (movement.ts is wrapped in withPostMoveCleanup) does recalc to 7, so the \"still 5 after standardMove\" sub-observation no longer reproduces (the static-abilities.ts handling landed in cbd38e3 today), but the primary defect — Gearhead reads 5 not 7 immediately after equipCard — is confirmed.",
+  "observed": "After equipCard (Doran's Blade -> Gearhead), meta showed equippedWith=[Doran's Blade], equipmentMightBonus=2, staticMightBonus=0; card tile displayed 5 Might. Still 5 after a subsequent standardMove (recalc opportunity).",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/equipment.ts:142",
+  "id": "71e6c9dce6be",
+  "createdAt": "2026-08-06T20:43:38.883Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.883Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:15:46.562Z",
+      "event": "grabbed:w1-i9"
+    },
+    {
+      "at": "2026-08-07T00:18:44.559Z",
+      "event": "done",
+      "note": "attach-equipment now dispatched via dispatchEvent + added to EVENT_TYPES_NEEDING_RECALC so statics recalc on attach"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i9",
+  "claimedAt": "2026-08-07T00:15:46.562Z",
+  "resolution": {
+    "note": "attach-equipment now dispatched via dispatchEvent + added to EVENT_TYPES_NEEDING_RECALC so statics recalc on attach",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/equipment.ts",
+      "packages/riftbound-engine/src/events/dispatcher.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-068-221.test.ts"
+    ],
+    "at": "2026-08-07T00:18:44.559Z"
+  }
+}

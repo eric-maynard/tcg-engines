@@ -58,7 +58,7 @@ describe("Not So Fast × Royal Entourage (legend target) / Void Seeker (unit tar
     ]);
   });
 
-  test.failing("BUG: (a) the trigger TARGETS a legend in either Legend Zone — P1 may choose P2's legend and it is exhausted on resolution (355.9.a.4, 355.10.a)", async () => {
+  test("(a) the trigger TARGETS a legend in either Legend Zone — P1 may choose P2's legend and it is exhausted on resolution (355.9.a.4, 355.10.a)", async () => {
     // Expected: after choosing the "exhaust" mode P1 is asked which legend (both p1Legend and
     // p2Legend offered); picking p2Legend exhausts it. Actual: the parsed target is `{type:"unit"}`,
     // no legend is ever offered and neither legend changes state.
@@ -133,7 +133,7 @@ describe("Not So Fast × Royal Entourage (legend target) / Void Seeker (unit tar
 
   // ---- Case 3: Void Seeker at P1's own unit -------------------------------------------------
 
-  test.failing("BUG: Case 3 (b): Void Seeker choosing P1's OWN unit — Not So Fast is NOT legal for P2 ('friendly' is relative to Not So Fast's controller; 355.9.b, 355.8)", async () => {
+  test("Case 3 (b): Void Seeker choosing P1's OWN unit — Not So Fast is NOT legal for P2 ('friendly' is relative to Not So Fast's controller; 355.9.b, 355.8)", async () => {
     // Expected: the only spell on the chain chooses a unit friendly to P1, so P2 has no valid target
     // and cannot even begin to play Not So Fast. Actual: Not So Fast is parsed as an unrestricted
     // `counter` and is offered against (and counters) Void Seeker.

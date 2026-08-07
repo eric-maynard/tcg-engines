@@ -1,0 +1,41 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 443.1.a / 469.2 — a conquer-only skip must not touch the Hold point; engine's score replacement ignores the method",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts",
+    "testName": "BUG: 443.1.a / 469.2 — a conquer-only skip must not touch the Hold point; engine's score replacement ignores the method"
+  },
+  "id": "d096acbe9dca",
+  "createdAt": "2026-08-06T20:50:12.435Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.435Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T01:14:13.081Z",
+      "event": "grabbed:w4-i19"
+    },
+    {
+      "at": "2026-08-07T01:17:54.687Z",
+      "event": "done",
+      "note": "pass the scoring method into applyScoreReplacement at every conquer/hold call site (443.1.a)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i19",
+  "claimedAt": "2026-08-07T01:14:13.081Z",
+  "resolution": {
+    "note": "pass the scoring method into applyScoreReplacement at every conquer/hold call site (443.1.a)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
+      "packages/riftbound-engine/src/game-definition/moves/chain/showdown.ts",
+      "packages/riftbound-engine/src/game-definition/moves/combat/conquer-battlefield.ts",
+      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts",
+      "packages/riftbound-engine/src/game-definition/moves/combat/score-point.ts"
+    ],
+    "at": "2026-08-07T01:17:54.687Z"
+  }
+}

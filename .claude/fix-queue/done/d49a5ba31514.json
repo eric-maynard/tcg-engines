@@ -1,0 +1,28 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 054.1 / 315.2.a — the first-Beginning-Phase point is denied by an opposing can't-gain-points static and never regained after the denier dies",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts",
+    "testName": "BUG: 054.1 / 315.2.a — the first-Beginning-Phase point is denied by an opposing can't-gain-points static and never regained after the denier dies"
+  },
+  "id": "d49a5ba31514",
+  "createdAt": "2026-08-06T20:50:12.436Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.436Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T02:35:33.352Z",
+      "event": "done(unclaimed)",
+      "note": ""
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "",
+    "at": "2026-08-07T02:35:33.352Z"
+  }
+}

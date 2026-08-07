@@ -1,0 +1,29 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-045-221",
+  "title": "BUG: with [Void Seeker→P2's unit, Discipline→P1's unit] on the chain only Void Seeker may be chosen — Discipline chose an ENEMY unit (355.9.b / 355.8)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-045-221.test.ts",
+    "testName": "BUG: with [Void Seeker→P2's unit, Discipline→P1's unit] on the chain only Void Seeker may be chosen — Discipline chose an ENEMY unit (355.9.b / 355.8)"
+  },
+  "id": "11336d74b081",
+  "createdAt": "2026-08-07T01:01:45.608Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:01:45.608Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T02:35:33.809Z",
+      "event": "done(unclaimed)",
+      "note": ""
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "",
+    "at": "2026-08-07T02:35:33.809Z"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-117-221",
+  "title": "BUG: pay X Energy → Add exactly X [rainbow] (X=3 of 3: energy 3→0, rainbow 0→3)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-117-221.test.ts",
+    "testName": "BUG: pay X Energy → Add exactly X [rainbow] (X=3 of 3: energy 3→0, rainbow 0→3)"
+  },
+  "id": "e5a1d230e020",
+  "createdAt": "2026-08-07T01:21:00.665Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:21:00.665Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

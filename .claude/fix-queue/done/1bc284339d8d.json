@@ -1,0 +1,48 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-085-221",
+  "title": "Weaponmaster prompt not offered when the only Equipment in play is Hand Hammer (ven-027-166)",
+  "expected": "Reproduced: playing Ornn (sfd-085-221) with Hand Hammer (ven-027-166) in base yields no weaponmaster-equip pick (decision falls straight back to main-phase action), while the identical setup with Serrated Dirk (sfd-009-221) yields the `weaponmaster-equip` pick. Root cause: play-unit.ts:572 gates Weaponmaster options on `registry.get(id)?.cardType === \"equipment\"`. Serrated Dirk has a hand-authored def (riftbound-cards/src/cards/sfd/serrated-dirk.ts:6 `cardType: \"equipment\"`), but VEN has no .ts defs — Hand Hammer flows through adaptJsonCard (riftbound-cards/src/data/all-cards.ts:809 `cardType: c.cardType`) which passes ven.json's `\"cardType\": \"gear\"` through unchanged, and enrich-cards.ts never remaps gear-with-Equip to equipment. Runtime registry confirms ven-027-166 cardType=\"gear\" (abilities do get re-parsed to Equip [calm], so the `[null]` detail is cosmetic; the cardType is the actual discriminator). Card-data layer bug in Hand Hammer / VEN JSON adaptation, surfaced via Ornn.",
+  "observed": "No pendingChoice/chain after playing Ornn with Hand Hammer + Seal of Rage in base. Same flow with Serrated Dirk (sfd-009-221) DID prompt. Hand Hammer surfaces as type 'gear' (not 'equipment') and its parsed abilities are [null] in ven.json, so the engine doesn't see it as Equipment. Root cause is Hand Hammer card data, surfaced via Ornn.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts:572",
+  "id": "1bc284339d8d",
+  "createdAt": "2026-08-06T20:43:38.883Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.883Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:14:52.163Z",
+      "event": "grabbed:w8-i11"
+    },
+    {
+      "at": "2026-08-07T00:19:28.862Z",
+      "event": "done",
+      "note": "adaptJsonCard: gear with [Equip] adapts to cardType equipment (VEN)"
+    },
+    {
+      "at": "2026-08-07T00:25:18.816Z",
+      "event": "failed",
+      "note": "gear-with-[Equip] -> cardType equipment in adaptJsonCard is right but flips 9 tracked BUG tests across 5 files other lanes are mid-edit on; left test.failing repro at __tests__/cards/ven-027-166.test.ts"
+    },
+    {
+      "at": "2026-08-07T00:26:32.297Z",
+      "event": "done",
+      "note": "play-unit Weaponmaster: offer a gear with the printed [Equip] keyword, not only cardType=equipment (VEN)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i11",
+  "claimedAt": "2026-08-07T00:14:52.163Z",
+  "resolution": {
+    "note": "play-unit Weaponmaster: offer a gear with the printed [Equip] keyword, not only cardType=equipment (VEN)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ven-027-166.test.ts"
+    ],
+    "at": "2026-08-07T00:26:32.297Z"
+  }
+}

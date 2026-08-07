@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-071-221",
+  "title": "BUG: enters EXHAUSTED when the only other Mech is the OPPONENT's ('you control')",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-071-221.test.ts",
+    "testName": "BUG: enters EXHAUSTED when the only other Mech is the OPPONENT's ('you control')"
+  },
+  "id": "259fc7d3b4bb",
+  "createdAt": "2026-08-07T00:57:36.963Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.963Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:42:05.992Z",
+      "event": "claimed:w9-i17"
+    },
+    {
+      "at": "2026-08-07T01:42:19.669Z",
+      "event": "done",
+      "note": "stale queue entry: repro already fixed and flipped to test() in HEAD; verified green in cards/+core-rules run"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i17",
+  "claimedAt": "2026-08-07T01:42:05.992Z",
+  "resolution": {
+    "note": "stale queue entry: repro already fixed and flipped to test() in HEAD; verified green in cards/+core-rules run",
+    "at": "2026-08-07T01:42:19.669Z"
+  }
+}

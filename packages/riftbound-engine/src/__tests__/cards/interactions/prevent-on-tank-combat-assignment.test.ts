@@ -122,7 +122,7 @@ describe("Prevent on a Tank defender × combat damage assignment", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
   });
 
-  test.failing("BUG: Case 2 — Counter Strike on the Tank + 12-Might attacker: never lethal (437.5.b) but not exempt (465.2.c.10) → all 12 assigned to Guardian and prevented; both defenders take 0 and survive; P2 drew 1", async () => {
+  test("Case 2 — Counter Strike on the Tank + 12-Might attacker: never lethal (437.5.b) but not exempt (465.2.c.10) → all 12 assigned to Guardian and prevented; both defenders take 0 and survive; P2 drew 1", async () => {
     // Expected: Counter Strike chooses Guardian; assignment 12/0; all prevented (437.4); attacker recalled.
     // Actual: Counter Strike's "prevent it" clause is not implemented (no target is even asked —
     // only "Draw 1" resolves), and combat splits 4/4(+4): both defenders die and P1 conquers.
@@ -144,7 +144,7 @@ describe("Prevent on a Tank defender × combat damage assignment", () => {
     await game.p1.passFocus();
     expect(game.p2.can("cast", "react")).toBe(true);
     const handBefore = game.p2.hand().length;
-    await game.p2.cast("react");
+    await game.p2.cast("react", { targets: "guardian" }); // "Choose a unit" is mandatory (437.7)
     expect(game.p2.resources()).toEqual({ energy: 0, power: { order: 1, calm: 0 } });
     await game.settle();
     expect(game.zoneOf("react")).toBe("trash");

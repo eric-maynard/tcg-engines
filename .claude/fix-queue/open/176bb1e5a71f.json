@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-089-221",
+  "title": "BUG: enemy Void Seeker's 4 damage should NOT kill a 5-Might (including me) Rumble at a battlefield",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-089-221.test.ts",
+    "testName": "BUG: enemy Void Seeker's 4 damage should NOT kill a 5-Might (including me) Rumble at a battlefield"
+  },
+  "id": "176bb1e5a71f",
+  "createdAt": "2026-08-07T01:16:42.693Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:16:42.693Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

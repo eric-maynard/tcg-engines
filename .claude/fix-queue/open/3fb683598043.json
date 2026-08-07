@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-077-221",
+  "title": "BUG: [Repeat] paid → the effect executes twice with independent choices (820.2.a): deal 4 to a base unit AND kill a gear",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-077-221.test.ts",
+    "testName": "BUG: [Repeat] paid → the effect executes twice with independent choices (820.2.a): deal 4 to a base unit AND kill a gear"
+  },
+  "id": "3fb683598043",
+  "createdAt": "2026-08-07T01:14:13.015Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.015Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

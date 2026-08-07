@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-248-298",
+  "title": "Icathian Rain resolves only one 'Deal 2 to a unit' instance instead of six",
+  "expected": "Enriched card def for ogn-248-298 (verified via getAllCards()) has six separate {type:'spell', effect:{type:'damage',amount:2,target:{type:'unit'}}} abilities. The engine only ever uses the first: play-spell.ts:956 `const spellAbility = abilities.find((a) => a.type === \"spell\")` stores that single effect on the chain (addToChain at :984), and the enumerator/condition (play-spell.ts:210, :411, :829) and resolve fallback (chain/resolve.ts:91) likewise use `.find`. No code folds multiple spell abilities into a sequence, so only one 'Deal 2 to a unit' instance with one target is resolved; the other five are dropped.",
+  "observed": "playSpell moves enumerate a single target (targets:[one id]); chain item is a single {type:'damage',amount:2,target:{type:'unit'}}; after resolving, the chosen unit (Flame Chompers, 3 might) had damage=2 and the spell went to trash with no further prompts/pendingChoice for the remaining 5 instances. Other units took 0.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts:956",
+  "id": "edbacadabd70",
+  "createdAt": "2026-08-06T20:43:38.884Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.884Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T01:41:30.297Z",
+      "event": "grabbed:w10-i19"
+    },
+    {
+      "at": "2026-08-07T01:41:44.249Z",
+      "event": "done",
+      "note": "already green in tree; verified ogn-248-298 test file passes (6 spell abilities folded)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w10-i19",
+  "claimedAt": "2026-08-07T01:41:30.297Z",
+  "resolution": {
+    "note": "already green in tree; verified ogn-248-298 test file passes (6 spell abilities folded)",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-248-298.test.ts"
+    ],
+    "at": "2026-08-07T01:41:44.249Z"
+  }
+}

@@ -321,8 +321,10 @@ describe("Rule 632.1.b.2: Final Point via Conquer requires every battlefield sco
     const state = getState(engine);
     // No VP was awarded — P1 is still at 7.
     expect(state.players[P1].victoryPoints).toBe(7);
-    // The battlefield was NOT recorded as scored this turn.
-    expect(state.scoredThisTurn[P1] ?? []).not.toContain("bf-1");
+    // rule 469.1 / 470: the draw replaces the POINT, not the Score — the
+    // Conquer still happened, so bf-1 counts as Scored this turn (and a later
+    // conquer this turn can complete "every battlefield" for the Final Point).
+    expect(state.scoredThisTurn[P1] ?? []).toContain("bf-1");
     // Game is still playing.
     expect(getStatus(engine)).toBe("playing");
     // P1 drew a card.

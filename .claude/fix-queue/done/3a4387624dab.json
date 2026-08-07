@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "unl-013-219",
+  "title": "Lotus Trap's 'Double all damage that would be dealt to it this turn' has no effect",
+  "expected": "Repo-wide grep for \"DoubleIncomingDamage\" across packages/ and apps/ finds exactly one hit: the card definition packages/riftbound-cards/src/cards/unl/lotus-trap.ts:16 (grant-keyword effect). The engine damage pipeline in packages/riftbound-engine/src/abilities/effects/damage.ts:260-325 iterates hits and applies `amount` verbatim (addCounter at :316, meta.damage = priorDamage + amount at :320) with only take-damage replacement checks (prevent/alt-effect) — no keyword lookup or multiplier anywhere. So the granted keyword is inert and Falling Star deals 3, not 6.",
+  "observed": "Wurm received grantedKeywords=[{keyword:'DoubleIncomingDamage',duration:'turn'}] but Falling Star dealt exactly 3 damage (meta.damage=3). Reproduced twice (cast normally before the damage spell, and cast as a Reaction on top of Falling Star in the chain). grep shows 'DoubleIncomingDamage' is only referenced in packages/riftbound-cards/src/cards/unl/lotus-trap.ts — the engine's damage pipeline never consumes the keyword.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effects/damage.ts:316",
+  "id": "3a4387624dab",
+  "createdAt": "2026-08-06T20:43:38.882Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.883Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:14:52.162Z",
+      "event": "grabbed:w8-i11"
+    },
+    {
+      "at": "2026-08-07T00:19:28.772Z",
+      "event": "done",
+      "note": "damage.ts: consume DoubleIncomingDamage granted keyword (Lotus Trap) before prevention/replacement"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i11",
+  "claimedAt": "2026-08-07T00:14:52.162Z",
+  "resolution": {
+    "note": "damage.ts: consume DoubleIncomingDamage granted keyword (Lotus Trap) before prevention/replacement",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/damage.ts",
+      "packages/riftbound-engine/src/__tests__/cards/unl-013-219.test.ts"
+    ],
+    "at": "2026-08-07T00:19:28.772Z"
+  }
+}

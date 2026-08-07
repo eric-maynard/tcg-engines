@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-060-221",
+  "title": "BUG: denies even the winning point — opponent on 7/8 holding while she is at a battlefield stays on 7 and the game goes on",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-060-221.test.ts",
+    "testName": "BUG: denies even the winning point — opponent on 7/8 holding while she is at a battlefield stays on 7 and the game goes on"
+  },
+  "id": "cce243b9f0cc",
+  "createdAt": "2026-08-07T01:20:34.443Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.443Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

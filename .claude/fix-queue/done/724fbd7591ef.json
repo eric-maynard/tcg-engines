@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-134-298",
+  "title": "BUG: 'If you can't, draw 1' — with an empty Rune Deck the caster draws a card instead",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-134-298.test.ts",
+    "testName": "BUG: 'If you can't, draw 1' — with an empty Rune Deck the caster draws a card instead"
+  },
+  "id": "724fbd7591ef",
+  "createdAt": "2026-08-06T17:51:09.034Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.034Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T21:40:27.260Z",
+      "event": "grabbed:w3-i6"
+    },
+    {
+      "at": "2026-08-06T21:44:27.921Z",
+      "event": "done",
+      "note": "Mobilize: explicit abilities with channeled-fewer-than fallback draw"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i6",
+  "claimedAt": "2026-08-06T21:40:27.260Z",
+  "resolution": {
+    "note": "Mobilize: explicit abilities with channeled-fewer-than fallback draw",
+    "files": [
+      "packages/riftbound-cards/src/cards/ogn/mobilize.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-134-298.test.ts"
+    ],
+    "at": "2026-08-06T21:44:27.921Z"
+  }
+}

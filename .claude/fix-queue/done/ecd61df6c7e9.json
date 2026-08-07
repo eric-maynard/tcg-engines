@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 8945ed2cd3a61d87 — lethal damage to Karthus (3) and Sentry (1) in one cleanup: Deathknell should still trigger twice (P1 draws 2); engine draws 1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/karthus-eternal-8945ed2cd3a61d87.test.ts",
+    "testName": "BUG: ruling 8945ed2cd3a61d87 — lethal damage to Karthus (3) and Sentry (1) in one cleanup: Deathknell should still trigger twice (P1 draws 2); engine draws 1"
+  },
+  "id": "ecd61df6c7e9",
+  "createdAt": "2026-08-06T19:54:39.765Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:54:39.765Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.596Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:13.895Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.596Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:13.895Z"
+  }
+}

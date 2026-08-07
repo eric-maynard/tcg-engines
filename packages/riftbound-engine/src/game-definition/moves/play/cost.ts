@@ -24,6 +24,7 @@ import {
   applyStaticCostReduction,
   computeGrantedSpellRepeatCost,
   computeOptionalAdditionalCostFlexReduction,
+  computeStaticCostIncrease,
   computeStaticCostReduction,
   computeStaticRepeatCostReduction,
   decodeCostAmount,
@@ -199,6 +200,67 @@ function evaluateEnterReadyCondition(
     // ready": the gate holds only while the controller has that much XP.
     case "while-level": {
       return evaluateWhileLevel(state, playerId as PlayerId, (condition.threshold as number) ?? 0);
+    }
+    // rule 143.4 (rule-id: sfd-071-221) — "I enter ready if you control
+    // another Mech": count board permanents (base + battlefields) on the named
+    // side matching the type/tag filter; `excludeSelf` never counts the
+    // entering unit itself.
+    case "control": {
+      if (!zones) {
+        return false;
+      }
+      const t = (condition.target ?? {}) as {
+        type?: string;
+        controller?: string;
+        excludeSelf?: boolean;
+        filter?: unknown;
+        quantity?: number | { atLeast?: number };
+      };
+      const min =
+        typeof t.quantity === "number"
+          ? t.quantity
+          : typeof t.quantity === "object" && typeof t.quantity?.atLeast === "number"
+            ? t.quantity.atLeast
+            : 1;
+      const owners =
+        t.controller === "enemy"
+          ? Object.keys(state.players).filter((pid) => pid !== playerId)
+          : [playerId];
+      const boardZones = [
+        "base",
+        ...Object.keys(state.battlefields ?? {}).map((bfId) => getBattlefieldZoneId(bfId)),
+      ];
+      const filters = t.filter === undefined ? [] : Array.isArray(t.filter) ? t.filter : [t.filter];
+      const registry = getGlobalCardRegistry();
+      let count = 0;
+      for (const owner of owners) {
+        for (const zone of boardZones) {
+          for (const id of zones.getCardsInZone(zone as CoreZoneId, owner as CorePlayerId)) {
+            if (t.excludeSelf && (id as string) === cardId) {
+              continue;
+            }
+            const def = registry.get(id as string) as
+              | { cardType?: string; tags?: readonly string[] }
+              | undefined;
+            if ((t.type === undefined || t.type === "unit") && def?.cardType !== "unit") {
+              continue;
+            }
+            if (t.type === "gear" && def?.cardType !== "gear" && def?.cardType !== "equipment") {
+              continue;
+            }
+            const tagOk = filters.every((f) => {
+              const tag = (f as { tag?: unknown } | null)?.tag;
+              if (typeof tag !== "string") return true;
+              return (def?.tags ?? []).some((x) => x.toLowerCase() === tag.toLowerCase());
+            });
+            if (!tagOk) {
+              continue;
+            }
+            count++;
+          }
+        }
+      }
+      return count >= min;
     }
     default: {
       return undefined;
@@ -1185,6 +1247,46 @@ function getBoardCostReduction(
   });
 }
 
+const NO_COST_INCREASE: { energy: number; power: Partial<Record<string, number>> } = {
+  energy: 0,
+  power: {},
+};
+
+/**
+ * rule 356.3 / 135.2.e.5.a (rule-id: sfd-146-221) — opponents' permanents may
+ * impose a static cost INCREASE on the cards you play ("enemy spells cost
+ * [1][rainbow] more"). Increases are added after every discount and are never
+ * floored away by a discount's minimum.
+ */
+function getBoardCostIncrease(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+): { energy: number; power: Partial<Record<string, number>> } {
+  if (!extras.board) {
+    return NO_COST_INCREASE;
+  }
+  return computeStaticCostIncrease({ draft: state, ...extras.board }, playerId, cardId);
+}
+
+/** Merge two per-domain pip tallies. */
+function mergePower(
+  a: Partial<Record<string, number>>,
+  b: Partial<Record<string, number>>,
+): Partial<Record<string, number>> {
+  if (Object.keys(b).length === 0) {
+    return a;
+  }
+  const out: Partial<Record<string, number>> = { ...a };
+  for (const [d, n] of Object.entries(b)) {
+    if (n && n > 0) {
+      out[d] = (out[d] ?? 0) + n;
+    }
+  }
+  return out;
+}
+
 /**
  * rule-id: ogn-150-298 (rule 560) — pips waived by board statics plus those
  * waived by a paid optional additional cost, merged per domain.
@@ -1839,6 +1941,8 @@ export function canAffordCard(
     repeatN > 0 ? getEffectiveSpellRepeatCost(state, playerId, cardId, extras.board) : undefined;
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, repeatN, repeatTiers);
   const boardReduction = getBoardCostReduction(state, playerId, cardId, extras);
+  // rule 356.3 — opponents' static cost increases, added after all discounts.
+  const boardIncrease = getBoardCostIncrease(state, playerId, cardId, extras);
   // rule-id: ven-096-166 — self static "I cost [N] less for each …".
   const selfScaled =
     getSelfScaledEnergyReduction(state, playerId, cardId, extras) +
@@ -1853,6 +1957,7 @@ export function canAffordCard(
     Math.max(0, applyStaticCostReduction(Math.max(0, baseCost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy) +
       xEnergy +
       repeatSurcharge +
+      boardIncrease.energy +
       (extras.additionalCost?.energy ?? 0),
   );
 
@@ -1878,7 +1983,9 @@ export function canAffordCard(
   );
   const basePower = reducePowerCost(baseCost.power, deflect.waived, pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
-  const extraPower = additionalCostPower(extras);
+  // rule 356.3 — an enemy static's [rainbow] surcharge is an added pip, not a
+  // printed one, so it is never covered by a hybrid/domain restriction.
+  const extraPower = mergePower(additionalCostPower(extras), boardIncrease.power);
   const powerDomains = new Set([
     ...Object.keys(basePower),
     ...Object.keys(repeatPower),
@@ -1981,6 +2088,8 @@ export function deductCost(
     repeatN > 0 ? getEffectiveSpellRepeatCost(draft, playerId, cardId, extras.board) : undefined;
   const repeatSurcharge = getRepeatEnergySurcharge(cardId, repeatN, repeatTiers);
   const boardReduction = getBoardCostReduction(draft, playerId, cardId, extras);
+  // rule 356.3 — opponents' static cost increases, added after all discounts.
+  const boardIncrease = getBoardCostIncrease(draft, playerId, cardId, extras);
   // rule-id: ven-096-166 — self static "I cost [N] less for each …".
   const selfScaled =
     getSelfScaledEnergyReduction(draft, playerId, cardId, extras) +
@@ -1995,6 +2104,7 @@ export function deductCost(
     Math.max(0, applyStaticCostReduction(Math.max(0, cost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy) +
       xEnergy +
       repeatSurcharge +
+      boardIncrease.energy +
       (extras.additionalCost?.energy ?? 0),
   );
 
@@ -2013,7 +2123,8 @@ export function deductCost(
   );
   const basePower = reducePowerCost(cost.power, deflect.waived, pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
-  const extraPower = additionalCostPower(extras);
+  // rule 356.3 — enemy static surcharge pips are added, never printed pips.
+  const extraPower = mergePower(additionalCostPower(extras), boardIncrease.power);
   const powerDomains = new Set([
     ...Object.keys(basePower),
     ...Object.keys(repeatPower),

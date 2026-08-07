@@ -45,7 +45,7 @@ describe("Blind Fury (ogn-025-298)", () => {
     expect(game.p1.can("cast", "bf")).toBe(false);
   });
 
-  test.failing("BUG: the opponent's top card is banished then played by the caster for free (unit lands under P1's control)", async () => {
+  test("the opponent's top card is banished then played by the caster for free (unit lands under P1's control)", async () => {
     // Expected: P2's top card leaves the deck, is banished, then P1 plays it ignoring cost.
     // Actual: not castable without a board target, and even when cast the top card never moves.
     const game = await scenario()

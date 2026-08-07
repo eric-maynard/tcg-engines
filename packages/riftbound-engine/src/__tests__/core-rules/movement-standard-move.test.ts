@@ -551,7 +551,7 @@ describe("No per-battlefield unit cap; the only destination limit is the 3+-play
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: 144.4.a.1 / 410.1.b.3 (3-player FFA) — a battlefield already holding units of two OTHER players is not a Standard Move destination; engine offers and executes the move, putting a third player's unit there", async () => {
+  test("144.4.a.1 / 410.1.b.3 (3-player FFA) — a battlefield already holding units of two OTHER players is not a Standard Move destination; engine offers and executes the move, putting a third player's unit there", async () => {
     // Expected: `standardMove:to:bf1` is not offered to P1 (or is rejected); u stays ready in base; bf1 untouched.
     // Actual: the move is legal in the engine and u arrives at bf1 (Contested by P1).
     const game = await scenario({ players: 3 })
@@ -570,7 +570,7 @@ describe("No per-battlefield unit cap; the only destination limit is the 3+-play
     expect(game.gameState.battlefields.bf1).toMatchObject({ contested: false, controller: P2 });
   });
 
-  test.failing("BUG: 449.2 / 447.2.c / 456.1 (3-player FFA) — an EFFECT forcing P1's unit from bf2 onto bf1 (units of two other players there) must Recall it to base instead, which is not a Move (no 'When I move' trigger); engine moves it onto bf1 and fires the move trigger", async () => {
+  test("449.2 / 447.2.c / 456.1 (3-player FFA) — an EFFECT forcing P1's unit from bf2 onto bf1 (units of two other players there) must Recall it to base instead, which is not a Move (no 'When I move' trigger); engine moves it onto bf1 and fires the move trigger", async () => {
     // Expected: after "Move a friendly unit to a battlefield" picks bf1, the Scout ends in P1's base (Recall), bf1 is
     // untouched/uncontested, and its "When I move, draw 1" does NOT fire → hand = before − 1 (the spell only).
     // Actual: Scout is placed at bf1, bf1 becomes Contested by P1, and the move trigger draws a card.
@@ -651,7 +651,7 @@ describe("Effect-driven Moves ignore Standard Move restrictions but are still Mo
     expect(game.gameState.battlefields.bf2?.controller).toBeNull();
   });
 
-  test.failing("BUG: 323.12 — choosing which staged showdown begins is the TURN player's step only; after P1's off-turn effect move contests bf2, engine also offers `startShowdown:bf2` to the non-turn player P1", async () => {
+  test("323.12 — choosing which staged showdown begins is the TURN player's step only; after P1's off-turn effect move contests bf2, engine also offers `startShowdown:bf2` to the non-turn player P1", async () => {
     // Expected: only P2 (turn player) may begin the staged showdown at bf2; P1 has no such option.
     // Actual: `startShowdown:bf2` is enumerated for both seats.
     const game = await scenario()

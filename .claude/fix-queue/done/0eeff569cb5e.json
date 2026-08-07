@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "ogs-004-024",
+  "title": "Yi's +4 Might is applied unconditionally, ignoring the 'While you have 8+ runes' condition",
+  "expected": "yi-meditative.ts declares no `abilities`, so enrich-cards.ts parses rulesText; parser output (verified via bun) is a static ability with condition `{type:\"custom\", text:\"While you have 8+ runes\"}` and effect modify-might +4 self. evaluateCondition (static-abilities.ts:105-316) has no \"custom\"/rune-count case, and the `default` branch at static-abilities.ts:312-315 returns true (\"Unknown condition — default to true\"), so recalculateStaticEffects applies staticMightBonus=4 regardless of rune count.",
+  "observed": "Immediately after playUnit on turn 1 with 2 runes in pool, meta.staticMightBonus=4 and the board tile displayed 8 Might",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/static-abilities.ts:312",
+  "id": "0eeff569cb5e",
+  "createdAt": "2026-08-06T20:43:38.883Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.883Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T01:39:33.960Z",
+      "event": "grabbed:w2-i14"
+    },
+    {
+      "at": "2026-08-07T01:39:57.781Z",
+      "event": "done",
+      "note": "already fixed at HEAD by commit 2456919 (runes-at-least static condition + explicit abilities on yi-meditative); all 7 Yi tests pass"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i14",
+  "claimedAt": "2026-08-07T01:39:33.960Z",
+  "resolution": {
+    "note": "already fixed at HEAD by commit 2456919 (runes-at-least static condition + explicit abilities on yi-meditative); all 7 Yi tests pass",
+    "files": [
+      "packages/riftbound-cards/src/cards/ogs/yi-meditative.ts",
+      "packages/riftbound-engine/src/abilities/static-abilities.ts"
+    ],
+    "at": "2026-08-07T01:39:57.781Z"
+  }
+}

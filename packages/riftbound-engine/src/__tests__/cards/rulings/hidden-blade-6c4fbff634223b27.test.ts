@@ -45,7 +45,7 @@ describe("Ruling 6c4fbff634223b27 — Hidden Blade's draw survives a replaced ki
 
   // Expected: "Its controller draws 2" — the targeted unit's controller (P2) draws; the caster does not.
   // Actual: the engine hands the 2 cards to the caster (P1) and P2 draws nothing.
-  test.failing("BUG: ruling 6c4fbff634223b27 — 'its controller' = the unit's controller P2 draws 2, not the caster (359.3.e.14); engine draws for P1", async () => {
+  test("ruling 6c4fbff634223b27 — 'its controller' = the unit's controller P2 draws 2, not the caster (359.3.e.14); engine draws for P1", async () => {
     const game = await board().build();
     const p1Hand = game.p1.hand().length;
     const p2Hand = game.p2.hand().length;
@@ -77,7 +77,7 @@ describe("Ruling 6c4fbff634223b27 — Hidden Blade's draw survives a replaced ki
   // replaced kill still lets P2 draw exactly 2; P1's only hand change is the Blade leaving.
   // Actual: the unit is killed outright (replacement not applied), so the premise of the ruling —
   // "the unit is not killed … the opponent draws 2" — does not hold.
-  test.failing("BUG: ruling 6c4fbff634223b27 — kill replaced by Zhonya's in play, yet the unit's controller P2 STILL draws 2", async () => {
+  test("ruling 6c4fbff634223b27 — kill replaced by Zhonya's in play, yet the unit's controller P2 STILL draws 2", async () => {
     const game = await withZhonyasInPlay().build();
     const p1Hand = game.p1.hand().length;
     const p2Hand = game.p2.hand().length;
@@ -111,7 +111,7 @@ describe("Ruling 6c4fbff634223b27 — Hidden Blade's draw survives a replaced ki
 
   // Expected: after the flip, Hidden Blade resolves → kill replaced → Hourglass to trash, unit recalled
   // to base healed + exhausted, and P2 draws 2. Actual: unit killed, Hourglass untouched.
-  test.failing("BUG: ruling 6c4fbff634223b27 — example: Zhonya's flipped in response replaces the death; unit survives AND P2 draws 2", async () => {
+  test("ruling 6c4fbff634223b27 — example: Zhonya's flipped in response replaces the death; unit survives AND P2 draws 2", async () => {
     const game = await withZhonyasHidden().build();
     const p2Hand = game.p2.hand().length;
     await game.p1.cast("blade", { targets: "victim" });

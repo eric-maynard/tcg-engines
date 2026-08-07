@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-083-221",
+  "title": "BUG: pay X [rainbow] = X POWER of any domain → Add exactly X Energy (X=2 of fury+fury: energy 0→2, fury 2→0)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-083-221.test.ts",
+    "testName": "BUG: pay X [rainbow] = X POWER of any domain → Add exactly X Energy (X=2 of fury+fury: energy 0→2, fury 2→0)"
+  },
+  "id": "139ce7cc1af0",
+  "createdAt": "2026-08-07T01:20:34.438Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.438Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-111-221",
+  "title": "Resolution moves an on-board unit for free instead of playing a hand unit at -3 cost to a controlled battlefield",
+  "expected": "Card def (riftbound-cards/src/cards/sfd/here-to-help.ts:15-21) declares {type:'play', from:'hand', reduceCost:{energy:3}, toLocation:{battlefield:'controlled'}, target:{controller:'friendly',type:'unit'}}. Engine mishandles all three: (1) play-spell.ts:465-471/567 treats the friendly-unit descriptor as a board card target (no exclusion for play/from:'hand', unlike chain/resolve.ts:155), so cast-time enumeration binds an on-board friendly unit; (2) abilities/effects/play.ts:32 only gathers hand candidates when `from==='hand' && !ctx.boundTargets`, so with the bound board unit it falls to getTargetIds (line 50) and then lines 74-87 push a triggered {type:'move', target, to:'choose'} chain item — toLocation object {battlefield:'controlled'} is neither 'here' nor 'base' so dest='choose' (line 74), no controlled-battlefield restriction; (3) `reduceCost` is never read in play.ts (only referenced in effects/look.ts:38-48), and the move path pays no cost at all. Matches observed: existing unit moved for free with unrestricted destination, hand untouched.",
+  "observed": "Resolution put a triggered 'move <target> to: choose' item on the chain, then a choose-destination pendingChoice. Normal cast: Flame Chompers (already in base) was moved base -> battlefield, options offered were BOTH battlefields including the uncontrolled enemy one; hand unchanged, no energy/power spent beyond the spell's own cost. From hidden: Gust Monk (already at that battlefield) was auto-selected with no prompt and offered destinations 'base' or the opponent's uncontrolled battlefield; picked base and it moved there. No unit was ever played from hand and no cost reduction occurred. (handle_play in abilities/effects/play.ts ignores from:'hand', reduceCost and toLocation:{battlefield:'controlled'}.)",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effects/play.ts:32",
+  "id": "a125fa8b7565",
+  "createdAt": "2026-08-06T20:43:38.885Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.885Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:26:08.987Z",
+      "event": "grabbed:w4-i16"
+    },
+    {
+      "at": "2026-08-07T00:30:24.321Z",
+      "event": "done",
+      "note": "handle_play: play-from-hand to a controlled battlefield now picks a hand unit, applies reduceCost and restricts destinations"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i16",
+  "claimedAt": "2026-08-07T00:26:08.987Z",
+  "resolution": {
+    "note": "handle_play: play-from-hand to a controlled battlefield now picks a hand unit, applies reduceCost and restricts destinations",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/play.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-111-221.test.ts"
+    ],
+    "at": "2026-08-07T00:30:24.321Z"
+  }
+}

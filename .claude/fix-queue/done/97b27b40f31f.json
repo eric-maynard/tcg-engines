@@ -1,0 +1,34 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: X is paid in Power, never Energy — with 0 Power beyond the surcharge, no amount of spare Energy can buy damage (444.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/bullet-time-vex-gold-x-payment.test.ts",
+    "testName": "BUG: X is paid in Power, never Energy — with 0 Power beyond the surcharge, no amount of spare Energy can buy damage (444.1)"
+  },
+  "id": "97b27b40f31f",
+  "createdAt": "2026-08-06T17:51:09.027Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.027Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.607Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.905Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.607Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.905Z"
+  }
+}

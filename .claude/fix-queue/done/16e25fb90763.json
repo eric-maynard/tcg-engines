@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling cc1dfe2325b10a8d — Case A: after Hidden Blade kills Azir, his trigger moves nothing; the token stays in base (engine sends it to Azir's trash)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/azir-sovereign-cc1dfe2325b10a8d.test.ts",
+    "testName": "BUG: ruling cc1dfe2325b10a8d — Case A: after Hidden Blade kills Azir, his trigger moves nothing; the token stays in base (engine sends it to Azir's trash)"
+  },
+  "id": "16e25fb90763",
+  "createdAt": "2026-08-06T19:51:17.545Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:51:17.545Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.623Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.490Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.623Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.490Z"
+  }
+}

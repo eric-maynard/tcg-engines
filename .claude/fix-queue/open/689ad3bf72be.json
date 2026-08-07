@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-103-221",
+  "title": "BUG: Mighty is CURRENT Might (710) — a buffed 4-Might unit (=5) and a damaged 5-Might unit both count → 3 energy",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-103-221.test.ts",
+    "testName": "BUG: Mighty is CURRENT Might (710) — a buffed 4-Might unit (=5) and a damaged 5-Might unit both count → 3 energy"
+  },
+  "id": "689ad3bf72be",
+  "createdAt": "2026-08-07T01:16:42.707Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:16:42.707Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

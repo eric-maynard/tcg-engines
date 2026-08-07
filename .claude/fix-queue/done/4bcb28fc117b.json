@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-174-298",
+  "title": "BUG: 'open' means unoccupied AND uncontrolled (170.11.c) — an uncontrolled battlefield holding an enemy unit is not offered",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-174-298.test.ts",
+    "testName": "BUG: 'open' means unoccupied AND uncontrolled (170.11.c) — an uncontrolled battlefield holding an enemy unit is not offered"
+  },
+  "id": "4bcb28fc117b",
+  "createdAt": "2026-08-06T17:39:26.575Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.575Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.600Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.325Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.600Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.325Z"
+  }
+}

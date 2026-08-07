@@ -772,10 +772,18 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
   // rule-id: ogn-118-298 — tally every event (per type / player / card) before
   // matching so "the first time … each turn" restrictions can read the count.
   {
-    const draft = ctx.draft as { turnEventCounts?: Record<string, number> };
+    const draft = ctx.draft as {
+      turnEventCounts?: Record<string, number>;
+      gameEventCounts?: Record<string, number>;
+    };
     draft.turnEventCounts ??= {};
+    // rule 315.2.a — the same keys tallied for the whole game, so
+    // `once-per-game` restrictions ("each player's first Beginning Phase")
+    // survive the per-turn reset.
+    draft.gameEventCounts ??= {};
     for (const key of turnEventCountKeys(event)) {
       draft.turnEventCounts[key] = (draft.turnEventCounts[key] ?? 0) + 1;
+      draft.gameEventCounts[key] = (draft.gameEventCounts[key] ?? 0) + 1;
     }
   }
   // rule-id: ogn-019-298 — "If you've discarded a card this turn" statics read a

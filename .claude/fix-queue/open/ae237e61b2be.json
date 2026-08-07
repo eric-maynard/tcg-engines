@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-088-221",
+  "title": "BUG: timing (145.2) — not usable during a showdown on your OWN turn either (another unit attacking bf2)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-088-221.test.ts",
+    "testName": "BUG: timing (145.2) — not usable during a showdown on your OWN turn either (another unit attacking bf2)"
+  },
+  "id": "ae237e61b2be",
+  "createdAt": "2026-08-07T01:01:45.619Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:01:45.619Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

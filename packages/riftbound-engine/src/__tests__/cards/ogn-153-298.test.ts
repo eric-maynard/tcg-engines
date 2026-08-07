@@ -71,7 +71,7 @@ describe("Overt Operation (ogn-153-298)", () => {
     expect(game.state("foe").might).toBe(2);
   });
 
-  test.failing("BUG: 'you may spend its buff' must be a real choice — a prompt is expected for the buffed unit (auto-applied today)", async () => {
+  test("'you may spend its buff' must be a real choice — a prompt is expected for the buffed unit (auto-applied today)", async () => {
     // Expected: after both players pass, P1 is asked whether to spend bt's buff (yes/no or pick).
     // Actual: `optional` effects auto-apply, so the spell fully resolves with no prompt.
     const game = await board();
@@ -94,7 +94,7 @@ describe("Overt Operation (ogn-153-298)", () => {
     expect(game.state("foe").isReady).toBe(true); // untouched enemy (placed ready)
   });
 
-  test.failing("BUG: declining the spend leaves the buffed unit exhausted (the option is auto-taken today)", async () => {
+  test("declining the spend leaves the buffed unit exhausted (the option is auto-taken today)", async () => {
     // Expected: answering "no" keeps bt exhausted and buffed. Actual: no prompt; bt is readied.
     const game = await board();
     await game.p1.cast("oo");

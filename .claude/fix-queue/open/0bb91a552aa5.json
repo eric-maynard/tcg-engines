@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-025-221",
+  "title": "BUG: flashed in as a defender mid-combat he gains the Defender designation at the next cleanup (464.2.c.3.a) — the engine leaves combatRole null",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-025-221.test.ts",
+    "testName": "BUG: flashed in as a defender mid-combat he gains the Defender designation at the next cleanup (464.2.c.3.a) — the engine leaves combatRole null"
+  },
+  "id": "0bb91a552aa5",
+  "createdAt": "2026-08-07T01:43:43.786Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:43:43.786Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

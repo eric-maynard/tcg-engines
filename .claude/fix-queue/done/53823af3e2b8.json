@@ -1,0 +1,41 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 4559826960eee691 — Skewer reveals P2's hand and lets P1 choose a unit from it (engine: no reveal/pick)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-4559826960eee691.test.ts",
+    "testName": "BUG: ruling 4559826960eee691 — Skewer reveals P2's hand and lets P1 choose a unit from it (engine: no reveal/pick)"
+  },
+  "id": "53823af3e2b8",
+  "createdAt": "2026-08-06T19:55:38.084Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:55:38.084Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:37:13.413Z",
+      "event": "grabbed:w7-i13"
+    },
+    {
+      "at": "2026-08-06T23:40:22.684Z",
+      "event": "done",
+      "note": "reveal+pick now settles through the owner's optional-cost prompt"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i13",
+  "claimedAt": "2026-08-06T23:37:13.413Z",
+  "resolution": {
+    "note": "reveal+pick now settles through the owner's optional-cost prompt",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts",
+      "packages/riftbound-engine/src/types/game-state.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-4559826960eee691.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-e67d700de3299ca6.test.ts"
+    ],
+    "at": "2026-08-06T23:40:22.684Z"
+  }
+}

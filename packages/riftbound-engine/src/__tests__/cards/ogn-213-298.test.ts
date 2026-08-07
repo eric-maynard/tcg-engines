@@ -41,7 +41,7 @@ describe("Hidden Blade (ogn-213-298)", () => {
     expect(low.p1.can("cast", "blade")).toBe(false);
   });
 
-  test.failing("BUG: 'Its controller draws 2' — killing an ENEMY unit makes the OPPONENT draw 2 and the caster nothing", async () => {
+  test("'Its controller draws 2' — killing an ENEMY unit makes the OPPONENT draw 2 and the caster nothing", async () => {
     // Expected: P2 (the killed unit's controller) draws 2; P1's hand only loses the spell.
     // Actual: the caster always draws the 2 cards, P2 draws none.
     const game = await board().build();

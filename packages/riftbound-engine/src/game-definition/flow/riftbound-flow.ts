@@ -32,7 +32,11 @@ import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getChannelCountLimit } from "../../operations/channel-limits";
-import { dequeueExtraTurn } from "../../operations/turn-queue";
+import {
+  beginAdditionalTurn,
+  dequeueExtraTurn,
+  resumeQueuedTurn,
+} from "../../operations/turn-queue";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
 import { applyScoreReplacement, canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
@@ -229,7 +233,16 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           // before endTurn) is left untouched.
           const extra = dequeueExtraTurn(context.state);
           if (extra !== undefined) {
+            // rule 737: the additional turn is INSERTED, not substituted — the
+            // turn it displaces is remembered and resumes once the run of
+            // additional turns finishes.
+            beginAdditionalTurn(context.state, context.getCurrentPlayer());
             context.setCurrentPlayer(extra);
+          } else {
+            const queued = resumeQueuedTurn(context.state);
+            if (queued !== undefined) {
+              context.setCurrentPlayer(queued);
+            }
           }
         },
 
@@ -515,7 +528,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
 
               const isFirstTurn =
                 context.state.firstTurnNumber?.[playerId] === context.getTurnNumber();
-              if (isFirstTurn && context.state.secondPlayerExtraRune) {
+              // rule 487.7: only the LAST player in Turn Order gets the extra
+              // rune; middle players in a multiplayer game channel the normal 2.
+              const isExtraRunePlayer =
+                context.state.extraRunePlayerId === undefined ||
+                context.state.extraRunePlayerId === playerId;
+              if (isFirstTurn && context.state.secondPlayerExtraRune && isExtraRunePlayer) {
                 baseChannelCount = 3;
               }
 
@@ -596,18 +614,34 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               const playerId = (context.state.turn?.activePlayer ||
                 context.getCurrentPlayer()) as CorePlayerId;
 
+              // rule 487.7: in the multiplayer modes the player going first
+              // skips their first Draw Phase — no draw, so no Burn Out either.
+              if (context.state.skipFirstDrawFor === (playerId as unknown as string)) {
+                context.state.skipFirstDrawFor = undefined;
+                return;
+              }
+
               // Check for empty deck -> Burn Out (rule 518)
               // rule 431.3/431.3.a: when the trash is empty too the deck stays
               // empty, so retrying the draw burns out again — repeatedly, giving
               // an opponent 1 point each time, until an opponent wins (431.3.c.1
-              // wins immediately, so the loop always terminates).
-              for (;;) {
+              // wins immediately). No-progress guard: with nobody able to gain a
+              // point (no opponents left) or after a bounded number of repeats
+              // the deck simply stays empty and no card is drawn.
+              const burnOutCap = 4 * (context.state.victoryScore || 8) + 8;
+              for (let burnOuts = 0; ; burnOuts++) {
                 const deckCards = context.zones.getCardsInZone(
                   "mainDeck" as CoreZoneId,
                   playerId as CorePlayerId,
                 );
                 if (deckCards.length > 0) {
                   break;
+                }
+                const someoneCanScore = Object.keys(context.state.players).some(
+                  (pid) => pid !== playerId && context.state.players[pid],
+                );
+                if (burnOuts > 0 && (!someoneCanScore || burnOuts >= burnOutCap)) {
+                  return;
                 }
                 // Burn Out: shuffle trash into deck, opponent scores 1 point
                 const trashCards = context.zones.getCardsInZone(

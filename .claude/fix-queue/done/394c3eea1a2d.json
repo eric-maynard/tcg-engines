@@ -1,0 +1,43 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 41492fa40ce64fb4 — a unit that becomes a copy of Aphelios via Shady Spectacles does not trigger (engine: cannot attach ven-137-166)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/aphelios-exalted-41492fa40ce64fb4.test.ts",
+    "testName": "BUG: ruling 41492fa40ce64fb4 — a unit that becomes a copy of Aphelios via Shady Spectacles does not trigger (engine: cannot attach ven-137-166)"
+  },
+  "id": "394c3eea1a2d",
+  "createdAt": "2026-08-06T19:48:12.206Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:48:12.206Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:21:30.484Z",
+      "event": "grabbed:w8-i6"
+    },
+    {
+      "at": "2026-08-06T23:41:25.570Z",
+      "event": "done",
+      "note": "equipCard accepts set-JSON cardType gear; Shady Spectacles copy-on-attach applied after the attach trigger"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i6",
+  "claimedAt": "2026-08-06T23:21:30.484Z",
+  "resolution": {
+    "note": "equipCard accepts set-JSON cardType gear; Shady Spectacles copy-on-attach applied after the attach trigger",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/equipment.ts",
+      "packages/riftbound-engine/src/operations/card-lookup.ts",
+      "packages/riftbound-cards/src/data/all-cards.ts",
+      "packages/riftbound-engine/src/harness/card-pool.ts",
+      "packages/riftbound-engine/src/testing/playtest/game-setup.ts",
+      "packages/riftbound-types/src/cards/card-types.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/aphelios-exalted-41492fa40ce64fb4.test.ts"
+    ],
+    "at": "2026-08-06T23:41:25.570Z"
+  }
+}

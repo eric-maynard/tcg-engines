@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-179-298",
+  "title": "'Each player kills one of their gear' implemented as caster kills one target gear of any player",
+  "expected": "Parser (riftbound-cards/src/parser/impl/effects-damage.ts:139-149) emits {type:\"kill\", player:\"each\", target:{type:\"gear\"}} for \"Each player kills one of their gear.\" But the engine handler handle_kill (riftbound-engine/src/abilities/effects/kill.ts:8-29) never reads effect.player — it just calls getTargetIds(effect, ctx) and trashes those targets, i.e. a plain single-target kill on the caster-chosen target. Grep of the engine for `\"each\"` shows player:\"each\" fan-out is implemented only in draw.ts:10, discard.ts:18, channel.ts:13 (and grant-keyword) — not kill. Since the target descriptor {type:\"gear\"} carries no controller restriction, play-spell enumeration offers every gear on board (including opponent's), and resolution kills only that one card with no per-player choice. Matches observed behavior.",
+  "observed": "Move enumeration offered playSpell targets = all gear on board incl. opponent's Gold token. Cast #1 (p1 has Seal of Rage + Sun Disc, p2 has Gold) targeting own Seal of Rage: only Seal of Rage went to trash; p2's Gold stayed in base, no prompt for p2. Cast #2 targeting p2's Gold: Gold was killed and p1's own Sun Disc survived. Chain item effect was {type:kill, player:each, target:{type:gear}} but resolved as single-target kill.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effects/kill.ts",
+  "id": "86f9503bcdbe",
+  "createdAt": "2026-08-06T20:43:38.884Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.884Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T01:40:25.884Z",
+      "event": "grabbed:w11-i14"
+    },
+    {
+      "at": "2026-08-07T01:46:35.507Z",
+      "event": "done",
+      "note": "parser: 'Each player kills one of their X' now emits controller:friendly + upTo:1 so the engine per-player fan-out triggers"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i14",
+  "claimedAt": "2026-08-07T01:40:25.884Z",
+  "resolution": {
+    "note": "parser: 'Each player kills one of their X' now emits controller:friendly + upTo:1 so the engine per-player fan-out triggers",
+    "files": [
+      "packages/riftbound-cards/src/parser/impl/effects-damage.ts"
+    ],
+    "at": "2026-08-07T01:46:35.507Z"
+  }
+}

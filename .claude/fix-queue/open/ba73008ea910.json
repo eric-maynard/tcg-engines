@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-055-221",
+  "title": "BUG: after holding two battlefields this turn (2 points) it costs 6 energy + [calm]",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-055-221.test.ts",
+    "testName": "BUG: after holding two battlefields this turn (2 points) it costs 6 energy + [calm]"
+  },
+  "id": "ba73008ea910",
+  "createdAt": "2026-08-07T00:48:39.538Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:48:39.538Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

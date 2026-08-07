@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-087-221",
+  "title": "BUG: 'any time' still needs priority (312.1 / 312.2.c–d) — right after P2's Cleave is finalized P2 holds priority, so P1 may not cast yet",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-087-221.test.ts",
+    "testName": "BUG: 'any time' still needs priority (312.1 / 312.2.c–d) — right after P2's Cleave is finalized P2 holds priority, so P1 may not cast yet"
+  },
+  "id": "59f37a8b9fd2",
+  "createdAt": "2026-08-07T01:14:13.012Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.012Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

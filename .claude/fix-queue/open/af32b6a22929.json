@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-088-221",
+  "title": "BUG: timing (145.2) — unit abilities are not usable during a showdown (defending on the opponent's turn)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-088-221.test.ts",
+    "testName": "BUG: timing (145.2) — unit abilities are not usable during a showdown (defending on the opponent's turn)"
+  },
+  "id": "af32b6a22929",
+  "createdAt": "2026-08-07T01:01:45.619Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:01:45.619Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

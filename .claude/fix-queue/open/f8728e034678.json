@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-045-221",
+  "title": "BUG: priority — right after P1 casts (before passing) P1 still holds priority (337.1.a), so P2 must NOT yet be offered Not So Fast (312.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-045-221.test.ts",
+    "testName": "BUG: priority — right after P1 casts (before passing) P1 still holds priority (337.1.a), so P2 must NOT yet be offered Not So Fast (312.1)"
+  },
+  "id": "f8728e034678",
+  "createdAt": "2026-08-07T01:01:45.608Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:01:45.608Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

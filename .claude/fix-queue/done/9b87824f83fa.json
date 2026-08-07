@@ -1,0 +1,37 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling e67d700de3299ca6 — P1's 'choose a unit from it' pick offers Ruin Runner (and Grunt, not the spell) from P2's revealed hand (engine: effect unimplemented)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-e67d700de3299ca6.test.ts",
+    "testName": "BUG: ruling e67d700de3299ca6 — P1's 'choose a unit from it' pick offers Ruin Runner (and Grunt, not the spell) from P2's revealed hand (engine: effect unimplemented)"
+  },
+  "id": "9b87824f83fa",
+  "createdAt": "2026-08-06T19:55:38.085Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:55:38.085Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:38:59.607Z",
+      "event": "grabbed:w1-i7"
+    },
+    {
+      "at": "2026-08-06T23:41:24.128Z",
+      "event": "done",
+      "note": "already fixed upstream: Bone Skewer reveal-hand/choose-unit pick works; test green"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i7",
+  "claimedAt": "2026-08-06T23:38:59.607Z",
+  "resolution": {
+    "note": "already fixed upstream: Bone Skewer reveal-hand/choose-unit pick works; test green",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-e67d700de3299ca6.test.ts"
+    ],
+    "at": "2026-08-06T23:41:24.128Z"
+  }
+}

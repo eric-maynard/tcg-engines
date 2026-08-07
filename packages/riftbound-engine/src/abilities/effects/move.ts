@@ -5,6 +5,7 @@ import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight } from "./_helpers";
+import { isBlockedByTwoOtherPlayers } from "../../game-definition/moves/movement/helpers";
 
 /**
  * rule-id: unl-144-219 — Rule 450 / 190.3.a: a unit arriving (by any means,
@@ -143,18 +144,41 @@ function hasNoMoveToBase(ctx: EffectContext, cardId: string): boolean {
  * the effect's controller as `movedBy`) so "When I move" / "When you move an
  * enemy unit" triggers fire. Non-board origins (hand, trash, …) are not moves.
  */
-export function moveCardWithEvent(ctx: EffectContext, cardId: string, targetZoneId: string): void {
+export function moveCardWithEvent(
+  ctx: EffectContext,
+  cardId: string,
+  targetZoneId: string,
+): string {
   const from = ctx.zones.getCardZone(cardId as CoreCardId) ?? "";
   // rule 144.4.b / sfd-014-221 (Minotaur Reckoner): "Units can't move to base"
   // binds effect-driven moves too (a Recall is not a Move — rule 455 — and goes
   // through effects/recall.ts, which never calls this).
   if (targetZoneId === "base" && from.startsWith("battlefield-") && hasNoMoveToBase(ctx, cardId)) {
-    return;
+    return from;
+  }
+  // rule 449.2 / 447.2.c / 456.1 — a battlefield already holding units of two
+  // OTHER players cannot be entered by any means; the forced Move instead
+  // becomes a Recall to base, and a Recall is not a Move (no move triggers).
+  if (
+    targetZoneId.startsWith("battlefield-") &&
+    isBlockedByTwoOtherPlayers(
+      targetZoneId,
+      arrivingController(ctx, cardId),
+      (zoneId) => ctx.zones.getCardsInZone(zoneId),
+      (id) =>
+        (ctx.cards.getCardController?.(id as CoreCardId) ??
+          ctx.cards.getCardOwner(id as CoreCardId)) as string | undefined,
+    )
+  ) {
+    if (from !== "base") {
+      ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: "base" as CoreZoneId });
+    }
+    return "base";
   }
   ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: targetZoneId as CoreZoneId });
   const onBoard = (z: string) => z === "base" || z.startsWith("battlefield-");
   if (from === targetZoneId || !onBoard(from) || !onBoard(targetZoneId)) {
-    return;
+    return targetZoneId;
   }
   const owner =
     ctx.cards.getCardController?.(cardId as CoreCardId) ??
@@ -168,6 +192,7 @@ export function moveCardWithEvent(ctx: EffectContext, cardId: string, targetZone
     to: targetZoneId,
     type: "move",
   });
+  return targetZoneId;
 }
 
 /**
@@ -223,10 +248,10 @@ function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void
   if (!partnerZone || partnerZone === selfZone) {
     return;
   }
-  moveCardWithEvent(ctx, selfId, partnerZone);
-  markContestedOnArrival(ctx.draft, partnerZone, arrivingController(ctx, selfId));
-  moveCardWithEvent(ctx, partner, selfZone);
-  markContestedOnArrival(ctx.draft, selfZone, arrivingController(ctx, partner));
+  const selfLanded = moveCardWithEvent(ctx, selfId, partnerZone);
+  markContestedOnArrival(ctx.draft, selfLanded, arrivingController(ctx, selfId));
+  const partnerLanded = moveCardWithEvent(ctx, partner, selfZone);
+  markContestedOnArrival(ctx.draft, partnerLanded, arrivingController(ctx, partner));
 
   // rule-id: sfd-050-221 (rule 716) — "If it's equipped, you may attach one of
   // its Equipment to me": only the swap knows which unit was chosen, so the
@@ -297,9 +322,9 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
       return;
     }
     const destZone = `battlefield-${bfKey}`;
-    moveCardWithEvent(ctx, unitId, destZone);
-    markContestedOnArrival(ctx.draft, destZone, arrivingController(ctx, unitId));
-    stageCombatOnArrival(ctx, destZone);
+    const landed = moveCardWithEvent(ctx, unitId, destZone);
+    markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, unitId));
+    stageCombatOnArrival(ctx, landed);
     return;
   }
   const moveRef = (effect as unknown as { reference?: TargetDescriptor }).reference;
@@ -457,10 +482,10 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         continue;
       }
       if (options.length === 1 || ctx.draft.pendingChoice) {
-        moveCardWithEvent(ctx, cardId, options[0] as string);
+        const landed = moveCardWithEvent(ctx, cardId, options[0] as string);
         // rule-id: unl-144-219 — Rule 450: arriving at a non-controlled
         // battlefield applies Contested so combat is staged.
-        markContestedOnArrival(ctx.draft, options[0] as string, arrivingController(ctx, cardId));
+        markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, cardId));
         continue;
       }
       ctx.draft.pendingChoice = {

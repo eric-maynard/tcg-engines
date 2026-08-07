@@ -199,24 +199,34 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
               bf.controller = solo;
               if (!draft.conqueredThisTurn[solo]) draft.conqueredThisTurn[solo] = [];
               draft.conqueredThisTurn[solo].push(before!.battlefieldId);
-              // Rule 348.2.a.1: this is a Conquer — emit the "conquer" event
-              // (as conquerBattlefield / resolveFullCombat do) so [Hunt] and
-              // "When you conquer" triggers fire.
-              conquerEvent = {
-                battlefieldId: before!.battlefieldId,
-                playerId: solo,
-                type: "conquer",
-              };
               const scored = draft.scoredThisTurn[solo] ?? [];
-              if (
-                !scored.includes(before!.battlefieldId) &&
+              // rule 471.2.c: Conquer abilities trigger only when the
+              // Battlefield SCORES — re-taking a battlefield this player
+              // already scored this turn is not a Conquer, so no event.
+              if (!scored.includes(before!.battlefieldId)) {
+                // Rule 348.2.a.1: this is a Conquer — emit the "conquer" event
+                // (as conquerBattlefield / resolveFullCombat do) so [Hunt] and
+                // "When you conquer" triggers fire.
+                conquerEvent = {
+                  battlefieldId: before!.battlefieldId,
+                  playerId: solo,
+                  type: "conquer",
+                };
+              }
+              if (!scored.includes(before!.battlefieldId)) {
                 // rule 471.1.b.1: the Final Point by conquer needs every
-                // battlefield scored this turn; otherwise draw instead.
-                !finalPointConquerDrawsInstead(draft, solo, before!.battlefieldId, context)
-              ) {
+                // battlefield scored this turn; otherwise draw instead. The
+                // Conquer is still a Score (469.1/470), so it is recorded.
+                const drewInstead = finalPointConquerDrawsInstead(
+                  draft,
+                  solo,
+                  before!.battlefieldId,
+                  context,
+                );
                 const p = draft.players[solo];
                 // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
-                if (p && !applyScoreReplacement(draft, solo, context)) p.victoryPoints += 1;
+                if (!drewInstead && p && !applyScoreReplacement(draft, solo, context, "conquer"))
+                  p.victoryPoints += 1;
                 if (!draft.scoredThisTurn[solo]) draft.scoredThisTurn[solo] = [];
                 draft.scoredThisTurn[solo].push(before!.battlefieldId);
                 if (hasPlayerWon(draft, solo)) {
@@ -269,6 +279,11 @@ export const startShowdown: Defs["startShowdown"] = {
     if (getActiveShowdown(interaction)?.active) {
       return false;
     }
+    // rule 323.12 — beginning a staged Showdown is the TURN player's step;
+    // a non-turn player never chooses it (e.g. after an off-turn Reaction move).
+    if (state.turn.activePlayer !== context.params.playerId) {
+      return false;
+    }
     const bf = state.battlefields[context.params.battlefieldId];
     if (!bf) {
       return false;
@@ -296,6 +311,10 @@ export const startShowdown: Defs["startShowdown"] = {
       return [];
     }
     if (getActiveShowdown(interaction)?.active) {
+      return [];
+    }
+    // rule 323.12 — only the turn player is offered the staged-showdown choice.
+    if (state.turn.activePlayer !== (context.playerId as string)) {
       return [];
     }
     // Rule 548: Only contested battlefields can have showdowns

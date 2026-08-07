@@ -91,7 +91,7 @@ describe("Ruling e574b44846512539 — Karthus doubling a Deathknell vs ONE Not S
   // Expected: with both Rex items on the chain P2's single Not So Fast is offered BOTH as legal targets (each is
   // an enemy ability choosing P2's unit) but counters exactly ONE; the other still resolves — 4 total damage on
   // P2's side, not 0 and not 8. Actual: nothing ever triggers, so there is nothing to counter.
-  test.failing("BUG: ruling e574b44846512539 — one Not So Fast sees two targets, counters one; the surviving trigger deals its 4 (engine: no triggers)", async () => {
+  test("ruling e574b44846512539 — one Not So Fast sees two targets, counters one; the surviving trigger deals its 4", async () => {
     const game = await rexBoard().build();
     await killOwn(game, "spark", "rex");
     await chooseRexTargets(game, ["victimA", "victimB"]);

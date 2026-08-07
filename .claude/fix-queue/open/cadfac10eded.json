@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ogs-004-024",
+  "title": "Yi's 'While you have 8+ runes' +4 Might is not re-evaluated when the rune pool shrinks via recycleRune (or after exhaustRune); the stale +4 persists until some unrelated move runs cleanup/static recalculation.",
+  "expected": "recycleRune reducer (packages/riftbound-engine/src/game-definition/moves/resources.ts:196-214) only calls zones.moveCard + increments pool.power; exhaustRune reducer (resources.ts:118-130) only sets the exhausted flag + energy. Neither invokes performCleanup/recalculateStaticEffects nor is wrapped in withPostMoveCleanup (only movement.ts:24, counters.ts, pending-choice.ts, dispatcher do). The 'runes-at-least' condition (abilities/static-abilities.ts:178-183) is only evaluated inside recalculateStaticEffects, so staticMightBonus stays stale. Reproduced with audit harness: 8 runes + Yi-style static -> might 8/staticMightBonus 4; applyMove recycleRune (success, runes=7) -> might still 8, staticMightBonus 4; exhaustRune -> still 8; manual recalculateStatics -> 4.",
+  "observed": "At 8 runes staticMightBonus=4/UI shows 8 (correct). After recycleRune (REST result success, p1 runes=7, chaos power +1) staticMightBonus stayed 4 and UI still showed 8; also unchanged after a subsequent exhaustRune. Only after playing another unit did it recompute to 0. recycleRune/exhaustRune reducers in moves/resources.ts do not run post-move cleanup (recalculateStaticEffects).",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/resources.ts:196",
+  "id": "cadfac10eded",
+  "createdAt": "2026-08-06T23:55:41.370Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.370Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

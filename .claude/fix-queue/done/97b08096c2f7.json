@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogs-010-024",
+  "title": "BUG: the play trigger returns the chosen spell from your trash to your hand (it returns Annie herself today)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogs-010-024.test.ts",
+    "testName": "BUG: the play trigger returns the chosen spell from your trash to your hand (it returns Annie herself today)"
+  },
+  "id": "97b08096c2f7",
+  "createdAt": "2026-08-06T18:35:08.356Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.356Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.602Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.408Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.602Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.408Z"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-085-221",
+  "title": "'I have +1 [Might] for each friendly gear' does not scale with gear count",
+  "expected": "Ornn (sfd-085-221) has no hand-authored abilities; enrich-cards.ts parses rulesText into a static ability `{type:\"modify-might\", amount:1, per:\"friendly gear\", target:\"self\"}` (verified by running parseAbilities). The engine's applyStaticEffect in riftbound-engine/src/abilities/static-abilities.ts:492-517 only computes `amount` from a numeric literal, `cardsInTrash`, or `score`; it never reads `effect.per` (no reference to `per` anywhere in static-abilities.ts or the abilities/ dir). So `amount = 1` is applied flat at line 547-551 (`staticMightBonus: current + targetAmount`), regardless of friendly gear count — matching the observed staticMightBonus=1 / Effective Might 5.",
+  "observed": "meta.staticMightBonus stayed at 1 and UI 'Effective Might' showed 5 with 2 friendly gear (2x Serrated Dirk, one attached) and still 5 after a 3rd gear (Hand Hammer + Seal of Rage + Sun Disc in first run). Bonus is a flat +1 regardless of gear count.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/static-abilities.ts:492",
+  "id": "7a426254e4f0",
+  "createdAt": "2026-08-06T20:43:38.883Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.883Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:14:52.163Z",
+      "event": "grabbed:w8-i11"
+    },
+    {
+      "at": "2026-08-07T00:19:28.813Z",
+      "event": "done",
+      "note": "static-parser: emit count descriptor for 'for each X' self-might so engine scales it"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i11",
+  "claimedAt": "2026-08-07T00:14:52.163Z",
+  "resolution": {
+    "note": "static-parser: emit count descriptor for 'for each X' self-might so engine scales it",
+    "files": [
+      "packages/riftbound-cards/src/parser/parsers/static-parser.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-085-221.test.ts"
+    ],
+    "at": "2026-08-07T00:19:28.813Z"
+  }
+}

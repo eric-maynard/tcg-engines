@@ -211,7 +211,9 @@ export function resolveTarget(
   const zoneLocation = offBoardZoneFor(target.location);
   const candidates = zoneLocation
     ? getZoneCardIds(zoneLocation, ctx, target.controller)
-    : getBoardCardIds(ctx);
+    : target.type === "facedown"
+      ? getFacedownCardIds(ctx)
+      : getBoardCardIds(ctx);
 
   // Filter by card type
   const registry = getGlobalCardRegistry();
@@ -245,6 +247,11 @@ export function resolveTarget(
       const def = registry.get(id);
       return def?.cardType === "unit" || def?.cardType === "gear" || def?.cardType === "equipment";
     });
+  } else if (target.type === "legend") {
+    // rule 355.9.a.4 / 355.10.a — "a legend" names a card in a Legend Zone.
+    // Both Legend Zones are public, so either player's legend is a legal
+    // choice unless the text says friendly/enemy (handled below).
+    filtered = getLegendZoneCardIds(ctx);
   } else if (target.type === "rune") {
     // rule-id: ogn-073-298 — "friendly runes" live in each player's runePool,
     // never on the unit board; board cards are not runes.
@@ -277,6 +284,15 @@ export function resolveTarget(
       const zone = ctx.zones.getCardZone(id as CoreCardId);
       return zone === hereZone;
     });
+  } else if (target.location === "here-battlefield") {
+    // rule 428.1.a.1.b: "at my battlefield" — the battlefield the source is (or
+    // last was) at. A base is not a battlefield, so nothing qualifies there.
+    const hereZone =
+      ctx.sourceZone === "battlefieldRow" ? `battlefield-${ctx.sourceCardId}` : ctx.sourceZone;
+    filtered =
+      hereZone?.startsWith("battlefield") === true
+        ? filtered.filter((id) => ctx.zones.getCardZone(id as CoreCardId) === hereZone)
+        : [];
   } else if (target.location === "base") {
     filtered = filtered.filter((id) => {
       const zone = ctx.zones.getCardZone(id as CoreCardId);
@@ -380,6 +396,21 @@ function getBoardCardIds(ctx: TargetResolverContext): string[] {
 }
 
 /**
+ * rule-id: ogn-181-298 — rule 811.1: facedown cards sit in `facedown-<bf>`
+ * zones and have no printed characteristics, so they are never part of the
+ * unit/gear board pool. Only a descriptor that names them (`type: "facedown"`)
+ * sees them, and no card-type filter is applied to that branch.
+ */
+function getFacedownCardIds(ctx: TargetResolverContext): string[] {
+  const ids: string[] = [];
+  for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+    const cards = ctx.zones.getCardsInZone(`facedown-${bfId}` as CoreZoneId);
+    ids.push(...cards.map((c) => c as string));
+  }
+  return ids;
+}
+
+/**
  * rule-id: ogn-170-298 — target locations that name a per-player off-board
  * zone rather than the board. Returns the engine zone id, or undefined for
  * board/battlefield locations.
@@ -425,6 +456,19 @@ function getZoneCardIds(
 }
 
 /** rule-id: ven-150-166 — rune cards in every player's rune pool. */
+/** rule 355.10.a — every player's Legend Zone is a public zone. */
+function getLegendZoneCardIds(ctx: TargetResolverContext): string[] {
+  const ids: string[] = [];
+  for (const playerId of Object.keys(ctx.draft.players)) {
+    ids.push(
+      ...ctx.zones
+        .getCardsInZone("legendZone" as CoreZoneId, playerId as CorePlayerId)
+        .map((c) => c as string),
+    );
+  }
+  return ids;
+}
+
 function getRunePoolCardIds(ctx: TargetResolverContext): string[] {
   const ids: string[] = [];
   for (const playerId of Object.keys(ctx.draft.players)) {

@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "ven-sp6-006",
+  "title": "Energy added by Lux's [Add][2] ability is unrestricted; the 'Spend this Energy only to play spells' rider is not enforced.",
+  "expected": "Parser output for ven-sp6-006's text \"[Exhaust]: [Reaction] — [Add] [2]. Spend this Energy only to play spells.\" is `{type:\"activated\", cost:{exhaust:true}, timing:\"reaction\", effect:{type:\"add-resource\", energy:2}}` with no restriction (verified by running parseAbilities). riftbound-cards/src/parser/impl/activated.ts:263-269 and :361-366 only recognize \"Spend this Energy only during showdowns\"; the \"only to play spells\" rider is silently swallowed by the [Add] regex at :272 (`\\.?\\s*(?:\\(.*\\))?` doesn't apply, but parseEffects path strips it). Engine handler riftbound-engine/src/abilities/effects/add-resource.ts:5-10 does `pool.energy += effect.energy` into the generic rune pool with no spend restriction, so the 2 energy pays for any card. Existing test riftbound-engine/src/__tests__/cards/ogs-014-024.test.ts:58 is marked test.failing(\"BUG: 'Use only to play spells' ...\") documenting the same defect for the OGS printing.",
+  "observed": "After activating Lux (energy 0->2, all runes still ready), legal moves listed playUnit for every 2-cost unit in hand; executing playUnit on Overzealous Fan (unit, cost 2) succeeded, energy went 2->0 and no runes were exhausted.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effects/add-resource.ts:9",
+  "id": "4c1ef8841f0c",
+  "createdAt": "2026-08-06T20:43:38.885Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.885Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-06T23:52:18.444Z",
+      "event": "grabbed:w7-i14"
+    },
+    {
+      "at": "2026-08-07T00:16:15.045Z",
+      "event": "done",
+      "note": "parser: 'Spend this Energy only to play spells' now sets add-resource restriction (engine already enforced it)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i14",
+  "claimedAt": "2026-08-06T23:52:18.444Z",
+  "resolution": {
+    "note": "parser: 'Spend this Energy only to play spells' now sets add-resource restriction (engine already enforced it)",
+    "files": [
+      "packages/riftbound-cards/src/parser/impl/activated.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ven-sp6-006.test.ts"
+    ],
+    "at": "2026-08-07T00:16:15.045Z"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-190-298",
+  "title": "BUG: dies in base → no battlefield, so nothing is damaged",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-190-298.test.ts",
+    "testName": "BUG: dies in base → no battlefield, so nothing is damaged"
+  },
+  "id": "38c6f5658ada",
+  "createdAt": "2026-08-06T17:39:26.577Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:39:26.577Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:45:03.894Z",
+      "event": "grabbed:w7-i22"
+    },
+    {
+      "at": "2026-08-07T02:35:32.104Z",
+      "event": "done",
+      "note": ""
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i22",
+  "claimedAt": "2026-08-07T01:45:03.894Z",
+  "resolution": {
+    "note": "",
+    "at": "2026-08-07T02:35:32.104Z"
+  }
+}

@@ -22,6 +22,7 @@ import {
   type ReplacementContext,
 } from "../abilities/replacement-effects";
 import type { PlayerId, RiftboundGameState } from "../types";
+import { getBattlefieldVictoryScoreBonus } from "./battlefield-setup-effects";
 import { getGlobalCardRegistry } from "./card-lookup";
 
 /**
@@ -48,7 +49,10 @@ export function finalPointConquerDrawsInstead(
   }
   // Same threshold as win-conditions/victory.getEffectiveVictoryScore, inlined
   // to keep operations/ free of a game-definition/ import cycle.
-  const threshold = (state.victoryScore ?? 8) + (player.victoryScoreModifier ?? 0);
+  const threshold =
+    (state.victoryScore ?? 8) +
+    (player.victoryScoreModifier ?? 0) +
+    getBattlefieldVictoryScoreBonus(state);
   if (player.victoryPoints !== threshold - 1) {
     return false;
   }

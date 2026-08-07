@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-083-221",
+  "title": "BUG: unspent added Energy is lost in the Expiration Step (317.2.d): X=2 this turn → 0 energy next turn",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-083-221.test.ts",
+    "testName": "BUG: unspent added Energy is lost in the Expiration Step (317.2.d): X=2 this turn → 0 energy next turn"
+  },
+  "id": "313b598b3c60",
+  "createdAt": "2026-08-07T01:20:34.439Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.439Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-226-298",
+  "title": "BUG: the chosen unit is played from trash for free — it enters the board exhausted; the Matron stays where she was",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-226-298.test.ts",
+    "testName": "BUG: the chosen unit is played from trash for free — it enters the board exhausted; the Matron stays where she was"
+  },
+  "id": "50a713364f5c",
+  "createdAt": "2026-08-06T17:51:17.787Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:17.787Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.623Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.529Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.623Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.529Z"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling edfd3defc2005bb9 — (Sentry/Yordle) the picked unit is played above the Deathknell; its play trigger resolves before the Deathknell (engine draws the picked card instead of playing it)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/baited-hook-edfd3defc2005bb9.test.ts",
+    "testName": "BUG: ruling edfd3defc2005bb9 — (Sentry/Yordle) the picked unit is played above the Deathknell; its play trigger resolves before the Deathknell (engine draws the picked card instead of playing it)"
+  },
+  "id": "f9d06890970f",
+  "createdAt": "2026-08-06T19:51:17.546Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:51:17.546Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:26:23.362Z",
+      "event": "grabbed:w7-i12"
+    },
+    {
+      "at": "2026-08-06T23:31:18.038Z",
+      "event": "done",
+      "note": "look onPicked:play now finalizes the play immediately (unit enters board, play trigger goes on chain above earlier triggers)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i12",
+  "claimedAt": "2026-08-06T23:26:23.362Z",
+  "resolution": {
+    "note": "look onPicked:play now finalizes the play immediately (unit enters board, play trigger goes on chain above earlier triggers)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/baited-hook-edfd3defc2005bb9.test.ts",
+      "packages/riftbound-engine/src/__tests__/pending-choice.test.ts"
+    ],
+    "at": "2026-08-06T23:31:18.038Z"
+  }
+}

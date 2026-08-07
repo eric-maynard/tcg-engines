@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-070-221",
+  "title": "BUG: facedown ⇒ Reaction, not 'free action' — during the opponent's Neutral Open state P1 holds no priority (312.2) and may not play it from facedown",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-070-221.test.ts",
+    "testName": "BUG: facedown ⇒ Reaction, not 'free action' — during the opponent's Neutral Open state P1 holds no priority (312.2) and may not play it from facedown"
+  },
+  "id": "3bde558eb621",
+  "createdAt": "2026-08-07T01:27:56.040Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:27:56.040Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

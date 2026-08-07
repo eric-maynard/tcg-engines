@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-081-221",
+  "title": "BUG: 'for each opponent who did' — when the opponent accepts you play a second exhausted Gold (2 for you, 1 for them)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-081-221.test.ts",
+    "testName": "BUG: 'for each opponent who did' — when the opponent accepts you play a second exhausted Gold (2 for you, 1 for them)"
+  },
+  "id": "a06285d3e7ff",
+  "createdAt": "2026-08-07T01:07:14.861Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:07:14.861Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

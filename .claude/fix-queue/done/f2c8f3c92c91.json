@@ -1,0 +1,43 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-062-298",
+  "title": "BUG: the reduced cost must still be paid — with 0 energy left a 7-cost unit (2 after reduction) cannot be played for free (rules 356.4, 419.2.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-062-298.test.ts",
+    "testName": "BUG: the reduced cost must still be paid — with 0 energy left a 7-cost unit (2 after reduction) cannot be played for free (rules 356.4, 419.2.a)"
+  },
+  "id": "f2c8f3c92c91",
+  "createdAt": "2026-08-06T17:15:21.552Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.552Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T20:11:47.476Z",
+      "event": "grabbed:w2-i3"
+    },
+    {
+      "at": "2026-08-06T20:56:32.491Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T01:44:01.601Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.403Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-07T01:44:01.601Z",
+  "claimedBy": "w9-i18",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.403Z"
+  }
+}

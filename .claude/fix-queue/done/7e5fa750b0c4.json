@@ -1,0 +1,39 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 29339d78dfd48122 — paying Hard Bargain's ransom with Ezreal out still costs the full [2] (P1 is asked, pays 2 → 0 left, Dredge Up draws)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/ezreal-prodigy-29339d78dfd48122.test.ts",
+    "testName": "BUG: ruling 29339d78dfd48122 — paying Hard Bargain's ransom with Ezreal out still costs the full [2] (P1 is asked, pays 2 → 0 left, Dredge Up draws)"
+  },
+  "id": "7e5fa750b0c4",
+  "createdAt": "2026-08-06T19:55:38.083Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:55:38.083Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:36:12.722Z",
+      "event": "grabbed:w5-i7"
+    },
+    {
+      "at": "2026-08-06T23:41:19.621Z",
+      "event": "done",
+      "note": "counter 'unless controller pays N': opt-in ransom prompt to the target's controller (rule 158.1), earmarked energy excluded"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w5-i7",
+  "claimedAt": "2026-08-06T23:36:12.722Z",
+  "resolution": {
+    "note": "counter 'unless controller pays N': opt-in ransom prompt to the target's controller (rule 158.1), earmarked energy excluded",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/counter.ts",
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+      "packages/riftbound-engine/src/types/game-state.ts"
+    ],
+    "at": "2026-08-06T23:41:19.621Z"
+  }
+}

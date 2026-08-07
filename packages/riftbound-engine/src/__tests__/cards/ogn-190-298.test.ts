@@ -37,7 +37,7 @@ describe("Kog'Maw, Caustic (ogn-190-298)", () => {
     expect(low.p1.can("play", "kog")).toBe(false);
   });
 
-  test.failing("BUG: dies at a battlefield → 4 damage to EVERY unit there (friend and foe); units elsewhere untouched", async () => {
+  test("dies at a battlefield → 4 damage to EVERY unit there (friend and foe); units elsewhere untouched", async () => {
     // Expected: foe3 dies, foe5/buddy take 4, bf2/base units untouched. Actual: resolving the trigger throws
     // "target.location?.startsWith is not a function" — the parsed target location is an object
     // ({ battlefield: "controlled" }) the resolver cannot handle, so the chain cannot resolve.
@@ -65,7 +65,7 @@ describe("Kog'Maw, Caustic (ogn-190-298)", () => {
     expect(game.state("home").damage).toBe(0);
   });
 
-  test.failing("BUG: dies in base → no battlefield, so nothing is damaged", async () => {
+  test("dies in base → no battlefield, so nothing is damaged", async () => {
     // Expected: trigger resolves as a no-op. Actual: same resolver crash as above (chain stuck).
     const game = await scenario()
       .battlefield("bf1", { controller: P1 })
@@ -82,7 +82,7 @@ describe("Kog'Maw, Caustic (ogn-190-298)", () => {
     expect(game.zoneOf("field")).toBe("battlefield-bf1");
   });
 
-  test.failing("BUG: dying in combat also triggers Deathknell (323.4) — the 3-Might attacker that killed him takes 4 and dies", async () => {
+  test("dying in combat also triggers Deathknell (323.4) — the 3-Might attacker that killed him takes 4 and dies", async () => {
     // Expected: P2's 3-Might attacker kills the defending Kog'Maw; Deathknell deals 4 to all units at bf1,
     // killing the attacker, so bf1 is not conquered. Actual: combat deaths fire no die trigger; attacker conquers.
     const game = await scenario()

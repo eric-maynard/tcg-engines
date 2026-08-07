@@ -1,0 +1,37 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: enemy Vex defending — Bullet Time is NOT playable with only [1] and no Power (needs [2] + 1 Power; 356.3)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/bullet-time-vex-gold-x-payment.test.ts",
+    "testName": "BUG: enemy Vex defending — Bullet Time is NOT playable with only [1] and no Power (needs [2] + 1 Power; 356.3)"
+  },
+  "id": "ea4b68d0f86e",
+  "createdAt": "2026-08-06T17:51:09.027Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.027Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:40.865Z",
+      "event": "grabbed:w6-i13"
+    },
+    {
+      "at": "2026-08-07T01:49:07.129Z",
+      "event": "done",
+      "note": "wire computeStaticCostIncrease into canAffordCard/deductCost (enemy Vex surcharge)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w6-i13",
+  "claimedAt": "2026-08-07T01:44:40.865Z",
+  "resolution": {
+    "note": "wire computeStaticCostIncrease into canAffordCard/deductCost (enemy Vex surcharge)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts"
+    ],
+    "at": "2026-08-07T01:49:07.129Z"
+  }
+}

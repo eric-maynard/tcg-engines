@@ -15,8 +15,18 @@ HEAD_SHA=$(git rev-parse HEAD); WT="/tmp/rb-land-wt"
 # fresh side worktree at HEAD (reused dir; always reset)
 if [ -d "$WT/.git" ] || [ -f "$WT/.git" ]; then git -C "$WT" reset -q --hard "$HEAD_SHA" && git -C "$WT" clean -qfdx -e node_modules -e '**/node_modules' >/dev/null 2>&1 || { git worktree remove --force "$WT" 2>/dev/null; rm -rf "$WT"; }; fi
 if [ ! -e "$WT/.git" ]; then git worktree prune; git worktree add --detach -f "$WT" "$HEAD_SHA" >/dev/null 2>&1 || { out committed false; out reason worktree_add_failed; exit 0; }; fi
-# share dependency dirs (bun workspaces: root + per-package node_modules)
-for nm in node_modules packages/*/node_modules apps/*/node_modules; do [ -d "$REPO/$nm" ] && [ ! -e "$WT/$nm" ] && ln -s "$REPO/$nm" "$WT/$nm"; done
+# dependency dirs: external deps shared from REPO, but WORKSPACE packages (@tcg/*) must resolve to the
+# worktree's own packages — otherwise package-name imports test main-tree code instead of the patch.
+link_nm() { # $1 = relative node_modules path (root or per-package)
+  local src="$REPO/$1" dst="$WT/$1"; [ -d "$src" ] || return 0
+  if [ -L "$dst" ]; then rm -f "$dst"; fi
+  mkdir -p "$dst"
+  for e in "$src"/* "$src"/.bin; do [ -e "$e" ] || continue; b=$(basename "$e");
+    case "$b" in @tcg) ;; *) [ -e "$dst/$b" ] || ln -s "$e" "$dst/$b";; esac; done
+  if [ -d "$src/@tcg" ]; then mkdir -p "$dst/@tcg"; for e in "$src/@tcg"/*; do b=$(basename "$e"); tgt=$(readlink -f "$e"); rel="${tgt#$REPO/}"; [ -e "$dst/@tcg/$b" ] || ln -s "$WT/$rel" "$dst/@tcg/$b"; done; fi
+}
+link_nm node_modules
+for d in packages/*/node_modules apps/*/node_modules; do [ -d "$REPO/$d" ] && link_nm "$d"; done
 # apply the caller's files onto the clean tree (copy current content; handle deletions)
 for f in "${FILES[@]}"; do if [ -e "$REPO/$f" ]; then mkdir -p "$WT/$(dirname "$f")" && cp "$REPO/$f" "$WT/$f"; else rm -f "$WT/$f"; fi; done
 # gates in the side tree

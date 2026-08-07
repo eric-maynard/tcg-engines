@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-083-221",
+  "title": "BUG: mixed domains and stored rainbow all count as [rainbow]: mind 1 + calm 1 + rainbow 1 pays X=3 → +3 Energy",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-083-221.test.ts",
+    "testName": "BUG: mixed domains and stored rainbow all count as [rainbow]: mind 1 + calm 1 + rainbow 1 pays X=3 → +3 Energy"
+  },
+  "id": "b128b03849be",
+  "createdAt": "2026-08-07T01:20:34.439Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.439Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

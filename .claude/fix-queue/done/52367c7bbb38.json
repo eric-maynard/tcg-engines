@@ -1,0 +1,46 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-051-298",
+  "title": "BUG: a stunned defender deals no combat damage — 5-might attacker kills it and survives (423.1.b/c)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-051-298.test.ts",
+    "testName": "BUG: a stunned defender deals no combat damage — 5-might attacker kills it and survives (423.1.b/c)"
+  },
+  "id": "52367c7bbb38",
+  "createdAt": "2026-08-06T17:15:21.550Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.550Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:48:12.269Z",
+      "event": "grabbed:w4-i2"
+    },
+    {
+      "at": "2026-08-06T20:56:32.491Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T01:42:42.743Z",
+      "event": "grabbed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:43:14.228Z",
+      "event": "done",
+      "note": "already fixed at HEAD: repro test is non-failing and green (Assault lethal threshold / stunned deals no combat damage)"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-07T01:42:42.743Z",
+  "claimedBy": "w9-i18",
+  "resolution": {
+    "note": "already fixed at HEAD: repro test is non-failing and green (Assault lethal threshold / stunned deals no combat damage)",
+    "files": [
+      "packages/riftbound-engine/src/combat/combat-resolver.ts"
+    ],
+    "at": "2026-08-07T01:43:14.228Z"
+  }
+}

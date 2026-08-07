@@ -13,7 +13,16 @@
     {
       "at": "2026-08-06T17:51:09.031Z",
       "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-07T01:50:25.272Z",
+      "event": "grabbed:w4-i24"
+    },
+    {
+      "at": "2026-08-07T02:36:01.401Z",
+      "event": "reaped"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedAt": "2026-08-07T01:50:25.272Z"
 }

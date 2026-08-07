@@ -1,0 +1,31 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 317.2.b — end-of-turn heal clears meta.damage but not the damage counter store, so the unit still reads 4 damage next turn",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/turn-structure-phases-and-resources.test.ts",
+    "testName": "BUG: 317.2.b — end-of-turn heal clears meta.damage but not the damage counter store, so the unit still reads 4 damage next turn"
+  },
+  "id": "e3262d91b64b",
+  "createdAt": "2026-08-06T20:50:12.434Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.434Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T00:04:30.446Z",
+      "event": "done(unclaimed)",
+      "note": "same fix: ending heal clears __counters.damage"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "same fix: ending heal clears __counters.damage",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts"
+    ],
+    "at": "2026-08-07T00:04:30.446Z"
+  }
+}

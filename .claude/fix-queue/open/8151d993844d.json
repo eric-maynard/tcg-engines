@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-078-221",
+  "title": "BUG: two Portals activated the same turn give the next spell TWO Repeat instances (820.1.c.2) — Study repeat=2 for 6 draws 3",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-078-221.test.ts",
+    "testName": "BUG: two Portals activated the same turn give the next spell TWO Repeat instances (820.1.c.2) — Study repeat=2 for 6 draws 3"
+  },
+  "id": "8151d993844d",
+  "createdAt": "2026-08-07T01:27:56.044Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:27:56.044Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

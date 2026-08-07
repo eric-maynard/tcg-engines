@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-010-221",
+  "title": "BUG: Void Drone played from the trash is charged the full [3] — the 'from anywhere other than your hand' discount is never applied (rule 356.4)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-010-221.test.ts",
+    "testName": "BUG: Void Drone played from the trash is charged the full [3] — the 'from anywhere other than your hand' discount is never applied (rule 356.4)"
+  },
+  "id": "a15d35be855c",
+  "createdAt": "2026-08-07T00:48:39.543Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:48:39.543Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

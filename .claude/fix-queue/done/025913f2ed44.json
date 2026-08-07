@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-029-221",
+  "title": "BUG: Assault also raises her lethal threshold — attacking a 3-Might defender she survives (3 damage < 4 Might) and conquers (807.1.c, 142.4.b, 466.1.a.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-029-221.test.ts",
+    "testName": "BUG: Assault also raises her lethal threshold — attacking a 3-Might defender she survives (3 damage < 4 Might) and conquers (807.1.c, 142.4.b, 466.1.a.1)"
+  },
+  "id": "025913f2ed44",
+  "createdAt": "2026-08-06T19:03:47.622Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:03:47.622Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.621Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.257Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.621Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.257Z"
+  }
+}

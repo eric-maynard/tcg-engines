@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-054-221",
+  "title": "BUG: registry payload — the static must address your EQUIPMENT (not all gear) EVERYWHERE (not just the board)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-054-221.test.ts",
+    "testName": "BUG: registry payload — the static must address your EQUIPMENT (not all gear) EVERYWHERE (not just the board)"
+  },
+  "id": "74aea74f5fad",
+  "createdAt": "2026-08-07T00:52:39.830Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:52:39.830Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

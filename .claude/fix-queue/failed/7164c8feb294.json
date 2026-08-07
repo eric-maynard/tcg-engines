@@ -1,0 +1,43 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-268-298",
+  "title": "BUG: the variable payment is [rainbow] POWER (any domain), not energy (rules 204.3.b, 135.2.e)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-268-298.test.ts",
+    "testName": "BUG: the variable payment is [rainbow] POWER (any domain), not energy (rules 204.3.b, 135.2.e)"
+  },
+  "id": "7164c8feb294",
+  "createdAt": "2026-08-06T17:51:09.021Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.021Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T21:29:02.799Z",
+      "event": "grabbed:w9-i4"
+    },
+    {
+      "at": "2026-08-06T21:44:59.068Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-06T21:45:24.043Z",
+      "event": "grabbed:w10-i1"
+    },
+    {
+      "at": "2026-08-06T21:46:13.818Z",
+      "event": "failed",
+      "note": "Owned by a concurrent worker: an uncommitted ~40-file change (ability xCost:'power', cost.ts xCostIsPower, resolve.ts resolution-time integer pay-X prompt, harness chooseX, bullet-time.ts) already implements X-as-Power; the two interaction BUG tests are already flipped and passing in the working tree. Landing anything here from clean HEAD would either duplicate or break, so no edits made."
+    }
+  ],
+  "status": "failed",
+  "claimedAt": "2026-08-06T21:45:24.042Z",
+  "claimedBy": "w10-i1",
+  "resolution": {
+    "note": "Owned by a concurrent worker: an uncommitted ~40-file change (ability xCost:'power', cost.ts xCostIsPower, resolve.ts resolution-time integer pay-X prompt, harness chooseX, bullet-time.ts) already implements X-as-Power; the two interaction BUG tests are already flipped and passing in the working tree. Landing anything here from clean HEAD would either duplicate or break, so no edits made.",
+    "at": "2026-08-06T21:46:13.818Z"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 29339d78dfd48122 — Ezreal DOES reduce Hard Bargain's Repeat [2] to [1]: castable with one Repeat at 3 energy",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/ezreal-prodigy-29339d78dfd48122.test.ts",
+    "testName": "BUG: ruling 29339d78dfd48122 — Ezreal DOES reduce Hard Bargain's Repeat [2] to [1]: castable with one Repeat at 3 energy"
+  },
+  "id": "aaf2299acdab",
+  "createdAt": "2026-08-06T19:55:38.083Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:55:38.083Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:36:12.722Z",
+      "event": "grabbed:w5-i7"
+    },
+    {
+      "at": "2026-08-06T23:41:19.580Z",
+      "event": "done",
+      "note": "Ezreal flex discount already reduces Repeat tiers; flipped repro"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w5-i7",
+  "claimedAt": "2026-08-06T23:36:12.722Z",
+  "resolution": {
+    "note": "Ezreal flex discount already reduces Repeat tiers; flipped repro",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/ezreal-prodigy-29339d78dfd48122.test.ts"
+    ],
+    "at": "2026-08-06T23:41:19.580Z"
+  }
+}

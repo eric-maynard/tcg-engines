@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-208-298",
+  "title": "BUG: the additional cost is a real kill — sacrificing Watchful Sentry fires its Deathknell (draw 1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-208-298.test.ts",
+    "testName": "BUG: the additional cost is a real kill — sacrificing Watchful Sentry fires its Deathknell (draw 1)"
+  },
+  "id": "66503f785bee",
+  "createdAt": "2026-08-06T17:51:09.032Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.032Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T21:45:49.125Z",
+      "event": "grabbed:w12-i1"
+    },
+    {
+      "at": "2026-08-06T21:48:28.229Z",
+      "event": "failed",
+      "note": "superseded mid-edit: another lane added operations/kill-as-cost.ts and rewrote the play-unit sacrifice branch to route through executeEffect kill, which fires die; my equivalent edit was overwritten. Test flipped to test( and passes in the shared tree"
+    }
+  ],
+  "status": "failed",
+  "claimedBy": "w12-i1",
+  "claimedAt": "2026-08-06T21:45:49.124Z",
+  "resolution": {
+    "note": "superseded mid-edit: another lane added operations/kill-as-cost.ts and rewrote the play-unit sacrifice branch to route through executeEffect kill, which fires die; my equivalent edit was overwritten. Test flipped to test( and passes in the shared tree",
+    "at": "2026-08-06T21:48:28.229Z"
+  }
+}

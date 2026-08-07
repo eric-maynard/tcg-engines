@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-043-221",
+  "title": "BUG: 'at A battlefield' (singular, cf. Fox-Fire 355.11.b) — units from two different battlefields cannot be mixed in one cast",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-043-221.test.ts",
+    "testName": "BUG: 'at A battlefield' (singular, cf. Fox-Fire 355.11.b) — units from two different battlefields cannot be mixed in one cast"
+  },
+  "id": "2520bcf6052d",
+  "createdAt": "2026-08-07T00:57:36.972Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.972Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

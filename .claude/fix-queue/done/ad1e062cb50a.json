@@ -1,0 +1,43 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-063-298",
+  "title": "BUG: 'if they didn't already' — a buffed Pouty Poro keeps Deflect 1, so one extra power suffices",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-063-298.test.ts",
+    "testName": "BUG: 'if they didn't already' — a buffed Pouty Poro keeps Deflect 1, so one extra power suffices"
+  },
+  "id": "ad1e062cb50a",
+  "createdAt": "2026-08-06T17:15:21.551Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.551Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T20:11:47.476Z",
+      "event": "grabbed:w2-i3"
+    },
+    {
+      "at": "2026-08-06T20:56:32.492Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T01:44:01.615Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.714Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-07T01:44:01.615Z",
+  "claimedBy": "w9-i18",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.714Z"
+  }
+}

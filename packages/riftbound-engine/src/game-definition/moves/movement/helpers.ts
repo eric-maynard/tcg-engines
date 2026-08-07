@@ -107,6 +107,35 @@ export function getMoveEscalationSurcharge(
 }
 
 /**
+ * rule 144.4.a.1 / 449.2 / 410.1.b.3 — a battlefield that already holds units
+ * of TWO other players is not a legal destination for `playerId`'s unit by any
+ * means (Standard Move, Ganking, or an effect-driven move). Only matters in
+ * games with 3+ players.
+ */
+export function isBlockedByTwoOtherPlayers(
+  battlefieldId: string,
+  playerId: string,
+  getCardsInZone: (zoneId: CoreZoneId) => readonly CoreCardId[],
+  getController: (cardId: string) => string | undefined,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  const others = new Set<string>();
+  const zoneId = (
+    battlefieldId.startsWith("battlefield-") ? battlefieldId : `battlefield-${battlefieldId}`
+  ) as CoreZoneId;
+  for (const cardId of getCardsInZone(zoneId)) {
+    if (registry.get(cardId as string)?.cardType !== "unit") {
+      continue;
+    }
+    const controller = getController(cardId as string);
+    if (controller !== undefined && controller !== playerId) {
+      others.add(controller);
+    }
+  }
+  return others.size >= 2;
+}
+
+/**
  * rule 740.2.a — a unit attacks or defends "alone" when no OTHER unit its
  * controller controls is at the same battlefield. `unitsAtLocation` is the
  * full occupancy of that battlefield after the move resolved.

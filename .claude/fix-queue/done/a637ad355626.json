@@ -1,0 +1,38 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 8bf06d3d8b09e32c — contrast: a conqueror that is NOT Mighty (plain 3 Might, no Assault) conquers but gets no Sunken Temple offer; engine offers the pay/draw regardless of Might",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/sunken-temple-8bf06d3d8b09e32c.test.ts",
+    "testName": "BUG: ruling 8bf06d3d8b09e32c — contrast: a conqueror that is NOT Mighty (plain 3 Might, no Assault) conquers but gets no Sunken Temple offer; engine offers the pay/draw regardless of Might"
+  },
+  "id": "a637ad355626",
+  "createdAt": "2026-08-06T19:54:39.766Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:54:39.766Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:27:18.229Z",
+      "event": "grabbed:w10-i9"
+    },
+    {
+      "at": "2026-08-06T23:31:20.679Z",
+      "event": "done",
+      "note": "evaluateTriggerCondition: recurse and/or/not, add has-at-least/has-at-most with here-location + [Mighty] (Assault/Shield aware) filter"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w10-i9",
+  "claimedAt": "2026-08-06T23:27:18.229Z",
+  "resolution": {
+    "note": "evaluateTriggerCondition: recurse and/or/not, add has-at-least/has-at-most with here-location + [Mighty] (Assault/Shield aware) filter",
+    "files": [
+      "packages/riftbound-engine/src/abilities/trigger-runner.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/sunken-temple-8bf06d3d8b09e32c.test.ts"
+    ],
+    "at": "2026-08-06T23:31:20.679Z"
+  }
+}

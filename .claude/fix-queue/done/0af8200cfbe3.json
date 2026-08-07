@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-082-221",
+  "title": "\"I don't deal combat damage\" is not honored in combat resolution",
+  "expected": "Ezreal (riftbound-cards/src/cards/sfd/ezreal-dashing.ts:49-54) grants itself keyword \"NoCombatDamage\", but the engine never consults that keyword: grep for \"NoCombatDamage\" in riftbound-engine/src returns zero hits. CombatUnit.dealsNoCombatDamage is set only for stunned units (game-definition/moves/combat/resolve-full-combat.ts:337-341) and the Vilemaw PreventWeakerEnemyCombatDamage threshold (combat/combat-resolver.ts:152-166); calculateSideMight (combat-resolver.ts:136-145) skips only units with that flag, so Ezreal contributes full Might and kills the Mech.",
+  "observed": "After resolveFullCombat both Ezreal AND the Mech were removed (Ezreal to trash, Mech token gone; battlefield empty). Ezreal's card meta shows grantedKeywords:[{keyword:'NoCombatDamage',duration:'static'}] but combat-resolver.ts only sets dealsNoCombatDamage for stunned units / Vilemaw threshold; the 'NoCombatDamage' keyword is never consulted in resolve-full-combat.ts, so Ezreal contributed his full Might as combat damage.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts:337",
+  "id": "0af8200cfbe3",
+  "createdAt": "2026-08-06T23:55:41.369Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.369Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:31:14.293Z",
+      "event": "grabbed:w2-i9"
+    },
+    {
+      "at": "2026-08-07T00:40:20.236Z",
+      "event": "done",
+      "note": "NoCombatDamage keyword (printed or self-granted static) now sets dealsNoCombatDamage in the CombatUnit build"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i9",
+  "claimedAt": "2026-08-07T00:31:14.293Z",
+  "resolution": {
+    "note": "NoCombatDamage keyword (printed or self-granted static) now sets dealsNoCombatDamage in the CombatUnit build",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts"
+    ],
+    "at": "2026-08-07T00:40:20.236Z"
+  }
+}

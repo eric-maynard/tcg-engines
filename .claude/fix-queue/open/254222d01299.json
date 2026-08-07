@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-024-221",
+  "title": "BUG: parsed play step should ignore the WHOLE cost ('ignoring its cost' → energy AND power, 356.1.b.1), not `ignoreCost: \\",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-024-221.test.ts",
+    "testName": "BUG: parsed play step should ignore the WHOLE cost ('ignoring its cost' → energy AND power, 356.1.b.1), not `ignoreCost: \\"
+  },
+  "id": "254222d01299",
+  "createdAt": "2026-08-07T01:14:13.015Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.015Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

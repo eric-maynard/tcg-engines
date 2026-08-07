@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-012-221",
+  "title": "BUG: after playing 1 card this turn Battering Ram costs 4 (rule 356.4 self static reduction is not applied)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-012-221.test.ts",
+    "testName": "BUG: after playing 1 card this turn Battering Ram costs 4 (rule 356.4 self static reduction is not applied)"
+  },
+  "id": "3795bb184eb8",
+  "createdAt": "2026-08-07T00:42:07.690Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:42:07.690Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

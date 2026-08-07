@@ -1,0 +1,37 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 61269cd307cc8ca8 — enemy Vex attacking: with 0 energy / 0 power P2 CANNOT flip the hidden Blade at all",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/vex-cheerless-61269cd307cc8ca8.test.ts",
+    "testName": "BUG: ruling 61269cd307cc8ca8 — enemy Vex attacking: with 0 energy / 0 power P2 CANNOT flip the hidden Blade at all"
+  },
+  "id": "5ac20203fc64",
+  "createdAt": "2026-08-06T19:45:47.841Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:45:47.841Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:19:08.958Z",
+      "event": "grabbed:w3-i8"
+    },
+    {
+      "at": "2026-08-06T23:25:33.234Z",
+      "event": "done",
+      "note": "already green on HEAD (fixed by an earlier lane); verified vex-cheerless ruling file passes"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i8",
+  "claimedAt": "2026-08-06T23:19:08.958Z",
+  "resolution": {
+    "note": "already green on HEAD (fixed by an earlier lane); verified vex-cheerless ruling file passes",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/vex-cheerless-61269cd307cc8ca8.test.ts"
+    ],
+    "at": "2026-08-06T23:25:33.234Z"
+  }
+}

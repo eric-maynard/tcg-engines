@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 445563aa61a7f05a (control) — at a normal battlefield the unit is banished then replayed to bf1 for free as a fresh unit; engine does nothing",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/temporal-breach-445563aa61a7f05a.test.ts",
+    "testName": "BUG: ruling 445563aa61a7f05a (control) — at a normal battlefield the unit is banished then replayed to bf1 for free as a fresh unit; engine does nothing"
+  },
+  "id": "99c867c12321",
+  "createdAt": "2026-08-06T19:56:55.634Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:56:55.634Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.601Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.325Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.601Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.325Z"
+  }
+}

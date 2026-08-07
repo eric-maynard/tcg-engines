@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-083-221",
+  "title": "BUG: partner round trip with Ancient Henge — 3 Energy → Henge X=3 → 3 [rainbow] → Anomaly X=3 → 3 Energy again",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-083-221.test.ts",
+    "testName": "BUG: partner round trip with Ancient Henge — 3 Energy → Henge X=3 → 3 [rainbow] → Anomaly X=3 → 3 Energy again"
+  },
+  "id": "8da03dbec30f",
+  "createdAt": "2026-08-07T01:20:34.439Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.439Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

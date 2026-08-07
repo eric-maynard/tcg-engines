@@ -1,0 +1,38 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling cf6487465e162f43 — conquering Minefield mills Nocturne + 1 straight to trash with no look/reveal prompt and no Nocturne offer (engine: look-and-recycle prompt)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/nocturne-horrifying-cf6487465e162f43.test.ts",
+    "testName": "BUG: ruling cf6487465e162f43 — conquering Minefield mills Nocturne + 1 straight to trash with no look/reveal prompt and no Nocturne offer (engine: look-and-recycle prompt)"
+  },
+  "id": "106a699edaa5",
+  "createdAt": "2026-08-06T19:54:39.766Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:54:39.766Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:45:54.317Z",
+      "event": "grabbed:w1-i11"
+    },
+    {
+      "at": "2026-08-07T01:48:32.389Z",
+      "event": "done",
+      "note": "Minefield now mills 2 (rule 440.1) instead of look-and-recycle"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i11",
+  "claimedAt": "2026-08-07T01:45:54.317Z",
+  "resolution": {
+    "note": "Minefield now mills 2 (rule 440.1) instead of look-and-recycle",
+    "files": [
+      "packages/riftbound-cards/src/cards/sfd/minefield.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/nocturne-horrifying-cf6487465e162f43.test.ts"
+    ],
+    "at": "2026-08-07T01:48:32.389Z"
+  }
+}

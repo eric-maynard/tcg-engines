@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogs-001-024",
+  "title": "BUG: your SPELLS deal 1 Bonus Damage — Hextech Ray deals 4 instead of 3 (rule 715.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogs-001-024.test.ts",
+    "testName": "BUG: your SPELLS deal 1 Bonus Damage — Hextech Ray deals 4 instead of 3 (rule 715.1)"
+  },
+  "id": "a9a4a6869c94",
+  "createdAt": "2026-08-06T17:51:09.020Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.020Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.621Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.334Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.621Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.334Z"
+  }
+}

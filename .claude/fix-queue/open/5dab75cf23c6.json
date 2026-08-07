@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-035-221",
+  "title": "BUG: the opt-in ('you may' as first words) is decided at finalization, before any player receives priority (383.3.a)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-035-221.test.ts",
+    "testName": "BUG: the opt-in ('you may' as first words) is decided at finalization, before any player receives priority (383.3.a)"
+  },
+  "id": "5dab75cf23c6",
+  "createdAt": "2026-08-07T00:48:39.549Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:48:39.549Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

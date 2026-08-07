@@ -1,0 +1,37 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 012ae43c41524a98 — Brynhir resolved before PF: the opponent's chosen card stays banished, yours is played (engine: PF has no look/banish/play implementation)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/promising-future-012ae43c41524a98.test.ts",
+    "testName": "BUG: ruling 012ae43c41524a98 — Brynhir resolved before PF: the opponent's chosen card stays banished, yours is played (engine: PF has no look/banish/play implementation)"
+  },
+  "id": "ac6e98932d66",
+  "createdAt": "2026-08-06T20:07:40.914Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:07:40.914Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:52:07.103Z",
+      "event": "grabbed:w7-i14"
+    },
+    {
+      "at": "2026-08-06T23:52:14.068Z",
+      "event": "done",
+      "note": "already fixed at HEAD; repro tests pass and are flipped"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i14",
+  "claimedAt": "2026-08-06T23:52:07.103Z",
+  "resolution": {
+    "note": "already fixed at HEAD; repro tests pass and are flipped",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/vex-apathetic-6daab1f9f787a618.test.ts"
+    ],
+    "at": "2026-08-06T23:52:14.068Z"
+  }
+}

@@ -31,6 +31,9 @@ export function parseTarget(text: string): AnyTarget {
     .trim()
     .replace(/\[([^\]]+)\]/g, "$1")
     .replace(/\s+/g, " ")
+    // A target phrase lifted from the tail of a sentence keeps its terminal
+    // punctuation ("a legend."); it is not part of the noun phrase.
+    .replace(/[.,;:]+$/, "")
     .trim();
 
   // Self reference

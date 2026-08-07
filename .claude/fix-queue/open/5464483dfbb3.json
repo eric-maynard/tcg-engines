@@ -1,0 +1,18 @@
+{
+  "source": "playtest",
+  "title": "The two Reflection tokens created by Keeper of Masks sit in base as name='Reflection', might 0, def 'token-def-reflection' (trace base[] and boardById), and render as generic 'Reflection' placeholders / generic token art rather than as Keeper of Masks. Keeper itself shows might 1.",
+  "expected": "Trace step 36 base[] shows two tokens with def 'token-def-reflection', name 'Reflection', might 0, while Keeper of Masks shows might 1. Source: create-token.ts:101-109 registers shared 'token-def-reflection' with literal tokenDef stats (Reflection, might 0); create-token.ts:142-150 registers the per-instance copy of the source card only under the instance tokenId. effect-context.ts:85-89 stamps the instance's definitionId as `token-def-<slug>`. snapshot.ts:366-368 resolves `def` via cardInstance.definitionId (the shared token-def-reflection), and lines 397-398 take might/name from that def — so the UI/snapshot shows vanilla 0-Might Reflection instead of a Keeper of Masks copy.",
+  "layer": "server",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/server/snapshot.ts:366",
+  "rule": "unl-081-219 Keeper of Masks (copy effect)",
+  "id": "5464483dfbb3",
+  "createdAt": "2026-08-06T23:55:41.371Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.371Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

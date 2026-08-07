@@ -214,6 +214,13 @@ function labelForOption(ctx: DecisionContext, m: FlatMove, card: CardRef | undef
   return primary === "-" ? verb : `${verb} ${primary}`;
 }
 
+/** rule 204.3.b — is this spell's X a resolution-time [rainbow] Power payment? */
+export function xIsResolutionPower(cardId: CardRef): boolean {
+  const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
+  const spell = abilities.find((a) => a.type === "spell");
+  return (spell as { xCost?: unknown } | undefined)?.xCost === "power";
+}
+
 /** Does this spell's effect read `{ variable: "x" }`? */
 export function spellSupportsX(cardId: CardRef): boolean {
   const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
@@ -561,6 +568,18 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       };
       return d;
     }
+    case "confirm": {
+      // rule 355.13 (ogn-153-298): a bare "you may …" is a real yes/no.
+      const d: YesNoDecision = {
+        ...base,
+        canAccept: true,
+        consequence: "Perform the optional effect",
+        id: decisionId(ctx.seq, seat, "yes-no"),
+        kind: "yes-no",
+        prompt: pc.prompt ?? `${ctx.label(pc.sourceCardId)}: perform the optional effect?`,
+      };
+      return d;
+    }
     case "opt-in": {
       // rule-id: sfd-119-221 — surface the "pay [N] to …" cost in the prompt.
       const cost = (
@@ -792,6 +811,7 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
       params.xAmount = answer.value;
       break;
     }
+    case "confirm":
     case "opt-in": {
       if (answer.kind === "yes-no") {
         params.accept = answer.value;
@@ -1046,10 +1066,19 @@ export function narrowVariants(ctx: DecisionContext, option: ActionOption, args:
     return { move: { ...variant, params: { ...variant.params, xAmount: args.x } }, type: "one" };
   }
   if (args.x !== undefined && args.x !== 0) {
+    // rule 204.3.b (ogn-268-298): a [rainbow] X has no play-time field, but a
+    // test may still PLEDGE it here — the engine carries it to resolution and
+    // charges the Power there.
+    if (typeof variant.params.cardId === "string" && xIsResolutionPower(variant.params.cardId)) {
+      return { move: { ...variant, params: { ...variant.params, xAmount: args.x } }, type: "one" };
+    }
     return {
       error: { code: "ILLEGAL_ARGS", detail: { option: option.key }, message: `${option.label}: this action takes no X` },
       type: "none",
     };
+  }
+  if (args.x === 0 && typeof variant.params.cardId === "string" && xIsResolutionPower(variant.params.cardId)) {
+    return { move: { ...variant, params: { ...variant.params, xAmount: 0 } }, type: "one" };
   }
   return { move: variant, type: "one" };
 }

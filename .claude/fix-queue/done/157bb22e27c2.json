@@ -1,0 +1,32 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 117.1 'up to two' — a 3-card mulligan request must be REJECTED (success:false, state unchanged); the engine silently truncates to the first two and succeeds",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
+    "testName": "BUG: 117.1 'up to two' — a 3-card mulligan request must be REJECTED (success:false, state unchanged); the engine silently truncates to the first two and succeeds"
+  },
+  "id": "157bb22e27c2",
+  "createdAt": "2026-08-06T20:50:12.432Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.432Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T00:42:39.657Z",
+      "event": "done(unclaimed)",
+      "note": "same mulligan condition also rejects 3-card requests instead of truncating"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "same mulligan condition also rejects 3-card requests instead of truncating",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/setup.ts",
+      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts"
+    ],
+    "at": "2026-08-07T00:42:39.657Z"
+  }
+}

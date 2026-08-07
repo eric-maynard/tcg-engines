@@ -1,0 +1,46 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-029-298",
+  "title": "BUG: choosing the same unit for both instructions deals 6 total (kills a 6-Might unit)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-029-298.test.ts",
+    "testName": "BUG: choosing the same unit for both instructions deals 6 total (kills a 6-Might unit)"
+  },
+  "id": "8f198a075244",
+  "createdAt": "2026-08-06T17:15:21.549Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.549Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:56:55.701Z",
+      "event": "grabbed:w11-i3"
+    },
+    {
+      "at": "2026-08-06T20:56:32.493Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T01:43:43.850Z",
+      "event": "grabbed:w6-i12"
+    },
+    {
+      "at": "2026-08-07T01:44:23.961Z",
+      "event": "done",
+      "note": "stale queue entry: already fixed and flipped at HEAD; repro tests green"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-07T01:43:43.850Z",
+  "claimedBy": "w6-i12",
+  "resolution": {
+    "note": "stale queue entry: already fixed and flipped at HEAD; repro tests green",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-029-298.test.ts"
+    ],
+    "at": "2026-08-07T01:44:23.961Z"
+  }
+}

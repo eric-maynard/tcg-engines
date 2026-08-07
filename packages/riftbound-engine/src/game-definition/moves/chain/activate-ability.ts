@@ -392,11 +392,17 @@ export const activateAbility: Defs["activateAbility"] = {
     if (state.status !== "playing") {
       return false;
     }
-    if (state.pendingChoice) {
+    const { playerId, cardId, abilityIndex, sourceCardId } = context.params;
+
+    // rule 429.3 / 429.3.a / 444.2.c: while a payment is being asked for, the
+    // paying player may still activate Reaction [Add] abilities (they resolve
+    // immediately and never use the chain). Every other pending choice, and
+    // every other ability, stays locked out until the choice is answered.
+    const payXPrompt =
+      state.pendingChoice?.type === "pay-x" && state.pendingChoice.playerId === playerId;
+    if (state.pendingChoice && !payXPrompt) {
       return false;
     }
-
-    const { playerId, cardId, abilityIndex, sourceCardId } = context.params;
 
     // Card must be on board (base, battlefield, legendZone, battlefieldRow).
     // Rule 580 / 101 (clarified): champions in championZone have NOT been
@@ -433,6 +439,15 @@ export const activateAbility: Defs["activateAbility"] = {
     const ability = abilities[abilityIndex];
     if (!ability || ability.type !== "activated") {
       return false;
+    }
+
+    // rule 605.2 / 429.3.a: only resource-Adding abilities resolve immediately,
+    // so only those may be used mid-payment.
+    if (payXPrompt) {
+      const effectType = (ability.effect as { type?: string } | undefined)?.type;
+      if (effectType !== "add-resource" && effectType !== "add") {
+        return false;
+      }
     }
 
     // Rule 728 / [Level N]: an activated ability gated by a while-level
@@ -703,10 +718,14 @@ export const activateAbility: Defs["activateAbility"] = {
     if (state.status !== "playing") {
       return [];
     }
-    if (state.pendingChoice) {
+    const playerId = context.playerId as string;
+    // rule 429.3 / 444.2.c: mid-payment, only the paying player's Reaction
+    // [Add] abilities are offered (the per-entry filter below keeps them).
+    const payXPrompt =
+      state.pendingChoice?.type === "pay-x" && state.pendingChoice.playerId === playerId;
+    if (state.pendingChoice && !payXPrompt) {
       return [];
     }
-    const playerId = context.playerId as string;
     const interaction = state.interaction ?? createInteractionState();
     const turnState = getTurnState(interaction);
     const results: {
@@ -774,6 +793,15 @@ export const activateAbility: Defs["activateAbility"] = {
 
       for (const entry of entries) {
         const { ability } = entry;
+
+        // rule 605.2 / 429.3.a: mid-payment only resource-Adding abilities
+        // (which resolve immediately, off the chain) may be used.
+        if (payXPrompt) {
+          const effectType = (ability.effect as { type?: string } | undefined)?.type;
+          if (effectType !== "add-resource" && effectType !== "add") {
+            continue;
+          }
+        }
 
         // Rule 728 / [Level N]: skip activated abilities whose while-level
         // condition is not yet met (e.g. Honeyfruit's Level-6 ability).

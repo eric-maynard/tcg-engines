@@ -9,9 +9,9 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  at a battlefield."
  *
  * Engine primitives:
- * - `playSpell` accepts an `xAmount` parameter: the variable amount of
- *   rainbow energy the player pays on top of the card's base cost. The
- *   cost-pay step deducts `xAmount` additional energy from the rune pool.
+ * - `xCost: "power"` marks the X as a resolution-time [rainbow] Power payment
+ *   (rule 204.3.b): it is not offered as a play-time field, and the controller
+ *   is asked how much Power to pay when the spell resolves.
  * - The chosen X value is threaded to the effect executor via
  *   `EffectContext.variables.x`. The damage effect below references it with
  *   `amount: { variable: "x" }`, so each instance of Bullet Time deals
@@ -37,6 +37,9 @@ const abilities: Ability[] = [
     },
     timing: "action",
     type: "spell",
+    // rule 204.3.b / 135.2.e: "Pay any amount of [rainbow]" — X is Power of any
+    // Domain paid on resolution, never Energy and never a play cost.
+    xCost: "power",
   },
 ];
 

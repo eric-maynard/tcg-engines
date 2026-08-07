@@ -852,7 +852,7 @@ describe("Re-taking a battlefield already scored this turn establishes control b
 });
 
 describe("The Final Point via a lone combat Conquer is refused (draw instead) unless every battlefield was scored this turn (471.1.b)", () => {
-  test.failing("BUG: 471.1.b.1 — at VictoryScore−1 a Conquer without having scored every battlefield draws 1 instead of scoring (engine awards the 8th point and ends the game)", async () => {
+  test("471.1.b.1 — at VictoryScore−1 a Conquer without having scored every battlefield draws 1 instead of scoring (engine awards the 8th point and ends the game)", async () => {
     // Expected: points stay 7, P1 draws 1, game not over, P1 controls bf1, bf1 counts as scored this turn (470).
     // Actual: resolveFullCombat adds the point directly → 8 → P1 wins.
     const game = await scenario()

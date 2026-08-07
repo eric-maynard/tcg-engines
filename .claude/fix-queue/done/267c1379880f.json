@@ -1,0 +1,43 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-034-298",
+  "title": "BUG: conquering an EMPTY enemy battlefield is not 'after an attack' (316.8.b.1) — only the conquer point should be scored",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-034-298.test.ts",
+    "testName": "BUG: conquering an EMPTY enemy battlefield is not 'after an attack' (316.8.b.1) — only the conquer point should be scored"
+  },
+  "id": "267c1379880f",
+  "createdAt": "2026-08-06T17:15:21.551Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.551Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T20:14:15.247Z",
+      "event": "grabbed:w3-i3"
+    },
+    {
+      "at": "2026-08-06T20:56:32.491Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T01:44:01.612Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.408Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-07T01:44:01.612Z",
+  "claimedBy": "w9-i18",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.408Z"
+  }
+}

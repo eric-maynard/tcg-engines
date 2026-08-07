@@ -96,7 +96,7 @@ describe("Noxian Guillotine × Counter Strike × Sudden Storm — prevented dama
     expect(game.locationOf("foe")).toBe("bf1");
   });
 
-  test.failing("BUG: Counter Strike must 'Choose a unit' at play time — the engine offers no target at all (parser dropped the Prevent clause)", async () => {
+  test("Counter Strike must 'Choose a unit' at play time — the engine offers no target at all (parser dropped the Prevent clause)", async () => {
     // Expected: the cast option has a `targets` field offering every unit (foe, ally).
     // Actual: Counter Strike is parsed as just "Draw 1" — no target field, no prevention installed.
     const game = await board().build();
@@ -119,7 +119,7 @@ describe("Noxian Guillotine × Counter Strike × Sudden Storm — prevented dama
     expect(game.gameState.activeReplacements ?? []).toHaveLength(0); // single-fire, spent
   });
 
-  test.failing("BUG: Guillotine → Counter Strike → Sudden Storm: the 2 is prevented to 0, the unit took no damage, survives, and Guillotine stays armed (437.2.a, 437.4, 417.1.e.1)", async () => {
+  test("Guillotine → Counter Strike → Sudden Storm: the 2 is prevented to 0, the unit took no damage, survives, and Guillotine stays armed (437.2.a, 437.4, 417.1.e.1)", async () => {
     // Expected: Counter Strike's Prevent replaces Storm's 2 with 0; fully prevented damage is not
     // dealt, so "the next time it takes damage" has not happened — foe alive, 0 damage, Guillotine's
     // delayed kill still in activeReplacements, Counter Strike's prevent consumed.
@@ -138,7 +138,7 @@ describe("Noxian Guillotine × Counter Strike × Sudden Storm — prevented dama
     expect(armed.map((e) => e.sourceCardId)).toEqual(["ng"]); // Guillotine still armed; Counter Strike's shield used up
   });
 
-  test.failing("BUG: after the prevented hit, the NEXT real damage this turn (Hextech Ray 3, non-lethal to 5 Might) triggers the still-armed Guillotine and kills it", async () => {
+  test("after the prevented hit, the NEXT real damage this turn (Hextech Ray 3, non-lethal to 5 Might) triggers the still-armed Guillotine and kills it", async () => {
     // Expected: Storm was prevented (unit survives), then Ray's 3 is real damage → Guillotine kills.
     // Actual: the unit already died to Storm because nothing was prevented, so Ray has no target.
     const game = await board().build();

@@ -76,7 +76,7 @@ describe("Ruling cf6487465e162f43 — Burn / Minefield mill Nocturne without a l
   // no reveal, no choice; Nocturne lands in the trash with no banish/play offer. Actual: Minefield is
   // mis-modelled as "look at the top 2, you may recycle one" — a 'Pick a revealed card to recycle'
   // prompt appears and nothing is milled.
-  test.failing("BUG: ruling cf6487465e162f43 — conquering Minefield mills Nocturne + 1 straight to trash with no look/reveal prompt and no Nocturne offer (engine: look-and-recycle prompt)", async () => {
+  test("ruling cf6487465e162f43 — conquering Minefield mills Nocturne + 1 straight to trash with no look/reveal prompt and no Nocturne offer (engine: look-and-recycle prompt)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 0, power: { rainbow: 1 } })
       .battlefield("bf1", { def: MINEFIELD, inert: false, controller: null })

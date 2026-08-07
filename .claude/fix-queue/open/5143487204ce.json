@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-043-221",
+  "title": "BUG: 'units AT A BATTLEFIELD' — a friendly unit sitting in the base must not be a legal target",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-043-221.test.ts",
+    "testName": "BUG: 'units AT A BATTLEFIELD' — a friendly unit sitting in the base must not be a legal target"
+  },
+  "id": "5143487204ce",
+  "createdAt": "2026-08-07T00:57:36.972Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.972Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

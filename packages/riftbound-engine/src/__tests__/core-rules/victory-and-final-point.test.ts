@@ -138,7 +138,7 @@ describe("471.1.a.1 / 472: Hold is not subject to the Final Point restriction", 
     expect(game.gameState.battlefields.B?.controller).toBe(P2);
   });
 
-  test("323.1/319.2/472 — the victory check runs after a Hold; the turn continues (channel + draw) instead of P1 winning at the Beginning→Channel cleanup", async () => {
+  test("323.1/319.2/472 — engine never runs the victory check after a Hold; the turn continues (channel + draw) instead of P1 winning at the Beginning→Channel cleanup", async () => {
     // Expected: P1 8 > 5 at the first Cleanup after the Scoring Step → status over, winner P1,
     // and the Channel/Draw/Main phases of that turn never happen. Actual: status stays "playing",
     // P1 channels 2 runes and draws a card.
@@ -172,7 +172,7 @@ describe("471.1.a.1 / 472: Hold is not subject to the Final Point restriction", 
 // ---------------------------------------------------------------------------
 
 describe("471.1.b.1 / 383.4.c.2.c: a lone Conquer at 7 draws a card instead of the Final Point", () => {
-  test.failing("BUG: 471.1.b.1 — engine awards the 8th point (and the game) for conquering one of two battlefields", async () => {
+  test("471.1.b.1 — engine awards the 8th point (and the game) for conquering one of two battlefields", async () => {
     // Expected: P1 stays at 7, draws exactly 1, A is scored/controlled, the Conquer Effect still
     // resolves ([Add] 1), no winner; P2's turn then proceeds. Actual: P1 → 8 and wins on the spot.
     const game = await scenario()
@@ -242,7 +242,7 @@ describe("471.1.b.1 / 470: conquering every battlefield in one turn earns the Fi
     expect(game.p1.hand().length).toBe(handBefore); // no draw-instead anywhere in Run 1
   });
 
-  test.failing("BUG: 471.1.b.1 — Run 2 from 7: first conquer must draw instead (stay 7, A still Scored), second conquer then earns the Final Point; engine wins on the first conquer", async () => {
+  test("471.1.b.1 — Run 2 from 7: first conquer must draw instead (stay 7, A still Scored), second conquer then earns the Final Point; engine wins on the first conquer", async () => {
     // Expected: A → draw 1 (7), B → every battlefield scored this turn → 8 → win; exactly one card
     // drawn. Actual: the first conquer already awards 8 and ends the game.
     const game = await scenario()
@@ -334,7 +334,7 @@ describe("469 / 470 / 471.1.b.1: 'Scored every battlefield' counts Hold and Conq
 // ---------------------------------------------------------------------------
 
 describe("487.4 / 488.4 / 471.1.b.1: with three battlefields, 'every battlefield' means all three", () => {
-  test.failing("BUG: 471.1.b.1 — at 7 with three battlefields the first and second lone conquers must each draw instead; only the third earns the Final Point (engine wins on the first)", async () => {
+  test("471.1.b.1 — at 7 with three battlefields the first and second lone conquers must each draw instead; only the third earns the Final Point (engine wins on the first)", async () => {
     // Expected: A → draw (7), B → draw (7, two of three is not 'every'), C → 8 → win. Actual: the
     // first conquer awards 8 and ends the game.
     const game = await scenario()

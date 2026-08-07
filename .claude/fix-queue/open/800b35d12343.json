@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-107-221",
+  "title": "BUG: needs an equipped FRIENDLY unit — with only a bare friendly unit and an equipped ENEMY unit the spell is not playable",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-107-221.test.ts",
+    "testName": "BUG: needs an equipped FRIENDLY unit — with only a bare friendly unit and an equipped ENEMY unit the spell is not playable"
+  },
+  "id": "800b35d12343",
+  "createdAt": "2026-08-07T00:57:36.961Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.961Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

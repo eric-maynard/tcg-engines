@@ -118,7 +118,7 @@ describe("Udyr, Wildman (ogn-157-298)", () => {
     expect(game.state("udyr").keywords).not.toContain("Ganking");
   });
 
-  test.failing("BUG: 'not chosen this turn' — after picking Ganking, a re-buffed Udyr is offered only the other three modes", async () => {
+  test("'not chosen this turn' — after picking Ganking, a re-buffed Udyr is offered only the other three modes", async () => {
     // Expected: second activation this turn lists Deal 2 / Stun / Ready me but not Ganking.
     // Actual: all four modes are offered again.
     const game = await board().build();

@@ -57,12 +57,15 @@ export function parseDamageEffect(text: string): DamageEffect | SequenceEffect |
 
   // Handle "deal damage equal to my/its Might/[Assault]/[keyword] to TARGET" pattern
   const mightDamageMatch = text.match(
-    /^Deal damage equal to (?:my|its|his|her)\s+(?:Might|\[\w+(?:-\w+)?\])\s+to\s+(.+?)\.?$/i,
+    /^Deal damage equal to (?:my|its|his|her)\s+(?:Might|\[(\w+(?:-\w+)?)\])\s+to\s+(.+?)\.?$/i,
   );
   if (mightDamageMatch) {
-    const target = parseCardTarget(mightDamageMatch[1]);
+    const keyword = mightDamageMatch[1];
+    const target = parseCardTarget(mightDamageMatch[2]);
+    // rule 807.2/807.3 — "damage equal to my [Assault]" reads the SUMMED value
+    // of that keyword (printed + granted), not the unit's Might.
     return {
-      amount: { might: "self" },
+      amount: keyword ? { keywordValue: keyword, of: "self" } : { might: "self" },
       target: target as AnyTarget,
       type: "damage",
     } as DamageEffect;
@@ -142,9 +145,17 @@ export function parseKillEffect(text: string): KillEffect | SequenceEffect | und
   );
   if (eachPlayerMatch) {
     const cardType = eachPlayerMatch[1].replace(/s$/, "") as "unit" | "gear";
+    // rule 422.1.a — "one of THEIR units/gear": each player picks among the
+    // cards THEY control, so the target must be controller-scoped (the engine's
+    // per-player fan-out keys off `controller: "friendly"`); a player with none
+    // is simply unaffected, hence `upTo: 1`.
     return {
       player: "each",
-      target: { type: cardType } as unknown as AnyTarget,
+      target: {
+        controller: "friendly",
+        quantity: { upTo: 1 },
+        type: cardType,
+      } as unknown as AnyTarget,
       type: "kill",
     };
   }

@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "unl-141-219",
+  "title": "\"When you play me from face down on your turn, you may move an enemy unit at a different location to my battlefield\" never triggers.",
+  "expected": "Card def (riftbound-cards/src/cards/unl/evelynn-entrancing.ts:29-33) uses trigger {event:\"play-from-hidden\", on:\"self\"}. revealHidden in game-definition/moves/play/hide.ts:356-361 fires only {type:\"play-self\", fromHiddenAt} and {type:\"play-card\"}; grep shows no emitter of \"play-from-hidden\" anywhere in engine src (only a test comment in __tests__/cards/ogn-167-298.test.ts:69 acknowledging the gap). trigger-matcher.ts EVENT_MAP (87-118) has no play-from-hidden entry and triggerMatchesEvent (213-230) only aliases beginning-phase/recycle-cards-to-deck/typed play-<cardType>, so a play-self event never matches a \"play-from-hidden\" trigger. The ability can never fire.",
+  "observed": "revealHidden succeeded (Evelynn entered battlefield-player-1-bf-ogn-275-298 exhausted) but chain=null, pendingChoice=null, no opt-in prompt, and the enemy unit stayed in base. Root cause in engine: revealHidden (moves/play/hide.ts) fires only 'play-self' (with fromHiddenAt) and 'play-card' events; nothing ever emits a 'play-from-hidden' event and trigger-matcher EVENT_MAP has no entry for it, so the card's trigger {event:\"play-from-hidden\", on:\"self\"} can never match.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/trigger-matcher.ts",
+  "id": "7c58830ba9e3",
+  "createdAt": "2026-08-06T20:43:38.884Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.884Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:16:45.007Z",
+      "event": "grabbed:w7-i15"
+    },
+    {
+      "at": "2026-08-07T00:17:22.416Z",
+      "event": "done",
+      "note": "play-from-hidden is emitted by hide.ts and mapped in EVENT_MAP; added regression test unl-141-219"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i15",
+  "claimedAt": "2026-08-07T00:16:45.007Z",
+  "resolution": {
+    "note": "play-from-hidden is emitted by hide.ts and mapped in EVENT_MAP; added regression test unl-141-219",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/unl-141-219.test.ts"
+    ],
+    "at": "2026-08-07T00:17:22.416Z"
+  }
+}

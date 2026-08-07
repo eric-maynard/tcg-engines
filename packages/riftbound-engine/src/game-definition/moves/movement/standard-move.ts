@@ -16,7 +16,12 @@ import {
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { getMoveEscalationSurcharge, hasKeyword, isAloneAtLocation } from "./helpers";
+import {
+  getMoveEscalationSurcharge,
+  hasKeyword,
+  isAloneAtLocation,
+  isBlockedByTwoOtherPlayers,
+} from "./helpers";
 
 /**
  * rule 350.1 / ogn-203-298 (Possession): moves are made by the unit's CURRENT
@@ -68,6 +73,19 @@ export const standardMove: Defs["standardMove"] = {
 
     const { unitIds, playerId, destination } = context.params;
     const toBase = destination === "base";
+    // rule 144.4.a.1 / 410.1.b.3 — a battlefield already holding units of two
+    // OTHER players is never a Standard Move destination.
+    if (
+      !toBase &&
+      isBlockedByTwoOtherPlayers(
+        destination,
+        playerId,
+        (zoneId) => context.zones.getCardsInZone(zoneId),
+        (cardId) => controllerOf(context.cards, cardId as CoreCardId),
+      )
+    ) {
+      return false;
+    }
     for (const unitId of unitIds) {
       const zone = context.zones.getCardZone(unitId as CoreCardId) as string | undefined;
       // rule 350.1 / unl-150-219 (Vex, Apathetic): "they can't move it this
@@ -228,6 +246,18 @@ export const standardMove: Defs["standardMove"] = {
     // rule 810.1.b — Ganking is what lets a unit already at a battlefield join
     // a move to another battlefield.
     for (const bfId of Object.keys(state.battlefields || {})) {
+      // rule 144.4.a.1 / 410.1.b.3 — never offer a destination already holding
+      // units of two other players.
+      if (
+        isBlockedByTwoOtherPlayers(
+          bfId,
+          context.playerId as string,
+          (zoneId) => context.zones.getCardsInZone(zoneId),
+          (cardId) => controllerOf(context.cards, cardId as CoreCardId),
+        )
+      ) {
+        continue;
+      }
       const gankers: string[] = [];
       for (const otherBfId of Object.keys(state.battlefields || {})) {
         if (otherBfId === bfId) {

@@ -42,7 +42,10 @@ export function enqueueExtraTurn(state: RiftboundGameState, playerId: PlayerId):
  */
 export function peekExtraTurn(state: RiftboundGameState): PlayerId | undefined {
   const s = state as RiftboundGameState & { pendingExtraTurns?: PlayerId[] };
-  return s.pendingExtraTurns?.[0];
+  // rule 738: each additional turn is inserted directly after the CURRENT
+  // turn, so a later-created one sits in front of an earlier one — the queue
+  // is drained last-in-first-out.
+  return s.pendingExtraTurns?.[s.pendingExtraTurns.length - 1];
 }
 
 /**
@@ -57,7 +60,49 @@ export function dequeueExtraTurn(state: RiftboundGameState): PlayerId | undefine
   if (!s.pendingExtraTurns || s.pendingExtraTurns.length === 0) {
     return undefined;
   }
-  return s.pendingExtraTurns.shift();
+  // rule 738: last-in-first-out — see peekExtraTurn.
+  return s.pendingExtraTurns.pop();
+}
+
+/**
+ * Additional-turn bookkeeping for rule 737.
+ *
+ * An additional turn is INSERTED into the repeating queue rather than
+ * replacing the queued turns: after it finishes the queue "proceeds with its
+ * previously queued turns". A run of back-to-back additional turns displaces
+ * exactly one queued turn, so only the first one records it.
+ */
+interface TurnQueueBookkeeping {
+  displacedTurn?: PlayerId;
+  inAdditionalTurn?: boolean;
+}
+
+/**
+ * Record that an additional turn is starting, displacing `queuedNext` (the
+ * player who would have taken the next turn under normal rotation).
+ */
+export function beginAdditionalTurn(state: RiftboundGameState, queuedNext: PlayerId): void {
+  const s = state as RiftboundGameState & TurnQueueBookkeeping;
+  if (!s.inAdditionalTurn) {
+    s.displacedTurn = queuedNext;
+  }
+  s.inAdditionalTurn = true;
+}
+
+/**
+ * The run of additional turns is over — return the previously queued turn
+ * they displaced (rule 737), or `undefined` for normal seat rotation.
+ */
+export function resumeQueuedTurn(state: RiftboundGameState): PlayerId | undefined {
+  const s = state as RiftboundGameState & TurnQueueBookkeeping;
+  const wasAdditional = s.inAdditionalTurn === true;
+  s.inAdditionalTurn = false;
+  if (!wasAdditional) {
+    return undefined;
+  }
+  const displaced = s.displacedTurn;
+  s.displacedTurn = undefined;
+  return displaced;
 }
 
 /**

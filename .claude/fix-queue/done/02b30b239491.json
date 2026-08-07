@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-025-298",
+  "title": "BUG: the opponent's top card is banished then played by the caster for free (unit lands under P1's control)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-025-298.test.ts",
+    "testName": "BUG: the opponent's top card is banished then played by the caster for free (unit lands under P1's control)"
+  },
+  "id": "02b30b239491",
+  "createdAt": "2026-08-06T17:15:21.552Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.552Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:34.538Z",
+      "event": "grabbed:w9-i19"
+    },
+    {
+      "at": "2026-08-07T01:49:26.075Z",
+      "event": "done",
+      "note": "harness SeatView.units() filters by controller, not owner"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i19",
+  "claimedAt": "2026-08-07T01:44:34.538Z",
+  "resolution": {
+    "note": "harness SeatView.units() filters by controller, not owner",
+    "files": [
+      "packages/riftbound-engine/src/harness/game.ts"
+    ],
+    "at": "2026-08-07T01:49:26.075Z"
+  }
+}

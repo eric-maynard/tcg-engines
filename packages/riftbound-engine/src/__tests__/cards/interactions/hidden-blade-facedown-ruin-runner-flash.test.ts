@@ -102,7 +102,7 @@ describe("Hidden Blade from facedown × Ruin Runner × Flash", () => {
     expect(game.p1.resources()).toEqual({ energy: 2, power: { order: 1 } });
   });
 
-  test.failing("BUG: 'Its controller draws 2' — the KILLED unit's controller (P2) draws, not the caster", async () => {
+  test("'Its controller draws 2' — the KILLED unit's controller (P2) draws, not the caster", async () => {
     // Expected: P2 (bf1Vanilla's controller) draws 2 and P1's hand is unchanged. Actual: the engine
     // hands the 2 cards to Hidden Blade's controller (P1) and P2 draws nothing.
     const game = await board().build();
@@ -119,7 +119,7 @@ describe("Hidden Blade from facedown × Ruin Runner × Flash", () => {
 
   // ── (b) no valid target at that battlefield ─────────────────────────────────────────────────
 
-  test.failing("BUG: (b) with only the enemy Ruin Runner at bf1, Hidden Blade cannot be played from facedown at all (811.1.d)", async () => {
+  test("(b) with only the enemy Ruin Runner at bf1, Hidden Blade cannot be played from facedown at all (811.1.d)", async () => {
     // Expected: no legal target under the bf1 restriction → `reveal` is not offered and the card
     // stays facedown. Actual: the engine lets P1 reveal it and even kills the untargetable Runner.
     const game = await scenario()

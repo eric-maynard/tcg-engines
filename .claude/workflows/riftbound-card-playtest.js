@@ -98,6 +98,7 @@ Expected: ${f.expected}
 Observed: ${f.observed}
 Layer: ${f.layer}. Affects: ${f.cards.join(', ')}
 
+If you need a live browser to reproduce, use a PRIVATE socket: \`pw() { bun /tmp/pwtest/pw-repl.ts --sock <100 + any number> "$@"; }\` and \`bash /tmp/pwtest/setup-game.sh <that same number> 1\` — never sockets 0–63 (those belong to playtest lanes).
 Source: engine=${REPO}/packages/riftbound-engine/src/{game-definition,abilities}/; card def=\`grep -rl "${f.cardId}" ${REPO}/packages/riftbound-cards/src/\`; server=${REPO}/apps/riftbound-app/server.ts; ui=${REPO}/apps/riftbound-app/public/js/gameplay/
 Rule: \`bun ${REPO}/.claude/skills/riftbound-rules/scripts/rule.ts <id>\``,
     { label:`verify ${f.cardId}`, phase:'Verify', schema:VERDICT }

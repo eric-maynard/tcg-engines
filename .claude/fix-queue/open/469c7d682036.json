@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-052-221",
+  "title": "BUG: right after activation exactly one seat should hold priority — the engine offers priority-class moves to BOTH players",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-052-221.test.ts",
+    "testName": "BUG: right after activation exactly one seat should hold priority — the engine offers priority-class moves to BOTH players"
+  },
+  "id": "469c7d682036",
+  "createdAt": "2026-08-07T01:07:14.863Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:07:14.863Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

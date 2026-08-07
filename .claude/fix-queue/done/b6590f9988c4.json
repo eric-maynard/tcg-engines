@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-250-298",
+  "title": "BUG: '…then move your unit there' — the chosen base unit ends up at that battlefield",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-250-298.test.ts",
+    "testName": "BUG: '…then move your unit there' — the chosen base unit ends up at that battlefield"
+  },
+  "id": "b6590f9988c4",
+  "createdAt": "2026-08-06T18:35:08.351Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.351Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T22:49:41.250Z",
+      "event": "grabbed:w9-i6"
+    },
+    {
+      "at": "2026-08-06T22:54:01.902Z",
+      "event": "done",
+      "note": "move: to='chosen-battlefield' moves the caster-chosen unit to the chosen battlefield"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i6",
+  "claimedAt": "2026-08-06T22:49:41.250Z",
+  "resolution": {
+    "note": "move: to='chosen-battlefield' moves the caster-chosen unit to the chosen battlefield",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/move.ts",
+      "packages/riftbound-cards/src/cards/ogn/stormbringer.ts"
+    ],
+    "at": "2026-08-06T22:54:01.902Z"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogs-001-024",
+  "title": "BUG: your ABILITIES deal 1 Bonus Damage — Iron Ballista's 'Deal 2' deals 3",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogs-001-024.test.ts",
+    "testName": "BUG: your ABILITIES deal 1 Bonus Damage — Iron Ballista's 'Deal 2' deals 3"
+  },
+  "id": "54423193b215",
+  "createdAt": "2026-08-06T17:51:09.020Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.020Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.623Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.490Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.623Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.490Z"
+  }
+}

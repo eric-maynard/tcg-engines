@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "unl-120-219",
+  "title": "[Ambush] not honored for Rengar in hand — cannot be played as a Reaction to a battlefield where player has units",
+  "expected": "packages/riftbound-cards/src/cards/unl/rengar-trophy-hunter.ts:16-33 encodes Ambush only as `{type:'static', effect:{type:'grant-keyword', keyword:'Ambush', target:'self'}}` (no `keywords` array, no `type:'keyword'` ability); this TS override is what all-cards.ts:690 exports (the JSON's `{type:'keyword',keyword:'Ambush'}` is superseded). CardDefinitionRegistry.hasKeyword (riftbound-engine/src/operations/card-lookup.ts:122-133) checks only `def.keywords` and abilities with `type === 'keyword'`, and toLookupPayload (harness/card-pool.ts:114,123) passes abilities/keywords through unchanged. So play-unit.ts:103 computes hasAmbush=false and play-unit.ts:141 (`targetIsBattlefield && !hasAmbush -> return false`) rejects the reaction-timed battlefield play, matching the observed CONDITION_FAILED while printed-keyword Inferna passes.",
+  "observed": "enumerateMoves listed playUnit->battlefield-player-1-bf for both Inferna copies but nothing for Rengar; direct playUnit {location:battlefield-player-1-bf-ogn-277-298} returned CONDITION_FAILED. Card def encodes Ambush as static {type:'grant-keyword',keyword:'Ambush',target:'self'}; CardDefinitionRegistry.hasKeyword only checks keywords[] / abilities of type 'keyword', so play-unit.ts sees hasAmbush=false for the in-hand card",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts:103",
+  "id": "9881884227a2",
+  "createdAt": "2026-08-06T20:43:38.884Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.884Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:17:58.076Z",
+      "event": "grabbed:w6-i8"
+    },
+    {
+      "at": "2026-08-07T00:24:14.108Z",
+      "event": "done",
+      "note": "hasKeyword counts unconditional static grant-keyword self"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w6-i8",
+  "claimedAt": "2026-08-07T00:17:58.076Z",
+  "resolution": {
+    "note": "hasKeyword counts unconditional static grant-keyword self",
+    "files": [
+      "packages/riftbound-engine/src/operations/card-lookup.ts",
+      "packages/riftbound-engine/src/__tests__/cards/unl-120-219.test.ts"
+    ],
+    "at": "2026-08-07T00:24:14.108Z"
+  }
+}

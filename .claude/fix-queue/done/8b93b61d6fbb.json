@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-049-221",
+  "title": "'Buff a friendly unit' gives no target choice",
+  "expected": "pending-choice.ts:624-660 (choose-mode resolution) calls `executeEffect(picked, effectCtx)` directly on the picked option's effect without raising a choose-target prompt (the choose-target prompt in chain/resolve.ts:141-244 only inspects the top-level effect.target / sequence lead, and a `choice` effect has neither). handle_buff (abilities/effects/buff.ts:22) -> getTargetIds -> resolveTarget, which for a non-\"all\" quantity returns `filtered.slice(0, 1)` (target-resolver.ts:312-313), i.e. the first friendly unit on board (Aphelios). If that unit is already buffed, buff.ts:29-33 `continue`s, so nothing happens and Skulker is never offered. Matches observed behavior.",
+  "observed": "Picking mode 2 resolved immediately with no choose-target pendingChoice; first time it auto-buffed Aphelios, second time (Aphelios already buffed) nothing changed and Skulker was never offered/buffed.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+  "id": "8b93b61d6fbb",
+  "createdAt": "2026-08-06T20:43:38.887Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.887Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:31:25.505Z",
+      "event": "grabbed:w6-i9"
+    },
+    {
+      "at": "2026-08-07T00:34:13.241Z",
+      "event": "done",
+      "note": "verified: choose-mode now raises choose-target for 'Buff a friendly unit'; added regression test"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w6-i9",
+  "claimedAt": "2026-08-07T00:31:25.505Z",
+  "resolution": {
+    "note": "verified: choose-mode now raises choose-target for 'Buff a friendly unit'; added regression test",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-049-221.test.ts"
+    ],
+    "at": "2026-08-07T00:34:13.241Z"
+  }
+}

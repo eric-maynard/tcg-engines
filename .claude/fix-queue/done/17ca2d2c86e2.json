@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 608d69cb66cfff4d — (inline model) Brynhir's restriction must also make an effect-INSTRUCTED play impossible: unit stays banished (engine: P2 replays it anyway)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/temporal-breach-608d69cb66cfff4d.test.ts",
+    "testName": "BUG: ruling 608d69cb66cfff4d — (inline model) Brynhir's restriction must also make an effect-INSTRUCTED play impossible: unit stays banished (engine: P2 replays it anyway)"
+  },
+  "id": "17ca2d2c86e2",
+  "createdAt": "2026-08-06T20:14:15.183Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:14:15.183Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.609Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.100Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.609Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.100Z"
+  }
+}

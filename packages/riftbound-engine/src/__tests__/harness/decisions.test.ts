@@ -188,24 +188,20 @@ describe("action decisions: grouping and the play bundle", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test("X spells: field exposes probed range; cast({x}) charges X; agents get an integer follow-up", async () => {
+  // rule 204.3.b / 135.2.e (ogn-268-298): "Pay any amount of [rainbow]" is a
+  // cost paid WITHIN the instructions — there is no play-time X field, and the
+  // payment is Power of any Domain, never Energy.
+  test("X spells: no play-time X field — [rainbow] X is an integer decision at RESOLUTION, paid in Power", async () => {
     const game = await scenario()
-      .resources(P1, { energy: 4 })
+      .resources(P1, { energy: 1, power: { rainbow: 3 } })
       .battlefield("bf1", { controller: P2 })
       .unit(P2, "bf1", { might: 5 }, "big")
       .hand(P1, BULLET_TIME, "bt")
       .build();
     const opt = game.p1.option("cast", "bt");
+    expect(opt?.fields.find((f) => f.name === "xAmount")).toBeUndefined();
     // rule-id: ogs-002-024 — "all enemy units at A battlefield" also exposes
     // the battlefield pick as a targets field (single option here).
-    expect(opt?.fields).toContainEqual({
-      arg: "x",
-      kind: "int",
-      max: 3,
-      min: 0,
-      name: "xAmount",
-      required: true,
-    });
     expect(opt?.fields).toContainEqual({
       arg: "targets",
       kind: "cards",
@@ -215,16 +211,18 @@ describe("action decisions: grouping and the play bundle", () => {
       options: [["bf1"]],
       required: true,
     });
-    const amb = await game.p1.try((s) => s.cast("bt"));
-    expect(!amb.ok && amb.error.message).toContain("needs `x` — one of: 0..3");
+    // An X pledged up front may never exceed the Power on hand — Energy cannot buy it.
     const tooMuch = await game.p1.try((s) => s.cast("bt", { x: 4 }));
-    expect(!tooMuch.ok && tooMuch.error.code).toBe("ILLEGAL_ARGS");
+    expect(tooMuch.ok).toBe(false);
 
-    const r1 = await game.act(P1, { key: "playSpell:bt", kind: "action" });
-    expect(r1.ok && r1.followUp?.kind).toBe("integer");
-    expect(r1.ok && r1.followUp?.kind === "integer" && r1.followUp.max).toBe(3);
-    await game.p1.chooseX(3);
+    await game.p1.cast("bt", { targets: "bf1" });
     expect(game.p1.energy()).toBe(0);
+    expect(game.p1.power()).toBe(3); // X is not paid when the spell is played
+    await game.p1.passPriority();
+    await game.p2.passPriority();
+    expect(game.decision()).toMatchObject({ kind: "integer", max: 3, seat: P1 });
+    await game.p1.chooseX(3);
+    expect(game.p1.power()).toBe(0);
     await game.settle();
     expect(game.state("big").damage).toBe(3);
   });

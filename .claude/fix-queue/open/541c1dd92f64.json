@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-012-221",
+  "title": "BUG: every card TYPE you played counts — unit + gear + spell → costs 2",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-012-221.test.ts",
+    "testName": "BUG: every card TYPE you played counts — unit + gear + spell → costs 2"
+  },
+  "id": "541c1dd92f64",
+  "createdAt": "2026-08-07T00:42:07.690Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:42:07.690Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

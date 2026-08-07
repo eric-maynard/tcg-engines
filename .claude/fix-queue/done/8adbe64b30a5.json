@@ -1,0 +1,35 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 29339d78dfd48122 — with Ezreal the Cadet's optional cost may instead drop the [fury] pip: 3 energy and no power suffices (deal 2)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/ezreal-prodigy-29339d78dfd48122.test.ts",
+    "testName": "BUG: ruling 29339d78dfd48122 — with Ezreal the Cadet's optional cost may instead drop the [fury] pip: 3 energy and no power suffices (deal 2)"
+  },
+  "id": "8adbe64b30a5",
+  "createdAt": "2026-08-06T19:55:38.083Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:55:38.083Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T22:25:59.299Z",
+      "event": "done(unclaimed)",
+      "note": "Accelerate/optional additional costs: import canPayOptionalPlayCost in pending-choice; apply Ezreal's flex [1]-or-[rainbow] discount to optional play costs"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "Accelerate/optional additional costs: import canPayOptionalPlayCost in pending-choice; apply Ezreal's flex [1]-or-[rainbow] discount to optional play costs",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+      "packages/riftbound-engine/src/__tests__/cards/interactions/matron-rearguard-accelerate-ezreal.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/ezreal-prodigy-29339d78dfd48122.test.ts"
+    ],
+    "at": "2026-08-06T22:25:59.299Z"
+  }
+}

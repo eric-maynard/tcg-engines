@@ -1,0 +1,37 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 67ba38e17c612ad4 — reanimated by The Harrowing as the only copy: it does NOT count itself → enters EXHAUSTED",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/shadow-assassin-67ba38e17c612ad4.test.ts",
+    "testName": "BUG: ruling 67ba38e17c612ad4 — reanimated by The Harrowing as the only copy: it does NOT count itself → enters EXHAUSTED"
+  },
+  "id": "a40cd482d1f3",
+  "createdAt": "2026-08-06T20:06:58.325Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.325Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:50:36.953Z",
+      "event": "grabbed:w1-i8"
+    },
+    {
+      "at": "2026-08-06T23:53:42.263Z",
+      "event": "done",
+      "note": "already green on HEAD (fixed by an earlier lane); verified test file passes"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i8",
+  "claimedAt": "2026-08-06T23:50:36.953Z",
+  "resolution": {
+    "note": "already green on HEAD (fixed by an earlier lane); verified test file passes",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/shadow-assassin-67ba38e17c612ad4.test.ts"
+    ],
+    "at": "2026-08-06T23:53:42.263Z"
+  }
+}

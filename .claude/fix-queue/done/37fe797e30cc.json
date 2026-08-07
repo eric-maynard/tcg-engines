@@ -1,0 +1,34 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 124.1 / 705 — the banished card is a new object: 2 damage, the buff and the granted [Tank] must be wiped (engine keeps damage/buff on the card in banishment)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/tokens-banishment-trash-object-identity.test.ts",
+    "testName": "BUG: 124.1 / 705 — the banished card is a new object: 2 damage, the buff and the granted [Tank] must be wiped (engine keeps damage/buff on the card in banishment)"
+  },
+  "id": "37fe797e30cc",
+  "createdAt": "2026-08-06T20:50:12.437Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.437Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.614Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.636Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.614Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.636Z"
+  }
+}

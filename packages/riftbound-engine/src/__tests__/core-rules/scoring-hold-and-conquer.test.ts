@@ -430,7 +430,7 @@ describe("Once per battlefield per turn: re-establishing Control of an already-s
     expect(contextOf(game)).toBe("main");
   });
 
-  test.failing("BUG: 471.2.c / 383.4.c.2.a — re-taking an already-scored battlefield must NOT put the unit's 'When I conquer' ability on the chain; engine fires the conquer trigger (draws) even though no Conquer/point occurred", async () => {
+  test("471.2.c / 383.4.c.2.a — re-taking an already-scored battlefield must NOT put the unit's 'When I conquer' ability on the chain; engine fires the conquer trigger (draws) even though no Conquer/point occurred", async () => {
     // Expected: after Hold A then losing and re-taking A the same turn, "reserve"'s conquer ability does not
     // trigger (A was already Scored; Conquer Effects fire only when the battlefield is Scored) → hand unchanged.
     // Actual: the engine emits a "conquer" event on every control gain, so P1 draws a card.

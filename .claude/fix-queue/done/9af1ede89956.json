@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-198-298",
+  "title": "BUG: castable with a unit in your trash and an empty board; costs 6 energy + 2 chaos; choices are YOUR trash UNITS only",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-198-298.test.ts",
+    "testName": "BUG: castable with a unit in your trash and an empty board; costs 6 energy + 2 chaos; choices are YOUR trash UNITS only"
+  },
+  "id": "9af1ede89956",
+  "createdAt": "2026-08-06T18:35:08.335Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.335Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.617Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.985Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.617Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.985Z"
+  }
+}

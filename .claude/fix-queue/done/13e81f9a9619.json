@@ -1,0 +1,40 @@
+{
+  "source": "playtest",
+  "cardId": "ven-036-166",
+  "title": "Static 'players only channel 1 rune at the start of their Channel Phase' has no effect",
+  "expected": "Card def in /root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/ven.json for ven-036-166 (Sandstone Chimera) has \"abilities\": [], \"parseSuccess\": false — no static ability registered; no .ts override exists. Engine channel phase in riftbound-engine/src/game-definition/flow/riftbound-flow.ts:402-415 hardcodes baseChannelCount = 2 (3 for second player's first turn) with no hook consulting battlefield statics, so no channel-count-limit mechanic exists.",
+  "observed": "player-2 rune pool went 0->3 and player-1 rune pool went 2->4 (runeDeck 10->8) — normal 2-rune channel unaffected. Registered def for ven-036-166 has no abilities at all (set JSON parseSuccess:false, abilities:[]) and the engine has no channel-count-limit mechanic",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts:402",
+  "id": "13e81f9a9619",
+  "createdAt": "2026-08-06T20:43:38.884Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.884Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:06:39.413Z",
+      "event": "grabbed:w5-i9"
+    },
+    {
+      "at": "2026-08-07T00:11:26.930Z",
+      "event": "done",
+      "note": "Sandstone Chimera: channel-limit static + flow channel-count cap"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w5-i9",
+  "claimedAt": "2026-08-07T00:06:39.413Z",
+  "resolution": {
+    "note": "Sandstone Chimera: channel-limit static + flow channel-count cap",
+    "files": [
+      "packages/riftbound-cards/src/data/sets/ven.json",
+      "packages/riftbound-engine/src/operations/channel-limits.ts",
+      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ven-036-166.test.ts"
+    ],
+    "at": "2026-08-07T00:11:26.930Z"
+  }
+}

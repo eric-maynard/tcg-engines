@@ -1,0 +1,43 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-035-298",
+  "title": "BUG: enters exhausted when NO opponent controls a battlefield (rule 143.4)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-035-298.test.ts",
+    "testName": "BUG: enters exhausted when NO opponent controls a battlefield (rule 143.4)"
+  },
+  "id": "4b8742c34973",
+  "createdAt": "2026-08-06T17:15:21.550Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.550Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:58:23.339Z",
+      "event": "grabbed:w5-i3"
+    },
+    {
+      "at": "2026-08-06T20:56:32.491Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T01:44:01.611Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:15.368Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-07T01:44:01.611Z",
+  "claimedBy": "w9-i18",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:15.368Z"
+  }
+}

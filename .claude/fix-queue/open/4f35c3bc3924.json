@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-089-221",
+  "title": "BUG: '(including me)' — Rumble should read 5 Might under his own static, but stays 4",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-089-221.test.ts",
+    "testName": "BUG: '(including me)' — Rumble should read 5 Might under his own static, but stays 4"
+  },
+  "id": "4f35c3bc3924",
+  "createdAt": "2026-08-07T01:16:42.692Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:16:42.692Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

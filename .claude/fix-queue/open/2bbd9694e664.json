@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-117-221",
+  "title": "BUG: the added [rainbow] pays a domain pip (135.2.e.5.b): 5 Energy → X=1 → play Dauntless Vanguard (4 + [body]) → pool empty",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-117-221.test.ts",
+    "testName": "BUG: the added [rainbow] pays a domain pip (135.2.e.5.b): 5 Energy → X=1 → play Dauntless Vanguard (4 + [body]) → pool empty"
+  },
+  "id": "2bbd9694e664",
+  "createdAt": "2026-08-07T01:21:00.665Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:21:00.665Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

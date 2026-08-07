@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-077-221",
+  "title": "BUG: Deflect surcharge is actually collected — after choosing the poro the spare [rainbow] is spent (809)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-077-221.test.ts",
+    "testName": "BUG: Deflect surcharge is actually collected — after choosing the poro the spare [rainbow] is spent (809)"
+  },
+  "id": "b74f461c749a",
+  "createdAt": "2026-08-07T01:17:36.535Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:17:36.535Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

@@ -1,0 +1,34 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 272f1092ac8ca57e — cast on the 5-Might unit: legal, costs 2 + [order], resolves, and the unit survives because the 'kill it if ≤3 Might' condition fails at resolution; engine rejects the target",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/lacerate-272f1092ac8ca57e.test.ts",
+    "testName": "BUG: ruling 272f1092ac8ca57e — cast on the 5-Might unit: legal, costs 2 + [order], resolves, and the unit survives because the 'kill it if ≤3 Might' condition fails at resolution; engine rejects the target"
+  },
+  "id": "cf096c4409f9",
+  "createdAt": "2026-08-06T19:45:47.841Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T19:45:47.841Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.598Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:14.092Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.598Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:14.092Z"
+  }
+}

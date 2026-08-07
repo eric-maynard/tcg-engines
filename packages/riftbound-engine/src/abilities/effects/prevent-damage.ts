@@ -28,6 +28,17 @@ export function handle_preventDamage(effect: ExecutableEffect, ctx: EffectContex
     return;
   }
   const preventTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
+  // rule 437.5.b (sfd-194-221): "the next time it would be dealt damage, prevent it"
+  // arms a single instance-wide shield (Prevent Value All) rather than a numeric one.
+  if ((effect as { instance?: boolean }).instance === true) {
+    for (const targetId of preventTargets) {
+      ctx.cards.updateCardMeta?.(
+        targetId as CoreCardId,
+        { preventNextDamageInstance: true } as unknown as Record<string, unknown>,
+      );
+    }
+    return;
+  }
   const preventAmount = resolveAmount(effect.amount ?? 0, ctx);
   for (const targetId of preventTargets) {
     ctx.cards.updateCardMeta?.(

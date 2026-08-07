@@ -1,0 +1,39 @@
+{
+  "source": "playtest",
+  "cardId": "ven-087-166",
+  "title": "Second ability \"Disempower this, [1], [Exhaust]: Play a 3 [Might] Mech unit token to your base\" cannot be activated",
+  "expected": "Reproduced: running parseAbilities on Hextech Disc's rulesText yields abilities[1] = {type:\"spell\", timing:\"action\", effect:create-token Mech} with no cost. Root cause: packages/riftbound-cards/src/parser/impl/activated.ts:205-207 — the leading-text-cost regex only accepts \"Disempower me\" (`/^(Discard ...|Disempower me)((?:,\\s*:rb_...:)*):\\s*(.+)$/`), so \"Disempower this, [1], [Exhaust]: ...\" fails every activated-ability pattern, parseActivatedAbility returns undefined, and parseOtherSegment (other-segment.ts:30-39/66-69) falls through to a costless spell ability. The engine gates activation on ability.type === \"activated\" (riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:104,145,340), so no activateAbility move is enumerated and forcing it fails. Checked-in ven.json:2715 also has abilities:[null] for this card.",
+  "observed": "No activateAbility move listed for the Disc in that state (turn 3: empowered=true, exhausted=false, energy 5). Forcing activateAbility abilityIndex:1 via REST returns CONDITION_FAILED. Runtime card def (/api/cards/ven-087-166) shows abilities[1] = {type:\"spell\", timing:\"action\", effect:create-token Mech} with NO cost and not type \"activated\" — the Disempower/[1]/[Exhaust] cost was dropped by the parser, so the engine never exposes it as an activatable ability. No Mech token could ever be produced.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/activated.ts:206",
+  "id": "715a45888e71",
+  "createdAt": "2026-08-06T20:43:38.886Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.886Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-06T23:52:18.444Z",
+      "event": "grabbed:w7-i14"
+    },
+    {
+      "at": "2026-08-07T00:16:15.087Z",
+      "event": "done",
+      "note": "parser: accept 'Disempower this/it' leading cost; stop splitting an ability at its cost colon"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i14",
+  "claimedAt": "2026-08-06T23:52:18.444Z",
+  "resolution": {
+    "note": "parser: accept 'Disempower this/it' leading cost; stop splitting an ability at its cost colon",
+    "files": [
+      "packages/riftbound-cards/src/parser/impl/activated.ts",
+      "packages/riftbound-cards/src/parser/impl/split.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ven-087-166.test.ts"
+    ],
+    "at": "2026-08-07T00:16:15.087Z"
+  }
+}

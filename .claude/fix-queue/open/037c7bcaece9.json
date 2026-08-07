@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-058-221",
+  "title": "BUG: 'you MAY reveal' — the pick is declinable; declining recycles all 4 and draws nothing (383.3.a.3)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-058-221.test.ts",
+    "testName": "BUG: 'you MAY reveal' — the pick is declinable; declining recycles all 4 and draws nothing (383.3.a.3)"
+  },
+  "id": "037c7bcaece9",
+  "createdAt": "2026-08-07T01:04:24.769Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:04:24.769Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

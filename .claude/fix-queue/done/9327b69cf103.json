@@ -1,0 +1,34 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 811.1.b 'on your turn' — during P2's turn (P2 acting in Neutral Open) P1 has no Hide available; engine offers and accepts hideCard for the non-turn player",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/hidden-and-facedown-zones.test.ts",
+    "testName": "BUG: 811.1.b 'on your turn' — during P2's turn (P2 acting in Neutral Open) P1 has no Hide available; engine offers and accepts hideCard for the non-turn player"
+  },
+  "id": "9327b69cf103",
+  "createdAt": "2026-08-06T20:50:12.430Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.430Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T01:44:01.619Z",
+      "event": "claimed:w9-i18"
+    },
+    {
+      "at": "2026-08-07T01:44:16.104Z",
+      "event": "done",
+      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i18",
+  "claimedAt": "2026-08-07T01:44:01.619Z",
+  "resolution": {
+    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
+    "at": "2026-08-07T01:44:16.104Z"
+  }
+}

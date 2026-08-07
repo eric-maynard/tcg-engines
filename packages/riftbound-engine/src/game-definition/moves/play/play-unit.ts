@@ -14,6 +14,7 @@ import { executeEffect } from "../../../abilities/effect-executor";
 import { resolveTarget } from "../../../abilities/target-resolver";
 import {
   createInteractionState,
+  getActiveShowdown,
   getTurnState,
   hasShowdownPermission,
   isLegalTiming,
@@ -964,6 +965,12 @@ export const playUnit: Defs["playUnit"] = {
     const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId, sacrificeIds, discardId, spentBuffIds } =
       context.params;
     const { zones, counters } = context;
+    // rule 340.2.a / 347.1 — playing this unit as a Focus action during a
+    // Showdown passes Focus once it has landed (checked at the tail).
+    const preInteraction = draft.interaction ?? createInteractionState();
+    const wasFocusAction =
+      !preInteraction.chain?.items.length &&
+      getActiveShowdown(preInteraction)?.focusPlayer === playerId;
 
     // Rule 560: optional additional cost. Re-derive from the card definition
     // instead of trusting client-supplied additionalCostSpec/sacrificeId — a
@@ -1255,6 +1262,16 @@ export const playUnit: Defs["playUnit"] = {
           type: "weaponmaster-equip",
           unitId: cardId,
         };
+      }
+    }
+
+    // rule 340.2.a / 347.1 — the unit resolved on finalize with nothing left
+    // on the chain and no prompt outstanding: Focus passes to the next
+    // Relevant Player. A play-trigger chain keeps Focus where it is (346.1).
+    if (wasFocusAction && !draft.pendingChoice && draft.interaction) {
+      const post = draft.interaction;
+      if (!post.chain?.items.length && getActiveShowdown(post)?.focusPlayer === playerId) {
+        draft.interaction = advanceFocusAfterAction(post);
       }
     }
   },

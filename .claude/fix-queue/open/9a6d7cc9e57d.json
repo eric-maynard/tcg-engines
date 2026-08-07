@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-114-221",
+  "title": "BUG: [Repeat] [3] on the SAME pair — 6 energy, one chain item, two exchanges before any death check: Raider takes 8, Brawler takes 6 ≥ 4 and dies too (142.4.a / 319.5)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-114-221.test.ts",
+    "testName": "BUG: [Repeat] [3] on the SAME pair — 6 energy, one chain item, two exchanges before any death check: Raider takes 8, Brawler takes 6 ≥ 4 and dies too (142.4.a / 319.5)"
+  },
+  "id": "9a6d7cc9e57d",
+  "createdAt": "2026-08-07T01:17:36.536Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:17:36.536Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

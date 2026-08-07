@@ -81,7 +81,8 @@ describe("Karthus × Kog'Maw × Watchful Sentry — doubled Deathknell on the ch
     ]);
   });
 
-  test.failing("BUG: Kog'Maw's Deathknell resolves as 'Deal 4 to all units at my (former) battlefield' — engine throws while resolving the target ('target.location?.startsWith is not a function')", async () => {
+  test(
+    "Kog'Maw's Deathknell resolves as 'Deal 4 to all units at my (former) battlefield' — engine throws while resolving the target ('target.location?.startsWith is not a function')", async () => {
     // Expected (no Karthus, single trigger): every unit at bf1 takes 4 → Sentry (1) dies and B draws 1,
     // the 9-Might wall carries 4 damage; units at bf2 / in base are untouched.
     // Actual: passChainPriority is rejected with an EXECUTION_ERROR from the target resolver.
@@ -99,7 +100,8 @@ describe("Karthus × Kog'Maw × Watchful Sentry — doubled Deathknell on the ch
     expect(game.state("home").damage).toBe(0);
   });
 
-  test.failing("BUG: (b) first Kog'Maw wave kills Karthus + Sentry; Sentry's Deathknell lands ABOVE the second Kog'Maw item (B draws 1 first); the second wave still resolves without Karthus and deals 4 again", async () => {
+  test(
+    "(b) first Kog'Maw wave kills Karthus + Sentry; Sentry's Deathknell lands ABOVE the second Kog'Maw item (B draws 1 first); the second wave still resolves without Karthus and deals 4 again", async () => {
     // Expected sequence (chain listed bottom → top):
     //   [Kog, Kog] → resolve top: Karthus(3) & Sentry(1) die, wall 4 dmg → [Kog, Sentry] → B draws 1 → [Kog]
     //   → resolves (already on the chain; Karthus leaving is irrelevant, 340.1) → wall 8 dmg.

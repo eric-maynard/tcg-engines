@@ -78,7 +78,7 @@ describe("Rengar, Pouncing / Shen, Kinkou played into an ongoing combat", () => 
     expect(destinationsOffered(game, P1, "rengar")).toEqual(["base", "battlefield-bf1", "battlefield-bf2"]);
   });
 
-  test.failing("BUG: (a) Rengar played to bf1 resolves immediately (337.2), is paid for, gains the Attacker designation (464.2.c.3.a) and Focus passes to P2 (340.2.a)", async () => {
+  test("(a) Rengar played to bf1 resolves immediately (337.2), is paid for, gains the Attacker designation (464.2.c.3.a) and Focus passes to P2 (340.2.a)", async () => {
     const game = await attack();
     const energy = game.p1.energy();
     await game.p1.play("rengar", { to: "bf1" });

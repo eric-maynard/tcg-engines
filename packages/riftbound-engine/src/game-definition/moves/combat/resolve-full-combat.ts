@@ -580,17 +580,21 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       // Blocked if a battlefield ability (e.g. Forgotten Monument) prevents
       // This player from scoring here right now.
       const scoringAllowed =
-        !alreadyScored &&
-        canPlayerScoreAtBattlefield(draft, attackingPlayer, battlefieldId) &&
-        // rule 471.1.b.1: the Final Point by conquer requires every battlefield
-        // scored this turn; otherwise draw a card instead (and don't record it
-        // as scored).
-        !finalPointConquerDrawsInstead(draft, attackingPlayer, battlefieldId, { cards, zones });
+        !alreadyScored && canPlayerScoreAtBattlefield(draft, attackingPlayer, battlefieldId);
+      // rule 471.1.b.1: the Final Point by conquer requires every battlefield
+      // scored this turn; otherwise draw a card instead. rule 469.1 / 470: the
+      // Conquer is still a Score, so the battlefield IS recorded as scored.
+      const drewInstead =
+        scoringAllowed &&
+        finalPointConquerDrawsInstead(draft, attackingPlayer, battlefieldId, { cards, zones });
       const player = draft.players[attackingPlayer];
       if (player && scoringAllowed) {
         draft.scoredThisTurn[attackingPlayer].push(battlefieldId);
         // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
-        if (!applyScoreReplacement(draft, attackingPlayer, { cards, zones })) {
+        if (
+          !drewInstead &&
+          !applyScoreReplacement(draft, attackingPlayer, { cards, zones }, "conquer")
+        ) {
           player.victoryPoints += 1;
         }
 

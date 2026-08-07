@@ -1189,7 +1189,7 @@ describe("Battlefield selection: Duel = random 1 of 3, Match = chosen 1 of 3; th
     }
   });
 
-  test.failing("BUG: 485.5 'placed simultaneously' — between P1's selection and P2's selection, P2's player view must not reveal which battlefield P1 kept; engine publishes it in state.battlefields / the public battlefieldRow immediately", async () => {
+  test("485.5 'placed simultaneously' — between P1's selection and P2's selection, P2's player view must not reveal which battlefield P1 kept; engine publishes it in state.battlefields / the public battlefieldRow immediately", async () => {
     // Expected: getPlayerView(P2).battlefields has no P1 entry (or the row is hidden) until P2 has also locked in.
     // Actual: selectBattlefield writes draft.battlefields[b2] and moves the card to the public row at once.
     const pg = throughChampions("simultaneous");
@@ -1323,7 +1323,7 @@ describe("FFA3 first-turn process (cross-mode guard): 3 battlefields, first play
     expect(game.p1.runes()).toHaveLength(4);
   });
 
-  test.failing("BUG: 487.7 first clause — in FFA3 the player going FIRST draws NOTHING in their first Draw Phase (hand stays 4); GAME_MODES.ffa3.firstPlayerSkipsDraw is defined but the draw phase never consults it (P1 has 5)", async () => {
+  test("487.7 first clause — in FFA3 the player going FIRST draws NOTHING in their first Draw Phase (hand stays 4); GAME_MODES.ffa3.firstPlayerSkipsDraw is defined but the draw phase never consults it (P1 has 5)", async () => {
     // Expected: P1 hand === 4 after its turn-1 Draw Phase in a 3-player game (contrast: 5 in a duel).
     // Actual: the flow always draws 1; the engine has no notion of the mode being played.
     const { game } = fullPregame({ players: [P1, P2, P3], seed: "ffa3-skip-draw" });
@@ -1332,7 +1332,7 @@ describe("FFA3 first-turn process (cross-mode guard): 3 battlefields, first play
     expect(game.p1.hand()).toHaveLength(4);
   });
 
-  test.failing("BUG: 487.7 second clause — only the LAST player (P3) channels +1; P2 (neither first nor last) must channel exactly 2 on its first turn; transitionToPlay books firstTurnNumber for EVERY non-first player so P2 gets 3", async () => {
+  test("487.7 second clause — only the LAST player (P3) channels +1; P2 (neither first nor last) must channel exactly 2 on its first turn; transitionToPlay books firstTurnNumber for EVERY non-first player so P2 gets 3", async () => {
     // Expected: P2 runes 2 / rune deck 10 after its first Channel Phase; P3 runes 3.
     // Actual: firstTurnNumber = { P2: 2, P3: 3 } and secondPlayerExtraRune applies to both → P2 channels 3.
     const { game } = fullPregame({ players: [P1, P2, P3], seed: "ffa3-middle" });

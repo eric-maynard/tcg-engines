@@ -130,7 +130,7 @@ describe("Karthus doubling Ruined Rex's Deathknell vs a single Not So Fast", () 
     expect(game.state("victimB").damage).toBe(0);
   });
 
-  test.failing("BUG: no Karthus — one Not So Fast is legal against the Rex trigger (enemy ability choosing P2's unit) and counters it entirely: 0 damage", async () => {
+  test("no Karthus — one Not So Fast is legal against the Rex trigger (enemy ability choosing P2's unit) and counters it entirely: 0 damage", async () => {
     const game = await board({ karthus: false }).build();
     await killRexAndTarget(game, ["victimA"]);
     await game.p1.passPriority();
@@ -175,7 +175,7 @@ describe("Karthus doubling Ruined Rex's Deathknell vs a single Not So Fast", () 
     expect(game.state("victimB").damage).toBe(0);
   });
 
-  test.failing("BUG: (b) ONE Not So Fast is offered both Rex items but counters exactly one — the other still resolves for 4 (425.1; 'an ability' is singular)", async () => {
+  test("(b) ONE Not So Fast is offered both Rex items but counters exactly one — the other still resolves for 4 (425.1; 'an ability' is singular)", async () => {
     // Expected: P2 sees two legal targets for Not So Fast, counters one; after everything resolves
     // exactly 4 damage has landed on P2's side (on whichever victim the surviving trigger chose).
     // Actual: nothing to counter — Rex never triggered.

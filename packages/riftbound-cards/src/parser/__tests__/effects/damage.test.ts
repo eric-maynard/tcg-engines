@@ -149,7 +149,8 @@ describe("Effect: Damage", () => {
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
           effect: expect.objectContaining({
-            amount: { might: "self" },
+            // rule 807.2 — "my [Assault]" is the summed keyword value, not Might.
+            amount: { keywordValue: "Assault", of: "self" },
             target: expect.objectContaining({
               controller: "enemy",
               location: "here",

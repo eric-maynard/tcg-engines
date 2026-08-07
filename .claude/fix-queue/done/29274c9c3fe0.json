@@ -1,0 +1,40 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 103.2.d.2 — a Signature card whose champion tag is NOT the legend's tag must be rejected; validateDeck has no notion of 'signature' beyond 'non-champion sharing the legend tag' and accepts it",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
+    "testName": "BUG: 103.2.d.2 — a Signature card whose champion tag is NOT the legend's tag must be rejected; validateDeck has no notion of 'signature' beyond 'non-champion sharing the legend tag' and accepts it"
+  },
+  "id": "29274c9c3fe0",
+  "createdAt": "2026-08-06T20:50:12.431Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.431Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T00:40:41.562Z",
+      "event": "grabbed:w2-i10"
+    },
+    {
+      "at": "2026-08-07T00:42:52.256Z",
+      "event": "done",
+      "note": "validateDeck: SIGNATURE_TAG_MISMATCH for signature cards off the legend tag (103.2.d.2)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i10",
+  "claimedAt": "2026-08-07T00:40:41.562Z",
+  "resolution": {
+    "note": "validateDeck: SIGNATURE_TAG_MISMATCH for signature cards off the legend tag (103.2.d.2)",
+    "files": [
+      "packages/riftbound-engine/src/validators/deck-validators.ts",
+      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
+      "packages/riftbound-engine/src/__tests__/deck-validation.test.ts",
+      "packages/riftbound-engine/src/__tests__/core-rules/runes-rune-deck-and-rune-pool.test.ts"
+    ],
+    "at": "2026-08-07T00:42:52.256Z"
+  }
+}

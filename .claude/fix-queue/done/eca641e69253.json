@@ -1,0 +1,39 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: (b) P2 — the player playing it — may pay Accelerate [1][mind]; then the Watcher enters READY and P2's pool is drained (356.2.b.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/arcane-shift-stolen-unit-owner-replays.test.ts",
+    "testName": "BUG: (b) P2 — the player playing it — may pay Accelerate [1][mind]; then the Watcher enters READY and P2's pool is drained (356.2.b.1)"
+  },
+  "id": "eca641e69253",
+  "createdAt": "2026-08-06T18:35:08.345Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.345Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T22:24:09.255Z",
+      "event": "grabbed:w6-i4"
+    },
+    {
+      "at": "2026-08-06T22:28:27.431Z",
+      "event": "done",
+      "note": "pending play offers [Accelerate] opt-in to the player playing it; paying flips it to ready"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w6-i4",
+  "claimedAt": "2026-08-06T22:24:09.255Z",
+  "resolution": {
+    "note": "pending play offers [Accelerate] opt-in to the player playing it; paying flips it to ready",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+      "packages/riftbound-engine/src/types/game-state.ts",
+      "packages/riftbound-engine/src/__tests__/cards/interactions/arcane-shift-stolen-unit-owner-replays.test.ts"
+    ],
+    "at": "2026-08-06T22:28:27.431Z"
+  }
+}

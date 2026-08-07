@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-063-221",
+  "title": "BUG: the trigger must be created when the spell is PLAYED (359.3.b, 206.1) — the Cask prompt/Gold should come before Premonition resolves",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-063-221.test.ts",
+    "testName": "BUG: the trigger must be created when the spell is PLAYED (359.3.b, 206.1) — the Cask prompt/Gold should come before Premonition resolves"
+  },
+  "id": "7347558842fa",
+  "createdAt": "2026-08-07T01:14:13.030Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.030Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

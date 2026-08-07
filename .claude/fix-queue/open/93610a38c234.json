@@ -1,0 +1,20 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-116-221",
+  "title": "BUG: 'that was uncontrolled' — walking onto an EMPTY battlefield the opponent controlled must not trigger either",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-116-221.test.ts",
+    "testName": "BUG: 'that was uncontrolled' — walking onto an EMPTY battlefield the opponent controlled must not trigger either"
+  },
+  "id": "93610a38c234",
+  "createdAt": "2026-08-07T01:14:13.027Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.027Z",
+      "event": "enqueued:unit-bug"
+    }
+  ],
+  "status": "open"
+}

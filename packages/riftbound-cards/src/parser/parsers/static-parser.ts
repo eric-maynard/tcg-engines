@@ -1017,8 +1017,9 @@ function parseStaticAbilityInner(
       const controlTagMatch = conditionText.match(/^you control another (\w+(?:\s+\w+)?)$/i);
       if (controlTagMatch) {
         const tagName = controlTagMatch[1];
+        // rule-id: sfd-071-221 — "another" excludes the entering card itself.
         condition = {
-          target: { filter: { tag: tagName } },
+          target: { controller: "friendly", excludeSelf: true, filter: { tag: tagName } },
           type: "control",
         } as unknown as Condition;
       }

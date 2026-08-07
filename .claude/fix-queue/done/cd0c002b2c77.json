@@ -1,0 +1,39 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-045-298",
+  "title": "A move that throws over the game WebSocket kills the server-side game session",
+  "expected": "WS move path calls `session.engine.executeMove(...)` at apps/riftbound-app/server/ws-game.ts:90 with no try/catch (nor any in server.ts:98-115 websocket.message). In the engine, `checkMoveCondition` runs at packages/core/src/engine/rule-engine.ts:414, OUTSIDE the try block that starts at rule-engine.ts:567, so a throwing move condition escapes executeMove entirely. Empirically verified on the installed Bun 1.3.13: an uncaught throw in Bun.serve `fetch` yields HTTP 500 and the process survives, but an uncaught throw in `websocket.message` terminates the process (exit=1). Process death drops the socket (ERR_CONNECTION_RESET) and wipes the in-memory `gameSessions` map, so after restart GET /api/game/:id/state and WS upgrade (ws-game.ts:26) return 'Game not found'/404 — exactly the observed asymmetry vs REST.",
+  "observed": "Sending the same Defy playSpell via the browser WS (executeMove) -> net::ERR_CONNECTION_RESET on the socket, then GET /api/game/<id>/state returns 'Game not found' and WS reconnect gets 404; window.__rbGameId becomes null. Via REST the game survived the 500. Reproduced 3 times.",
+  "layer": "server",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/server/ws-game.ts:90",
+  "id": "cd0c002b2c77",
+  "createdAt": "2026-08-06T20:43:38.885Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:43:38.885Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T00:21:57.021Z",
+      "event": "grabbed:w10-i11"
+    },
+    {
+      "at": "2026-08-07T00:24:05.279Z",
+      "event": "done",
+      "note": "throwing move condition no longer escapes executeMove (CONDITION_ERROR); WS message dispatch wrapped in try/catch so a handler throw can't kill the server"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w10-i11",
+  "claimedAt": "2026-08-07T00:21:57.021Z",
+  "resolution": {
+    "note": "throwing move condition no longer escapes executeMove (CONDITION_ERROR); WS message dispatch wrapped in try/catch so a handler throw can't kill the server",
+    "files": [
+      "packages/core/src/engine/rule-engine.ts",
+      "apps/riftbound-app/server.ts",
+      "packages/core/src/engine/__tests__/rule-engine-moves.test.ts"
+    ],
+    "at": "2026-08-07T00:24:05.279Z"
+  }
+}
