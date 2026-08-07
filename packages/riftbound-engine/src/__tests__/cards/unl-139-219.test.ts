@@ -128,7 +128,7 @@ describe("Bone Skewer (unl-139-219)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1); // being played there does not hand over control
   });
 
-  test.failing("BUG: the pulled unit applies Contested to YOUR battlefield by itself (190.3.a.1) → combat on P1's turn with P2 as attacker holding Focus (464.2.c.1); stunned it deals 0 and dies to the 4-might Guard; bf1 stays P1's", async () => {
+  test("the pulled unit applies Contested to YOUR battlefield by itself (190.3.a.1) → combat on P1's turn with P2 as attacker holding Focus (464.2.c.1); stunned it deals 0 and dies to the 4-might Guard; bf1 stays P1's", async () => {
     // Expected: right after the play bf1 is contested BY P2, a combat is staged and, once begun, Skulker is
     // the attacker with P2 holding Focus; it deals 0 (stunned) and dies. Actual (regressed while this file
     // was being written): bf1 stays uncontested and P1 is merely offered a manual `contest bf1` that
@@ -167,7 +167,7 @@ describe("Bone Skewer (unl-139-219)", () => {
     expect(game.p1.hand()).toEqual([]);
   });
 
-  test.failing("BUG: the ensuing combat with a stunned 5-Might Drake attacking the 4-Might Guard — nobody dies, damage is healed and the ATTACKER is recalled to P2's base (466.1.a.2); bf1 stays P1's", async () => {
+  test("the ensuing combat with a stunned 5-Might Drake attacking the 4-Might Guard — nobody dies, damage is healed and the ATTACKER is recalled to P2's base (466.1.a.2); bf1 stays P1's", async () => {
     // Expected: Drake deals 0 (stunned), takes 4 < 5, both remain → attackers recalled, heal, P1 keeps bf1.
     // Actual: no Contested/combat is produced by the forced play (see the BUG above), so the Drake just sits at bf1.
     const game = await board().build();
@@ -222,7 +222,7 @@ describe("Bone Skewer (unl-139-219)", () => {
     expect(game.state("skulker")).toMatchObject({ controller: P2, isReady: true, isStunned: false, zone: "battlefield-bf2" });
   });
 
-  test.failing("BUG: pulled onto an EMPTY uncontrolled battlefield, P2's unit contests it (190.3.a.1) and after the showdown P2 conquers and scores 1 — on P1's turn", async () => {
+  test("pulled onto an EMPTY uncontrolled battlefield, P2's unit contests it (190.3.a.1) and after the showdown P2 conquers and scores 1 — on P1's turn", async () => {
     // Expected: bf2 becomes contested by P2, a non-combat showdown is staged/handed back, and once it
     // closes P2 controls bf2 and has 1 point (469.1). Actual: bf2 stays uncontrolled/uncontested, 0 points.
     const game = await board().battlefield("bf2", { controller: null }).build();

@@ -322,12 +322,43 @@ function maybeOfferAccelerate(
 }
 
 /**
+ * rule 436 / 359.3.e (unl-136-219 Scryer's Bloom) — "[Predict 2], THEN draw 1".
+ * A sequence step that parked a prompt owning its own `then` chain (the next
+ * Predict) leaves the sequence remainder in `deferredSequenceRest`; run it once
+ * the whole prompt chain has been answered, so the draw takes whatever the
+ * player chose to leave on top. A remainder that parks a prompt of its own is
+ * re-deferred together with the entries behind it.
+ */
+function flushDeferredSequenceRest(draft: RiftboundGameState, context: unknown): void {
+  const queue = draft.deferredSequenceRest;
+  if (!queue || queue.length === 0 || draft.pendingChoice) {
+    return;
+  }
+  draft.deferredSequenceRest = undefined;
+  for (let i = 0; i < queue.length; i++) {
+    const entry = queue[i] as NonNullable<RiftboundGameState["deferredSequenceRest"]>[number];
+    executeEffect(
+      entry.effect as ExecutableEffect,
+      buildEffectContext(draft, entry.playerId, entry.sourceCardId ?? "", context),
+    );
+    if (draft.pendingChoice) {
+      const rest = queue.slice(i + 1);
+      if (rest.length > 0) {
+        draft.deferredSequenceRest = [...(draft.deferredSequenceRest ?? []), ...rest];
+      }
+      return;
+    }
+  }
+}
+
+/**
  * rule-id: ogn-063-298 — a picked choice's effect (e.g. a buff) can change
  * what a static ability grants ("friendly buffed units have [Deflect]"), so
  * static recalc + SBA must run after it executes, same as after a chain
  * resolve. Guarded so unit-test stubs without full context bags don't crash.
  */
 function postChoiceCleanup(draft: RiftboundGameState, context: unknown): void {
+  flushDeferredSequenceRest(draft, context);
   const ctx = context as Partial<PostMoveCleanupContext> | undefined;
   if (ctx?.cards && ctx?.counters && ctx?.zones && typeof ctx.zones.getCardsInZone === "function") {
     cleanupAndFireDeaths(draft, ctx as PostMoveCleanupContext);
@@ -2405,6 +2436,10 @@ export const pendingChoiceMoves: Partial<
           targetZoneId: choice.playTo as CoreZoneId,
         });
         context.counters.setFlag(pickedCardId as CoreCardId, "exhausted", true);
+        // rule 190.3.a.1 (unl-139-219) — a unit ARRIVING at a battlefield its
+        // controller does not control applies Contested by itself, however it
+        // got there; the Cleanup after this resolution opens the showdown.
+        markContestedOnArrival(draft, choice.playTo as string, playedOwner);
         if (choice.playStun === true) {
           context.counters.setFlag(pickedCardId as CoreCardId, "stunned", true);
           context.cards.updateCardMeta(pickedCardId as CoreCardId, {
