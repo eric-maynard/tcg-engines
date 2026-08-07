@@ -250,7 +250,7 @@ export interface RiftboundMoves {
   hideCard: { playerId: PlayerId; cardId: CardId; battlefieldId: CardId };
 
   /** Reveal and play hidden card */
-  revealHidden: { playerId: PlayerId; cardId: CardId };
+  revealHidden: { playerId: PlayerId; cardId: CardId; paidAdditionalCost?: boolean };
 
   /** Play Chosen Champion from Champion Zone */
   playFromChampionZone: { playerId: PlayerId; location: LocationId };

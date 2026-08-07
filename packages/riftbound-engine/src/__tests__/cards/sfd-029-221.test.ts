@@ -108,10 +108,7 @@ describe("Rek'Sai, Breacher (sfd-029-221)", () => {
     expect(game.p1.resources()).toEqual({ energy: 1, power: { fury: 1 } });
   });
 
-  test.failing("BUG: static — a friendly unit played from facedown (not from hand) has Accelerate and may pay [1][fury] to enter ready", async () => {
-    // Expected (805.1.a + this static): revealing the hidden Fury unit offers the optional
-    // Accelerate cost; paying 1 energy + 1 fury makes it enter ready. Actual: no payment is
-    // offered on the facedown play and the unit enters exhausted (the grant only shows on board).
+  test("static — a friendly unit played from facedown (not from hand) has Accelerate and may pay [1][fury] to enter ready", async () => {
     const game = await scenario()
       .resources(P1, { power: { rainbow: 1 } })
       .battlefield("bf1", { controller: P1 })
@@ -130,6 +127,8 @@ describe("Rek'Sai, Breacher (sfd-029-221)", () => {
     await game.settle();
     expect(game.zoneOf("sneak")).toBe("battlefield-bf1");
     expect(game.state("sneak").isReady).toBe(true);
-    expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0, rainbow: 0 } });
+    // the [rainbow] spent on hiding is gone with the turn — emptied pools drop
+    // their domain keys (rule 517.2.c), so only the fury pip paid here remains.
+    expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0 } });
   });
 });

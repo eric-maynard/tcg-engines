@@ -44,9 +44,7 @@ describe("Azir, Ascendant (sfd-050-221)", () => {
     expect(broke.p1.can("activate", "azir")).toBe(false);
   });
 
-  test.failing("BUG: swaps places — Azir moves to the chosen unit's battlefield and that unit moves to Azir's original location (base)", async () => {
-    // Expected: after choosing Pawn (at bf1), Azir is at bf1 and Pawn is in base.
-    // Actual: the parsed effect is `move self → here`; nothing moves and no unit is asked for.
+  test("swaps places — Azir moves to the chosen unit's battlefield and that unit moves to Azir's original location (base)", async () => {
     const game = await board(1).script(P1, ["pawn"]).build();
     await game.p1.activate("azir");
     await game.settle();
@@ -54,9 +52,7 @@ describe("Azir, Ascendant (sfd-050-221)", () => {
     expect(game.locationOf("pawn")).toBe("base");
   });
 
-  test.failing("BUG: if the chosen unit is equipped, you may attach one of its Equipment to Azir", async () => {
-    // Expected: Pawn wears Serrated Dirk; after the swap P1 may move the Dirk onto Azir.
-    // Actual: no swap and no attach prompt — the Dirk stays on Pawn.
+  test("if the chosen unit is equipped, you may attach one of its Equipment to Azir", async () => {
     const game = await board(1).resources(P1, { energy: 0, power: { calm: 1, fury: 1 } }).gear(P1, DIRK, "dirk").script(P1, ["pawn", "yes", "dirk"]).build();
     await game.p1.do("equipCard", { equipmentId: "dirk", unitId: "pawn" });
     await game.settle();
@@ -67,7 +63,7 @@ describe("Azir, Ascendant (sfd-050-221)", () => {
     expect(game.state("dirk").attachedTo).toBe("azir");
   });
 
-  test.failing("BUG: 'Use only once per turn' — after one activation resolves it is not offered again this turn (rule 377.2.b)", async () => {
+  test("'Use only once per turn' — after one activation resolves it is not offered again this turn (rule 377.2.b)", async () => {
     // Expected: second activation illegal in the same turn even with calm power to spare.
     // Actual: the ability is offered again.
     const game = await board(2).script(P1, ["pawn"]).build();

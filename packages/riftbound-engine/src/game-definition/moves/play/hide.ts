@@ -13,7 +13,11 @@ import { fireTriggers } from "../../../abilities/trigger-runner";
 import { addToChain, createInteractionState, getTurnState } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { getBattlefieldZoneId, getFacedownZoneId } from "../../../zones/zone-configs";
-import { hasStaticEffect, consumeEntersReadyReplacement } from "./cost";
+import {
+  hasStaticEffect,
+  consumeEntersReadyReplacement,
+  getGrantedAcceleratePlayCost,
+} from "./cost";
 import { spellEffectHasLegalTargets } from "./targeting";
 import type { SpellEffectTargetShape } from "./targeting";
 
@@ -167,6 +171,90 @@ function hiddenCapacityAt(
     }
   }
   return capacity;
+}
+
+/**
+ * rule-id: sfd-029-221 (rule 805.1.a) — a card revealed from facedown is played
+ * from somewhere other than a hand, so a board static may grant it Accelerate.
+ * Returns the granted cost when it is both licensed and affordable.
+ */
+function grantedAccelerateForReveal(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  ctx: {
+    cards: {
+      getCardController?: (id: CoreCardId) => string | undefined;
+      getCardOwner: (id: CoreCardId) => string | undefined;
+    };
+    zones: { getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => readonly CoreCardId[] };
+  },
+): { energy: number; power: string[] } | undefined {
+  const board: { cardId: string; controller: string | undefined }[] = [];
+  const zoneIds: string[] = ["base"];
+  for (const bfId of Object.keys(state.battlefields)) {
+    zoneIds.push(getBattlefieldZoneId(bfId));
+  }
+  for (const zoneId of zoneIds) {
+    for (const id of ctx.zones.getCardsInZone(zoneId as CoreZoneId)) {
+      board.push({
+        cardId: id as string,
+        controller: ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id),
+      });
+    }
+  }
+  const cost = getGrantedAcceleratePlayCost(cardId, playerId, board, false);
+  if (!cost) {
+    return undefined;
+  }
+  const pool = state.runePools[playerId];
+  if (!pool || pool.energy < cost.energy) {
+    return undefined;
+  }
+  const power = pool.power as Partial<Record<string, number>>;
+  const remaining: Record<string, number> = {};
+  for (const [d, v] of Object.entries(power)) {
+    if (typeof v === "number" && v > 0) {
+      remaining[d] = v;
+    }
+  }
+  for (const domain of cost.power) {
+    // rule 135.2.e.5.a — a pooled [rainbow] Power pays any named-domain pip.
+    if ((remaining[domain] ?? 0) > 0) {
+      remaining[domain] = (remaining[domain] ?? 0) - 1;
+      continue;
+    }
+    if ((remaining.rainbow ?? 0) > 0) {
+      remaining.rainbow = (remaining.rainbow ?? 0) - 1;
+      continue;
+    }
+    return undefined;
+  }
+  return cost;
+}
+
+/** Deduct a granted Accelerate cost from the player's pool (rule 805.1.a). */
+function payGrantedAccelerate(
+  draft: RiftboundGameState,
+  playerId: string,
+  cost: { energy: number; power: readonly string[] },
+): void {
+  const pool = draft.runePools[playerId];
+  if (!pool) {
+    return;
+  }
+  pool.energy = Math.max(0, pool.energy - cost.energy);
+  for (const domain of cost.power) {
+    const key = domain as keyof typeof pool.power;
+    if ((pool.power[key] ?? 0) > 0) {
+      pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
+      continue;
+    }
+    const rainbow = "rainbow" as keyof typeof pool.power;
+    if ((pool.power[rainbow] ?? 0) > 0) {
+      pool.power[rainbow] = Math.max(0, (pool.power[rainbow] ?? 0) - 1);
+    }
+  }
 }
 
 /**
@@ -429,6 +517,19 @@ export const revealHidden: Defs["revealHidden"] = {
     ) {
       return false;
     }
+    // rule-id: sfd-029-221 (rule 805.1.a) — the optional Accelerate cost is only
+    // payable when a static licenses it and the pool covers it.
+    if (
+      context.params.paidAdditionalCost === true &&
+      !grantedAccelerateForReveal(
+        state,
+        context.params.playerId as string,
+        context.params.cardId as string,
+        context,
+      )
+    ) {
+      return false;
+    }
     return true;
   },
   // rule-id: sfd-017-221 — Rule 723.1.c.3: surface hidden cards as playable
@@ -439,7 +540,7 @@ export const revealHidden: Defs["revealHidden"] = {
       return [];
     }
     const playerId = context.playerId as string;
-    const results: { playerId: string; cardId: string }[] = [];
+    const results: { playerId: string; cardId: string; paidAdditionalCost?: boolean }[] = [];
     for (const bfId of Object.keys(state.battlefields)) {
       const facedown = context.zones.getCardsInZone(getFacedownZoneId(bfId) as CoreZoneId);
       for (const hid of facedown) {
@@ -455,6 +556,11 @@ export const revealHidden: Defs["revealHidden"] = {
           continue;
         }
         results.push({ cardId: hid as string, playerId });
+        // rule-id: sfd-029-221 (rule 805.1.a) — offer the granted Accelerate as a
+        // second variant so the reveal can enter ready.
+        if (grantedAccelerateForReveal(state, playerId, hid as string, context)) {
+          results.push({ cardId: hid as string, paidAdditionalCost: true, playerId });
+        }
       }
     }
     return results;
@@ -560,7 +666,17 @@ export const revealHidden: Defs["revealHidden"] = {
         cardId,
         ctx: { cards, counters, zones },
       });
-      const entersReady = replacedReady || hasStaticEffect(cardId, "enter-ready");
+      // rule-id: sfd-029-221 (rule 805.1.a) — paying the granted Accelerate cost
+      // as part of this play makes the unit enter ready.
+      let paidAccelerate = false;
+      if (context.params.paidAdditionalCost === true) {
+        const cost = grantedAccelerateForReveal(draft, playerId, cardId, { cards, zones });
+        if (cost) {
+          payGrantedAccelerate(draft, playerId, cost);
+          paidAccelerate = true;
+        }
+      }
+      const entersReady = paidAccelerate || replacedReady || hasStaticEffect(cardId, "enter-ready");
       if (!entersReady) {
         counters.setFlag(cardId as CoreCardId, "exhausted", true);
       }
