@@ -10,6 +10,25 @@
 import type { CardDefinitionLookup } from "../operations/card-lookup";
 import type { CardDefLike, CardPool } from "./types";
 
+/**
+ * Hand out a private copy of a definition. The pool is process-wide and the
+ * same definition object is shared by every scenario in a test file; a caller
+ * that mutates it (bun's asymmetric matchers write themselves into the
+ * received object during `toMatchObject`) would otherwise corrupt the card for
+ * every later scenario — e.g. a trigger's `filter: ["self","spell"]` turning
+ * into a matcher object makes that trigger fire on unrelated cards.
+ */
+function cloneDef(def: CardDefLike | undefined): CardDefLike | undefined {
+  if (def === undefined) {
+    return undefined;
+  }
+  try {
+    return structuredClone(def);
+  } catch {
+    return def;
+  }
+}
+
 export function createCardPool(defs: readonly CardDefLike[]): CardPool {
   const byId = new Map<string, CardDefLike>();
   for (const def of defs) {
@@ -19,7 +38,7 @@ export function createCardPool(defs: readonly CardDefLike[]): CardPool {
   }
   return {
     all: () => defs,
-    get: (id) => byId.get(id),
+    get: (id) => cloneDef(byId.get(id)),
     size: byId.size,
   };
 }
