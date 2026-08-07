@@ -177,6 +177,24 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         powerCost: copySource.powerCost ? [...copySource.powerCost] : undefined,
         tags: copySource.tags ? [...copySource.tags] : undefined,
       });
+      // rule 477.2 / 477.2.a: the effect's own keywords are GRANTED on top of
+      // the copied traits (ability layer), so they survive a later copy of the
+      // token. Record them as grants as well as on the copy's keyword line.
+      if (grantedTokenKeywords.length > 0) {
+        const meta = ctx.cards.getCardMeta?.(tokenId as CoreCardId) as
+          | { grantedKeywords?: { duration: string; keyword: string }[] }
+          | undefined;
+        const existing = meta?.grantedKeywords ?? [];
+        ctx.cards.updateCardMeta?.(
+          tokenId as CoreCardId,
+          {
+            grantedKeywords: [
+              ...existing,
+              ...grantedTokenKeywords.map((keyword) => ({ duration: "permanent", keyword })),
+            ],
+          } as unknown as Record<string, unknown>,
+        );
+      }
     } else {
       registry.register(tokenId, {
         abilities: namedAbilities ? ([...namedAbilities] as never) : undefined,

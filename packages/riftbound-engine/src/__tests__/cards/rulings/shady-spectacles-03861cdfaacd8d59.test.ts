@@ -60,7 +60,7 @@ describe("Ruling 03861cdfaacd8d59 — a Temporary Reflection copied again by Sha
   // "Small Guy", 2 Might, a unit) whose Temporary is a separately granted keyword.
   // Actual: the engine's Mirror Image asks for no unit, and the token it makes is a 0-Might copy of the
   // Mirror Image SPELL with no Temporary at all.
-  test.failing("BUG: ruling 03861cdfaacd8d59 (premise) — Mirror Image's Reflection should be a unit copy of the chosen unit carrying a GRANTED Temporary; engine makes a spell-copy token without Temporary", async () => {
+  test("ruling 03861cdfaacd8d59 (premise) — Mirror Image's Reflection should be a unit copy of the chosen unit carrying a GRANTED Temporary; engine makes a spell-copy token without Temporary", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { rainbow: 2 } })
       .unit(P1, "base", { might: 2, name: "Small Guy" }, "small")

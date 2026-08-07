@@ -1276,7 +1276,8 @@ export const playSpell: Defs["playSpell"] = {
         }
       } else if (
         spellEffect?.type === "reveal-hand" &&
-        (spellEffect as { battlefield?: string }).battlefield === "choose" &&
+        ((spellEffect as { battlefield?: string }).battlefield === "choose" ||
+          (spellEffect as { chooseBattlefield?: boolean }).chooseBattlefield === true) &&
         Object.keys(state.battlefields ?? {}).length > 0
       ) {
         // rule 419.3 (unl-139-219 Bone Skewer) — "Choose a battlefield. An
