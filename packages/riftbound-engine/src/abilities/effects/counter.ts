@@ -71,6 +71,7 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
               ctx.cards.getCardController?.(id as CoreCardId) ??
               ctx.cards.getCardOwner(id as CoreCardId),
             playerId: ctx.playerId,
+            zoneOf: (id) => ctx.zones.getCardZone(id as CoreCardId),
           })
         )
           continue;

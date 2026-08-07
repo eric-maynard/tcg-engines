@@ -51,6 +51,7 @@ import {
   findAllAtOneBattlefieldTarget,
   findAmountReferenceDamageTarget,
   findAmountReferenceTarget,
+  findConditionalBranchTarget,
   findReplacementChosenTarget,
   findSequenceLeadTarget,
   findSplitDamageEffect,
@@ -129,6 +130,26 @@ function leadCounterEffect(effect: unknown): { target?: unknown } | undefined {
       return first as { target?: unknown };
     }
   }
+  // rule-id: ven-152-166 (rule 355.8) — "Choose a spell… You may pay [rainbow].
+  // If you do, gain control of it… Otherwise, counter it." Both branches name
+  // the SAME chain item, chosen once at play time, so the conditional targets a
+  // chain item exactly like a bare counter does. The counter branch carries the
+  // descriptor (identical to the other branch's) used to gate legal items.
+  if (e?.type === "conditional") {
+    const branches = [
+      (effect as { else?: unknown }).else,
+      (effect as { then?: unknown }).then,
+    ];
+    const counterBranch = branches.find(
+      (b) => (b as { type?: string } | undefined)?.type === "counter",
+    );
+    const spellBranch = branches.find(
+      (b) => (b as { type?: string } | undefined)?.type === "gain-control-of-spell",
+    );
+    if (counterBranch !== undefined && spellBranch !== undefined) {
+      return counterBranch as { target?: unknown };
+    }
+  }
   return undefined;
 }
 
@@ -144,7 +165,8 @@ function counterChainTarget(effect: unknown): { target?: unknown } | undefined {
   if (spec === undefined) {
     return undefined;
   }
-  if ((effect as { type?: string } | undefined)?.type === "counter") {
+  const kind = (effect as { type?: string } | undefined)?.type;
+  if (kind === "counter" || kind === "conditional") {
     return spec;
   }
   return findSequenceLeadTarget(effect as SpellEffectTargetShape | undefined) === undefined
@@ -520,7 +542,12 @@ export const playSpell: Defs["playSpell"] = {
     // target must itself satisfy the spell's target descriptor (controller /
     // location / filter such as "in combat with an enemy Fury unit"); the
     // ≥1-legal-target gate above only proves SOME candidate exists.
-    const spellTgt = (spellAbility?.effect as SpellEffectTargetShape | undefined)?.target;
+    const spellEffectShapeForTgt = spellAbility?.effect as SpellEffectTargetShape | undefined;
+    const spellTgt =
+      spellEffectShapeForTgt?.target ??
+      // rule-id: ven-008-166 (rule 355.8) — the unit named by both conditional
+      // branches is the spell's play-time target, so validate against it too.
+      findConditionalBranchTarget(spellEffectShapeForTgt);
     const counterSpec = counterChainTarget(spellAbility?.effect);
     const isCounterSpell = counterSpec !== undefined;
     // rule-id: ogn-045-298 (rule 355.8) — a counter's supplied target names a
@@ -540,6 +567,7 @@ export const playSpell: Defs["playSpell"] = {
                 context.cards.getCardController?.(cid as CoreCardId) ??
                 context.cards.getCardOwner(cid as CoreCardId),
               playerId: context.playerId as string,
+              zoneOf: (cid) => context.zones.getCardZone(cid as CoreCardId),
             }),
         );
       if (
@@ -1032,6 +1060,9 @@ export const playSpell: Defs["playSpell"] = {
         // next time it takes damage": the chosen unit lives on the nested
         // replacement; lift it so the caster picks at play time.
         findReplacementChosenTarget(spellEffect) ??
+        // rule-id: ven-008-166 (rule 355.8) — "Deal 3 to a unit… deal 5 to it
+        // instead": both conditional branches name one caster-chosen unit.
+        findConditionalBranchTarget(spellEffect) ??
         (secondTgt ? seqSlots?.[0] : findSequenceLeadTarget(spellEffect));
       // rule-id: ogn-045-298 — a counter's target is a chain item (own branch below).
       const counterSpec = counterChainTarget(spellEffect);
@@ -1539,6 +1570,7 @@ export const playSpell: Defs["playSpell"] = {
                 context.cards.getCardController?.(id as CoreCardId) ??
                 context.cards.getCardOwner(id as CoreCardId),
               playerId: context.playerId as string,
+              zoneOf: (id) => context.zones.getCardZone(id as CoreCardId),
             }))
             continue;
           const key = seen.has(item.cardId) ? item.id : item.cardId;
@@ -1575,6 +1607,7 @@ export const playSpell: Defs["playSpell"] = {
                 context.cards.getCardController?.(id as CoreCardId) ??
                 context.cards.getCardOwner(id as CoreCardId),
               playerId: context.playerId as string,
+              zoneOf: (id) => context.zones.getCardZone(id as CoreCardId),
             })
           )
             continue;
@@ -1866,6 +1899,8 @@ export const playSpell: Defs["playSpell"] = {
       const tgt =
         spellEffect?.target ??
         findReplacementChosenTarget(spellEffect) ??
+        // rule-id: ven-008-166 (rule 355.8) — conditional branches naming one unit.
+        findConditionalBranchTarget(spellEffect) ??
         findSequenceLeadTarget(spellEffect);
       const isCardTarget =
         counterChainTarget(spellEffect) === undefined &&

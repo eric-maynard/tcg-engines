@@ -9,7 +9,15 @@ import type { ChainItem } from "./chain-state";
 
 type Comparison = { eq?: number; lt?: number; lte?: number; gt?: number; gte?: number };
 type CounterTargetObject = { type?: string; controller?: string; filter?: unknown };
-type ChoosesDescriptor = { type?: string; types?: readonly string[]; controller?: string };
+type ChoosesDescriptor = {
+  type?: string;
+  types?: readonly string[];
+  controller?: string;
+  /** rule 355.8 (unl-106-219) — the chosen object must sit in this zone kind. */
+  location?: string;
+  /** rule 359.3.e.9.a (unl-106-219) — "…and no OTHER" object of that relation. */
+  exclusive?: boolean;
+};
 
 /**
  * rule 355.9.b (sfd-045-221) — "enemy"/"friendly" qualifiers on a counter's
@@ -20,6 +28,8 @@ type ChoosesDescriptor = { type?: string; types?: readonly string[]; controller?
 export interface CounterTargetContext {
   readonly controllerOf: (id: string) => string | undefined;
   readonly playerId?: string;
+  /** rule 355.8 (unl-106-219) — needed for "…a friendly unit AT A BATTLEFIELD". */
+  readonly zoneOf?: (id: string) => string | undefined;
 }
 
 /** Descriptor shapes a counter's `filter.chooses` may name (`types` array or a `type` alias). */
@@ -109,13 +119,24 @@ function itemChoosesMatching(
     const effectPicksCounterSide = t.controller === (sameSide ? "friendly" : "enemy");
     return chooses.controller === "friendly" ? effectPicksCounterSide : !effectPicksCounterSide;
   }
-  return locked.some((id) => {
+  const matches = locked.filter((id) => {
     if (!wanted.includes(registry.getCardType(id) ?? "")) return false;
     if (chooses.controller === undefined) return true;
     const owner = ctx?.controllerOf(id);
     if (owner === undefined || ctx?.playerId === undefined) return false;
     return chooses.controller === "friendly" ? owner === ctx.playerId : owner !== ctx.playerId;
   });
+  if (matches.length === 0) return false;
+  // rule 355.8 (unl-106-219) — "Choose a friendly unit AT A BATTLEFIELD": with
+  // no such chosen object the counter's first choice does not exist.
+  if (chooses.location === "battlefield") {
+    const prefix = "battlefield-";
+    if (!matches.some((id) => (ctx?.zoneOf?.(id) ?? "").startsWith(prefix))) return false;
+  }
+  // rule 359.3.e.9.a (unl-106-219) — "…and no other friendly unit": an item
+  // that also chose a SECOND object of that relation is not a legal target.
+  if (chooses.exclusive === true && matches.length > 1) return false;
+  return true;
 }
 
 /**

@@ -103,6 +103,35 @@ export function findReplacementChosenTarget(
 }
 
 /**
+ * rule-id: ven-008-166 (rule 355.8) — "Deal 3 to a unit at a battlefield. If you
+ * paid the additional cost, deal 5 to IT instead": both branches of a
+ * `conditional` name the same caster-chosen object, so the choice belongs to the
+ * spell as a whole and is made at play time whichever branch ends up running.
+ * Only lift when both branches are present and agree on the descriptor — a lone
+ * `then` leaves the else-path targetless, so its target is not spell-wide.
+ */
+export function findConditionalBranchTarget(
+  effect: SpellEffectTargetShape | undefined,
+): SpellEffectTargetDescriptor | undefined {
+  if (effect?.type !== "conditional" || effect.target !== undefined) return undefined;
+  const branches = [
+    (effect as { then?: SpellEffectTargetShape }).then,
+    (effect as { else?: SpellEffectTargetShape }).else,
+  ];
+  if (branches.some((b) => b === undefined)) return undefined;
+  const targets = branches.map((b) => b?.target);
+  const [first] = targets;
+  if (!first || typeof first === "string") return undefined;
+  const key = (t: SpellEffectTargetDescriptor | undefined) =>
+    t && typeof t !== "string"
+      ? JSON.stringify(Object.entries(t as Record<string, unknown>).sort())
+      : undefined;
+  const firstKey = key(first);
+  if (!targets.every((t) => key(t) === firstKey)) return undefined;
+  return first;
+}
+
+/**
  * rule-id: sfd-017-221 / ogn-213-298 (rule 355.8) — a `sequence` spell ("Kill a
  * unit at a battlefield. Its controller draws 2.") carries its caster-chosen
  * target on a sub-effect, not on the sequence itself. Surface that lead
@@ -340,6 +369,7 @@ function counterCtx(ctx: Parameters<typeof resolveTarget>[1]): CounterTargetCont
     controllerOf: (id) =>
       ctx.cards.getCardController?.(id as never) ?? ctx.cards.getCardOwner(id as never),
     playerId: ctx.playerId,
+    zoneOf: (id) => ctx.zones.getCardZone?.(id as never),
   };
 }
 
@@ -549,6 +579,9 @@ export function spellEffectHasLegalTargets(
     effect.defender,
     // rule-id: ogn-254-298 — a "next time it…" replacement's chosen unit.
     findReplacementChosenTarget(effect),
+    // rule-id: ven-008-166 (rule 355.8) — a conditional whose branches both
+    // damage the same chosen unit still needs one legal target to be played.
+    findConditionalBranchTarget(effect),
   ]) {
     if (!targetDescriptorIsSatisfiable(tgt, effect.player, ctx, affordable)) {
       return false;
