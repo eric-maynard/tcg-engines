@@ -50,6 +50,19 @@ function onCardClick(cardId) {
     const move = chosen.length === 0
       ? pickTargetedMove(interaction.pendingMoves, cardId)
       : exactTargetVariant(interaction.pendingMoves, next);
+    // rule 573 (Repeat) — the same target set may also have Repeat variants;
+    // hold targeting open so the banner can offer them instead of silently
+    // committing to the base cost.
+    if (move && repeatVariantsFor(interaction.pendingMoves, next).length > 0) {
+      interaction.chosenTargets = next;
+      interaction.validTargets = remainingTargetIds(
+        variantsExtending(interaction.pendingMoves, next),
+        next,
+      );
+      render();
+      updateTargetBanner();
+      return;
+    }
     if (move) {
       executeMove(move.moveId, move.params, move.playerId);
       cancelInteraction();
@@ -246,6 +259,22 @@ function exactTargetVariant(moves, chosen) {
   return matches.find(isBaseCostVariant) || matches[0] || null;
 }
 
+/**
+ * rule 573 (Repeat) — variants binding exactly `chosen` that pay one or more
+ * extra Repeat costs, cheapest first. The engine enumerates these alongside the
+ * base-cost play; without an explicit opt-in the UI would always take the base
+ * variant and Repeat would be unreachable.
+ */
+function repeatVariantsFor(moves, chosen) {
+  return (moves || [])
+    .filter(m => {
+      const t = moveTargetList(m);
+      if (t.length !== chosen.length || !chosen.every(id => t.includes(id))) return false;
+      return (m.params?.repeatCount ?? 0) > 0;
+    })
+    .sort((a, b) => (a.params?.repeatCount ?? 0) - (b.params?.repeatCount ?? 0));
+}
+
 /** Ids that can still be added to `chosen` given the extending variants. */
 function remainingTargetIds(extending, chosen) {
   const ids = new Set();
@@ -312,14 +341,22 @@ function updateTargetBanner() {
   if (chosen.length === 0) {
     const none = exactTargetVariant(interaction.pendingMoves, []);
     if (none) buttons.push({ label: "No target", move: none });
-  } else {
+  }
+  const repeats = chosen.length === 0 ? [] : repeatVariantsFor(interaction.pendingMoves, chosen);
+  if (chosen.length > 0) {
     const done = exactTargetVariant(interaction.pendingMoves, chosen);
-    if (done) buttons.push({ label: `Done (${chosen.length})`, move: done });
+    if (done) buttons.push({ label: repeats.length > 0 ? "Play" : `Done (${chosen.length})`, move: done });
+    // rule 573 — one button per extra Repeat the player can pay for.
+    for (const m of repeats) {
+      buttons.push({ label: `Repeat x${m.params.repeatCount}`, move: m });
+    }
   }
   const chosenNames = chosen.map(id => (findCard(id)?.name || id).replace(/^player-[12]-/, ""));
   const text = chosen.length === 0
     ? `Choose a target for ${name} — Esc to cancel`
-    : `${name}: ${chosenNames.join(", ")} — pick another or Done · Esc to cancel`;
+    : repeats.length > 0
+      ? `${name}: ${chosenNames.join(", ")} — Play, or pay Repeat · Esc to cancel`
+      : `${name}: ${chosenNames.join(", ")} — pick another or Done · Esc to cancel`;
   showTargetBanner(text, buttons);
 }
 

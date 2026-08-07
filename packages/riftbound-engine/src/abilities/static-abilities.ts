@@ -123,6 +123,46 @@ function isBoardZone(zone: string): boolean {
 }
 
 /**
+ * State/tag filter for an `exists-here` condition descriptor. Board state lives
+ * on the card meta, sometimes under `__flags` — read both, as the target
+ * resolver does.
+ */
+function existsHereFilterMatches(
+  filter: string | { tag?: string } | undefined,
+  cardId: string,
+  ctx: StaticAbilityContext,
+): boolean {
+  if (!filter) {
+    return true;
+  }
+  if (typeof filter === "object") {
+    if (!filter.tag) {
+      return true;
+    }
+    return (getGlobalCardRegistry().get(cardId)?.tags ?? []).includes(filter.tag);
+  }
+  const meta = (ctx.cards.getCardMeta(cardId as CoreCardId) ?? {}) as Partial<RiftboundCardMeta> &
+    Record<string, unknown>;
+  const flags = (meta.__flags ?? {}) as Record<string, unknown>;
+  const flag = (name: string): boolean => meta[name] === true || flags[name] === true;
+  switch (filter) {
+    case "stunned":
+      return flag("stunned");
+    case "buffed":
+      return flag("buffed");
+    case "damaged":
+      return ((meta.damage ?? 0) as number) > 0;
+    case "exhausted":
+      return flag("exhausted");
+    case "ready":
+      return !flag("exhausted");
+    default:
+      // Unknown filter strings match everything, as elsewhere in the resolver.
+      return true;
+  }
+}
+
+/**
  * Evaluate whether a static ability's condition is met.
  */
 export function evaluateCondition(
@@ -204,6 +244,7 @@ export function evaluateCondition(
       const target = (condition.target ?? {}) as {
         controller?: string;
         excludeSelf?: boolean;
+        filter?: string | { tag?: string };
         location?: string;
         type?: string;
         quantity?: { atLeast?: number; exactly?: number };
@@ -228,6 +269,9 @@ export function evaluateCondition(
             continue;
           }
           if (target.type === "unit" && registry.get(cardId)?.cardType !== "unit") {
+            continue;
+          }
+          if (!existsHereFilterMatches(target.filter, cardId, ctx)) {
             continue;
           }
           count++;

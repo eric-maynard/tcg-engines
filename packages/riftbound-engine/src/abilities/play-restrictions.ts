@@ -62,6 +62,39 @@ function conditionHolds(condition: Record<string, unknown> | undefined, zone: st
 }
 
 /**
+ * rule 419.1 (rule-id: ven-029-166 Ol' Poro) — "I can't be played on your
+ * first, second, or third turns": a self-restriction printed on the card being
+ * played, gated on how many turns its controller has taken. A player's first
+ * turn is `turnsTaken === 1`, so "not on your first three turns" is
+ * `minTurnsTaken: 4`.
+ *
+ * Shape in card data:
+ *   { type: "static", effect: { type: "restrict-play", who: "self",
+ *                               minTurnsTaken: 4 } }
+ */
+export function selfPlayIsForbidden(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+): boolean {
+  const turnsTaken = state.players?.[playerId]?.turnsTaken ?? 0;
+  for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const effect = (ability as { effect?: Record<string, unknown> }).effect;
+    if (!effect || effect.type !== "restrict-play" || effect.who !== "self") {
+      continue;
+    }
+    const minTurnsTaken = effect.minTurnsTaken;
+    if (typeof minTurnsTaken === "number" && turnsTaken < minTurnsTaken) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * True when a board static forbids `playerId` from playing `cardId` right now.
  * rule-id: ven-132-166 (Fallen Feline) — "While I'm at a battlefield, opponents
  * can't play spells with that name."
@@ -71,6 +104,9 @@ export function playIsForbidden(
   playerId: string,
   cardId: string,
 ): boolean {
+  if (selfPlayIsForbidden(ctx.draft, playerId, cardId)) {
+    return true;
+  }
   const registry = getGlobalCardRegistry();
   const playedDef = registry.get(cardId);
   if (!playedDef) {

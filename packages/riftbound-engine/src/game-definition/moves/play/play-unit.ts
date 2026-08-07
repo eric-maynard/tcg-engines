@@ -27,6 +27,7 @@ import {
   cleanupAndFireDeaths,
   type PostMoveCleanupContext,
 } from "../../../cleanup/post-move-cleanup";
+import { selfPlayIsForbidden } from "../../../abilities/play-restrictions";
 import { applyPlayBattlefieldToken } from "./battlefield-token";
 import {
   extractBattlefieldId,
@@ -337,6 +338,14 @@ export const playUnit: Defs["playUnit"] = {
     // Rule 103 / 555: only the card's owner may play it.
     const owner = context.cards.getCardOwner(context.params.cardId as CoreCardId);
     if (owner !== context.params.playerId) {
+      return false;
+    }
+
+    // rule 419.1 (ven-029-166): the card's own text may forbid playing it this
+    // early in its controller's game.
+    if (
+      selfPlayIsForbidden(state, context.params.playerId as string, context.params.cardId as string)
+    ) {
       return false;
     }
 
@@ -727,6 +736,10 @@ export const playUnit: Defs["playUnit"] = {
     for (const cardId of playableCards) {
       const def = registry.get(cardId as string);
       if (!def || def.cardType !== "unit") {
+        continue;
+      }
+      // rule 419.1 (ven-029-166) — keep the enumerator in sync with condition.
+      if (selfPlayIsForbidden(state, context.playerId as string, cardId as string)) {
         continue;
       }
       // Rule 560 / 717: when the unit declares a payable optional additional

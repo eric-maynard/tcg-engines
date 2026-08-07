@@ -17,10 +17,15 @@ export function stripReminders(text: string): string {
   // pattern-matching.
   const INCLUDING_ME = "including-me";
   const guarded = text.replace(/\(\s*including me\s*\)/gi, INCLUDING_ME);
+  // A reminder that ends a line must not swallow the newline after it: the
+  // ability splitter relies on line boundaries, so gluing two printed lines
+  // together ("...Stun a unit.While there's...") makes both misparse.
+  const keepBreak = (fallback: string) => (match: string) =>
+    match.includes("\n") ? "\n" : fallback;
   // Strip italic-wrapped reminder text like `_ (...)_` or `_(...)_`
-  let cleaned = guarded.replace(/_?\s*\([^)]*\)\s*_?/g, "");
+  let cleaned = guarded.replace(/_?\s*\([^)]*\)\s*_?/g, keepBreak(""));
   // Also strip standalone parenthetical reminders
-  cleaned = cleaned.replace(/\s*\([^)]*\)\s*/g, " ");
+  cleaned = cleaned.replace(/\s*\([^)]*\)\s*/g, keepBreak(" "));
   return cleaned.trim();
 }
 

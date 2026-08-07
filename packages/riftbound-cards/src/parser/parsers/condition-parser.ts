@@ -666,6 +666,29 @@ export function parseConditionFromText(text: string): ConditionParseResult | und
     }
   }
 
+  // rule 445.2 (rule-id: ven-135-166) — "While there's a stunned enemy unit
+  // here, …": existence of a matching unit at the source's own location.
+  const whileThereIsMatch = text.match(
+    /^\s*(?:while|if)\s+there(?:'s|’s|'re|’re| is| are)\s+(?:a |an )?(.+?)\s+here,?\s*/i,
+  );
+  if (whileThereIsMatch) {
+    const subject = whileThereIsMatch[1];
+    const excludeSelf = /^(?:an)?other\b/i.test(subject);
+    const target = buildControlTarget(subject) ?? ({ type: "unit" } as Target);
+    return {
+      condition: {
+        target: {
+          ...target,
+          location: "here",
+          ...(excludeSelf ? { excludeSelf: true } : {}),
+        },
+        type: "exists-here",
+      } as unknown as Condition,
+      remainingText: text.slice(whileThereIsMatch[0].length),
+      startIndex: 0,
+    };
+  }
+
   // Try generic "if you have N ..." count phrase
   const ifYouHaveMatch = IF_YOU_HAVE_PATTERN.exec(text.trim());
   if (ifYouHaveMatch) {
