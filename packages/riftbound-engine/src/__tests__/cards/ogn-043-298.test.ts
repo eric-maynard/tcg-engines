@@ -60,6 +60,21 @@ describe("Charm (ogn-043-298)", () => {
     expect(game.locationOf("home")).toBe("bf2");
   });
 
+  // rule 450: Contested is attributed to the controller of the unit that moved,
+  // not to the caster who chose the destination.
+  test("moving an enemy unit onto an uncontrolled battlefield contests it for THAT unit's controller", async () => {
+    const game = await board().build();
+    await game.p1.cast("charm", { targets: "home" });
+    await game.settle();
+    await game.p1.pick("battlefield-bf2");
+    await game.settle();
+    // The caster (P1) has no unit there, so Contested must never be credited
+    // to P1 — the showdown belongs to P2, the moved unit's controller.
+    expect(game.gameState.battlefields.bf2?.contestedBy).not.toBe(P1);
+    // The uncontested showdown closes to the moved unit's controller.
+    expect(game.gameState.battlefields.bf2?.controller).toBe(P2);
+  });
+
   test("targets only ENEMY units — friendly units are not offered", async () => {
     const game = await board().build();
     const targets = game.p1.option("cast", "charm")?.fields.find((f) => f.arg === "targets")?.options;

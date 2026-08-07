@@ -20,7 +20,7 @@ const DIRK = "sfd-009-221"; // Serrated Dirk — Equipment
 
 function board() {
   return scenario()
-    .resources(P1, { energy: 4, power: { calm: 2 } })
+    .resources(P1, { energy: 4, power: { calm: 2, fury: 2 } })
     .unit(P1, "base", CARD, "aph")
     .gear(P1, DIRK, "dirk");
 }

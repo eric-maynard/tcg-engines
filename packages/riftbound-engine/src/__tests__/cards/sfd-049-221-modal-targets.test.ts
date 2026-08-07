@@ -16,7 +16,7 @@ const DIRK = "sfd-009-221"; // Serrated Dirk — Equipment
 describe("Aphelios, Exalted — modal targeting (sfd-049-221)", () => {
   test("mode 'Ready 2 runes' readies both exhausted runes", async () => {
     const game = await scenario()
-      .resources(P1, { energy: 4, power: { calm: 2 } })
+      .resources(P1, { energy: 4, power: { calm: 2, fury: 2 } })
       .unit(P1, "base", CARD, "aph")
       .gear(P1, DIRK, "dirk")
       .runes(P1, "calm", 2)
@@ -33,7 +33,7 @@ describe("Aphelios, Exalted — modal targeting (sfd-049-221)", () => {
 
   test("mode 'Buff a friendly unit' prompts for which friendly unit", async () => {
     const game = await scenario()
-      .resources(P1, { energy: 4, power: { calm: 2 } })
+      .resources(P1, { energy: 4, power: { calm: 2, fury: 2 } })
       .unit(P1, "base", CARD, "aph")
       .unit(P1, "base", "sfd-050-221", "other")
       .gear(P1, DIRK, "dirk")
@@ -46,5 +46,23 @@ describe("Aphelios, Exalted — modal targeting (sfd-049-221)", () => {
     await game.acting().pick("other");
     await game.settle();
     expect(game.state("other").meta.buffed).toBe(true);
+  });
+
+  test("mode 'Buff a friendly unit' still offers the unbuffed unit when the first is buffed", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 4, power: { calm: 2, fury: 2 } })
+      .unit(P1, "base", CARD, "aph", { buffed: true })
+      .unit(P1, "base", "ogn-175-298", "skulker")
+      .gear(P1, DIRK, "dirk")
+      .build();
+    await game.p1.do("equipCard", { equipmentId: "dirk", unitId: "aph" });
+    await game.settle();
+    await game.acting().chooseMode(2);
+    // rule 355.10 — the buff target is declared by the controller, so an
+    // already-buffed Aphelios must not silently swallow the mode.
+    expect(game.decision()?.kind).toBe("pick");
+    await game.acting().pick("skulker");
+    await game.settle();
+    expect(game.state("skulker").meta.buffed).toBe(true);
   });
 });
