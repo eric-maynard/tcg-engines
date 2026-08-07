@@ -356,9 +356,10 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     for (const equipId of meta?.equippedWith ?? []) {
       equipBonus += registry.getMightBonus(equipId as string);
     }
+    // rule 323.5 — lethal damage is re-evaluated against a set base Might.
     const effectiveMight = Math.max(
       0,
-      baseMight +
+      ((meta as Partial<RiftboundCardMeta> | undefined)?.baseMightOverride ?? baseMight) +
         (meta?.buffed ? 1 : 0) +
         (meta?.extraBuffs ?? 0) +
         (meta?.mightModifier ?? 0) +

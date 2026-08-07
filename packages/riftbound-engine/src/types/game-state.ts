@@ -150,6 +150,14 @@ export interface RiftboundCardMeta {
   mightModifier?: number;
 
   /**
+   * rule 323.5 (ven-116-166 Dragon Form) — "its base Might becomes N": replaces
+   * the PRINTED base every effective-Might reader starts from. Buffs, this-turn
+   * modifiers, statics and equipment still layer on top. Turn-scoped entries are
+   * cleared at the Ending Step (rule 517.2.b).
+   */
+  baseMightOverride?: number;
+
+  /**
    * rule-id: sfd-110-221 (rule 466.7.c) — the portion of `mightModifier` that
    * was applied "this combat" and must be reverted at Combat Cleanup.
    */
@@ -730,6 +738,12 @@ export interface ChooseTargetChoice {
    * item's `targets` instead of executing the effect immediately.
    */
   readonly bindToChainItemId?: string;
+  /**
+   * rule 402.2 (sfd-132-221) — a pending trigger naming several caster-chosen
+   * Game Objects asks one slot at a time; the pick fills slot N of the item's
+   * `targets` (earlier slots are kept) instead of replacing the whole list.
+   */
+  readonly bindSlotIndex?: number;
   /**
    * rule 355.8 / 820.2 (unl-182-219): the pick is the target of the mode
    * locked in for the Nth `choice` node of that chain item's effect (nodes in

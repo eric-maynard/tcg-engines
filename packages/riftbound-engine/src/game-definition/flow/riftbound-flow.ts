@@ -437,6 +437,17 @@ function runExpirationStep(context: FlowStepContext): void {
           } as Partial<RiftboundCardMeta>);
         }
 
+        // rule 323.5 / 517.2.b (ven-116-166) — "its base Might becomes N THIS
+        // TURN" ends now: the printed base returns.
+        const setBaseMightCards = context.cards.queryCards(
+          (_id, m) => (m as Partial<RiftboundCardMeta>).baseMightOverride !== undefined,
+        );
+        for (const cardId of setBaseMightCards) {
+          context.cards.updateCardMeta(cardId, {
+            baseMightOverride: undefined,
+          } as Partial<RiftboundCardMeta>);
+        }
+
         // Empty all rune pools (rule 517.2.c)
         for (const playerId of Object.keys(context.state.runePools)) {
           const pool = context.state.runePools[playerId];

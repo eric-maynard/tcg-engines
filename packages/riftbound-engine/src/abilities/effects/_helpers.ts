@@ -76,14 +76,16 @@ export const MIGHTY_THRESHOLD = 5;
 export function getEffectiveMight(cardId: string, ctx: EffectContext): number {
   const registry = getGlobalCardRegistry();
   const def = registry.get(cardId);
-  const baseMight = def?.might ?? 0;
-  if (baseMight === 0) {
+  const printedMight = def?.might ?? 0;
+  if (printedMight === 0) {
     return 0;
   } // Not a unit
 
   const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
     | Partial<RiftboundCardMeta>
     | undefined;
+  // rule 323.5 — a set base Might replaces the printed one.
+  const baseMight = meta?.baseMightOverride ?? printedMight;
   const buffBonus = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
   const mightMod = meta?.mightModifier ?? 0;
   const staticBonus = meta?.staticMightBonus ?? 0;

@@ -114,6 +114,31 @@ export function parseBuffEffect(text: string): BuffEffect | undefined {
 }
 
 /**
+ * rule 323.5 (ven-116-166 Dragon Form) — "Its base Might becomes N this turn":
+ * a SET of the base value (it can shrink a big unit), not a `+N` modifier, so
+ * buffs and this-turn modifiers still layer on top of the new base.
+ */
+export function parseSetBaseMightEffect(text: string): Effect | undefined {
+  const match = text.match(
+    /^(my|its|it|his|her|their|(?:(?:a|an|another|that)\s+)?(?:friendly |enemy )?unit(?:['\u2019]s)?)\s+base\s+(?:Might|:rb_might:)\s+becomes\s+(\d+)(?:\s*:rb_might:)?(\s+this turn)?\.?$/i,
+  );
+  if (!match) {
+    return undefined;
+  }
+  const who = match[1].toLowerCase();
+  const isSelf = who === "my" || who === "me";
+  const effect = {
+    amount: Number.parseInt(match[2], 10),
+    target: (isSelf ? "self" : { type: "unit" }) as AnyTarget,
+    type: "set-base-might",
+  } as Record<string, unknown>;
+  if (match[3]) {
+    effect.duration = "turn";
+  }
+  return effect as unknown as Effect;
+}
+
+/**
  * Try to parse a modify-might effect: "Give TARGET +/-N :rb_might: this turn[, to a minimum of M :rb_might:]."
  */
 export function parseModifyMightEffect(text: string): ModifyMightEffect | SequenceEffect | undefined {

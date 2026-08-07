@@ -961,7 +961,8 @@ function effectiveMight(
   def: { might?: number } | undefined,
   meta: Partial<RiftboundCardMeta> | undefined,
 ): number {
-  const base = def?.might ?? 0;
+  // rule 323.5 — a set base Might replaces the printed one.
+  const base = meta?.baseMightOverride ?? def?.might ?? 0;
   const buff = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
   // rule 718.4: a Might comparison reads the CURRENT value, which includes the
   // bonus from every attached Equipment — not just buffs and this-turn modifiers.

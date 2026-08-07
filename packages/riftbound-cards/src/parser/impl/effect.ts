@@ -33,6 +33,7 @@ import {
   parseDoubleMightEffect,
   parseHealEffect,
   parseModifyMightEffect,
+  parseSetBaseMightEffect,
   parseSpendBuffEffect,
 } from "./effects-might";
 import {
@@ -74,6 +75,7 @@ export function parseEffect(text: string): Effect | undefined {
     parseChannelEffect(cleaned) ??
     parseBuffEffect(cleaned) ??
     parseDamageEffect(cleaned) ??
+    parseSetBaseMightEffect(cleaned) ??
     parseModifyMightEffect(cleaned) ??
     parseDoubleMightEffect(cleaned) ??
     parseKillEffect(cleaned) ??

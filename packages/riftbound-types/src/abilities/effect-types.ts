@@ -352,6 +352,19 @@ export interface IncreaseMightToEffect {
 }
 
 /**
+ * rule 323.5 / 142.4.b (ven-116-166 Dragon Form): "Its base Might becomes N" —
+ * a SET of the base value, not a modifier. Buffs, "+N this turn" modifiers and
+ * static bonuses still layer on top of the new base, and lethal damage is
+ * re-evaluated against it.
+ */
+export interface SetBaseMightEffect {
+  readonly type: "set-base-might";
+  readonly amount: number;
+  readonly target?: AnyTarget;
+  readonly duration?: "turn" | "permanent";
+}
+
+/**
  * rule 364.3 (ogn-053-298 Stand United): a spell/ability-created continuous
  * effect that behaves like a static ability for the rest of the turn — it is
  * re-evaluated on every static pass, so it also reaches units that start
@@ -987,6 +1000,7 @@ export type Effect =
   | DoubleMightEffect
   | SwapMightEffect
   | IncreaseMightToEffect
+  | SetBaseMightEffect
   | TurnStaticEffect
 
   // Movement

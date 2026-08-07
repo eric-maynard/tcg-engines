@@ -287,9 +287,10 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       for (const equipId of meta?.equippedWith ?? []) {
         equipBonus += registry.getMightBonus(equipId as string);
       }
+      // rule 323.5 — combat reads a set base Might in place of the printed one.
       const baseMight = Math.max(
         0,
-        printedMight +
+        (meta?.baseMightOverride ?? printedMight) +
           (meta?.buffed ? 1 : 0) +
           (meta?.extraBuffs ?? 0) +
           (meta?.mightModifier ?? 0) +
