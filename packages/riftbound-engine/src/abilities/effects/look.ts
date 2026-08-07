@@ -152,7 +152,11 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     onPicked?: "recycle" | "banish" | "discard" | "draw" | "play";
     onRest?: "recycle" | "draw" | "trash";
     then?: { recycle?: unknown };
-    filter?: { excludeCardTypes?: readonly string[]; cardTypes?: readonly string[] };
+    filter?: {
+      excludeCardTypes?: readonly string[];
+      cardTypes?: readonly string[];
+      minEnergyCost?: number;
+    };
     optional?: boolean;
     reduceCost?: { energy?: number };
     ignoreEnergyCost?: boolean;
@@ -168,6 +172,9 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // rule 383.3.a.3 (sfd-058-221) — "reveal a GEAR from among them": an
   // allow-list on the pick; non-matching looked-at cards are never offered.
   const lookAllowed = lookEff.filter?.cardTypes;
+  // rule 206 (unl-064-219 Fate Weaver) — "a spell with Energy cost [4] or
+  // more": a printed-Energy floor on the pick, checked by isValidPendingPick.
+  const lookMinEnergy = lookEff.filter?.minEnergyCost;
   // rule-id: ogn-242-298 — "a unit … that has Might up to 1 more than the
   // killed unit": the ceiling is the Might the just-killed unit last had
   // (rule 429 / last-known information), recorded by `handle_kill`.
@@ -223,7 +230,8 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // isValidPendingPick rejects non-matching revealed cards.
     ...((lookExcluded && lookExcluded.length > 0) ||
     (lookAllowed && lookAllowed.length > 0) ||
-    maxMight !== undefined
+    maxMight !== undefined ||
+    lookMinEnergy !== undefined
       ? {
           filter: {
             ...(lookExcluded && lookExcluded.length > 0
@@ -231,6 +239,7 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
               : {}),
             ...(lookAllowed && lookAllowed.length > 0 ? { cardTypes: [...lookAllowed] } : {}),
             ...(maxMight !== undefined ? { maxMight } : {}),
+            ...(lookMinEnergy !== undefined ? { minEnergyCost: lookMinEnergy } : {}),
           },
         }
       : {}),

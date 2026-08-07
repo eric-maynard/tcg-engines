@@ -112,6 +112,11 @@ export interface LookEffect {
     readonly excludeCardTypes?: readonly string[];
     /** Card types that ARE valid picks ("reveal a gear from among them"). */
     readonly cardTypes?: readonly string[];
+    /**
+     * rule 206 (unl-064-219 Fate Weaver) — "a spell with Energy cost [4] or
+     * more": the pick's printed Energy cost floor (Power pips are not Energy).
+     */
+    readonly minEnergyCost?: number;
   };
   /** "You may …" — the pick is declinable. */
   readonly optional?: boolean;
@@ -207,7 +212,8 @@ export interface RevealHandEffect {
  */
 export interface NameCardEffect {
   readonly type: "name-card";
-  readonly cardType: "spell" | "unit" | "gear";
+  /** rule 762: "name a tag" names a tag instead of a card name. */
+  readonly cardType: "spell" | "unit" | "gear" | "tag";
 }
 
 // ============================================================================
@@ -485,7 +491,9 @@ export interface TokenDefinition {
 export interface CreateTokenEffect {
   readonly type: "create-token";
   readonly token: TokenDefinition;
-  readonly location?: "base" | "here" | "battlefield" | Location;
+  // rule 359.3.f.3 — "there" on a move trigger is the ORIGIN of the move,
+  // snapshotted when it happened (`"origin"`), not where the source is now.
+  readonly location?: "base" | "here" | "battlefield" | "origin" | Location;
   readonly ready?: boolean;
   readonly amount?: number;
 }

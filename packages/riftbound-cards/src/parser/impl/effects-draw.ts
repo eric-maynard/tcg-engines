@@ -141,7 +141,7 @@ export function parseLookEffect(text: string): LookEffect | undefined {
   // it": the pick is declinable AND restricted to that card type; everything
   // not picked is recycled.
   const revealDraw = rest.match(
-    /^(?:Then\s+)?You may reveal an? (unit|gear|spell)\b[^.]*?from among them,?\s*(?:and|then)\s+draw it/i,
+    /^(?:Then\s+)?You may reveal an? (unit|gear|spell)\b([^.]*?)from among them,?\s*(?:and|then)\s+draw it/i,
   );
   // rule 416.1 (ven-156-166 Lightning Rush) — "Put the rest into your trash"
   // overrides the default recycle-to-bottom destination for the unpicked
@@ -151,9 +151,17 @@ export function parseLookEffect(text: string): LookEffect | undefined {
     const kind = revealDraw[1].toLowerCase();
     // Equipment is gear (rule 150.4).
     const cardTypes = kind === "gear" ? ["gear", "equipment"] : [kind];
+    // rule 206 (unl-064-219 Fate Weaver) — "…with Energy cost [4] or more":
+    // a printed-Energy floor on the pick; Power pips are not Energy.
+    const minCost = revealDraw[2]?.match(
+      /with (?:an? )?Energy cost (?:\[|:rb_energy_)(\d+)(?:\]|:)?\s*or more/i,
+    );
     return {
       amount,
-      filter: { cardTypes },
+      filter: {
+        cardTypes,
+        ...(minCost ? { minEnergyCost: Number.parseInt(minCost[1], 10) } : {}),
+      },
       from,
       optional: true,
       ...(restToTrash ? { onRest: "trash" as const } : {}),

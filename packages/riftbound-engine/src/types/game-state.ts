@@ -499,6 +499,11 @@ export interface RevealAndPickChoice {
     /** rule-id: unl-139-219 — "choose a unit from it": allowed card types. */
     readonly cardTypes?: readonly string[];
     readonly maxMight?: number;
+    /**
+     * rule 206 (unl-064-219 Fate Weaver) — "a spell with Energy cost [4] or
+     * more": picks whose printed Energy cost is below this are illegal.
+     */
+    readonly minEnergyCost?: number;
   };
 
   /**

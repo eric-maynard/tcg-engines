@@ -654,6 +654,15 @@ export function isValidPendingPick(choice: PendingChoice, cardId: string): boole
       return false;
     }
   }
+  // rule 206 (unl-064-219 Fate Weaver) — "a spell with Energy cost [4] or
+  // more": the floor reads the card's PRINTED Energy cost; Power pips never
+  // count toward it.
+  const minEnergyCost = choice.filter?.minEnergyCost;
+  if (typeof minEnergyCost === "number") {
+    if (getGlobalCardRegistry().getEnergyCost(cardId) < minEnergyCost) {
+      return false;
+    }
+  }
   return true;
 }
 
