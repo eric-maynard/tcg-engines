@@ -10,6 +10,23 @@ import { unitIgnoresDamage } from "../../operations/damage-immunity";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
 
+/**
+ * rule 437.2 (unl-013-219 Lotus Trap) — "Double all damage that would be dealt
+ * to it this turn" is modelled as a granted `DoubleIncomingDamage` keyword on
+ * the chosen unit; every damage amount aimed at that unit is doubled.
+ */
+function doubleIfMarked(amount: number, targetId: string, ctx: EffectContext): number {
+  if (amount <= 0) {
+    return amount;
+  }
+  const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
+    | Partial<RiftboundCardMeta>
+    | undefined;
+  const doubled =
+    meta?.grantedKeywords?.some((gk) => gk.keyword === "DoubleIncomingDamage") ?? false;
+  return doubled ? amount * 2 : amount;
+}
+
 export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
   // rule-id: ogn-145-298 — a global "Prevent all spell and ability damage"
@@ -223,7 +240,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
             | Partial<RiftboundCardMeta>
             | undefined
         )?.damage ?? 0;
-      const dmg = assigned[targetId] + surplus + bonusDamage;
+      const dmg = doubleIfMarked(assigned[targetId] + surplus + bonusDamage, targetId, ctx);
       surplus = 0;
       ctx.counters.addCounter(targetId as CoreCardId, "damage", dmg);
       ctx.cards.updateCardMeta?.(
@@ -269,7 +286,11 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       }
     }
   }
-  for (const { targetId, amount } of hits) {
+  for (const { targetId, amount: rawHitAmount } of hits) {
+    // rule 437.2 (unl-013-219 Lotus Trap) — "Double all damage that would be
+    // dealt to it": a damage-amount replacement, so it applies before any
+    // prevention or take-damage replacement is consulted.
+    const amount = doubleIfMarked(rawHitAmount, targetId, ctx);
     // rule 465.2.c.10 (ogn-189-298) — a unit with an active "I don't take
     // damage" restriction is dealt nothing at all.
     if (unitIgnoresDamage(targetId, ctx.draft)) {

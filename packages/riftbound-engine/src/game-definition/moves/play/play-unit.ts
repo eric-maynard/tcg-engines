@@ -1222,7 +1222,15 @@ export const playUnit: Defs["playUnit"] = {
           zoneId as CoreZoneId,
           playerId as CorePlayerId,
         )) {
-          if (registry.get(id as string)?.cardType === "equipment") {
+          // rule 208.3 / 476.1 (ven-027-166 Hand Hammer) — a gear with the
+          // printed [Equip] ability IS Equipment. VEN cards come from set JSON
+          // typed simply as "gear", so accept them the same way `equipCard`
+          // does instead of gating on the "equipment" card type alone.
+          const equipDef = registry.get(id as string);
+          const isEquipment =
+            equipDef?.cardType === "equipment" ||
+            (equipDef?.cardType === "gear" && registry.hasKeyword(id as string, "Equip"));
+          if (isEquipment) {
             equipOptions.push(id as string);
           }
         }
