@@ -362,3 +362,55 @@ describe("427.1 / 124.1 / 186.1 — banish and bounce leave without dying: reset
     expect(game.state("v").might).toBe(3);
   });
 });
+
+// ===========================================================================
+// Single damage store (counter bag = store, meta.damage = mirror)
+// ===========================================================================
+
+describe("520 / 124.1 — one damage store: every writer keeps the counter and its mirror identical", () => {
+  const HEAL2 = spell("Mend", { amount: 2, target: { type: "unit" }, type: "heal" });
+  const PING3 = spell("Ping3", { amount: 3, target: { type: "unit" }, type: "damage" });
+  const readStores = (game: Awaited<ReturnType<ReturnType<typeof scenario>["build"]>>, id: string) => {
+    const meta = game.state(id).meta as { damage?: number; __counters?: { damage?: number } };
+    return { counter: meta.__counters?.damage ?? 0, mirror: meta.damage ?? 0 };
+  };
+
+  test("seeded damage, spell damage and a heal all agree in both stores (2 → 5 → 3)", async () => {
+    const game = await scenario()
+      .unit(P1, "base", { might: 7, name: "Big" }, "big", { damage: 2 })
+      .hand(P1, PING3, "ping")
+      .hand(P1, HEAL2, "mend")
+      .build();
+    expect(readStores(game, "big")).toEqual({ counter: 2, mirror: 2 });
+    await game.p1.cast("ping", { targets: "big" });
+    await game.settle();
+    expect(readStores(game, "big")).toEqual({ counter: 5, mirror: 5 });
+    expect(game.state("big").damage).toBe(5);
+    await game.p1.cast("mend", { targets: "big" });
+    await game.settle();
+    expect(readStores(game, "big")).toEqual({ counter: 3, mirror: 3 });
+    await game.p1.endTurn();
+    await game.settle();
+    expect(readStores(game, "big")).toEqual({ counter: 0, mirror: 0 }); // 317.2.b heal
+  });
+
+  test("sandbox `addDamage` that reaches lethal is a passive kill through the choke point: Deathknell fires, trash copy has no damage", async () => {
+    const game = await scenario().unit(P1, "base", DK_DRAWER, "d").build();
+    const hand0 = game.p1.hand().length;
+    await game.p1.do("addDamage", { amount: 2, cardId: "d", playerId: P1 });
+    expect(game.zoneOf("d")).toBe("trash");
+    await game.settle();
+    expect(game.p1.hand()).toHaveLength(hand0 + 1);
+    expect(readStores(game, "d")).toEqual({ counter: 0, mirror: 0 });
+  });
+
+  test("sandbox `killUnit` is an active kill: Deathknell fires and the buff is gone in the trash", async () => {
+    const game = await scenario().unit(P1, "base", DK_DRAWER, "d", { buffed: true }).build();
+    const hand0 = game.p1.hand().length;
+    await game.p1.do("killUnit", { cardId: "d", playerId: P1 });
+    expect(game.zoneOf("d")).toBe("trash");
+    expect(game.state("d").isBuffed).toBe(false);
+    await game.settle();
+    expect(game.p1.hand()).toHaveLength(hand0 + 1);
+  });
+});

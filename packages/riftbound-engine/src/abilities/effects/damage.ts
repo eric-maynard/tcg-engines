@@ -7,6 +7,7 @@ import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { unitIgnoresDamage } from "../../operations/damage-immunity";
+import { addDamage } from "../../operations/damage-store";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
 
@@ -234,19 +235,9 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       if (unitIgnoresDamage(targetId, ctx.draft, (id) => ctx.cards.getCardMeta?.(id as CoreCardId) as { empowered?: boolean; combatRole?: string } | undefined)) {
         continue;
       }
-      const priorDamage =
-        (
-          ctx.cards.getCardMeta?.(targetId as CoreCardId) as
-            | Partial<RiftboundCardMeta>
-            | undefined
-        )?.damage ?? 0;
       const dmg = doubleIfMarked(assigned[targetId] + surplus + bonusDamage, targetId, ctx);
       surplus = 0;
-      ctx.counters.addCounter(targetId as CoreCardId, "damage", dmg);
-      ctx.cards.updateCardMeta?.(
-        targetId as CoreCardId,
-        { damage: priorDamage + dmg, ...damageAttribution } as unknown as Record<string, unknown>,
-      );
+      addDamage(ctx, targetId, dmg, damageAttribution as Record<string, unknown>);
       if (dmg > 0) reactAnyUnitDamaged(targetId);
     }
     return;
@@ -354,15 +345,9 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       markReplacementConsumed(ctx.draft, replacement);
       continue;
     }
-    // Mirror to meta.damage — state-based death checks (rule 520), the
-    // end-of-turn clear, and the UI all read meta.damage, not the
-    // __counters bag. Without this, spell/ability damage is invisible
-    // and never kills a unit. Read the prior value BEFORE addCounter so
-    // callers whose counter store aliases meta.damage don't double-apply.
     const priorMeta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
       | (Partial<RiftboundCardMeta> & { damagePreventionShield?: number })
       | undefined;
-    const priorDamage = priorMeta?.damage ?? 0;
     // rule 437.4 / 437.7: a "prevent the next N damage" shield absorbs this
     // damage first and is spent by the amount it absorbs.
     const shield = Math.max(0, priorMeta?.damagePreventionShield ?? 0);
@@ -376,14 +361,9 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     if (prevented > 0 && dealt <= 0) {
       continue;
     }
-    ctx.counters.addCounter(targetId as CoreCardId, "damage", dealt);
-    ctx.cards.updateCardMeta?.(
-      targetId as CoreCardId,
-      {
-        damage: priorDamage + dealt,
-        ...damageAttribution,
-      } as unknown as Record<string, unknown>,
-    );
+    // rule 520 / 124.1 — one damage store: the counter and its meta mirror
+    // are written together so death checks, the end-of-turn clear and the UI agree.
+    addDamage(ctx, targetId, dealt, damageAttribution as Record<string, unknown>);
     if (dealt > 0) reactAnyUnitDamaged(targetId);
   }
 }

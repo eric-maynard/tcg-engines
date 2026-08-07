@@ -29,6 +29,7 @@ import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getChannelCountLimit } from "../../operations/channel-limits";
+import { clearDamage, getDamage } from "../../operations/damage-store";
 import { type LeaveBoardContext, removeFromBoard } from "../../operations/leave-board";
 import {
   beginAdditionalTurn,
@@ -237,22 +238,21 @@ function runExpirationStep(context: FlowStepContext): void {
           );
         }
 
+        const flowCards = context.cards as unknown as {
+          getCardMeta(cardId: CoreCardId): object | undefined;
+          updateCardMeta(cardId: CoreCardId, meta: Record<string, unknown>): void;
+        };
         for (const cardId of allBoardCards) {
           const meta = context.cards.getCardMeta(cardId);
           if (!meta) {
             continue;
           }
 
-          // Clear all damage from units (rule 517.2.a / 317.2.b) — marked
-          // damage lives in BOTH meta.damage and the reserved __counters
-          // bag (effects/damage.ts and assignDamage write both), so the
-          // heal must zero both or readers taking the max still see it.
-          const damageCounters = (meta as { __counters?: Record<string, number> }).__counters;
-          if ((meta.damage ?? 0) > 0 || (damageCounters?.damage ?? 0) > 0) {
-            context.cards.updateCardMeta(cardId, {
-              __counters: { ...(damageCounters ?? {}), damage: 0 },
-              damage: 0,
-            } as Partial<RiftboundCardMeta>);
+          // Clear all damage from units (rule 517.2.a / 317.2.b) through the
+          // single damage store (counter bag + meta mirror in one write; the
+          // flow has no counter ops, so the store patches the bag via meta).
+          if (getDamage({ cards: flowCards }, cardId as string) > 0) {
+            clearDamage({ cards: flowCards }, cardId as string);
           }
 
           // Clear stun at Ending Step (rule 423.1.a.2) — the stun effect writes

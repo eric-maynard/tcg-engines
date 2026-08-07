@@ -19,6 +19,7 @@ import type { PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup"
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { getCardEffectiveMight } from "../play/cost";
 import { unitIgnoresDamage } from "../../../operations/damage-immunity";
+import { addDamage, clearDamage, getDamage, setDamage } from "../../../operations/damage-store";
 import type {
   GrantedKeyword,
   RiftboundCardMeta,
@@ -411,15 +412,8 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         if (dmg <= 0) {
           continue;
         }
-        counters.addCounter(unitId as CoreCardId, "damage", dmg);
-        // Also update card meta damage for consistency
-        const existingDamage = existingMeta?.damage ?? 0;
-        cards.updateCardMeta(
-          unitId as CoreCardId,
-          {
-            damage: existingDamage + dmg,
-          } as Partial<RiftboundCardMeta>,
-        );
+        // rule 520 / 124.1 — single damage store (counter + meta mirror).
+        addDamage(context, unitId, dmg);
       }
     }
 
@@ -444,26 +438,21 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
             activeRepl.splice(idx, 1);
           }
         }
-        const metaNow = cards.getCardMeta(unit.id as CoreCardId) as
-          | Partial<RiftboundCardMeta>
-          | undefined;
         // rule 428.5.c.2: a combat death is a kill by the opposing
         // combatant's controller ("When you kill a stunned enemy unit").
-        cards.updateCardMeta(unit.id as CoreCardId, {
-          ...((metaNow?.damage ?? 0) < unit.baseMight ? { damage: Math.max(1, unit.baseMight) } : {}),
+        const attribution = {
           lastDamageSource: "combat",
           lastDamagedBy: unit.owner === attackingPlayer ? defenderUnits[0]?.owner : attackingPlayer,
-        } as Partial<RiftboundCardMeta>);
+        };
+        if (getDamage(context, unit.id) < unit.baseMight) {
+          setDamage(context, unit.id, Math.max(1, unit.baseMight), attribution);
+        } else {
+          cards.updateCardMeta(unit.id as CoreCardId, attribution as Partial<RiftboundCardMeta>);
+        }
         continue;
       }
-      counters.clearCounter?.(unit.id as CoreCardId, "damage");
-      const survivorMeta = cards.getCardMeta(unit.id as CoreCardId) as
-        | Partial<RiftboundCardMeta>
-        | undefined;
-      if ((survivorMeta?.damage ?? 0) > 0) {
-        cards.updateCardMeta(unit.id as CoreCardId, {
-          damage: 0,
-        } as Partial<RiftboundCardMeta>);
+      if (getDamage(context, unit.id) > 0) {
+        clearDamage(context, unit.id);
       }
     }
 
@@ -488,18 +477,14 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       }
     }
     for (const id of healZoneIds) {
-      const bystanderMeta = cards.getCardMeta(id as CoreCardId) as
-        | Partial<RiftboundCardMeta>
-        | undefined;
-      const dmg = bystanderMeta?.damage ?? 0;
+      const dmg = getDamage(context, id as string);
       if (dmg <= 0) {
         continue;
       }
       if (dmg >= getCardEffectiveMight(id as string, (cid) => cards.getCardMeta(cid) as Partial<RiftboundCardMeta> | undefined)) {
         continue;
       }
-      counters.clearCounter?.(id as CoreCardId, "damage");
-      cards.updateCardMeta(id as CoreCardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+      clearDamage(context, id as string);
     }
 
     cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);

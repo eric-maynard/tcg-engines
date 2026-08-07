@@ -6,15 +6,21 @@
  */
 
 import type { CardId as CoreCardId, GameMoveDefinitions } from "@tcg/core";
-import { performCleanup } from "../../cleanup";
+import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
+import { addDamage, clearDamage, removeDamage } from "../../operations/damage-store";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 
 /**
- * Counter/token move definitions
+ * Counter/token move definitions.
+ *
+ * rule 520 / 428.1.a.2 — sandbox damage and counter edits can make a unit
+ * lethal, so every move here runs the post-move maintenance pass (static
+ * recalc + state-based checks + `die` emission through the leave-board choke
+ * point): a unit killed by `addDamage` fires its Deathknell like any other.
  */
 export const counterMoves: Partial<
   GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>
-> = {
+> = withPostMoveCleanup({
   addBuff: {
     reducer: (_draft, context) => {
       const { cardId } = context.params;
@@ -36,7 +42,7 @@ export const counterMoves: Partial<
    * counter values (e.g., poison thresholds) take effect immediately.
    */
   addCounter: {
-    reducer: (draft, context) => {
+    reducer: (_draft, context) => {
       const { cardId, counterType, delta } = context.params;
       if (delta === 0) {
         return;
@@ -46,49 +52,24 @@ export const counterMoves: Partial<
       } else {
         context.counters.removeCounter(cardId as CoreCardId, counterType, -delta);
       }
-
-      // Fire state-based checks so static recalc picks up any passive
-      // Effects gated on counter values. This is critical for risk #1
-      // In the gap-closure plan (combat math desync after counter changes).
-      performCleanup({
-        cards: context.cards as unknown as Parameters<typeof performCleanup>[0]["cards"],
-        counters: context.counters as unknown as Parameters<typeof performCleanup>[0]["counters"],
-        draft,
-        zones: context.zones as unknown as Parameters<typeof performCleanup>[0]["zones"],
-      });
+      // The post-move wrapper runs static recalc + state-based checks so
+      // passive effects gated on counter values take effect immediately.
     },
   },
 
   addDamage: {
-    reducer: (draft, context) => {
+    reducer: (_draft, context) => {
       const { cardId, amount } = context.params;
-      // Mirror to meta.damage — death checks and the UI read meta.damage,
-      // not the __counters bag. Read prior value before addCounter.
-      const meta = (context.cards.getCardMeta(cardId as CoreCardId) ?? {}) as Partial<
-        RiftboundCardMeta
-      >;
-      context.counters.addCounter(cardId as CoreCardId, "damage", amount);
-      context.cards.updateCardMeta(
-        cardId as CoreCardId,
-        { damage: (meta.damage ?? 0) + amount } as Partial<RiftboundCardMeta>,
-      );
-      performCleanup({
-        cards: context.cards as unknown as Parameters<typeof performCleanup>[0]["cards"],
-        counters: context.counters as unknown as Parameters<typeof performCleanup>[0]["counters"],
-        draft,
-        zones: context.zones as unknown as Parameters<typeof performCleanup>[0]["zones"],
-      });
+      // rule 520 / 124.1 — single damage store; the wrapper's maintenance
+      // pass reaps a lethal unit and publishes its `die`.
+      addDamage(context, cardId as string, amount);
     },
   },
 
   clearDamage: {
     reducer: (_draft, context) => {
       const { cardId } = context.params;
-      context.counters.clearCounter(cardId as CoreCardId, "damage");
-      context.cards.updateCardMeta(
-        cardId as CoreCardId,
-        { damage: 0 } as Partial<RiftboundCardMeta>,
-      );
+      clearDamage(context, cardId as string);
     },
   },
 
@@ -105,7 +86,7 @@ export const counterMoves: Partial<
    * immediately — critical for risk #1 in the gap-closure plan.
    */
   modifyBuff: {
-    reducer: (draft, context) => {
+    reducer: (_draft, context) => {
       const { cardId, deltaMight, deltaToughness = 0 } = context.params;
       if (deltaMight === 0 && deltaToughness === 0) {
         return;
@@ -121,13 +102,6 @@ export const counterMoves: Partial<
         mightModifier: currentMight + deltaMight,
         toughnessModifier: currentToughness + deltaToughness,
       } as Partial<RiftboundCardMeta>);
-
-      performCleanup({
-        cards: context.cards as unknown as Parameters<typeof performCleanup>[0]["cards"],
-        counters: context.counters as unknown as Parameters<typeof performCleanup>[0]["counters"],
-        draft,
-        zones: context.zones as unknown as Parameters<typeof performCleanup>[0]["zones"],
-      });
     },
   },
 
@@ -155,7 +129,7 @@ export const counterMoves: Partial<
   removeDamage: {
     reducer: (_draft, context) => {
       const { cardId, amount } = context.params;
-      context.counters.removeCounter(cardId as CoreCardId, "damage", amount);
+      removeDamage(context, cardId as string, amount);
     },
   },
 
@@ -172,4 +146,4 @@ export const counterMoves: Partial<
       context.counters.setFlag(cardId as CoreCardId, "stunned", false);
     },
   },
-};
+});

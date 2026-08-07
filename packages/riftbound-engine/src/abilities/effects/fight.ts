@@ -1,6 +1,5 @@
 // Effect handler: "fight"
-import type { CardId as CoreCardId } from "@tcg/core";
-import type { RiftboundCardMeta } from "../../types";
+import { addDamage } from "../../operations/damage-store";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
@@ -54,28 +53,14 @@ export function handle_fight(effect: ExecutableEffect, ctx: EffectContext, h: Ef
       // turn buffs like Rampage's +2 count.
       const aMight = getEffectiveMight(attackerId, ctx);
       const dMight = getEffectiveMight(defenderId, ctx);
-      // rule-id: ven-083-166 (Rampage) / rule 520 — mirror fight damage to
-      // meta.damage (as `case "damage"` does) so state-based death checks,
-      // end-of-turn clear, and UI see it. Read priors BEFORE addCounter so
-      // counter stores that alias meta.damage don't double-apply.
-      const readDamage = (id: string): number =>
-        (ctx.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined)
-          ?.damage ?? 0;
-      const attackerPrior = readDamage(attackerId);
-      const defenderPrior = readDamage(defenderId);
+      // rule-id: ven-083-166 (Rampage) / rule 520 — fight damage goes through
+      // the single damage store so state-based death checks, the end-of-turn
+      // clear, and the UI see it. Both amounts were read before either lands.
       if (aMight > 0) {
-        ctx.counters.addCounter(defenderId as CoreCardId, "damage", aMight);
-        ctx.cards.updateCardMeta?.(
-          defenderId as CoreCardId,
-          { damage: defenderPrior + aMight } as unknown as Record<string, unknown>,
-        );
+        addDamage(ctx, defenderId, aMight);
       }
       if (dMight > 0) {
-        ctx.counters.addCounter(attackerId as CoreCardId, "damage", dMight);
-        ctx.cards.updateCardMeta?.(
-          attackerId as CoreCardId,
-          { damage: attackerPrior + dMight } as unknown as Record<string, unknown>,
-        );
+        addDamage(ctx, attackerId, dMight);
       }
     }
   }

@@ -178,6 +178,10 @@ function placeCard(
   if (Object.keys(flags).length > 0) {
     m.__flags = flags;
   }
+  // Marked damage: the counter bag is the store, `damage` its mirror.
+  if (typeof m.damage === "number" && m.damage > 0) {
+    m.__counters = { ...((m.__counters as Record<string, number> | undefined) ?? {}), damage: m.damage };
+  }
   if (isRune) {
     m.domain = m.domain ?? domainsOf(def)[0];
   }
