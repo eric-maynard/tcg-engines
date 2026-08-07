@@ -58,6 +58,12 @@ export interface CombatUnit {
 export const PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE = "PreventWeakerEnemyCombatDamage";
 
 /**
+ * Marker keyword for "I don't deal combat damage." (sfd-082-221 Ezreal, Dashing).
+ * Printed or granted by a static; read when building CombatUnits.
+ */
+export const NO_COMBAT_DAMAGE = "NoCombatDamage";
+
+/**
  * Result of a combat between two sides.
  */
 export interface CombatResult {

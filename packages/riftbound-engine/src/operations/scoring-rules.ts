@@ -110,6 +110,59 @@ function scoreReplacementConditionMet(
 }
 
 /**
+ * rule 054.1 / 365.1: is `playerId` forbidden from gaining points right now by a
+ * static restriction on a card that is currently ON THE BOARD (base or a
+ * battlefield)? The shape the parser emits for "Opponents can't gain points."
+ * is `{type:"static", effect:{type:"restriction", restriction:"opponents can't
+ * gain points."}}`. Nothing is retroactive: the denial only counts while the
+ * card is on the board, which is why this is evaluated at the moment of the gain.
+ *
+ * Conditional deniers ("while I'm at a battlefield") are NOT evaluated here and
+ * fail open, so a novel condition never silently stops scoring.
+ */
+export function pointGainDenied(
+  state: RiftboundGameState,
+  playerId: PlayerId,
+  io: ScoreReplacementIO,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  const getOwner = io.cards.getCardOwner ?? (() => undefined);
+
+  const boardCards: { id: string; owner: string | undefined }[] = [];
+  for (const pid of Object.keys(state.players)) {
+    for (const cardId of io.zones.getCardsInZone("base" as CoreZoneId, pid as CorePlayerId)) {
+      boardCards.push({ id: cardId as string, owner: pid });
+    }
+  }
+  for (const bfId of Object.keys(state.battlefields ?? {})) {
+    for (const cardId of io.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
+      boardCards.push({ id: cardId as string, owner: getOwner(cardId as CoreCardId) });
+    }
+  }
+
+  for (const card of boardCards) {
+    for (const ability of registry.getAbilities(card.id) ?? []) {
+      if (ability.type !== "static" || ability.condition !== undefined) {
+        continue;
+      }
+      const effect = ability.effect as { type?: string; restriction?: unknown } | undefined;
+      if (effect?.type !== "restriction" || typeof effect.restriction !== "string") {
+        continue;
+      }
+      const text = effect.restriction.toLowerCase();
+      if (!/can'?t gain points/.test(text)) {
+        continue;
+      }
+      const targetsOpponents = text.includes("opponent") || text.includes("enemy");
+      if (targetsOpponents ? card.owner !== undefined && card.owner !== playerId : true) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Rule 571.4: before a player scores a point from conquering/holding, consult
  * board `replaces: "score"` replacement abilities (e.g. Otterpus — "they draw
  * 1 instead"). Returns `true` when the point was replaced and must NOT be
@@ -120,6 +173,12 @@ export function applyScoreReplacement(
   playerId: PlayerId,
   io: ScoreReplacementIO,
 ): boolean {
+  // rule 054.1: a static "opponents can't gain points" beats "can"; it removes
+  // the POINT only — the Score itself still happened, so callers keep recording
+  // scoredThisTurn and still fire Conquer/Hold triggers (383.4.c.2.c).
+  if (pointGainDenied(state, playerId, io)) {
+    return true;
+  }
   const ctx: ReplacementContext = {
     cards: {
       getCardMeta: (io.cards.getCardMeta ??

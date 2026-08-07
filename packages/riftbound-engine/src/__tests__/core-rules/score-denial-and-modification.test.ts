@@ -132,7 +132,7 @@ describe("054.1 / 365.1 / 469.1 / 470 / 471.1 — a static 'opponents can't gain
 
   // Expected (054.1, 471.1 "up to one point"): P1 stays on 4 — the gain is forbidden while the denier is on the board.
   // Actual: the engine has no gain-denial static (the parsed `restriction` effect is ignored) → P1 goes to 5.
-  test.failing("BUG: 054.1 / 471.1 — the conquer under an opponents-can't-gain-points static must award NO point; engine awards it", async () => {
+  test("054.1 / 471.1 — the conquer under an opponents-can't-gain-points static must award NO point; engine awards it", async () => {
     const game = await conquerBoard();
     await game.p1.move("scout", "A");
     await game.settle();
@@ -182,7 +182,7 @@ describe("315.2.b.2 / 469.2 / 383.4.d.2.c — under the denier the Hold still HA
 
   // Expected: P1 stays on 3 (gain forbidden, 054.1) even though the Hold and its trigger happened.
   // Actual: no gain-denial in the engine → 4.
-  test.failing("BUG: 054.1 / 471.1 — the Hold under an opponents-can't-gain-points static must gain NO point; engine awards it", async () => {
+  test("054.1 / 471.1 — the Hold under an opponents-can't-gain-points static must gain NO point; engine awards it", async () => {
     const game = await holdBoard();
     await game.p2.endTurn();
     await game.settle();
@@ -386,7 +386,7 @@ describe("470 / 471.1 / 365.1 — the denier dying mid-turn grants nothing retro
 
   // Expected: Scoring Step under denial → P1 stays 4 (A scored for 0); killing the denier afterwards changes nothing (still 4).
   // Actual: no denial → the Hold already paid 5.
-  test.failing("BUG: 054.1 / 471.1 — Hold under denial pays 0 and killing the denier later in the turn does NOT add the point back; engine paid the Hold up front", async () => {
+  test("054.1 / 471.1 — Hold under denial pays 0 and killing the denier later in the turn does NOT add the point back; engine paid the Hold up front", async () => {
     const game = await midTurnBoard();
     await game.p2.endTurn();
     await game.settle();
@@ -451,7 +451,7 @@ describe("466.1 → 466.5.d / 365.1 — killing the denier in the very combat th
 
   // Expected: with a SECOND denier surviving in P2's base the same combat conquers B but P1 stays 5.
   // Actual: no gain-denial in the engine → 6.
-  test.failing("BUG: 054.1 — contrast: a second denier that survives in P2's base keeps denying, so the same combat conquer yields no point; engine awards it", async () => {
+  test("054.1 — contrast: a second denier that survives in P2's base keeps denying, so the same combat conquer yields no point; engine awards it", async () => {
     const game = await scenario()
       .points(P1, 5)
       .battlefield("A")
@@ -527,7 +527,7 @@ describe("315.2.a → 315.2.b / 816.1.b — start-of-Beginning-Phase effects ful
   // Mirror. Expected: a start-of-MAIN-Phase snipe (316.4) kills the denier only after the Scoring Step → the Hold
   // was denied → P1 stays 6 all turn (nothing retroactive).
   // Actual: no denial → 7.
-  test.failing("BUG: 054.1 / 316.4 — mirror: sniping the denier at the start of the Main Phase is too late, the Hold stayed denied (P1 6); engine has no denial", async () => {
+  test("054.1 / 316.4 — mirror: sniping the denier at the start of the Main Phase is too late, the Hold stayed denied (P1 6); engine has no denial", async () => {
     const game = await scenario()
       .turn(2)
       .active(P2)
