@@ -351,6 +351,30 @@ export function getPlayLocationPermission(cardId: string): string | undefined {
 }
 
 /**
+ * rule 355.2 (rule-id: sfd-216-221 Rockfall Path) — a Battlefield card may
+ * forbid unit plays at its own location ("Units can't be played here").
+ * Captured as a static self-grant of the virtual `NoUnitsPlayedHere` keyword;
+ * the battlefield's instance id doubles as its card id in `battlefieldRow`.
+ */
+export function battlefieldForbidsUnitPlay(battlefieldId: string): boolean {
+  const abilities = getGlobalCardRegistry().getAbilities(battlefieldId) ?? [];
+  for (const ability of abilities) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const effect = (ability as { effect?: { type?: string; keyword?: string; keywords?: readonly string[] } })
+      .effect;
+    if (effect?.type !== "grant-keyword" && effect?.type !== "grant-keywords") {
+      continue;
+    }
+    if (effect.keyword === "NoUnitsPlayedHere" || effect.keywords?.includes("NoUnitsPlayedHere")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * rule 419.1 / rule-id: ven-022-166 — a permanent this player controls that
  * reads "You may play cards from your trash" extends the legal play zone: the
  * trash becomes a play-from zone for its controller. Recognised either as an

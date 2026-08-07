@@ -44,6 +44,7 @@ import {
   battlefieldIsOccupiedEnemy,
   battlefieldIsOpen,
   opponentsRestrictedToBase,
+  battlefieldForbidsUnitPlay,
   playOnlyToConqueredBattlefield,
   consumeEntersReadyReplacement,
   getBuffSpendCost,
@@ -291,6 +292,12 @@ export const playUnit: Defs["playUnit"] = {
     const reactionTimingOk =
       unitHasReaction(context.params.cardId as string) &&
       reactionWindowOpen(state, context.params.playerId as string);
+
+    // rule 355.2 (sfd-216-221): the destination battlefield itself may forbid
+    // unit plays ("Units can't be played here") — no permission overrides it.
+    if (targetIsBattlefield && targetBfId && battlefieldForbidsUnitPlay(targetBfId)) {
+      return false;
+    }
 
     // rule 355.2 (ogn-070-298): an enemy static may confine this player's
     // units to their own base — every battlefield destination is illegal.
@@ -963,7 +970,13 @@ export const playUnit: Defs["playUnit"] = {
     if (opponentsRestrictedToBase(state, context.zones, context.playerId as string)) {
       return results.filter((r) => !isBattlefieldZone(r.location));
     }
-    return results;
+    // rule 355.2 (sfd-216-221): drop destinations whose battlefield forbids
+    // unit plays ("Units can't be played here").
+    return results.filter(
+      (r) =>
+        !isBattlefieldZone(r.location) ||
+        !battlefieldForbidsUnitPlay(extractBattlefieldId(r.location) ?? ""),
+    );
   },
   reducer: (draft, context) => {
     const { cardId, playerId, location, paidAdditionalCost, additionalCostSpec, sacrificeId, sacrificeIds, discardId, spentBuffIds } =

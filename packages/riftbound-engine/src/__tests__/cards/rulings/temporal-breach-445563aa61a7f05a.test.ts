@@ -53,9 +53,8 @@ describe("Ruling 445563aa61a7f05a — Temporal Breach into Rockfall Path: banish
     expect(game.chain().map((c) => c.cardId)).toEqual(["breach"]);
   });
 
-  // Expected (premise of the ruling): Rockfall Path's "Units can't be played here" removes bf1 from the legal
-  // play destinations. Actual: the engine still offers battlefield-bf1 (restriction not enforced).
-  test.failing("BUG: ruling 445563aa61a7f05a (premise) — Rockfall Path must not be a legal destination for playing a unit; engine offers it", async () => {
+  // Rockfall Path's "Units can't be played here" removes bf1 from the legal play destinations.
+  test("ruling 445563aa61a7f05a (premise) — Rockfall Path is not a legal destination for playing a unit", async () => {
     const game = await scenario()
       .resources(P2, { energy: 3 })
       .active(P2)
