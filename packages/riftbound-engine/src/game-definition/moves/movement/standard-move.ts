@@ -26,6 +26,9 @@ import {
   relocateAttachedEquipment,
   totalPowerAvailable,
 } from "./helpers";
+import { getCardEffectiveMight } from "../play/cost";
+
+const MIGHTY_THRESHOLD = 5;
 
 /**
  * rule 350.1 / ogn-203-298 (Possession): moves are made by the unit's CURRENT
@@ -453,11 +456,26 @@ export const standardMove: Defs["standardMove"] = {
         // rule 740.2.a — "alone" is judged against the battlefield's occupancy.
         const ownerOf = (id: string) => controllerOf(context.cards, id as CoreCardId);
         const occupants = allUnits as unknown as string[];
+        const metaOf = (id: string) =>
+          context.cards.getCardMeta?.(id as CoreCardId) as Partial<RiftboundCardMeta> | undefined;
+        // rule 709/710 (rule-id: sfd-180-221, cf. 476.3): combat-only keywords are
+        // part of current Might, so an Assault/Shield unit whose Might crosses
+        // < 5 → >= 5 the moment its combat role is stamped BECOMES Mighty.
+        const fireIfBecameMighty = (id: string, before: number, owner: string) => {
+          if (before >= MIGHTY_THRESHOLD) {
+            return;
+          }
+          if (getCardEffectiveMight(id, metaOf) >= MIGHTY_THRESHOLD) {
+            fireTriggers({ cardId: id, owner, type: "become-mighty" }, triggerCtx);
+          }
+        };
         for (const unitId of unitIds) {
+          const mightBefore = getCardEffectiveMight(unitId, metaOf);
           context.cards.updateCardMeta(
             unitId as CoreCardId,
             { combatRole: "attacker" } as Partial<RiftboundCardMeta>,
           );
+          fireIfBecameMighty(unitId, mightBefore, playerId);
           fireTriggers(
             {
               alone: isAloneAtLocation(unitId, playerId, occupants, ownerOf),
@@ -475,10 +493,12 @@ export const standardMove: Defs["standardMove"] = {
         for (const cardId of allUnits) {
           const owner = controllerOf(context.cards, cardId);
           if (owner !== undefined && owner !== playerId) {
+            const mightBefore = getCardEffectiveMight(cardId as string, metaOf);
             context.cards.updateCardMeta(
               cardId,
               { combatRole: "defender" } as Partial<RiftboundCardMeta>,
             );
+            fireIfBecameMighty(cardId as string, mightBefore, owner as string);
             const batchIndex = defendCount.get(owner as string) ?? 0;
             defendCount.set(owner as string, batchIndex + 1);
             fireTriggers(

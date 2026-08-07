@@ -262,7 +262,7 @@ describe("Fiora, Worthy (sfd-180-221)", () => {
     expect(game.p1.power("order")).toBe(0);
   });
 
-  test.failing("BUG: combat keywords count — a 4-Might [Assault] unit becomes 5 the moment it attacks (709/710, cf. 476.3) and Fiora's trigger should hit the chain during the showdown", async () => {
+  test("combat keywords count — a 4-Might [Assault] unit becomes 5 the moment it attacks (709/710, cf. 476.3) and Fiora's trigger should hit the chain during the showdown", async () => {
     // Expected: on declaring the attack the Assault unit is a 5-Might attacker → become-mighty →
     // Fiora's optional trigger is put on the chain (P1 gets the pay-[order] question before combat).
     // Actual: keyword-conditional Might is applied in the layers without raising the event; no trigger.
