@@ -57,9 +57,7 @@ describe("Targonian Visionary (unl-098-219)", () => {
     expect(game.state("vis").might).toBe(6);
   });
 
-  test.failing("BUG (824.1.c.1): control, not ownership — a Visionary P1 owns but P2 controls must read P2's XP", async () => {
-    // Expected: controller P2 at 11 XP → 10 Might; controller P2 at 0 XP (owner P1 at 11) → 6.
-    // Actual: the while-level condition is evaluated against the OWNER's XP (6 and 10 respectively).
+  test("824.1.c.1: control, not ownership — a Visionary P1 owns but P2 controls must read P2's XP", async () => {
     const p2HasXp = await scenario()
       .xp(P1, 0)
       .xp(P2, 11)

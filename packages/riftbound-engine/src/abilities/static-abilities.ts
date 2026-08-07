@@ -35,8 +35,23 @@ export interface StaticAbilityContext {
   readonly cards: {
     getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
     getCardOwner: (cardId: CoreCardId) => string | undefined;
+    getCardController?: (cardId: CoreCardId) => string | undefined;
     updateCardMeta: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
   };
+}
+
+/**
+ * rule 108.2 — "your"/"friendly" addresses the cards you CONTROL. A card you
+ * control but do not own (Possession) is still yours; ownership only decides
+ * where it goes when it leaves the board.
+ */
+function controllerOf(ctx: StaticAbilityContext, cardId: string, fallback?: string): string {
+  return (
+    ctx.cards.getCardController?.(cardId as CoreCardId) ??
+    ctx.cards.getCardOwner(cardId as CoreCardId) ??
+    fallback ??
+    ""
+  );
 }
 
 /**
@@ -398,9 +413,11 @@ export function evaluateCondition(
       return ctx.draft.additionalCostsPaid?.[source.id] === true;
     }
 
+    // rule 824.1.c.1 / 108.2 — "[Level N]" reads "you" = the card's CONTROLLER,
+    // not its owner: a Visionary you control but do not own uses your XP.
     case "while-level": {
       const threshold = (condition.threshold as number) ?? 0;
-      const player = ctx.draft.players[source.owner];
+      const player = ctx.draft.players[controllerOf(ctx, source.id, source.owner)];
       return (player?.xp ?? 0) >= threshold;
     }
 
@@ -605,6 +622,7 @@ function resolveStaticTargetsFromDescriptor(
     return [];
   }
   const registry = getGlobalCardRegistry();
+  const sourceController = controllerOf(ctx, source.id, source.owner);
   return boardCards
     .filter((c) => {
       // rule 208.2 (sfd-089-221) — "(including me)": the source is addressed by
@@ -634,10 +652,11 @@ function resolveStaticTargetsFromDescriptor(
       if (t.location !== "anywhere" && !isBoardZone(c.zone)) {
         return false;
       }
-      if (t.controller === "friendly" && c.owner !== source.owner) {
+      // rule 108.2 — "your token units" follows CONTROL, not ownership.
+      if (t.controller === "friendly" && controllerOf(ctx, c.id, c.owner) !== sourceController) {
         return false;
       }
-      if (t.controller === "enemy" && c.owner === source.owner) {
+      if (t.controller === "enemy" && controllerOf(ctx, c.id, c.owner) === sourceController) {
         return false;
       }
       if (t.excludeSelf && c.id === source.id) {

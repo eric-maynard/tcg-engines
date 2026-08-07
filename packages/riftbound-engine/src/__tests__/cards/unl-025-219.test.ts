@@ -92,13 +92,12 @@ describe("Undying Legion (unl-025-219)", () => {
     expect(game.p1.can("play", "ul")).toBe(true);
   });
 
-  test.failing("BUG: playing it from the trash costs exactly [3] + [fury], lands it in base exhausted, and counts as a card played", async () => {
-    // Expected: 3 energy AND 1 fury deducted; ul on the board; cardsPlayedThisTurn goes 1 → 2.
-    // Actual: not playable from the trash at all.
+  test("playing it from the trash costs exactly [3] + [fury], lands it in base exhausted, and counts as a card played", async () => {
     const game = await inTrash({ energy: 5, power: { fury: 2 } }).build();
     await game.p1.play("cheap", { to: "base" });
     await game.settle();
-    await game.p1.play("ul");
+    // bf1 is P1's, so the play has two legal destinations — the harness needs an explicit one.
+    await game.p1.play("ul", { to: "base" });
     expect(game.p1.resources()).toEqual({ energy: 1, power: { fury: 1 } });
     await game.settle();
     expect(game.zoneOf("ul")).toBe("base");

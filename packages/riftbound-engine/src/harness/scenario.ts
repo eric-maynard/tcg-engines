@@ -327,6 +327,9 @@ function applyStaticsToScenario(engine: HarnessEngine): void {
   const ctx = {
     cards: {
       getCardMeta: (cardId: string) => internal.cardMetas[cardId],
+      // rule 108.2 — statics scoped to "your" cards read control, not ownership.
+      getCardController: (cardId: string) =>
+        internal.cards[cardId]?.controller ?? internal.cards[cardId]?.owner,
       getCardOwner: (cardId: string) => internal.cards[cardId]?.owner,
       updateCardMeta: (cardId: string, meta: Partial<RiftboundCardMeta>) => {
         internal.cardMetas[cardId] = {
