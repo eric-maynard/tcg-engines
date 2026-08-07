@@ -363,12 +363,18 @@ export const playUnit: Defs["playUnit"] = {
       Boolean(targetBfId) &&
       (standardTimingOk || reactionTimingOk) &&
       canPlayToAttackedBattlefield(context.params.cardId as string) &&
-      battlefieldIsAttackedBy(state, targetBfId as string, context.params.playerId as string, {
-        getController: (id) =>
+      battlefieldIsAttackedBy(state, targetBfId as string, context.params.playerId as string) &&
+      // rule 464.2.c: Attacker/Defender designations exist only once COMBAT
+      // opens (an opposing unit is present). A non-combat showdown — moving
+      // onto an empty battlefield — has no Attacker, so nobody is attacking it.
+      battlefieldHasEnemyUnits(
+        context.zones,
+        (id) =>
           (context.cards.getCardController?.(id) as string | undefined) ??
           (context.cards.getCardOwner(id) as string | undefined),
-        zones: context.zones,
-      })
+        targetBfId as string,
+        context.params.playerId as string,
+      )
     ) {
       // rule 355.2 (sfd-025-221): "I can be played to a battlefield you're
       // attacking" — the contested battlefield this player moved onto.
@@ -890,7 +896,19 @@ export const playUnit: Defs["playUnit"] = {
       // currently attacking when the card grants CanPlayToAttacked.
       if (canPlayToAttackedBattlefield(cardId as string)) {
         for (const bfId of Object.keys(state.battlefields ?? {})) {
-          if (!battlefieldIsAttackedBy(state, bfId, context.playerId as string)) {
+          // rule 464.2.c: only a COMBAT showdown has an Attacker — an empty
+          // battlefield merely contested by a Standard Move is not attacked.
+          if (
+            !battlefieldIsAttackedBy(state, bfId, context.playerId as string) ||
+            !battlefieldHasEnemyUnits(
+              context.zones,
+              (id) =>
+                (context.cards.getCardController?.(id) as string | undefined) ??
+                (context.cards.getCardOwner(id) as string | undefined),
+              bfId,
+              context.playerId as string,
+            )
+          ) {
             continue;
           }
           const bfZoneId = getBattlefieldZoneId(bfId) as string;

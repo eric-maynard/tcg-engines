@@ -120,7 +120,7 @@ describe("Renata Glasc, Mastermind (sfd-088-221)", () => {
     expect(game.p1.hand()).toHaveLength(1);
   });
 
-  test.failing("BUG: 'only while I'm at a battlefield' — in the base neither ability may be activated (377.2.b)", async () => {
+  test("'only while I'm at a battlefield' — in the base neither ability may be activated (377.2.b)", async () => {
     // Expected: with Renata ready in base and 5 energy / 5 mind, no activateAbility option exists for her.
     // Actual: the restriction sentence is not parsed/enforced; both abilities are offered from the base.
     const game = await scenario()
@@ -138,7 +138,7 @@ describe("Renata Glasc, Mastermind (sfd-088-221)", () => {
     expect(game.p1.can("activate", "renata")).toBe(false);
   });
 
-  test.failing("BUG: timing (145.2) — unit abilities are not usable during a showdown (defending on the opponent's turn)", async () => {
+  test("timing (145.2) — unit abilities are not usable during a showdown (defending on the opponent's turn)", async () => {
     // Expected: when P2 attacks bf1 and passes Focus to P1, Renata (no [Action]/[Reaction]) offers nothing.
     // Actual: both activated abilities appear in P1's showdown menu.
     const game = await atBattlefield({ energy: 5, mind: 5 }).active(P2).unit(P2, "base", { might: 1, name: "Poker" }, "poker").build();
@@ -148,7 +148,7 @@ describe("Renata Glasc, Mastermind (sfd-088-221)", () => {
     expect(game.p1.legal().filter((o) => o.card === "renata" && o.verb === "activate")).toEqual([]);
   });
 
-  test.failing("BUG: timing (145.2) — not usable during a showdown on your OWN turn either (another unit attacking bf2)", async () => {
+  test("timing (145.2) — not usable during a showdown on your OWN turn either (another unit attacking bf2)", async () => {
     // Expected: while P1's Striker is in a showdown at bf2, P1 holds Focus but Renata's abilities are not activatable.
     // Actual: they are offered alongside passFocus.
     const game = await atBattlefield({ energy: 5, mind: 5 }).unit(P1, "base", { might: 3, name: "Striker" }, "striker").build();
@@ -172,7 +172,7 @@ describe("Renata Glasc, Mastermind (sfd-088-221)", () => {
     });
   });
 
-  test.failing("BUG: parsed abilities drop the 'Use my abilities only while I'm at a battlefield' restriction entirely", async () => {
+  test("parsed abilities drop the 'Use my abilities only while I'm at a battlefield' restriction entirely", async () => {
     // Expected: each activated ability (or the card) carries an at-battlefield use condition.
     // Actual: neither ability has any condition/restriction field; the third sentence produced nothing.
     const pool = await loadDefaultCardPool();

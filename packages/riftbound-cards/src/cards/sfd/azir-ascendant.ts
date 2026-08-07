@@ -24,6 +24,9 @@ const abilities: Ability[] = [
     },
     // rule 377.2.b — "Use only once per turn" is a condition on ACTIVATING.
     restrictions: [{ type: "once-per-turn" }],
+    // rule 806.1.c.2 — the printed [Action] tag lifts this off the unit default
+    // (rule 145.2: Main Phase, Open State, never in a Showdown).
+    timing: "action",
     type: "activated",
   },
 ];

@@ -58,7 +58,39 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
   // This converts [Exhaust] -> :rb_exhaust:, [N] -> :rb_energy_N:,
   // [fury]/[calm]/etc -> :rb_rune_X:, [Might] -> :rb_might:, [Buff] -> Buff,
   // And strips "[>]" indicator arrows.
-  const trimmed = normalizeTokens(text.trim());
+  let trimmed = normalizeTokens(text.trim());
+
+  // === Card-level "Use my abilities only while I'm at a battlefield" pre-pass ===
+  // rule 377.2.b: unlike the per-ability "Use this ability only while I'm at a
+  // battlefield" (handled in impl/activated.ts), this sentence stands alone and
+  // restricts EVERY activated ability on the card. Strip it, parse the rest, then
+  // attach the restriction to each activated ability.
+  const cardLevelAtBattlefield = trimmed.match(
+    /(?:^|\n|\s)Use my abilities only while I(?:'m| am) at a battlefield\.?/i,
+  );
+  if (cardLevelAtBattlefield) {
+    const rest = trimmed.replace(cardLevelAtBattlefield[0], "\n").trim();
+    if (rest.length > 0) {
+      const inner = parseAbilitiesInner(rest, _options);
+      if (inner.success && inner.abilities) {
+        return {
+          ...inner,
+          abilities: inner.abilities.map((a) =>
+            a.type === "activated"
+              ? ({
+                  ...a,
+                  restrictions: [
+                    ...((a as { restrictions?: { type: string }[] }).restrictions ?? []),
+                    { type: "self-at-battlefield" },
+                  ],
+                } as Ability)
+              : a,
+          ),
+        };
+      }
+    }
+    trimmed = rest;
+  }
 
   // === Level-gated pre-pass (UNL set) ===
   // "[Level N] <effect>" means the effect is active only while the controller

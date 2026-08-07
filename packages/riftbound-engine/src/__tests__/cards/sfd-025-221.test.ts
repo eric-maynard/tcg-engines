@@ -236,7 +236,7 @@ describe("Rengar, Pouncing (sfd-025-221)", () => {
     expect(game.turnPlayer()).toBe(P2);
   });
 
-  test.failing("BUG: a non-combat showdown (moving onto an empty open battlefield) is not 'attacking' (124.2/464.2.c/807.1.d) — that not-yet-controlled battlefield must not be offered", async () => {
+  test("a non-combat showdown (moving onto an empty open battlefield) is not 'attacking' (124.2/464.2.c/807.1.d) — that not-yet-controlled battlefield must not be offered", async () => {
     // Expected: during the non-combat showdown P1 neither controls "open" (control comes on conquer
     // after the showdown) nor has an Attacker designation (no combat), so only base is legal.
     // Actual: the engine treats "contested by you" as "attacking" and offers battlefield-open.

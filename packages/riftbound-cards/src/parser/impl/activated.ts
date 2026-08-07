@@ -254,12 +254,12 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
   let timing: "action" | "reaction" | undefined;
   let condition: { type: "legion" } | undefined;
 
-  // Check for [Reaction] timing
-  // Strip "[Reaction]" plus any trailing separator (comma, em dash, or ">>" marker).
-  const reactionMatch = remaining.match(/^\[Reaction\](?:\s*(?:,|—|-|>>))?\s*/i);
-  if (reactionMatch) {
-    timing = "reaction";
-    remaining = remaining.slice(reactionMatch[0].length);
+  // Check for [Reaction] / [Action] timing after the cost ("[calm]: [Action] — …").
+  // Strip the tag plus any trailing separator (comma, em dash, or ">>" marker).
+  const timingMatch = remaining.match(/^\[(Reaction|Action)\](?:\s*(?:,|—|-|>>))?\s*/i);
+  if (timingMatch) {
+    timing = timingMatch[1].toLowerCase() as "action" | "reaction";
+    remaining = remaining.slice(timingMatch[0].length);
   }
 
   // Check for [Legion] condition

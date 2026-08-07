@@ -31,10 +31,11 @@ import { buildEffectContext, canAffordPower } from "./effect-context";
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
 /**
- * rule 151.2: a Gear activated ability may be used only during its controller's
- * Main Phase in an Open State, never during a Showdown — unless the ability
- * itself is printed [Action]/[Reaction]. Classifying it as "standard" timing
- * gives exactly that through `isLegalTiming` (neutral-open only).
+ * rule 145.2 (Units) / rule 151.2 (Gear): their activated abilities may be used
+ * only during their controller's Main Phase in an Open State, never during a
+ * Showdown — unless the ability itself is printed [Action]/[Reaction].
+ * Classifying it as "standard" timing gives exactly that through
+ * `isLegalTiming` (neutral-open only).
  */
 function abilityTimingClass(
   ability: { keyword?: string; timing?: string },
@@ -46,7 +47,8 @@ function abilityTimingClass(
   if (ability.keyword === "Action" || ability.timing === "action") {
     return "action";
   }
-  return getGlobalCardRegistry().getCardType(hostCardId) === "gear" ? "standard" : "action";
+  const hostType = getGlobalCardRegistry().getCardType(hostCardId);
+  return hostType === "gear" || hostType === "unit" ? "standard" : "action";
 }
 
 /**
