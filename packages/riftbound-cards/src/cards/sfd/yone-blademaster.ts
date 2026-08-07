@@ -9,9 +9,8 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * When I conquer a battlefield that was uncontrolled, deal damage equal
  * to my Might to an enemy unit in a base.
  *
- * The "was uncontrolled" qualifier is not expressible yet. Approximated
- * as a conquer trigger that deals self-might damage to an enemy unit in
- * a base.
+ * "was uncontrolled" is the `battlefield-was-uncontrolled` trigger
+ * restriction: the conquer event carries the pre-conquer controller.
  */
 const abilities: Ability[] = [
   { keyword: "Weaponmaster", type: "keyword" },
@@ -25,7 +24,13 @@ const abilities: Ability[] = [
       },
       type: "damage",
     },
-    trigger: { event: "conquer", on: "self" },
+    // rule 188: "that was uncontrolled" — only a conquer of a battlefield no
+    // player controlled counts, not stealing one from the opponent.
+    trigger: {
+      event: "conquer",
+      on: "self",
+      restrictions: [{ type: "battlefield-was-uncontrolled" }],
+    },
     type: "triggered",
   },
 ];

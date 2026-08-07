@@ -150,7 +150,9 @@ export type TriggerRestriction =
   | { readonly type: "once-per-game" }
   | { readonly type: "during-turn"; readonly whose: "your" | "opponent" }
   | { readonly type: "in-combat" }
-  | { readonly type: "not-in-combat" };
+  | { readonly type: "not-in-combat" }
+  /** rule 188 — "conquer a battlefield that was uncontrolled" (sfd-116-221). */
+  | { readonly type: "battlefield-was-uncontrolled" };
 
 // ============================================================================
 // Trigger Definition

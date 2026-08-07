@@ -181,6 +181,12 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       return;
     }
 
+    // rule 188 / 469.1: who held the battlefield as combat began — combat
+    // deaths can empty it and state-based checks clear control (466.5.b)
+    // before the outcome is applied, so "a battlefield that was uncontrolled"
+    // must read the controller from before the damage step, not after.
+    const controllerBeforeCombat = battlefield.controller ?? null;
+
     const attackingPlayer = battlefield.contestedBy;
     if (!attackingPlayer) {
       // Rule 627.4: Resolution Step always clears Contested even when no
@@ -663,6 +669,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
             battlefieldId,
             excessDamage,
             playerId: attackingPlayer,
+            previousController: controllerBeforeCombat,
             type: "conquer",
           },
           { cards, counters, draft, zones },

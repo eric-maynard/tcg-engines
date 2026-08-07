@@ -131,7 +131,7 @@ export const scorePoint: Defs["scorePoint"] = {
     // During Beginning phase, manual Conquer moves) must fire them too.
     const scoreEvent =
       method === "conquer"
-        ? ({ battlefieldId, playerId, type: "conquer" } as const)
+        ? ({ battlefieldId, playerId, previousController: prevController, type: "conquer" } as const)
         : ({ battlefieldId, playerId, type: "hold" } as const);
     fireTriggers(scoreEvent, { cards, counters, draft, zones });
 

@@ -187,7 +187,14 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
 
     // If showdown ended (all passed), clean up.
     if (isShowdownEnded(draft.interaction)) {
-      let conquerEvent: { type: "conquer"; playerId: string; battlefieldId: string } | undefined;
+      let conquerEvent:
+        | {
+            type: "conquer";
+            playerId: string;
+            battlefieldId: string;
+            previousController: string | null;
+          }
+        | undefined;
       const bf = before?.battlefieldId ? draft.battlefields[before.battlefieldId] : undefined;
       if (bf) {
         if (before?.isCombatShowdown) {
@@ -216,6 +223,8 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
           if (owners.size === 1) {
             const solo = [...owners][0];
             if (bf.controller !== solo) {
+              // rule 188: pre-conquer controller — `null` means Uncontrolled.
+              const previousController = bf.controller ?? null;
               bf.controller = solo;
               if (!draft.conqueredThisTurn[solo]) draft.conqueredThisTurn[solo] = [];
               draft.conqueredThisTurn[solo].push(before!.battlefieldId);
@@ -230,6 +239,7 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
                 conquerEvent = {
                   battlefieldId: before!.battlefieldId,
                   playerId: solo,
+                  previousController,
                   type: "conquer",
                 };
               }

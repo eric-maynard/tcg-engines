@@ -135,6 +135,8 @@ export const conquerBattlefield: Defs["conquerBattlefield"] = {
     const { playerId, battlefieldId } = context.params;
 
     const battlefield = draft.battlefields[battlefieldId];
+    // rule 188: pre-conquer controller — `null` means Uncontrolled.
+    const previousController = battlefield?.controller ?? null;
     if (battlefield) {
       battlefield.controller = playerId;
       battlefield.contested = false;
@@ -179,7 +181,7 @@ export const conquerBattlefield: Defs["conquerBattlefield"] = {
     // Emit "conquer" event so triggered abilities fire
     // (e.g. Blade Dancer's "When you conquer, pay 1 to ready me")
     fireTriggers(
-      { battlefieldId, playerId, type: "conquer" },
+      { battlefieldId, playerId, previousController, type: "conquer" },
       {
         cards: context.cards,
         counters: context.counters,

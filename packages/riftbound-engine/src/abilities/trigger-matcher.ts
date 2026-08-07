@@ -84,6 +84,11 @@ export interface TriggerableAbility {
     readonly on?: string;
     readonly restrictions?: readonly TriggerRestriction[];
     /**
+     * rule-id: sfd-075-221 — card type the acting source must have ("an
+     * activated ability of a GEAR"); compared against the event's `sourceType`.
+     */
+    readonly sourceType?: string;
+    /**
      * rule-id: unl-205-219 — "When a player plays a spell, THEY may …": the
      * ability is controlled by the player who caused the event, not by the
      * controller of the card printing it.
@@ -150,6 +155,8 @@ const EVENT_MAP: Record<string, string> = {
   "start-of-turn": "start-of-turn",
   stun: "stun",
   "take-damage": "take-damage",
+  // rule-id: sfd-075-221 — rule 206.1: using an activated ability.
+  "use-activated-ability": "use-activated-ability",
   "win-combat": "win-combat",
 };
 
@@ -207,6 +214,15 @@ function restrictionSatisfied(
       const pid = "owner" in event ? event.owner : "playerId" in event ? event.playerId : card.owner;
       const key = typeof pid === "string" ? `${event.type}|p:${pid}` : event.type;
       return (counts[key] ?? 0) === 1;
+    }
+    case "battlefield-was-uncontrolled": {
+      // rule 188 / 469.1 (sfd-116-221): "conquer a battlefield that was
+      // uncontrolled" — only when no player controlled it as the conquer
+      // happened. Emitters carry the pre-conquer controller.
+      if (event.type !== "conquer") {
+        return false;
+      }
+      return (event.previousController ?? null) === null;
     }
     case "once-each-turn":
       // TODO(once-each-turn): per-card fire tracking not yet implemented.
@@ -299,6 +315,16 @@ function triggerMatchesEvent(
     event.type === "play-card" && event.cardType !== "spell" ? `play-${event.cardType}` : undefined;
   if (!triggerEvents.includes(mapped) && !(typedPlay && triggerEvents.includes(typedPlay))) {
     return false;
+  }
+
+  // rule-id: sfd-075-221 — "an activated ability of a GEAR" qualifies the
+  // acting source: a legend's or a unit's ability (or an event with no source
+  // type) never satisfies it.
+  if (trigger.sourceType !== undefined) {
+    const eventSourceType = (event as { sourceType?: string }).sourceType;
+    if (eventSourceType !== trigger.sourceType) {
+      return false;
+    }
   }
 
   // Check "on" subject

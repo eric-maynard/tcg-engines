@@ -146,7 +146,7 @@ describe("Yone, Blademaster (sfd-116-221)", () => {
     expect(game.zoneOf("outpost")).toBe("battlefield-bf2");
   });
 
-  test.failing("BUG: 'that was uncontrolled' — winning combat for a battlefield the OPPONENT controlled must not trigger the damage", async () => {
+  test("'that was uncontrolled' — winning combat for a battlefield the OPPONENT controlled must not trigger the damage", async () => {
     // Expected: bf1 was controlled by P2, so after Yone kills the defender and conquers, no enemy base unit is
     // damaged and no target prompt appears. Actual: the qualifier is not parsed; 5 damage is dealt anyway.
     const game = await scenario()
@@ -164,7 +164,7 @@ describe("Yone, Blademaster (sfd-116-221)", () => {
     expect(game.state("sturdy").damage).toBe(0);
   });
 
-  test.failing("BUG: 'that was uncontrolled' — walking onto an EMPTY battlefield the opponent controlled must not trigger either", async () => {
+  test("'that was uncontrolled' — walking onto an EMPTY battlefield the opponent controlled must not trigger either", async () => {
     // Expected: control passes P2 → P1 (a conquer), but the battlefield was not uncontrolled → no damage.
     // Actual: Sturdy takes 5.
     const game = await scenario()

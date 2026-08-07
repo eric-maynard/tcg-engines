@@ -41,6 +41,12 @@ export type GameEvent =
       battlefieldId: string;
       afterAttack?: boolean;
       excessDamage?: number;
+      /**
+       * rule 188 — the player who controlled the battlefield immediately
+       * before this conquer, or `null` when it was Uncontrolled. Read by the
+       * `battlefield-was-uncontrolled` trigger restriction (sfd-116-221).
+       */
+      previousController?: string | null;
     }
   | { type: "hold"; playerId: string; battlefieldId: string }
   // rule 428.5: `killedBy` = the player responsible for the kill (kill
@@ -117,4 +123,11 @@ export type GameEvent =
   // a look/reveal that shows a card to its owner is an observable moment, fired
   // once per shown card. Milling straight to the trash (Burn, rule 440.1) never
   // looks at or reveals, so it must NOT fire this.
-  | { type: "reveal"; cardId: string; playerId: string; from?: string };
+  | { type: "reveal"; cardId: string; playerId: string; from?: string }
+  // rule-id: sfd-075-221 — rule 206.1: "when you USE an activated ability"
+  // happens as the ability is activated, so this is fired once per activation
+  // AFTER the ability reaches the chain — the trigger then sits above it and
+  // resolves first. `cardId` is the HOST whose ability was used, `sourceType`
+  // its card type (Equipment normalises to "gear", rule 151: Equipment is a
+  // kind of gear and [Equip] is an activated ability).
+  | { type: "use-activated-ability"; cardId: string; playerId: string; sourceType?: string };
