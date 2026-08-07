@@ -18,6 +18,7 @@ import { type EffectContext, executeEffect } from "../../../abilities/effect-exe
 import { evaluateLegionCondition } from "../../../abilities/legion-conditions";
 import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { countDistinctTagsAmongUnits } from "../../../operations/distinct-tags";
 import { scoreWithinConditionMet } from "../../../operations/score-within";
 import { pointsGainedThisTurn } from "../../../operations/points";
 import {
@@ -2127,6 +2128,17 @@ function getSelfScaledEnergyReduction(
       for (const bfId of Object.keys(state.battlefields ?? {})) {
         for (const id of zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) consider(id);
       }
+    } else if (scope.startsWith("for each of the following tags among your units")) {
+      // rule 356.4 (rule-id: unl-196-219) — the discount counts DISTINCT listed
+      // tags present among the units you control (0–4), not units: two Poros
+      // count once and an enemy's Cat counts for nothing.
+      count = countDistinctTagsAmongUnits(
+        zones,
+        extras.board?.cards,
+        Object.keys(state.battlefields ?? {}),
+        playerId,
+        ((effect as { distinctTags?: readonly string[] }).distinctTags ?? []),
+      );
     } else if (scope.startsWith("for each card with my name in your trash")) {
       // rule 419.1 (rule-id: ven-096-166) — playing a card puts it on the chain
       // BEFORE its cost is determined, so a card played out of the trash never

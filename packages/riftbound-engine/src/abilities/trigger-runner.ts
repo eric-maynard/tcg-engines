@@ -12,6 +12,7 @@ import type {
 } from "@tcg/core";
 import { addToChain, createInteractionState } from "../chain/chain-state";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { countDistinctTagsAmongUnits } from "../operations/distinct-tags";
 import { getLKI, getLeavingBatch } from "../operations/leave-board";
 import { scoreWithinConditionMet } from "../operations/score-within";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
@@ -332,14 +333,10 @@ export function evaluateTriggerCondition(
     return (state.players[controllerId]?.xp ?? 0) >= threshold;
   }
   if (c.type === "score-within") {
-    // rule 383.2.a.1 (rule-id: unl-116-219, Poppy Paragon) — "if an opponent's
-    // score is within N points of the Victory Score" sits in the trigger
-    // Condition: out of range the ability is never put on the chain at all.
-    return scoreWithinConditionMet(
-      c as { points?: number; range?: number; whose?: string },
-      state as never,
-      controllerId,
-    );
+    // rule 383.2.a.1 (rule-id: unl-116-219, Poppy, Paragon) — "if an opponent's
+    // score is within N points of the Victory Score" sits inside the trigger's
+    // Condition, so out of range the ability never goes on the chain at all.
+    return scoreWithinConditionMet(c, state, controllerId);
   }
   if (c.type === "paid-additional-cost") {
     // Zaun Punk (sfd-160-221) et al: the payoff fires only when the optional
@@ -435,6 +432,21 @@ export function evaluateTriggerCondition(
     const mine = runeCount(controllerId);
     return Object.keys(ctx.draft.players ?? {}).some(
       (pid) => pid !== controllerId && runeCount(pid) > mine,
+    );
+  }
+  if (c.type === "distinct-tags-at-least" && ctx) {
+    // rule 383.2.a.1 (rule-id: unl-196-219, Daisy!) — "while your units have
+    // all 4 tags" is checked as the attacker designation is gained: count the
+    // DISTINCT listed tags among the units you control, enemies excluded.
+    const needed = (c as { amount?: number }).amount ?? 1;
+    return (
+      countDistinctTagsAmongUnits(
+        ctx.zones,
+        ctx.cards,
+        Object.keys(ctx.draft.battlefields ?? {}),
+        controllerId,
+        (c as { tags?: readonly string[] }).tags ?? [],
+      ) >= needed
     );
   }
   if (c.type === "total-might-at-least" && ctx) {
@@ -1291,7 +1303,7 @@ export function promptFinalizationOptIn(draft: unknown): void {
       // event kinds whose finalization is already modelled ask here; every
       // other kind keeps the engine's resolution-time convention.
       FINALIZATION_OPT_IN_EVENTS.has(
-        (it as { triggerEvent?: { type?: string } }).triggerEvent?.type ?? "",
+        ((it as { triggerEvent?: { type?: string } }).triggerEvent?.type ?? ""),
       ),
   );
   if (!item) {
