@@ -286,6 +286,10 @@ export function parseModifyMightEffect(text: string): ModifyMightEffect | Sequen
       if (typeof target === "object" && target !== null && "type" in target) {
         (target as { quantity: number }).quantity = qty;
       }
+    } else if (/^(it|them)$/i.test(targetStr.trim())) {
+      // rule 359.3.f — the pronoun "it" in a triggered ability names the subject
+      // of the event that fired the trigger, never the ability's own source.
+      target = { type: "trigger-source" } as AnyTarget;
     } else {
       target = parseTarget(targetStr);
     }

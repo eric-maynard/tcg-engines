@@ -152,7 +152,7 @@ describe("Yasuo, Remorseful attacks into Ahri, Inquisitive + Nine-Tailed Fox —
   // Expected: Ahri -2 and Nine-Tailed Fox -1 both hit Yasuo (the only enemy unit here / the attacking
   // unit) → 6 - 2 - 1 = 3 in either P2 order. Actual: Nine-Tailed Fox's -1 is applied to the legend
   // itself ("it" parsed as self), so Yasuo stays at 4.
-  test.failing("BUG: after both P2 triggers resolve Yasuo is at 3 Might (6 → 4 → 3 or 6 → 5 → 3) — Nine-Tailed Fox's -1 must land on the attacking unit", async () => {
+  test("after both P2 triggers resolve Yasuo is at 3 Might (6 → 4 → 3 or 6 → 5 → 3) — Nine-Tailed Fox's -1 must land on the attacking unit", async () => {
     const game = await board("full").build();
     await game.p1.move("yasuo", "bf1");
     await stepChain(game, (g) => g.chain().length === 1 && !isPrompt(g.decision()));
@@ -174,7 +174,7 @@ describe("Yasuo, Remorseful attacks into Ahri, Inquisitive + Nine-Tailed Fox —
   });
 
   // Expected: 3 damage exactly (Yasuo at 3). Actual: 4 (Nine-Tailed Fox never reduced him).
-  test.failing("BUG: Yasuo's trigger deals exactly 3 to Brute, who survives with 3 damage on a 5-Might body (359.3.f.2)", async () => {
+  test("Yasuo's trigger deals exactly 3 to Brute, who survives with 3 damage on a 5-Might body (359.3.f.2)", async () => {
     const game = await board("full").build();
     await game.p1.move("yasuo", "bf1");
     await stepChain(game);
@@ -185,7 +185,7 @@ describe("Yasuo, Remorseful attacks into Ahri, Inquisitive + Nine-Tailed Fox —
   // defender (465.2.c.3), Yasuo takes 8 and dies, a defender remains → P2 keeps bf1, nobody scores.
   // Actual: Yasuo at 4 with 4 marked on Brute → 1 finishes Brute and 3 kills Ahri; everyone dies and
   // bf1 ends uncontrolled.
-  test.failing("BUG: full combat — Yasuo (3) kills exactly one defender and dies to 8; P2 still holds bf1 (465.2.c.3, 466.3)", async () => {
+  test("full combat — Yasuo (3) kills exactly one defender and dies to 8; P2 still holds bf1 (465.2.c.3, 466.3)", async () => {
     const game = await board("full").script(P1, ["brute"]).build();
     await game.p1.move("yasuo", "bf1");
     await stepChain(game);
@@ -208,7 +208,7 @@ describe("Yasuo, Remorseful attacks into Ahri, Inquisitive + Nine-Tailed Fox —
 
   // Expected: "give IT -1 Might this turn" — the attacking enemy unit: 6 → 5. Actual: the modifier is
   // applied to the legend card; the attacker stays 6.
-  test.failing("BUG: Nine-Tailed Fox gives the ATTACKING unit -1 Might this turn (6 → 5)", async () => {
+  test("Nine-Tailed Fox gives the ATTACKING unit -1 Might this turn (6 → 5)", async () => {
     const game = await foxOnly().build();
     await game.p1.move("six", "bf1");
     await stepChain(game);
