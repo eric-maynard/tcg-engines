@@ -302,7 +302,7 @@ describe("811.1.b / 421.2 / 309.1 / 310.1.a / 135.2.e.5.a: Hide only on your tur
       .hand(P1, HIDDEN_PING, "H");
   }
 
-  test.failing("BUG: 811.1.b 'on your turn' — during P2's turn (P2 acting in Neutral Open) P1 has no Hide available; engine offers and accepts hideCard for the non-turn player", async () => {
+  test("811.1.b 'on your turn' — during P2's turn (P2 acting in Neutral Open) P1 has no Hide available; engine offers and accepts hideCard for the non-turn player", async () => {
     // Expected: can("hide") is false for P1 on P2's turn and the attempt is rejected.
     // Actual: hideCard only checks the Neutral Open turn STATE, not whose turn it is, so P1 may hide.
     const game = await timingBoard().active(P2).build();
@@ -769,7 +769,7 @@ describe("190.4.b / 323.6 / 323.2.a / 811.6: while a Combat is ongoing at bf1, t
     expect(game.actingSeat()).toBe(P1);
   });
 
-  test.failing("BUG: 323.7 / 107.3.d — H must STILL be facedown at bf1 (P1 never lost control) and be playable from hidden by P1 in the showdown: it enters at bf1, becomes a defender, and combat proceeds A(4) vs H(3); engine trashes H the moment D dies", async () => {
+  test("323.7 / 107.3.d — H must STILL be facedown at bf1 (P1 never lost control) and be playable from hidden by P1 in the showdown: it enters at bf1, becomes a defender, and combat proceeds A(4) vs H(3); engine trashes H the moment D dies", async () => {
     // Expected: zoneOf(H) === facedown-bf1, can("reveal", H) true; after reveal H is at bf1 with the
     // defender designation and the eventual combat kills H (4 dmg ≥ 3) while A survives (3 < 4) and
     // conquers. Actual: the post-kill cleanup removes H to P1's trash even though bf1's controller is
@@ -904,7 +904,7 @@ describe("107.3.b / 107.3.b.1 / 107.3.b.2 / 421.4: facedown capacity can be rais
       .hand(P2, ACTION_PING_2, "zap");
   }
 
-  test.failing("BUG (capability probe): 107.3.b.1 — with M's static '+1 facedown capacity at battlefields you control' on the board, H1→bf1 AND H2→bf1 both succeed (2/2) while H3→bf1 is rejected; engine does not model a permanent-sourced capacity modifier (only battlefield text baked in at setup)", async () => {
+  test("(capability probe): 107.3.b.1 — with M's static '+1 facedown capacity at battlefields you control' on the board, H1→bf1 AND H2→bf1 both succeed (2/2) while H3→bf1 is rejected; engine does not model a permanent-sourced capacity modifier (only battlefield text baked in at setup)", async () => {
     // Expected: two facedown cards at bf1, third refused. Actual: the second Hide is already refused.
     const game = await boosterBoard().build();
     await game.p1.hide("H1", "bf1");

@@ -119,6 +119,55 @@ function revealIsPrevented(
 }
 
 /**
+ * rule 107.3.b / 107.3.b.1 — a Facedown Zone holds one card per player by
+ * default. Battlefield text ("You may hide an additional card here.") is baked
+ * into `hiddenCapacityBonus` at setup; a permanent's static
+ * `increase-hidden-capacity` raises it live for every battlefield its
+ * controller controls, for as long as that permanent is on the board.
+ */
+function hiddenCapacityAt(
+  state: RiftboundGameState,
+  playerId: string,
+  bfId: string,
+  ctx: {
+    cards: {
+      getCardController?: (id: CoreCardId) => string | undefined;
+      getCardOwner: (id: CoreCardId) => string | undefined;
+    };
+    zones: {
+      getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => readonly CoreCardId[];
+    };
+  },
+): number {
+  const bf = state.battlefields[bfId];
+  let capacity = 1 + (bf?.hiddenCapacityBonus ?? 0);
+  const registry = getGlobalCardRegistry();
+  const controllerOf = (id: CoreCardId) =>
+    ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id);
+  const candidates: CoreCardId[] = [
+    ...ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId),
+  ];
+  for (const otherBfId of Object.keys(state.battlefields)) {
+    candidates.push(...ctx.zones.getCardsInZone(getBattlefieldZoneId(otherBfId) as CoreZoneId));
+  }
+  for (const id of candidates) {
+    if (controllerOf(id) !== playerId) {
+      continue;
+    }
+    for (const ability of registry.getAbilities(id as string) ?? []) {
+      if (ability.type !== "static") {
+        continue;
+      }
+      const effect = ability.effect as { type?: string; amount?: number } | undefined;
+      if (effect?.type === "increase-hidden-capacity") {
+        capacity += effect.amount ?? 1;
+      }
+    }
+  }
+  return capacity;
+}
+
+/**
  * Hide a card at a Battlefield (rule 723)
  */
 export const hideCard: Defs["hideCard"] = {
@@ -132,6 +181,10 @@ export const hideCard: Defs["hideCard"] = {
     // Rule 597.2: Hide is a Discretionary Action → Neutral Open only.
     const interaction = state.interaction ?? createInteractionState();
     if (getTurnState(interaction) !== "neutral-open") {
+      return false;
+    }
+    // rule 811.1.b: "on your turn" — only the active player may Hide.
+    if (state.turn.activePlayer !== context.params.playerId) {
       return false;
     }
 
@@ -154,9 +207,7 @@ export const hideCard: Defs["hideCard"] = {
     }
 
     // Enforce per-player hidden-card capacity at the target battlefield.
-    // Default capacity is 1; battlefields like Bandle Tree bump
-    // `hiddenCapacityBonus` to permit additional hidden cards.
-    const capacity = 1 + (bf.hiddenCapacityBonus ?? 0);
+    const capacity = hiddenCapacityAt(state, context.params.playerId, bfId, context);
     const facedownZoneId = getFacedownZoneId(bfId);
     const hiddenCards = context.zones.getCardsInZone(facedownZoneId as CoreZoneId);
     let ownedHidden = 0;
@@ -184,6 +235,10 @@ export const hideCard: Defs["hideCard"] = {
     if (getTurnState(interaction) !== "neutral-open") {
       return [];
     }
+    // rule 811.1.b: "on your turn" — only the active player may Hide.
+    if (state.turn.activePlayer !== (context.playerId as string)) {
+      return [];
+    }
     // rule-id: ogn-121-298 — Rule 723.1.b: hiding costs [C] (1 Power).
     if (!canAffordHide(state, context.playerId as string)) {
       return [];
@@ -202,7 +257,7 @@ export const hideCard: Defs["hideCard"] = {
       if (bf.controller !== (context.playerId as string)) {
         continue;
       }
-      const capacity = 1 + (bf.hiddenCapacityBonus ?? 0);
+      const capacity = hiddenCapacityAt(state, context.playerId as string, bfId, context);
       const facedown = context.zones.getCardsInZone(getFacedownZoneId(bfId) as CoreZoneId);
       let owned = 0;
       for (const hid of facedown) {

@@ -676,29 +676,27 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     stateChanged = true;
   }
 
-  // Step 4: Remove orphaned hidden cards (rule 523)
-  // Hidden cards at battlefields without a friendly unit are trashed
+  // Step 4: Remove orphaned hidden cards (rule 323.7 / 107.3.d)
+  // A Facedown Zone belongs to the battlefield's CONTROLLER: a card there is
+  // trashed only once its owner stops controlling that battlefield. Losing the
+  // last unit there is not itself enough — control only changes in an Open
+  // State (step 6 / rule 190.4.b), so a defender whose last unit dies mid-combat
+  // keeps its facedown card and may still play it.
   for (const bfId of Object.keys(ctx.draft.battlefields)) {
     const facedownZoneId = `facedown-${bfId}` as CoreZoneId;
-    const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
 
     const hiddenCards = ctx.zones.getCardsInZone(facedownZoneId);
     if (hiddenCards.length === 0) {
       continue;
     }
 
-    const bfUnits = ctx.zones.getCardsInZone(bfZoneId);
+    const bfController = ctx.draft.battlefields[bfId]?.controller ?? null;
 
     for (const hiddenCardId of hiddenCards) {
-      const hiddenOwner = ctx.cards.getCardOwner(hiddenCardId) ?? "";
+      const hiddenOwner =
+        ctx.cards.getCardController?.(hiddenCardId) ?? ctx.cards.getCardOwner(hiddenCardId) ?? "";
 
-      // Check if the hidden card's controller has a unit at this battlefield
-      const hasFriendlyUnit = bfUnits.some((unitId) => {
-        const unitOwner = ctx.cards.getCardOwner(unitId) ?? "";
-        return unitOwner === hiddenOwner;
-      });
-
-      if (!hasFriendlyUnit) {
+      if (bfController !== hiddenOwner) {
         // Remove hidden card to trash
         ctx.zones.moveCard({
           cardId: hiddenCardId,
