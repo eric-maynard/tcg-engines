@@ -787,7 +787,20 @@ export class SeatHandle {
   }
 
   can(verbOrMove: string, card?: CardRef): boolean {
-    return this.option(verbOrMove, card) !== undefined;
+    // `play(card)` dispatches on the card's type (spell → playSpell, gear or
+    // equipment → playGear, else playUnit), and those moves surface under their
+    // own verbs ("cast", "equip"). `can("play", card)` must ask about the very
+    // move `play(card)` would run, not a literal "play" verb.
+    if (this.option(verbOrMove, card) !== undefined) {
+      return true;
+    }
+    if (verbOrMove === "play" && card !== undefined && this.game.has(card)) {
+      const type = this.game.state(card).cardType;
+      const moveId =
+        type === "spell" ? "playSpell" : type === "gear" || type === "equipment" ? "playGear" : "playUnit";
+      return this.option(moveId, card) !== undefined;
+    }
+    return false;
   }
 
   // ---- core act -----------------------------------------------------------------

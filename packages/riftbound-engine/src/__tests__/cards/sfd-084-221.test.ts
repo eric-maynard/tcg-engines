@@ -140,7 +140,7 @@ describe("Jayce, Man of Progress (sfd-084-221)", () => {
     expect(game.decision()?.kind).toBe("action");
   });
 
-  test.failing("BUG: If you do — a gear costing exactly 7 is playable from hand for 0 energy, paying only its [mind] power", async () => {
+  test("If you do — a gear costing exactly 7 is playable from hand for 0 energy, paying only its [mind] power", async () => {
     // Expected: after the kill, "seven" (7 energy + [mind]) is legal with 0 energy / 1 mind and playing
     // it spends just the mind. Actual: only the kill clause is parsed; no cost waiver exists.
     const game = await board().build();
@@ -166,7 +166,7 @@ describe("Jayce, Man of Progress (sfd-084-221)", () => {
     expect(game.p1.can("play", "seven")).toBe(false);
   });
 
-  test.failing("BUG: 'a gear' — only ONE free play: after the free 7-drop, the 2-cost gizmo needs real energy again", async () => {
+  test("'a gear' — only ONE free play: after the free 7-drop, the 2-cost gizmo needs real energy again", async () => {
     const game = await board().build();
     await playAndKill(game, "mask");
     await game.p1.play("seven");
@@ -179,7 +179,7 @@ describe("Jayce, Man of Progress (sfd-084-221)", () => {
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: 'this turn' — unused, the permission lapses: free now, full 7 energy on your next turn", async () => {
+  test("'this turn' — unused, the permission lapses: free now, full 7 energy on your next turn", async () => {
     const game = await board({ mind: 2 }).build();
     await playAndKill(game, "mask");
     expect(game.p1.can("play", "seven")).toBe(true); // waived this turn
@@ -195,7 +195,7 @@ describe("Jayce, Man of Progress (sfd-084-221)", () => {
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: parsed ability shape — optional play-self trigger: kill friendly gear, THEN a linked 'ignore energy cost ≤7 gear from hand this turn' rider", async () => {
+  test("parsed ability shape — optional play-self trigger: kill friendly gear, THEN a linked 'ignore energy cost ≤7 gear from hand this turn' rider", async () => {
     // Actual: abilities = [{ optional kill friendly gear }] with no linked follow-up at all.
     const pool = await loadDefaultCardPool();
     const def = pool.get(CARD);

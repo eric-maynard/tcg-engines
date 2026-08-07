@@ -25,6 +25,53 @@ import {
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
+/** A granted "play a gear … ignoring its Energy cost" permission on the draft. */
+interface EnergyWaiverEntry {
+  replaces?: string;
+  duration?: string;
+  owner?: string;
+  ignoreEnergyCost?: boolean;
+  maxEnergyCost?: number;
+  target?: { type?: string };
+}
+
+/**
+ * rule 356.1.b / 317.2.c (rule-id: sfd-084-221 Jayce, Man of Progress) — "you
+ * may play a gear with Energy cost no more than [7] from hand this turn,
+ * ignoring its Energy cost". The permission is installed as an
+ * `activeReplacements` entry (`replaces: "play-cost"`, `ignoreEnergyCost`), and
+ * unlike a fixed discount it waives the play's WHOLE Energy component while
+ * leaving the Power cost untouched. A gear above `maxEnergyCost` is not covered
+ * at all — it keeps its full cost rather than getting a partial discount.
+ * Returns the entry's index so the pay path can spend a `duration: "next"` one.
+ */
+function findEnergyWaiver(state: RiftboundGameState, playerId: string, cardId: string): number {
+  const active = state.activeReplacements as EnergyWaiverEntry[] | undefined;
+  if (!active) {
+    return -1;
+  }
+  const cardType = getGlobalCardRegistry().get(cardId)?.cardType;
+  const printed = getGlobalCardRegistry().getEnergyCost(cardId) ?? 0;
+  for (let i = active.length - 1; i >= 0; i--) {
+    const entry = active[i];
+    if (!entry || entry.replaces !== "play-cost" || entry.ignoreEnergyCost !== true) {
+      continue;
+    }
+    if (entry.owner !== undefined && entry.owner !== playerId) {
+      continue;
+    }
+    const targetType = entry.target?.type;
+    if (targetType !== undefined && targetType !== "card" && targetType !== cardType) {
+      continue;
+    }
+    if (entry.maxEnergyCost !== undefined && printed > entry.maxEnergyCost) {
+      continue;
+    }
+    return i;
+  }
+  return -1;
+}
+
 /**
  * Play gear to Base (rule 143.1.a.1)
  */
@@ -80,7 +127,11 @@ export const playGear: Defs["playGear"] = {
         state,
         context.params.playerId,
         context.params.cardId,
-        { chosenTargetId: context.params.chosenTargetId },
+        {
+          chosenTargetId: context.params.chosenTargetId,
+          ignoreEnergyCost:
+            findEnergyWaiver(state, context.params.playerId as string, context.params.cardId as string) >= 0,
+        },
         createMetaAccessor(context.cards),
         getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
       )
@@ -120,7 +171,6 @@ export const playGear: Defs["playGear"] = {
       context.counters,
       context.playerId as string,
     );
-    const affordPool = { energy: pool.energy + potential, power: pool.power };
 
     const handCards = context.zones.getCardsInZone(
       "hand" as CoreZoneId,
@@ -139,9 +189,25 @@ export const playGear: Defs["playGear"] = {
       ) {
         continue;
       }
+      // rule 356.4 (sfd-084-221) — enumerate through the same pay path as the
+      // condition/reducer, so cost modifiers, board statics and one-shot
+      // play-cost discounts count here too; a raw printed-cost check would hide
+      // a gear whose Energy cost is discounted or waived.
       // Cards with interactive cost reduction are enumerated against their
       // Base cost; the actual cost is computed per-target at play time.
-      if (!registry.canAfford(cardId as string, affordPool)) {
+      if (
+        !canAffordCard(
+          state,
+          context.playerId as string,
+          cardId as string,
+          {
+            ignoreEnergyCost:
+              findEnergyWaiver(state, context.playerId as string, cardId as string) >= 0,
+          },
+          createMetaAccessor(context.cards),
+          potential,
+        )
+      ) {
         continue;
       }
 
@@ -156,11 +222,30 @@ export const playGear: Defs["playGear"] = {
     const { cardId, playerId, chosenTargetId } = context.params;
     const { zones } = context;
 
+    // rule 356.1.b (sfd-084-221) — spend a granted "ignoring its Energy cost"
+    // permission on this play: the Energy is waived, the Power cost is still
+    // paid, and a one-shot (`duration: "next"`) permission is used up, so the
+    // next gear this turn costs its full price again.
+    const waiverIdx = findEnergyWaiver(draft, playerId as string, cardId as string);
+    if (waiverIdx >= 0) {
+      const active = draft.activeReplacements as EnergyWaiverEntry[];
+      if (active[waiverIdx]?.duration === "next") {
+        active.splice(waiverIdx, 1);
+      }
+    }
+
     // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.
-    deductCost(draft, playerId, cardId, { chosenTargetId }, createMetaAccessor(context.cards), {
-      counters: context.counters,
-      zones: context.zones,
-    });
+    deductCost(
+      draft,
+      playerId,
+      cardId,
+      { chosenTargetId, ignoreEnergyCost: waiverIdx >= 0 },
+      createMetaAccessor(context.cards),
+      {
+        counters: context.counters,
+        zones: context.zones,
+      },
+    );
 
     zones.moveCard({
       cardId: cardId as CoreCardId,
