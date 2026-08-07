@@ -16,6 +16,11 @@ export interface ParserOptions {
   readonly cardId?: string;
   /** Generate unique IDs for abilities */
   readonly generateAbilityUids?: boolean;
+  /**
+   * rule 805.1.a.1 — the card's domain. Accelerate printed without reminder text
+   * still costs [1][C], where the Power must match one of the card's domains.
+   */
+  readonly domain?: string;
 }
 
 /**

@@ -37,7 +37,11 @@ function enrichCard(raw: Card): Card {
     return card;
   }
 
-  const result = parseAbilities(card.rulesText, { omitId: true, omitText: true });
+  const result = parseAbilities(card.rulesText, {
+    domain: (card as { domain?: string }).domain,
+    omitId: true,
+    omitText: true,
+  });
   if (!result.success || !result.abilities || result.abilities.length === 0) {
     return card;
   }

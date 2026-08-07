@@ -7,6 +7,8 @@
 import type { Ability, SpellAbility } from "@tcg/riftbound-types";
 import type { Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import { parseStaticAbility } from "./parsers/static-parser";
+import { parseTarget } from "./parsers/target-parser";
+import { bindChosenTarget, CHOOSE_PREAMBLE_RE } from "./impl/choose-preamble";
 import { parseActivatedAbility } from "./impl/activated";
 import { parseEffects } from "./impl/effects";
 import { parseEmpoweredGatedAbilities, parseLevelGatedAbilities } from "./impl/gated";
@@ -75,7 +77,7 @@ function applyPrintedSpellTiming(abilities: Ability[], printedText: string): Abi
   );
 }
 
-function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbilitiesResult {
+function parseAbilitiesInner(text: string, options?: ParserOptions): ParseAbilitiesResult {
   if (!text || text.trim().length === 0) {
     return { error: "Empty ability text", success: false };
   }
@@ -97,7 +99,7 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
   if (cardLevelAtBattlefield) {
     const rest = trimmed.replace(cardLevelAtBattlefield[0], "\n").trim();
     if (rest.length > 0) {
-      const inner = parseAbilitiesInner(rest, _options);
+      const inner = parseAbilitiesInner(rest, options);
       if (inner.success && inner.abilities) {
         return {
           ...inner,
@@ -214,7 +216,7 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
     if (segments.length === 1) {
       const seg = segments[0];
       if (seg.type === "keyword") {
-        const kwAbility = parseKeywordSegment(seg.text);
+        const kwAbility = parseKeywordSegment(seg.text, options?.domain);
         if (kwAbility) {
           return { abilities: [kwAbility], success: true };
         }
@@ -247,7 +249,7 @@ function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbili
         }
       }
 
-      const kwAbility = parseKeywordSegment(seg.text);
+      const kwAbility = parseKeywordSegment(seg.text, options?.domain);
       if (kwAbility) {
         abilities.push(kwAbility);
       }
@@ -355,10 +357,24 @@ function parseSingleAbility(text: string): ParseAbilitiesResult {
   // Try standalone effect (treat as a spell body). rule 155 / 159.2.a.1: with no
   // printed [Action]/[Reaction] the ability carries NO timing — the card's own
   // timing ("standard") governs when it may be played.
-  const effect = parseEffects(text);
+  // rule 355 — an untagged body may still open with "Choose <target>. … it …":
+  // the restriction on that choice (friendly, "without [Keyword]") is part of
+  // the spell's targeting, so bind it as the [Action]/[Reaction] path does.
+  const chooseMatch = CHOOSE_PREAMBLE_RE.exec(text);
+  const chosenTarget =
+    chooseMatch && (!chooseMatch[2] || !/^\s+and /i.test(chooseMatch[2]))
+      ? parseTarget(chooseMatch[1])
+      : undefined;
+  const effect = parseEffects(chooseMatch ? text.slice(chooseMatch[0].length) : text);
   if (effect) {
     return {
-      abilities: [{ effect, ...spellTimingFromText(text), type: "spell" } as SpellAbility],
+      abilities: [
+        {
+          effect: chosenTarget ? bindChosenTarget(effect, chosenTarget) : effect,
+          ...spellTimingFromText(text),
+          type: "spell",
+        } as SpellAbility,
+      ],
       success: true,
     };
   }

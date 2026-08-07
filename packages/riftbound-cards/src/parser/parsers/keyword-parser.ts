@@ -12,7 +12,7 @@ import type {
   ValueKeyword,
   ValueKeywordAbility,
 } from "@tcg/riftbound-types";
-import type { Cost } from "@tcg/riftbound-types/abilities/cost-types";
+import type { Cost, Domain } from "@tcg/riftbound-types/abilities/cost-types";
 import { extractAndParseCost, mergeCosts, parseAdditionalCostText, parseCost } from "./cost-parser";
 
 // ============================================================================
@@ -65,6 +65,7 @@ const REPEAT_COST_PATTERN =
 export function parseCostKeyword(
   keyword: CostKeyword,
   followingText: string,
+  domain?: string,
 ): CostKeywordAbility | null {
   let cost: Cost | null = null;
 
@@ -92,6 +93,12 @@ export function parseCostKeyword(
         if (costMatch) {
           cost = parseCost(costMatch[1]);
         }
+      }
+      // rule 805.1.a: Accelerate always costs [1][C] even when printed without
+      // reminder text; the Power must match one of the card's domains (805.1.a.1),
+      // or any domain when the card has none (805.1.a.2).
+      if (!cost) {
+        cost = { energy: 1, power: [(domain ?? "rainbow") as Domain] };
       }
       break;
     }

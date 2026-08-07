@@ -106,7 +106,7 @@ export function findNextStandaloneKeywordIndex(text: string): number {
 /**
  * Parse a keyword segment into an Ability.
  */
-export function parseKeywordSegment(text: string): KeywordAbility | undefined {
+export function parseKeywordSegment(text: string, domain?: string): KeywordAbility | undefined {
   // Match the keyword bracket
   const kwMatch = KEYWORD_AT_POS_RE.exec(text);
   if (!kwMatch) {
@@ -130,7 +130,7 @@ export function parseKeywordSegment(text: string): KeywordAbility | undefined {
 
   // Cost keywords
   if (ALL_COST_KEYWORDS.includes(keyword)) {
-    const result = parseCostKeyword(keyword as CostKeyword, afterBracket);
+    const result = parseCostKeyword(keyword as CostKeyword, afterBracket, domain);
     if (result) {
       return result;
     }
