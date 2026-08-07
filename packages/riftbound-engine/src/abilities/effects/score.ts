@@ -1,4 +1,5 @@
 // Effect handler: "score"
+import { isResolvingChainItem } from "../../chain/resolution-guard";
 import { hasPlayerWon } from "../../game-definition/win-conditions/victory";
 import { pointGainDenied } from "../../operations/scoring-rules";
 import type { PlayerId } from "../../types";
@@ -44,6 +45,14 @@ export function handle_score(effect: ExecutableEffect, ctx: EffectContext, _h: E
       continue;
     }
     player.victoryPoints += amount;
+  }
+  // rule 320 / 321: no Cleanup — hence no victory check (rule 323.1) — while a
+  // Chain Item is resolving. The chain's post-resolution Cleanup runs it once
+  // the item leaves the Chain (rule 319.5), so a momentary lead between the two
+  // instructions of "You gain 1 point. Then each opponent gains 1 point." never
+  // wins the game.
+  if (isResolvingChainItem()) {
+    return;
   }
   // rule 194.2(.b): the win check compares every player, so it runs only after
   // ALL recipients of one instruction have been updated — a symmetric "each

@@ -26,7 +26,9 @@ import {
   resolveTarget,
 } from "../../../abilities/target-resolver";
 import { fireTriggers } from "../../../abilities/trigger-runner";
+import { withChainItemResolution } from "../../../chain/resolution-guard";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
+import { checkVictory } from "../../win-conditions/victory";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getCardEffectiveMight, getDeflectSurcharge, xCostIsPower } from "../play/cost";
@@ -41,6 +43,23 @@ import { buildEffectContext } from "./effect-context";
 import { openPendingContestedShowdown } from "./showdown";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
+
+/**
+ * rule 319.5 / 323.1: an item leaving the Chain makes a Cleanup outstanding,
+ * and the Cleanup's first task is the victory check. Effects that changed
+ * scores mid-resolution deliberately skipped it (rule 321), so it happens here,
+ * comparing every player exactly once against the final post-resolution scores.
+ */
+function runPostResolutionVictoryCheck(draft: RiftboundGameState): void {
+  if (draft.status === "finished") {
+    return;
+  }
+  const winner = checkVictory(draft);
+  if (winner) {
+    draft.status = "finished";
+    draft.winner = winner;
+  }
+}
 
 /**
  * Total pooled Power a player has across every Domain — rule 809.1.c.1: a
@@ -733,8 +752,11 @@ export const passChainPriority: Defs["passChainPriority"] = {
       draft.interaction = newState;
 
       if (resolved) {
-        executeResolvedItem(resolved, draft, context);
-        settleResolvedSpellCard(resolved, context);
+        withChainItemResolution(() => {
+          executeResolvedItem(resolved, draft, context);
+          settleResolvedSpellCard(resolved, context);
+        });
+        runPostResolutionVictoryCheck(draft);
 
         // Run state-based checks after resolution (rule 543.3/518).
         // rule-id: ogn-246-298 — units reaped here must emit `die` so
@@ -787,8 +809,11 @@ export const resolveChain: Defs["resolveChain"] = {
     draft.interaction = newState;
 
     if (resolved) {
-      executeResolvedItem(resolved, draft, context);
-      settleResolvedSpellCard(resolved, context);
+      withChainItemResolution(() => {
+        executeResolvedItem(resolved, draft, context);
+        settleResolvedSpellCard(resolved, context);
+      });
+      runPostResolutionVictoryCheck(draft);
 
       // rule-id: ogn-246-298 — SBA deaths after resolution emit `die`.
       cleanupAndFireDeaths(draft, context);

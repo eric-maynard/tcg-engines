@@ -104,7 +104,8 @@ describe("Parser: parseIfYouDoEffect()", () => {
     };
     expect(a.type).toBe("triggered");
     expect(a.optional).toBe(true);
-    expect(a.condition?.type).toBe("paid-additional-cost");
+    expect(a.condition?.type).toBe("pay-cost");
+    expect((a.condition as { cost?: unknown }).cost).toEqual({ power: ["fury"] });
     expect(a.effect.type).toBe("modify-might");
   });
 });

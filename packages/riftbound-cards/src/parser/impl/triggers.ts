@@ -115,7 +115,14 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
     );
     if (payIfYouDoMatch) {
       optional = true;
-      condition = { type: "paid-additional-cost" };
+      // rule 383.3.b (rule-id: sfd-020-221): "you may pay [X]. If you do, Y" is
+      // an opt-in cost charged when the trigger resolves — the same shape as
+      // "you may pay [X] to Y". It is NOT `paid-additional-cost`, which reads a
+      // flag set while PLAYING a card and is always false for attack/defend.
+      condition = {
+        cost: parseCost(payIfYouDoMatch[1]!),
+        type: "pay-cost",
+      } as unknown as { type: string };
       effectText = effectText.slice(payIfYouDoMatch[0].length);
     }
 

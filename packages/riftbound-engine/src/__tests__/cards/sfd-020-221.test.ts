@@ -40,7 +40,7 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
     expect(poor.p1.can("play", "draven")).toBe(false);
   });
 
-  test.failing("BUG: When I attack: you may pay [fury] → +2 Might this turn (4 → 6 kills a 5-Might defender)", async () => {
+  test("When I attack: you may pay [fury] → +2 Might this turn (4 → 6 kills a 5-Might defender)", async () => {
     const game = await attacking(1, 5).build();
     await game.p1.move("draven", "bf1");
     await game.settle();
@@ -56,7 +56,7 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
     expect(game.state("draven").might).toBe(4);
   });
 
-  test.failing("BUG: When I attack: declining pays nothing and gives no Might (4 vs 5 → Draven dies)", async () => {
+  test("When I attack: declining pays nothing and gives no Might (4 vs 5 → Draven dies)", async () => {
     const game = await attacking(1, 5).build();
     await game.p1.move("draven", "bf1");
     await game.settle();
@@ -85,7 +85,7 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
     expect(game.locationOf("foe")).toBe("bf1");
   });
 
-  test.failing("BUG: When I defend: the same optional [fury] payment gives +2 Might (4 → 6 survives a 5-Might attacker)", async () => {
+  test("When I defend: the same optional [fury] payment gives +2 Might (4 → 6 survives a 5-Might attacker)", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P1, { power: { fury: 1 } })
