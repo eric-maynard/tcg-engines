@@ -304,8 +304,10 @@ Recipe — stun: `effects/stun.ts` sets flag + `stun` event; zero its combat dam
   together via `leaveBoard(…, {replacements:"skip"})`), `effects/kill.ts killUnits` (whole target batch) and
   `leave-board.ts applyDieReplacement` (single card: costs, [Temporary]). Per dying card it collects every candidate
   (`collectDieCandidates`: bound `activeReplacements` entries first, then board `findAllReplacements`), then:
-  371.2 optional costed bound shield ⇒ legacy `opt-in` prompt (`suspendedDeathCardId`; batch waits; kill batches carry
-  `suspendedKill`); 372 ≥2 candidates ⇒ `order` prompt to the dying card's controller (harness shows it as a `pick`
+  371.2 optional costed shield — bound entry OR board ability with `condition:{type:"pay-cost"}` (+ `payer:
+  "affected-controller"` for "ITS controller may pay", `duringCombat:true` for "would die during combat"; battlefield
+  cards in `battlefieldRow` are scanned with zone `battlefield-<id>` so `location:"here"` works) ⇒ legacy `opt-in`
+  prompt (`suspendedDeathCardId`; batch waits; asked-and-still-dying = declined; kill batches carry `suspendedKill`); 372 ≥2 candidates ⇒ `order` prompt to the dying card's controller (harness shows it as a `pick`
   "which applies first", semantics `replacement-order`, timing RPL; `seat.pick(src)` or `seat.order([...])`); 373 a
   `singleUse` candidate (bound entry, `duration:"next"`, or an effect that kills/banishes `self` — Zhonya's, GA) that also
   matches a LATER death of the batch ⇒ `pick-many{1,1, semantics:"replacement-assign"}` to ITS controller naming the dying

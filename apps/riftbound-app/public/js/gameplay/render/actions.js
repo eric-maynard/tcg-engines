@@ -260,6 +260,8 @@ function renderActions() {
       : pending.onPicked === "recycle" ? "Recycle a card"
       : pending.onPicked === "play" ? "Choose a card to play"
       : pending.type === "choose-destination" ? "Choose a destination"
+      // Rules 372/373/355.11.b: generic order / pick-many prompts carry their own prompt text.
+      : (pending.type === "order" || pending.type === "pick-many") ? (pending.prompt ?? "Choose")
       : "Choose a card";
     html += `<div class="action-section-title" style="background:#3a2a4a;color:#ffd070;padding:6px;border-radius:3px;">
       ${mine ? "⚠ " + esc(verb) : "Waiting for opponent to " + esc(verb.toLowerCase())}
@@ -296,7 +298,8 @@ function renderActions() {
           : (!m.params?.pickedCardId && zid != null)
           // Rule sfd-109-221 (356.1.b.3): a pending play may offer the optional additional cost.
           ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, ""))) + (m.params?.paidAdditionalCost ? " (pay additional cost)" : "")
-          : (card?.name ?? String(cid));
+          // Rules 372/373/355.11.b: order / pick-many variants ship a display `label`.
+          : (card?.name ?? m.params?.label ?? String(cid));
         html += `<button class="action-btn highlighted"
           onclick='executeMove("resolvePendingChoice", ${JSON.stringify(m.params)}, ${JSON.stringify(m.playerId)})'>
           ${esc(label)}
