@@ -1093,6 +1093,33 @@ export interface OptionalPlayCost {
    * discount applied to the base cost when the optional cost is paid.
    */
   readonly energyDiscount?: number;
+  /**
+   * rule-id: unl-122-219 (rule 364.3.a) — the OFFER itself may be gated ("if
+   * you've played a spell this turn, you may pay …"). Carries the declaring
+   * ability's condition so state-aware callers can withhold the option.
+   */
+  readonly condition?: Record<string, unknown>;
+  /**
+   * rule-id: unl-122-219 (rule 369.3) — "If you do, I enter ready": paying the
+   * optional cost replaces how the unit enters, exactly like a paid Accelerate.
+   */
+  readonly entersReadyIfPaid?: boolean;
+}
+
+/**
+ * rule 364.3.a (rule-id: unl-122-219) — is a gated optional additional cost on
+ * the menu right now? An absent or unevaluable condition leaves the offer open.
+ */
+export function optionalPlayCostOffered(
+  optional: OptionalPlayCost | undefined,
+  state: RiftboundGameState,
+  playerId: string,
+  cardId?: string,
+): boolean {
+  if (!optional?.condition) {
+    return true;
+  }
+  return evaluateEnterReadyCondition(optional.condition, state, playerId, cardId) !== false;
 }
 
 /** Decode an "I cost [N] less" ifPaid rider into an energy discount. */
@@ -1253,10 +1280,16 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
       }
       if (energy > 0 || power.length > 0 || xp > 0) {
         const energyDiscount = ifPaidEnergyDiscount(effect.ifPaid);
+        // rule 369.3 (unl-122-219) — "If you do, I enter ready".
+        const entersReadyIfPaid =
+          (effect.ifPaid as { type?: string } | undefined)?.type === "enter-ready";
+        const gate = (ability as { condition?: Record<string, unknown> }).condition;
         return {
           cost: { energy, power, ...(xp > 0 ? { xp } : {}) },
           kind: "pay",
           ...(energyDiscount > 0 ? { energyDiscount } : {}),
+          ...(entersReadyIfPaid ? { entersReadyIfPaid } : {}),
+          ...(gate ? { condition: gate } : {}),
         };
       }
     }

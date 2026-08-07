@@ -55,6 +55,7 @@ import {
   getBuffSpendCost,
   getKillAnyNumberCost,
   getOptionalPlayCost,
+  optionalPlayCostOffered,
   getSacrificeCostDiscount,
   createMetaAccessor,
   getPotentialRuneEnergy,
@@ -156,6 +157,11 @@ function resolvePayableOptionalCost(
   | undefined {
   const optional = getOptionalPlayCost(cardId);
   if (optional?.kind !== "accelerate" && optional?.kind !== "pay") {
+    return undefined;
+  }
+  // rule 364.3.a (unl-122-219) — "if you've played a spell this turn, you may
+  // pay …": with the gate unmet the option is not even on the menu.
+  if (!optionalPlayCostOffered(optional, state, playerId, cardId)) {
     return undefined;
   }
   const xp = optional.cost?.xp ?? 0;
@@ -290,7 +296,7 @@ function holdsChainPriority(state: RiftboundGameState, playerId: string): boolea
  *  - a Neutral Open state → only the turn player (rule 316.5.b: nobody else
  *    holds priority there, so [Reaction] opens no window).
  */
-export function reactionWindowOpen(state: RiftboundGameState, playerId: string): boolean {
+function reactionWindowOpen(state: RiftboundGameState, playerId: string): boolean {
   if (holdsChainPriority(state, playerId)) {
     return true;
   }
@@ -367,6 +373,24 @@ function friendlyBuffedUnits(
     }
   }
   return out;
+}
+
+/**
+ * rule 356.2 — the destinations already enumerated for a card's free play.
+ * An additional cost is a cost of playing the card, not of playing it to base,
+ * so each paid variant must be offered at every one of these locations.
+ */
+function enumeratedLocations(
+  results: readonly { readonly cardId?: string; readonly location?: string }[],
+  cardId: string,
+): string[] {
+  const seen = new Set<string>();
+  for (const r of results) {
+    if (r.cardId === cardId && typeof r.location === "string") {
+      seen.add(r.location);
+    }
+  }
+  return seen.size > 0 ? [...seen] : ["base"];
 }
 
 /**
@@ -723,6 +747,15 @@ export const playUnit: Defs["playUnit"] = {
     if (context.params.paidAdditionalCost && declaredSpec !== undefined && payableOptions.length > 0 && payable === undefined) {
       return false;
     }
+    // rule 364.3.a (unl-122-219) — declaring a payment the card does not offer
+    // right now (gate unmet, or too little XP) is not a legal play; without this
+    // the play would slip through charging only the base cost.
+    if (context.params.paidAdditionalCost && payableOptions.length === 0) {
+      const kind = getOptionalPlayCost(context.params.cardId as string)?.kind;
+      if (kind === "pay" || kind === "accelerate") {
+        return false;
+      }
+    }
     // rule 356.2.b / 204.2 (ogn-002-298) — "you may discard N as an additional
     // cost. If you do, reduce my cost by [N]": the discarded card must be a
     // different card in hand, and the rider nets against the base cost.
@@ -976,6 +1009,58 @@ export const playUnit: Defs["playUnit"] = {
         ];
 
     const results: RiftboundMoves["playUnit"][] = [];
+    // rule 356.2 (unl-166-219) — a "kill a pet" / "return a gear" additional
+    // cost is a cost of PLAYING the card, so it applies on every path that
+    // enumerated a destination (including the Ambush reaction window), and a
+    // mandatory one leaves no unpaid variant behind.
+    const expandPaidCostVariants = (
+      cardIdArg: string,
+      optional: ReturnType<typeof getOptionalPlayCost>,
+    ): void => {
+      if (optional?.kind !== "kill" && optional?.kind !== "return-to-hand") {
+        return;
+      }
+      const locations = enumeratedLocations(results, cardIdArg);
+      let victims: readonly string[];
+      if (optional.kind === "kill") {
+        victims = resolveTarget(
+          {
+            ...(optional.kill as Record<string, unknown>),
+            quantity: "all",
+          } as Parameters<typeof resolveTarget>[0],
+          {
+            cards: context.cards as Parameters<typeof resolveTarget>[1]["cards"],
+            draft: state,
+            playerId: context.playerId as string,
+            sourceCardId: cardIdArg,
+            zones: context.zones,
+          },
+        );
+      } else {
+        victims = friendlyBoardGear(state, context.zones, context.cards, context.playerId as string);
+      }
+      if (optional.mandatory) {
+        for (let i = results.length - 1; i >= 0; i--) {
+          if (
+            results[i]?.cardId === cardIdArg &&
+            (results[i] as { sacrificeId?: string }).sacrificeId === undefined
+          ) {
+            results.splice(i, 1);
+          }
+        }
+      }
+      for (const sacrificeId of victims) {
+        for (const location of locations) {
+          results.push({
+            cardId: cardIdArg,
+            location,
+            paidAdditionalCost: true,
+            playerId: context.playerId as string,
+            sacrificeId,
+          });
+        }
+      }
+    };
     for (const cardId of playableCards) {
       // rule 356.1 (unl-025-219) — a self-granted trash play replaces the
       // printed cost for every affordability check below.
@@ -1236,6 +1321,9 @@ export const playUnit: Defs["playUnit"] = {
       // (base / a controlled battlefield) while its controller holds priority.
       const reactionPlay = reactionWindow && unitHasReaction(cardId as string);
       if (!standardTiming && !reactionPlay) {
+        // rule 356.2 (unl-166-219): an Ambush reaction still pays the card's
+        // additional cost — expand the destinations just enumerated.
+        expandPaidCostVariants(cardId as string, discardCost);
         continue;
       }
 
@@ -1468,67 +1556,8 @@ export const playUnit: Defs["playUnit"] = {
             results.push({ ...variant, location });
           }
         }
-      } else if (optional?.kind === "kill") {
-        const killDescriptor = {
-          ...(optional.kill as Record<string, unknown>),
-          quantity: "all" as const,
-        };
-        const sacrificeOptions = resolveTarget(
-          killDescriptor as Parameters<typeof resolveTarget>[0],
-          {
-            cards: context.cards as Parameters<typeof resolveTarget>[1]["cards"],
-            draft: state,
-            playerId: context.playerId as string,
-            sourceCardId: cardId as string,
-            zones: context.zones,
-          },
-        );
-        // rule 356.2.a.1 (ogn-208-298) — a MANDATORY additional kill cost has
-        // no unpaid variant: drop the plain plays enumerated for this card so
-        // only victim-naming ones remain (none ⇒ the card cannot be played).
-        if (optional.mandatory) {
-          for (let i = results.length - 1; i >= 0; i--) {
-            if (
-              results[i]?.cardId === (cardId as string) &&
-              (results[i] as { sacrificeId?: string }).sacrificeId === undefined
-            ) {
-              results.splice(i, 1);
-            }
-          }
-        }
-        for (const sacrificeId of sacrificeOptions) {
-          results.push({
-            cardId: cardId as string,
-            location: "base",
-            paidAdditionalCost: true,
-            playerId: context.playerId as string,
-            sacrificeId,
-          });
-        }
-      } else if (optional?.kind === "return-to-hand") {
-        // rule 356.2.a.1 (sfd-044-221) — one paid variant per friendly gear
-        // that could be returned; a MANDATORY cost has no unpaid variant, so
-        // with no friendly gear the card is simply unplayable.
-        const bounceOptions = friendlyBoardGear(state, context.zones, context.cards, context.playerId as string);
-        if (optional.mandatory) {
-          for (let i = results.length - 1; i >= 0; i--) {
-            if (
-              results[i]?.cardId === (cardId as string) &&
-              (results[i] as { sacrificeId?: string }).sacrificeId === undefined
-            ) {
-              results.splice(i, 1);
-            }
-          }
-        }
-        for (const sacrificeId of bounceOptions) {
-          results.push({
-            cardId: cardId as string,
-            location: "base",
-            paidAdditionalCost: true,
-            playerId: context.playerId as string,
-            sacrificeId,
-          });
-        }
+      } else {
+        expandPaidCostVariants(cardId as string, optional);
       }
     }
     // rule 355.2 (ogn-070-298): while an enemy Mageseeker Warden is at a
@@ -1750,7 +1779,9 @@ export const playUnit: Defs["playUnit"] = {
           }
           // rule 364.3.a — an additional cost's pips are power spent this turn too.
           recordPowerSpent(draft, playerId, (need.power ?? []).length);
-          paidAccelerate = optional.kind === "accelerate";
+          // rule 369.3 (unl-122-219) — "you may pay [chaos] … If you do, I
+          // enter ready" replaces the entry exactly like a paid Accelerate.
+          paidAccelerate = optional.kind === "accelerate" || optional.entersReadyIfPaid === true;
           paidAdditionalCostActual = true;
         }
       } else if (optional?.kind === "kill" && sacrificeId) {

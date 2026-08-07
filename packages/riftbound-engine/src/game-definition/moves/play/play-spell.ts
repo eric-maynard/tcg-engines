@@ -2248,6 +2248,15 @@ export const playSpell: Defs["playSpell"] = {
     // Firing here would trigger e.g. Abandoned Hall even on countered
     // spells (425.1.b).
 
+    // rule 191.1 / 364.3.a (rule-id: unl-122-219) — "if you've played a spell
+    // this turn": a spell counts as played by its caster the moment it goes on
+    // the chain, whether or not it later resolves (425.1.b).
+    {
+      const withEvents = draft as { turnEvents?: Record<string, string[]> };
+      withEvents.turnEvents ??= {};
+      (withEvents.turnEvents[playerId as string] ??= []).push("played-spell");
+    }
+
     // Rule 724 (Legion) tracker: count this spell play so subsequent
     // Cards can satisfy their Legion conditions.
     if (draft.cardsPlayedThisTurn) {
