@@ -852,6 +852,27 @@ export function removeFromBoard(
   opts: LeaveOptions = {},
 ): LeaveResult[] {
   const snaps = snapshotBatch(ctx, ids);
+  // rules 370–373 — several cards KILLED together (a multi-kill cost, a wipe)
+  // are simultaneous deaths: plan their die replacements as one batch (one
+  // Zhonya's saves one of them — 373; several shields on one are ordered —
+  // 372) instead of card by card. A question parks the whole batch;
+  // `continueKillBatch` finishes it on the answer.
+  const onBoard = ids.filter((id) => isBoardZone(snaps.get(id)?.zone));
+  if (isKillCause(cause) && opts.replacements !== "skip" && onBoard.length > 1) {
+    const getCardsInZone = ctx.zones.getCardsInZone ?? (() => []);
+    const batchCtx = { ...ctx, zones: { ...ctx.zones, getCardsInZone, moveCard: ctx.zones.moveCard } };
+    const plan = runDieBatch(batchCtx, onBoard, {
+      canPrompt: true,
+      kill: { cause, playerId: cause.by ?? "", sourceCardId: cause.source ?? "", to },
+    });
+    const results = ids.map((id) =>
+      plan.suspended || plan.replaced.includes(id) || (onBoard.includes(id) && !plan.dying.includes(id))
+        ? ({ cardId: id, cause, left: false, lki: snaps.get(id) as LKISnapshot, replacedBy: "replacement" } as LeaveResult)
+        : leaveBoard(ctx, id, to, cause, { ...opts, lki: snaps.get(id), replacements: "skip" }),
+    );
+    emitLeaveEvents(ctx, results, fire);
+    return results;
+  }
   const results = ids.map((id) => leaveBoard(ctx, id, to, cause, { ...opts, lki: snaps.get(id) }));
   emitLeaveEvents(ctx, results, fire);
   return results;
