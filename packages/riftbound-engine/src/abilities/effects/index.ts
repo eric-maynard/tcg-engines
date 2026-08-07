@@ -35,6 +35,7 @@ import { handle_eachOpponentMay } from "./each-opponent-may";
 import { handle_attach } from "./attach";
 import { handle_attach_or_detach } from "./attach-or-detach";
 import { handle_detach } from "./detach";
+import { handle_become_copy } from "./become-copy";
 import { handle_sequence } from "./sequence";
 import { handle_conditional } from "./conditional";
 import { handle_optional } from "./optional";
@@ -110,6 +111,8 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "attach": handle_attach,
   "attach-or-detach": handle_attach_or_detach,
   "detach": handle_detach,
+  // rule 477.1.b (ven-137-166): equipped unit becomes a copy of a chosen unit.
+  "become-copy": handle_become_copy,
   "sequence": handle_sequence,
   "conditional": handle_conditional,
   "optional": handle_optional,

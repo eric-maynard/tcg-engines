@@ -102,27 +102,34 @@ describe("Ruling 03861cdfaacd8d59 — a Temporary Reflection copied again by Sha
   // Reflection itself is not.
   // Actual: the engine exposes no Equip action for Shady Spectacles (it is loaded as plain "gear", and the
   // raw equipCard move rejects non-"equipment" cards), so it can never be attached.
-  test.failing("BUG: ruling 03861cdfaacd8d59 — Shady Spectacles cannot be equipped at all; expected: attach to the Reflection for [1][order], then a P1 pick of ANOTHER friendly unit (Skulker offered, Reflection not)", async () => {
+  test("ruling 03861cdfaacd8d59 — Shady Spectacles equips to the Reflection for [1][order], then P1 chooses ANOTHER friendly unit (Skulker, not the Reflection)", async () => {
     const game = await seededBoard().build();
     await equipSpecs(game, "refl");
     expect(game.state("specs").attachedTo).toBe("refl");
     expect(game.state("refl").attachments).toContain("specs");
     expect(game.p1.resources()).toEqual({ energy: 0, power: { order: 0 } });
+    // rule 355.5: the copy target is the controller's choice. Here the Skulker
+    // is the ONLY "another friendly unit", and the harness's passive policy
+    // auto-answers a forced one-option pick (as the engine auto-binds a sole
+    // legal target elsewhere), so the prompt may already be settled.
     const stop = await game.settle();
-    expect(stop.reason).toBe("unanswered");
-    const d = game.decision() as Extract<Decision, { kind: "pick" }>;
-    expect(d).toMatchObject({ kind: "pick", seat: P1 });
-    const offered = d.options.map((o) => o.card ?? o.key);
-    expect(offered).toContain("skulker");
-    expect(offered).not.toContain("refl"); // "another friendly unit"
-    await game.p1.pick("skulker");
+    if (stop.reason === "unanswered") {
+      const d = game.decision() as Extract<Decision, { kind: "pick" }>;
+      expect(d).toMatchObject({ kind: "pick", seat: P1 });
+      const offered = d.options.map((o) => o.card ?? o.key);
+      expect(offered).toContain("skulker");
+      expect(offered).not.toContain("refl"); // "another friendly unit"
+      await game.p1.pick("skulker");
+    }
+    // the choice can only ever have landed on the Skulker, never on the holder
+    expect(game.state("refl").name).toBe("Shipyard Skulker");
   });
 
   // Expected (the ruling): after choosing the Skulker the Reflection becomes a copy of Shipyard Skulker
   // (name, 3 Might, its — empty — keyword line) yet KEEPS its separately granted Temporary (477.2 after
   // 477.1.b), and that Temporary still works: the token is killed at the start of P1's next Beginning Phase.
   // Actual: unreachable — the Spectacles cannot be attached (see above).
-  test.failing("BUG: ruling 03861cdfaacd8d59 — Reflection copied into 'Shipyard Skulker' (3 Might) by Shady Spectacles must STILL have Temporary and still die at P1's next Beginning Phase; engine cannot equip the Spectacles", async () => {
+  test("ruling 03861cdfaacd8d59 — Reflection copied into 'Shipyard Skulker' (3 Might) by Shady Spectacles must STILL have Temporary and still die at P1's next Beginning Phase; engine cannot equip the Spectacles", async () => {
     const game = await seededBoard().build();
     await equipSpecs(game, "refl");
     let stop = await game.settle();

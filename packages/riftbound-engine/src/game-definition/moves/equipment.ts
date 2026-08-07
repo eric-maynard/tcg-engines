@@ -20,6 +20,8 @@ import type {
 import { dispatchEvent } from "../../events/dispatcher";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId } from "../../zones/zone-configs";
+import { deductAbilityCost } from "./chain/activate-ability";
+import { canPayEquipCost, printedEquipCost } from "./equip-cost";
 
 /**
  * Check whether a unit has the given keyword, considering both its printed
@@ -39,6 +41,23 @@ function unitHasKeyword(
     return true;
   }
   return false;
+}
+
+/**
+ * rule 476.1: only an Equipment can be attached to a unit. Hand-authored defs
+ * spell the Equipment type as `cardType: "equipment"`; set-JSON cards keep the
+ * printed type "gear" for every non-unit permanent, so a "gear" card counts as
+ * an Equipment only when it prints an [Equip] ability. A plain Gear such as
+ * Petricite Monument (sfd-104-221) therefore can never be attached.
+ */
+function isAttachable(cardId: string, cardType: string): boolean {
+  if (cardType === "equipment") {
+    return true;
+  }
+  if (cardType !== "gear") {
+    return false;
+  }
+  return printedEquipCost(cardId) !== undefined;
 }
 
 /**
@@ -100,7 +119,19 @@ export const equipmentMoves: Partial<
         const meta = context.cards.getCardMeta(id as CoreCardId) as
           | Partial<RiftboundCardMeta>
           | undefined;
-        return !meta?.attachedTo;
+        if (meta?.attachedTo) {
+          return false;
+        }
+        // rule 476.1: attaching happens only through a printed [Equip] ability.
+        // A card typed "gear" without [Equip] (Petricite Monument) is not an
+        // Equipment and can never be attached.
+        if (!isAttachable(id, def.cardType)) {
+          return false;
+        }
+        // rule 476.1: [Equip] is an activated ability with a cost — it can only
+        // be used when its printed cost is payable right now.
+        const cost = printedEquipCost(id);
+        return !cost || canPayEquipCost(state, playerId, cost);
       });
       if (equipment.length === 0) {
         return [];
@@ -143,6 +174,9 @@ export const equipmentMoves: Partial<
       // "equipment" while set-JSON cards (VEN) keep "gear". Both are the same
       // card type for rule 434 (attach), so accept either spelling.
       if (!equipDef || (equipDef.cardType !== "equipment" && equipDef.cardType !== "gear")) {
+        return false;
+      }
+      if (!isAttachable(context.params.equipmentId, equipDef.cardType)) {
         return false;
       }
 
@@ -191,10 +225,28 @@ export const equipmentMoves: Partial<
         return false;
       }
 
+      // rule 476.1: the printed [Equip] cost must be payable.
+      const equipCost = printedEquipCost(context.params.equipmentId);
+      if (equipCost && !canPayEquipCost(state, context.params.playerId, equipCost)) {
+        return false;
+      }
+
       return true;
     },
     reducer: (draft, context) => {
       const { equipmentId, unitId, playerId } = context.params;
+
+      // rule 476.1: pay the printed [Equip] cost.
+      const equipCost = printedEquipCost(equipmentId);
+      if (equipCost) {
+        deductAbilityCost(
+          draft,
+          playerId,
+          { energy: equipCost.energy, power: [...equipCost.power] },
+          context.zones,
+          context.counters,
+        );
+      }
 
       // Mark equipment as attached to the unit. Equipment flagged with
       // `copyAttachedUnitText` (Svellsongur) also records `copiedFromCardId`
@@ -257,11 +309,20 @@ export const equipmentMoves: Partial<
           }
         }
         // With more than one legal choice the controller would be prompted; the
-        // engine does not model that prompt yet, so only the forced case (a
-        // single "another friendly unit") applies the copy.
-        const [only, ...rest] = candidates;
-        if (only !== undefined && rest.length === 0) {
-          registry.becomeCopyOf(unitId, only);
+        // rule 355.5: the controller chooses. A sole legal candidate is
+        // auto-bound (as resolution-time target choices are); two or more
+        // prompt the controller.
+        if (candidates.length === 1 && candidates[0] !== undefined) {
+          registry.becomeCopyOf(unitId, candidates[0]);
+        } else if (candidates.length > 1 && !draft.pendingChoice) {
+          draft.pendingChoice = {
+            effect: { holderId: unitId, type: "become-copy" },
+            options: candidates as never,
+            playerId: playerId as never,
+            remaining: 1,
+            sourceCardId: equipmentId as never,
+            type: "choose-target",
+          };
         }
       }
     },

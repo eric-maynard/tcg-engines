@@ -95,7 +95,7 @@ describe("Ruling 41492fa40ce64fb4 — Aphelios, Exalted × Svellsongur / Shady S
   // but ally did not have the ability when the attachment event occurred → NO trigger from ally (and
   // none from Aphelios, who was not equipped). Actual: the attach itself is rejected (see above), so the
   // scenario cannot be reached; the assertions on the copy never hold.
-  test.failing("BUG: ruling 41492fa40ce64fb4 — a unit that becomes a copy of Aphelios via Shady Spectacles does not trigger (engine: cannot attach ven-137-166)", async () => {
+  test("ruling 41492fa40ce64fb4 — a unit that becomes a copy of Aphelios via Shady Spectacles does not trigger (engine: cannot attach ven-137-166)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1, power: { order: 1 } })
       .unit(P1, "base", APHELIOS, "aph")

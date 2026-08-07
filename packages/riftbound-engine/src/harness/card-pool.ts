@@ -114,6 +114,7 @@ export function toLookupPayload(
     abilities: (def.abilities ?? []) as CardDefinitionLookup["abilities"],
     cardType: overrides?.cardType ?? def.cardType,
     copyAttachedUnitText: def.copyAttachedUnitText as boolean | undefined,
+    copyChosenUnitToHolder: def.copyChosenUnitToHolder as boolean | undefined,
     domain: Array.isArray(domain) ? [...domain] : (domain as string | undefined),
     energyCost: overrides?.energyCost ?? def.energyCost,
     id: instanceId,

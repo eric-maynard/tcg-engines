@@ -85,7 +85,7 @@ describe("Armed Assailant (sfd-002-221)", () => {
 
   test("'even if it's already attached': a Dirk worn by another unit is offered and moves onto the Assailant", async () => {
     const game = await scenario()
-      .resources(P1, { energy: 6, power: { fury: 1 } })
+      .resources(P1, { energy: 6, power: { fury: 2 } })
       .gear(P1, DIRK, "dirk")
       .unit(P1, "base", { might: 2, name: "Squire" }, "squire")
       .hand(P1, CARD, "aa")
