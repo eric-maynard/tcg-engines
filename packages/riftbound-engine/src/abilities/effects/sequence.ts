@@ -37,8 +37,17 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
   const executeEffect = h.executeEffect;
   const seq = effect as unknown as {
     effects?: ExecutableEffect[];
+    independentExecution?: boolean;
     pendingValue?: { source: number };
   };
+  // rule 820.2.a — a continuation parked behind a modal prompt is its OWN
+  // execution and makes its own choices: it must not inherit the target the
+  // prompt just picked, or a repeated modal effect would silently re-hit the
+  // previous execution's target instead of prompting again.
+  if (seq.independentExecution === true && ctx.boundTargets !== undefined) {
+    const { boundTargets: _priorPick, ...rest } = ctx;
+    ctx = rest as EffectContext;
+  }
   if (seq.effects) {
     // rule-id: sfd-206-221 (rule 355.8) — "Choose a friendly unit and a
     // spell": the chain item the caster locked for a bare lead `counter` rides
@@ -394,7 +403,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         if (rest.length > 0) {
           ctx.draft.pendingChoice = {
             ...(parked as object),
-            then: { effects: rest, type: "sequence" },
+            then: { effects: rest, independentExecution: true, type: "sequence" },
             // The continuation is the REST OF THE SEQUENCE, not the prompt's
             // own follow-up: it must still run when an optional prompt is
             // declined ("you may [Predict], then reveal the top card").

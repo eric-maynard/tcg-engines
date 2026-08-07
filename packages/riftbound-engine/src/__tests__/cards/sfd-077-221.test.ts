@@ -175,7 +175,7 @@ describe("Rocket Barrage (sfd-077-221)", () => {
     expect((await noSecondPip.p1.try((p) => p.cast("rb", { repeat: 1 }))).ok).toBe(false);
   });
 
-  test.failing("BUG: [Repeat] paid → the effect executes twice with independent choices (820.2.a): deal 4 to a base unit AND kill a gear", async () => {
+  test("[Repeat] paid → the effect executes twice with independent choices (820.2.a): deal 4 to a base unit AND kill a gear", async () => {
     // Expected: two mode/target rounds — "four" dies to 4 damage and the enemy Snax is killed.
     // Actual: after the first mode resolves the spell finishes; the paid-for second execution never happens.
     const game = await board(8, 2).build();
@@ -194,7 +194,7 @@ describe("Rocket Barrage (sfd-077-221)", () => {
     expect(game.zoneOf("big")).toBe("trash");
   });
 
-  test.failing("BUG: [Repeat] 'Kill a gear' twice on two different gear kills both (820.2.a)", async () => {
+  test("[Repeat] 'Kill a gear' twice on two different gear kills both (820.2.a)", async () => {
     const game = await board(8, 2).build();
     await game.p1.cast("rb", { repeat: 1 });
     await resolve(game, [KILL_GEAR, "snax", KILL_GEAR, "mySnax"]);
