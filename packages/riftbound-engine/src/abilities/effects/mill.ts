@@ -1,5 +1,6 @@
 // Effect handler: "mill" — the [Burn N] keyword action.
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
+import { refillDeckOrBurnOut } from "../../operations/points";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
 
@@ -28,6 +29,15 @@ export function handle_mill(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   const count = typeof raw === "number" ? raw : resolveAmount(raw, ctx);
   const burned: string[] = [];
   for (let i = 0; i < count; i++) {
+    // rule 440.4 / 431.2 — burning with an empty Main Deck makes that player
+    // Burn Out (trash shuffled back in, an opponent gains 1 point); the burn
+    // then continues against the refilled deck.
+    if (
+      ctx.zones.getCardsInZone("mainDeck" as CoreZoneId, ctx.playerId as CorePlayerId).length === 0 &&
+      !refillDeckOrBurnOut(ctx.draft, ctx.playerId, ctx)
+    ) {
+      break;
+    }
     const deck = ctx.zones.getCardsInZone("mainDeck" as CoreZoneId, ctx.playerId as CorePlayerId);
     const top = deck[0];
     if (top === undefined) {
