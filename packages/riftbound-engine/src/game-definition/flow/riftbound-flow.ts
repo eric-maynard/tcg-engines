@@ -748,7 +748,9 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             endIf: (context) =>
               !(context.state as RiftboundGameState).interaction?.chain?.active &&
               !(context.state as RiftboundGameState).pendingChoice,
-            next: "channel",
+            // The Scoring Step is its own phase (see `scoring` below) so the
+            // Hold triggers it fires can hold the turn open too.
+            next: "scoring",
             onBegin: (context) => {
               context.state.turn = {
                 ...context.state.turn,
@@ -914,13 +916,36 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               }
             },
 
-            onEnd: (context) => {
+            order: 2,
+          },
+
+          /**
+           * Scoring Step of the Beginning Phase (rule 315.2.b), modelled as its
+           * own flow phase.
+           *
+           * rule 315.2.a→b / 317.1: the Scoring Step may not run until the
+           * Beginning Step's triggers have resolved, and the Hold triggers IT
+           * fires must resolve before the Channel Phase begins. A phase's onEnd
+           * cannot hold its own phase open (the transition is already under
+           * way), so the deferred scoring runs here instead, where `endIf` can
+           * keep the turn parked until the Hold chain empties.
+           *
+           * `turn.phase` is deliberately NOT written: this is still the
+           * Beginning Phase as far as the rules and the game state are
+           * concerned.
+           */
+          scoring: {
+            endIf: (context) =>
+              !(context.state as RiftboundGameState).interaction?.chain?.active &&
+              !(context.state as RiftboundGameState).pendingChoice,
+            next: "channel",
+            onBegin: (context) => {
               if (takeDeferredStep(context.state, "hold-scoring")) {
                 runHoldScoringStep(context);
               }
             },
 
-            order: 2,
+            order: 2.5,
           },
 
           /**

@@ -277,7 +277,11 @@ function renderRuneStacks(runes) {
     const step = visibleCards.length > 1 ? Math.min(FAN_STEP, FAN_SPAN / (visibleCards.length - 1)) : FAN_STEP;
     const label = DOMAIN_LABELS[domain] ?? domain[0].toUpperCase();
     const labelText = cards.length > 1 ? `${label} (${cards.length})` : label;
-    html += `<div class="rune-stack" style="min-height:${stackHeight + 18}px;height:${stackHeight + 18}px;">`;
+    // [rule:ui-rune-pool-never-overflows-upward] Only `height` is set inline: an
+    // inline min-height beats the stylesheet's `max-height:100%`, so the stack
+    // could not shrink with the hand row and spilled up over the Legend/Champion
+    // zone. With height alone the clamp applies when the row is squeezed.
+    html += `<div class="rune-stack" style="height:${stackHeight + 18}px;">`;
     html += `<div class="rune-stack-label" style="color:${color};">${labelText}</div>`;
     visibleCards.forEach((c, i) => {
       html += renderRuneCard(c, 16 + Math.round(i * step), i + 1, color);

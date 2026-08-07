@@ -192,6 +192,34 @@ describe("Ornn, Blacksmith (sfd-058-221)", () => {
     expect(game.p1.runes()).toHaveLength(2); // channel phase still happened
   });
 
+  test("rule 315.2.b: with a start-of-turn trigger ALSO on the chain, the hold trigger still resolves before Channel/Draw", async () => {
+    // Loose Cannon (ogn-251-298) fires at the start of the Beginning Phase, so hold scoring is
+    // deferred until that chain empties; the hold trigger it then queues must still be answered
+    // while the turn is in its Beginning Phase — not after runes were channeled and a card drawn.
+    const game = await scenario()
+      .turn(2)
+      .active(P2)
+      .legend(P1, "ogn-251-298", "cannon")
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", CARD, "ornn")
+      .deck(P1, [FILLER, SNAX, DIRK, CANTRIP, FILLER], ["u1", "snax", "dirk", "spell", "fifth"])
+      .build();
+    await game.p2.endTurn();
+    const stop = await game.settle();
+    expect(stop.reason).toBe("unanswered");
+    // Ornn's hold trigger is the open prompt, and nothing past the Scoring Step has run yet.
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
+    expect(game.phase()).toBe("beginning");
+    expect(game.p1.runes()).toHaveLength(0);
+    await game.p1.pick("snax");
+    await game.settle();
+    // Now the rest of the turn happens: Loose Cannon's draw, Ornn's gear, then the draw-phase card.
+    expect(game.phase()).toBe("main");
+    expect(game.p1.runes()).toHaveLength(2);
+    expect(game.p1.hand()).toContain("snax");
+    expect(game.p1.points()).toBe(1);
+  });
+
   test("no hold trigger when Ornn sits in base while another unit holds (only the hold point + the draw-phase card)", async () => {
     const game = await scenario()
       .turn(2)
