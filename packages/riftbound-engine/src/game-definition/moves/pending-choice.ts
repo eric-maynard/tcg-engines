@@ -747,6 +747,7 @@ export function isValidPickManyAnswer(
   choice: PickManyChoice,
   pickedKeys: unknown,
   mightOf?: (cardId: string) => number,
+  zoneOf?: (cardId: string) => string | undefined,
 ): boolean {
   const picked = pickedKeys === undefined ? [] : pickedKeys;
   if (!Array.isArray(picked)) {
@@ -769,6 +770,18 @@ export function isValidPickManyAnswer(
       return sum + mightOf(cardId);
     }, 0);
     if (total > cap) {
+      return false;
+    }
+  }
+  // rule 355.11.b — an "at the same location" group requirement: the subset
+  // itself must sit at one location.
+  if (choice.constraint?.sameLocation === true && zoneOf) {
+    const locations = new Set(
+      (picked as string[]).map((key) =>
+        zoneOf(choice.options.find((o) => o.key === key)?.cardId ?? key),
+      ),
+    );
+    if (locations.size > 1) {
       return false;
     }
   }
@@ -1114,8 +1127,11 @@ export const pendingChoiceMoves: Partial<
       if (choice.type === "pick-many") {
         return (
           choice.playerId === context.params.playerId &&
-          isValidPickManyAnswer(choice, context.params.pickedKeys, (id) =>
-            getCardEffectiveMight(id, (m) => context.cards.getCardMeta(m as CoreCardId)),
+          isValidPickManyAnswer(
+            choice,
+            context.params.pickedKeys,
+            (id) => getCardEffectiveMight(id, (m) => context.cards.getCardMeta(m as CoreCardId)),
+            (id) => context.zones.getCardZone(id as CoreCardId),
           )
         );
       }
@@ -1345,7 +1361,11 @@ export const pendingChoiceMoves: Partial<
           return opt?.label ?? (opt?.cardId ? (getGlobalCardRegistry().get(opt.cardId)?.name ?? opt.cardId) : key);
         };
         return candidates
-          .filter((pickedKeys) => isValidPickManyAnswer(choice, pickedKeys, mightOf))
+          .filter((pickedKeys) =>
+            isValidPickManyAnswer(choice, pickedKeys, mightOf, (id) =>
+              context.zones.getCardZone(id as CoreCardId),
+            ),
+          )
           .map((pickedKeys) => ({
             label: pickedKeys.length > 0 ? pickedKeys.map(nameOf).join(" + ") : "None",
             pickedKeys,
@@ -1534,8 +1554,11 @@ export const pendingChoiceMoves: Partial<
       if (choice.type === "pick-many") {
         const pickedKeys = (context.params.pickedKeys as string[] | undefined) ?? [];
         if (
-          !isValidPickManyAnswer(choice, pickedKeys, (id) =>
-            getCardEffectiveMight(id, (m) => context.cards.getCardMeta(m as CoreCardId)),
+          !isValidPickManyAnswer(
+            choice,
+            pickedKeys,
+            (id) => getCardEffectiveMight(id, (m) => context.cards.getCardMeta(m as CoreCardId)),
+            (id) => context.zones.getCardZone(id as CoreCardId),
           )
         ) {
           return;

@@ -1129,7 +1129,11 @@ export interface PickManyChoice {
   readonly max: number;
   readonly semantics: "target" | "drop" | "replacement-assign" | "subset";
   readonly prompt?: string;
-  readonly constraint?: { readonly totalMightAtMost?: number };
+  readonly constraint?: {
+    readonly totalMightAtMost?: number;
+    // rule 355.11.b — every picked card must share one location.
+    readonly sameLocation?: boolean;
+  };
   readonly resume: PendingResume;
 }
 
@@ -1301,8 +1305,12 @@ export interface RiftboundGameState {
    */
   skipFirstDrawFor?: PlayerId;
 
-  /** Additional costs paid for the current card being played */
-  readonly additionalCostsPaid?: Record<string, boolean>;
+  /**
+   * rule 356.2 — additional costs paid per played card: the list of paid cost
+   * ids (see `moves/play/cost-model.ts`), or the legacy boolean. Read through
+   * `additionalCostWasPaid(state, cardId, id?)`.
+   */
+  readonly additionalCostsPaid?: Record<string, boolean | readonly string[]>;
 
   /**
    * rule-id: ogn-064-298 / sfd-206-221 — card id the most recent `counter`

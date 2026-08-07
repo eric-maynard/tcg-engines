@@ -50,6 +50,53 @@ function noteLethalDamage(ctx: EffectContext, targetId: string, total: number, d
   }
 }
 
+/**
+ * rule 355.11.b (rule-id: sfd-080-221 Bellows Breath) — "units at the same
+ * location" is a GROUP requirement on the chosen targets, not a per-target one.
+ * If the group no longer shares one location as the effect resolves (something
+ * moved in response), its controller chooses a SUBSET of the ORIGINAL targets
+ * that does, and only that subset is affected — never a unit that was not
+ * chosen. Raises a `pick-many {semantics:"subset"}` whose answer re-enters this
+ * handler with the subset bound. Returns true when the prompt was parked.
+ */
+function raiseSameLocationSubsetRepick(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  targets: readonly string[],
+): boolean {
+  const location = (effect.target as { location?: string } | undefined)?.location;
+  if (
+    (location !== "here" && location !== "same") ||
+    targets.length < 2 ||
+    ctx.draft.pendingChoice !== undefined ||
+    (effect as { _subsetChecked?: boolean })._subsetChecked === true
+  ) {
+    return false;
+  }
+  const zones = new Set(targets.map((id) => ctx.zones.getCardZone(id as CoreCardId)));
+  if (zones.size <= 1) {
+    return false;
+  }
+  ctx.draft.pendingChoice = {
+    constraint: { sameLocation: true },
+    max: targets.length,
+    min: 0,
+    options: targets.map((id) => ({ cardId: id, key: id })),
+    playerId: ctx.playerId,
+    prompt: "Choose original targets at one location to affect",
+    resume: {
+      effect: { ...effect, _subsetChecked: true },
+      kind: "subset-repick",
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+    },
+    semantics: "subset",
+    sourceCardId: ctx.sourceCardId,
+    type: "pick-many",
+  } as RiftboundGameState["pendingChoice"];
+  return true;
+}
+
 export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
   // rule-id: ogn-145-298 — a global "Prevent all spell and ability damage"
@@ -274,6 +321,9 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
   // only its instruction is illegal, so deal nothing to it and keep the splash.
   const splashOnly = (effect as { _splashOnly?: boolean })._splashOnly === true;
   const targets = splashOnly ? [] : getTargetIds(effect, ctx);
+  if (raiseSameLocationSubsetRepick(effect, ctx, targets)) {
+    return;
+  }
   const hits: { targetId: string; amount: number }[] = targets.map((targetId) => ({
     amount: amount > 0 ? amount + bonusDamage : amount,
     targetId,
