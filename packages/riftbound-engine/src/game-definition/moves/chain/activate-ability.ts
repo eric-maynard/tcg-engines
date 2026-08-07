@@ -215,6 +215,28 @@ function deflectBudget(
   return total - ((cost?.power as string[] | undefined)?.length ?? 0);
 }
 
+/**
+ * rule-id: unl-045-219 (Forgotten Signpost) — rule 402.3 / 204.1.b: an effect
+ * that pays by exhausting one unit and moves "a DIFFERENT unit you control"
+ * needs two distinct units, so the ids a `to: "exhausted-ally"` move may
+ * legally carry are only those with some other ready unit left to pay.
+ */
+function exhaustedAllyMoveTargets(
+  effect: unknown,
+  resolverCtx: Parameters<typeof resolveTarget>[1],
+): string[] | undefined {
+  const e = effect as { to?: unknown; target?: unknown; costExhaust?: unknown } | undefined;
+  if (e?.to !== "exhausted-ally" || !e.target || !e.costExhaust) {
+    return undefined;
+  }
+  const movers = resolveTarget({ ...(e.target as TargetDescriptor), quantity: "all" }, resolverCtx);
+  const payers = resolveTarget(
+    { ...(e.costExhaust as TargetDescriptor), quantity: "all" },
+    resolverCtx,
+  );
+  return movers.filter((m) => payers.some((p) => p !== m));
+}
+
 function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
   let t = (effect as { target?: unknown } | undefined)?.target;
   // rule 355.7/355.8: a sequence ability ("Kill a friendly unit. Look at the
@@ -855,6 +877,28 @@ export const activateAbility: Defs["activateAbility"] = {
       return false;
     }
 
+    // rule 402.3 (unl-045-219) — "move a DIFFERENT unit you control": with a
+    // single unit the mover and the exhaust-payer would have to be the same
+    // card, so the ability has no legal activation at all.
+    const differentUnitMovers = exhaustedAllyMoveTargets(ability.effect, {
+      cards: context.cards,
+      choosing: true,
+      draft: state,
+      playerId,
+      sourceCardId: cardId,
+      sourceZone: zone,
+      zones: context.zones,
+    });
+    if (differentUnitMovers) {
+      if (differentUnitMovers.length === 0) {
+        return false;
+      }
+      const named = (context.params.targets as string[] | undefined)?.[0];
+      if (named !== undefined && !differentUnitMovers.includes(named)) {
+        return false;
+      }
+    }
+
     // rule-id: sfd-052-221 (rule 355.14.b) — a supplied play-time target
     // must be one of the legal candidates for the effect's chosen target.
     const boundTargets = context.params.targets as string[] | undefined;
@@ -1201,6 +1245,21 @@ export const activateAbility: Defs["activateAbility"] = {
           continue;
         }
 
+        // rule 402.3 (unl-045-219) — only units that leave some OTHER ready
+        // unit free to pay the exhaust cost are movable.
+        const exhaustAllyMovers = exhaustedAllyMoveTargets(ability.effect, {
+          cards: context.cards,
+          choosing: true,
+          draft: state,
+          playerId,
+          sourceCardId: entry.hostCardId,
+          sourceZone: hostZone,
+          zones: context.zones,
+        });
+        if (exhaustAllyMovers && exhaustAllyMovers.length === 0) {
+          continue;
+        }
+
         // rule-id: sfd-052-221 (rule 355.10.f / 355.14.b) — enumerate one
         // activation per legal caster-chosen target so the choice is locked
         // when the ability is finalized on the chain, not at resolution.
@@ -1219,6 +1278,9 @@ export const activateAbility: Defs["activateAbility"] = {
               zones: context.zones,
             },
           );
+          if (exhaustAllyMovers) {
+            targetOptions = targetOptions.filter((id) => exhaustAllyMovers.includes(id));
+          }
           // rule 809.1.c (rule-id: sfd-120-221) — a Deflect object the chooser
           // cannot pay the surcharge for is not a legal choice.
           const budget = deflectBudget(
@@ -1372,14 +1434,9 @@ export const activateAbility: Defs["activateAbility"] = {
         );
       }
 
-      // Rule 730.2: "Spend N XP" reduces the controlling player's XP.
-      const xpCost = cost.xp as number | undefined;
-      if (xpCost && xpCost > 0) {
-        const player = draft.players[playerId];
-        if (player) {
-          player.xp = Math.max(0, (player.xp ?? 0) - xpCost);
-        }
-      }
+      // rule 730.2: "Spend N XP" reduces the controlling player's XP — already
+      // charged by the `deductAbilityCost(cost)` call above; charging it again
+      // here would spend the XP twice.
 
       // Rule 357.2 / 422.3: pay the "Discard N" cost — the chosen hand
       // card is trashed before the ability is placed on the chain.
