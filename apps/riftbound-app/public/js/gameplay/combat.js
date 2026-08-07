@@ -29,7 +29,7 @@ function renderShowdownCard(card) {
   const baseMight = card.might ?? 0;
   const mightMod = card.meta?.mightModifier ?? 0;
   const staticBonus = card.meta?.staticMightBonus ?? 0;
-  const effectiveMight = baseMight + mightMod + staticBonus;
+  const effectiveMight = baseMight + mightMod + staticBonus + buffMightBonus(card);
 
   return `
     <div class="${classes.join(" ")}"
@@ -47,6 +47,15 @@ function renderShowdownCard(card) {
       ${card.meta?.damage > 0 ? `<div class="sc-damage">${card.meta.damage}</div>` : ""}
     </div>
   `;
+}
+
+/**
+ * rule 733: buffs stack and each adds +1 Might. The engine records the first
+ * buff as `meta.buffed` and every further one in `meta.extraBuffs`, so both
+ * terms are needed wherever the client re-derives current Might.
+ */
+function buffMightBonus(card) {
+  return (card?.meta?.buffed ? 1 : 0) + (card?.meta?.extraBuffs ?? 0);
 }
 
 /** Extract combat-relevant keywords from a card */
@@ -87,7 +96,7 @@ function getCardKeywords(card) {
 function calculateCombatPreview(attackerUnits, defenderUnits) {
   let attackerMight = 0;
   for (const unit of attackerUnits) {
-    let might = (unit.might || 0) + (unit.meta?.mightModifier || 0) + (unit.meta?.staticMightBonus || 0);
+    let might = (unit.might || 0) + (unit.meta?.mightModifier || 0) + (unit.meta?.staticMightBonus || 0) + buffMightBonus(unit);
     // Assault keyword adds Might while attacking
     const kws = getCardKeywords(unit);
     const assaultKw = kws.find(k => k.name.toLowerCase() === "assault");
@@ -97,7 +106,7 @@ function calculateCombatPreview(attackerUnits, defenderUnits) {
 
   let defenderMight = 0;
   for (const unit of defenderUnits) {
-    let might = (unit.might || 0) + (unit.meta?.mightModifier || 0) + (unit.meta?.staticMightBonus || 0);
+    let might = (unit.might || 0) + (unit.meta?.mightModifier || 0) + (unit.meta?.staticMightBonus || 0) + buffMightBonus(unit);
     // Shield keyword adds Might while defending
     const kws = getCardKeywords(unit);
     const shieldKw = kws.find(k => k.name.toLowerCase() === "shield");

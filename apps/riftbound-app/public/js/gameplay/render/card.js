@@ -154,7 +154,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
         <div class="card-back"></div>
         <button class="card-hide-btn"
                 type="button"
-                title="Reveal this card"
+                title="Uncover this card (local view only)"
                 onpointerdown="event.stopPropagation();"
                 onclick="event.stopPropagation(); toggleHideHandCard('${esc(card.id)}');">Show</button>
       </div>
@@ -192,16 +192,20 @@ function renderCardElement(card, isFacedown = false, zone = "") {
     ? ""
     : `onpointerdown="onPointerDown(event, '${esc(card.id)}')"`;
 
-  // W13: per-card Hide toggle on viewer-owned hand cards. Click replaces
+  // W13: per-card cover toggle on viewer-owned hand cards. Click replaces
   // the face with a card-back; state persists in localStorage.
+  // rule 811.1: "Hide" is the Discretionary Action gated on the [Hidden]
+  // keyword (engine move `hideCard`), so this purely cosmetic local toggle
+  // must NOT be labelled "Hide" — it would read as that rules action on
+  // every hand card, including cards without [Hidden].
   let hideBtn = "";
   if (zone === "hand" && isOwned && card.id) {
     hideBtn = `<button
       class="card-hide-btn"
       type="button"
-      title="Hide this card (local, persists via localStorage)"
+      title="Cover this card in your own view only (local, persists via localStorage) — not the [Hidden] Hide action"
       onpointerdown="event.stopPropagation();"
-      onclick="event.stopPropagation(); toggleHideHandCard('${esc(card.id)}');">Hide</button>`;
+      onclick="event.stopPropagation(); toggleHideHandCard('${esc(card.id)}');">Cover</button>`;
   }
 
   // rule-827 (ven-021-166): effective Might = base + mightModifier + staticMightBonus + buff.
@@ -210,6 +214,9 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   // Empower / modify-might effects are visible on the board card.
   // rule-buff-might (unl-162-219): Buff is a separate +1 term (engine: `meta.buffed ? 1 : 0`),
   // not folded into mightModifier, so it must be added here to show on the board.
+  // rule 733 (ogn-078-298): buffs STACK — the engine keeps the extra ones in
+  // `meta.extraBuffs` (first buff sets `buffed`, each further buff increments
+  // `extraBuffs`), so effective Might is `buffed + extraBuffs`, not just +1.
   // rule-sfd-068-221: attached Equipment bonus is a separate term (server-computed
   // meta.equipmentMightBonus from equippedWith) and must be included too.
   // rule 432.1.a: while a unit is in combat in the matching role its CURRENT
@@ -217,7 +224,7 @@ function renderCardElement(card, isFacedown = false, zone = "") {
   // only applies those inside combat resolution, so fold them in for display.
   const baseMight = card.might;
   const effMight = baseMight != null
-    ? Math.max(0, baseMight + (card.meta?.mightModifier ?? 0) + (card.meta?.staticMightBonus ?? 0) + (card.meta?.buffed ? 1 : 0) + (card.meta?.equipmentMightBonus ?? 0) + combatRoleMightBonus(card))
+    ? Math.max(0, baseMight + (card.meta?.mightModifier ?? 0) + (card.meta?.staticMightBonus ?? 0) + (card.meta?.buffed ? 1 : 0) + (card.meta?.extraBuffs ?? 0) + (card.meta?.equipmentMightBonus ?? 0) + combatRoleMightBonus(card))
     : null;
   const mightBadge = (effMight != null && effMight !== baseMight)
     ? `<div class="card-might" title="Effective Might">${effMight}</div>`
