@@ -10,7 +10,12 @@
  * the stored effect (recycle / banish / discard), and clears the state.
  */
 
-import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
+import type {
+  CardId as CoreCardId,
+  PlayerId as CorePlayerId,
+  ZoneId as CoreZoneId,
+  GameMoveDefinitions,
+} from "@tcg/core";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
 import { markContestedOnArrival } from "../../abilities/effects/move";
@@ -38,7 +43,8 @@ import {
   getOptionalPlayCost,
   staticEnterReadyApplies,
 } from "./play/cost";
-import { isLegalMultiTargetSet } from "./play/targeting";
+import { isLegalMultiTargetSet, spellEffectHasLegalTargets } from "./play/targeting";
+import type { SpellEffectTargetShape } from "./play/targeting";
 
 const isBoardZone = (z: string): boolean => z === "base" || z.startsWith("battlefield-");
 
@@ -398,6 +404,78 @@ export function pickDefaultForChoice(choice: PendingChoice): string | number | u
     return undefined;
   }
   return choice.revealed.find((id) => isValidPendingPick(choice, id));
+}
+
+/**
+ * rule 337.1.b / 337.2 / 354.3 (ogn-242-298 Baited Hook) — finalize a pending
+ * play an effect created ("banish a unit from among them and play it"): the
+ * card's player picks its location and the unit enters the board immediately,
+ * firing its play triggers on top of the chain. Returns true when a location
+ * prompt was parked (the caller must stop and wait for the answer).
+ */
+function finalizePendingPlay(
+  draft: RiftboundGameState,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+  play: { cardId: string; playerId: string; sourceCardId?: string; then?: unknown },
+): boolean {
+  // rule 355.2 / 355.4: base, or any battlefield this player controls.
+  const destOptions = [
+    "base",
+    ...Object.entries(draft.battlefields)
+      .filter(([, bf]) => bf.controller === play.playerId)
+      .map(([bfId]) => `battlefield-${bfId}`),
+  ];
+  if (destOptions.length > 1) {
+    draft.pendingChoice = {
+      cardId: play.cardId,
+      options: destOptions,
+      playerId: play.playerId,
+      sourceCardId: play.sourceCardId,
+      ...(play.then !== undefined ? { then: play.then } : {}),
+      type: "choose-destination",
+    } as RiftboundGameState["pendingChoice"];
+    return true;
+  }
+  context.zones.moveCard({
+    cardId: play.cardId as CoreCardId,
+    targetZoneId: "base" as CoreZoneId,
+  });
+  // rule 143.4: a unit entering the board is exhausted however it was played.
+  if (
+    getGlobalCardRegistry().get(play.cardId)?.cardType === "unit" &&
+    !staticEnterReadyApplies(play.cardId, draft, play.playerId, context.zones)
+  ) {
+    context.counters?.setFlag?.(play.cardId as CoreCardId, "exhausted", true);
+  }
+  // Guarded so unit-test stubs that omit the full context bags don't crash.
+  if (!context.cards || !context.counters || typeof context.zones.getCardsInZone !== "function") {
+    return false;
+  }
+  const trigCtx = {
+    cards: context.cards,
+    counters: context.counters,
+    draft,
+    zones: context.zones,
+  };
+  // rule 419.4.a: a card played by an effect is still played.
+  fireTriggers(
+    { cardId: play.cardId, paidAdditionalCost: false, playerId: play.playerId, type: "play-self" },
+    trigCtx,
+  );
+  fireTriggers(
+    {
+      cardId: play.cardId,
+      cardType: getGlobalCardRegistry().get(play.cardId)?.cardType ?? "unit",
+      playerId: play.playerId,
+      type: "play-card",
+    },
+    trigCtx,
+  );
+  if (draft.cardsPlayedThisTurn) {
+    draft.cardsPlayedThisTurn[play.playerId] = (draft.cardsPlayedThisTurn[play.playerId] ?? 0) + 1;
+  }
+  return false;
 }
 
 /**
@@ -1412,6 +1490,8 @@ export const pendingChoiceMoves: Partial<
         return;
       }
       const pickedCardId = picks[picks.length - 1] as string;
+      /** rule 337.1.b (ogn-242-298) — a "banish it and play it" pick, finalized below. */
+      let pendingPlayFinalize: string | undefined;
       let remaining = choice.remaining ?? 1;
       let taken = choice.taken ?? 0;
       let revealed = choice.revealed as readonly string[];
@@ -1514,7 +1594,13 @@ export const pendingChoiceMoves: Partial<
         if (draft.cardsPlayedThisTurn) {
           draft.cardsPlayedThisTurn[playedOwner] = (draft.cardsPlayedThisTurn[playedOwner] ?? 0) + 1;
         }
-      } else if (choice.onPicked === "play") {
+      } else if (
+        choice.onPicked === "play" &&
+        // rule 358.3.a (ogn-115-298 × ogn-026-298) — an instruction to play a
+        // card is skipped as impossible when that player can't play cards this
+        // turn; the card simply stays where the pick put it (banishment).
+        draft.cannotPlayCardsThisTurn?.[choice.prompter] !== true
+      ) {
         const pool = draft.runePools[choice.prompter];
         const raw = getGlobalCardRegistry().getCostToDeduct(pickedCardId as string);
         // rule 356.1.b.1 (ogn-025-298): "ignoring its cost" waives the whole
@@ -1537,7 +1623,38 @@ export const pendingChoiceMoves: Partial<
                   (pool.power.rainbow ?? 0) >=
                 (amount ?? 0),
             ));
-        if (affordable) {
+        // rule 354.2 (ogn-115-298 × ogn-095-298) — "play" a spell puts it on
+        // the chain; it is never placed on the board like a permanent.
+        const isSpell =
+          choice.playFrom !== "trash" &&
+          getGlobalCardRegistry().getCardType(pickedCardId as string) === "spell";
+        // rule 355.8 / 358.5 (ogn-115-298 × ogn-064-298) — a spell with no
+        // legal target cannot be finalized: the play attempt is undone, so the
+        // card stays where it is and nothing is paid.
+        const spellPlayable =
+          !isSpell ||
+          spellEffectHasLegalTargets(
+            (getGlobalCardRegistry().getAbilities(pickedCardId as string) ?? []).find(
+              (a: { type: string }) => a.type === "spell",
+            )?.effect as SpellEffectTargetShape | undefined,
+            {
+              cards: {
+                getCardController: (c: CoreCardId) => context.cards.getCardController?.(c),
+                getCardMeta: (c: CoreCardId) => context.cards.getCardMeta?.(c),
+                getCardOwner: (c: CoreCardId) => context.cards.getCardOwner(c),
+              },
+              choosing: true,
+              draft,
+              playerId: choice.prompter,
+              sourceCardId: pickedCardId as string,
+              zones: {
+                getCardZone: (c: CoreCardId) => context.zones.getCardZone(c),
+                getCardsInZone: (z: CoreZoneId, p?: CorePlayerId) =>
+                  context.zones.getCardsInZone(z, p),
+              },
+            } as Parameters<typeof spellEffectHasLegalTargets>[1],
+          );
+        if (affordable && spellPlayable) {
           if (pool) {
             pool.energy = Math.max(0, pool.energy - energy);
             for (const [domain, amount] of Object.entries(power)) {
@@ -1619,6 +1736,23 @@ export const pendingChoiceMoves: Partial<
               draft.cardsPlayedThisTurn[playedOwner] =
                 (draft.cardsPlayedThisTurn[playedOwner] ?? 0) + 1;
             }
+          } else if (isSpell) {
+            // rule 354.2 / 419.1 (ogn-115-298) — the instructed spell play puts
+            // it on the chain under the instructed player; it resolves there and
+            // ends in its owner's trash like any other spell.
+            castSpellFromTrash(pickedCardId as string, choice.prompter, false, {
+              draft,
+              zones: context.zones,
+            });
+          } else if (choice.playImmediate) {
+            // rule 337.1.b / 337.2 (ogn-242-298) — "banish a unit from among
+            // them … and play it" is ONE instruction: the banished card is a
+            // PENDING PLAY, not a chain item that waits its turn. It finalizes
+            // as soon as the resolving ability finishes its instructions, its
+            // player picks the location, and the unit enters the board at once.
+            // Deferred to after "then recycle the rest" so the rest of the
+            // instruction happens before the location prompt.
+            pendingPlayFinalize = pickedCardId as string;
           } else {
             draft.interaction = addToChain(
               draft.interaction ?? createInteractionState(),
@@ -1674,6 +1808,23 @@ export const pendingChoiceMoves: Partial<
       // rule-id: ogn-235-298 — one `recycle` event for the whole batch
       // (picked-to-recycle and/or recycled rest) so Karma's buff fires once.
       fireRecycleEvent(draft, context, choice.prompter, recycledIds);
+
+      // rule 337.1.b / 337.2 / 354.3 (ogn-242-298) — finalize the pending play:
+      // its player chooses the location and the unit enters the board now, so
+      // its play trigger lands ABOVE anything already on the chain (a Deathknell
+      // queued earlier by the same ability resolves last).
+      if (pendingPlayFinalize !== undefined) {
+        if (
+          finalizePendingPlay(draft, context, {
+            cardId: pendingPlayFinalize,
+            playerId: choice.prompter,
+            sourceCardId: choice.sourceCardId,
+            then: choice.then,
+          })
+        ) {
+          return;
+        }
+      }
 
       // Resume the originating effect's `then` clause (e.g. discard 1 → draw 1).
       if (choice.then) {

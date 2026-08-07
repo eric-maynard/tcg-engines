@@ -135,7 +135,7 @@ describe("Ruling 23c9277d071cd1f7 — a counterspell banished with Promising Fut
   // for 0 Energy; Wind Wall then has no spell to target → cannot be finalized (355.8), the attempt is undone
   // (358.5) and Wind Wall stays in P1's banishment with P1's [calm][calm] unspent.
   // Actual: not implemented.
-  test.failing("BUG: ruling 23c9277d071cd1f7 — if P2 picks a permanent, P1's Wind Wall has no legal target, is not finalized and remains BANISHED (calm unspent); engine does not implement the play pass", async () => {
+  test("ruling 23c9277d071cd1f7 — if P2 picks a permanent, P1's Wind Wall has no legal target, is not finalized and remains BANISHED (calm unspent); engine does not implement the play pass", async () => {
     const game = await board().build();
     await castToFirstPass(game);
     await game.p1.pick("windwall");

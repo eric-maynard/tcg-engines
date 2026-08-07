@@ -82,7 +82,7 @@ describe("Ruling 012ae43c41524a98 — Brynhir Thundersong × Promising Future", 
   // turn); P1 casts Promising Future; P1 banishes a3, P2 banishes b2, rest recycled; starting with P2: P2's
   // instructed play is impossible → skipped, b2 REMAINS in P2's banishment; P1 plays a3 free. Actual: Promising
   // Future is wired as "re-play a unit on the board" (it even demands a board target) — no look/banish/play flow.
-  test.failing("BUG: ruling 012ae43c41524a98 — Brynhir resolved before PF: the opponent's chosen card stays banished, yours is played (engine: PF has no look/banish/play implementation)", async () => {
+  test("ruling 012ae43c41524a98 — Brynhir resolved before PF: the opponent's chosen card stays banished, yours is played (engine: PF has no look/banish/play implementation)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 11, power: { mind: 1 } }) // 6 Brynhir + 5 PF
       .deck(P1, [U(1), U(2), U(3), U(4), U(5), U(6)], ["a1", "a2", "a3", "a4", "a5", "a6"])
@@ -138,7 +138,7 @@ describe("Ruling 012ae43c41524a98 — Brynhir Thundersong × Promising Future", 
   // Case 3 — the opponent's chosen card is a SPELL and Brynhir is P1's chosen card. Expected: P2's spell is put on
   // the chain (played) before Brynhir's play effect exists; even if her trigger resolves before the spell does, the
   // spell still resolves — P2 draws its card. Actual: see above.
-  test.failing("BUG: ruling 012ae43c41524a98 — an opponent's chosen SPELL still resolves even though Brynhir's trigger may resolve first (engine: PF unimplemented)", async () => {
+  test("ruling 012ae43c41524a98 — an opponent's chosen SPELL still resolves even though Brynhir's trigger may resolve first (engine: PF unimplemented)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 5, power: { mind: 1 } })
       .deck(P1, [BRYNHIR, U(2), U(3), U(4), U(5), U(6)], ["bryn", "a2", "a3", "a4", "a5", "a6"])
