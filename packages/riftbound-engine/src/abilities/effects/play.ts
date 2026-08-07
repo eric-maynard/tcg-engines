@@ -10,6 +10,7 @@ import {
   hasStaticEffect,
   staticEnterReadyApplies,
 } from "../../game-definition/moves/play/cost";
+import { offerWeaponmasterEquip } from "../../game-definition/moves/play/weaponmaster";
 import { extractBattlefieldId } from "../../zones/zone-configs";
 import { battlefieldForbidsUnitPlays } from "../play-restrictions";
 import { spellEffectHasLegalTargets, type SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
@@ -970,6 +971,14 @@ export function enterUnitFromEffect(cardId: string, zoneId: string, ctx: EffectC
   const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? ctx.playerId;
   ctx.fireTriggers?.({ cardId, paidAdditionalCost: false, playerId: owner, type: "play-self" });
   ctx.fireTriggers?.({ cardId, cardType: "unit", playerId: owner, type: "play-card" });
+  // rule 821.1.c / 356.1.b (rule-id: sfd-127-221) — an effect-instructed play is
+  // still a play, so Weaponmaster offers its Equip here exactly as from hand.
+  offerWeaponmasterEquip(
+    ctx.draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
+    ctx.zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
+    owner,
+    cardId,
+  );
   if (ctx.draft.cardsPlayedThisTurn) {
     ctx.draft.cardsPlayedThisTurn[owner] = (ctx.draft.cardsPlayedThisTurn[owner] ?? 0) + 1;
   }

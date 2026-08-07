@@ -301,6 +301,13 @@ export function evaluateTriggerCondition(
   if (c.type === "legion") {
     return evaluateLegionCondition(state, controllerId);
   }
+  if (c.type === "while-level") {
+    // rule 831.1 (rule-id: unl-040-219, Wuju Apprentice) — a `[Level N]` gate on
+    // a TRIGGERED ability is checked when the trigger would go on the chain:
+    // below N XP the ability simply does not trigger.
+    const threshold = (c as { threshold?: number }).threshold ?? 0;
+    return (state.players[controllerId]?.xp ?? 0) >= threshold;
+  }
   if (c.type === "paid-additional-cost") {
     // Zaun Punk (sfd-160-221) et al: the payoff fires only when the optional
     // additional cost was actually paid. The play event carries the flag; if

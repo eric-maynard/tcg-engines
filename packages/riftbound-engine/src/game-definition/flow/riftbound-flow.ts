@@ -302,6 +302,14 @@ function runExpirationStep(context: FlowStepContext): void {
             } as Partial<RiftboundCardMeta>);
           }
 
+          // rule-id: ven-099-166 — "Disempower it at end of turn" (rule 517.2.b)
+          if ((meta as { empoweredUntilEndOfTurn?: boolean }).empoweredUntilEndOfTurn) {
+            context.cards.updateCardMeta(cardId, {
+              empowered: false,
+              empoweredUntilEndOfTurn: false,
+            } as unknown as Partial<RiftboundCardMeta>);
+          }
+
           // Reset turn-scoped Might modifier (rule 517.2.b)
           if (meta.mightModifier && meta.mightModifier !== 0) {
             context.cards.updateCardMeta(cardId, { mightModifier: 0 });

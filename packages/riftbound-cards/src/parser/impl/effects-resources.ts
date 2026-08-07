@@ -189,8 +189,17 @@ export function parseSpendXpEffect(text: string): Effect | undefined {
  * - "Disempower a [friendly|enemy] unit."
  */
 export function parseEmpowerEffect(text: string): Effect | undefined {
-  const match = text.match(
-    /^(dis)?empower (me|it|this|(?:a|an|another)\s+(?:friendly |enemy )?(?:unit|gear)(?:\s+(?:here|at a battlefield))?|something(?: else)?)\.?$/i,
+  // rule 517.2.b (rule-id: ven-099-166) — "… Disempower it at end of turn."
+  // is the duration of the empower it follows, not a separate effect.
+  let body = text;
+  let untilEndOfTurn = false;
+  const tail = body.match(/[.,]?\s*disempower it at (?:the )?end of turn\.?$/i);
+  if (tail) {
+    untilEndOfTurn = true;
+    body = body.slice(0, tail.index).trim();
+  }
+  const match = body.match(
+    /^(dis)?empower (me|it|this|(?:a|an|another)\s+(?:friendly |enemy )?(?:unit|gear)(?:\s+(?:here|at a battlefield))?|something(?: else)?(?:\s+here)?)\.?$/i,
   );
   if (!match) {
     return undefined;
@@ -203,7 +212,11 @@ export function parseEmpowerEffect(text: string): Effect | undefined {
   } else if (targetStr === "it") {
     target = { type: "unit" } as AnyTarget;
   } else if (targetStr.startsWith("something")) {
-    target = { excludeSelf: targetStr.includes("else"), type: "permanent" } as unknown as AnyTarget;
+    target = {
+      excludeSelf: targetStr.includes("else"),
+      type: "permanent",
+      ...(/\bhere$/.test(targetStr) ? { location: "here" } : {}),
+    } as unknown as AnyTarget;
   } else {
     // rule-id: ven-062-166 — "Empower another gear": `parseCardTarget` only
     // ever yields `{type:"unit"}`, so the gear noun and the "another"
@@ -217,5 +230,9 @@ export function parseEmpowerEffect(text: string): Effect | undefined {
     }
     target = parsed as AnyTarget;
   }
-  return { target, type: dis ? "disempower" : "empower" } as unknown as Effect;
+  return {
+    target,
+    type: dis ? "disempower" : "empower",
+    ...(untilEndOfTurn ? { duration: "turn" } : {}),
+  } as unknown as Effect;
 }

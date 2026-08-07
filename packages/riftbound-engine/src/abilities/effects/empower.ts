@@ -10,9 +10,17 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
     const wasEmpowered =
       (ctx.cards.getCardMeta(targetId as CoreCardId) as { empowered?: boolean } | undefined)
         ?.empowered ?? false;
+    // rule 517.2.b: "Disempower it at end of turn" rides along as a duration —
+    // the flag is read by the Ending Step cleanup.
+    const untilEndOfTurn =
+      effect.type === "empower" && (effect as { duration?: string }).duration === "turn";
     ctx.cards.updateCardMeta?.(
       targetId as CoreCardId,
-      { empowered: effect.type === "empower" } as unknown as Record<string, unknown>,
+      {
+        empowered: effect.type === "empower",
+        ...(untilEndOfTurn ? { empoweredUntilEndOfTurn: true } : {}),
+        ...(effect.type === "disempower" ? { empoweredUntilEndOfTurn: false } : {}),
+      } as unknown as Record<string, unknown>,
     );
     // Rule 827.1.c: "When I become [Empowered]" fires on the false→true edge.
     if (effect.type === "empower" && !wasEmpowered) {

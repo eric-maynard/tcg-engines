@@ -29,6 +29,7 @@ import {
 } from "../../../cleanup/post-move-cleanup";
 import { selfPlayIsForbidden } from "../../../abilities/play-restrictions";
 import { applyPlayBattlefieldToken } from "./battlefield-token";
+import { offerWeaponmasterEquip } from "./weaponmaster";
 import {
   extractBattlefieldId,
   getBattlefieldZoneId,
@@ -1551,43 +1552,12 @@ export const playUnit: Defs["playUnit"] = {
     // controller can pick one (or decline). The reduced Equip cost is
     // charged by the weaponmaster-equip reducer (rule 821.1.c;
     // rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost).
-    if (
-      !draft.pendingChoice &&
-      getGlobalCardRegistry().hasKeyword(cardId, "Weaponmaster")
-    ) {
-      const registry = getGlobalCardRegistry();
-      const boardZones: string[] = ["base"];
-      for (const bfId of Object.keys(draft.battlefields ?? {})) {
-        boardZones.push(getBattlefieldZoneId(bfId));
-      }
-      const equipOptions: string[] = [];
-      for (const zoneId of boardZones) {
-        for (const id of zones.getCardsInZone(
-          zoneId as CoreZoneId,
-          playerId as CorePlayerId,
-        )) {
-          // rule 208.3 / 476.1 (ven-027-166 Hand Hammer) — a gear with the
-          // printed [Equip] ability IS Equipment. VEN cards come from set JSON
-          // typed simply as "gear", so accept them the same way `equipCard`
-          // does instead of gating on the "equipment" card type alone.
-          const equipDef = registry.get(id as string);
-          const isEquipment =
-            equipDef?.cardType === "equipment" ||
-            (equipDef?.cardType === "gear" && registry.hasKeyword(id as string, "Equip"));
-          if (isEquipment) {
-            equipOptions.push(id as string);
-          }
-        }
-      }
-      if (equipOptions.length > 0) {
-        draft.pendingChoice = {
-          options: equipOptions,
-          playerId,
-          type: "weaponmaster-equip",
-          unitId: cardId,
-        };
-      }
-    }
+    offerWeaponmasterEquip(
+      draft as unknown as Parameters<typeof offerWeaponmasterEquip>[0],
+      zones as unknown as Parameters<typeof offerWeaponmasterEquip>[1],
+      playerId,
+      cardId,
+    );
 
     // rule 340.2.a / 347.1 — the unit resolved on finalize with nothing left
     // on the chain and no prompt outstanding: Focus passes to the next
