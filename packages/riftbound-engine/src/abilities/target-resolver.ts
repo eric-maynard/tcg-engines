@@ -687,7 +687,10 @@ export function isProtectedFromEnemyChoice(cardId: string, ctx: TargetResolverCo
  * `meta.__flags`); seeded positions and mirrors use the top-level meta field.
  * Both representations mean the same status, so read either.
  */
-function metaFlag(meta: Partial<RiftboundCardMeta> | undefined, key: "exhausted" | "stunned"): boolean {
+function metaFlag(
+  meta: Partial<RiftboundCardMeta> | undefined,
+  key: "exhausted" | "stunned" | "empowered",
+): boolean {
   if ((meta as { [k: string]: unknown } | undefined)?.[key] === true) {
     return true;
   }
@@ -736,6 +739,11 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
         return (meta?.damage ?? 0) > 0;
       case "stunned":
         return metaFlag(meta, "stunned");
+      // rule 442.1.a — "a unit that's [Empowered]"
+      case "empowered":
+        return metaFlag(meta, "empowered");
+      case "not-empowered":
+        return !metaFlag(meta, "empowered");
       case "buffed":
         return meta?.buffed === true;
       case "ready":

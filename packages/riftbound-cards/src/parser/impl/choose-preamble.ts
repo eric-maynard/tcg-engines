@@ -13,7 +13,7 @@ import type { AnyTarget } from "@tcg/riftbound-types/targeting";
 // rule-id: ven-040-166 — capture the head noun phrase (qualifier tails like
 // "that's in combat with …" are accepted so the preamble is still recognised).
 export const CHOOSE_PREAMBLE_RE =
-  /^Choose ((?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there))?)(\s+and (?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there))?|,?\s+(?:that|with|in|from|being)\b[^.]*)?\.\s*/i;
+  /^Choose ((?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there))?(?:\s+without \[[^\]]+\])?)(\s+and (?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there))?|,?\s+(?:that|with|in|from|being)\b[^.]*)?\.\s*/i;
 
 export function isPronounTarget(t: unknown): boolean {
   if (t === "self") {

@@ -30,11 +30,28 @@ export function parseTarget(text: string): AnyTarget {
     .toLowerCase()
     .trim()
     .replace(/\[([^\]]+)\]/g, "$1")
+    // rule-id: ven-061-166 — "an enemy Body ([body]) unit": the parenthesised
+    // icon only restates the domain word, and leaving it in breaks the noun
+    // phrase (parentheses are not word characters).
+    .replace(/\(\s*(?::rb_[a-z0-9_]+:\s*)+\)/g, " ")
     .replace(/\s+/g, " ")
     // A target phrase lifted from the tail of a sentence keeps its terminal
     // punctuation ("a legend."); it is not part of the noun phrase.
     .replace(/[.,;:]+$/, "")
     .trim();
+
+  // rule 355.10 — "a friendly unit without [Temporary]": the trailing clause is
+  // an exclusion filter on the choice, not part of the noun phrase.
+  const withoutMatch = normalized.match(/^(.+?)\s+without\s+([\w -]+)$/);
+  if (withoutMatch) {
+    const base = parseTarget(withoutMatch[1]);
+    if (typeof base === "object" && "type" in base) {
+      const existing = (base as { filter?: unknown }).filter;
+      const excl = { excludeKeyword: capitalizeTag(withoutMatch[2].trim()) };
+      const filter = existing === undefined ? excl : [...[existing].flat(), excl];
+      return { ...(base as object), filter } as Target;
+    }
+  }
 
   // Self reference
   if (normalized === "me" || normalized === "it" || normalized === "itself") {
@@ -100,7 +117,13 @@ export function parseTarget(text: string): AnyTarget {
     // ("[Mighty] units" — rule 710) which is a filter, not a tribal tag.
     if (tagStr && tagStr.length > 0) {
       const stateFilter = STATE_ADJECTIVE_FILTERS[tagStr];
-      result.filter = stateFilter ? stateFilter : { tag: capitalizeTag(tagStr) };
+      // rule 122.2 (rule-id: ven-061-166) — a domain adjective ("an enemy Body
+      // unit") narrows by the card's Domain, which is never a tribal tag.
+      result.filter = stateFilter
+        ? stateFilter
+        : DOMAIN_WORDS.has(tagStr)
+          ? { domain: tagStr }
+          : { tag: capitalizeTag(tagStr) };
     }
 
     return result as Target;
@@ -135,6 +158,9 @@ export function parseTarget(text: string): AnyTarget {
   // Default to unit target
   return { type: "unit" };
 }
+
+/** rule 122.2 — the six Domains; as an adjective they filter by Domain, not tag. */
+const DOMAIN_WORDS = new Set(["fury", "calm", "mind", "body", "chaos", "order"]);
 
 /** Adjectives that describe a unit's state rather than a tribal tag. */
 const STATE_ADJECTIVE_FILTERS: Record<string, string> = {

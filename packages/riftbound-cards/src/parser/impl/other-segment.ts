@@ -4,7 +4,9 @@
 
 import type { Ability, SpellAbility } from "@tcg/riftbound-types";
 import { applyIncludeSelfQualifier, parseStaticAbility } from "../parsers/static-parser";
+import { parseTarget } from "../parsers/target-parser";
 import { parseActivatedAbility } from "./activated";
+import { bindChosenTarget, CHOOSE_PREAMBLE_RE } from "./choose-preamble";
 import { parseEffects } from "./effects";
 import { stripReminders } from "./normalize";
 import { parseAdditionalCostAbility, parseReplacementAbility } from "./replacement";
@@ -67,9 +69,22 @@ export function parseOtherSegment(text: string): Ability | undefined {
 
   // Try standalone effect (spell body). rule 155 / 159.2.a.1: no printed
   // [Action]/[Reaction] → no ability-level timing; the card's timing governs.
-  const effect = parseEffects(cleaned);
+  // rule 355 — an untagged body may still open with "Choose <target>. … it …";
+  // the restriction on that choice (friendly / without [Keyword]) is part of the
+  // spell's targeting, so bind it exactly as the tagged path does.
+  const chooseMatch = CHOOSE_PREAMBLE_RE.exec(cleaned);
+  const chosenTarget =
+    chooseMatch && (!chooseMatch[2] || !/^\s+and /i.test(chooseMatch[2]))
+      ? parseTarget(chooseMatch[1])
+      : undefined;
+  const body = chooseMatch ? cleaned.slice(chooseMatch[0].length) : cleaned;
+  const effect = parseEffects(body);
   if (effect) {
-    return { effect, ...spellTimingFromText(text), type: "spell" } as SpellAbility;
+    return {
+      effect: chosenTarget ? bindChosenTarget(effect, chosenTarget) : effect,
+      ...spellTimingFromText(text),
+      type: "spell",
+    } as SpellAbility;
   }
 
   return undefined;
