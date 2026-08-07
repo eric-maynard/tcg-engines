@@ -250,6 +250,14 @@ export function parseKillEffect(text: string): KillEffect | SequenceEffect | und
         might: { lte: Number.parseInt(mightLteMatch[1], 10) },
       };
     }
+    // rule 359.3.f.2 (rule-id: ven-136-166 Ambessa) — "kill an enemy unit here
+    // with less Might than ME": the ceiling is the SOURCE's Might read as the
+    // instruction executes (Assault included while it attacks), so it stays a
+    // symbolic filter; equal Might is not "less".
+    if (/with\s+less\s+(?::rb_might:|\[?Might\]?)\s+than\s+me\b/i.test(withClause ?? "")) {
+      (target as { filter?: unknown }).filter = { mightLessThanSelf: true };
+      return { target: target as AnyTarget, type: "kill" };
+    }
     // rule-id: ven-154-166 (rule 355.8) — "Kill an enemy unit with less Might
     // than IT": "it" is the unit named by the "Choose a friendly unit."
     // preamble, so the kill carries a caster-chosen `reference` (bound by
