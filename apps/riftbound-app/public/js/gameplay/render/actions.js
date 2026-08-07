@@ -44,10 +44,13 @@ function formatMoveDescription(moveId, params) {
     // Inherited abilities (Heimerdinger) share cardId — name the source card and
     // ability slot so the options are distinguishable.
     case "activateAbility": {
-      const from = params.sourceCardId && params.sourceCardId !== params.cardId
-        ? ` — ${r(params.sourceCardId)}${Number.isInteger(params.abilityIndex) ? ` ability ${params.abilityIndex + 1}` : ""}`
-        : (Number.isInteger(params.abilityIndex) && params.abilityIndex > 0 ? ` — ability ${params.abilityIndex + 1}` : "");
-      return `${r(params.cardId)}${from}${params.targets?.length ? " → " + r(params.targets) : ""}`;
+      // Name the ability by its printed cost + effect (rule 331.1) so two
+      // abilities on the same card — and inherited ones (Heimerdinger) — are
+      // told apart without reading the board.
+      const shown = typeof activatedAbilityLabel === "function"
+        ? activatedAbilityLabel(params.cardId, params.abilityIndex, params.sourceCardId)
+        : `${r(params.cardId)}${Number.isInteger(params.abilityIndex) && params.abilityIndex > 0 ? ` — ability ${params.abilityIndex + 1}` : ""}`;
+      return `${shown}${params.targets?.length ? " → " + r(params.targets) : ""}`;
     }
     case "resolveFullCombat": return `${bf(params.battlefieldId)}`;
     case "passChainPriority": return null;
@@ -130,6 +133,48 @@ function reevaluateCostPayment() {
   showCostPaymentActionBar(card, currentEnergy);
 }
 
+/**
+ * Split a card's printed rules text into its activated-ability segments.
+ * Activated abilities are printed "COST: effect" (rule 331.1), e.g.
+ * "[Exhaust]: Give a unit +2 Might." or "[Empower] [2][fury]: …".
+ * Reminder text in parentheses is dropped.
+ */
+function activatedAbilitySegments(card) {
+  const text = (card?.rulesText || "")
+    .replace(/\(([^()]*)\)/g, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+  if (!text) return [];
+  return text
+    .split(/\n+|(?<=\.)\s+/)
+    .map(s => s.trim())
+    .filter(s => /^[^:]{1,48}:/.test(s));
+}
+
+/**
+ * Human label for an activateAbility move: the ability's own cost + effect text,
+ * so a player can tell "[Exhaust]: Buff me" from "Empower — [2][fury]" instead of
+ * reading a generic "Activate Ability" button.
+ */
+function activatedAbilityLabel(cardId, abilityIndex, sourceCardId) {
+  const card = findCard(cardId);
+  const name = String(card?.name ?? cardId ?? "").replace(/^player-[12]-/, "");
+  const srcCard = sourceCardId && sourceCardId !== cardId ? findCard(sourceCardId) : null;
+  const segs = activatedAbilitySegments(srcCard ?? card);
+  let seg = null;
+  if (segs.length === 1) {
+    seg = segs[0];
+  } else if (segs.length > 1) {
+    const i = Number.isInteger(abilityIndex) ? abilityIndex : 0;
+    seg = segs[i] ?? segs[segs.length - 1];
+  }
+  const suffix = srcCard ? ` (from ${String(srcCard.name ?? sourceCardId).replace(/^player-[12]-/, "")})` : "";
+  if (!seg) {
+    return `${name}${Number.isInteger(abilityIndex) && abilityIndex > 0 ? ` — ability ${abilityIndex + 1}` : ""}${suffix}`;
+  }
+  return `${name} — ${seg}${suffix}`;
+}
+
 function renderActions() {
   const list = document.getElementById("actionsList");
   if (!availableMoves || availableMoves.length === 0) {
@@ -174,6 +219,9 @@ function renderActions() {
   const sections = {
     turn: { label: "Turn Actions", moveIds: ["advancePhase", "endTurn", "channelRunes", "drawCard", "readyAll", "emptyRunePool"], moves: [] },
     play: { label: "Play Cards", moveIds: ["playUnit", "playSpell", "playGear"], moves: [] },
+    // Activated abilities are a primary action (rule 331) — they belong next to
+    // Play Cards, not buried under "Other" below Concede.
+    abilities: { label: "Abilities", moveIds: ["activateAbility", "revealHidden"], moves: [] },
     movement: { label: "Movement", moveIds: ["standardMove", "gankingMove", "recallUnit"], moves: [] },
     runes: { label: "Rune Actions", moveIds: ["exhaustRune", "recycleRune"], moves: [] },
     battlefield: { label: "Battlefield", moveIds: ["contestBattlefield", "conquerBattlefield", "scorePoint"], moves: [] },
@@ -297,9 +345,14 @@ function renderActions() {
             ? `${baseName} — ${findCard(srcId)?.name ?? srcId}`
             : baseName;
           const targetIds = [...new Set(variants.map(moveTargetId).filter(Boolean))];
-          const detail = targetIds.length
-            ? `${name} — ${targetIds.length} target${targetIds.length === 1 ? "" : "s"}…`
+          // An activated ability is identified by its printed cost + effect, not
+          // by the bare card name (rule 331.1).
+          const shown = moveId === "activateAbility"
+            ? activatedAbilityLabel(cid, variants[0].params?.abilityIndex, srcId)
             : name;
+          const detail = targetIds.length
+            ? `${shown} — ${targetIds.length} target${targetIds.length === 1 ? "" : "s"}…`
+            : shown;
           const highlighted = interaction.sourceCardId === cid;
           html += `
             <button class="action-btn ${highlighted ? "highlighted" : ""}"
@@ -474,5 +527,12 @@ function toggleMoveGroup(moveId) {
     cancelInteraction(); // re-renders the action list, so re-look-up below
   }
   const el = document.getElementById(`move-group-${moveId}`);
-  if (el) el.classList.toggle("hidden");
+  if (!el) return;
+  const opened = el.classList.toggle("hidden") === false;
+  // The actions panel is height-capped and scrolls; a group expanded near the
+  // bottom reveals its per-rune options below the fold, so they read as missing.
+  // Pull them into view (block:"nearest" leaves an already-visible group alone).
+  if (opened && typeof el.scrollIntoView === "function") {
+    el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 }

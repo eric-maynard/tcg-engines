@@ -689,21 +689,27 @@ function costOptionAffordable(
 /**
  * rule 827.1.c.2 (rule-id: ven-074-166) — an either/or activation cost
  * ("[Empower] — [1] or [body]") lists several COMPLETE costs and exactly one of
- * them is paid: never both, never neither. The controller's pool decides which
- * one; a cost payable out of banked resources wins over one that would need
- * runes exhausted, and when several are payable the first printed one is used.
+ * them is paid: never both, never neither. Which one is the CONTROLLER'S choice
+ * (rule 357.2), so an explicit `costOptionIndex` param always wins; only when
+ * the activation names none do we fall back to a deterministic pick — a cost
+ * payable out of banked resources over one that would need runes exhausted, and
+ * the first printed one among equals.
  */
 function selectCostOption(
   ability: { costOptions?: unknown },
   pool: { energy: number; power: Record<string, number | undefined> } | undefined,
   potentialEnergy: number,
   discount = 0,
+  chosenIndex?: number,
 ): Record<string, unknown> | undefined {
   const raw = ability.costOptions;
   if (!Array.isArray(raw) || raw.length === 0) {
     return undefined;
   }
   const options = raw as Record<string, unknown>[];
+  if (typeof chosenIndex === "number" && options[chosenIndex]) {
+    return options[chosenIndex];
+  }
   if (!pool) {
     return options[0];
   }
@@ -712,6 +718,41 @@ function selectCostOption(
   return (
     options.find((o) => afford(o, 0)) ?? options.find((o) => afford(o, potentialEnergy)) ?? options[0]
   );
+}
+
+/**
+ * rule 357.2 (rule-id: ven-074-166) — indices of the either/or costs the player
+ * can actually pay right now out of banked resources. Fewer than two → there is
+ * no choice to offer and the activation carries no `costOptionIndex`.
+ */
+export function affordableCostOptionIndices(
+  ability: { costOptions?: unknown },
+  pool: { energy: number; power: Record<string, number | undefined> } | undefined,
+  discount = 0,
+): number[] | undefined {
+  const raw = ability.costOptions;
+  if (!Array.isArray(raw) || raw.length < 2 || !pool) {
+    return undefined;
+  }
+  const options = raw as Record<string, unknown>[];
+  // Two halves that a discount has collapsed onto the same payment (Risen Altar
+  // makes both [1] and [body] free) are not a choice — offer each distinct one once.
+  const seen = new Set<string>();
+  const indices: number[] = [];
+  for (let i = 0; i < options.length; i++) {
+    const applied = applyResourceDiscount(options[i], discount) ?? options[i];
+    if (!costOptionAffordable(applied, pool, 0)) {
+      continue;
+    }
+    const power = [...((applied.power as string[] | undefined) ?? [])].sort().join(",");
+    const sig = `${String((applied.energy as number | undefined) ?? 0)}|${power}`;
+    if (seen.has(sig)) {
+      continue;
+    }
+    seen.add(sig);
+    indices.push(i);
+  }
+  return indices.length > 1 ? indices : undefined;
 }
 
 /**
@@ -726,8 +767,9 @@ export function effectiveAbilityCost(
   pool?: { energy: number; power: Record<string, number | undefined> },
   potentialEnergy = 0,
   discount = 0,
+  costOptionIndex?: number,
 ): Record<string, unknown> | undefined {
-  const chosenOption = selectCostOption(ability, pool, potentialEnergy, discount);
+  const chosenOption = selectCostOption(ability, pool, potentialEnergy, discount, costOptionIndex);
   const baseCost = ability.cost as Record<string, unknown> | undefined;
   const merged = chosenOption ? { ...(baseCost ?? {}), ...chosenOption } : baseCost;
   const cost = applyResourceDiscount(merged, discount);
@@ -1007,6 +1049,7 @@ export const activateAbility: Defs["activateAbility"] = {
         context.zones,
         context.cards,
       ),
+      context.params.costOptionIndex as number | undefined,
     );
     if (effectiveCost) {
       const cost = effectiveCost;
@@ -1659,6 +1702,7 @@ export const activateAbility: Defs["activateAbility"] = {
           discardId?: string;
           targets?: string[];
           recycleIds?: string[];
+          costOptionIndex?: number;
         } = {
           abilityIndex: entry.abilityIndex,
           cardId: entry.hostCardId,
@@ -1686,6 +1730,25 @@ export const activateAbility: Defs["activateAbility"] = {
         if (recycleOptions) {
           bases = bases.flatMap((base) =>
             (recycleOptions as string[][]).map((recycleIds) => ({ ...base, recycleIds })),
+          );
+        }
+        // rule 827.1.c.2 / 357.2 (rule-id: ven-074-166) — "Pay either cost":
+        // when more than one of the printed complete costs is affordable the
+        // controller picks, so enumerate one activation per affordable option.
+        const costOptionIndices = affordableCostOptionIndices(
+          ability as { costOptions?: unknown },
+          state.runePools[playerId],
+          empowerCostDiscount(
+            ability as { effect?: unknown },
+            entry.hostCardId as string,
+            playerId as string,
+            context.zones,
+            context.cards,
+          ),
+        );
+        if (costOptionIndices) {
+          bases = bases.flatMap((base) =>
+            costOptionIndices.map((costOptionIndex) => ({ ...base, costOptionIndex })),
           );
         }
         if (discardOptions) {
@@ -1767,6 +1830,7 @@ export const activateAbility: Defs["activateAbility"] = {
         context.zones,
         context.cards,
       ),
+      (context.params as Record<string, unknown>).costOptionIndex as number | undefined,
     );
     if (costToPay) {
       const cost = costToPay;

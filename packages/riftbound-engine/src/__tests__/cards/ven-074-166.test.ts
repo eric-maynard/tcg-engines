@@ -78,11 +78,27 @@ describe("Legion Marauder (ven-074-166)", () => {
 
   test("'either' means exactly one half — with 1 energy AND 1 body available, activating spends a total of exactly 1 resource, never both", async () => {
     const game = await marauder({ energy: 1, power: { body: 1 } }).build();
-    await game.p1.activate("lm");
+    // rule 357.2: both halves are payable, so the activation names which one.
+    await game.p1.activate("lm", 0, { params: { costOptionIndex: 0 } });
     const r = game.p1.resources();
     expect(r.energy + (r.power.body ?? 0)).toBe(1);
     await game.settle();
     expect(game.state("lm").isEmpowered).toBe(true);
+  });
+
+  test("rule 357.2 — with BOTH halves affordable the player chooses which cost to pay: choosing [body] spends the body pip and leaves energy alone", async () => {
+    const game = await marauder({ energy: 2, power: { body: 1 } }).build();
+    const opt = game.p1.legal().find((o) => o.key === "activateAbility:lm#0");
+    expect(opt?.variantCount).toBe(2);
+    expect(opt?.fields.find((f) => f.arg === "costOptionIndex")?.options).toEqual([0, 1]);
+    await game.p1.activate("lm", 0, { params: { costOptionIndex: 1 } });
+    expect(game.p1.resources()).toEqual({ energy: 2, power: { body: 0 } });
+    await game.settle();
+    expect(game.state("lm").isEmpowered).toBe(true);
+
+    const other = await marauder({ energy: 2, power: { body: 1 } }).build();
+    await other.p1.activate("lm", 0, { params: { costOptionIndex: 0 } });
+    expect(other.p1.resources()).toEqual({ energy: 1, power: { body: 1 } });
   });
 
   test("negative space — nothing to pay with, or only a FURY pip, or already Empowered, or the opponent's turn: not activatable", async () => {

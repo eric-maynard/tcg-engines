@@ -514,6 +514,13 @@
     .bf-units .card .card-might { width: 18px; height: 18px; font-size: 10px; }
 
     /* Rune pool: domain-grouped stacks */
+    /* [rule:ui-rune-pool-never-overflows-upward] DESIGN.md: Legend/Champion is
+       always visible for both players. The player's pool sits in the hand row,
+       which is the row that absorbs the over-subscribed board's deficit (see
+       .player-base-row above); a bottom-aligned 250px rune-stack in a shorter
+       row overflowed UPWARD and, as a later DOM sibling, painted over the
+       resource bar and #player-legendChampion. Clip the pool to its own box and
+       clamp the stack to the row so the overflow can never escape the grid. */
     .rune-pool-grid {
       display: flex;
       gap: 10px;
@@ -523,11 +530,13 @@
       border-radius: 8px;
       background: #1a183066;
       flex-shrink: 0;
+      overflow: hidden;
     }
     .rune-stack {
       position: relative;
       width: 112px;
       min-height: 172px;  /* fallback so absolutely-positioned cards inside are always visible */
+      max-height: 100%;
       flex-shrink: 0;
     }
     .rune-stack-label {
@@ -1255,6 +1264,14 @@
          max-height) so Turn Actions stay reachable. */
       flex-shrink: 0;
     }
+
+    /* [rule:ui-actions-panel-scrollable] The panel is capped at 220px, so an
+       expanded move group (per-rune Recycle/Exhaust options) lands below the
+       fold. Without a visible thumb the overflow reads as clipped content —
+       match the .game-log treatment so there is an affordance to scroll.
+       actions.js toggleMoveGroup also scrolls the revealed group into view. */
+    .actions-panel::-webkit-scrollbar { width: 4px; }
+    .actions-panel::-webkit-scrollbar-thumb { background: #3a3560; border-radius: 2px; }
 
     .actions-title {
       font-size: 10px;
