@@ -182,6 +182,9 @@ export function parseEffects(text: string): Effect | undefined {
   return parseSentenceSequence(cleaned, false);
 }
 
+const CHANNEL_FALLBACK_RE =
+  /^If you (?:can'?t|couldn'?t)(?:\s+channel\s+(\d+)\s+runes?(?:\s+this way)?)?,\s*(.+?)\.?$/i;
+
 /**
  * Split a body into sentences and parse each one into a sequence.
  *
@@ -209,6 +212,25 @@ function parseSentenceSequence(cleaned: string, strict: boolean): Effect | undef
     ) {
       effects[effects.length - 1] = { ...prev, destination: "hand" } as Effect;
       continue;
+    }
+    // rule 430.3 — "Channel N rune(s) …. If you can't, X." / "If you couldn't
+    // channel N runes this way, X.": the rider fires when the Rune Deck ran dry,
+    // so fold it into a `channeled-fewer-than` conditional on the channel above.
+    const channelFallback = CHANNEL_FALLBACK_RE.exec(sentence.trim());
+    if (prev?.type === "channel" && channelFallback) {
+      const fallback = parseEffects(`${channelFallback[2].trim().replace(/\.$/, "")}.`);
+      if (fallback) {
+        const wanted =
+          channelFallback[1] !== undefined
+            ? Number.parseInt(channelFallback[1], 10)
+            : ((prev as { amount?: number }).amount ?? 1);
+        effects.push({
+          condition: { amount: wanted, type: "channeled-fewer-than" },
+          then: fallback,
+          type: "conditional",
+        } as unknown as Effect);
+        continue;
+      }
     }
     const eff = parseEffect(sentence.trim());
     if (eff) {

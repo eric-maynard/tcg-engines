@@ -29,6 +29,16 @@ export function handle_grantKeyword(effect: ExecutableEffect, ctx: EffectContext
     }
     return;
   }
+  // rule-id: sfd-078-221 / unl-216-219 — "give the next spell you play this
+  // turn [Repeat] equal to its cost" is a player-scoped pending grant, not card
+  // meta: the spell it applies to hasn't been played yet. Count the instances
+  // (rule 820.3 — two grants = two separately payable Repeat tiers).
+  if (kw === "NextSpellRepeat") {
+    const draft = ctx.draft as { nextSpellRepeat?: Record<string, number> };
+    draft.nextSpellRepeat ??= {};
+    draft.nextSpellRepeat[ctx.playerId] = (draft.nextSpellRepeat[ctx.playerId] ?? 0) + 1;
+    return;
+  }
   const targets = getTargetIds(effect, ctx);
   const kwTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
   // rule 816.1.b: Temporary only acts at the controller's next Beginning Phase, so

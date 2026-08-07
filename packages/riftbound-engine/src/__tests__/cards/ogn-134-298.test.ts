@@ -39,7 +39,7 @@ describe("Mobilize (ogn-134-298)", () => {
     expect(r.ok).toBe(false);
   });
 
-  test.failing("BUG: 'If you can't, draw 1' — with an empty Rune Deck the caster draws a card instead", async () => {
+  test("'If you can't, draw 1' — with an empty Rune Deck the caster draws a card instead", async () => {
     // Expected: no rune to channel → draw 1 (hand goes from 1 (mob) to 1 after mob leaves and a card is drawn).
     // Actual: the parsed ability only carries the channel clause; nothing is drawn.
     const game = await scenario().fillDecks({ main: 10, runes: 0 }).resources(P1, { energy: 2 }).hand(P1, CARD, "mob").build();

@@ -117,7 +117,7 @@ describe("Temporal Portal × Sacrifice (Repeat equal to its cost) × Dunebreaker
     expect(game.p1.can("activate", "portal")).toBe(false); // already exhausted
   });
 
-  test.failing("BUG: after the Portal resolves, Sacrifice (printed cost [1]) is offered with exactly one Repeat instance costing [1] (206, 820.3)", async () => {
+  test("after the Portal resolves, Sacrifice (printed cost [1]) is offered with exactly one Repeat instance costing [1] (206, 820.3)", async () => {
     // Expected: the cast option for Sacrifice now carries repeatCount ∈ {1} (one granted instance,
     // priced at the printed cost [1] — the kill is an additional cost and is not folded in).
     // Actual: the Portal's `NextSpellRepeat` grant is never read by playSpell; no Repeat variant.
@@ -127,7 +127,7 @@ describe("Temporal Portal × Sacrifice (Repeat equal to its cost) × Dunebreaker
     expect(repeatOptions(game)).toEqual([1]);
   });
 
-  test.failing("BUG: Portal + Sacrifice with Repeat paid: [2] energy total, ONE Dunebreaker killed, effect runs twice → draw 4, channel 2 runes exhausted (357.2, 820.1.d, 135.2.b.3, 820.3.a)", async () => {
+  test("Portal + Sacrifice with Repeat paid: [2] energy total, ONE Dunebreaker killed, effect runs twice → draw 4, channel 2 runes exhausted (357.2, 820.1.d, 135.2.b.3, 820.3.a)", async () => {
     // Expected as titled. Actual: no Repeat variant exists, so the cast with repeat=1 is rejected.
     const game = await board().build();
     await game.p1.activate("portal");
@@ -148,7 +148,7 @@ describe("Temporal Portal × Sacrifice (Repeat equal to its cost) × Dunebreaker
     expect(game.p1.trash().filter((c) => game.state(c).cardType === "unit")).toEqual(["dune"]);
   });
 
-  test.failing("BUG: the Portal's grant applies only to the NEXT spell — a second Sacrifice played the same turn has no Repeat", async () => {
+  test("the Portal's grant applies only to the NEXT spell — a second Sacrifice played the same turn has no Repeat", async () => {
     // Expected: first Sacrifice consumes the grant; the second copy is offered without Repeat.
     // Actual: fails earlier — the first Sacrifice never gets a Repeat variant.
     const game = await board()
@@ -159,7 +159,8 @@ describe("Temporal Portal × Sacrifice (Repeat equal to its cost) × Dunebreaker
     await game.p1.activate("portal");
     await game.settle();
     expect(repeatOptions(game)).toEqual([1]);
-    await game.p1.cast("sacrifice", { repeat: 1 });
+    // two friendly Mighty units here, so the mandatory kill (356.2.a.1) must be named
+    await game.p1.cast("sacrifice", { repeat: 1, sacrifice: "dune" });
     await game.settle();
     const field = game.p1.option("cast", "sacrifice2")?.fields.find((f) => f.name === "repeatCount");
     expect(field?.options ?? []).toEqual([]);
@@ -184,7 +185,7 @@ describe("Temporal Portal × Sacrifice (Repeat equal to its cost) × Dunebreaker
     expect(game.p1.energy()).toBe(2); // [1] stays spent
   });
 
-  test.failing("BUG: countered WITH Repeat paid: nothing resolves, Dunebreaker stays dead, and the [2] (base + Repeat) is not refunded (425.1.c, 425.1.c.1)", async () => {
+  test("countered WITH Repeat paid: nothing resolves, Dunebreaker stays dead, and the [2] (base + Repeat) is not refunded (425.1.c, 425.1.c.1)", async () => {
     // Expected as titled. Actual: no Repeat variant is offered after the Portal, so the repeated
     // cast cannot even be made (and the kill cost is never paid).
     const game = await board().build();

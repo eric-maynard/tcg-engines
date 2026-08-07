@@ -128,7 +128,7 @@ describe("Temporal Portal (sfd-078-221)", () => {
     expect(r.ok).toBe(false);
   });
 
-  test.failing("BUG: the next spell gains [Repeat] equal to its cost — Study (2) may be cast with repeat for 4 total and draws twice; the spell after it gets nothing", async () => {
+  test("the next spell gains [Repeat] equal to its cost — Study (2) may be cast with repeat for 4 total and draws twice; the spell after it gets nothing", async () => {
     // Expected (820.1.d): after the Portal resolves, casting Study offers repeat=1 priced at Study's own
     // cost [2]; paying 2+2 leaves 4 energy and the single chain item draws 2. Study#2 afterwards has no
     // Repeat (grant consumed). Actual: the grant flag is set but no Repeat tier is ever offered.
@@ -144,7 +144,7 @@ describe("Temporal Portal (sfd-078-221)", () => {
     expect(repeatOptions(game, "study2")).not.toContain(1);
   });
 
-  test.failing("BUG: 'equal to its cost' includes Power (206) — Premonition's granted Repeat costs [2][mind][mind][mind]; paying it draws 6", async () => {
+  test("'equal to its cost' includes Power (206) — Premonition's granted Repeat costs [2][mind][mind][mind]; paying it draws 6", async () => {
     // Expected: with 4 energy + 6 mind after activation, Premonition may be repeated once for its full
     // printed cost, ending at 0 energy / 0 mind with 6 cards drawn. Actual: no Repeat is offered.
     const game = await scenario().resources(P1, { energy: 4, power: { mind: 6, rainbow: 1 } }).gear(P1, CARD, "portal").hand(P1, PREMONITION, "premo").build();
@@ -160,7 +160,7 @@ describe("Temporal Portal (sfd-078-221)", () => {
     expect((await short.p1.try((p) => p.cast("premo", { repeat: 1 }))).ok).toBe(false);
   });
 
-  test.failing("BUG: stacks with printed Repeat (820.1.c.2/820.3) — Downstage Dramatics (Repeat [2]) gets a second instance: repeat=2 for 6 energy draws 3", async () => {
+  test("stacks with printed Repeat (820.1.c.2/820.3) — Downstage Dramatics (Repeat [2]) gets a second instance: repeat=2 for 6 energy draws 3", async () => {
     // Expected: printed Repeat [2] + granted Repeat [2] = two instances, each payable once → repeat 0..2;
     // paying both costs 2+2+2 and the effect runs three times. Actual: only the printed tier exists (max 1).
     const game = await scenario().resources(P1, { energy: 6, power: { rainbow: 1 } }).gear(P1, CARD, "portal").hand(P1, DOWNSTAGE, "dd").build();
@@ -173,7 +173,7 @@ describe("Temporal Portal (sfd-078-221)", () => {
     expect(game.p1.hand()).toHaveLength(3);
   });
 
-  test.failing("BUG: two Portals activated the same turn give the next spell TWO Repeat instances (820.1.c.2) — Study repeat=2 for 6 draws 3", async () => {
+  test("two Portals activated the same turn give the next spell TWO Repeat instances (820.1.c.2) — Study repeat=2 for 6 draws 3", async () => {
     // Expected: each activation is its own grant → two instances on the next spell. Actual: the grant is
     // a per-player boolean and no tier is offered at all.
     const game = await scenario().resources(P1, { energy: 6, power: { rainbow: 2 } }).gear(P1, CARD, "portal").gear(P1, CARD, "portal2").hand(P1, STUDY, "study").build();

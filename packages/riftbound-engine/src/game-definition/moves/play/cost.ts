@@ -1001,6 +1001,56 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
 }
 
 /**
+ * rule-id: sfd-029-221 (rule 805.1.a) — "Friendly units played from anywhere
+ * other than a player's hand have [Accelerate]." Accelerate is an optional
+ * additional cost paid AS the unit is played, so a board static grants it as a
+ * play-time licence (`{type:"static", effect:{type:"grant-keyword-on-play",
+ * keyword:"Accelerate", playedFrom:"non-hand"}}`) rather than as a keyword on
+ * the card. The granted cost is the printed Accelerate price, [1] plus one pip
+ * of the played card's own domain.
+ *
+ * `boardCards` is every card in play with its controller; only permanents
+ * controlled by the playing player license their controller's plays.
+ */
+export function getGrantedAcceleratePlayCost(
+  cardId: string,
+  playerId: string,
+  boardCards: readonly { readonly cardId: string; readonly controller: string | undefined }[],
+  playedFromHand: boolean,
+): { energy: number; power: string[] } | undefined {
+  if (playedFromHand) {
+    return undefined;
+  }
+  const registry = getGlobalCardRegistry();
+  const def = registry.get(cardId) as { cardType?: string; domain?: string } | undefined;
+  if (def?.cardType !== "unit") {
+    return undefined;
+  }
+  const granted = boardCards.some((entry) => {
+    if (entry.controller !== playerId || entry.cardId === cardId) {
+      return false;
+    }
+    return (registry.getAbilities(entry.cardId) ?? []).some((ability) => {
+      if (ability.type !== "static") {
+        return false;
+      }
+      const effect = ability.effect as
+        | { type?: string; keyword?: string; playedFrom?: string }
+        | undefined;
+      return (
+        effect?.type === "grant-keyword-on-play" &&
+        effect.keyword === "Accelerate" &&
+        effect.playedFrom === "non-hand"
+      );
+    });
+  });
+  if (!granted) {
+    return undefined;
+  }
+  return { energy: 1, power: def.domain ? [def.domain] : [] };
+}
+
+/**
  * Calculate the Deflect surcharge for targeting a card (rule 721.1.b).
  *
  * Reads the Deflect value from each target's `keyword`-typed abilities
@@ -1408,7 +1458,21 @@ export function getEffectiveSpellRepeatCost(
   const granted = board
     ? computeGrantedSpellRepeatCost({ draft: state, ...board }, playerId, cardId)
     : [];
-  let tiers: RepeatTiers = [...intrinsic, ...granted];
+  // rule-id: sfd-078-221 / unl-216-219 (rule 206) — a pending "next spell you
+  // play this turn has [Repeat] equal to its cost" grant prices its tier at the
+  // spell's PRINTED cost; additional costs (a mandatory kill) are not folded in.
+  const pending = Math.max(0, (state as { nextSpellRepeat?: Record<string, number> }).nextSpellRepeat?.[playerId] ?? 0);
+  const nextSpellTiers: { energy: number; power: readonly string[] }[] = [];
+  if (pending > 0 && getGlobalCardRegistry().getCardType(cardId) === "spell") {
+    const printed = {
+      energy: getGlobalCardRegistry().getEnergyCost(cardId),
+      power: [...getGlobalCardRegistry().getPowerCost(cardId)],
+    };
+    for (let i = 0; i < pending; i++) {
+      nextSpellTiers.push(printed);
+    }
+  }
+  let tiers: RepeatTiers = [...intrinsic, ...granted, ...nextSpellTiers];
   // rule-id: sfd-211-221 (rules 356.4.c, 356.6) — "friendly [Repeat] costs
   // cost [1] less" discounts EVERY tier's energy part; a [rainbow]-only tier
   // has no energy to reduce and stays as printed.
