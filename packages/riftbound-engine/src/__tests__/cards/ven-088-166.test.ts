@@ -156,8 +156,15 @@ describe("Jayce, Hammer in Hand (ven-088-166)", () => {
 
   // Expected: Assault 2 this turn → 7 Might while attacking (807.1.c raises Might itself, so the Warden's 6
   // back is not lethal): he kills the 6-Might Warden, survives and conquers bf2. Actual: no choice is offered.
-  test.failing("BUG: choosing Assault 2 — granted for the turn, he attacks the 6-Might Warden as a 7, kills it, survives and conquers", async () => {
-    const game = await dawn().build();
+  test("choosing Assault 2 — granted for the turn, he attacks the 6-Might Warden as a 7, kills it, survives and conquers", async () => {
+    // rule 810.1.b: without Ganking he can only attack from base, so he starts there (Awaken still readies him).
+    const game = await scenario()
+      .turn(2)
+      .active(P2)
+      .battlefield("bf2", { controller: P2 })
+      .unit(P2, "bf2", { might: 6, name: "Warden" }, "warden")
+      .unit(P1, "base", CARD, "jayce", { exhausted: true })
+      .build();
     await game.p2.endTurn();
     await choose(game, "assault");
     expect(game.phase()).toBe("main");
