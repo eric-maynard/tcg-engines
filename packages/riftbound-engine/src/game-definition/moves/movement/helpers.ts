@@ -148,3 +148,33 @@ export function isAloneAtLocation(
 ): boolean {
   return !unitsAtLocation.some((id) => id !== unitId && getOwner(id) === owner);
 }
+
+/**
+ * rule 434.4 / 152.2 — an Equipment is located wherever the unit it is
+ * attached to is located, so every move of the holder drags its attachments
+ * along. Cleanup only recalls LOOSE gear (state-based-checks step 5 skips
+ * equipment whose host is still on the board), so the relocation has to happen
+ * at each move site.
+ */
+export function relocateAttachedEquipment(
+  unitId: string,
+  toZone: string,
+  cards: { getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined },
+  zones: {
+    getCardZone: (cardId: CoreCardId) => string | undefined;
+    moveCard: (args: { cardId: CoreCardId; targetZoneId: CoreZoneId }) => unknown;
+  },
+): void {
+  const equipped = cards.getCardMeta?.(unitId as CoreCardId)?.equippedWith ?? [];
+  for (const equipId of equipped) {
+    const from = zones.getCardZone(equipId as CoreCardId) as string | undefined;
+    // Only board-resident attachments travel; one in a trash/hand is already gone.
+    if (from === undefined || from === toZone) {
+      continue;
+    }
+    if (from !== "base" && !from.startsWith("battlefield-")) {
+      continue;
+    }
+    zones.moveCard({ cardId: equipId as CoreCardId, targetZoneId: toZone as CoreZoneId });
+  }
+}

@@ -10,9 +10,24 @@ import {
 } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { hasKeyword, isAloneAtLocation } from "./helpers";
+import { hasKeyword, isAloneAtLocation, relocateAttachedEquipment } from "./helpers";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
+
+/**
+ * rule 127.1 / 350.1 — a unit is moved by its CURRENT controller, not its
+ * owner: a stolen unit ganks for its new controller and no longer for the
+ * player who owns the card. Mirrors `controllerOf` in standard-move.ts.
+ */
+function controllerOf(
+  cards: {
+    getCardOwner: (cardId: CoreCardId) => unknown;
+    getCardController?: (cardId: CoreCardId) => string | undefined;
+  },
+  cardId: CoreCardId,
+): string | undefined {
+  return cards.getCardController?.(cardId) ?? (cards.getCardOwner(cardId) as string | undefined);
+}
 
 /**
  * Ganking Move
@@ -48,8 +63,8 @@ export const gankingMove: Defs["gankingMove"] = {
       return false;
     }
 
-    const owner = context.cards.getCardOwner(context.params.unitId as CoreCardId);
-    if ((owner as string) !== context.params.playerId) {
+    const controller = controllerOf(context.cards, context.params.unitId as CoreCardId);
+    if (controller !== context.params.playerId) {
       return false;
     }
 
@@ -102,8 +117,7 @@ export const gankingMove: Defs["gankingMove"] = {
         context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined;
 
       for (const cardId of cardsAtBf) {
-        const owner = context.cards.getCardOwner(cardId);
-        if ((owner as string) !== (context.playerId as string)) {
+        if (controllerOf(context.cards, cardId) !== (context.playerId as string)) {
           continue;
         }
         if (context.counters.getFlag(cardId, "exhausted")) {
@@ -154,6 +168,9 @@ export const gankingMove: Defs["gankingMove"] = {
       targetZoneId: toZone as CoreZoneId,
     });
 
+    // rule 434.4 / 152.2 — attached Equipment is located with its holder.
+    relocateAttachedEquipment(unitId as string, toZone, context.cards, zones);
+
     // Fire "move" game event for triggered abilities that react to
     // Battlefield-to-battlefield Ganking moves.
     // rule-id: unl-133-219 — carry mover/owner so actor-scoped triggers match.
@@ -176,9 +193,10 @@ export const gankingMove: Defs["gankingMove"] = {
     const bf = draft.battlefields?.[toBattlefield];
     if (bf && bf.controller !== playerId) {
       const allUnits = zones.getCardsInZone(toZone as CoreZoneId);
+      // rule 127.1 — "opposing" is decided by current CONTROL, not ownership.
       const hasOpponentUnit = allUnits.some((cardId) => {
-        const owner = context.cards.getCardOwner(cardId);
-        return owner !== undefined && (owner as string) !== playerId;
+        const controller = controllerOf(context.cards, cardId);
+        return controller !== undefined && controller !== playerId;
       });
 
       if (!bf.contested) {
@@ -217,7 +235,7 @@ export const gankingMove: Defs["gankingMove"] = {
       if (hasOpponentUnit) {
         const triggerCtx = { cards: context.cards, counters, draft, zones };
         // rule 740.2.a — "alone" = no other unit of the same controller here.
-        const ownerOf = (id: string) => context.cards.getCardOwner(id as CoreCardId) as string | undefined;
+        const ownerOf = (id: string) => controllerOf(context.cards, id as CoreCardId);
         const occupants = allUnits as unknown as string[];
         context.cards.updateCardMeta(
           unitId as CoreCardId,
@@ -236,8 +254,8 @@ export const gankingMove: Defs["gankingMove"] = {
         // rule 383.4.f.2.a — one "you defend" per player per combat.
         const defendCount = new Map<string, number>();
         for (const cardId of allUnits) {
-          const owner = context.cards.getCardOwner(cardId);
-          if (owner !== undefined && (owner as string) !== playerId) {
+          const owner = controllerOf(context.cards, cardId);
+          if (owner !== undefined && owner !== playerId) {
             context.cards.updateCardMeta(
               cardId,
               { combatRole: "defender" } as Partial<RiftboundCardMeta>,

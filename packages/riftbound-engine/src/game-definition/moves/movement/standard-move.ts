@@ -21,6 +21,7 @@ import {
   hasKeyword,
   isAloneAtLocation,
   isBlockedByTwoOtherPlayers,
+  relocateAttachedEquipment,
 } from "./helpers";
 
 /**
@@ -370,6 +371,9 @@ export const standardMove: Defs["standardMove"] = {
         cardId: unitId as CoreCardId,
         targetZoneId: toZone as CoreZoneId,
       });
+
+      // rule 434.4 / 152.2 — attached Equipment is located with its holder.
+      relocateAttachedEquipment(unitId as string, toZone, context.cards, zones);
 
       // Fire "move" game event so triggered abilities (e.g. Treasure
       // Hunter "When I move...") can react. Rule 616-619 covers
