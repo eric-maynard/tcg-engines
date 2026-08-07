@@ -102,6 +102,8 @@ export interface TriggerableAbility {
   };
   readonly effect: unknown;
   readonly optional?: boolean;
+  /** rule 383.3.a.3 — "you may" in a later part of the effect: decided on resolution. */
+  readonly optionalOnResolution?: boolean;
   readonly condition?: unknown;
 }
 
@@ -304,7 +306,7 @@ function triggerMatchesEvent(
         ? "start-of-turn"
         : e === "recycle-cards-to-deck"
           ? "recycle"
-          : e === "move-to-battlefield"
+          : e === "move-to-battlefield" || e === "move-from-battlefield"
             ? "move"
             : e,
     );
@@ -312,6 +314,18 @@ function triggerMatchesEvent(
     event.type === "move" &&
     trigger.event.split("-or-").includes("move-to-battlefield") &&
     !String(event.to).startsWith("battlefield-")
+  ) {
+    return false;
+  }
+  // rule 144.4.b / 144.4.c (sfd-137-221) — parser event `move-from-battlefield`
+  // ("When I move from a battlefield") is the engine `move` event narrowed by
+  // ORIGIN: battlefield → base and battlefield → battlefield (Ganking) both
+  // qualify, base → battlefield never does. Recalls emit no `move` event
+  // (rule 420: "Recalls are not Moves"), so they can't reach here.
+  if (
+    event.type === "move" &&
+    trigger.event.split("-or-").includes("move-from-battlefield") &&
+    !String(event.from).startsWith("battlefield-")
   ) {
     return false;
   }
