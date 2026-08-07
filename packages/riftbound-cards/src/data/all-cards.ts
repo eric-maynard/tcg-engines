@@ -808,6 +808,54 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-004-166": {
     abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
   },
+  // rule 135.2 / 416.1.a — Decree of Strength: "Choose an opponent. They reveal
+  // their hand and you choose a Mind card from it. They recycle that card."
+  // Same primitive as Sabotage (ogn-156-298) but the pick filter is a DOMAIN,
+  // not a card type: Mind units, spells and gear all qualify, and a two-domain
+  // card counts when either domain is Mind.
+  "ven-085-166": {
+    abilities: [
+      {
+        effect: {
+          filter: { domains: ["mind"] },
+          onPicked: "recycle",
+          target: { type: "player", which: "opponent" },
+          type: "reveal-hand",
+        },
+        type: "spell",
+      },
+    ],
+  },
+  // rule 415.1 / 807 / 809 / 810 — Jayce, Hammer in Hand: "When I become ready,
+  // choose one to give me this turn — [Assault 2] / [Deflect 2] / [Ganking]".
+  // The generator's parse keeps the trigger but leaves the modal body as `raw`
+  // and bolts the two reminder-text keywords on as PRINTED keywords; Jayce has
+  // none printed — each is a turn-scoped grant chosen on resolution (rule 359.3).
+  "ven-088-166": {
+    abilities: [
+      {
+        effect: {
+          options: [
+            {
+              effect: { duration: "turn", keyword: "Assault", type: "grant-keyword", value: 2 },
+              label: "Assault 2",
+            },
+            {
+              effect: { duration: "turn", keyword: "Deflect", type: "grant-keyword", value: 2 },
+              label: "Deflect 2",
+            },
+            {
+              effect: { duration: "turn", keyword: "Ganking", type: "grant-keyword" },
+              label: "Ganking",
+            },
+          ],
+          type: "choice",
+        },
+        trigger: { event: "ready", on: "self" },
+        type: "triggered",
+      },
+    ],
+  },
   // rule 440.1 / 440.1.a — Forgotten Relic: "When you play this or at the start of
   // your Beginning Phase, [Burn 1]. When you burn a unit this way, do this: Give a
   // friendly unit +[Might] equal to the burned card's Might this turn." The parser
@@ -1558,6 +1606,45 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+  // rule 355.4 / 355.10.f — Shuriken Flip: "Deal 2 to up to one enemy unit at a
+  // battlefield, then move a friendly unit." The parser's damage leaf swallows
+  // the whole sentence and drops the move. The move is a MANDATORY second
+  // instruction whose unit and destination are picked as the spell resolves
+  // (`chooseAtResolution`), so it neither adds a play-time target slot nor gates
+  // the play when no friendly unit is on the board.
+  "ven-140-166": {
+    abilities: [
+      {
+        effect: {
+          effects: [
+            {
+              amount: 2,
+              target: {
+                controller: "enemy",
+                location: "battlefield",
+                quantity: { upTo: 1 },
+                type: "unit",
+              },
+              type: "damage",
+            },
+            {
+              chooseAtResolution: true,
+              target: { controller: "friendly", type: "unit" },
+              to: "choose",
+              type: "move",
+            },
+          ],
+          type: "sequence",
+        },
+        type: "spell",
+      },
+      {
+        cost: { energy: 3, power: ["rainbow"] },
+        keyword: "Flow",
+        type: "keyword",
+      },
+    ],
+  },
   // rule 383.4.c / 185 — Swain, Visionary: "[Vision] / When I conquer, if you've
   // played a non-token unit, a non-token gear, and a spell this turn, you score
   // 1 point." The parser drops the conquer line and duplicates Vision as a bare
@@ -1580,6 +1667,14 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+  // rule-id: ven-115-166 — printed DRAGON tag, missing from the set data (the
+  // generator emits `tags: []` for every non-champion VEN unit). Ocean Drake's
+  // "return a non-Dragon unit" reads the tag, so the drakes themselves — and
+  // every other printed Dragon in the set — must carry it.
+  "ven-016-166": { tags: ["Dragon"] },
+  "ven-048-166": { tags: ["Dragon"] },
+  "ven-091-166": { tags: ["Dragon"] },
+  "ven-115-166": { tags: ["Dragon"] },
 };
 
 function adaptJsonCard(c: Record<string, unknown>): Card {
