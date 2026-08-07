@@ -80,6 +80,8 @@ function renderPendingChoiceModal() {
       ? `Split ${pending.total} damage`
     : pending.type === "choose-target" ? "Choose a target"
     : pending.type === "choose-mode" ? "Choose one"  // Rule sfd-091-221
+    // Rules 372/373/383.3.d/355.11.b: generic order / pick-many prompts carry their own prompt text.
+    : (pending.type === "order" || pending.type === "pick-many") ? (pending.prompt ?? (pending.type === "order" ? "Choose an order" : "Choose"))
     : "Choose a card";
 
   let html = `<div class="chain-title">${esc(title)}</div>`;
@@ -160,7 +162,8 @@ function renderPendingChoiceModal() {
         : zid != null
         // Rule sfd-109-221 (356.1.b.3): a pending play may offer the optional additional cost.
         ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, ""))) + (otherPicks[i].params?.paidAdditionalCost ? " (pay additional cost)" : "")
-        : (otherPicks[i].params?.pickedName ?? "—");
+        // Rules 372/373/355.11.b: order / pick-many variants ship a display `label`.
+        : (otherPicks[i].params?.pickedName ?? otherPicks[i].params?.label ?? "—");
       html += `<button class="choice-modal-btn" data-other-idx="${i}">${esc(String(label))}</button>`;
     }
     html += `</div>`;

@@ -1318,7 +1318,16 @@ export const pendingChoiceMoves: Partial<
         }
         const keys = choice.items.map((i) => i.key);
         const perms = keys.length <= 4 ? permutationsOf(keys) : [[...keys], [...keys].reverse()];
-        return perms.map((orderedKeys) => ({ orderedKeys, playerId: context.playerId as string }));
+        const nameOf = (key: string): string => {
+          const item = choice.items.find((i) => i.key === key);
+          return item?.label ?? (item?.cardId ? (getGlobalCardRegistry().get(item.cardId)?.name ?? item.cardId) : key);
+        };
+        // `label` is display-only (the app's choice modal prints it).
+        return perms.map((orderedKeys) => ({
+          label: orderedKeys.map(nameOf).join(" → "),
+          orderedKeys,
+          playerId: context.playerId as string,
+        }));
       }
       // rule 355.13 / 373 / 355.11.b — singles (and every subset for short
       // lists); any other legal `pickedKeys` list is accepted too.
@@ -1331,9 +1340,17 @@ export const pendingChoiceMoves: Partial<
           keys.length <= 4 ? subsetsOf(keys) : [[], ...keys.map((k) => [k]), [...keys]];
         const mightOf = (id: string): number =>
           getCardEffectiveMight(id, (m) => context.cards.getCardMeta(m as CoreCardId));
+        const nameOf = (key: string): string => {
+          const opt = choice.options.find((o) => o.key === key);
+          return opt?.label ?? (opt?.cardId ? (getGlobalCardRegistry().get(opt.cardId)?.name ?? opt.cardId) : key);
+        };
         return candidates
           .filter((pickedKeys) => isValidPickManyAnswer(choice, pickedKeys, mightOf))
-          .map((pickedKeys) => ({ pickedKeys, playerId: context.playerId as string }));
+          .map((pickedKeys) => ({
+            label: pickedKeys.length > 0 ? pickedKeys.map(nameOf).join(" + ") : "None",
+            pickedKeys,
+            playerId: context.playerId as string,
+          }));
       }
       if (choice.type === "combat-damage") {
         if (choice.playerId !== (context.playerId as string)) {
