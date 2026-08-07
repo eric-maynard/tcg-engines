@@ -231,7 +231,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     // absorbs the whole surplus so all available damage is distributed.
     for (const targetId of splitTargets) {
       // rule 465.2.c.10 (ogn-189-298) — never dealt damage.
-      if (unitIgnoresDamage(targetId, ctx.draft)) {
+      if (unitIgnoresDamage(targetId, ctx.draft, (id) => ctx.cards.getCardMeta?.(id as CoreCardId) as { empowered?: boolean; combatRole?: string } | undefined)) {
         continue;
       }
       const priorDamage =
@@ -293,7 +293,7 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     const amount = doubleIfMarked(rawHitAmount, targetId, ctx);
     // rule 465.2.c.10 (ogn-189-298) — a unit with an active "I don't take
     // damage" restriction is dealt nothing at all.
-    if (unitIgnoresDamage(targetId, ctx.draft)) {
+    if (unitIgnoresDamage(targetId, ctx.draft, (id) => ctx.cards.getCardMeta?.(id as CoreCardId) as { empowered?: boolean; combatRole?: string } | undefined)) {
       continue;
     }
     // rule 437.2.a / 437.4 + 417.1.e.1 (sfd-194-221) — a single-instance

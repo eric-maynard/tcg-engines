@@ -341,7 +341,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         ...(killOnDamageIdx(cardId as string) >= 0 ? { diesOnAnyDamage: true } : {}),
         // rule 465.2.c.10 (ogn-189-298): "I don't take damage" — skipped for
         // damage assignment and never dealt lethal damage.
-        ...(unitIgnoresDamage(cardId as string, draft) ? { immuneToDamage: true } : {}),
+        ...(unitIgnoresDamage(cardId as string, draft, () => meta as { empowered?: boolean; combatRole?: string } | undefined) ? { immuneToDamage: true } : {}),
         // rule 423.1.b: a stunned unit deals no combat damage (it still takes damage).
         // Same for a unit carrying the NoCombatDamage marker ("I don't deal combat
         // damage." — sfd-082-221), printed or granted by a static.

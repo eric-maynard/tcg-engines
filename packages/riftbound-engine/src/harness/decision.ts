@@ -630,10 +630,10 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       // rule-id: unl-135-219 — "you may pay 2 XP": XP and discard costs are
       // opt-in costs too and must be named before the player answers.
       if (cost?.xp) {
-        costParts.push(`${cost.xp} XP`);
+        costParts.push(`[${cost.xp} XP]`);
       }
       if (cost?.discard) {
-        costParts.push(`discard ${cost.discard}`);
+        costParts.push(`[discard ${cost.discard}]`);
       }
       let costText = costParts.length > 0 ? `Pay ${costParts.join("")}` : "";
       if (cost?.exhaust) {

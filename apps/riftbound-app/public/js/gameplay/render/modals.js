@@ -21,6 +21,21 @@ function closeChoiceModal() {
   if (overlay) overlay.classList.remove("visible");
 }
 
+// Rule 583 / 422: render an optional cost ({xp, energy, power:[…], discard,
+// exhaust}) as short prose — an opt-in trigger's `optInCost` or a
+// reveal-and-pick's `pickCost` (unl-135-219 "you may pay 2 XP to choose a
+// card"). Returns null when the choice is free, so titles stay unchanged.
+function describeOptInCost(cost) {
+  if (!cost || typeof cost !== "object") return null;
+  const parts = [];
+  if (cost.energy) parts.push(`${cost.energy} energy`);
+  if (Array.isArray(cost.power) && cost.power.length) parts.push(cost.power.join(" + "));
+  if (cost.xp) parts.push(`${cost.xp} XP`);
+  if (cost.discard) parts.push(`discard ${cost.discard}`);
+  if (cost.exhaust) parts.push("exhaust");
+  return parts.length ? `pay ${parts.join(", ")}` : null;
+}
+
 function renderPendingChoiceModal() {
   const pending = gameState?.pendingChoice;
   const mine = pending && (pending.prompter ?? pending.playerId) === viewingPlayer;
@@ -44,8 +59,12 @@ function renderPendingChoiceModal() {
   // Rule ogn-067-298: opt-in ("you may …") triggers carry only {accept} —
   // title names the source card and buttons read Yes/No instead of "—".
   const optInSrc = pending.type === "opt-in" ? findCard(pending.sourceCardId) : null;
+  // Rule 583 (sfd-119-221): a "you may pay X to …" trigger carries its cost on
+  // the chain item as `optInCost` — name it, so Yes is never a blind click.
+  const optInCostText = pending.type === "opt-in"
+    ? describeOptInCost(pending.resolved?.optInCost) : null;
   const title = pending.type === "opt-in"
-    ? `Use ${optInSrc?.name ?? "optional"} ability?`
+    ? `Use ${optInSrc?.name ?? "optional"} ability?${optInCostText ? ` (${optInCostText})` : ""}`
     : pending.onPicked === "discard" ? "Discard a card"
     : pending.onPicked === "banish" ? "Banish a card"
     : pending.onPicked === "recycle" ? "Recycle a card"
@@ -64,7 +83,12 @@ function renderPendingChoiceModal() {
     : "Choose a card";
 
   let html = `<div class="chain-title">${esc(title)}</div>`;
-  html += `<div class="chain-subtitle">Play is paused until you choose</div>`;
+  // Rule 356.1 (unl-135-219): a pick that costs something must say so before
+  // the player commits — Decline is always the free way out.
+  const pickCostText = describeOptInCost(pending.pickCost);
+  html += `<div class="chain-subtitle">${pickCostText
+    ? esc(`Choosing a card costs ${pickCostText.replace(/^pay /, "")} — or decline`)
+    : "Play is paused until you choose"}</div>`;
 
   const picks = availableMoves.filter(m => m.moveId === "resolvePendingChoice");
   const cardPicks = picks.filter(m => m.params?.pickedCardId);
@@ -103,7 +127,12 @@ function renderPendingChoiceModal() {
         : modeOpt
         ? (modeOpt.label ?? modeOpt.text ?? modeOpt.effect?.text ?? `${modeOpt.effect?.type ?? "mode"}${modeOpt.effect?.amount != null ? ` ${modeOpt.effect.amount}` : ""}`)
         : typeof accept === "boolean"
-        ? (pending.type === "choose-target" && pending.anyNumber ? "Done" : accept ? "Yes" : "No")  // Rule ogn-067-298 / ogn-256-298
+        // Rule ogn-067-298 / ogn-256-298 / 355.13: an optional reveal-and-pick
+        // is declined AFTER the hand is revealed, so "Decline" reads better
+        // than "No" next to the revealed cards.
+        ? (pending.type === "choose-target" && pending.anyNumber ? "Done"
+          : accept ? "Yes"
+          : pending.type === "reveal-and-pick" ? "Decline" : "No")
         : zid != null
         // Rule sfd-109-221 (356.1.b.3): a pending play may offer the optional additional cost.
         ? (zid === "base" ? "Base" : getBattlefieldName(String(zid).replace(/^battlefield-/, ""))) + (otherPicks[i].params?.paidAdditionalCost ? " (pay additional cost)" : "")

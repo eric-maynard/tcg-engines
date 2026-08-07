@@ -2733,8 +2733,37 @@
       ],
       "isChampion": true,
       "rulesText": "[Empower] [3][body] ([3][body]: Empower me. Use only if not Empowered.)\n[Empowered][&gt;] I have +3 [Might] and can't be dealt damage unless I'm in combat.",
-      "abilities": [],
-      "parseSuccess": false,
+      "abilities": [
+        {
+          "_rule": "827.1.c.1 — Empower — [Cost] is the activated ability '[Cost]: Empower this. Play only if not Empowered.'",
+          "cost": { "energy": 3, "power": ["body"] },
+          "effect": { "target": "self", "type": "empower" },
+          "name": "Empower",
+          "restrictions": [
+            { "condition": { "condition": { "type": "while-empowered" }, "type": "not" }, "type": "use-only-if" }
+          ],
+          "type": "activated"
+        },
+        {
+          "_rule": "827 — [Empowered] static: +3 [Might] while Empowered.",
+          "condition": { "type": "while-empowered" },
+          "effect": { "amount": 3, "target": "self", "type": "modify-might" },
+          "type": "static"
+        },
+        {
+          "_rule": "465.2.c.10 — \"can't be dealt damage unless I'm in combat\": the immunity holds only while Empowered AND out of combat.",
+          "condition": {
+            "conditions": [
+              { "type": "while-empowered" },
+              { "condition": { "type": "in-combat" }, "type": "not" }
+            ],
+            "type": "and"
+          },
+          "effect": { "restriction": "no-damage", "type": "restriction" },
+          "type": "static"
+        }
+      ],
+      "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/3907dc56d3a639e62f5222eaa0fd589c7a582da6-744x1039.png?accountingTag=RB",
       "illustrator": null,
       "errata": null
@@ -3568,8 +3597,32 @@
       "isChampion": false,
       "rulesText": "[Hidden] (Hide now for [rainbow] to react with later for [energy_0].)\nI have [Shield 3] while I'm at a battlefield with exactly one other unit you control. (+3 [Might] while I'm a defender.)",
       "abilities": [
-        null,
-        null
+        {
+          "type": "keyword",
+          "keyword": "Hidden"
+        },
+        {
+          "type": "static",
+          "condition": {
+            "type": "and",
+            "conditions": [
+              { "type": "while-at-battlefield" },
+              {
+                "type": "exists-here",
+                "target": {
+                  "type": "unit",
+                  "excludeSelf": true,
+                  "quantity": { "exactly": 1 }
+                }
+              }
+            ]
+          },
+          "effect": {
+            "type": "grant-keyword",
+            "keyword": "Shield",
+            "value": 3
+          }
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/de5b6316d65297e67a97d12d7c70974f7d3ce7d6-744x1039.png?accountingTag=RB",
@@ -4416,7 +4469,44 @@
       "isChampion": false,
       "rulesText": "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a spell with Energy cost no more than [4].  You may pay [rainbow]. If you do, gain control of it and you may make new choices for it. Otherwise, counter it.",
       "abilities": [
-        null
+        {
+          "effect": {
+            "condition": {
+              "cost": {
+                "power": [
+                  "rainbow"
+                ]
+              },
+              "type": "pay-cost"
+            },
+            "else": {
+              "target": {
+                "filter": {
+                  "energyCost": {
+                    "lte": 4
+                  }
+                },
+                "type": "spell"
+              },
+              "type": "counter"
+            },
+            "then": {
+              "newChoices": true,
+              "target": {
+                "filter": {
+                  "energyCost": {
+                    "lte": 4
+                  }
+                },
+                "type": "spell"
+              },
+              "type": "gain-control-of-spell"
+            },
+            "type": "conditional"
+          },
+          "timing": "reaction",
+          "type": "spell"
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/2df67fe2ba17f0796ff1f9c03b85d2db48fe954b-744x1039.png?accountingTag=RB",
