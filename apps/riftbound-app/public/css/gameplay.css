@@ -501,6 +501,14 @@
       height: 126px;
       max-height: 100%;
     }
+    /* [rule:ui-bf-unit-not-clipped] A height-capped card with object-fit:cover
+       crops the art top/bottom, which is where the printed card name lives —
+       the unit stays on screen but is unidentifiable. Letterbox instead so the
+       whole card face survives the squeeze. */
+    .bf-units .card .card-img {
+      object-fit: contain;
+      background: #1a1730;
+    }
     .bf-units .card .card-name { font-size: 10px; }
     .bf-units .card .card-damage { width: 18px; height: 18px; font-size: 10px; }
     .bf-units .card .card-might { width: 18px; height: 18px; font-size: 10px; }
