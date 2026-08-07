@@ -209,9 +209,12 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
           // units remain and they don't already control it, they establish
           // Control. 348.2.a.1: this is a Conquer if not yet scored.
           const bfZone = `battlefield-${before!.battlefieldId}` as CoreZoneId;
+          // rule 469.1 / 477.1.a: Control of a battlefield is established (and the
+          // point scored) by the CONTROLLER of the units left there — a borrowed
+          // unit conquers for the player controlling it, never for its owner.
           const owners = new Set<string>();
           for (const cid of context.zones.getCardsInZone(bfZone)) {
-            const o = context.cards.getCardOwner(cid);
+            const o = context.cards.getCardController?.(cid as never) ?? context.cards.getCardOwner(cid);
             if (o) owners.add(o as string);
           }
           if (owners.size === 1) {

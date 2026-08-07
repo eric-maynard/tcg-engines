@@ -3,6 +3,7 @@ import { handle_delayedLoseControl } from "./delayed-lose-control";
 import { handle_draw } from "./draw";
 import { handle_damage } from "./damage";
 import { handle_kill } from "./kill";
+import { handle_temporaryKill } from "./temporary-kill";
 import { handle_buff } from "./buff";
 import { handle_score } from "./score";
 import { handle_channel } from "./channel";
@@ -89,6 +90,8 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "draw": handle_draw,
   "damage": handle_damage,
   "kill": handle_kill,
+  // rule 816.1 — the [Temporary] chain item pushed by the Beginning Phase
+  "temporary-kill": handle_temporaryKill,
   "buff": handle_buff,
   "score": handle_score,
   "channel": handle_channel,

@@ -100,10 +100,13 @@ describe("Sprite (unl-t07)", () => {
     const game = await scenario().active(P2).unit(P1, "base", CARD, "sprite").unit(P1, "base", SNAPJAWS, "snap").build();
     expect(game.p1.xp()).toBe(0);
     await game.p2.endTurn();
-    expect(game.phase()).toBe("beginning"); // held while the death trigger sits on the chain
-    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "snap", controller: P1, triggered: true })]);
-    expect(killed(game, "sprite")).toBe(true); // already dead when the trigger is pending
+    expect(game.phase()).toBe("beginning"); // held while the trigger sits on the chain
+    // rule 816.1 — [Temporary] is itself a triggered ability, so the kill goes
+    // on the chain first; the Snapjaws death trigger follows when it resolves.
+    expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sprite", controller: P1, triggered: true })]);
+    expect(killed(game, "sprite")).toBe(false); // not dead until the Temporary item resolves
     await game.settle();
+    expect(killed(game, "sprite")).toBe(true);
     expect(game.phase()).toBe("main");
     expect(game.p1.xp()).toBe(1);
     expect(game.zoneOf("snap")).toBe("base");

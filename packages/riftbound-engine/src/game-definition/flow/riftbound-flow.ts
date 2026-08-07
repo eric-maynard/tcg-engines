@@ -27,6 +27,7 @@ import type { EffectContext } from "../../abilities/effect-executor";
 import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
+import { addToChain, createInteractionState } from "../../chain/chain-state";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getChannelCountLimit } from "../../operations/channel-limits";
 import { hasSkipDrawPhaseGrant } from "../moves/play/cost";
@@ -704,7 +705,12 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 return m.__flags?.exhausted === true || m.exhausted === true;
               });
               for (const cardId of exhausted) {
-                if (context.cards.getCardOwner?.(cardId) !== playerId) {
+                // rule 315.1.b / 515.1: Awaken readies what the turn player
+                // CONTROLS — a borrowed permanent readies for its controller,
+                // not for its owner.
+                const holder =
+                  context.cards.getCardController?.(cardId) ?? context.cards.getCardOwner?.(cardId);
+                if (holder !== playerId) {
                   continue;
                 }
                 const meta = context.cards.getCardMeta(cardId) as Flagged;
@@ -835,21 +841,35 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               // prompt), Equipment detaches (457.1), the card resets (124.1),
               // tokens cease (186.1) and `die` fires with last-known
               // information so Deathknells go on the chain (held by endIf).
+              //
+              // rule 816.1 — [Temporary] is a TRIGGERED ability, so each kill
+              // goes on the Chain as its own item and both players get Priority
+              // over it (the permanent's controller may respond, e.g. Retreat
+              // it in answer to the trigger). Resolution runs
+              // `handle_temporaryKill`, which performs the removal above.
               if (temporaryIds.length > 0) {
-                const flowTriggerCtx = buildFlowTriggerContext(context);
-                removeFromBoard(
-                  {
-                    cards: context.cards as unknown as LeaveBoardContext["cards"],
-                    // no counter store in the flow: meta-backed flags/counters
-                    counters: buildFlowEffectContext(context).counters,
-                    draft: context.state,
-                    zones: context.zones,
-                  },
-                  temporaryIds,
-                  "trash",
-                  { by: turnPlayerId as string, kind: "temporary" },
-                  (event) => fireTriggers(event, flowTriggerCtx),
-                );
+                const state = context.state as RiftboundGameState;
+                if (!state.interaction) {
+                  (state as RiftboundGameState & {
+                    interaction: NonNullable<RiftboundGameState["interaction"]>;
+                  }).interaction = createInteractionState();
+                }
+                const turnOrder = Object.keys(state.players ?? {});
+                for (const cardId of temporaryIds) {
+                  (state as RiftboundGameState & {
+                    interaction: NonNullable<RiftboundGameState["interaction"]>;
+                  }).interaction = addToChain(
+                    state.interaction!,
+                    {
+                      cardId,
+                      controller: turnPlayerId as string,
+                      effect: { type: "temporary-kill" } as never,
+                      triggered: true,
+                      type: "ability",
+                    },
+                    turnOrder,
+                  );
+                }
               }
 
               // rule 323.6: control of a Battlefield is lost as soon as the

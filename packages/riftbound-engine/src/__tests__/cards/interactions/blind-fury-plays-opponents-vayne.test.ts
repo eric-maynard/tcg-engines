@@ -181,7 +181,7 @@ describe("Blind Fury plays the opponent's Vayne, Hunter — owner vs controller"
   // Expected (469.1, 127.1): only the conquering CONTROLLER scores; ownership of the unit is
   // irrelevant, so P2's score is unchanged. Actual: the engine also credits Vayne's owner (P2)
   // with a point when the P1-controlled Vayne conquers.
-  test.failing("BUG: (b) Vayne's OWNER (P2) scores nothing when the P1-controlled Vayne conquers (469.1)", async () => {
+  test("(b) Vayne's OWNER (P2) scores nothing when the P1-controlled Vayne conquers (469.1)", async () => {
     const { game, p2Before } = await vayneConquersOpen({ tapEnergy: 0 });
     if (game.decision()?.kind === "yes-no") {
       await game.p1.no();
@@ -281,7 +281,7 @@ describe("Blind Fury plays the opponent's Vayne, Hunter — owner vs controller"
   // unit's controller as it was on the board = P1 → P1 draws 2, P2 draws 0 (net −1 for the Blade).
   // Actual: the engine reads the controller after the card has landed in P2's trash (where
   // controller reverts to owner) and hands the 2 cards to P2; P1 draws nothing.
-  test.failing("BUG: (c) 'Its controller draws 2' = the last board controller P1 draws 2; P2 (owner/killer) draws nothing", async () => {
+  test("(c) 'Its controller draws 2' = the last board controller P1 draws 2; P2 (owner/killer) draws nothing", async () => {
     const { game, p1Hand, p2Hand } = await bladed();
     expect(game.p1.hand()).toHaveLength(p1Hand + 2);
     expect(game.p2.hand()).toHaveLength(p2Hand - 1); // spent Hidden Blade, drew nothing

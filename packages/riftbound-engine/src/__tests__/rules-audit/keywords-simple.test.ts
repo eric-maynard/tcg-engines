@@ -52,6 +52,7 @@ import {
   getCardMeta,
   getCardZone,
   getCardsInZone,
+  getChainItems,
   getState,
   runPhaseHook,
 } from "./helpers";
@@ -838,8 +839,9 @@ describe("Rule 728.1.b: Temporary units are killed at the start of their control
     // Rule 728.1.b behavior without the flow manager cascading into draw.
     runPhaseHook(engine, "beginning", "onBegin");
 
-    // Per rule 728.1.b, the Temporary unit is killed before scoring.
-    expect(getCardZone(engine, "temp")).toBe("trash");
+    // rule 816.1 — [Temporary] is a triggered ability: the kill goes on the
+    // chain before scoring and happens when that item resolves.
+    expect(getChainItems(engine).map((i) => [i.cardId, i.triggered])).toEqual([["temp", true]]);
   });
 
   it("a NON-Temporary unit is NOT killed at the start of its controller's Beginning Phase", () => {
@@ -896,7 +898,8 @@ describe("Rule 728.1.c: The trigger condition is the controller's Beginning Phas
 
     runPhaseHook(engine, "beginning", "onBegin");
 
-    expect(getCardZone(engine, "temp-bf")).toBe("trash");
+    // rule 816.1 — the kill is a triggered ability placed on the chain.
+    expect(getChainItems(engine).map((i) => i.cardId)).toEqual(["temp-bf"]);
   });
 });
 
@@ -916,10 +919,8 @@ describe("Rule 728.2: Multiple instances of Temporary are redundant", () => {
 
     runPhaseHook(engine, "beginning", "onBegin");
 
-    expect(getCardZone(engine, "temp2")).toBe("trash");
-    // Not present twice anywhere.
-    const trashCards = getCardsInZone(engine, "trash", P1);
-    expect(trashCards.filter((id) => id === "temp2")).toHaveLength(1);
+    // rule 816.1 / 728.2 — one triggered kill on the chain, not two.
+    expect(getChainItems(engine).map((i) => i.cardId)).toEqual(["temp2"]);
   });
 });
 
@@ -1069,10 +1070,8 @@ describe("Rule 728 smoke: Temporary killed during real phase advance", () => {
 
     runPhaseHook(engine, "beginning", "onBegin");
 
-    // Temporary unit should be killed per rule 728.
-    expect(getCardZone(engine, "tempA")).toBe("trash");
-    const trashCards = getCardsInZone(engine, "trash", P1);
-    expect(trashCards).toContain("tempA");
+    // rule 816.1 — the kill is a triggered ability: the chain carries it.
+    expect(getChainItems(engine).map((i) => [i.cardId, i.controller])).toEqual([["tempA", P1]]);
   });
 });
 

@@ -1,6 +1,6 @@
 // Effect handler: "draw"
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
-import { getDepartedOwner } from "../../operations/leave-board";
+import { getDepartedOwner, getLKI, zoneOfCard } from "../../operations/leave-board";
 import { refillDeckOrBurnOut } from "../../operations/points";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
@@ -38,10 +38,20 @@ export function handle_draw(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // player who controlled it: fall back to the kill's last-known control
     // snapshot (kill.ts) and then to departed-owner LKI, or "Its controller
     // draws 2" silently does nothing whenever the killed object was a token.
+    // rule 359.3.e.12 / 808.1.d.3 (ogn-213-298) — a unit that has already left
+    // the board ("Kill a unit at a battlefield. Its controller draws 2.") is
+    // read from last-known information: the controller it had ON the board, not
+    // the owner control reverts to the moment the card lands in the trash.
+    const lkiController =
+      getLKI(ctx.draft, targetId as string)?.controller ??
+      (ctx.draft.lastKilledUnitId === targetId ? ctx.draft.lastKilledUnitController : undefined);
+    const zone = zoneOfCard(ctx as never, targetId as string);
+    const onBoard = zone === "base" || (zone?.startsWith("battlefield-") ?? false);
     const pid =
+      (onBoard ? undefined : lkiController) ??
       ctx.cards.getCardController?.(targetId as CoreCardId) ??
       ctx.cards.getCardOwner(targetId as CoreCardId) ??
-      (ctx.draft.lastKilledUnitId === targetId ? ctx.draft.lastKilledUnitController : undefined) ??
+      lkiController ??
       getDepartedOwner(ctx.draft, targetId as string);
     if (pid === undefined) {
       return;

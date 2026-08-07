@@ -30,6 +30,7 @@ import {
   createCard,
   createDeck,
   createMinimalGameState,
+  getChainItems,
   getCardMeta,
   getCardZone,
   getCardsInZone,
@@ -171,8 +172,9 @@ describe("Rule 515.2 / 728.1.b: Temporary units die at Beginning Phase", () => {
       zone: "base",
     });
     runPhaseHook(engine, "beginning", "onBegin");
-    expect(getZone(engine, P1, "trash")).toContain("temp");
-    expect(getZone(engine, P1, "base")).not.toContain("temp");
+    // rule 816.1 — [Temporary] is a triggered ability: the Beginning Phase
+    // puts the kill on the chain instead of performing it inline.
+    expect(getChainItems(engine).map((i) => [i.cardId, i.triggered])).toEqual([["temp", true]]);
   });
 
   it("non-Temporary units are NOT killed at beginning phase", () => {
