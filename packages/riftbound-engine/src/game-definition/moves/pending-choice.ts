@@ -16,6 +16,8 @@ import type {
   ZoneId as CoreZoneId,
   GameMoveDefinitions,
 } from "@tcg/core";
+import { enumerateDamageAssignments, isLegalDamageAssignment } from "../../combat";
+import type { DamageAssignmentPlan } from "../../combat";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
 import { markContestedOnArrival } from "../../abilities/effects/move";
@@ -23,9 +25,10 @@ import { castSpellFromTrash } from "../../abilities/effects/play";
 import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
 import { openPendingContestedShowdown } from "./chain/showdown";
 import { resolveTarget } from "../../abilities/target-resolver";
+import * as triggerRunner from "../../abilities/trigger-runner";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { lockTriggerTargets } from "../../abilities/trigger-target-lock";
-import { addToChain, createInteractionState } from "../../chain";
+import { addToChain, createInteractionState, removeChainItem } from "../../chain";
 import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
@@ -39,17 +42,44 @@ import type {
 import { buildEffectContext, executeResolvedItem } from "./chain-moves";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canAffordPower } from "./chain/effect-context";
+import { payAnyDomainPower } from "./chain/resolve";
 import {
   discountOptionalPlayCost,
   getCardEffectiveMight,
+  getDeflectSurcharge,
   getNotHandSelfEnergyReduction,
   getOptionalPlayCost,
+  getPotentialRuneEnergy,
   staticEnterReadyApplies,
 } from "./play/cost";
 import { isLegalMultiTargetSet, spellEffectHasLegalTargets } from "./play/targeting";
 import type { SpellEffectTargetShape } from "./play/targeting";
 
 const isBoardZone = (z: string): boolean => z === "base" || z.startsWith("battlefield-");
+
+/**
+ * rule 809.1.c / 809.1.c.1 (356.2.a.2) — the [Deflect] surcharge for choosing an
+ * opponent's Deflect card with an ability is incurred WHEN THE TARGET IS CHOSEN.
+ * `chain/resolve.ts` charges the auto-bound single candidate and flags the
+ * multi-candidate prompt with `deflectTax`; this pays it at pick time.
+ */
+function chargePromptedDeflectTax(
+  draft: RiftboundGameState,
+  choice: { deflectTax?: true; playerId: string },
+  pickedIds: readonly string[],
+  cards: { getCardOwner?: unknown; getCardController?: unknown; getCardMeta?: unknown },
+): void {
+  if (choice.deflectTax !== true || pickedIds.length === 0) {
+    return;
+  }
+  const owed = getDeflectSurcharge(
+    draft,
+    choice.playerId,
+    [...pickedIds],
+    cards as Parameters<typeof getDeflectSurcharge>[3],
+  );
+  payAnyDomainPower(draft, choice.playerId, owed);
+}
 
 /**
  * rule 355.10 (sfd-039-221 Royal Entourage) — a modal ability's target belongs
@@ -115,6 +145,24 @@ function liftModalTarget(
     type: "choose-target",
   };
   return true;
+}
+
+/** rule 465.2.c.3 — the stored combat-damage prompt re-read as an assignment plan. */
+function combatAssignmentPlan(choice: {
+  options: readonly string[];
+  total: number;
+  lethalNeed: Readonly<Record<string, number>>;
+  tier: Readonly<Record<string, number>>;
+  defaultAllocation: Readonly<Record<string, number>>;
+}): DamageAssignmentPlan {
+  return {
+    defaultAllocation: { ...choice.defaultAllocation },
+    hasChoice: true,
+    need: { ...choice.lethalNeed },
+    order: [...choice.options],
+    tier: { ...choice.tier },
+    total: choice.total,
+  };
 }
 
 /**
@@ -417,7 +465,10 @@ function canPayOptInCost(
   playerId: string,
   sourceCardId: string,
   cost: Record<string, unknown>,
-  context: { counters: { getFlag?: (cardId: CoreCardId, flag: string) => boolean | undefined } },
+  context: {
+    counters: { getFlag?: (cardId: CoreCardId, flag: string) => boolean | undefined };
+    zones?: { getCardsInZone: (zone: never, player: never) => readonly CoreCardId[] };
+  },
   effect?: unknown,
 ): boolean {
   // rule 355.10.c.1 (rule-id: sfd-026-221) — "recycle another friendly unit to
@@ -447,7 +498,18 @@ function canPayOptInCost(
     (state as { restrictedEnergy?: Record<string, Partial<Record<string, number>>> })
       .restrictedEnergy?.[playerId] ?? {},
   ).reduce<number>((sum, amount) => sum + (amount ?? 0), 0);
-  if (pool.energy - Math.min(earmarked, pool.energy) < energyCost) {
+  // rule 444.2.c / 357.1.a: a Pay demanded while an ability resolves is still
+  // a Pay, so the payer may exhaust ready runes to fund it — credit their
+  // yield here (deductAbilityCost taps them when the cost is actually paid).
+  const runeEnergy =
+    context.zones && energyCost > 0
+      ? getPotentialRuneEnergy(
+          context.zones as unknown as Parameters<typeof getPotentialRuneEnergy>[0],
+          context.counters as unknown as Parameters<typeof getPotentialRuneEnergy>[1],
+          playerId,
+        )
+      : 0;
+  if (pool.energy - Math.min(earmarked, pool.energy) + runeEnergy < energyCost) {
     return false;
   }
   const powerCost = cost.power as string[] | undefined;
@@ -482,7 +544,9 @@ export function weaponmasterEquipCost(equipmentId: string): Record<string, unkno
   const abilities = getGlobalCardRegistry().getAbilities(equipmentId) ?? [];
   const equipAbility = abilities.find(
     (a) => a.type === "keyword" && (a as { keyword?: string }).keyword === "Equip",
-  ) as { cost?: { energy?: number; power?: readonly string[] } } | undefined;
+  ) as
+    | { cost?: { energy?: number; power?: readonly string[]; recycle?: number } }
+    | undefined;
   if (!equipAbility) {
     return undefined;
   }
@@ -491,7 +555,24 @@ export function weaponmasterEquipCost(equipmentId: string): Record<string, unkno
     const rainbowIdx = power.indexOf("rainbow");
     power.splice(rainbowIdx === -1 ? 0 : rainbowIdx, 1);
   }
-  return { energy: equipAbility.cost?.energy ?? 0, power };
+  // rule 821.1.c.3 (sfd-150-221 Last Rites): [A] only shaves a power pip — a
+  // "Recycle N cards from your trash" portion of the Equip cost survives it
+  // and is still paid in full.
+  const recycle = equipAbility.cost?.recycle;
+  return {
+    energy: equipAbility.cost?.energy ?? 0,
+    power,
+    ...(typeof recycle === "number" && recycle > 0 ? { recycleFromTrash: recycle } : {}),
+  };
+}
+
+/** Cards currently in `playerId`'s trash, when the zone bag is available. */
+// biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+function trashSize(zones: any, playerId: string): number {
+  if (typeof zones?.getCardsInZone !== "function") {
+    return 0;
+  }
+  return zones.getCardsInZone("trash", playerId).length as number;
 }
 
 /** rule-id: sfd-119-221-weaponmaster-pays-reduced-equip-cost — 821.1.c.5 payability gate. */
@@ -502,7 +583,39 @@ function canPayWeaponmasterEquip(
   context: Parameters<typeof canPayOptInCost>[4],
 ): boolean {
   const cost = weaponmasterEquipCost(equipmentId);
-  return cost !== undefined && canPayOptInCost(state, playerId, equipmentId, cost, context);
+  if (cost === undefined) {
+    return false;
+  }
+  // rule 821.1.c.5 (sfd-150-221): too few cards in the trash → the Equip cost
+  // cannot be paid, so the Equipment is never offered and stays where it is.
+  const needRecycle = cost.recycleFromTrash as number | undefined;
+  if (needRecycle !== undefined && trashSize(context.zones, playerId) < needRecycle) {
+    return false;
+  }
+  return canPayOptInCost(state, playerId, equipmentId, cost, context);
+}
+
+/**
+ * All orderings of `items`. Callers only ever pass a handful of cards
+ * (Predict looks at 2-3), so the factorial blow-up is bounded; longer lists
+ * fall back to the current order to keep the move list finite.
+ */
+function permutationsOf(items: readonly string[]): string[][] {
+  if (items.length > 4) {
+    return [[...items]];
+  }
+  if (items.length <= 1) {
+    return [[...items]];
+  }
+  const out: string[][] = [];
+  for (let i = 0; i < items.length; i++) {
+    const head = items[i] as string;
+    const rest = [...items.slice(0, i), ...items.slice(i + 1)];
+    for (const tail of permutationsOf(rest)) {
+      out.push([head, ...tail]);
+    }
+  }
+  return out;
 }
 
 /**
@@ -557,6 +670,9 @@ export function pickDefaultForChoice(choice: PendingChoice): string | number | u
   }
   if (choice.type === "choose-mode") {
     return choice.options[0];
+  }
+  if (choice.type === "order-cards") {
+    return undefined;
   }
   if (choice.type === "opt-in") {
     return undefined;
@@ -707,6 +823,17 @@ export const pendingChoiceMoves: Partial<
       if (!choice) {
         return false;
       }
+      // rule 465.2.c.3 / 465.2.c.7 — the assigning player answers with one
+      // allocation of this side's whole combat damage.
+      if (choice.type === "combat-damage") {
+        if (choice.playerId !== context.params.playerId) {
+          return false;
+        }
+        return isLegalDamageAssignment(
+          combatAssignmentPlan(choice),
+          context.params.allocation,
+        );
+      }
       if (choice.type === "weaponmaster-equip") {
         // rule-id: ven-041-166-weaponmaster-on-play-equip
         if (choice.playerId !== context.params.playerId) {
@@ -820,6 +947,20 @@ export const pendingChoiceMoves: Partial<
       if (choice.prompter !== context.params.playerId) {
         return false;
       }
+      // rule 386.2 (unl-062-219) — any permutation of the arranged cards is a
+      // legal answer.
+      if (choice.type === "order-cards") {
+        const order = context.params.orderedCardIds as string[] | undefined;
+        if (!Array.isArray(order)) {
+          return false;
+        }
+        const known = new Set(choice.cards as readonly string[]);
+        return (
+          order.length === known.size &&
+          new Set(order).size === order.length &&
+          order.every((id) => known.has(id))
+        );
+      }
       if (choice.type === "name-card") {
         // Rule 762: any legal card name is valid; the enumerated `options`
         // are the names known to this game's registry.
@@ -862,6 +1003,15 @@ export const pendingChoiceMoves: Partial<
       const choice = state.pendingChoice;
       if (!choice) {
         return [];
+      }
+      if (choice.type === "combat-damage") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        return enumerateDamageAssignments(combatAssignmentPlan(choice)).map((allocation) => ({
+          allocation,
+          playerId: context.playerId as string,
+        }));
       }
       if (choice.type === "weaponmaster-equip") {
         if (choice.playerId !== (context.playerId as string)) {
@@ -972,6 +1122,15 @@ export const pendingChoiceMoves: Partial<
           playerId: context.playerId as string,
         }));
       }
+      // rule 386.2 (unl-062-219) — "put the rest back in any order": one move
+      // per arrangement. Bounded because Predict looks at a handful of cards.
+      if (choice.type === "order-cards") {
+        const perms = permutationsOf(choice.cards as readonly string[]);
+        return perms.map((order) => ({
+          orderedCardIds: order,
+          playerId: context.playerId as string,
+        }));
+      }
       const results: { playerId: string; pickedCardId?: string; accept?: boolean }[] = [];
       for (const cardId of choice.revealed) {
         if (isValidPendingPick(choice, cardId)) {
@@ -994,6 +1153,28 @@ export const pendingChoiceMoves: Partial<
         return;
       }
 
+      // rule 465.2.c.3 — record the assignment; `resolveFullCombat` re-runs
+      // (its condition is blocked while a pendingChoice exists) and applies it.
+      if (choice.type === "combat-damage") {
+        const allocation = context.params.allocation;
+        if (!isLegalDamageAssignment(combatAssignmentPlan(choice), allocation)) {
+          return;
+        }
+        draft.pendingChoice = undefined;
+        const bf = draft.battlefields[choice.battlefieldId];
+        if (bf) {
+          // rule 465.2.c.3 — both sides assign simultaneously and each answer
+          // has its own slot: writing the DEFENDING player's assignment into
+          // the attacker's slot re-opens the same prompt forever.
+          if (choice.side === "defender") {
+            bf.combatDefenderDamageAllocation = { ...allocation };
+          } else {
+            bf.combatDamageAllocation = { ...allocation };
+          }
+        }
+        return;
+      }
+
       if (choice.type === "weaponmaster-equip") {
         // rule-id: ven-041-166-weaponmaster-on-play-equip
         // "You may Equip one of your Equipment to me … even if it's already
@@ -1008,7 +1189,7 @@ export const pendingChoiceMoves: Partial<
         // Rule 821.1.c: pay the Equip cost reduced by [A]; if it can't be
         // paid the Equipment stays where it is (821.1.c.5).
         const equipCost = weaponmasterEquipCost(picked);
-        if (!equipCost || !canPayOptInCost(draft, choice.playerId, picked, equipCost, context)) {
+        if (!equipCost || !canPayWeaponmasterEquip(draft, choice.playerId, picked, context)) {
           return;
         }
         deductAbilityCost(draft, choice.playerId, equipCost, context.zones, context.counters);
@@ -1049,6 +1230,23 @@ export const pendingChoiceMoves: Partial<
           },
           { cards: context.cards, counters: context.counters, draft, zones: context.zones },
         );
+        // rule 821.1.c / 476.1 (sfd-150-221 Last Rites): the non-resource part
+        // of the Equip cost — "Recycle N cards from your trash" — is paid by
+        // its payer choosing which cards leave the trash.
+        const recycleCount = equipCost.recycleFromTrash as number | undefined;
+        if (recycleCount !== undefined && recycleCount > 0 && !draft.pendingChoice) {
+          const trash = context.zones
+            .getCardsInZone("trash" as CoreZoneId, choice.playerId as CorePlayerId)
+            .map((id: unknown) => id as string);
+          draft.pendingChoice = {
+            onPicked: "recycle",
+            prompter: choice.playerId,
+            remaining: recycleCount,
+            revealed: trash,
+            revealer: choice.playerId,
+            type: "reveal-and-pick",
+          } as RiftboundGameState["pendingChoice"];
+        }
         return;
       }
 
@@ -1125,6 +1323,36 @@ export const pendingChoiceMoves: Partial<
         // the optional flag cleared so target selection etc. proceeds normally;
         // on decline the trigger fizzles.
         draft.pendingChoice = undefined;
+        // rule 383.3.a.2 / 402.1.a: this answer was asked while the trigger was
+        // being FINALIZED. Accepting leaves a non-optional item on the chain
+        // (it resolves without asking again); declining removes the item, so
+        // nobody ever receives Priority over a trigger that will do nothing.
+        const finalizeId = (choice as { finalizationChainItemId?: string })
+          .finalizationChainItemId;
+        if (finalizeId !== undefined) {
+          const interaction = draft.interaction;
+          if (interaction?.chain) {
+            draft.interaction =
+              context.params.accept === true
+                ? {
+                    ...interaction,
+                    chain: {
+                      ...interaction.chain,
+                      items: interaction.chain.items.map((it) =>
+                        it.id === finalizeId ? { ...it, optional: false } : it,
+                      ),
+                    },
+                  }
+                : removeChainItem(interaction, finalizeId);
+          }
+          // WIP guard: the finalization opt-in helper (rule 383.3.a) is not exported in this tree yet;
+          // call it only if the owning lane has landed it.
+          (triggerRunner as { promptFinalizationOptIn?: (d: unknown) => void }).promptFinalizationOptIn?.(draft);
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
+          return;
+        }
         // rule 356.5.a / 356.4.f.1 (unl-139-219 Bone Skewer): the instructed
         // play already happened — the answer only records whether the (zeroed)
         // optional additional cost counts as paid.
@@ -1487,6 +1715,7 @@ export const pendingChoiceMoves: Partial<
             }
             return;
           }
+          chargePromptedDeflectTax(draft, choice, pickedSoFar, context.cards);
           // Rule 359.2: "when you choose me" fires for each chosen target.
           const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
           // rule-id: sfd-142-221 — tag spell- vs ability-sourced choices.
@@ -1524,6 +1753,7 @@ export const pendingChoiceMoves: Partial<
             for (let i = 0; i < n; i++) encoded.push(id);
           }
           if (encoded.length > 0) {
+            chargePromptedDeflectTax(draft, choice, [...new Set(encoded)], context.cards);
             const trigCtx = { cards: context.cards, counters: context.counters, draft, zones: context.zones };
             const sourceType =
               getGlobalCardRegistry().get(choice.sourceCardId as string)?.cardType === "spell"
@@ -1554,6 +1784,14 @@ export const pendingChoiceMoves: Partial<
           : choice.boundTargets
             ? choice.boundTargets.filter((id) => id !== picked)
             : [picked];
+        // A drop prompt (`boundTargets` without `assign`) UN-chooses the pick, so
+        // nothing new is chosen and no surcharge is owed.
+        chargePromptedDeflectTax(
+          draft,
+          choice,
+          choice.boundTargets && !choice.assign ? [] : [picked],
+          context.cards,
+        );
         draft.pendingChoice = undefined;
         // rule 359.3.f.3 (unl-112-219) — "…to THAT battlefield": information
         // read from the trigger condition survives the target prompt, so the
@@ -1790,6 +2028,13 @@ export const pendingChoiceMoves: Partial<
           // no other prompt is already parked.
           maybeOfferAccelerate(draft, choice.cardId as string, choice.playerId, context);
         }
+        // rule 323.6 (rule-id: sfd-165-221) — answering the destination prompt
+        // ends the resolution: run the Cleanup so a battlefield left with no
+        // units (the one the dying unit vacated) stops being controlled once
+        // the turn is Open again. Skipped while another prompt is parked.
+        if (!draft.pendingChoice) {
+          postChoiceCleanup(draft, context);
+        }
         return;
       }
 
@@ -1800,10 +2045,34 @@ export const pendingChoiceMoves: Partial<
         if (typeof name !== "string" || !choice.options.includes(name)) {
           return;
         }
-        context.cards.updateCardMeta(choice.sourceCardId as CoreCardId, {
-          namedCard: name,
-        } as Partial<RiftboundCardMeta>);
+        context.cards.updateCardMeta(
+          choice.sourceCardId as CoreCardId,
+          (choice.cardType === "tag"
+            ? { namedTag: name }
+            : { namedCard: name }) as Partial<RiftboundCardMeta>,
+        );
         draft.pendingChoice = undefined;
+        return;
+      }
+
+      // rule 386.2 (unl-062-219) — arrange the looked-at cards back on top of
+      // the Main Deck: index 0 of the answer ends up topmost.
+      if (choice.type === "order-cards") {
+        const order = context.params.orderedCardIds as string[] | undefined;
+        const wanted = Array.isArray(order) ? order : [...choice.cards];
+        const known = new Set(choice.cards as readonly string[]);
+        if (wanted.length !== known.size || !wanted.every((id) => known.has(id))) {
+          return;
+        }
+        for (const cardId of [...wanted].reverse()) {
+          context.zones.moveCard({
+            cardId: cardId as CoreCardId,
+            position: "top",
+            targetZoneId: "mainDeck" as CoreZoneId,
+          });
+        }
+        draft.pendingChoice = undefined;
+        postChoiceCleanup(draft, context);
         return;
       }
 
@@ -1850,6 +2119,17 @@ export const pendingChoiceMoves: Partial<
         // rule 359.3.e — declining an optional prompt does not cancel the rest
         // of the instruction it interrupted ("you may [Predict], THEN reveal
         // the top card"); resume the suspended sequence remainder.
+        // rule 386.2 (unl-062-219) — a declined Predict still puts the cards
+        // that stayed on top back "in any order".
+        if (choice.onDecline) {
+          executeEffect(
+            choice.onDecline as ExecutableEffect,
+            buildEffectContext(draft, choice.prompter, choice.sourceCardId ?? "", context),
+          );
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
+        }
         if ((choice as { thenIsSequenceRest?: boolean }).thenIsSequenceRest && choice.then) {
           executeEffect(
             choice.then as ExecutableEffect,
@@ -1896,6 +2176,12 @@ export const pendingChoiceMoves: Partial<
       let revealed = choice.revealed as readonly string[];
 
       const targetZoneId = onPickedTargetZone(choice.onPicked);
+      // rule-id: sfd-169-221 — "on the top or bottom of your Main Deck": the
+      // picked cards are held back here and placed by a follow-up
+      // choose-destination prompt answered by their owner.
+      const ownerChoiceRecycle =
+        choice.onPicked === "recycle" &&
+        (choice as { position?: string }).position === "owner-choice";
       for (const id of picks) {
         const moveParams: {
           cardId: CoreCardId;
@@ -1920,7 +2206,7 @@ export const pendingChoiceMoves: Partial<
         // board below, so leave it where it is for now.
         // rule 419.3 (unl-139-219): a forced play to a fixed battlefield goes
         // straight there too.
-        if (choice.playFrom !== "trash" && choice.playTo === undefined) {
+        if (choice.playFrom !== "trash" && choice.playTo === undefined && !ownerChoiceRecycle) {
           context.zones.moveCard(moveParams);
         }
         revealed = revealed.filter((r) => r !== id);
@@ -1943,6 +2229,39 @@ export const pendingChoiceMoves: Partial<
         if (revealed.some((id) => isValidPendingPick(rest, id))) {
           draft.pendingChoice = { ...rest, remaining, taken };
           return;
+        }
+      }
+
+      // rule 416.1.a / rule-id: sfd-169-221 — the pick is made; its owner now
+      // chooses the top or the bottom of their Main Deck for it.
+      if (ownerChoiceRecycle && picks.length > 0) {
+        const held = picks[0] as string;
+        draft.pendingChoice = {
+          cardId: held,
+          options: ["mainDeck-top", "mainDeck-bottom"],
+          playerId: context.cards.getCardOwner(held as CoreCardId) ?? choice.prompter,
+          type: "choose-destination",
+        };
+        return;
+      }
+
+      // rule 337.1.b (ogn-115-298) — "each player … banishes one of them …
+      // [then] each player plays those cards": the banish pass is public and
+      // finishes before any play, so record the picks in order for a later
+      // `play-banished-pass` step to replay.
+      if (choice.onPicked === "banish") {
+        const banishLog = draft as unknown as {
+          lookBanishedCards?: { cardId: string; playerId: string; sourceCardId?: string }[];
+        };
+        for (const id of picks) {
+          banishLog.lookBanishedCards = [
+            ...(banishLog.lookBanishedCards ?? []),
+            {
+              cardId: id as string,
+              playerId: context.cards.getCardOwner(id as CoreCardId) ?? choice.revealer,
+              ...(choice.sourceCardId !== undefined ? { sourceCardId: choice.sourceCardId } : {}),
+            },
+          ];
         }
       }
 
@@ -2172,7 +2491,16 @@ export const pendingChoiceMoves: Partial<
               {
                 cardId: pickedCardId as string,
                 controller: choice.prompter,
-                effect: { target: pickedCardId as string, to: "choose", type: "move" },
+                effect: {
+                  // rule 355.2.b (sfd-170-221) — "you may play it here" adds the
+                  // instructing card's battlefield to the valid locations.
+                  ...(choice.playHere !== undefined
+                    ? { extraDestinations: [choice.playHere] }
+                    : {}),
+                  target: pickedCardId as string,
+                  to: "choose",
+                  type: "move",
+                },
                 triggered: true,
                 type: "ability",
               },

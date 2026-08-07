@@ -233,6 +233,189 @@ export function distributeDamage(
 }
 
 /**
+ * rule 465.2.c.3 / 465.2.c.7 — the player assigning combat damage chooses the
+ * order in which the opposing units receive lethal damage, so an assignment is
+ * only forced when a single line is legal. This describes the legal shapes of
+ * one side's assignment so the move layer can surface the decision.
+ *
+ * Priority tiers (815.1.b Tank first, 826.4.b Backline last) are hard: a unit
+ * in a later tier may receive nothing while an earlier-tier unit lacks lethal.
+ */
+export interface DamageAssignmentPlan {
+  /** Assignable target ids, in damage-assignment priority order. */
+  readonly order: string[];
+  /** Damage still needed to make each target lethal. */
+  readonly need: Record<string, number>;
+  /** Assignment priority tier: 0 = Tank, 1 = plain, 2 = Backline. */
+  readonly tier: Record<string, number>;
+  readonly total: number;
+  /** The engine's forced/greedy assignment — always legal. */
+  readonly defaultAllocation: Record<string, number>;
+  /** True when more than one legal assignment exists (a real decision). */
+  readonly hasChoice: boolean;
+}
+
+export function planDamageAssignment(
+  units: CombatUnit[],
+  totalDamage: number,
+  role?: "attacker" | "defender",
+): DamageAssignmentPlan {
+  const assignable = units.filter((u) => u.immuneToDamage !== true);
+  const withFlags = assignable.map((u) => ({
+    ...u,
+    hasBackline: hasKeyword(u, "Backline"),
+    hasTank: hasKeyword(u, "Tank"),
+  }));
+  const sorted = sortByBacklinePriority(sortByTankPriority(withFlags));
+
+  const order: string[] = [];
+  const need: Record<string, number> = {};
+  const tier: Record<string, number> = {};
+  for (const unit of sorted) {
+    order.push(unit.id);
+    need[unit.id] = Math.max(0, lethalThreshold(unit, role) - unit.currentDamage);
+    tier[unit.id] = hasKeyword(unit, "Tank") ? 0 : (hasKeyword(unit, "Backline") ? 2 : 1);
+  }
+
+  // A choice exists only inside the first tier the damage cannot fully cover:
+  // earlier tiers are forced (everything in them must reach lethal) and later
+  // tiers never see a point. Two or more candidates there ⇒ the assigner picks.
+  let remaining = totalDamage;
+  let hasChoice = false;
+  for (const t of [0, 1, 2]) {
+    const group = order.filter((id) => tier[id] === t);
+    if (group.length === 0) {
+      continue;
+    }
+    const groupNeed = group.reduce((sum, id) => sum + (need[id] ?? 0), 0);
+    if (remaining >= groupNeed) {
+      remaining -= groupNeed;
+      continue;
+    }
+    hasChoice = remaining > 0 && group.length > 1;
+    remaining = 0;
+    break;
+  }
+
+  return {
+    defaultAllocation: distributeDamage(units, totalDamage, role),
+    hasChoice,
+    need,
+    order,
+    tier,
+    total: totalDamage,
+  };
+}
+
+/**
+ * rule 465.2.c.3 / .c.7 — every legal way for one side to assign its damage:
+ * repeatedly complete lethal on some unit of the highest-priority tier that
+ * still lacks it, then (only once everything is lethal) pile the excess.
+ * Zero-valued buckets are omitted so allocations compare canonically.
+ */
+export function enumerateDamageAssignments(
+  plan: DamageAssignmentPlan,
+  cap = 200,
+): Record<string, number>[] {
+  const out: Record<string, number>[] = [];
+  const seen = new Set<string>();
+  const emit = (alloc: Record<string, number>): void => {
+    const canonical: Record<string, number> = {};
+    for (const id of plan.order) {
+      if ((alloc[id] ?? 0) > 0) {
+        canonical[id] = alloc[id] as number;
+      }
+    }
+    const key = JSON.stringify(canonical);
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(canonical);
+    }
+  };
+  const walk = (alloc: Record<string, number>, remaining: number): void => {
+    if (out.length >= cap) {
+      return;
+    }
+    if (remaining <= 0) {
+      emit(alloc);
+      return;
+    }
+    const nonLethal = plan.order.filter((id) => (alloc[id] ?? 0) < (plan.need[id] ?? 0));
+    if (nonLethal.length === 0) {
+      for (const id of plan.order) {
+        emit({ ...alloc, [id]: (alloc[id] ?? 0) + remaining });
+        if (out.length >= cap) {
+          return;
+        }
+      }
+      return;
+    }
+    const minTier = Math.min(...nonLethal.map((id) => plan.tier[id] ?? 1));
+    for (const id of nonLethal.filter((cand) => (plan.tier[cand] ?? 1) === minTier)) {
+      const give = Math.min(remaining, (plan.need[id] ?? 0) - (alloc[id] ?? 0));
+      walk({ ...alloc, [id]: (alloc[id] ?? 0) + give }, remaining - give);
+    }
+  };
+  walk({}, plan.total);
+  return out;
+}
+
+/**
+ * rule 465.2.c.3 / .c.4 / .c.7 / 815.1.c.2 — is `allocation` a legal way for
+ * one side to assign `plan.total` damage?
+ */
+export function isLegalDamageAssignment(
+  plan: DamageAssignmentPlan,
+  allocation: unknown,
+): allocation is Record<string, number> {
+  if (!allocation || typeof allocation !== "object") {
+    return false;
+  }
+  const alloc = allocation as Record<string, unknown>;
+  let sum = 0;
+  for (const [id, v] of Object.entries(alloc)) {
+    if (!plan.order.includes(id)) {
+      return false;
+    }
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 0) {
+      return false;
+    }
+    sum += v;
+  }
+  if (sum !== plan.total) {
+    return false;
+  }
+  const got = (id: string): number => (alloc[id] as number | undefined) ?? 0;
+  const lethal = (id: string): boolean => got(id) >= (plan.need[id] ?? 0);
+  const everyoneLethal = plan.order.every((id) => lethal(id));
+  let partials = 0;
+  for (const id of plan.order) {
+    const n = got(id);
+    const requirement = plan.need[id] ?? 0;
+    // 465.2.c.4: no overkill while any unit still lacks lethal.
+    if (n > requirement && !everyoneLethal) {
+      return false;
+    }
+    if (n > 0 && n < requirement) {
+      partials++;
+    }
+    // 815.1.b / 826.4.b: nothing lands in a later tier while an earlier-tier
+    // unit lacks lethal.
+    if (n > 0) {
+      const myTier = plan.tier[id] ?? 1;
+      for (const other of plan.order) {
+        if ((plan.tier[other] ?? 1) < myTier && !lethal(other)) {
+          return false;
+        }
+      }
+    }
+  }
+  // 465.2.c.3: lethal must be completed on one unit before the next receives
+  // any, so at most one unit ends up partially damaged.
+  return partials <= 1;
+}
+
+/**
  * Resolve combat between attackers and defenders.
  *
  * Uses MUTUAL SIMULTANEOUS DAMAGE (rule 626):
@@ -245,6 +428,18 @@ export function distributeDamage(
 export function resolveCombat(
   attackersIn: CombatUnit[],
   defendersIn: CombatUnit[],
+  opts?: {
+    /**
+     * rule 465.2.c.3 — the attacking player's chosen assignment of its damage
+     * onto the defenders. Omitted ⇒ the forced/greedy assignment is used.
+     */
+    readonly attackerAssignment?: Record<string, number>;
+    /**
+     * rule 465.2.c.3 — the defending player's chosen assignment of its damage
+     * onto the attackers. Omitted ⇒ the forced/greedy assignment is used.
+     */
+    readonly defenderAssignment?: Record<string, number>;
+  },
 ): CombatResult {
   // rule-id: unl-060-219 — weaker enemies of a Vilemaw-style unit deal no combat damage.
   const attackers = applyCombatDamagePrevention(attackersIn, true, defendersIn);
@@ -257,7 +452,8 @@ export function resolveCombat(
   const damageAssignment: Record<string, number> = {};
 
   // Step 2: Attackers deal their total Might to defenders (rule 626.1.b)
-  const attackerDamageToDefenders = distributeDamage(defenders, attackerTotal, "defender");
+  const attackerDamageToDefenders =
+    opts?.attackerAssignment ?? distributeDamage(defenders, attackerTotal, "defender");
   Object.assign(damageAssignment, attackerDamageToDefenders);
   // rule-id: ogn-034-298 — excess = assigned beyond each defender's lethal need.
   let attackerExcessDamage = 0;
@@ -267,7 +463,8 @@ export function resolveCombat(
   }
 
   // Step 3: Defenders deal their total Might to attackers (rule 626.1.c)
-  const defenderDamageToAttackers = distributeDamage(attackers, defenderTotal, "attacker");
+  const defenderDamageToAttackers =
+    opts?.defenderAssignment ?? distributeDamage(attackers, defenderTotal, "attacker");
   for (const [id, dmg] of Object.entries(defenderDamageToAttackers)) {
     damageAssignment[id] = (damageAssignment[id] ?? 0) + dmg;
   }
@@ -283,8 +480,10 @@ export function resolveCombat(
       const combatDamage = damageAssignment[unit.id] ?? 0;
       const totalDamage = unit.currentDamage + combatDamage;
       // rule-id: ogn-254-298 — kill on any damage taken (bound replacement).
+      // rule 142.4.b: damage must be non-zero to be lethal, so a 0-Might unit
+      // that is dealt nothing survives.
       if (
-        totalDamage >= lethalThreshold(unit, role) ||
+        (totalDamage > 0 && totalDamage >= lethalThreshold(unit, role)) ||
         (unit.diesOnAnyDamage === true && combatDamage > 0)
       ) {
         killed.push(unit.id);
