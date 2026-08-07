@@ -46,6 +46,13 @@ git -C "$WT" add -A -- "${FILES[@]}" 2>/dev/null
 if git -C "$WT" diff --cached --quiet; then out committed false; out reason nothing_staged; exit 0; fi
 git -C "$WT" commit -q -m "$MSG" || { out committed false; out reason wt_commit_failed; exit 0; }
 NEW=$(git -C "$WT" rev-parse HEAD)
+# Post-commit integrity: every file that differs between REPO copy and HEAD_SHA must be in the commit; else roll back.
+MISSING=""; for f in "${FILES[@]}"; do
+  if ! git -C "$WT" diff --quiet "$HEAD_SHA" "$NEW" -- "$f" 2>/dev/null; then continue; fi   # in commit (differs) → ok
+  # not in commit: acceptable only if the file is identical to HEAD_SHA's version (nothing to commit)
+  if [ -e "$REPO/$f" ] && git -C "$WT" cat-file -e "$HEAD_SHA:$f" 2>/dev/null; then cmp -s "$REPO/$f" <(git -C "$WT" show "$HEAD_SHA:$f") || MISSING="$MISSING $f"; elif [ -e "$REPO/$f" ]; then MISSING="$MISSING $f"; fi
+done
+if [ -n "$MISSING" ]; then git -C "$WT" reset -q --hard "$HEAD_SHA"; out committed false; out reason commit_incomplete; out missing "$(echo $MISSING | tr ' ' ',')"; exit 0; fi
 git -C "$REPO" update-ref "refs/heads/$BR" "$NEW" "$HEAD_SHA" || { out committed false; out reason ref_update_failed; exit 0; }
 git -C "$REPO" reset -q -- "${FILES[@]}" >/dev/null 2>&1   # index ← new HEAD for these paths; working tree untouched
 out committed true; out sha "$(git -C "$REPO" rev-parse --short HEAD)"
