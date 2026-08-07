@@ -82,7 +82,7 @@ describe("Ruling 4c941546639a650b — Baited Hook whose friendly unit was bounce
   // and P1's hand is just the bounced Bait.
   // Actual: the engine shows a MANDATORY "pick a revealed card to draw" over all five cards and puts the
   // pick into P1's hand.
-  test.failing("BUG: ruling 4c941546639a650b — engine forces a pick-to-draw from the top 5; expected: null Might ⇒ no unit may be chosen, all 5 recycled (359.3.e.12)", async () => {
+  test("ruling 4c941546639a650b — engine forces a pick-to-draw from the top 5; expected: null Might ⇒ no unit may be chosen, all 5 recycled (359.3.e.12)", async () => {
     const game = await board().build();
     await hookThenGust(game);
     const stop = await game.settle();
