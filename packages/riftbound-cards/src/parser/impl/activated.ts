@@ -212,7 +212,7 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
     // E.g. "Discard a gear, :rb_energy_1:, :rb_exhaust:: Deal 4 to a unit at a battlefield."
     //      "Disempower me, :rb_rune_rainbow:, :rb_exhaust:: Ready a unit."
     const textCost2Match = text.match(
-      /^(Discard (?:a |an )?(?:gear|unit|card|spell)|Disempower me)((?:,\s*:rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)|exhaust):)*):\s*(.+)$/is,
+      /^(Discard (?:a |an )?(?:gear|unit|card|spell)|Disempower (?:me|this|it))((?:,\s*:rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)|exhaust):)*):\s*(.+)$/is,
     );
     if (textCost2Match) {
       const costText = textCost2Match[1].trim();
@@ -283,7 +283,7 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
   // it so it doesn't break the [Add] match below.
   let addRestriction: "spell" | "gear" | undefined;
   const useOnlyToPlay = remaining.match(
-    /\s*Use only to play (spells?|gear)\b[^.]*\.?(?:\s*\([^)]*\))?\s*$/i,
+    /\s*(?:Use|Spend this Energy) only to play (spells?|gear)\b[^.]*\.?(?:\s*\([^)]*\))?\s*$/i,
   );
   if (useOnlyToPlay) {
     addRestriction = useOnlyToPlay[1].toLowerCase().startsWith("spell") ? "spell" : "gear";

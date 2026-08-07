@@ -124,7 +124,10 @@ export function splitOnAbilityBoundaries(text: string): string[] {
   // Pattern that matches the start of a new ability in card text.
   // Uses lookahead so we don't consume the matched text.
   const boundaryPattern =
-    /(?=(?:When (?:you |I |a |an |another |the )|At the (?:start|end) of |The (?:first|second|third|next) time |Whenever |While (?:I'm|you)|Other friendly |Your [A-Z]|Friendly (?:units|buffed)|Enemy (?:units|gear)|Stunned (?:enemy|friendly) |Each |If (?:you've|an |I )|Play (?:a |an |one |two |three |four |five |six |\d+ )|Recycle \d|Spend ))|(?<=[.\n)]\s*)(?=I enter ready)|(?<=\.\s?)(?=:rb_)|(?<=\.)\n(?=[A-Z\[:])/g;
+    // `(?<!:\s)` — text right after an activation-cost colon ("Disempower this,
+    // :rb_energy_1:, :rb_exhaust:: Play a …") is the ability's EFFECT, not a new
+    // ability; splitting there strips the cost and demotes it to a free spell.
+    /(?<!:\s)(?=(?:When (?:you |I |a |an |another |the )|At the (?:start|end) of |The (?:first|second|third|next) time |Whenever |While (?:I'm|you)|Other friendly |Your [A-Z]|Friendly (?:units|buffed)|Enemy (?:units|gear)|Stunned (?:enemy|friendly) |Each |If (?:you've|an |I )|Play (?:a |an |one |two |three |four |five |six |\d+ )|Recycle \d|Spend ))|(?<=[.\n)]\s*)(?=I enter ready)|(?<=\.\s?)(?=:rb_)|(?<=\.)\n(?=[A-Z\[:])/g;
 
   const indices: number[] = [];
   let match: RegExpExecArray | null;

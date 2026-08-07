@@ -529,7 +529,12 @@ export function executeResolvedItem(
     ...(typeof trigEvt?.to === "string" ? { triggerToZone: trigEvt.to } : {}),
     // rule 811.1.d.3: units played by a from-Hidden card go to that battlefield.
     ...(hiddenZone ? { hiddenZone } : {}),
-  };
+    // rule 560 (unl-164-219) — a play-self trigger's "if you paid my additional
+    // cost" reads the paid flag carried by the firing event.
+    ...((trigEvt as { paidAdditionalCost?: boolean } | undefined)?.paidAdditionalCost === true
+      ? { paidAdditionalCost: true }
+      : {}),
+  } as EffectContext;
   // Rule 359.2: "when you choose me" triggers fire when a spell/ability's
   // controller picks a card as a target.
   // rule-id: sfd-142-221 (383.4.b.2) / sfd-052-221 (355.14.b) — play-time

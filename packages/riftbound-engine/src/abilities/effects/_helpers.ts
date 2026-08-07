@@ -528,6 +528,9 @@ export function evaluateEffectCondition(
       // rule-id: ven-083-166 / rule 560 — playSpell records whether the
       // caster elected the optional additional cost; absent means unpaid.
       if (ctx.draft.additionalCostsPaid?.[ctx.sourceCardId] === true) return true;
+      // rule 560 (unl-164-219) — a play-self trigger carries the flag on its
+      // firing event; unit plays do not record it on the draft.
+      if ((ctx as { paidAdditionalCost?: boolean }).paidAdditionalCost === true) return true;
       // rule-id: ogn-056-298 — "X. If you do, Y" inside a sequence: the
       // sequence handler records whether the preceding step X was performed.
       return (ctx as { ifYouDoPerformed?: boolean }).ifYouDoPerformed === true;
