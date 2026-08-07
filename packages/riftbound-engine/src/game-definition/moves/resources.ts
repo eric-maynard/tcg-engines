@@ -32,6 +32,21 @@ function holdsRunePriority(state: RiftboundGameState, playerId: string): boolean
 }
 
 /**
+ * rule 444.2.c / 429.3 / 204.4.b.1 — a Pay demanded by a resolving ability
+ * ("you may pay [1] to …") is still a Pay step, so the player being asked may
+ * activate a rune's [Reaction] Add ability to fund it. Every other pending
+ * choice keeps the board frozen, so only the payer's own `opt-in` prompt lifts
+ * the block.
+ */
+function runeAddAllowedDuringChoice(state: RiftboundGameState, playerId: string): boolean {
+  const pending = state.pendingChoice;
+  if (!pending) {
+    return true;
+  }
+  return pending.type === "opt-in" && pending.playerId === playerId;
+}
+
+/**
  * Resource move definitions
  */
 const resourceMoveDefs: Partial<
@@ -86,7 +101,7 @@ const resourceMoveDefs: Partial<
    */
   exhaustRune: {
     condition: (state, context) => {
-      if (state.pendingChoice) {
+      if (!runeAddAllowedDuringChoice(state, context.params.playerId as string)) {
         return false;
       }
       if (state.status !== "playing") {
@@ -115,7 +130,7 @@ const resourceMoveDefs: Partial<
       return true;
     },
     enumerator: (state, context) => {
-      if (state.pendingChoice) {
+      if (!runeAddAllowedDuringChoice(state, context.playerId as string)) {
         return [];
       }
       if (state.status !== "playing") {
