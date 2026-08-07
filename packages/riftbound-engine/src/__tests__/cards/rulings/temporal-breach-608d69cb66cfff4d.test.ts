@@ -96,7 +96,7 @@ describe("Ruling 608d69cb66cfff4d — Temporal Breach under Brynhir Thundersong:
   // Expected: Brynhir resolved; Breach banishes P2's unit (completes normally), then "its owner plays it" is impossible
   // for P2 this turn → skipped; the unit REMAINS in P2's banishment; Breach finishes resolving (→ trash); nothing pending.
   // Actual: ven-066-166's effect is an unparsed raw stub — Breach resolves doing nothing; the unit never leaves bf1.
-  test.failing("BUG: ruling 608d69cb66cfff4d — with Brynhir resolved, Breach banishes P2's unit and the replay is skipped: it stays banished (engine: Temporal Breach effect unimplemented)", async () => {
+  test("ruling 608d69cb66cfff4d — with Brynhir resolved, Breach banishes P2's unit and the replay is skipped: it stays banished (engine: Temporal Breach effect unimplemented)", async () => {
     const game = await board(TEMPORAL_BREACH, { brynhir: true }).build();
     await brynhirResolved(game);
     await castBreachAtVictim(game);
@@ -145,7 +145,7 @@ describe("Ruling 608d69cb66cfff4d — Temporal Breach under Brynhir Thundersong:
   // no pending play for P2 is created/finalized and the unit stays in P2's banishment. Actual: Brynhir's
   // "opponents can't play cards" only gates hand plays; the effect-instructed play still goes on the chain and P2
   // puts the unit back on the board.
-  test.failing("BUG: ruling 608d69cb66cfff4d — (inline model) Brynhir's restriction must also make an effect-INSTRUCTED play impossible: unit stays banished (engine: P2 replays it anyway)", async () => {
+  test("ruling 608d69cb66cfff4d — (inline model) Brynhir's restriction must also make an effect-INSTRUCTED play impossible: unit stays banished (engine: P2 replays it anyway)", async () => {
     const game = await board(BREACH_MODEL, { brynhir: true }).build();
     await brynhirResolved(game);
     await castBreachAtVictim(game);

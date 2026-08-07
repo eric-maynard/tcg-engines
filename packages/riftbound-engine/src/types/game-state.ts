@@ -172,6 +172,13 @@ export interface RiftboundCardMeta {
   exiledByThis?: CardId[];
 
   /**
+   * rule-id: ven-066-166 — board zone this card was banished from ("base" or
+   * "battlefield-<id>"). Read by a "play it to the same location" effect
+   * (rule 355.2) so the replay destination is the zone it just left.
+   */
+  banishedFrom?: string;
+
+  /**
    * rule-id: sfd-109-221 (Akshan) — layered control-changing effects on this
    * permanent, oldest first. The latest entry whose source is still on the
    * board (or that has no source, i.e. permanent) wins; with none left the
@@ -292,6 +299,14 @@ export interface BattlefieldState {
 
   /** rule-id: ogn-034-298 — excess damage carried into the deferred conquer event. */
   combatExcessDamage?: number;
+
+  /**
+   * rule 466.1.a.2: no defending unit was left here when the Combat Cleanup
+   * ran, so the surviving attackers were never recalled. Carried across the
+   * deferred Resolution Step (466.2) — a unit that a pending trigger puts here
+   * afterwards makes the combat a No Result (466.3.d), not a defender win.
+   */
+  combatNoDefendersAtCleanup?: boolean;
 
   /**
    * Bonus to the number of cards a player may hide at this battlefield.
@@ -529,6 +544,12 @@ export interface ChooseTargetChoice {
    */
   readonly bindToChainItemId?: string;
   /**
+   * rule 359.3.f.3 (unl-112-219): the destination zone of the move that fired
+   * the trigger — "…to THAT battlefield". Carried across the prompt so the
+   * effect still knows it when it re-executes with the chosen target.
+   */
+  readonly triggerToZone?: string;
+  /**
    * Rule 355.14.h (unl-192-219): when set, the pick is a target to DROP —
    * the stored effect is re-executed with this list minus the picked id as
    * its bound targets, preserving the reference unit at index 0.
@@ -659,6 +680,31 @@ export interface OptInChoice {
    * pay. Accept → the cost is charged and the unit enters ready (rule 805.2.b);
    * decline → it enters exhausted (rule 143.4).
    */
+  /**
+   * rule 158.1 (sfd-136-221) — "Counter a spell unless its controller pays
+   * [N]": the ransom prompt goes to the targeted spell's controller. Accepting
+   * charges the cost and the counter does nothing; declining runs `effect`
+   * (the same counter with the `unless` clause stripped).
+   */
+  readonly counterRansom?: {
+    readonly effect: unknown;
+    readonly sourcePlayerId: PlayerId;
+    readonly boundTargets?: readonly string[];
+  };
+  /**
+   * rule 356.5.a / 356.4.f.1 (unl-139-219 Bone Skewer) — a card being played
+   * to a fixed battlefield "ignoring any and all costs" whose optional
+   * additional cost its player may still DECLARE. The amount is 0 either way;
+   * accepting only records that the cost counts as paid, so "if you paid the
+   * additional cost" riders fire. The play finalizes on either answer.
+   */
+  readonly instructedPlay?: {
+    readonly cardId: CardId;
+    readonly playTo: string;
+    readonly playStun: boolean;
+    /** Fallback controller when the card has no recorded owner. */
+    readonly revealer: PlayerId;
+  };
   readonly acceleratePlay?: {
     readonly cardId: CardId;
     readonly cost?: { readonly energy?: number; readonly power?: readonly string[] };
@@ -838,6 +884,14 @@ export interface RiftboundGameState {
    * turn ("opponents can't play cards this turn"). Cleared at end of turn.
    */
   cannotPlayCardsThisTurn?: Record<string, true>;
+
+  /**
+   * rule-id: unl-190-219 — players who can't play SPELLS for the rest of a
+   * turn (Lilting Lullaby's linked "its controller can't play spells this
+   * turn"), stamped with the turn number it was imposed on so it lapses by
+   * itself once the turn advances.
+   */
+  cannotPlaySpellsThisTurn?: Record<string, number>;
 
   /**
    * Keys of `"next"`-duration replacements that have already fired this turn.

@@ -8,9 +8,22 @@ import {
   deductCost,
   staticEnterReadyApplies,
 } from "../../game-definition/moves/play/cost";
+import { extractBattlefieldId } from "../../zones/zone-configs";
+import { battlefieldForbidsUnitPlays } from "../play-restrictions";
 import { spellEffectHasLegalTargets, type SpellEffectTargetShape } from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
+
+/**
+ * rule 358.3.a (rule-id: ogn-026-298 Brynhir Thundersong) — a "player can't play
+ * cards" restriction applies to every play, including one an effect INSTRUCTS a
+ * player to make (rule 419.1: putting the card on the chain is the play). The
+ * instruction is then impossible for that player and is skipped; the rest of the
+ * effect (e.g. ven-066-166's banish) still stands.
+ */
+function playerCannotPlay(ctx: EffectContext, playerId: string): boolean {
+  return ctx.draft.cannotPlayCardsThisTurn?.[playerId] === true;
+}
 
 export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // rule-id: unl-186-219 — "you may play this from your trash for [C]" on a
@@ -96,6 +109,53 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     }
     return;
   }
+  // rule-id: ven-066-166 (rule 354.2 / 355.2) — "Banish a unit, then its owner
+  // plays it to the same location, ignoring its cost": like any effect-driven
+  // play the card waits in banishment as a pending chain item (rule 354.3),
+  // but its destination is fixed to the board zone it just left, so its owner
+  // is never asked to choose. rule 358.3.a: when that location can't receive a
+  // unit (sfd-216-221 Rockfall Path) the play is impossible and is skipped —
+  // the banish stands and the unit stays in its owner's banishment.
+  if (toLocation === "same") {
+    const turnOrderSame = Object.keys(ctx.draft.players);
+    for (const targetId of targets) {
+      const dest = (
+        ctx.cards.getCardMeta?.(targetId as CoreCardId) as { banishedFrom?: string } | undefined
+      )?.banishedFrom;
+      if (dest === undefined) {
+        continue;
+      }
+      if (
+        dest.startsWith("battlefield-") &&
+        battlefieldForbidsUnitPlays(extractBattlefieldId(dest) ?? "")
+      ) {
+        continue;
+      }
+      const sameOwner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId;
+      if (playerCannotPlay(ctx, sameOwner)) {
+        continue;
+      }
+      ctx.draft.interaction = addToChain(
+        ctx.draft.interaction ?? createInteractionState(),
+        {
+          cardId: targetId,
+          controller: sameOwner,
+          // rule 143.4: however it was played, the unit enters exhausted.
+          effect: {
+            effects: [
+              { target: targetId, to: dest, type: "move" },
+              { target: targetId, type: "exhaust" },
+            ],
+            type: "sequence",
+          },
+          triggered: true,
+          type: "ability",
+        },
+        turnOrderSame,
+      );
+    }
+    return;
+  }
   // rule-id: ogn-102-298 — an explicit "to their base" destination fixes both
   // location and payment, so the play finalizes right here (rule 354.3 →
   // 355.2): the unit enters its owner's base as a newly played permanent.
@@ -112,6 +172,9 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   const dest = toLocation === "base" ? "base" : "choose";
   for (const targetId of targets) {
     const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? ctx.playerId;
+    if (playerCannotPlay(ctx, owner)) {
+      continue;
+    }
     ctx.draft.interaction = addToChain(
       ctx.draft.interaction ?? createInteractionState(),
       {
@@ -366,7 +429,7 @@ function playCandidatesFromHand(effect: ExecutableEffect, ctx: EffectContext): s
  * its play triggers and counting toward this turn's plays (rule 724),
  * mirroring the playUnit reducer.
  */
-function enterUnitFromEffect(cardId: string, zoneId: string, ctx: EffectContext): void {
+export function enterUnitFromEffect(cardId: string, zoneId: string, ctx: EffectContext): void {
   ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: zoneId as CoreZoneId });
   // rule 337.2: the played card is a new object — board state from its
   // previous existence (damage, buffs, stun, granted keywords) is gone.

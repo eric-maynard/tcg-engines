@@ -74,7 +74,7 @@ describe("Ruling 445563aa61a7f05a — Temporal Breach into Rockfall Path: banish
   // to bf1 ignoring cost — it comes back as a fresh object (no damage), P2 pays nothing, banishment is empty.
   // Actual: Temporal Breach resolves as a no-op (its effect text is not parsed) — the unit is never banished
   // and keeps its damage.
-  test.failing("BUG: ruling 445563aa61a7f05a (control) — at a normal battlefield the unit is banished then replayed to bf1 for free as a fresh unit; engine does nothing", async () => {
+  test("ruling 445563aa61a7f05a (control) — at a normal battlefield the unit is banished then replayed to bf1 for free as a fresh unit; engine does nothing", async () => {
     const game = await board(false).build();
     await breach(game);
     expect(game.p2.banishment()).toEqual([]);

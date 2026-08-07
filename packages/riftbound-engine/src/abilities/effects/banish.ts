@@ -31,6 +31,13 @@ export function handle_banish(effect: ExecutableEffect, ctx: EffectContext, _h: 
       cardId: targetId as CoreCardId,
       targetZoneId: "banishment" as CoreZoneId,
     });
+    // rule 186.1: a token in a non-board zone ceases to exist immediately. Do
+    // it here rather than in the state-based sweep so a follow-up step of the
+    // same effect ("then its owner plays it") finds nothing to replay.
+    if ((targetId as string).startsWith("token-")) {
+      ctx.zones.removeCardFromGame?.({ cardId: targetId as CoreCardId });
+      continue;
+    }
     // rule 124.1: a card leaving the board for banishment becomes a NEW
     // object — damage, buffs, stun and granted keywords are gone, and any
     // control-changing effect on it ends, so it reverts to its owner
@@ -43,6 +50,9 @@ export function handle_banish(effect: ExecutableEffect, ctx: EffectContext, _h: 
     ctx.counters?.setFlag?.(targetId as CoreCardId, "buffed", false);
     ctx.counters?.setFlag?.(targetId as CoreCardId, "exhausted", false);
     ctx.cards.updateCardMeta?.(targetId as CoreCardId, {
+      // rule-id: ven-066-166 — remember the board zone it left so a "then its
+      // owner plays it to the same location" step has a destination.
+      banishedFrom: from,
       buffed: false,
       combatMightModifier: 0,
       combatRole: null,

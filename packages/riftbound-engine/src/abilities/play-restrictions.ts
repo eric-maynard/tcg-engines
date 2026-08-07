@@ -110,3 +110,23 @@ export function playIsForbidden(
   }
   return false;
 }
+
+/**
+ * rule 355.2 (rule-id: sfd-216-221 Rockfall Path): a battlefield card whose own
+ * text reads "Units can't be played here" is never a legal play destination for
+ * a unit — not for a normal play, and not for an effect that would place a unit
+ * there (rule 358.3.a: an impossible instruction is skipped). `battlefieldId`
+ * is the battlefield card's instance id.
+ */
+export function battlefieldForbidsUnitPlays(battlefieldId: string): boolean {
+  for (const ability of getGlobalCardRegistry().getAbilities(battlefieldId) ?? []) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const effect = (ability as { effect?: { type?: string; keyword?: string } }).effect;
+    if (effect?.type === "grant-keyword" && effect.keyword === "NoUnitsPlayedHere") {
+      return true;
+    }
+  }
+  return false;
+}

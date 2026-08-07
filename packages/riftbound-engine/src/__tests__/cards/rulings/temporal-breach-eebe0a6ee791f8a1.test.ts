@@ -38,7 +38,7 @@ function spriteWhereabouts(game: Game): string[] {
 }
 
 describe("Ruling eebe0a6ee791f8a1 — Temporal Breach on a token: it ceases to exist, nothing is replayed", () => {
-  test.failing("BUG: ruling eebe0a6ee791f8a1 — Breach the Sprite token: it is banished, immediately ceases to exist (not on board, not lingering in banishment), its owner is asked nothing and nothing is replayed; engine has no implementation (no target, no-op)", async () => {
+  test("ruling eebe0a6ee791f8a1 — Breach the Sprite token: it is banished, immediately ceases to exist (not on board, not lingering in banishment), its owner is asked nothing and nothing is replayed", async () => {
     // Expected: token gone for good; P2 gets no prompt; play returns to P1's main phase. Actual: Temporal
     // Breach offers no targets and resolves doing nothing — the Sprite is still at bf1.
     const game = await board().build();
@@ -57,7 +57,7 @@ describe("Ruling eebe0a6ee791f8a1 — Temporal Breach on a token: it ceases to e
     expect(game.zoneOf("breach")).toBe("trash");
   });
 
-  test.failing("BUG: ruling eebe0a6ee791f8a1 — contrast on a real (non-token) unit: it is banished and then its owner replays it to the SAME location as a fresh object (damage gone), no destination choice; engine no-ops", async () => {
+  test("ruling eebe0a6ee791f8a1 — contrast on a real (non-token) unit: it is banished and then its owner replays it to the SAME location as a fresh object (damage gone), no destination choice; engine no-ops", async () => {
     const game = await board().build();
     await game.p1.cast("breach", { targets: "veteran" });
     await game.settle({ policy: "first" }); // accept any forced/optional confirmation on P2's side
