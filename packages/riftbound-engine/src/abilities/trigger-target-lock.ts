@@ -78,10 +78,22 @@ export function triggerTargetsSatisfiable(
   if (typeof e !== "object" || e === null || e.type !== "sequence" || !Array.isArray(e.effects)) {
     return true;
   }
+  // rule 402.4 counts SLOTS (distinct Game Objects), not steps: "give one of
+  // your other units here +3 [Might] and [Tank]" (unl-056-219) names ONE
+  // recipient shared by both steps, which the sequence binds once. Identical
+  // descriptors are therefore folded into a single slot — otherwise a
+  // one-recipient trigger with no candidate would be removed from the Chain
+  // instead of resolving and doing nothing (rule 383.4).
   const slots: TargetDescriptor[] = [];
+  const seen = new Set<string>();
   for (const sub of e.effects) {
     const t = casterChosenTarget(sub);
     if (t) {
+      const key = JSON.stringify(t);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
       slots.push(t);
     }
   }

@@ -241,12 +241,23 @@ export function distributeDamage(
  * Priority tiers (815.1.b Tank first, 826.4.b Backline last) are hard: a unit
  * in a later tier may receive nothing while an earlier-tier unit lacks lethal.
  */
+/**
+ * rule 465.2.c.8 — tier of a unit with both [Tank] and [Backline]: the
+ * assigning player decides which keyword to honour, so it belongs to no tier.
+ */
+export const FLEXIBLE_TIER = -1;
+
 export interface DamageAssignmentPlan {
   /** Assignable target ids, in damage-assignment priority order. */
   readonly order: string[];
   /** Damage still needed to make each target lethal. */
   readonly need: Record<string, number>;
-  /** Assignment priority tier: 0 = Tank, 1 = plain, 2 = Backline. */
+  /**
+   * Assignment priority tier: 0 = Tank, 1 = plain, 2 = Backline, and
+   * `FLEXIBLE_TIER` (-1) for a unit with BOTH Tank and Backline — rule
+   * 465.2.c.8 lets the assigning player honour either keyword, so such a unit
+   * constrains nothing and may be served at any point of the assignment.
+   */
   readonly tier: Record<string, number>;
   readonly total: number;
   /** The engine's forced/greedy assignment — always legal. */
@@ -274,7 +285,16 @@ export function planDamageAssignment(
   for (const unit of sorted) {
     order.push(unit.id);
     need[unit.id] = Math.max(0, lethalThreshold(unit, role) - unit.currentDamage);
-    tier[unit.id] = hasKeyword(unit, "Tank") ? 0 : (hasKeyword(unit, "Backline") ? 2 : 1);
+    // rule 465.2.c.8 — Tank AND Backline on the same unit: the assigning
+    // player chooses which one to honour, so neither tier is imposed on it.
+    tier[unit.id] =
+      hasKeyword(unit, "Tank") && hasKeyword(unit, "Backline")
+        ? FLEXIBLE_TIER
+        : hasKeyword(unit, "Tank")
+          ? 0
+          : hasKeyword(unit, "Backline")
+            ? 2
+            : 1;
   }
 
   // A choice exists only inside the first tier the damage cannot fully cover:
@@ -295,6 +315,17 @@ export function planDamageAssignment(
     hasChoice = remaining > 0 && group.length > 1;
     remaining = 0;
     break;
+  }
+  // rule 465.2.c.8 — with a Tank+Backline unit on the receiving side the
+  // assigner picks which reading to honour, so any assignment that cannot make
+  // every unit lethal is a real decision (serve the dual unit first, or last).
+  if (
+    !hasChoice &&
+    totalDamage > 0 &&
+    order.length > 1 &&
+    order.some((id) => tier[id] === FLEXIBLE_TIER)
+  ) {
+    hasChoice = totalDamage < order.reduce((sum, id) => sum + (need[id] ?? 0), 0);
   }
 
   return {
@@ -350,8 +381,16 @@ export function enumerateDamageAssignments(
       }
       return;
     }
-    const minTier = Math.min(...nonLethal.map((id) => plan.tier[id] ?? 1));
-    for (const id of nonLethal.filter((cand) => (plan.tier[cand] ?? 1) === minTier)) {
+    // rule 465.2.c.8 — a Tank+Backline unit sits in no tier: it is always a
+    // legal next recipient, and it never holds back the other tiers either.
+    const tiered = nonLethal.filter((id) => (plan.tier[id] ?? 1) !== FLEXIBLE_TIER);
+    const minTier = tiered.length > 0 ? Math.min(...tiered.map((id) => plan.tier[id] ?? 1)) : undefined;
+    const candidates = nonLethal.filter(
+      (cand) =>
+        (plan.tier[cand] ?? 1) === FLEXIBLE_TIER ||
+        (minTier !== undefined && (plan.tier[cand] ?? 1) === minTier),
+    );
+    for (const id of candidates) {
       const give = Math.min(remaining, (plan.need[id] ?? 0) - (alloc[id] ?? 0));
       walk({ ...alloc, [id]: (alloc[id] ?? 0) + give }, remaining - give);
     }
@@ -401,10 +440,13 @@ export function isLegalDamageAssignment(
     }
     // 815.1.b / 826.4.b: nothing lands in a later tier while an earlier-tier
     // unit lacks lethal.
-    if (n > 0) {
+    // rule 465.2.c.8 — a Tank+Backline unit is bound by neither tier, in
+    // either direction: it may be served early or skipped entirely.
+    if (n > 0 && (plan.tier[id] ?? 1) !== FLEXIBLE_TIER) {
       const myTier = plan.tier[id] ?? 1;
       for (const other of plan.order) {
-        if ((plan.tier[other] ?? 1) < myTier && !lethal(other)) {
+        const otherTier = plan.tier[other] ?? 1;
+        if (otherTier !== FLEXIBLE_TIER && otherTier < myTier && !lethal(other)) {
           return false;
         }
       }
@@ -434,11 +476,6 @@ export function resolveCombat(
      * onto the defenders. Omitted ⇒ the forced/greedy assignment is used.
      */
     readonly attackerAssignment?: Record<string, number>;
-    /**
-     * rule 465.2.c.3 — the defending player's chosen assignment of its damage
-     * onto the attackers. Omitted ⇒ the forced/greedy assignment is used.
-     */
-    readonly defenderAssignment?: Record<string, number>;
   },
 ): CombatResult {
   // rule-id: unl-060-219 — weaker enemies of a Vilemaw-style unit deal no combat damage.
@@ -463,8 +500,7 @@ export function resolveCombat(
   }
 
   // Step 3: Defenders deal their total Might to attackers (rule 626.1.c)
-  const defenderDamageToAttackers =
-    opts?.defenderAssignment ?? distributeDamage(attackers, defenderTotal, "attacker");
+  const defenderDamageToAttackers = distributeDamage(attackers, defenderTotal, "attacker");
   for (const [id, dmg] of Object.entries(defenderDamageToAttackers)) {
     damageAssignment[id] = (damageAssignment[id] ?? 0) + dmg;
   }
@@ -480,10 +516,8 @@ export function resolveCombat(
       const combatDamage = damageAssignment[unit.id] ?? 0;
       const totalDamage = unit.currentDamage + combatDamage;
       // rule-id: ogn-254-298 — kill on any damage taken (bound replacement).
-      // rule 142.4.b: damage must be non-zero to be lethal, so a 0-Might unit
-      // that is dealt nothing survives.
       if (
-        (totalDamage > 0 && totalDamage >= lethalThreshold(unit, role)) ||
+        totalDamage >= lethalThreshold(unit, role) ||
         (unit.diesOnAnyDamage === true && combatDamage > 0)
       ) {
         killed.push(unit.id);
