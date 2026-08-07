@@ -17,6 +17,7 @@ import type {
   RiftboundGameState,
   RiftboundMoves,
 } from "../../types";
+import { createInteractionState, getTurnState } from "../../chain/chain-state";
 import { dispatchEvent } from "../../events/dispatcher";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId } from "../../zones/zone-configs";
@@ -65,6 +66,16 @@ function isAttachable(cardId: string, cardType: string): boolean {
 }
 
 /**
+ * rule 151.2: the activated ability of a gear (here [Equip]) may only be used
+ * in a Neutral State — never while a Showdown is open, even by the Focus holder
+ * on their own turn.
+ */
+function equipTimingAllowed(state: RiftboundGameState): boolean {
+  const turnState = getTurnState(state.interaction ?? createInteractionState());
+  return turnState === "neutral-open" || turnState === "neutral-closed";
+}
+
+/**
  * Equipment move definitions
  */
 export const equipmentMoves: Partial<
@@ -88,6 +99,10 @@ export const equipmentMoves: Partial<
       }
       const playerId = context.playerId as string;
       if (state.turn.activePlayer !== playerId) {
+        return [];
+      }
+      // rule 151.2: not while a Showdown is open.
+      if (!equipTimingAllowed(state)) {
         return [];
       }
 
@@ -169,6 +184,10 @@ export const equipmentMoves: Partial<
         return false;
       }
       if (state.turn.activePlayer !== context.params.playerId) {
+        return false;
+      }
+      // rule 151.2: not while a Showdown is open.
+      if (!equipTimingAllowed(state)) {
         return false;
       }
 
