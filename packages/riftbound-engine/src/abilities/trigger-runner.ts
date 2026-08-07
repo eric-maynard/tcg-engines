@@ -437,6 +437,41 @@ export function evaluateTriggerCondition(
       (pid) => pid !== controllerId && runeCount(pid) > mine,
     );
   }
+  if (c.type === "total-might-at-least" && ctx) {
+    // rule 383.2.a.1 (rule-id: unl-097-219, Kinkou Initiate) — "if your other
+    // units have total Might N or more" sums the CURRENT Might of the units
+    // you control across base and every battlefield; the source itself is
+    // excluded for the "other" scope, and enemy units never count.
+    const needed = (c as { amount?: number }).amount ?? 0;
+    const excludeSelf = ((c as { scope?: string }).scope ?? "other-units") !== "units";
+    const registry = getGlobalCardRegistry();
+    const ids: string[] = ctx.zones
+      .getCardsInZone("base" as CoreZoneId, controllerId as CorePlayerId)
+      .map((x) => x as string);
+    for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+      ids.push(
+        ...ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId).map((x) => x as string),
+      );
+    }
+    let total = 0;
+    for (const id of ids) {
+      if (excludeSelf && id === sourceCardId) {
+        continue;
+      }
+      const def = registry.get(id) as { cardType?: string } | undefined;
+      if (def?.cardType !== undefined && def.cardType !== "unit") {
+        continue;
+      }
+      const owner =
+        ctx.cards.getCardController?.(id as CoreCardId) ??
+        (ctx.cards.getCardOwner(id as CoreCardId) as string | undefined);
+      if (owner !== controllerId) {
+        continue;
+      }
+      total += currentMightForTriggers(id, ctx);
+    }
+    return total >= needed;
+  }
   if (c.type === "control" && ctx) {
     // rule-id: ven-058-166 (Patched Porobot) / rule 383.2.a.1 — an "if you
     // control N <thing>" clause is part of the trigger condition; with fewer
@@ -1240,6 +1275,8 @@ function expandKeywordDoubling(
  * Items carrying an `optInCost` ("you may pay [N] to …") are left alone — their
  * cost is charged at resolution by `executeResolvedItem`.
  */
+const FINALIZATION_OPT_IN_EVENTS = new Set(["hold"]);
+
 export function promptFinalizationOptIn(draft: unknown): void {
   const state = draft as RiftboundGameState;
   if (state.pendingChoice) {
@@ -1249,7 +1286,13 @@ export function promptFinalizationOptIn(draft: unknown): void {
     (it) =>
       (it as { optional?: boolean }).optional === true &&
       (it as { triggered?: boolean }).triggered === true &&
-      (it as { optInCost?: unknown }).optInCost === undefined,
+      (it as { optInCost?: unknown }).optInCost === undefined &&
+      // Mirrors `trigger-target-lock.ts FINALIZATION_LOCK_EVENTS`: only the
+      // event kinds whose finalization is already modelled ask here; every
+      // other kind keeps the engine's resolution-time convention.
+      FINALIZATION_OPT_IN_EVENTS.has(
+        (it as { triggerEvent?: { type?: string } }).triggerEvent?.type ?? "",
+      ),
   );
   if (!item) {
     return;
@@ -1519,6 +1562,10 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
     // rule 355.5 / 808.1.d.2: each freshly finalized item chooses its own
     // Game Object now, before anyone receives priority.
     lockTriggerTargets(ctx.draft, { cards: ctx.cards, zones: ctx.zones });
+    // rule 383.3.a.2 (sfd-035-221) — a "you may" trigger decides whether it is
+    // performed while it is being FINALIZED, so no Priority round happens over
+    // a trigger that will do nothing.
+    promptFinalizationOptIn(ctx.draft);
   }
 
   for (const match of inlineMatches) {

@@ -61,6 +61,7 @@ describe("Guardian of the Passage (sfd-035-221)", () => {
     await game.settle();
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1, source: { cardId: "gp" } });
     await game.p1.yes();
+    await game.settle(); // rule 383.3.a — accepted at finalization; the pick comes at resolution
     const d = game.decision();
     expect(d).toMatchObject({ kind: "pick", seat: P1 });
     const offered = d?.kind === "pick" ? d.options.map((o) => o.card).sort() : [];
@@ -81,6 +82,7 @@ describe("Guardian of the Passage (sfd-035-221)", () => {
     await game.p2.endTurn();
     await game.settle();
     await game.p1.yes();
+    await game.settle();
     await game.p1.pick("tequip");
     await game.settle();
     expect(game.zoneOf("tequip")).toBe("hand");
@@ -185,6 +187,7 @@ describe("Guardian of the Passage (sfd-035-221)", () => {
       await game.settle();
       expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
       await game.p1.yes();
+      await game.settle();
       const d = game.decision();
       if (d?.kind === "pick" && d.options.length > 1) {
         await game.p1.pick(d.options[0]?.key as string);
@@ -202,6 +205,7 @@ describe("Guardian of the Passage (sfd-035-221)", () => {
     await game.p2.endTurn();
     await game.settle();
     await game.p1.yes();
+    await game.settle();
     await game.p1.pick("tunit");
     await game.settle();
     await game.p1.do("addResources", { energy: 3 }); // Skulker costs 3
@@ -211,7 +215,7 @@ describe("Guardian of the Passage (sfd-035-221)", () => {
     expect(game.state("tunit")).toMatchObject({ damage: 0, isExhausted: true });
   });
 
-  test.failing("BUG: the opt-in ('you may' as first words) is decided at finalization, before any player receives priority (383.3.a)", async () => {
+  test("the opt-in ('you may' as first words) is decided at finalization, before any player receives priority (383.3.a)", async () => {
     // Expected: right after the hold trigger is created P1 is asked yes/no; only an accepted
     // trigger sits on the chain for responses. Actual: both players get a priority window
     // first and the yes/no is asked on resolution.
