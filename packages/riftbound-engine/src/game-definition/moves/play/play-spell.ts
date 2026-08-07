@@ -767,6 +767,26 @@ export const playSpell: Defs["playSpell"] = {
       }
     }
 
+    // rule-id: unl-054-219 (rule 355.8) — "enemy units with the SAME
+    // controller": reject a supplied set mixing two opponents' units rather
+    // than trusting the client (the enumerator never offers one).
+    if (
+      spellTgt &&
+      typeof spellTgt !== "string" &&
+      (spellTgt as { sameController?: boolean }).sameController === true &&
+      (context.params.targets?.length ?? 0) > 1
+    ) {
+      const chosen = context.params.targets as readonly string[];
+      const controllerOfChosen = (id: string): string =>
+        (context.cards.getCardController?.(id as CoreCardId) as string | undefined) ??
+        (context.cards.getCardOwner(id as CoreCardId) as string | undefined) ??
+        "";
+      const owner = controllerOfChosen(chosen[0] as string);
+      if (!chosen.every((id) => controllerOfChosen(id) === owner)) {
+        return false;
+      }
+    }
+
     // rule-id: unl-192-219 (rule 355.14.b/c / 355.15) — split-damage targets
     // are [mightRef, ...splits]; the number of split targets may not exceed
     // the reference unit's current Might, and each must be a legal enemy
@@ -1327,6 +1347,10 @@ export const playSpell: Defs["playSpell"] = {
         const anyQty = !splitDesc && qty === "any";
         const mightOf = (id: string) =>
           getCardEffectiveMight(id, (c) => context.cards.getCardMeta?.(c));
+        const controllerOfCard = (id: string): string =>
+          (context.cards.getCardController?.(id as CoreCardId) as string | undefined) ??
+          (context.cards.getCardOwner(id as CoreCardId) as string | undefined) ??
+          "";
         const subsetPool =
           totalMightCap !== undefined
             ? (validTargets as string[]).filter((id) => mightOf(id) <= totalMightCap)
@@ -1368,6 +1392,18 @@ export const playSpell: Defs["playSpell"] = {
               subset.reduce((sum, id) => sum + mightOf(id), 0) > totalMightCap
             ) {
               continue;
+            }
+            // rule-id: unl-054-219 (rule 355.8) — "any number of enemy units
+            // with the SAME controller": two opponents' units never mix in one
+            // chosen set.
+            if (
+              (tgt as { sameController?: boolean }).sameController === true &&
+              subset.length > 1
+            ) {
+              const owner = controllerOfCard(subset[0] as string);
+              if (!subset.every((id) => controllerOfCard(id) === owner)) {
+                continue;
+              }
             }
             baseVariants.push({
               cardId: cardId as string,
@@ -2053,8 +2089,25 @@ export const playSpell: Defs["playSpell"] = {
     // For Repeat spells, we wrap the effect in a `sequence` that
     // Repeats the original effect (1 + repeatCount) times. This
     // Executes during chain resolution exactly once per repeat.
+    // rule 824.1.c (rule-id: unl-038-219 Skyward Strike) — a spell may print
+    // more than one instruction; a "[Level N]" rider parses as its own `spell`
+    // ability with a `while-level` condition. ALL of them resolve, in printed
+    // order, each gated by its own condition — resolving only the first would
+    // silently drop the rider.
+    const spellAbilities = abilities.filter((a) => a.type === "spell");
+    const combinedSpellEffect: unknown =
+      spellAbilities.length > 1
+        ? {
+            effects: spellAbilities.map((a) => {
+              const gate = (a as { condition?: unknown }).condition;
+              return gate ? { condition: gate, then: a.effect, type: "conditional" } : a.effect;
+            }),
+            type: "sequence",
+          }
+        : spellEffect;
+
     const xValue = Math.max(0, xAmount ?? 0);
-    let effectToStore: unknown = spellEffect;
+    let effectToStore: unknown = combinedSpellEffect;
     if (spellEffect && repeatN > 0) {
       // rule 820.2.a (sfd-151-221) — when the caster named one GROUP of
       // targets per execution ("Give two friendly units each +1"), each copy

@@ -339,6 +339,13 @@ export interface Target {
    * comparison ("any number of units ... with total Might 4 or less").
    */
   readonly totalMight?: Comparison;
+
+  /**
+   * rule-id: unl-054-219 (Tricksy Tentacles) — aggregate constraint over the
+   * CHOSEN set: every selected target must share ONE controller ("any number
+   * of enemy units with the same controller"). Only bites with 3+ players.
+   */
+  readonly sameController?: boolean;
 }
 
 /**

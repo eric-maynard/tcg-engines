@@ -8,26 +8,28 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * Move any number of enemy units with the same controller and a total
  * Might of 8 or less to a single location.
  *
- * Modeled as a move effect targeting any number of enemy units with the
- * aggregate-might filter. The engine needs to enforce both the
- * "same controller" constraint and the "<= 8 total Might" cap during
- * target selection.
+ * Modeled as a move effect over any number of enemy units:
+ * `totalMight` caps the SUMMED Might of the chosen set (rule 355.11.b),
+ * `sameController` forbids mixing two opponents' units, and the
+ * `single-location` destination sends the whole group to ONE location
+ * (rule 198.1 — battlefields AND bases).
  *
- * FIXME: No first-class "sum of might across chosen targets" filter
- * exists. We approximate with a `totalMight` filter entry the engine
- * interprets during target resolution.
+ * No printed location restriction: a unit in an opponent's base is as legal
+ * a choice as one at a battlefield.
  */
 const abilities: Ability[] = [
   {
     effect: {
       target: {
         controller: "enemy",
-        filter: [{ might: { lte: 8 } }, { keyword: "same-controller" }],
-        location: "battlefield",
+        // A single unit over 8 Might can never fit under the total cap.
+        filter: [{ might: { lte: 8 } }],
         quantity: "any",
+        sameController: true,
+        totalMight: { lte: 8 },
         type: "unit",
       },
-      to: { battlefield: "any" },
+      to: "single-location",
       type: "move",
     },
     timing: "action",

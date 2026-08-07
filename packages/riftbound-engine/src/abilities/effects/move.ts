@@ -348,6 +348,62 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     stageCombatOnArrival(ctx, landed);
     return;
   }
+  // rule-id: unl-045-219 (Forgotten Signpost) — rules 204.1.b / 355.10.c.1 /
+  // 449.1: "Exhaust a unit you control, [Exhaust]: Move a DIFFERENT unit you
+  // control to the LOCATION of the unit you exhausted." The exhausted unit is
+  // chosen (not targeted) and it — not the controller — fixes the destination,
+  // so no free "choose a destination" prompt may ever appear: a battlefield
+  // where you exhausted nothing is unreachable, and its base is reachable.
+  if ((effect as unknown as { to?: unknown }).to === "exhausted-ally") {
+    const payerDesc = (effect as unknown as { costExhaust?: TargetDescriptor }).costExhaust;
+    // The mover is chosen when the ability is activated; the payer prompt that
+    // follows would otherwise overwrite `boundTargets`, so the mover is pinned
+    // onto the re-entered effect instead.
+    const pinnedMover = (effect as unknown as { _moverId?: string })._moverId;
+    const moverId = pinnedMover ?? ctx.boundTargets?.[0];
+    if (moverId === undefined || payerDesc === undefined) {
+      return;
+    }
+    const payerPool = resolveTarget({ ...payerDesc, quantity: "all" }, {
+      cards: ctx.cards,
+      draft: ctx.draft,
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      sourceZone: ctx.sourceZone,
+      zones: ctx.zones,
+    }).filter((id) => id !== moverId);
+    let payerId: string | undefined =
+      pinnedMover === undefined ? undefined : ctx.boundTargets?.[0];
+    if (payerId === undefined) {
+      if (payerPool.length >= 2) {
+        ctx.draft.pendingChoice = {
+          effect: { ...(effect as object), _moverId: moverId },
+          options: payerPool,
+          playerId: ctx.playerId,
+          remaining: 1,
+          sourceCardId: ctx.sourceCardId,
+          type: "choose-target",
+        } as RiftboundGameState["pendingChoice"];
+        return;
+      }
+      payerId = payerPool[0];
+      if (payerId === undefined) {
+        return;
+      }
+    } else if (!payerPool.includes(payerId)) {
+      return;
+    }
+    ctx.counters.setFlag(payerId as CoreCardId, "exhausted", true);
+    const destZone = ctx.zones.getCardZone(payerId as CoreCardId);
+    if (destZone === undefined || ctx.zones.getCardZone(moverId as CoreCardId) === destZone) {
+      return;
+    }
+    const landed = moveCardWithEvent(ctx, moverId, destZone);
+    markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, moverId));
+    stageCombatOnArrival(ctx, landed);
+    return;
+  }
+
   const moveRef = (effect as unknown as { reference?: TargetDescriptor }).reference;
   if (moveRef && (effect as unknown as { from?: unknown }).from === "chosen-battlefield") {
     const resolverCtx = {
@@ -750,6 +806,48 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, cardId));
     }
     stageCombatOnArrival(ctx, landing);
+    return;
+  }
+
+  // rule-id: unl-054-219 (rule 198.1 / 449.1) — "…to a single location": a
+  // location is any battlefield OR a base, and the whole chosen group travels
+  // to the ONE destination the caster picks; the picks are never split.
+  if (dest === "single-location") {
+    const [first, ...rest] = moveTargets;
+    if (first === undefined) {
+      return;
+    }
+    const zonesOf = moveTargets.map((id) => ctx.zones.getCardZone(id as CoreCardId));
+    const shared = zonesOf.every((z) => z === zonesOf[0]) ? zonesOf[0] : undefined;
+    const options = [
+      "base",
+      ...Object.keys(ctx.draft.battlefields ?? {}).map((bfId) => `battlefield-${bfId}`),
+    ].filter((z) => z !== shared);
+    if (options.length === 0) {
+      return;
+    }
+    if (options.length > 1 && !ctx.draft.pendingChoice) {
+      ctx.draft.pendingChoice = {
+        alsoMoveCardIds: rest,
+        cardId: first,
+        options,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        type: "choose-destination",
+      } as RiftboundGameState["pendingChoice"];
+      return;
+    }
+    const landing = options[0] as string;
+    for (const cardId of moveTargets) {
+      if (ctx.zones.getCardZone(cardId as CoreCardId) === landing) {
+        continue;
+      }
+      const landed = moveCardWithEvent(ctx, cardId, landing);
+      markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, cardId));
+    }
+    if (landing.startsWith("battlefield-")) {
+      stageCombatOnArrival(ctx, landing);
+    }
     return;
   }
 
