@@ -63,6 +63,7 @@ import {
   getPlayEnergyDiscountOverflow,
   hasPlayFromTrashGrant,
 } from "./cost";
+import { computeOptionalAdditionalCostFlexReduction } from "../../../operations/static-cost-reduction";
 import type { CostExtras } from "./cost";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -107,6 +108,96 @@ function resolvePayableOptionalCost(
     power: discounted?.power ?? [],
     xp,
   };
+}
+
+/**
+ * rule 356.4.c.1 (sfd-149-221 Ezreal, Prodigy) — every way the payer may apply
+ * `flex` "[1] or [rainbow] less" reductions to one optional additional cost.
+ * The choice is the PAYER's, so each distinct outcome is offered as its own
+ * play variant; `applyFlexibleOptionalCostReduction` only picks the default.
+ * Ordered energy-shaved first, deduplicated by shape.
+ */
+function flexibleOptionalCostVariants(
+  cost: { energy?: number; power?: readonly string[] },
+  flex: number,
+): { energy: number; power: readonly string[] }[] {
+  const start = { energy: cost.energy ?? 0, power: [...(cost.power ?? [])] };
+  let frontier: { energy: number; power: string[] }[] = [start];
+  for (let i = 0; i < flex; i++) {
+    const next = new Map<string, { energy: number; power: string[] }>();
+    for (const state of frontier) {
+      if (state.energy === 0 && state.power.length === 0) {
+        next.set(JSON.stringify(state), state);
+        continue;
+      }
+      if (state.energy > 0) {
+        const v = { energy: state.energy - 1, power: [...state.power] };
+        next.set(JSON.stringify(v), v);
+      }
+      for (let j = 0; j < state.power.length; j++) {
+        const v = { energy: state.energy, power: state.power.filter((_, k) => k !== j) };
+        next.set(JSON.stringify(v), v);
+      }
+    }
+    frontier = [...next.values()];
+  }
+  const seen = new Map<string, { energy: number; power: readonly string[] }>();
+  for (const v of frontier) {
+    seen.set(JSON.stringify(v), v);
+  }
+  return [...seen.values()];
+}
+
+/**
+ * rule 356.4.c.1 (sfd-149-221 Ezreal, Prodigy) — every shape the payer may pay
+ * this unit's optional additional cost in. Without a friendly "[1] or
+ * [rainbow] less" static there is exactly one (the printed cost); with one the
+ * PAYER, not the engine, decides which half each reduction shaves, so each
+ * distinct discounted cost is offered as its own play variant. The engine's
+ * default (`resolvePayableOptionalCost`) stays first.
+ */
+function payableOptionalCostVariants(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  board?: CostExtras["board"],
+): { kind: "accelerate" | "pay"; energy: number; power: readonly string[]; xp: number }[] {
+  const base = resolvePayableOptionalCost(state, playerId, cardId, board);
+  if (!base) {
+    return [];
+  }
+  const optional = getOptionalPlayCost(cardId);
+  // The XP path nets its own rider discount — leave it to the default.
+  if (!board || base.xp > 0 || (optional?.kind !== "accelerate" && optional?.kind !== "pay")) {
+    return [base];
+  }
+  const flex = computeOptionalAdditionalCostFlexReduction({ draft: state, ...board }, playerId);
+  if (flex <= 0) {
+    return [base];
+  }
+  const printed = { energy: optional.cost?.energy ?? 0, power: optional.cost?.power ?? [] };
+  const out = [base];
+  for (const variant of flexibleOptionalCostVariants(printed, flex)) {
+    if (variant.energy === base.energy && variant.power.length === base.power.length && variant.power.every((d, i) => d === base.power[i])) {
+      continue;
+    }
+    out.push({ ...base, energy: variant.energy, power: variant.power });
+  }
+  return out;
+}
+
+/** rule 356.4.c.1 — do two optional-cost shapes name the same payment? */
+function sameOptionalCostSpec(
+  a: { energy?: number; power?: readonly string[] } | undefined,
+  b: { energy?: number; power?: readonly string[] } | undefined,
+): boolean {
+  const ap = a?.power ?? [];
+  const bp = b?.power ?? [];
+  return (
+    (a?.energy ?? 0) === (b?.energy ?? 0) &&
+    ap.length === bp.length &&
+    [...ap].sort().every((d, i) => d === [...bp].sort()[i])
+  );
 }
 
 /**
@@ -512,14 +603,27 @@ export const playUnit: Defs["playUnit"] = {
     // "I cost [N] less" rider, affordability is tested against the discounted
     // base cost. rule 805.1.a: a declared Accelerate / "you may pay" extra is
     // paid on top of the base cost, so the combined total must be affordable.
-    const payable = context.params.paidAdditionalCost
-      ? resolvePayableOptionalCost(
+    // rule 356.4.c.1 (sfd-149-221): when the caller names WHICH discounted
+    // shape it pays, honour it as long as it is one the payer may choose.
+    const payableOptions = context.params.paidAdditionalCost
+      ? payableOptionalCostVariants(
           state,
           context.params.playerId as string,
           context.params.cardId as string,
           { cards: context.cards, zones: context.zones },
         )
+      : [];
+    const declaredSpec = context.params.additionalCostSpec as
+      | { energy?: number; power?: readonly string[] }
+      | undefined;
+    const payable = context.params.paidAdditionalCost
+      ? (declaredSpec !== undefined
+          ? payableOptions.find((o) => sameOptionalCostSpec(o, declaredSpec))
+          : undefined) ?? payableOptions[0]
       : undefined;
+    if (context.params.paidAdditionalCost && declaredSpec !== undefined && payableOptions.length > 0 && payable === undefined) {
+      return false;
+    }
     // rule 356.2.b / 204.2 (ogn-002-298) — "you may discard N as an additional
     // cost. If you do, reduce my cost by [N]": the discarded card must be a
     // different card in hand, and the rider nets against the base cost.
@@ -846,28 +950,40 @@ export const playUnit: Defs["playUnit"] = {
       // rule 560 / 805.1.a: the optional cost is paid ON TOP of the base cost, so
       // affordability is the combined total (base [C] pip + Accelerate's [C] pip
       // needs two power), not the extra checked in isolation.
-      const paidVariant =
-        payable &&
-        canAffordCard(
-          state,
-          context.playerId as string,
-          cardId as string,
-          { additionalCost: { energy: payable.energy, power: payable.power }, board },
-          metaForAfford,
-          potential,
-        )
-          ? ({
-              additionalCostSpec: {
-                energy: payable.energy,
-                power: payable.power,
-                ...(payable.xp > 0 ? { xp: payable.xp } : {}),
-              },
-              cardId: cardId as string,
-              location: "base",
-              paidAdditionalCost: true,
-              playerId: context.playerId as string,
-            } satisfies RiftboundMoves["playUnit"])
-          : undefined;
+      // rule 356.4.c.1 (sfd-149-221): one variant per way the payer may shave a
+      // flexible "[1] or [rainbow] less" discount off this optional cost.
+      const paidVariants: RiftboundMoves["playUnit"][] = [];
+      for (const option of payableOptionalCostVariants(
+        state,
+        context.playerId as string,
+        cardId as string,
+        board,
+      )) {
+        if (
+          !canAffordCard(
+            state,
+            context.playerId as string,
+            cardId as string,
+            { additionalCost: { energy: option.energy, power: option.power }, board },
+            metaForAfford,
+            potential,
+          )
+        ) {
+          continue;
+        }
+        paidVariants.push({
+          additionalCostSpec: {
+            energy: option.energy,
+            power: option.power,
+            ...(option.xp > 0 ? { xp: option.xp } : {}),
+          },
+          cardId: cardId as string,
+          location: "base",
+          paidAdditionalCost: true,
+          playerId: context.playerId as string,
+        } satisfies RiftboundMoves["playUnit"]);
+      }
+      const paidVariant = paidVariants[0];
 
       // rule 356.1 (unl-089-219) — "If you've spent [4] or more to play a
       // spell this turn, you may play me for [mind]": an alternate play cost
@@ -906,8 +1022,8 @@ export const playUnit: Defs["playUnit"] = {
           potential,
         )
       ) {
-        if (paidVariant && standardTiming) {
-          results.push(paidVariant);
+        if (standardTiming) {
+          results.push(...paidVariants);
         }
         if (altVariant) {
           results.push(altVariant);
@@ -1123,7 +1239,7 @@ export const playUnit: Defs["playUnit"] = {
       results.push(...buffVariants);
       results.push(...killAnyVariants);
       if (paidVariant) {
-        results.push(paidVariant);
+        results.push(...paidVariants);
       } else if (optional?.kind === "kill") {
         const killDescriptor = {
           ...(optional.kill as Record<string, unknown>),
@@ -1361,7 +1477,15 @@ export const playUnit: Defs["playUnit"] = {
       if ((optional?.kind === "accelerate" || optional?.kind === "pay") && pool) {
         // rule 356.4.c (sfd-149-221): pay the cost as discounted by friendly
         // "optional additional costs you pay cost [1] or [rainbow] less" statics.
-        const need = discountOptionalPlayCost(draft, playerId, optional.cost, board) ?? {};
+        // rule 356.4.c.1 (sfd-149-221): the payer may name which half of the
+        // cost a flexible "[1] or [rainbow] less" discount shaves; an
+        // unrecognised spec falls back to the engine's default choice.
+        const options = payableOptionalCostVariants(draft, playerId, cardId as string, board);
+        const declared = options.find((o) => sameOptionalCostSpec(o, additionalCostSpec));
+        const need: { energy?: number; power?: readonly string[]; xp?: number } =
+          additionalCostSpec !== undefined && declared
+            ? { energy: declared.energy, power: declared.power, xp: optional.cost?.xp }
+            : discountOptionalPlayCost(draft, playerId, optional.cost, board) ?? {};
         const xpOk = (need.xp ?? 0) === 0 || xpPaid;
         // rule 356.4.f / 356.4.f.1 — a discount that overflowed the printed
         // Energy cost also pays this one, and paying 0 still counts as paying.
