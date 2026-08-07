@@ -534,9 +534,67 @@ export function buildReplacementEffectContext(
  * was replaced — the caller must then leave the card where it is and fire no
  * `die` (rule 370.1.a.1 / 808.1.d.1).
  */
+interface BoundDieReplacement {
+  readonly replaces?: string;
+  readonly targetCardIds?: readonly string[];
+  readonly sourceCardId?: string;
+  readonly owner?: string;
+  readonly condition?: { type?: string };
+  readonly replacement?: ExecutableEffect | "prevent";
+}
+
+/**
+ * rule 370.1.a.1 (unl-175-219 Tactical Retreat) — a runtime `die` replacement a
+ * resolved spell bound to this unit ("the next time it would die this turn …")
+ * replaces EVERY death, not just lethal damage found by a cleanup pass: a plain
+ * Kill instruction is a death too. Costed ("you may pay … instead") shields need
+ * a prompt, which only the cleanup pass can raise, so they are left alone here.
+ */
+function consumeBoundDieReplacement(
+  draft: RiftboundGameState,
+  cardId: string,
+): BoundDieReplacement | undefined {
+  const active = (draft as { activeReplacements?: BoundDieReplacement[] }).activeReplacements;
+  if (!active || active.length === 0) {
+    return undefined;
+  }
+  const idx = active.findIndex(
+    (e) =>
+      e?.replaces === "die" &&
+      e.targetCardIds?.includes(cardId) === true &&
+      e.condition?.type !== "pay-cost",
+  );
+  if (idx < 0) {
+    return undefined;
+  }
+  return active.splice(idx, 1)[0];
+}
+
 export function applyDieReplacement(ctx: LeaveBoardContext, cardId: string): boolean {
   if (RUNNING_DIE_REPLACEMENTS.has(cardId)) {
     return false;
+  }
+  const bound = consumeBoundDieReplacement(ctx.draft, cardId);
+  if (bound) {
+    const boundRepl = bound.replacement;
+    if (boundRepl && boundRepl !== "prevent" && typeof boundRepl === "object" && boundRepl.type === "banish") {
+      // "banish it instead": a new object in banishment (124.1), not a death.
+      leaveBoard(ctx, cardId, "banishment", { kind: "replaced" });
+      return true;
+    }
+    clearDamage(ctx, cardId);
+    if (boundRepl && boundRepl !== "prevent" && typeof boundRepl === "object" && boundRepl.type) {
+      const owner = ownerOf(ctx, cardId) ?? "";
+      executeEffect(boundRepl, {
+        ...buildReplacementEffectContext(
+          ctx,
+          { sourceCardId: bound.sourceCardId ?? cardId, sourceOwner: bound.owner ?? owner },
+          cardId,
+        ),
+        boundTargets: [cardId],
+      });
+    }
+    return true;
   }
   if (!ctx.zones.getCardsInZone) {
     return false;
