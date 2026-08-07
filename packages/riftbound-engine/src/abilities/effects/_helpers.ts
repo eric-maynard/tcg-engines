@@ -155,6 +155,12 @@ export function resolveAmount(
     // rule-id: ogn-260-298 (rule 355.14.a) — "Ready a friendly unit. It deals
     // damage equal to ITS Might": "its" names the unit an EARLIER sequence step
     // acted on (the sequence's `pendingValue`), never this step's damage target.
+    // rule 359.3.f.2 (sfd-163-221) — "+[Might] equal to ITS Might" after "Kill a
+    // friendly unit": the victim's Might as it was killed, buffs included. The
+    // kill step snapshots it (last-known information — the unit is gone now).
+    if (mightRef === "killed") {
+      return ctx.draft.lastKilledUnitMight ?? 0;
+    }
     if (mightRef === "pending-value") {
       const pendingId = (ctx as { pendingSequenceValue?: readonly string[] })
         .pendingSequenceValue?.[0];
@@ -526,6 +532,11 @@ export function evaluateEffectCondition(
       if (cmp?.eq !== undefined && might !== cmp.eq) return false;
       return true;
     }
+    // rule 359.3.e.14.b (sfd-163-221) — "Kill a friendly unit. IF YOU DO, …":
+    // the linked instruction happens only when a unit actually died; with no
+    // comparison this is exactly the "a kill happened" test.
+    case "killed-a-unit":
+    // falls through
     case "killed-might": {
       // rule-id: unl-186-219 — "Kill a unit… Then, if it had N [Might] or
       // less": compares the last-known Might snapshotted by the `kill` step.
