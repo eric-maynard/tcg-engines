@@ -36,6 +36,7 @@ import {
   isLegalMultiTargetSet,
   type SpellEffectTargetShape,
 } from "../play/targeting";
+import { deductAbilityCost } from "./activate-ability";
 import { buildEffectContext } from "./effect-context";
 import { openPendingContestedShowdown } from "./showdown";
 
@@ -154,10 +155,30 @@ export function executeResolvedItem(
   // opponents' reaction window (359.3.c) and never as a play cost. Pause and
   // ask the controller how much Power to pay; the reducer binds `x` and
   // re-enters here.
+  const xStore = resolved.effect as
+    | { _variables?: Record<string, number>; _xPledged?: boolean }
+    | undefined;
+  // rule 204.3.b / 444.1: an X pledged when the spell was played is paid HERE,
+  // out of Power, capped by what the pool actually holds now.
+  let pledgePaid: number | undefined;
+  if (xCostIsPower(resolved.cardId) && xStore?._xPledged === true) {
+    const power = draft.runePools[resolved.controller]?.power ?? {};
+    const available = Object.values(power).reduce<number>((a, b) => a + (b ?? 0), 0);
+    pledgePaid = Math.min(Math.max(0, xStore._variables?.x ?? 0), available);
+    if (pledgePaid > 0) {
+      deductAbilityCost(
+        draft,
+        resolved.controller,
+        { power: Array.from({ length: pledgePaid }, () => "rainbow") },
+        context.zones,
+        context.counters,
+      );
+    }
+  }
   if (
+    pledgePaid === undefined &&
     xCostIsPower(resolved.cardId) &&
-    (resolved.effect as { _variables?: Record<string, number> } | undefined)?._variables?.x ===
-      undefined
+    xStore?._variables?.x === undefined
   ) {
     const pool = draft.runePools[resolved.controller];
     // rule 444.2: paying 0 is always legal, so `max` only bounds the offer.
@@ -198,7 +219,10 @@ export function executeResolvedItem(
   // Strip any bound variables (e.g., X-cost value) before executing — they
   // Are threaded into the EffectContext so `{ variable: "x" }` expressions
   // Can resolve to the chosen X amount during spell resolution.
-  const { _variables, ...effectRest } = rawEffect;
+  const { _variables: storedVariables, _xPledged: _pledgeFlag, ...effectRest } = rawEffect as
+    typeof rawEffect & { _xPledged?: boolean };
+  const _variables =
+    pledgePaid === undefined ? storedVariables : { ...(storedVariables ?? {}), x: pledgePaid };
   const effect = effectRest as ExecutableEffect;
 
   const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);

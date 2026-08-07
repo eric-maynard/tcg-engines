@@ -72,7 +72,7 @@ describe("Kai'Sa, Evolutionary (ogn-112-298)", () => {
     expect(game.zoneOf("fyc")).toBe("trash");
   });
 
-  test.failing("BUG: accepting lets you play a trash spell with Energy cost < points for free, and it is recycled afterwards", async () => {
+  test("accepting lets you play a trash spell with Energy cost < points for free, and it is recycled afterwards", async () => {
     // With 2 points → 3 after the conquer: Discipline (2) qualifies, Find Your Center (3) does not.
     // Expected: pick among eligible trash spells → Discipline is played (0 energy spent) targeting Kai'Sa
     // (+2 Might, draw 1) and then goes to the bottom of the main deck instead of the trash.

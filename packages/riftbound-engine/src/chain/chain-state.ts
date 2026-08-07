@@ -66,8 +66,10 @@ export interface ChainItem {
    * pending and only moves to its final zone when it leaves the chain
    * (resolved or countered). Defaults to "trash"; [Flow] plays banish;
    * rule-id: unl-131-219 — a counter may redirect it to the owner's hand.
+   * rule-id: ogn-112-298 (rule 594) — "Then recycle it": "mainDeck" sends the
+   * spell to the BOTTOM of its owner's Main Deck.
    */
-  readonly resolveTo?: "trash" | "banishment" | "hand";
+  readonly resolveTo?: "trash" | "banishment" | "hand" | "mainDeck";
 }
 
 /**

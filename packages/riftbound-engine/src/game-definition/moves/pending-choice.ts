@@ -14,6 +14,7 @@ import type { CardId as CoreCardId, ZoneId as CoreZoneId, GameMoveDefinitions } 
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
 import { markContestedOnArrival } from "../../abilities/effects/move";
+import { castSpellFromTrash } from "../../abilities/effects/play";
 import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
 import { resolveTarget } from "../../abilities/target-resolver";
 import { fireTriggers } from "../../abilities/trigger-runner";
@@ -448,6 +449,13 @@ export const pendingChoiceMoves: Partial<
         }
         return true;
       }
+      if (choice.type === "confirm") {
+        // rule 355.13 (ogn-153-298): a bare "you may …" — both answers legal.
+        if (choice.playerId !== context.params.playerId) {
+          return false;
+        }
+        return typeof context.params.accept === "boolean";
+      }
       if (choice.type === "choose-mode") {
         if (choice.playerId !== context.params.playerId) {
           return false;
@@ -573,6 +581,15 @@ export const pendingChoiceMoves: Partial<
           !cost || canPayOptInCost(state, choice.playerId, choice.sourceCardId, cost, context);
         return [
           ...(canAccept ? [{ accept: true, playerId: context.playerId as string }] : []),
+          { accept: false, playerId: context.playerId as string },
+        ];
+      }
+      if (choice.type === "confirm") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        return [
+          { accept: true, playerId: context.playerId as string },
           { accept: false, playerId: context.playerId as string },
         ];
       }
@@ -751,6 +768,32 @@ export const pendingChoiceMoves: Partial<
           draft,
           context,
         );
+        if (!draft.pendingChoice) {
+          postChoiceCleanup(draft, context);
+        }
+        return;
+      }
+
+      if (choice.type === "confirm") {
+        // rule 355.13 (ogn-153-298): "you may …" inside a resolving effect —
+        // yes runs the effect, and the suspended remainder of the sequence
+        // runs either way.
+        draft.pendingChoice = undefined;
+        const confirmCtx = buildEffectContext(
+          draft,
+          choice.playerId,
+          choice.sourceCardId,
+          context,
+        );
+        if (context.params.accept === true) {
+          executeEffect(choice.effect as ExecutableEffect, {
+            ...confirmCtx,
+            ...(choice.boundTargets ? { boundTargets: choice.boundTargets } : {}),
+          });
+        }
+        if (choice.then && !draft.pendingChoice) {
+          executeEffect(choice.then as ExecutableEffect, confirmCtx);
+        }
         if (!draft.pendingChoice) {
           postChoiceCleanup(draft, context);
         }
@@ -1436,6 +1479,20 @@ export const pendingChoiceMoves: Partial<
           // your trash" completes as part of the enclosing effect — the unit
           // enters its owner's base exhausted and fires its own play triggers.
           if (choice.playFrom === "trash") {
+            // rule 354.2 / 594 (rule-id: ogn-112-298) — a SPELL played from the
+            // trash goes on the chain, never to a board location; "Then recycle
+            // it" sends it to the bottom of the Main Deck when it leaves.
+            if (getGlobalCardRegistry().getCardType(pickedCardId as string) === "spell") {
+              castSpellFromTrash(
+                pickedCardId as string,
+                choice.prompter,
+                choice.playRecycleAfter === true,
+                { draft, zones: context.zones },
+              );
+              draft.pendingChoice = undefined;
+              postChoiceCleanup(draft, context);
+              return;
+            }
             // rule 355.2 / 355.4 (rule-id: sfd-165-221-glasc-mixologist-deathknell-destination):
             // a card entering play from off-board may be placed at its player's base OR
             // any battlefield they control — the choice is theirs. The

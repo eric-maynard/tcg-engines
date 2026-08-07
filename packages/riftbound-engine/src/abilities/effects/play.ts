@@ -265,19 +265,47 @@ function replaySelfSpell(effect: ExecutableEffect, ctx: EffectContext): void {
  * trash / hand are outside the zones the target resolver scans, so the check
  * reads the registry directly.
  */
-function matchesPrintedCostFilter(cardId: string, filter: unknown): boolean {
+function matchesPrintedCostFilter(
+  cardId: string,
+  filter: unknown,
+  ctx?: EffectContext,
+): boolean {
   if (typeof filter !== "object" || filter === null) {
     return true;
   }
-  const f = filter as { energyCost?: Record<string, number>; powerCost?: Record<string, number> };
+  const f = filter as {
+    energyCost?: Record<string, unknown>;
+    powerCost?: Record<string, unknown>;
+  };
   const registry = getGlobalCardRegistry();
-  const cmp = (value: number, c: Record<string, number> | undefined): boolean => {
+  // rule-id: ogn-112-298 (rule 206) — a bound may name a game value rather than
+  // a printed number ("Energy cost less than your points"); it is read when the
+  // candidates are gathered.
+  const bound = (raw: unknown): number | undefined => {
+    if (typeof raw === "number") {
+      return raw;
+    }
+    if (raw && typeof raw === "object" && "points" in (raw as object) && ctx) {
+      const whose = (raw as { points?: string }).points;
+      const pid = whose === "opponent"
+        ? Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId)
+        : ctx.playerId;
+      return ctx.draft.players[pid ?? ctx.playerId]?.victoryPoints ?? 0;
+    }
+    return undefined;
+  };
+  const cmp = (value: number, c: Record<string, unknown> | undefined): boolean => {
     if (!c) return true;
-    if (c.eq !== undefined && value !== c.eq) return false;
-    if (c.lt !== undefined && !(value < c.lt)) return false;
-    if (c.lte !== undefined && !(value <= c.lte)) return false;
-    if (c.gt !== undefined && !(value > c.gt)) return false;
-    if (c.gte !== undefined && !(value >= c.gte)) return false;
+    const eq = bound(c.eq);
+    const lt = bound(c.lt);
+    const lte = bound(c.lte);
+    const gt = bound(c.gt);
+    const gte = bound(c.gte);
+    if (eq !== undefined && value !== eq) return false;
+    if (lt !== undefined && !(value < lt)) return false;
+    if (lte !== undefined && !(value <= lte)) return false;
+    if (gt !== undefined && !(value > gt)) return false;
+    if (gte !== undefined && !(value >= gte)) return false;
     return true;
   };
   if ("energyCost" in f && !cmp(registry.getEnergyCost(cardId), f.energyCost)) {
@@ -321,7 +349,7 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
     if (target?.type && target.type !== "card" && target.type !== cardType) {
       return false;
     }
-    if (!costFilters.every((f) => matchesPrintedCostFilter(id, f))) {
+    if (!costFilters.every((f) => matchesPrintedCostFilter(id, f, ctx))) {
       return false;
     }
     return canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta);
@@ -342,6 +370,10 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
         playFrom: "trash",
         playIgnoreEnergy: extras.ignoreEnergyCost === true,
         playIgnoreCost: extras.ignoreBaseCost === true,
+        // rule-id: ogn-112-298 (rule 594) — "Then recycle it": a spell played
+        // from the trash goes to the bottom of its owner's Main Deck instead of
+        // back to the trash when it finishes resolving.
+        playRecycleAfter: (effect as { recycleAfter?: unknown }).recycleAfter === true,
         prompter: ctx.playerId,
         remaining: 1,
         revealed: [...candidates],
@@ -356,6 +388,52 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
   deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
   if (registry.getCardType(chosen) === "unit") {
     enterUnitFromEffect(chosen, "base", ctx);
+    return;
+  }
+  if (registry.getCardType(chosen) === "spell") {
+    castSpellFromTrash(
+      chosen,
+      ctx.playerId,
+      (effect as { recycleAfter?: unknown }).recycleAfter === true,
+      ctx,
+    );
+  }
+}
+
+/**
+ * rule-id: ogn-112-298 (rules 354.2 / 356.1.b / 594) — a spell an effect plays
+ * from the trash goes on the chain like any other spell play: its controller is
+ * the player the effect instructed, its targets are chosen as it resolves, and
+ * when it leaves the chain it is recycled (bottom of the Main Deck) rather than
+ * trashed if the instruction said so.
+ */
+export function castSpellFromTrash(
+  cardId: string,
+  playerId: string,
+  recycleAfter: boolean,
+  bag: {
+    draft: EffectContext["draft"];
+    zones: { moveCard: (p: { cardId: CoreCardId; targetZoneId: CoreZoneId }) => void };
+  },
+): void {
+  const spellEffect = (getGlobalCardRegistry().getAbilities(cardId) ?? []).find(
+    (a) => a.type === "spell",
+  )?.effect;
+  bag.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: "chain" as CoreZoneId });
+  bag.draft.interaction = addToChain(
+    bag.draft.interaction ?? createInteractionState(),
+    {
+      cardId,
+      controller: playerId,
+      effect: spellEffect,
+      resolveTo: recycleAfter ? "mainDeck" : "trash",
+      type: "spell",
+    },
+    Object.keys(bag.draft.players),
+  );
+  // Rule 724 (Legion): a card played by an effect still counts as played.
+  if (bag.draft.cardsPlayedThisTurn) {
+    bag.draft.cardsPlayedThisTurn[playerId] = (bag.draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
   }
 }
 
