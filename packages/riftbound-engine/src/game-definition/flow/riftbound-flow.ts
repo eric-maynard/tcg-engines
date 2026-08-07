@@ -32,11 +32,7 @@ import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getChannelCountLimit } from "../../operations/channel-limits";
-import {
-  beginAdditionalTurn,
-  dequeueExtraTurn,
-  resumeQueuedTurn,
-} from "../../operations/turn-queue";
+import { dequeueExtraTurn } from "../../operations/turn-queue";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
 import { applyScoreReplacement, canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
@@ -233,16 +229,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           // before endTurn) is left untouched.
           const extra = dequeueExtraTurn(context.state);
           if (extra !== undefined) {
-            // rule 737: the additional turn is INSERTED, not substituted — the
-            // turn it displaces is remembered and resumes once the run of
-            // additional turns finishes.
-            beginAdditionalTurn(context.state, context.getCurrentPlayer());
             context.setCurrentPlayer(extra);
-          } else {
-            const queued = resumeQueuedTurn(context.state);
-            if (queued !== undefined) {
-              context.setCurrentPlayer(queued);
-            }
           }
         },
 
@@ -506,7 +493,8 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             endIf: () => true,
             next: "draw",
             onBegin: (context) => {
-              // rule 323.1: once a player has won the game ends immediately —\n              // the rest of the turn (Channel/Draw/Main) never happens.
+              // rule 323.1: once a player has won the game ends immediately —
+              // the rest of the turn (Channel/Draw/Main) never happens.
               if (gameHasEnded(context.state)) {
                 return;
               }
@@ -527,12 +515,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
 
               const isFirstTurn =
                 context.state.firstTurnNumber?.[playerId] === context.getTurnNumber();
-              // rule 487.7: only the LAST player in Turn Order gets the extra
-              // rune; middle players in a multiplayer game channel the normal 2.
-              const isExtraRunePlayer =
-                context.state.extraRunePlayerId === undefined ||
-                context.state.extraRunePlayerId === playerId;
-              if (isFirstTurn && context.state.secondPlayerExtraRune && isExtraRunePlayer) {
+              if (isFirstTurn && context.state.secondPlayerExtraRune) {
                 baseChannelCount = 3;
               }
 
@@ -613,13 +596,6 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               const playerId = (context.state.turn?.activePlayer ||
                 context.getCurrentPlayer()) as CorePlayerId;
 
-              // rule 487.7: in the multiplayer modes the player going first
-              // skips their first Draw Phase — no draw, so no Burn Out either.
-              if (context.state.skipFirstDrawFor === (playerId as unknown as string)) {
-                context.state.skipFirstDrawFor = undefined;
-                return;
-              }
-
               // Check for empty deck -> Burn Out (rule 518)
               // rule 431.3/431.3.a: when the trash is empty too the deck stays
               // empty, so retrying the draw burns out again — repeatedly, giving
@@ -645,12 +621,6 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   });
                 }
                 context.zones.shuffleZone("mainDeck" as CoreZoneId, playerId as CorePlayerId);
-                // No-progress guard: with deck AND trash empty the reshuffle changes
-                // nothing. Award this Burn Out once and stop retrying within this Draw
-                // step (the next Draw step burns out again). Repeating to an immediate
-                // opponent win (431.3.a) is tracked as a separate queue item because it
-                // changes outcomes for every empty-deck fixture; decide it deliberately.
-                const noProgress = trashCards.length === 0;
 
                 // Opponent scores 1 point
                 for (const opponentId of Object.keys(context.state.players)) {
@@ -668,9 +638,6 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 if (gameHasEnded(context.state)) {
                   // rule 323.1: the game ended mid-burnout — no card is drawn.
                   return;
-                }
-                if (noProgress) {
-                  return; // nothing to draw this step
                 }
               }
 
