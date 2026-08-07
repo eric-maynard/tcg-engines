@@ -70,7 +70,7 @@ describe("Cruel Patron × Zhonya's Hourglass × LeBlanc — replaced cost-kill i
   // Expected (808.1.d.2 / 428.1.a.1.b): LeBlanc is killed as the cost → her Deathknell is queued before
   // she hits the trash, finalizes above Cruel Patron and resolves first (draw 1); Cruel Patron enters base.
   // Actual: `play(patron, {sacrifice})` has no matching engine variant — the kill cost is not modelled.
-  test.failing("BUG: without Zhonya's — LeBlanc is killed as the cost (→ trash), Deathknell draws 1, Cruel Patron enters base, 4 energy paid", async () => {
+  test("without Zhonya's — LeBlanc is killed as the cost (→ trash), Deathknell draws 1, Cruel Patron enters base, 4 energy paid", async () => {
     const game = await board({ zhonyas: false }).build();
     const hand0 = game.p1.hand().length;
     const deck0 = game.p1.deck().length;
@@ -88,7 +88,7 @@ describe("Cruel Patron × Zhonya's Hourglass × LeBlanc — replaced cost-kill i
 
   // Expected (357.2.a, 370.1.a.1): the cost-kill on LeBlanc is replaced — Zhonya's is killed instead
   // (→ trash); LeBlanc stays on the board in base, healed to 0 damage and exhausted. Actual: see above.
-  test.failing("BUG: with Zhonya's — the cost-kill is replaced: Hourglass → trash; LeBlanc stays in base healed (0 damage) and exhausted", async () => {
+  test("with Zhonya's — the cost-kill is replaced: Hourglass → trash; LeBlanc stays in base healed (0 damage) and exhausted", async () => {
     const game = await board({ zhonyas: true }).build();
     expect(game.state("leblanc").damage).toBe(1);
     await game.p1.play("patron", { sacrifice: "leblanc" });
@@ -114,7 +114,7 @@ describe("Cruel Patron × Zhonya's Hourglass × LeBlanc — replaced cost-kill i
 
   // Expected (808.1.d.1, 428.1.a.1.b, 370.1.a.1): LeBlanc never went to the trash, so her Deathknell does
   // not resolve — no card drawn; the only hand change is Cruel Patron leaving it. Actual: see above.
-  test.failing("BUG: with Zhonya's — LeBlanc's Deathknell does NOT draw (she was never sent to trash) (808.1.d.1)", async () => {
+  test("with Zhonya's — LeBlanc's Deathknell does NOT draw (she was never sent to trash) (808.1.d.1)", async () => {
     const game = await board({ zhonyas: true }).build();
     const hand0 = game.p1.hand().length;
     const deck0 = game.p1.deck().length;
@@ -128,7 +128,7 @@ describe("Cruel Patron × Zhonya's Hourglass × LeBlanc — replaced cost-kill i
   // Expected (369.1 no "may"; 372 only orders MULTIPLE replacements): Zhonya's applies automatically —
   // after declaring the play there is no yes/no or ordering prompt for P1; the game returns to an open
   // main phase with the replacement already applied. Actual: see above (play itself is rejected).
-  test.failing("BUG: with Zhonya's — the replacement is mandatory: no opt-out / ordering prompt is offered to P1 (369.1, 372)", async () => {
+  test("with Zhonya's — the replacement is mandatory: no opt-out / ordering prompt is offered to P1 (369.1, 372)", async () => {
     const game = await board({ zhonyas: true }).build();
     await game.p1.play("patron", { sacrifice: "leblanc" });
     const d = game.decision();

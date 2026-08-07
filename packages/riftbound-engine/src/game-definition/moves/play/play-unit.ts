@@ -1116,10 +1116,23 @@ export const playUnit: Defs["playUnit"] = {
           optional.kill.type === "permanent" ||
           optional.kill.type === kind;
         if (owner === playerId && inPlay && sacrificeId !== cardId && okType) {
-          zones.moveCard({
-            cardId: sacrificeId as CoreCardId,
-            targetZoneId: "trash" as CoreZoneId,
-          });
+          // rule 428.1: the cost-kill is a real kill — Deathknell and "when a
+          // friendly unit dies" triggers fire and a die-replacement may apply.
+          // rule 357.2.a: a cost replaced this way still counts as paid.
+          executeEffect(
+            { target: { type: "unit" }, type: "kill" },
+            {
+              boundTargets: [sacrificeId as string],
+              cards: context.cards,
+              counters,
+              draft,
+              fireTriggers: (event) =>
+                fireTriggers(event, { cards: context.cards, counters, draft, zones }),
+              playerId,
+              sourceCardId: cardId as string,
+              zones,
+            },
+          );
           paidAdditionalCostActual = true;
         }
       }

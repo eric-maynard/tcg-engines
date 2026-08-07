@@ -59,7 +59,7 @@ describe("Cruel Patron (ogn-208-298)", () => {
     expect(variants.every((v) => v.params.sacrificeId === "fodder")).toBe(true);
   });
 
-  test.failing("BUG: the additional cost is a real kill — sacrificing Watchful Sentry fires its Deathknell (draw 1)", async () => {
+  test("the additional cost is a real kill — sacrificing Watchful Sentry fires its Deathknell (draw 1)", async () => {
     // Expected: Sentry dies to pay the cost → its Deathknell triggers and P1 draws 1. Actual: no kill happens.
     const game = await scenario().resources(P1, { energy: 4 }).hand(P1, CARD, "patron").unit(P1, "base", SENTRY, "sentry").build();
     const before = game.p1.hand().length; // includes patron
