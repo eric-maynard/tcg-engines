@@ -1,6 +1,7 @@
 // Effect handler: "stun"
 import type { CardId as CoreCardId } from "@tcg/core";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { tryReplaceCardEvent } from "./_replacement-gate";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 
 export function handle_stun(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
@@ -11,6 +12,20 @@ export function handle_stun(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // choosing it is legal but no stun happens, so no stun event fires.
     const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as { stunned?: boolean } | undefined;
     if (meta?.stunned === true) {
+      continue;
+    }
+    // rule 366-372 (ven-181-166): "if a spell or ability that chooses me would
+    // stun me, … instead" — the replacement takes over and no stun happens.
+    if (
+      tryReplaceCardEvent(
+        {
+          cardId: targetId,
+          owner: ctx.cards.getCardOwner?.(targetId as CoreCardId),
+          type: "stun",
+        },
+        ctx,
+      )
+    ) {
       continue;
     }
     ctx.counters.setFlag(targetId as CoreCardId, "stunned", true);

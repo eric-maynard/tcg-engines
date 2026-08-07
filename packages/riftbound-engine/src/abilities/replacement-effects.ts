@@ -41,6 +41,10 @@ export interface ReplacementEvent {
     // rule 433.1.b / 366-372 — a spell or ability would give a unit a negative
     // Might modifier (ven-181-166 Gangplank, Naval).
     | "might-decrease"
+    // rule 366-372 (ven-181-166 Gangplank, Naval) — a spell or ability that
+    // chooses a unit would stun it / return it to its owner's hand.
+    | "stun"
+    | "return-to-hand"
     | "play-token"
     // rule 369.1 / 370.1 (sfd-018-221) — a player would reveal cards from a deck.
     | "reveal"

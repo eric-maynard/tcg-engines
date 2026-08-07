@@ -1,6 +1,8 @@
 // Effect handler: "return-to-hand"
+import type { CardId as CoreCardId } from "@tcg/core";
 import { removeFromBoard } from "../../operations/leave-board";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { tryReplaceCardEvent } from "./_replacement-gate";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
 
 /**
@@ -11,12 +13,25 @@ import { type EffectHelpers, getTargetIds } from "./_helpers";
  * (rule 124.1 / 191.1), and a token ceases to exist instead (rule 186.1).
  */
 function bounceToHand(cardIds: readonly string[], ctx: EffectContext): void {
-  if (cardIds.length === 0) {
+  // rule 366-372 (ven-181-166): "if a spell or ability that chooses me would …
+  // return me to hand, … instead" — a replaced card never leaves the board.
+  const bounced = cardIds.filter(
+    (cardId) =>
+      !tryReplaceCardEvent(
+        {
+          cardId,
+          owner: ctx.cards.getCardOwner?.(cardId as CoreCardId),
+          type: "return-to-hand",
+        },
+        ctx,
+      ),
+  );
+  if (bounced.length === 0) {
     return;
   }
   removeFromBoard(
     ctx,
-    cardIds,
+    bounced,
     "hand",
     { by: ctx.playerId, kind: "bounce", source: ctx.sourceCardId },
     ctx.fireTriggers,

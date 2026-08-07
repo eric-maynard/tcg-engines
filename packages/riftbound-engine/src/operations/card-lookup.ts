@@ -39,6 +39,12 @@ export interface CardDefinitionLookup {
    */
   readonly interactiveCostReduction?: "target-might";
   /**
+   * Atakhan-style marker (rule 356.4): a paid "kill a friendly unit"
+   * additional cost discounts this card by the killed unit's printed cost —
+   * [1] per Energy and one `powerDomain` pip per Power pip.
+   */
+  readonly sacrificeCostDiscount?: { readonly powerDomain: string };
+  /**
    * Move-escalation flag. When a card with this flag is on the board
    * and enemy-controlled, each unit the opponent moves beyond the first
    * in a single turn costs an additional 1 rainbow (energy) per move.
@@ -112,6 +118,8 @@ export class CardDefinitionRegistry {
   private readonly definitions = new Map<string, CardDefinitionLookup>();
   /** Pre-copy definitions of instances currently copying another card (rule 477.1.b). */
   private readonly copyOriginals = new Map<string, CardDefinitionLookup>();
+  /** Instance being copied, per copying instance (rule 477.1.b) — lets snapshots render the copy. */
+  private readonly copySources = new Map<string, string>();
 
   /**
    * rule 477.1.b: `holderId` becomes a copy of `sourceId` — its traits (name,
@@ -128,6 +136,15 @@ export class CardDefinitionRegistry {
       this.copyOriginals.set(holderId, current);
     }
     this.definitions.set(holderId, { ...source, id: holderId });
+    this.copySources.set(holderId, sourceId);
+  }
+
+  /**
+   * rule 477.1.b: the instance `holderId` is currently copying, if any. Read by
+   * the app snapshot so the copy's name/Might/rules text reach the client.
+   */
+  copySourceOf(holderId: string): string | undefined {
+    return this.copySources.get(holderId);
   }
 
   /** End a `becomeCopyOf` copy, restoring the instance's printed definition. */
@@ -137,6 +154,7 @@ export class CardDefinitionRegistry {
       return;
     }
     this.copyOriginals.delete(holderId);
+    this.copySources.delete(holderId);
     this.definitions.set(holderId, original);
   }
 
