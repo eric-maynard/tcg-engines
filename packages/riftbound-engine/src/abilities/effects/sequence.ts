@@ -608,7 +608,11 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         // rule 820.2.a (sfd-129-221 Temptation) — and so does a
         // `choose-destination`: each Repeat execution picks its own
         // destination, so a later one must not overwrite the parked prompt.
-        (parked?.type === "choose-mode" ||
+        // rule 820.2 (unl-182-219) — a mode locked in while the card was
+        // PLAYED runs inline, so the prompt it parks (its own target) is what
+        // suspends the remaining executions.
+        ((parked as { fromChosenMode?: boolean } | undefined)?.fromChosenMode === true ||
+          parked?.type === "choose-mode" ||
           parked?.type === "confirm" ||
           parked?.type === "reveal-and-pick" ||
           (parked?.type === "choose-destination" && indepSlots !== undefined)) &&

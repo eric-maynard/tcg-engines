@@ -39,10 +39,56 @@ function modeHasLegalTarget(option: { effect?: ExecutableEffect }, ctx: EffectCo
   );
 }
 
+/**
+ * rule 349 / 820.2 (unl-182-219) — modes are picked during the Make Relevant
+ * Choices step of PLAYING the card, so a spell's mode arrives here already
+ * locked in as `_chosenIndex`. Run it without re-prompting; a prompt the mode
+ * parks (its own target) suspends the rest of a [Repeat] sequence, which is
+ * what `fromChosenMode` tells `handle_sequence`.
+ */
+function runPreChosenMode(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  h: EffectHelpers,
+  options: { effect: ExecutableEffect }[],
+  index: number,
+): void {
+  if ((effect as { notChosenThisTurn?: boolean }).notChosenThisTurn === true) {
+    const sourceId = ctx.sourceCardId as Parameters<typeof ctx.cards.getCardOwner>[0];
+    const currentTurn = (ctx.draft as { turn?: { number?: number } }).turn?.number ?? 0;
+    const meta = ctx.cards.getCardMeta?.(sourceId) as
+      | { modesChosenThisTurn?: number[]; modesChosenTurn?: number }
+      | undefined;
+    // rule 517.2.b — the record is turn-stamped, so a stale one lapses.
+    const prior = meta?.modesChosenTurn === currentTurn ? (meta.modesChosenThisTurn ?? []) : [];
+    ctx.cards.updateCardMeta?.(sourceId, {
+      modesChosenThisTurn: [...prior, index],
+      modesChosenTurn: currentTurn,
+    });
+  }
+  const picked = options[index]?.effect;
+  if (!picked) {
+    return;
+  }
+  // rule 355.8 / 820.2 — the target chosen for this mode while the card was
+  // played travels with it.
+  const chosenTargets = (effect as { _chosenTargets?: string[] })._chosenTargets;
+  h.executeEffect(picked, chosenTargets ? { ...ctx, boundTargets: chosenTargets } : ctx);
+  const parked = ctx.draft.pendingChoice as { then?: unknown } | undefined;
+  if (parked && parked.then === undefined) {
+    ctx.draft.pendingChoice = { ...(parked as object), fromChosenMode: true } as typeof ctx.draft.pendingChoice;
+  }
+}
+
 export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
   const { options } = effect as unknown as { options?: { effect: ExecutableEffect }[] };
   if (!options || options.length === 0) {
+    return;
+  }
+  const preChosen = (effect as { _chosenIndex?: number })._chosenIndex;
+  if (typeof preChosen === "number") {
+    runPreChosenMode(effect, ctx, h, options, preChosen);
     return;
   }
   // rule 355.8 (ogn-157-298): "Choose one you've not chosen this turn" — modes
@@ -122,4 +168,31 @@ export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: E
     }
     executeEffect(options[soleIndex].effect, ctx);
   }
+}
+
+/**
+ * rule 349 / 820.2 (unl-182-219) — the mode menu as offered during the Make
+ * Relevant Choices step of playing a card. Applies the same filters
+ * `handle_choice` uses at resolution; `excluded` names the modes already locked
+ * in for earlier executions of this same play ("choose one you haven't already
+ * chosen").
+ */
+export function playTimeModeOptions(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  excluded: readonly number[],
+): number[] {
+  const { options } = effect as unknown as { options?: { effect: ExecutableEffect }[] };
+  if (!options || options.length === 0) {
+    return [];
+  }
+  const notChosen = (effect as { notChosenThisTurn?: boolean }).notChosenThisTurn === true;
+  let indices = options.map((_unused, i) => i).filter((i) => !(notChosen && excluded.includes(i)));
+  const targetable = indices.filter((i) =>
+    modeHasLegalTarget(options[i] as { effect?: ExecutableEffect }, ctx),
+  );
+  if (targetable.length > 0) {
+    indices = targetable;
+  }
+  return indices;
 }

@@ -30,6 +30,7 @@ import { isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { removeFromBoard } from "../../../operations/leave-board";
 import { executeEffect } from "../../../abilities/effect-executor";
+import { raisePlayTimeModeChoice } from "./play-time-modes";
 import type { CostExtras } from "./cost";
 import {
   getOptionalPlayCost,
@@ -2172,14 +2173,18 @@ export const playSpell: Defs["playSpell"] = {
         targets?.length === perExecution * (1 + repeatN)
           ? perExecution
           : 0;
+      // rule 820.2 — every execution owns its choices, so each copy must be a
+      // DISTINCT object: a mode locked in for one execution must not leak into
+      // the others.
+      const copy = () => structuredClone(spellEffect) as typeof spellEffect;
       const repeatedEffects = Array.from({ length: 1 + repeatN }, (_unused, i) =>
         groupSize > 0
           ? {
               boundTargetsOverride: (targets as string[]).slice(i * groupSize, (i + 1) * groupSize),
-              effects: [spellEffect],
+              effects: [copy()],
               type: "sequence",
             }
-          : spellEffect,
+          : copy(),
       );
       effectToStore = {
         effects: repeatedEffects,
@@ -2320,6 +2325,33 @@ export const playSpell: Defs["playSpell"] = {
           zones: context.zones,
         },
       );
+    }
+
+    // rule 349 / 820.2 (unl-182-219 Curtain Call) — the modes of a modal spell
+    // are chosen during the Make Relevant Choices step of playing it, before
+    // anyone gets priority; every [Repeat] execution picks its own. The picks
+    // are locked onto the chain item's effect and consumed when it resolves.
+    if (!draft.pendingChoice && effectToStore && repeatN > 0) {
+      const items = draft.interaction?.chain?.items ?? [];
+      const item = [...items].reverse().find((it) => it?.cardId === cardId);
+      if (item?.id !== undefined) {
+        raisePlayTimeModeChoice(
+          draft,
+          item.id as string,
+          item.effect,
+          playerId,
+          cardId,
+          {
+            cards: context.cards,
+            counters: context.counters,
+            draft,
+            playerId,
+            sourceCardId: cardId,
+            zones: context.zones,
+            // biome-ignore lint/suspicious/noExplicitAny: only the board-reading fields are used
+          } as any,
+        );
+      }
     }
   },
 };

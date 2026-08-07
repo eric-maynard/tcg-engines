@@ -144,7 +144,7 @@ describe("Curtain Call × Marai Spire × Ezreal, Prodigy — three Repeat costs"
     expect(game.gameState.cardsPlayedThisTurn?.[P1]).toBe(1);
   });
 
-  test.failing("BUG: all mode/target choices are made while PLAYING the spell, before anyone gets priority (820.2)", async () => {
+  test("all mode/target choices are made while PLAYING the spell, before anyone gets priority (820.2)", async () => {
     // Expected: either the cast bundle asks for the modes, or P1 is prompted for them before the
     // priority window opens. Actual: the spell goes on the chain with nothing chosen; the single
     // "Choose a mode" prompt only appears at resolution.

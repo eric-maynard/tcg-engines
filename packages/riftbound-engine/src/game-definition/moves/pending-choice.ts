@@ -52,6 +52,7 @@ import {
   getPotentialRuneEnergy,
   staticEnterReadyApplies,
 } from "./play/cost";
+import { collectChoiceNodes, raisePlayTimeModeChoice } from "./play/play-time-modes";
 import { isLegalMultiTargetSet, spellEffectHasLegalTargets } from "./play/targeting";
 import type { SpellEffectTargetShape } from "./play/targeting";
 
@@ -129,7 +130,21 @@ function liftModalTarget(
     sourceZone: context.zones.getCardZone(choice.sourceCardId as CoreCardId),
     zones: context.zones,
   } as Parameters<typeof resolveTarget>[1]);
+  // rule 809.1.c.1 (rule-id: sfd-077-221) — the [Deflect] surcharge is owed
+  // when the target is CHOSEN, which for a modal effect is here and not at
+  // cast time. A sole auto-bound candidate is charged immediately; a real
+  // prompt carries `deflectTax` and is charged at pick time.
+  const deflectTax = options.some(
+    (id) => getDeflectSurcharge(draft, controller, [id], context.cards) > 0,
+  );
   if (options.length < 2) {
+    if (deflectTax && options.length === 1) {
+      payAnyDomainPower(
+        draft,
+        controller,
+        getDeflectSurcharge(draft, controller, [...options], context.cards),
+      );
+    }
     return false;
   }
   draft.pendingChoice = {
@@ -138,6 +153,7 @@ function liftModalTarget(
     playerId: controller,
     remaining: 1,
     sourceCardId: choice.sourceCardId,
+    ...(deflectTax ? { deflectTax: true as const } : {}),
     // rule 820.2 (unl-182-219) — the suspended continuation (e.g. the later
     // [Repeat] executions) rides along on the lifted target prompt; dropping
     // it here would silently lose those executions.
@@ -1540,6 +1556,31 @@ export const pendingChoiceMoves: Partial<
         if (!choice.options.includes(idx)) {
           return;
         }
+        // rule 349 / 820.2 (unl-182-219) — a mode chosen while PLAYING the
+        // card: lock it onto the pending chain item (the effect runs later,
+        // when that item resolves) and ask for the next execution's mode.
+        if (choice.bindToChainItemId !== undefined) {
+          const items = draft.interaction?.chain?.items ?? [];
+          const item = items.find((it) => it && it.id === choice.bindToChainItemId);
+          draft.pendingChoice = undefined;
+          if (!item) {
+            return;
+          }
+          const nodes = collectChoiceNodes(item.effect);
+          const node = nodes.find((n) => n._chosenIndex === undefined);
+          if (node) {
+            node._chosenIndex = idx;
+          }
+          raisePlayTimeModeChoice(
+            draft,
+            choice.bindToChainItemId,
+            item.effect,
+            choice.playerId,
+            choice.sourceCardId as string,
+            buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+          );
+          return;
+        }
         const modalOptions =
           (choice.effect as { options?: { effect: unknown }[] } | undefined)?.options ?? [];
         const picked = modalOptions[idx]?.effect;
@@ -1596,6 +1637,37 @@ export const pendingChoiceMoves: Partial<
 
       if (choice.type === "choose-target") {
         const picked = context.params.pickedCardId as string;
+        // rule 355.8 / 820.2 (unl-182-219) — the target of a mode chosen while
+        // PLAYING the card: lock it onto that mode inside the chain item's
+        // effect, then move on to the next execution's choices.
+        if (choice.choiceNodeIndex !== undefined && choice.bindToChainItemId !== undefined) {
+          if (!choice.options.includes(picked)) {
+            return;
+          }
+          const items = draft.interaction?.chain?.items ?? [];
+          const item = items.find((it) => it && it.id === choice.bindToChainItemId);
+          draft.pendingChoice = undefined;
+          if (!item) {
+            return;
+          }
+          const node = collectChoiceNodes(item.effect)[choice.choiceNodeIndex as number];
+          if (node) {
+            node._chosenTargets = [picked];
+          }
+          fireTriggers(
+            { cardId: picked, chooserId: choice.playerId, sourceType: "spell", type: "choose" },
+            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+          );
+          raisePlayTimeModeChoice(
+            draft,
+            choice.bindToChainItemId,
+            item.effect,
+            choice.playerId,
+            choice.sourceCardId as string,
+            buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+          );
+          return;
+        }
         // rule 355.5 / 811.1.b (ogn-213-298): a play-time target choice — lock
         // the pick onto the pending chain item and let priority proceed; the
         // effect runs (or mistargets) later, when that item resolves.

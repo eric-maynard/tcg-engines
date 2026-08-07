@@ -356,6 +356,13 @@ export interface BattlefieldState {
   combatDamageAllocation?: Record<string, number>;
 
   /**
+   * rule 465.2.c.3 — the DEFENDING player's chosen assignment of its combat
+   * damage onto the attackers here. Both sides assign simultaneously, so each
+   * answer needs its own slot (sharing one re-opens the prompt forever).
+   */
+  combatDefenderDamageAllocation?: Record<string, number>;
+
+  /**
    * Bonus to the number of cards a player may hide at this battlefield.
    *
    * Default hidden-capacity is 1 per player. Battlefields like Bandle Tree
@@ -451,6 +458,32 @@ export interface SetupState {
    * hidden from the other players until everyone has locked one in.
    */
   readonly battlefieldChoices?: Record<string, string>;
+}
+
+/** Outcome of one game of a Match (rule 486.5). */
+export interface MatchGameResult {
+  /** Winner of that game; absent when the game was drawn. */
+  readonly winner?: PlayerId;
+  /** rule 486.5.a — a drawn game does not count as used. */
+  readonly drawn?: boolean;
+}
+
+/**
+ * Match (best-of-three) record — rule 486.5 / 486.6.
+ *
+ * A Match is several games played with the same decks. The battlefields that
+ * were in play during a DECISIVE game are removed for the rest of the match
+ * (486.6), so each player's pool of three shrinks game by game and game 3 is
+ * forced onto the battlefield nobody has used yet. A drawn game re-presents the
+ * same battlefields instead (486.5.a).
+ */
+export interface MatchState {
+  /** 1-based number of the game currently being played. */
+  gameNumber: number;
+  /** Battlefield card ids that may no longer be selected this match (486.6). */
+  usedBattlefields: string[];
+  /** One entry per completed game, in order. */
+  results: MatchGameResult[];
 }
 
 /**
@@ -674,6 +707,18 @@ export interface ChooseTargetChoice {
    * item's `targets` instead of executing the effect immediately.
    */
   readonly bindToChainItemId?: string;
+  /**
+   * rule 355.8 / 820.2 (unl-182-219): the pick is the target of the mode
+   * locked in for the Nth `choice` node of that chain item's effect (nodes in
+   * execution order), so it is written onto that node, not onto the item.
+   */
+  readonly choiceNodeIndex?: number;
+  /**
+   * rule 820.2 (unl-182-219): set when this prompt was parked by a mode that
+   * was chosen at play time — it suspends the remaining [Repeat] executions
+   * exactly as a resolution-time mode prompt would.
+   */
+  readonly fromChosenMode?: boolean;
   /**
    * rule 359.3.f.3 (unl-112-219): the destination zone of the move that fired
    * the trigger — "…to THAT battlefield". Carried across the prompt so the
@@ -926,8 +971,10 @@ export interface WeaponmasterEquipChoice {
  */
 export interface CombatDamageChoice {
   readonly type: "combat-damage";
-  /** The assigning player (today: the attacker distributing onto defenders). */
+  /** The assigning player. */
   readonly playerId: PlayerId;
+  /** Which side of the combat this answer assigns for (465.2.c.3). */
+  readonly side?: "attacker" | "defender";
   readonly battlefieldId: string;
   /** Assignable target ids, in Tank → plain → Backline priority order. */
   readonly options: readonly CardId[];
@@ -1060,6 +1107,12 @@ export interface RiftboundGameState {
 
   /** Setup state (only present during setup phase) */
   readonly setup?: SetupState;
+
+  /**
+   * rule 486.5 / 486.6 — Match (best-of-three) record. Absent in a single
+   * game; written by the `startNextGame` move when a game of a match ends.
+   */
+  match?: MatchState;
 
   /** Chain & showdown interaction state */
   readonly interaction?: import("../chain/chain-state").TurnInteractionState;
