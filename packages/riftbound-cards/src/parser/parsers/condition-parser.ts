@@ -435,6 +435,19 @@ const IF_YOU_HAVE_PATTERN = /^(?:if|while) (you have .+?),?\s*$/i;
  * Returns the condition and remaining text
  */
 export function parseConditionFromText(text: string): ConditionParseResult | undefined {
+  // rule 364.3.a: "If you've gained XP this turn" is a real turn-scoped condition, not free text —
+  // without this it fell through to `custom`, which the engine treats as unconditionally true.
+  const xpGainedMatch = /^(?:If|While)\s+you(?:'ve|\s+have)?\s+gained\s+XP\s+this\s+turn,?\s*/i.exec(
+    text,
+  );
+  if (xpGainedMatch) {
+    return {
+      condition: { type: "xp-gained-this-turn" } as Condition,
+      remainingText: text.slice(xpGainedMatch[0].length),
+      startIndex: 0,
+    };
+  }
+
   // Try "While I'm [Mighty]"
   const whileMightyMatch = WHILE_MIGHTY_PATTERN.exec(text);
   if (whileMightyMatch) {

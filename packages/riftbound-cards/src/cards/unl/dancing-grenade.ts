@@ -1,7 +1,19 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { SpellCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+// rule 417/712: "Deal 2" is a flat Deal action — the trailing "for each time this spell has dealt
+// damage this turn" rider belongs to the [rainbow] replay, not to the printed 2. The generic parser
+// folds that "for each" into the first amount (2 x count(all units)), so the payload is explicit here.
+const abilities: Ability[] = [
+  {
+    effect: { amount: 2, target: { type: "unit" }, type: "damage" },
+    type: "spell",
+  } as unknown as Ability,
+];
+
 export const dancingGrenade: SpellCard = {
+  abilities,
   cardNumber: 20,
   cardType: "spell",
   domain: "fury",
