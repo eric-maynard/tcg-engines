@@ -8,11 +8,12 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  multiple units to my battlefield at the same time."
  *
  * Engine primitive: the `moveEscalation: true` marker on this unit instructs
- * the `standardMove` validator and reducer to apply a per-turn surcharge to
- * the active player's moves while Mageseeker Investigator is enemy-controlled
- * on the board. The surcharge is 1 rainbow energy per unit moved beyond the
- * first in a given turn, tracked via `state.unitsMovedThisTurn[playerId]`,
- * which resets at the start of each turn.
+ * the `standardMove` validator and reducer to apply an applied cost (rule
+ * 204.4) to an opponent's Standard Move whose DESTINATION is the battlefield
+ * this unit is currently at. The cost is [rainbow] per unit beyond the first
+ * in that single move (rule 445–447: separate single-unit moves are separate
+ * actions and cost nothing), paid from POWER of any domain and never energy
+ * (rule 135.2.e.5.a); an unpayable cost makes the move illegal (rule 203).
  *
  * The engine does not need an ability object for this effect; the rule is
  * applied directly from the `moveEscalation` flag on the card definition.

@@ -446,35 +446,38 @@ describe("Move escalation — Mageseeker Investigator", () => {
 
   /**
    * Drive `standardMove.condition` through a stub context with an enemy
-   * Mageseeker on a battlefield. The first move of the turn should be
-   * allowed (1 energy in pool is enough even though surcharge=0), the
-   * second move (ordinal=2) should require ≥1 energy surcharge, and a
-   * player with 0 energy should be rejected on their second move.
+   * Mageseeker at the DESTINATION battlefield. rule 204.4: moving two units
+   * there at the same time costs [rainbow] — POWER of any domain
+   * (135.2.e.5.a) — and rule 203 makes the move illegal when it cannot be
+   * paid. Energy in the pool is no substitute.
    */
-  test("standardMove condition rejects second move when opponent controls escalator and pool is empty", () => {
+  test("standardMove condition rejects a multi-unit move onto the escalator's battlefield with no power", () => {
     const state = createMockState({
       battlefields: {
         "bf-1": { contested: false, controller: "p1", id: "bf-1" },
       },
       runePools: {
-        p1: { energy: 0, power: {} },
+        p1: { energy: 5, power: {} },
         p2: { energy: 5, power: {} },
       },
-      unitsMovedThisTurn: { p1: 1, p2: 0 }, // P1 already moved one unit
+      unitsMovedThisTurn: { p1: 1, p2: 0 },
     });
 
-    // Zone layout: our moving unit on base, Mageseeker on battlefield bf-1
+    // Zone layout: our moving units on base, Mageseeker on battlefield bf-1
     const zoneMap: Record<string, string> = {
       mageseeker: "battlefield-bf-1",
       "moving-unit": "base",
+      "moving-unit-2": "base",
     };
     const ownerMap: Record<string, string> = {
       mageseeker: "p2",
       "moving-unit": "p1",
+      "moving-unit-2": "p1",
     };
     const exhaustedMap: Record<string, boolean> = {
       mageseeker: false,
       "moving-unit": false,
+      "moving-unit-2": false,
     };
 
     const condition = movementMoves.standardMove?.condition;
@@ -495,7 +498,7 @@ describe("Move escalation — Mageseeker Investigator", () => {
       params: {
         destination: "bf-1",
         playerId: "p1",
-        unitIds: ["moving-unit"],
+        unitIds: ["moving-unit", "moving-unit-2"],
       },
       zones: {
         getCardZone: (id: string) => zoneMap[id],
@@ -513,8 +516,8 @@ describe("Move escalation — Mageseeker Investigator", () => {
       },
     };
 
-    // P1 already moved 1 unit this turn; second move with Mageseeker
-    // In play costs 1 rainbow, but P1 has 0 energy → rejected.
+    // Two units at the same time onto the Mageseeker's battlefield cost one
+    // [rainbow]; P1 holds no power at all → rejected (rule 203).
     expect(condition(state, mockContext as unknown as Parameters<typeof condition>[1])).toBe(false);
   });
 
@@ -626,13 +629,13 @@ describe("Move escalation — Mageseeker Investigator", () => {
     expect(condition(state, mockContext as unknown as Parameters<typeof condition>[1])).toBe(true);
   });
 
-  test("standardMove reducer deducts surcharge and increments counter", () => {
+  test("standardMove reducer deducts the surcharge from POWER and increments the counter", () => {
     const state = createMockState({
       battlefields: {
         "bf-1": { contested: false, controller: "p1", id: "bf-1" },
       },
       runePools: {
-        p1: { energy: 3, power: {} },
+        p1: { energy: 3, power: { fury: 1 } },
         p2: { energy: 5, power: {} },
       },
       unitsMovedThisTurn: { p1: 1, p2: 0 },
@@ -641,10 +644,12 @@ describe("Move escalation — Mageseeker Investigator", () => {
     const zoneMap: Record<string, string> = {
       mageseeker: "battlefield-bf-1",
       "moving-unit": "base",
+      "moving-unit-2": "base",
     };
     const ownerMap: Record<string, string> = {
       mageseeker: "p2",
       "moving-unit": "p1",
+      "moving-unit-2": "p1",
     };
 
     const reducer = movementMoves.standardMove?.reducer;
@@ -670,13 +675,13 @@ describe("Move escalation — Mageseeker Investigator", () => {
       params: {
         destination: "bf-1",
         playerId: "p1",
-        unitIds: ["moving-unit"],
+        unitIds: ["moving-unit", "moving-unit-2"],
       },
       zones: {
         getCardZone: (id: string) => zoneMap[id],
         getCardsInZone: (zone: string) => {
           if (zone === "base") {
-            return ["moving-unit"];
+            return ["moving-unit", "moving-unit-2"];
           }
           if (zone === "battlefield-bf-1") {
             return ["mageseeker"];
@@ -694,10 +699,11 @@ describe("Move escalation — Mageseeker Investigator", () => {
       mockContext as unknown as Parameters<typeof reducer>[1],
     );
 
-    // 1 rainbow surcharge deducted
-    expect(state.runePools.p1?.energy).toBe(2);
+    // rule 135.2.e.5.a — the [rainbow] pip comes out of POWER, energy is untouched
+    expect(state.runePools.p1?.energy).toBe(3);
+    expect(state.runePools.p1?.power.fury).toBe(0);
     // Counter incremented
-    expect(state.unitsMovedThisTurn?.p1).toBe(2);
+    expect(state.unitsMovedThisTurn?.p1).toBe(3);
     // Unit moved and exhausted
     expect(movedTo["moving-unit"]).toBe("battlefield-bf-1");
     expect(exhausted["moving-unit"]).toBe(true);

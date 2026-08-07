@@ -17,11 +17,14 @@ import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../.
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import {
+  battlefieldAcceptsMoveFromAnywhere,
   getMoveEscalationSurcharge,
   hasKeyword,
   isAloneAtLocation,
   isBlockedByTwoOtherPlayers,
+  payMoveEscalationSurcharge,
   relocateAttachedEquipment,
+  totalPowerAvailable,
 } from "./helpers";
 
 /**
@@ -126,11 +129,15 @@ export const standardMove: Defs["standardMove"] = {
           zone === undefined ||
           !zone.startsWith("battlefield-") ||
           zone === `battlefield-${destination}` ||
-          !hasKeyword(
-            unitId,
-            "Ganking",
-            (id: CoreCardId) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
-          )
+          // rule 187.9 / unl-t01 — a destination with "Units can move here from
+          // anywhere" opens the battlefield→battlefield leg without Ganking.
+          (!battlefieldAcceptsMoveFromAnywhere(destination) &&
+            !hasKeyword(
+              unitId,
+              "Ganking",
+              (id: CoreCardId) =>
+                context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
+            ))
         ) {
           return false;
         }
@@ -145,22 +152,20 @@ export const standardMove: Defs["standardMove"] = {
       }
     }
 
-    // Rule: enemy move-escalation cards (e.g., Mageseeker Investigator)
-    // Charge the active player 1 rainbow per unit moved beyond the first
-    // In a single turn. Refuse the move if the pool can't cover it.
+    // rule 204.4 — an applied cost from an enemy move-escalation card
+    // (unl-163-219): [rainbow] per unit beyond the first when several units
+    // move to ITS battlefield at the same time. rule 203 — a cost that cannot
+    // be paid makes the action illegal; rule 135.2.e.5.a — POWER, not energy.
     const surcharge = getMoveEscalationSurcharge(
       state,
       playerId,
       unitIds.length,
-      (c) => context.zones.getCardZone(c) as string | undefined,
+      destination,
       (c) => context.cards.getCardOwner(c) as string | undefined,
       (z, p) => context.zones.getCardsInZone(z, p),
     );
-    if (surcharge > 0) {
-      const pool = state.runePools[playerId];
-      if (!pool || pool.energy < surcharge) {
-        return false;
-      }
+    if (surcharge > 0 && totalPowerAvailable(state, playerId) < surcharge) {
+      return false;
     }
 
     return true;
@@ -260,6 +265,9 @@ export const standardMove: Defs["standardMove"] = {
         continue;
       }
       const gankers: string[] = [];
+      // rule 187.9 / unl-t01 (Baron Pit) — "Units can move here from anywhere"
+      // lets any ready unit at another battlefield take this leg.
+      const acceptsFromAnywhere = battlefieldAcceptsMoveFromAnywhere(bfId);
       for (const otherBfId of Object.keys(state.battlefields || {})) {
         if (otherBfId === bfId) {
           continue;
@@ -274,7 +282,7 @@ export const standardMove: Defs["standardMove"] = {
           if (context.counters.getFlag(cardId, "exhausted")) {
             continue;
           }
-          if (!hasKeyword(cardId as string, "Ganking", metaAccessor)) {
+          if (!acceptsFromAnywhere && !hasKeyword(cardId as string, "Ganking", metaAccessor)) {
             continue;
           }
           // rule 350.1 / unl-150-219: "can't move it this turn".
@@ -339,21 +347,17 @@ export const standardMove: Defs["standardMove"] = {
     const { unitIds, destination, playerId } = context.params;
     const { zones, counters } = context;
 
-    // Pay the move-escalation surcharge (rule: Mageseeker Investigator)
+    // rule 204.4 / 135.2.e.5.a — pay the applied cost in POWER of any domain
+    // (unl-163-219 Mageseeker Investigator); energy is never touched.
     const surcharge = getMoveEscalationSurcharge(
       draft,
       playerId,
       unitIds.length,
-      (c) => context.zones.getCardZone(c) as string | undefined,
+      destination,
       (c) => context.cards.getCardOwner(c) as string | undefined,
       (z, p) => context.zones.getCardsInZone(z, p),
     );
-    if (surcharge > 0) {
-      const pool = draft.runePools[playerId];
-      if (pool) {
-        pool.energy = Math.max(0, pool.energy - surcharge);
-      }
-    }
+    payMoveEscalationSurcharge(draft, playerId, surcharge);
 
     const toBase = destination === "base";
     for (const unitId of unitIds) {

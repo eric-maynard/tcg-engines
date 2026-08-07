@@ -35,75 +35,84 @@ export function hasKeyword(
 }
 
 /**
- * Compute the total move-escalation surcharge imposed on `playerId` by
- * enemy-controlled board cards that declare `moveEscalation`.
+ * rule 204.4 (unl-163-219 Mageseeker Investigator) — an "applied cost" attached
+ * to a Standard Move: moving MULTIPLE units AT THE SAME TIME to the battlefield
+ * where an enemy `moveEscalation` card sits costs [rainbow] for each unit beyond
+ * the first in THAT move.
  *
- * For the Nth unit moved in a single turn (N > 1), the active player pays
- * 1 extra energy per escalator on the board. We only require one such
- * escalator to be present (Mageseeker Investigator is unique); multiple
- * escalators do not stack.
+ * rule 445–447: separate single-unit moves in the same turn are separate
+ * actions and are never taxed — the surcharge is per move action, not per turn.
+ * rule 106: "my battlefield" is the battlefield the escalator is currently at;
+ * an escalator in base (or at another battlefield) taxes nothing.
  *
- * Returns 0 if no enemy escalator exists on the board.
+ * The currency is POWER of any domain (rule 135.2.e.5.a), never energy — see
+ * `payMoveEscalationSurcharge`.
+ *
+ * Returns the number of [rainbow] pips owed for THIS move action.
  */
 export function getMoveEscalationSurcharge(
-  state: RiftboundGameState,
+  _state: RiftboundGameState,
   playerId: string,
   unitsToMove: number,
-  getCardZone: (cardId: CoreCardId) => string | undefined,
+  destination: string,
   getCardOwner: (cardId: CoreCardId) => string | undefined,
   getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[],
 ): number {
-  const registry = getGlobalCardRegistry();
-
-  let hasEscalation = false;
-
-  // Check enemy base cards
-  for (const otherId of Object.keys(state.players)) {
-    if (otherId === playerId) {
-      continue;
-    }
-    const baseCards = getCardsInZone("base" as CoreZoneId, otherId as CorePlayerId);
-    for (const cid of baseCards) {
-      if (registry.hasMoveEscalation(cid as string)) {
-        hasEscalation = true;
-        break;
-      }
-    }
-    if (hasEscalation) {
-      break;
-    }
-  }
-
-  // Check enemy battlefield cards
-  if (!hasEscalation) {
-    for (const bfId of Object.keys(state.battlefields ?? {})) {
-      const bfCards = getCardsInZone(`battlefield-${bfId}` as CoreZoneId);
-      for (const cid of bfCards) {
-        const owner = getCardOwner(cid);
-        if (owner && owner !== playerId && registry.hasMoveEscalation(cid as string)) {
-          hasEscalation = true;
-          break;
-        }
-      }
-      if (hasEscalation) {
-        break;
-      }
-    }
-  }
-
-  if (!hasEscalation) {
+  if (destination === "base" || unitsToMove < 2) {
     return 0;
   }
-
-  const alreadyMoved = state.unitsMovedThisTurn?.[playerId] ?? 0;
-  let surcharge = 0;
-  for (let i = 0; i < unitsToMove; i++) {
-    const ordinal = alreadyMoved + i + 1;
-    if (ordinal > 1) {
-      surcharge += 1;
+  const registry = getGlobalCardRegistry();
+  const zoneId = (
+    destination.startsWith("battlefield-") ? destination : `battlefield-${destination}`
+  ) as CoreZoneId;
+  for (const cid of getCardsInZone(zoneId)) {
+    const owner = getCardOwner(cid);
+    if (owner !== undefined && owner !== playerId && registry.hasMoveEscalation(cid as string)) {
+      return unitsToMove - 1;
     }
   }
-  return surcharge;
+  return 0;
+}
+
+/**
+ * rule 135.2.e.5.a — total POWER of any domain available to pay [rainbow] pips.
+ */
+export function totalPowerAvailable(state: RiftboundGameState, playerId: string): number {
+  const pool = state.runePools[playerId];
+  if (!pool) {
+    return 0;
+  }
+  return Object.values(pool.power ?? {}).reduce((sum, n) => sum + (n ?? 0), 0);
+}
+
+/**
+ * Pay `amount` [rainbow] pips out of `playerId`'s POWER (any domain, rule
+ * 135.2.e.5.a). Energy is never touched. Returns false — leaving the pool
+ * untouched — when the cost cannot be paid (rule 203 makes the action illegal).
+ */
+export function payMoveEscalationSurcharge(
+  draft: RiftboundGameState,
+  playerId: string,
+  amount: number,
+): boolean {
+  if (amount <= 0) {
+    return true;
+  }
+  const pool = draft.runePools[playerId];
+  if (!pool || totalPowerAvailable(draft, playerId) < amount) {
+    return false;
+  }
+  let remaining = amount;
+  for (const domain of Object.keys(pool.power ?? {})) {
+    if (remaining <= 0) {
+      break;
+    }
+    const have = pool.power[domain] ?? 0;
+    const take = Math.min(have, remaining);
+    pool.power[domain] = have - take;
+    remaining -= take;
+  }
+  return remaining === 0;
 }
 
 /**
@@ -177,4 +186,27 @@ export function relocateAttachedEquipment(
     }
     zones.moveCard({ cardId: equipId as CoreCardId, targetZoneId: toZone as CoreZoneId });
   }
+}
+
+/**
+ * rule 187.9 / unl-t01 (Baron Pit): "Units can move here from anywhere" is a
+ * property of the DESTINATION battlefield — it lifts the 144.4.b
+ * base↔battlefield restriction for moves TO it only, never for moves away.
+ */
+export function battlefieldAcceptsMoveFromAnywhere(battlefieldId: string): boolean {
+  const id = battlefieldId.startsWith("battlefield-")
+    ? battlefieldId.slice("battlefield-".length)
+    : battlefieldId;
+  const registry = getGlobalCardRegistry();
+  if (registry.hasKeyword(id, "AcceptsMoveFromAnywhere")) {
+    return true;
+  }
+  const abilities = (registry.getAbilities(id) ?? []) as {
+    effect?: { type?: string; keyword?: string };
+  }[];
+  return abilities.some(
+    (ability) =>
+      ability.effect?.type === "grant-keyword" &&
+      ability.effect?.keyword === "AcceptsMoveFromAnywhere",
+  );
 }

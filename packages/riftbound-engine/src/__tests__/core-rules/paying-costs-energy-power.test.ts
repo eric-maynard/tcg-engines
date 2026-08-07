@@ -536,7 +536,13 @@ describe("'Ignoring its cost' zeroes the base cost only; a chosen optional addit
 // ---------------------------------------------------------------------------
 
 describe("Applied Cost on a Standard Move (204.4, 204.4.b, 204.4.c, 429.3)", () => {
-  /** Enemy unit imposing the engine's applied move cost: each unit you move beyond the first this turn costs [1]. */
+  /**
+   * Enemy unit imposing the applied move cost of rule 204.4's own example
+   * (unl-163-219): moving MULTIPLE units to ITS battlefield at the same time
+   * costs [rainbow] — POWER of any domain (135.2.e.5.a), never energy — for
+   * each unit beyond the first. Separate single-unit moves are separate
+   * actions (445–447) and are never taxed.
+   */
   const INVESTIGATOR = fillerUnit(2, [], { domain: "order", might: 6, moveEscalation: true, name: "Investigator-alike (test)" });
   const build = () =>
     scenario()
@@ -547,15 +553,14 @@ describe("Applied Cost on a Standard Move (204.4, 204.4.b, 204.4.c, 429.3)", () 
       .unit(P1, "base", { might: 2 }, "W")
       .fillDecks({ main: 10, runes: 0 });
 
-  test("case A — with 1 Energy floating the taxed move is performed: 1 is paid as the move happens (no chain, no response window), the unit arrives exhausted", async () => {
-    const game = await build().resources(P1, { energy: 1 }).build();
-    await game.p1.move("W", "bfA"); // first move this turn: free
-    await game.settle();
+  test("case A — with 1 POWER floating the taxed two-unit move is performed: the pip is paid as the move happens (no chain, no response window), energy untouched, both units arrive exhausted", async () => {
+    const game = await build().resources(P1, { energy: 1, power: { fury: 1 } }).build();
+    await game.p1.move(["U", "W"], "bfB");
+    // rule 135.2.e.5.a — the applied cost is POWER of any domain, never energy.
     expect(game.p1.energy()).toBe(1);
-    expect(game.p1.legal().some((o) => o.key === "standardMove:to:bfB")).toBe(true);
-    await game.p1.move("U", "bfB");
-    expect(game.p1.energy()).toBe(0);
+    expect(game.p1.power("fury")).toBe(0);
     expect(game.locationOf("U")).toBe("bfB");
+    expect(game.locationOf("W")).toBe("bfB");
     expect(game.state("U").isExhausted).toBe(true);
     expect(game.chain()).toHaveLength(0); // the payment did not use the chain
     // What follows is the normal combat showdown at bfB, attacker (P1) with Focus first.
@@ -563,30 +568,34 @@ describe("Applied Cost on a Standard Move (204.4, 204.4.b, 204.4.c, 429.3)", () 
     expect(decisionOf(game)?.seat).toBe(P1);
   });
 
-  test("case B — with no Energy and no rune the taxed move cannot be performed at all: the unit stays READY in base and nothing is staged at the battlefield (204.4.c)", async () => {
-    const game = await build().build();
-    await game.p1.move("W", "bfA");
-    await game.settle();
-    expect(game.p1.energy()).toBe(0);
-    expect(game.p1.legal().some((o) => o.key === "standardMove:to:bfB")).toBe(false);
-    const r = await game.p1.try((p) => p.move("U", "bfB"));
+  test("case B — with no Power and no rune the taxed move cannot be performed at all: the units stay READY in base and nothing is staged at the battlefield (204.4.c)", async () => {
+    const game = await build().resources(P1, { energy: 5 }).build();
+    // rule 203 — an applied cost that cannot be paid makes the action illegal;
+    // energy cannot stand in for the [rainbow] pip.
+    const r = await game.p1.try((p) => p.move(["U", "W"], "bfB"));
     expect(r.ok).toBe(false);
     expect(game.locationOf("U")).toBe("base");
     expect(game.state("U").isReady).toBe(true); // exhaust-to-move was not spent on an impossible action
+    expect(game.p1.energy()).toBe(5);
     expect(game.gameState.battlefields.bfB?.contested).toBe(false);
     expect(game.gameState.battlefields.bfB?.controller).toBe(P2);
     expect(decisionOf(game)?.context).toBe("main");
+    // rule 445–447 — a single-unit move is not "multiple units at the same
+    // time", so it stays free.
+    await game.p1.move("U", "bfB");
+    expect(game.locationOf("U")).toBe("bfB");
+    expect(game.p1.energy()).toBe(5);
   });
 
-  test("case A′ — a READY rune tapped first (Reaction Add) pays the applied cost with an identical end state: rune exhausted, pool 0, unit at the battlefield", async () => {
+  test("case A′ — a READY rune recycled first (Reaction Add) pays the applied cost with an identical end state: pool empty, both units at the battlefield", async () => {
     const game = await build().rune(P1, "fury", { alias: "R" }).build();
-    await game.p1.move("W", "bfA");
-    await game.settle();
-    await game.p1.tapRune("R");
-    await game.p1.move("U", "bfB");
-    expect(game.state("R").isExhausted).toBe(true);
+    await game.p1.recycleRune("R");
+    expect(game.p1.power("fury")).toBe(1);
+    await game.p1.move(["U", "W"], "bfB");
+    expect(game.p1.power("fury")).toBe(0);
     expect(game.p1.energy()).toBe(0);
     expect(game.locationOf("U")).toBe("bfB");
+    expect(game.locationOf("W")).toBe("bfB");
     expect(game.chain()).toHaveLength(0);
   });
 
@@ -595,11 +604,10 @@ describe("Applied Cost on a Standard Move (204.4, 204.4.b, 204.4.c, 429.3)", () 
   // priority window. Actual: the engine only lists the move when the pool already covers the surcharge.
   test.failing("BUG: 204.4.b.1/429.3 — a taxed move is not offered when the pool is empty even though a ready rune could pay the applied cost during the move", async () => {
     const game = await build().rune(P1, "fury", { alias: "R" }).build();
-    await game.p1.move("W", "bfA");
-    await game.settle();
     expect(game.state("R").isReady).toBe(true);
     expect(game.p1.energy()).toBe(0);
-    expect(game.p1.legal().some((o) => o.key === "standardMove:to:bfB")).toBe(true);
+    const r = await game.p1.try((p) => p.move(["U", "W"], "bfB"));
+    expect(r.ok).toBe(true);
   });
 });
 
