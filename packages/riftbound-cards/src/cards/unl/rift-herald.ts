@@ -18,7 +18,15 @@ const playFromHand = {
 
 const abilities: Ability[] = [
   {
-    effect: { amount: 3, from: "deck", type: "look" },
+    // rule 383.3.a.3: "you MAY reveal a UNIT from among them and draw it" — the
+    // pick is unit-only and declinable; the rest are recycled either way.
+    effect: {
+      amount: 3,
+      filter: { cardTypes: ["unit"] },
+      from: "deck",
+      optional: true,
+      type: "look",
+    },
     trigger: { event: "move-to-battlefield", on: "self" },
     type: "triggered",
   },
