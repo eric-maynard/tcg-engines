@@ -162,7 +162,7 @@ describe("Sea Monkey (sfd-098-221)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: while P1 still holds priority over the pending play trigger, P2's Reaction is not yet legal (one decision cursor at a time)", async () => {
+  test("while P1 still holds priority over the pending play trigger, P2's Reaction is not yet legal (one decision cursor at a time)", async () => {
     // Expected: right after the paid play only P1 may act; P2 gets priority once P1 passes.
     // Actual: the `singleDecisionCursor` invariant reports priority-class moves legal for both seats.
     const game = await scenario().resources(P1, { energy: 3 }).hand(P1, CARD, "monkey").hand(P2, ZAP, "zap").build();

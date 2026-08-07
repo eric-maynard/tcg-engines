@@ -20,12 +20,14 @@ import {
   addToChain,
   createInteractionState,
   getTurnState,
+  hasChainPriorityPermission,
   hasShowdownPermission,
   isLegalTiming,
 } from "../../../chain";
 import type { TimingClass } from "../../../chain";
 import { isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { removeFromBoard } from "../../../operations/leave-board";
 import { executeEffect } from "../../../abilities/effect-executor";
 import type { CostExtras } from "./cost";
 import {
@@ -402,6 +404,13 @@ export const playSpell: Defs["playSpell"] = {
       return false;
     }
 
+    // rule 312.2.c-d / 338.1.b.1: in a Closed State only the Priority holder
+    // may add to the chain — [Reaction] timing is no permission to act out of
+    // turn with Priority elsewhere.
+    if (!hasChainPriorityPermission(interaction, context.params.playerId)) {
+      return false;
+    }
+
     // rule 313.1 / 347: in a Showdown Open State only the Focus holder may
     // play cards; everyone else waits for Focus to pass.
     if (turnState === "showdown-open" && !hasShowdownPermission(interaction, context.params.playerId)) {
@@ -564,8 +573,11 @@ export const playSpell: Defs["playSpell"] = {
       const pairEffect = spellAbility?.effect as
         | { type?: string; target1?: unknown; target2?: unknown }
         | undefined;
-      const t1 = pairEffect?.type === "swap-might" ? pairEffect.target1 : undefined;
-      const t2 = pairEffect?.type === "swap-might" ? pairEffect.target2 : undefined;
+      // rule-id: unl-083-219 — `swap-locations` names the same two-target shape.
+      const isPairEffect =
+        pairEffect?.type === "swap-might" || pairEffect?.type === "swap-locations";
+      const t1 = isPairEffect ? pairEffect?.target1 : undefined;
+      const t2 = isPairEffect ? pairEffect?.target2 : undefined;
       const supplied = (context.params.targets ?? []) as string[];
       if (
         typeof t1 === "object" &&
@@ -592,6 +604,15 @@ export const playSpell: Defs["playSpell"] = {
             : conditionResolverCtx,
         ) as string[];
         if (!secondPool.includes(supplied[1] as string)) {
+          return false;
+        }
+        // rule-id: unl-083-219 (rule 355.8) — "…and another unit you control
+        // at a DIFFERENT location": swapping locations is only a legal choice
+        // for two units that are not already in the same zone.
+        if (
+          pairEffect?.type === "swap-locations" &&
+          context.zones.getCardZone(supplied[1] as CoreCardId) === zone
+        ) {
           return false;
         }
       }
@@ -719,6 +740,10 @@ export const playSpell: Defs["playSpell"] = {
     const turnState = getTurnState(interaction);
     // rule 316.5.b: Neutral Open State → only the Turn Player plays spells.
     if (turnState === "neutral-open" && state.turn.activePlayer !== (context.playerId as string)) {
+      return [];
+    }
+    // rule 312.2.c-d: Closed State → only the Priority holder may add an item.
+    if (!hasChainPriorityPermission(interaction, context.playerId as string)) {
       return [];
     }
     // rule 313.1 / 347: Showdown Open State → only the Focus holder acts.
@@ -934,7 +959,10 @@ export const playSpell: Defs["playSpell"] = {
       // names TWO caster-chosen targets through `target1`/`target2` (Swap only —
       // `increase-might-to` picks programmatically). Enumerate
       // one Play per legal pair so both are locked on the chain item.
-      const isSwap = spellEffect?.type === "swap-might";
+      // rule-id: unl-083-219 — `swap-locations` (Smoke and Mirrors) uses the
+      // same two-caster-chosen-target shape.
+      const isSwap =
+        spellEffect?.type === "swap-might" || spellEffect?.type === "swap-locations";
       const pairFirst =
         isSwap && typeof spellEffect?.target1 === "object" && spellEffect.target1 !== null
           ? (spellEffect.target1 as { quantity?: unknown; location?: string })
@@ -1114,7 +1142,10 @@ export const playSpell: Defs["playSpell"] = {
         );
         // rule 433.1 — Swap is symmetric, so [a,b] and [b,a] are the same
         // play; a directional pair (increase-might-to) keeps both orders.
-        const symmetric = spellEffect?.type === "swap-might";
+        const symmetric =
+          spellEffect?.type === "swap-might" || spellEffect?.type === "swap-locations";
+        // rule-id: unl-083-219 — a location swap needs two DIFFERENT locations.
+        const needDifferentZones = spellEffect?.type === "swap-locations";
         const seenPairs = new Set<string>();
         for (const a of firsts) {
           const zone = context.zones.getCardZone(a as CoreCardId);
@@ -1126,6 +1157,9 @@ export const playSpell: Defs["playSpell"] = {
           );
           for (const b of seconds) {
             if (b === a) continue;
+            if (needDifferentZones && context.zones.getCardZone(b as CoreCardId) === zone) {
+              continue;
+            }
             if (symmetric) {
               const key = [a as string, b as string].sort().join("|");
               if (seenPairs.has(key)) continue;
@@ -1621,6 +1655,10 @@ export const playSpell: Defs["playSpell"] = {
       if (turnState === "neutral-open" && state.turn.activePlayer !== (context.playerId as string)) {
         continue;
       }
+      // rule 312.2.c-d: Closed State → only the Priority holder may add an item.
+      if (!hasChainPriorityPermission(interaction, context.playerId as string)) {
+        continue;
+      }
       // rule 313.1 / 347: Showdown Open State → only the Focus holder acts.
       if (turnState === "showdown-open" && !hasShowdownPermission(interaction, context.playerId as string)) {
         continue;
@@ -1755,7 +1793,14 @@ export const playSpell: Defs["playSpell"] = {
           zones.getCardZone(discardId as CoreCardId) === "hand" &&
           context.cards.getCardOwner(discardId as CoreCardId) === playerId
         ) {
-          zones.moveCard({ cardId: discardId as CoreCardId, targetZoneId: "trash" as CoreZoneId });
+          // rule 422 — a discard paid as a cost is still a discard event.
+          removeFromBoard(
+            { cards: context.cards, counters: context.counters, draft, zones },
+            [discardId as string],
+            "trash",
+            { by: playerId, kind: "discard", source: cardId as string, sourceKind: "spell" },
+            (event) => fireTriggers(event, { cards: context.cards, counters: context.counters, draft, zones }),
+          );
           exhaustCostPaid = true;
         }
       } else if (optional?.kind === "pay") {

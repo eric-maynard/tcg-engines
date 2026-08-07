@@ -179,7 +179,7 @@ describe("Premonition (sfd-087-221)", () => {
     expect(game.p1.hand()).toHaveLength(4);
   });
 
-  test.failing("BUG: 'any time' still needs priority (312.1 / 312.2.c–d) — right after P2's Cleave is finalized P2 holds priority, so P1 may not cast yet", async () => {
+  test("'any time' still needs priority (312.1 / 312.2.c–d) — right after P2's Cleave is finalized P2 holds priority, so P1 may not cast yet", async () => {
     // Expected: with Cleave just added and P2 not yet passed, P1 has no priority-class option; only after
     // P2 passes does Premonition become legal. Actual: the engine offers (and accepts) P1's Reaction
     // immediately, and the harness records a singleDecisionCursor violation.

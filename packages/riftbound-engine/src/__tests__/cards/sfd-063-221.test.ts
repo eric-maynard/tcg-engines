@@ -97,7 +97,7 @@ describe("Chemtech Cask (sfd-063-221)", () => {
     expect(game.turnPlayer()).toBe(P2);
   });
 
-  test.failing("BUG: priority is exclusive (312.2) — while P2 still holds priority over its own Slow Draw, P1's [Reaction] must not yet be legal", async () => {
+  test("priority is exclusive (312.2) — while P2 still holds priority over its own Slow Draw, P1's [Reaction] must not yet be legal", async () => {
     // Expected: right after P2 finalizes Slow Draw, P2 has priority; P1 may react only once P2 passes.
     // Actual: both seats have priority-class moves at once (singleDecisionCursor invariant fires).
     const game = await oppTurn().build();

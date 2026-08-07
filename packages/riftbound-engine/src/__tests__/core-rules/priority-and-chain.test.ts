@@ -305,7 +305,7 @@ describe("Playing a spell creates a Chain, closes the state, and its CONTROLLER 
     expect(chainIds(game)).toEqual(["s1"]);
   });
 
-  test.failing("BUG: 312 / 312.2.c-d / 337.4 / 338.1 — engine lets the NON-priority player play a Reaction while the item's controller still holds Priority", async () => {
+  test("312 / 312.2.c-d / 337.4 / 338.1 — engine lets the NON-priority player play a Reaction while the item's controller still holds Priority", async () => {
     // Expected: right after P1 finalizes S1, P1 (controller) alone has Priority; P2 may act only
     // once P1 passes (312.2.d, 338.1.b.1). Actual: playSpell's Closed-state gate checks timing only,
     // so P2's Reaction is enumerated AND executes (chain becomes [s1, p2react], priority jumps to P2).

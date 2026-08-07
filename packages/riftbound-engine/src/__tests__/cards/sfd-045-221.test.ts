@@ -88,7 +88,7 @@ describe("Not So Fast (sfd-045-221)", () => {
     expect(game.zoneOf("nsf")).toBe("trash");
   });
 
-  test.failing("BUG: priority — right after P1 casts (before passing) P1 still holds priority (337.1.a), so P2 must NOT yet be offered Not So Fast (312.1)", async () => {
+  test("priority — right after P1 casts (before passing) P1 still holds priority (337.1.a), so P2 must NOT yet be offered Not So Fast (312.1)", async () => {
     // Expected: P2's menu has no playSpell until P1 passes. Actual: the Reaction is enumerated for
     // P2 immediately (harness invariant singleDecisionCursor also flags it).
     const game = await board().build();

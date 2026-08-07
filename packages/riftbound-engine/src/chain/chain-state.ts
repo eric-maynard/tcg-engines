@@ -52,6 +52,12 @@ export interface ChainItem {
   /** Rule 583 (unl-021-219): "you may" trigger — controller opts in on resolve */
   readonly optional?: boolean;
   /**
+   * rule 383.3.a.3 (rule-id: sfd-120-221) — the "you may" is a later part of
+   * the effect, so it is decided on RESOLUTION: this item is never offered the
+   * finalization opt-in and always reaches the chain.
+   */
+  readonly optionalOnResolution?: boolean;
+  /**
    * rule-id: sfd-119-221 — "you may pay [N] to …" trigger: the cost the
    * controller must pay on opt-in ({ energy?, power?, exhaust? }). Accepting
    * is only legal when affordable, and the cost is deducted before the effect.
@@ -223,6 +229,34 @@ export function hasShowdownPermission(
     return true;
   }
   return showdown.focusPlayer === playerId;
+}
+
+/**
+ * rule 312 / 312.2.c-d / 338.1.b.1: Priority is exclusive. While a chain exists
+ * (a Closed State) only the player who currently holds Priority may add another
+ * item to it; every other Relevant Player waits until Priority is passed to
+ * them. Outside a chain this is not the gate (turn player / Focus holder is).
+ */
+export function holdsChainPriority(
+  interaction: TurnInteractionState,
+  playerId: string,
+): boolean {
+  const chain = interaction.chain;
+  return chain?.active === true && chain.activePlayer === playerId;
+}
+
+/**
+ * rule 312.2.c-d: a Discretionary Action taken while a chain is open requires
+ * Priority. True when there is no chain (some other rule gates the action).
+ */
+export function hasChainPriorityPermission(
+  interaction: TurnInteractionState,
+  playerId: string,
+): boolean {
+  if (!interaction.chain?.active) {
+    return true;
+  }
+  return interaction.chain.activePlayer === playerId;
 }
 
 /**

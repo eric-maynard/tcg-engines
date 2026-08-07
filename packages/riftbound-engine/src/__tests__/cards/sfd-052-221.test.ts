@@ -169,7 +169,7 @@ describe("Heart of Dark Ice (sfd-052-221)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: right after activation exactly one seat should hold priority — the engine offers priority-class moves to BOTH players", async () => {
+  test("right after activation exactly one seat should hold priority — the engine offers priority-class moves to BOTH players", async () => {
     // Expected: activating puts the ability on the chain and a single player has priority (the
     // singleDecisionCursor invariant stays clean). Actual: at seq 1 both player-1 and player-2
     // have legal priority-class moves while a P2 Reaction is in hand.

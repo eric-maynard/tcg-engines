@@ -12,6 +12,7 @@ import {
   addToChain,
   createInteractionState,
   getTurnState,
+  hasChainPriorityPermission,
   hasShowdownPermission,
   isLegalTiming,
 } from "../../../chain";
@@ -603,6 +604,11 @@ export const activateAbility: Defs["activateAbility"] = {
       if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
         return false;
       }
+      // rule 312.2.c-d / 338.1.b.1: Closed State → only the Priority holder
+      // may add another item to the chain.
+      if (!hasChainPriorityPermission(interaction, playerId)) {
+        return false;
+      }
       // rule 313.1 / 347: in a Showdown Open State only the Focus holder acts.
       if (turnState === "showdown-open" && !hasShowdownPermission(interaction, playerId)) {
         return false;
@@ -974,6 +980,10 @@ export const activateAbility: Defs["activateAbility"] = {
         if (!payXPrompt) {
           // rule 316.5.b: Neutral Open State → only the Turn Player activates.
           if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
+            continue;
+          }
+          // rule 312.2.c-d: Closed State → only the Priority holder may act.
+          if (!hasChainPriorityPermission(interaction, playerId)) {
             continue;
           }
           // rule 313.1 / 347: Showdown Open State → only the Focus holder acts.
@@ -1356,7 +1366,18 @@ export const activateAbility: Defs["activateAbility"] = {
           named && named.length === recycleSpec.amount
             ? named
             : (eligible.slice(0, recycleSpec.amount) as readonly string[]);
-        for (const id of toRecycle) {
+        // rule 416.5: cards recycled simultaneously go to the bottom in a
+        // RANDOM order — the payer must not be able to stack the deck bottom
+        // by choosing (or by relying on) the trash order.
+        const ordered = [...toRecycle];
+        for (let i = ordered.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const a = ordered[i] as string;
+          const b = ordered[j] as string;
+          ordered[i] = b;
+          ordered[j] = a;
+        }
+        for (const id of ordered) {
           context.zones.moveCard({
             cardId: id as CoreCardId,
             position: "bottom",

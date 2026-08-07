@@ -178,7 +178,7 @@ describe("Lucian, Merciless (sfd-113-221)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: while P1 holds priority over Lucian's pending conquer trigger, P2 is also offered its [Reaction] (312.2 — only the priority holder may play)", async () => {
+  test("while P1 holds priority over Lucian's pending conquer trigger, P2 is also offered its [Reaction] (312.2 — only the priority holder may play)", async () => {
     // Expected: right after the conquer, the trigger is on the chain and P1 (its controller) alone
     // has priority; P2 may react only once P1 passes. Actual: P2's reaction is legal at the same
     // time (the harness' singleDecisionCursor invariant fires).
