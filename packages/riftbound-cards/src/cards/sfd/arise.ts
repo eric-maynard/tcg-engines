@@ -24,15 +24,17 @@ const abilities: Ability[] = [
           type: "for-each",
         },
         {
+          // rule 359.3.e.14 — "them" is linked to the tokens THIS spell
+          // played, so the ready step reads the sequence's pending value
+          // instead of scanning the board for Sand Soldiers.
           target: {
-            controller: "friendly",
-            filter: { tag: "Sand Soldier" },
             quantity: { upTo: 2 },
-            type: "unit",
+            type: "pending-value",
           },
           type: "ready",
         },
       ],
+      pendingValue: { source: 0 },
       type: "sequence",
     },
     timing: "action",

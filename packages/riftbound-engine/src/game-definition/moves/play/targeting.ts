@@ -115,7 +115,12 @@ export function findSequenceLeadTarget(
   effect: SpellEffectTargetShape | undefined,
 ): SpellEffectTargetDescriptor | undefined {
   const slots = collectSequenceTargetSlots(effect);
-  if (slots?.length === 1) return slots[0];
+  // rule 355.10.d (rule-id: sfd-198-221) — "…for each Equipment you control"
+  // COUNTS a pool, it never asks the caster to choose, so a lone for-each
+  // descriptor is not a play-time target (and an empty pool is still castable).
+  if (slots?.length === 1 && !isForEachOnlyTarget(effect, slots[0] as SlotDescriptor)) {
+    return slots[0];
+  }
   // rule-id: ogn-266-298 (rule 355.8) — "Choose a battlefield. …friendly
   // units there… enemy units there…": several all-at-one-battlefield steps
   // share ONE play-time battlefield choice, so the first names it.
@@ -126,6 +131,29 @@ export function findSequenceLeadTarget(
 }
 
 type SlotDescriptor = Exclude<SpellEffectTargetDescriptor, string>;
+
+/** True when `slot` is only ever named by a `for-each` step (a counted pool). */
+function isForEachOnlyTarget(
+  effect: SpellEffectTargetShape | undefined,
+  slot: SlotDescriptor,
+): boolean {
+  let sawForEach = false;
+  const walk = (effects: SpellEffectTargetShape[] | undefined): boolean => {
+    for (const sub of effects ?? []) {
+      if (sub?.type === "sequence") {
+        if (walk(sub.effects)) return true;
+        continue;
+      }
+      const t = sub?.target;
+      if (t === undefined || typeof t === "string") continue;
+      if (JSON.stringify(t) !== JSON.stringify(slot)) continue;
+      if (sub.type !== "for-each") return true;
+      sawForEach = true;
+    }
+    return false;
+  };
+  return walk(effect?.effects) ? false : sawForEach;
+}
 
 /** True when `t` is an anaphoric restatement of `slot` (no conflicting keys). */
 export function isRestatementOf(slot: SlotDescriptor, t: SlotDescriptor): boolean {

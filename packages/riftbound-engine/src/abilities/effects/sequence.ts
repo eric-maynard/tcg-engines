@@ -24,7 +24,8 @@ type SubTarget = { type?: string; location?: string } | string | undefined;
  */
 type SequenceSlots = {
   readonly slots: readonly Record<string, unknown>[];
-  readonly bound: readonly string[];
+  /** A hole means that slot's locked pick became illegal before resolution. */
+  readonly bound: readonly (string | undefined)[];
 };
 
 const isSameLocationTarget = (t: SubTarget): boolean =>
@@ -173,6 +174,28 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       sourceZone: ctx.sourceZone,
       zones: ctx.zones,
     };
+    // rule 359.3.e.5 (rule-id: sfd-200-221) — a locked pick that became illegal
+    // before resolution is dropped from the chain item's list, so POSITION no
+    // longer identifies the slot ([friendly, enemy] with the friendly gone would
+    // hand the enemy to the friendly step). Re-align each surviving id with the
+    // slot whose descriptor it still satisfies and skip the vacated slot's step.
+    const vacatedSlots = new Set<number>();
+    if (seqSlots !== undefined && seqSlots.bound.length < seqSlots.slots.length) {
+      const remaining = [...seqSlots.bound];
+      const aligned = seqSlots.slots.map((slot, slotIdx) => {
+        const pool = resolveTarget({ ...(slot as TargetDescriptor), quantity: "all" }, {
+          ...resolverCtx,
+          choosing: true,
+        } as Parameters<typeof resolveTarget>[1]);
+        const k = remaining.findIndex((id) => id !== undefined && pool.includes(id));
+        if (k < 0) {
+          vacatedSlots.add(slotIdx);
+          return undefined;
+        }
+        return remaining.splice(k, 1)[0];
+      });
+      seqSlots = { bound: aligned, slots: seqSlots.slots };
+    }
     // rule-id: ogn-262-298 (rule 355.4) — "…move a friendly unit to THAT enemy
     // unit's battlefield": the destination step's zone comes from an earlier
     // step's chosen target, so capture that zone and thread it as `sameZone`.
@@ -257,6 +280,15 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         // left unchosen selects nothing; the step is skipped rather than
         // re-resolved from the board.
         if (j >= 0 && id === undefined) {
+          // rule 359.3.e.5 — the slot's pick is gone: the instruction is
+          // skipped, never re-resolved against the rest of the board. A skipped
+          // source step leaves any later `pending-value` step empty (354.2).
+          if (vacatedSlots.has(j)) {
+            if (seq.pendingValue?.source === i) {
+              pending = [];
+            }
+            continue;
+          }
           const q = (seqSlots.slots[j] as { quantity?: { upTo?: number } }).quantity;
           if (typeof q === "object" && q !== null && q.upTo !== undefined) {
             continue;
@@ -286,7 +318,10 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // take the pending value from what it actually played.
       let playedSink: { ids: string[] } | undefined;
       if (seq.pendingValue?.source === i) {
-        pending = getTargetIds(sub, subCtx);
+        // rule-id: sfd-198-221 (rule 354.2) — a `for-each` source step's own
+        // targets are what it COUNTS ("for each Equipment you control"), not
+        // what it produced, so its pending value comes from the sink only.
+        pending = sub.type === "for-each" ? [] : getTargetIds(sub, subCtx);
         subCtx = { ...subCtx, boundTargets: pending };
         if (pending.length === 0) {
           playedSink = { ids: [] };
@@ -382,16 +417,25 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // silently auto-picking. The rest of the sequence rides on the prompt's
       // `then` so it still runs after the pick (or the decline).
       const upToN = (subTarget as { quantity?: { upTo?: number } } | undefined)?.quantity?.upTo;
+      // rule 359.3.e.14 (rule-id: sfd-198-221) — "Ready up to two of THEM":
+      // the choice is made among the pending value only (the tokens this
+      // sequence just played), never a fresh board scan.
+      const pvOptions =
+        typeof subTarget === "object" && subTarget?.type === "pending-value" && pending
+          ? [...pending]
+          : undefined;
       if (
         typeof subTarget === "object" &&
         typeof upToN === "number" &&
-        subCtx.boundTargets === undefined &&
+        (subCtx.boundTargets === undefined || pvOptions !== undefined) &&
         ctx.draft.pendingChoice === undefined
       ) {
-        const options = resolveTarget(
-          { ...(subTarget as TargetDescriptor), quantity: "all" },
-          { ...resolverCtx, choosing: true } as Parameters<typeof resolveTarget>[1],
-        );
+        const options =
+          pvOptions ??
+          resolveTarget(
+            { ...(subTarget as TargetDescriptor), quantity: "all" },
+            { ...resolverCtx, choosing: true } as Parameters<typeof resolveTarget>[1],
+          );
         if (options.length > 0) {
           const rest = seq.effects.slice(i + 1);
           ctx.draft.pendingChoice = {

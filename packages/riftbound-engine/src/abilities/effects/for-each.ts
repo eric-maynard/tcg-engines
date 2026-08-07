@@ -10,7 +10,10 @@ export function handle_forEach(effect: ExecutableEffect, ctx: EffectContext, h: 
   const forEachTarget = (effect as unknown as { target?: TargetDescriptor }).target;
   const forEachEffect = (effect as unknown as { effect?: ExecutableEffect }).effect;
   if (forEachTarget && forEachEffect) {
-    const targets = resolveTarget(forEachTarget, {
+    // rule-id: sfd-198-221 — "for each Equipment you control" counts EVERY
+    // match, so the descriptor is resolved as an exhaustive pool; the default
+    // quantity of 1 would repeat the effect only once.
+    const targets = resolveTarget({ ...forEachTarget, quantity: "all" }, {
       cards: ctx.cards,
       draft: ctx.draft,
       playerId: ctx.playerId,
