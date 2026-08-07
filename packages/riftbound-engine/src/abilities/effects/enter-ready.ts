@@ -8,5 +8,13 @@ export function handle_enterReady(effect: ExecutableEffect, ctx: EffectContext, 
   const enterTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
   for (const targetId of enterTargets) {
     ctx.counters.setFlag(targetId as CoreCardId, "exhausted", false);
+    // rule 805.2.b — the unit is ready, whichever representation carried the
+    // exhausted state: seeded positions and effect-driven plays write the
+    // legacy top-level `exhausted` meta, which the counter flag alone leaves
+    // set (mirrors `effects/ready.ts`).
+    const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as { exhausted?: boolean } | undefined;
+    if (meta?.exhausted === true) {
+      ctx.cards.updateCardMeta?.(targetId as CoreCardId, { exhausted: false } as Record<string, unknown>);
+    }
   }
 }
