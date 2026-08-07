@@ -33,7 +33,7 @@
  *
  * Engine status when this file was written: the parser drops the whole activated ability (it emits a
  * stray costless `{type:"spell", effect: gain-xp 1}` next to the enters-exhausted static), so every
- * activation clause below is a `test.failing("BUG: …")` that flips once the ability exists and resolves
+ * activation clause below is a `test("…")` that flips once the ability exists and resolves
  * in printed order.
  */
 
@@ -83,7 +83,7 @@ describe("Scryer's Bloom (unl-136-219)", () => {
     expect((await scenario().resources(P1, { energy: 0, power: { chaos: 3 } }).hand(P1, CARD, "b").build()).p1.can("play", "b")).toBe(false);
   });
 
-  test.failing("BUG: unusable the turn it is played (enters exhausted), readies at P1's next Awaken and is THEN activatable with 1 energy — the 'Kill this, [1], [Exhaust]' activated ability is not parsed, so it is never offered", async () => {
+  test("unusable the turn it is played (enters exhausted), readies at P1's next Awaken and is THEN activatable with 1 energy — the 'Kill this, [1], [Exhaust]' activated ability is not parsed, so it is never offered", async () => {
     const game = await scenario().resources(P1, { energy: 2 }).hand(P1, CARD, "bloom").build();
     await game.p1.play("bloom");
     await game.settle();
@@ -98,7 +98,7 @@ describe("Scryer's Bloom (unl-136-219)", () => {
     expect(game.p1.can("activate", "bloom")).toBe(true);
   });
 
-  test.failing("BUG: all three costs gate it — ready + 1 energy → legal; ready + 0 energy → not; exhausted + energy → not (activated ability missing: never legal)", async () => {
+  test("all three costs gate it — ready + 1 energy → legal; ready + 0 energy → not; exhausted + energy → not (activated ability missing: never legal)", async () => {
     expect((await ready(1).build()).p1.can("activate", "bloom")).toBe(true);
     expect((await ready(0).build()).p1.can("activate", "bloom")).toBe(false);
     const tapped = await scenario().resources(P1, { energy: 3 }).gear(P1, CARD, "bloom", { exhausted: true }).build();
@@ -108,7 +108,7 @@ describe("Scryer's Bloom (unl-136-219)", () => {
     expect(tapped.p1.energy()).toBe(3);
   });
 
-  test.failing("BUG: activation pays [1] + kills the Bloom up front, goes on the chain, then Predict 2 shows exactly a,b with hand/XP untouched; keeping both draws a, +1 XP (activated ability missing; and 'THEN draw 1' must wait for the predict)", async () => {
+  test("activation pays [1] + kills the Bloom up front, goes on the chain, then Predict 2 shows exactly a,b with hand/XP untouched; keeping both draws a, +1 XP (activated ability missing; and 'THEN draw 1' must wait for the predict)", async () => {
     // Expected (203.1 / 436 / 730.1): costs paid up front → chain item → predict prompt over a,b with hand and
     // XP untouched → keep both → draw a → b,c on top → +1 XP. Actual: at the prompt the hand already holds a
     // and XP is already 1; the follow-up order prompt then offers b AND c.
@@ -140,7 +140,7 @@ describe("Scryer's Bloom (unl-136-219)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: Predict 2 — recycle the top card (a → bottom), keep b → 'then draw 1' draws b and c becomes the top card (activated ability missing)", async () => {
+  test("Predict 2 — recycle the top card (a → bottom), keep b → 'then draw 1' draws b and c becomes the top card (activated ability missing)", async () => {
     const game = await ready(1).build();
     const deck0 = game.p1.deck().length;
     await crack(game);
@@ -158,7 +158,7 @@ describe("Scryer's Bloom (unl-136-219)", () => {
     expect(game.p1.xp()).toBe(1);
   });
 
-  test.failing("BUG: Predict 2 — recycle BOTH → a and b go to the bottom, the draw takes c (activated ability missing)", async () => {
+  test("Predict 2 — recycle BOTH → a and b go to the bottom, the draw takes c (activated ability missing)", async () => {
     const game = await ready(1).build();
     await crack(game);
     const d = game.decision();
@@ -179,7 +179,7 @@ describe("Scryer's Bloom (unl-136-219)", () => {
     expect(game.p1.xp()).toBe(1);
   });
 
-  test.failing("BUG: Predict 2 — keep both but put them back as b, a → the draw takes b, a is the new top (436.1.a 'in any order'; activated ability missing)", async () => {
+  test("Predict 2 — keep both but put them back as b, a → the draw takes b, a is the new top (436.1.a 'in any order'; activated ability missing)", async () => {
     const game = await ready(1).build();
     await crack(game);
     await game.p1.decline();
@@ -193,7 +193,7 @@ describe("Scryer's Bloom (unl-136-219)", () => {
     expect(game.p1.xp()).toBe(1);
   });
 
-  test.failing("BUG: XP stacks with what you had (4 → 5) and exactly one card is drawn even with an empty hand (activated ability missing)", async () => {
+  test("XP stacks with what you had (4 → 5) and exactly one card is drawn even with an empty hand (activated ability missing)", async () => {
     const game = await ready(1).xp(P1, 4).build();
     await crack(game);
     await game.p1.decline();
@@ -204,7 +204,7 @@ describe("Scryer's Bloom (unl-136-219)", () => {
     expect(game.p2.hand()).toHaveLength(0);
   });
 
-  test.failing("BUG: timing (151.2) — legal in your open Main Phase, but NOT with Focus inside a showdown and NOT on the opponent's turn (activated ability missing: the first, positive expectation fails)", async () => {
+  test("timing (151.2) — legal in your open Main Phase, but NOT with Focus inside a showdown and NOT on the opponent's turn (activated ability missing: the first, positive expectation fails)", async () => {
     const open = await ready(2).build();
     expect(open.p1.can("activate", "bloom")).toBe(true);
 
@@ -229,7 +229,7 @@ describe("Scryer's Bloom (unl-136-219)", () => {
     expect(game.zoneOf("bloom")).toBe("base");
   });
 
-  test.failing("BUG: registry payload should be [static enters-exhausted, activated {cost: kill self + 1 energy + exhaust} → sequence(predict 2, draw 1, gain-xp 1)]; the parser emits a stray costless `spell: gain-xp 1` in place of the activated ability", async () => {
+  test("registry payload should be [static enters-exhausted, activated {cost: kill self + 1 energy + exhaust} → sequence(predict 2, draw 1, gain-xp 1)]; the parser emits a stray costless `spell: gain-xp 1` in place of the activated ability", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "gear", domain: "chaos", energyCost: 1, name: "Scryer's Bloom" });
     expect(def?.powerCost ?? []).toEqual([]);

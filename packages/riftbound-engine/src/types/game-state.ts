@@ -1299,6 +1299,18 @@ export interface RiftboundGameState {
   pendingChoice?: PendingChoice;
 
   /**
+   * rule 436 / 359.3.e (unl-136-219 Scryer's Bloom) — "[Predict 2], THEN draw
+   * 1": the remainder of a sequence whose step parked a prompt that already
+   * owns its own `then` chain. It runs once every prompt of that chain has been
+   * answered and nothing else is pending.
+   */
+  deferredSequenceRest?: {
+    effect: unknown;
+    playerId: string;
+    sourceCardId?: string;
+  }[];
+
+  /**
    * rule-id: ogn-220-298 (rule 355.5 / 811.1.b) — open multi-slot target locks
    * for spells played from [Hidden], keyed by chain item id. A card naming two
    * caster-chosen targets is asked one prompt per slot; this keeps the picks
