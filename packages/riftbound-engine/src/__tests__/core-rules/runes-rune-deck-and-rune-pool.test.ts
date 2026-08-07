@@ -488,7 +488,7 @@ describe("416.5.a — several runes recycled simultaneously go to the bottom in 
   // chooses — the engine must surface that choice to P1 (a pick and/or order prompt); choosing Z,X,Y yields a rune
   // deck of exactly [rA, rZ, rX, rY] and adds no power (effect-recycle, not the rune ability — 429.4.a).
   // Actual: the generic `recycle` effect is a no-op for board runes — no prompt at all, runes stay in play.
-  test.failing("BUG: 416.5.a — effect recycling 3 runes should surface an owner's-ORDER decision and place them under the deck in that order; engine does not recycle them at all", async () => {
+  test("416.5.a — effect recycling 3 runes surfaces an owner's-ORDER decision and places them under the deck in that order", async () => {
     const game = await scenario()
       .fillDecks({ main: 10, runes: 0 })
       .rune(P1, "fury", { alias: "rX" })

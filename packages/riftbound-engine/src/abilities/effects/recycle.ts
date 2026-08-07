@@ -127,14 +127,58 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
   // a multi-pick prompt; when the zone holds no more than N there is no choice
   // and every card is recycled.
   const from = (effect as { from?: string }).from;
+  // rule 416.1.b / 416.1.c / 416.5.a — "Recycle N of your runes": the runes go
+  // under their OWNER's Rune Deck (no power for anyone — 429.4.a), and when
+  // more than one is recycled at once the owner chooses the order they are put
+  // there, so park a pick prompt even when every rune must go.
+  if ((effect as { what?: string }).what === "rune" && (effect as { amount?: unknown }).amount !== undefined) {
+    const owner = ctx.playerId;
+    const pool = ctx.zones
+      .getCardsInZone("runePool" as CoreZoneId, owner as CorePlayerId)
+      .map((id) => id as string);
+    const n = Math.min(resolveAmount((effect as { amount?: unknown }).amount ?? 1, ctx), pool.length);
+    if (n <= 0) {
+      return;
+    }
+    if (n === 1 && pool.length === 1) {
+      const [only] = pool;
+      ctx.zones.moveCard({
+        cardId: only as CoreCardId,
+        position: "bottom",
+        targetZoneId: "runeDeck" as CoreZoneId,
+      });
+      ctx.counters.setFlag(only as CoreCardId, "exhausted", false);
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      onPicked: "recycle",
+      prompter: owner,
+      remaining: n,
+      revealed: pool,
+      revealer: owner,
+      sourceCardId: ctx.sourceCardId,
+      type: "reveal-and-pick",
+    };
+    return;
+  }
   if ((effect as { amount?: unknown }).amount !== undefined && (from === "trash" || from === "hand")) {
     const zoneId = from as CoreZoneId;
     // rule-id: ogn-212-298 — "from trashes" pools every player's trash; each
     // picked card still returns to the bottom of ITS OWNER's Main Deck.
+    // rule-id: unl-103-219 — the scope may also be spelled on the effect's
+    // `target` ("cards from opponents' trashes" → controller "enemy"), so read
+    // `owner` first and fall back to `target.controller`.
+    const targetSpec = (effect.target ?? undefined) as
+      | { controller?: string; quantity?: { upTo?: unknown } }
+      | undefined;
+    const scope = (effect as { owner?: string }).owner ?? targetSpec?.controller;
+    const allPlayers = Object.keys((ctx.draft as { players?: Record<string, unknown> }).players ?? {});
     const owners =
-      (effect as { owner?: string }).owner === "any"
-        ? Object.keys((ctx.draft as { players?: Record<string, unknown> }).players ?? {})
-        : [ctx.playerId];
+      scope === "any" || scope === "all"
+        ? allPlayers
+        : scope === "enemy" || scope === "opponent"
+          ? allPlayers.filter((p) => p !== ctx.playerId)
+          : [ctx.playerId];
     const pool = owners.flatMap((p) =>
       ctx.zones.getCardsInZone(zoneId, p as CorePlayerId).map((id) => id as string),
     );
@@ -142,7 +186,8 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
     const n = Math.min(want, pool.length);
     // rule 416 — "recycle up to N" lets the chooser take fewer (or none), so
     // the prompt is offered even when the zone holds no more than N.
-    const upTo = (effect as { upTo?: boolean }).upTo === true;
+    const upTo =
+      (effect as { upTo?: boolean }).upTo === true || targetSpec?.quantity?.upTo !== undefined;
     if (n <= 0) {
       return;
     }
