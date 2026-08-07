@@ -2814,6 +2814,16 @@
       transition: transform .12s ease, box-shadow .12s ease, margin .12s ease;
       cursor: pointer;
     }
+    /* Tokens have no art in the CDN map; the <img> 404s and the fallback tile
+       below it takes over, so both need the card's footprint. */
+    .choice-modal-card-img { width: 100%; display: block; border-radius: 8px; }
+    .choice-modal-card > .card-fallback {
+      width: 100%; aspect-ratio: 5 / 7; border-radius: 8px;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 4px; padding: 6px; text-align: center;
+      background: #241f38; border: 1px solid #4a4270; color: #cfc8ee;
+      font-size: 11px; box-sizing: border-box;
+    }
     .choice-modal-card:hover {
       transform: translateY(-14px) scale(1.08);
       margin: 0 4px;

@@ -53,6 +53,8 @@ export type {
   ParameterInfo,
   ParamFieldSchema,
 } from "./types/move-enumeration";
+// rule 194.3.a — the UI needs the same threshold the engine wins on.
+export { effectiveVictoryScore } from "./operations/points";
 // Zone configuration exports
 export {
   createBattlefieldZone,

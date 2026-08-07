@@ -251,9 +251,10 @@ function renderGameOver() {
   // rule-id: ogn-276-298 (Aspirant's Climb) — include the viewer's
   // victoryScoreModifier so the target matches the engine's effective threshold.
   const targetVP =
-    gameState.victoryScore != null
-      ? gameState.victoryScore + (gameState.players?.[viewingPlayer]?.victoryScoreModifier ?? 0)
-      : "?";
+    gameState.victoryScoreEffective?.[viewingPlayer]
+      ?? (gameState.victoryScore != null
+        ? gameState.victoryScore + (gameState.players?.[viewingPlayer]?.victoryScoreModifier ?? 0)
+        : "?");
 
   // Determine winner: prefer gameState.winner, but fall back to VP comparison
   // to guard against edge cases where the winner field is empty or mismatched

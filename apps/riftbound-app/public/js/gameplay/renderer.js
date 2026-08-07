@@ -100,10 +100,11 @@ function renderPlayerInfo() {
       ? `<div class="player-stat"><span class="stat-label">XP</span><span class="stat-value xp">${xp}</span></div>`
       : "";
 
-    // rule-id: ogn-276-298 (Aspirant's Climb) — effective threshold is
-    // victoryScore + per-player victoryScoreModifier, matching the engine's
-    // getEffectiveVictoryScore.
-    const effectiveVictoryScore = (gameState.victoryScore ?? 0) + (player?.victoryScoreModifier ?? 0);
+    // rule-id: ogn-276-298 (Aspirant's Climb) / rule 194.3.a — that battlefield
+    // raises the threshold without touching victoryScoreModifier, so prefer the
+    // server's engine-computed effectiveVictoryScore over the local sum.
+    const effectiveVictoryScore = gameState.victoryScoreEffective?.[pid]
+      ?? (gameState.victoryScore ?? 0) + (player?.victoryScoreModifier ?? 0);
 
     document.getElementById(elemId).innerHTML = `
       <div class="player-avatar ${isActive ? "active" : ""}" title="${esc(pName(pid))}">${esc(initials(pName(pid)))}</div>
@@ -176,7 +177,21 @@ function setHoverPreviewCard(defId, name) {
   // Avoid reassigning src if unchanged (prevents flicker on re-entry).
   if (els.img.getAttribute("data-current") !== imgId) {
     els.img.setAttribute("data-current", imgId);
+    els.img.removeAttribute("data-failed");
+    // Remember which image 404'd: mouseover bubbles from every descendant of a
+    // card, so a re-entry with the same src fires no new error event and must
+    // not re-show the broken <img> (tokens have no card image).
+    els.img.onerror = () => {
+      els.img.setAttribute("data-failed", imgId);
+      els.slot.classList.remove("has-card");
+      els.slot.setAttribute("aria-hidden", "true");
+    };
     els.img.src = nextSrc;
+  }
+  if (els.img.getAttribute("data-failed") === imgId) {
+    els.slot.classList.remove("has-card");
+    els.slot.setAttribute("aria-hidden", "true");
+    return;
   }
   els.img.alt = name || "";
   els.slot.classList.add("has-card");

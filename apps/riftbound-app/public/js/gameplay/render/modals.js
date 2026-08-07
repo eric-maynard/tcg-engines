@@ -115,8 +115,17 @@ function renderPendingChoiceModal() {
       const attrs = idx == null
         ? `class="choice-modal-card choice-modal-card-ineligible" style="opacity:.4;cursor:default"`
         : `class="choice-modal-card" data-pick-idx="${idx}"`;
-      html += `<img ${attrs} src="/card-image/${esc(imgId)}"
-        alt="${esc(card?.name ?? cid)}" title="${esc(card?.name ?? cid)}">`;
+      // Tokens (definitionId `token-def-<slug>`) usually have no art on disk or
+      // in the CDN map, so the bare <img> 404s into a broken-image icon. Mirror
+      // renderCard's fallback tile: hide the image and show a named tile.
+      const label = esc(card?.name ?? cid);
+      html += `<div ${attrs} title="${label}"><img class="choice-modal-card-img" src="/card-image/${esc(imgId)}"
+        alt="${label}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+        ><div class="card-fallback" style="display:none">
+        <div class="fallback-cost">${card?.energyCost != null ? esc(card.energyCost) : "&mdash;"}</div>
+        <div class="fallback-name">${label}</div>
+        <div class="fallback-type">${esc(card?.cardType ?? "")}</div>
+      </div></div>`;
     }
     html += `</div>`;
   }
@@ -195,6 +204,15 @@ function describePlayVariant(m, card) {
   const sacIds = Array.isArray(m.params.sacrificeIds) && m.params.sacrificeIds.length
     ? m.params.sacrificeIds
     : (m.params.sacrificeId ? [m.params.sacrificeId] : null);
+  // rule-id: ven-008-166 (rule 356.2.b) — "you may discard 1" enumerates one
+  // variant per discardable card; name the card or every variant renders the same.
+  if (m.params?.discardId) {
+    const name = findCard(m.params.discardId)?.name ?? m.params.discardId;
+    return {
+      label: `Play + discard ${name}`,
+      detail: `${baseCost} energy — discard ${name} as an additional cost`,
+    };
+  }
   if (sacIds) {
     const names = sacIds.map(id => findCard(id)?.name ?? id);
     const list = names.join(" + ");
@@ -231,7 +249,13 @@ function openPlayCostModal(cardId) {
   // Rule ogn-193-298: match the action-panel grouping key exactly so a
   // cardId-less champion move doesn't leak into another card's modal.
   const variants = availableMoves.filter(m =>
-    (m.moveId === "playUnit" || m.moveId === "playFromChampionZone") &&
+    // rule-id: ven-008-166 — spells and gear carry optional additional costs
+    // too, so their variants must reach this modal instead of silently
+    // defaulting to the unpaid play.
+    (m.moveId === "playUnit" ||
+      m.moveId === "playFromChampionZone" ||
+      m.moveId === "playSpell" ||
+      m.moveId === "playGear") &&
     (m.params?.cardId ?? "__champion") === cardId,
   );
   if (variants.length === 0) return;

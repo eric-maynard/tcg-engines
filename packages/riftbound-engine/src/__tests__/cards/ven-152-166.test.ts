@@ -18,6 +18,7 @@ import { P1, P2, scenario } from "../../harness";
 
 const REBUTTAL = "ven-152-166";
 const CLEAVE = "ogn-004-298"; // 1 energy — "Give a unit [Assault 3] this turn."
+const BOOST = "unl-031-219"; // 1 energy Reaction — "Give a unit +1 [Might] this turn."
 
 /** P2's turn; P2 casts Cleave; P1 holds Rebuttal with `power` power available. */
 async function cleaveThenRebuttal(power: Record<string, number>): Promise<Game> {
@@ -55,6 +56,37 @@ describe("Rebuttal (ven-152-166)", () => {
     expect(game.state("theirs").grantedKeywords).toEqual([]);
     expect(game.zoneOf("cleave")).toBe("trash");
     expect(game.zoneOf("reb")).toBe("trash");
+  });
+
+  test("with two legal spells on the chain the caster chooses which one", async () => {
+    // rule 355.8 — "Choose a spell with Energy cost no more than [4]" is a
+    // caster-chosen target locked at play time, so both pending spells must be
+    // offered; the counter branch must not silently take the topmost one.
+    const game = await scenario()
+      .active(P2)
+      .resources(P2, { energy: 2 })
+      .resources(P1, { energy: 1, power: { mind: 1 } })
+      .unit(P2, "base", { might: 3 }, "theirs")
+      .hand(P2, CLEAVE, "cleave")
+      .hand(P2, BOOST, "boost")
+      .hand(P1, REBUTTAL, "reb")
+      .build();
+    await game.p2.cast("cleave", { targets: "theirs" });
+    await game.p2.cast("boost", { targets: "theirs" });
+    if (game.actingSeat() === P2) {
+      await game.p2.passPriority();
+    }
+    const offered = game.p1
+      .option("cast", "reb")
+      ?.fields.find((f) => f.name === "targets")
+      ?.options;
+    expect(offered?.length).toBe(2);
+    // Choose the BOTTOM spell, not the topmost the fallback would take.
+    await game.p1.cast("reb", { targets: "cleave" });
+    await game.settle();
+    // Cleave was countered (no [Assault 3]); the untargeted Boost resolved.
+    expect(game.state("theirs").grantedKeywords ?? []).toEqual([]);
+    expect(game.state("theirs").might).toBe(4);
   });
 
   test("paying [rainbow] gains control of the spell instead of countering it", async () => {

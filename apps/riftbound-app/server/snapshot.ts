@@ -3,7 +3,7 @@
  */
 
 import type { Card } from "@tcg/riftbound-types/cards";
-import { getGlobalCardRegistry } from "@tcg/riftbound";
+import { effectiveVictoryScore, getGlobalCardRegistry } from "@tcg/riftbound";
 import type { RiftboundCardMeta } from "@tcg/riftbound";
 import type { PlayerId } from "@tcg/core";
 import { type LogEntry, actorName, makeLogEntry } from "../src/narrator";
@@ -380,8 +380,21 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
       const instanceDef = (cardId as string).startsWith("token-")
         ? (getGlobalCardRegistry().get(cardId as string) as Card | undefined)
         : undefined;
+      // rule 477.1.b (ven-137-166 Shady Spectacles): a real (non-token) instance
+      // that "becomes a copy" is rewritten only in the engine's per-instance
+      // registry, so the snapshot must follow the copy source to the copied
+      // card's set definition — otherwise the client keeps showing the printed card.
+      const copySourceId = getGlobalCardRegistry().copySourceOf(cardId as string);
+      const copyDefinitionId = copySourceId
+        ? internal.cards[copySourceId]?.definitionId
+        : undefined;
+      const copyDef = copyDefinitionId
+        ? (registry.get(copyDefinitionId) ??
+            (getGlobalCardRegistry().get(copySourceId as string) as Card | undefined))
+        : undefined;
       const def = cardInstance
-        ? (instanceDef ??
+        ? (copyDef ??
+            instanceDef ??
             registry.get(cardInstance.definitionId) ??
             (getGlobalCardRegistry().get(cardInstance.definitionId) as Card | undefined))
         : undefined;
@@ -415,12 +428,19 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
           (baseMeta.copyOfCardId
             ? internal.cards[baseMeta.copyOfCardId]?.definitionId
             : undefined) ??
+          copyDefinitionId ??
           cardInstance?.definitionId ??
           "",
         domain: def?.domain,
         energyCost: def?.energyCost,
         id: cardId,
-        meta: { ...baseMeta, equipmentMightBonus, exhausted: exhaustedFromFlags, stunned: stunnedFromFlags },
+        meta: {
+          ...baseMeta,
+          ...(copySourceId ? { copyOfCardId: copySourceId } : {}),
+          equipmentMightBonus,
+          exhausted: exhaustedFromFlags,
+          stunned: stunnedFromFlags,
+        },
         might: def && "might" in def ? (def as Record<string, unknown>).might as number : undefined,
         name: def?.name ?? cardId,
         owner: cardInstance?.owner ?? "",
@@ -450,6 +470,15 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
     status: state.status,
     turn: state.turn,
     victoryScore: state.victoryScore,
+    // rule 194.3.a — battlefields like Aspirant's Climb raise the threshold
+    // without touching victoryScoreModifier, so the raw victoryScore alone is
+    // not what the engine wins on. Ship the engine's per-player number.
+    victoryScoreEffective: Object.fromEntries(
+      Object.keys(state.players ?? {}).map((pid) => [
+        pid,
+        effectiveVictoryScore(state, pid as PlayerId),
+      ]),
+    ),
     winner: state.winner,
     zones,
   };
