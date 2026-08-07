@@ -433,9 +433,6 @@ export function killUnits(
   const results: LeaveResult[] = [];
   // rule 370.1.a.2 / 740.2.a — note every target before the first one moves.
   const snaps = snapshotBatch(ctx, targets);
-  ctx.draft.lastKilledUnitMight = undefined;
-  ctx.draft.lastKilledUnitId = undefined;
-  ctx.draft.lastKilledUnitController = undefined;
   // rules 370–373 — die replacements for the whole simultaneous batch (one
   // Zhonya's Hourglass saves ONE of several units killed together; several
   // shields on one unit are ordered by its controller). A replaced death never
@@ -452,6 +449,12 @@ export function killUnits(
           kill: { cause, playerId: ctx.playerId, sourceCardId: ctx.sourceCardId, to: "trash" },
         })
       : { dying: [] as string[], replaced: [] as string[], suspended: false };
+  // rule 359.3.e.14.b (sfd-163-221) — cleared AFTER the batch: a replacement's
+  // own kill ("kill this instead" — Zhonya's Hourglass) is a different action
+  // and must not be what a linked "If you do" sees.
+  ctx.draft.lastKilledUnitMight = undefined;
+  ctx.draft.lastKilledUnitId = undefined;
+  ctx.draft.lastKilledUnitController = undefined;
   if (plan.suspended) {
     return results;
   }
