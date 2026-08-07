@@ -227,7 +227,7 @@ describe("Rocket Barrage (sfd-077-221)", () => {
     expect(game.zoneOf("snax")).toBe("trash");
   });
 
-  test.failing("BUG: Deflect (809) — with the enemy Deflect unit as the only possible choice and no spare power, the Barrage cannot be cast at it / cannot hurt it", async () => {
+  test("Deflect (809) — with the enemy Deflect unit as the only possible choice and no spare power, the Barrage cannot be cast at it / cannot hurt it", async () => {
     // Expected: P1 (4 energy + exactly the [mind] pip) cannot pay the extra [rainbow] to choose P2's
     // Pouty Poro, the only object either mode could pick → the cast is illegal (or the poro is untouchable).
     // Actual: the mode/target are picked at resolution with no Deflect surcharge and the poro dies.

@@ -6,6 +6,7 @@
 import { isAllAtOneBattlefield, resolveTarget } from "../../../abilities/target-resolver";
 import { type CounterTargetContext, isLegalCounterTarget } from "../../../chain/counter-target";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { getDeflectSurcharge } from "./cost";
 
 export type SpellEffectTargetDescriptor =
   | string
@@ -371,9 +372,50 @@ function offBoardPlayHasCandidates(
  * every caster-chosen target. For a modal (`choice`) effect the caster picks one
  * mode, so the spell is legal iff at least one mode's targets can be satisfied.
  */
+/**
+ * rule 809.1.b / 809.1.c.1 (rule-id: sfd-077-221) — Deflect taxes the CHOICE,
+ * not the cast: choosing an opposing Deflect object costs extra Power of any
+ * Domain on top of the source's own cost. A candidate whose surcharge the
+ * chooser cannot cover is not a legal choice, so it cannot be the candidate
+ * that makes a play legal under 355.8.
+ *
+ * Budget = the chooser's pooled Power, less the printed Power pips of a source
+ * still sitting in their hand (those are spent on the play itself). A source
+ * already on the board (an activated/triggered ability) has no such deduction.
+ */
+function makeDeflectAffordable(
+  ctx: Parameters<typeof resolveTarget>[1],
+): (cardId: string) => boolean {
+  const registry = getGlobalCardRegistry();
+  const playerId = ctx.playerId as string | undefined;
+  const state = ctx.draft as {
+    runePools?: Record<string, { power?: Partial<Record<string, number>> } | undefined>;
+  };
+  const pool = playerId ? state.runePools?.[playerId] : undefined;
+  let budget = Object.values(pool?.power ?? {}).reduce((a: number, b) => a + (b ?? 0), 0);
+  const source = ctx.sourceCardId as string | undefined;
+  if (source && playerId) {
+    const inHand = ctx.zones
+      .getCardsInZone(
+        "hand" as Parameters<typeof ctx.zones.getCardsInZone>[0],
+        playerId as Parameters<typeof ctx.zones.getCardsInZone>[1],
+      )
+      .some((id) => (id as string) === source);
+    if (inHand) {
+      budget -= (registry.getPowerCost(source) ?? []).length;
+    }
+  }
+  return (cardId: string): boolean =>
+    getDeflectSurcharge(ctx.draft as never, playerId ?? "", [cardId], ctx.cards) <= budget;
+}
+
 export function spellEffectHasLegalTargets(
   effect: SpellEffectTargetShape | undefined,
   ctx: Parameters<typeof resolveTarget>[1],
+  // rule 809.1.b / 355.8 (rule-id: sfd-077-221) — an extra per-candidate gate:
+  // a candidate the caster cannot afford (a Deflect surcharge on top of the
+  // card's own cost) is not a legal choice, so it cannot satisfy 355.8.
+  affordable?: (cardId: string) => boolean,
 ): boolean {
   if (!effect) {
     return true;
@@ -385,11 +427,17 @@ export function spellEffectHasLegalTargets(
   }
   // Rule 355.8: modal spells — at least one option must have a valid target set.
   if (effect.type === "choice" && Array.isArray(effect.options)) {
-    return effect.options.some((opt) => spellEffectHasLegalTargets(opt?.effect, ctx));
+    // rule 809.1.b (rule-id: sfd-077-221) — a modal spell picks its mode (and
+    // its target) as it resolves, so no Deflect surcharge is quoted at cast
+    // time. A mode whose only candidates are Deflect objects the caster cannot
+    // pay for is therefore not a mode they can legally choose (355.8); when no
+    // mode survives, the spell has no legal play at all.
+    const modeAffordable = affordable ?? makeDeflectAffordable(ctx);
+    return effect.options.some((opt) => spellEffectHasLegalTargets(opt?.effect, ctx, modeAffordable));
   }
   // Sequence effects: every sub-effect's targets must be satisfiable.
   if (effect.type === "sequence" && Array.isArray(effect.effects)) {
-    if (!effect.effects.every((sub) => spellEffectHasLegalTargets(sub, ctx))) {
+    if (!effect.effects.every((sub) => spellEffectHasLegalTargets(sub, ctx, affordable))) {
       return false;
     }
     // rule-id: ogn-220-298 (rule 355.8) — "… and an enemy unit at the same
@@ -458,7 +506,7 @@ export function spellEffectHasLegalTargets(
     // rule-id: ogn-254-298 — a "next time it…" replacement's chosen unit.
     findReplacementChosenTarget(effect),
   ]) {
-    if (!targetDescriptorIsSatisfiable(tgt, effect.player, ctx)) {
+    if (!targetDescriptorIsSatisfiable(tgt, effect.player, ctx, affordable)) {
       return false;
     }
   }
@@ -471,6 +519,7 @@ export function targetDescriptorIsSatisfiable(
   tgt: SpellEffectTargetDescriptor | undefined,
   player: string | undefined,
   ctx: Parameters<typeof resolveTarget>[1],
+  affordable?: (cardId: string) => boolean,
 ): boolean {
   if (!tgt) {
     return true;
@@ -512,7 +561,9 @@ export function targetDescriptorIsSatisfiable(
     },
     ctx,
   );
-  return resolved.length > 0;
+  // rule 809.1.b (rule-id: sfd-077-221) — candidates whose Deflect surcharge
+  // the caster cannot pay are not legal choices.
+  return (affordable ? resolved.filter((id) => affordable(id as string)) : resolved).length > 0;
 }
 
 /**
