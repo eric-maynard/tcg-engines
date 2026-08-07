@@ -14,11 +14,13 @@ const abilities: Ability[] = [
     effect: {
       effects: [
         { target: { type: "unit" }, type: "stun" },
-        // Draw rider is conditional on "played from hand" (vs played
-        // From face-down). The engine needs a "played-from-hand" context
-        // Flag to gate this cleanly; leaving as unconditional draw for
-        // Now.
-        { amount: 1, type: "draw" },
+        // rule 811.1 — the draw is gated on WHERE the card was played from: a
+        // play from Hidden is not "from your hand".
+        {
+          condition: { type: "played-from-hand" },
+          then: { amount: 1, type: "draw" },
+          type: "conditional",
+        },
       ],
       type: "sequence",
     },

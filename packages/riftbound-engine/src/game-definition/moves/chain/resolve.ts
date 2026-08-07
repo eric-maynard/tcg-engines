@@ -127,6 +127,40 @@ function bindNamedAmounts<T>(effect: T, variables: Record<string, number>): T {
 }
 
 /**
+ * rule 811.1 (unl-042-219 Back Off) — "If you played this from your hand" is
+ * FALSE for a card played from Hidden. The gate is folded into the effect tree
+ * before resolution because a resolution-time target prompt re-executes the
+ * stored effect from a fresh context, which no longer knows the card came from
+ * facedown. `{ type: "noop" }` keeps sequence step indices (and their bound
+ * target slots) intact while executing nothing.
+ */
+function resolvePlayedFromHandGates<T>(effect: T, playedFromHand: boolean): T {
+  if (effect === null || typeof effect !== "object") {
+    return effect;
+  }
+  if (Array.isArray(effect)) {
+    return effect.map((e) => resolvePlayedFromHandGates(e, playedFromHand)) as unknown as T;
+  }
+  const node = effect as Record<string, unknown>;
+  if (
+    node.type === "conditional" &&
+    (node.condition as { type?: unknown } | undefined)?.type === "played-from-hand"
+  ) {
+    const branch = playedFromHand ? node.then : node.else;
+    return (branch === undefined
+      ? { type: "noop" }
+      : resolvePlayedFromHandGates(branch, playedFromHand)) as unknown as T;
+  }
+  const out: Record<string, unknown> = { ...node };
+  for (const [key, value] of Object.entries(out)) {
+    if (value !== null && typeof value === "object") {
+      out[key] = resolvePlayedFromHandGates(value, playedFromHand);
+    }
+  }
+  return out as T;
+}
+
+/**
  * Execute a resolved chain item's effect.
  * Skips execution if the item was countered (rule 543).
  */
@@ -347,6 +381,11 @@ export function executeResolvedItem(
   // may only choose targets at the battlefield it was facedown at.
   const hiddenZone =
     typeof trigEvt?.fromHiddenAt === "string" ? `battlefield-${trigEvt.fromHiddenAt}` : undefined;
+  // rule 811.1 (unl-042-219) — played from Hidden, not from hand: collapse any
+  // "if you played this from your hand" gate to its `else` branch now.
+  if (hiddenZone !== undefined) {
+    effect = resolvePlayedFromHandGates(effect, false);
+  }
 
   // Rule 355.10: for a resolved effect that targets a caster-chosen single
   // card ("give a unit X"), the controller picks which card. When targets
