@@ -8,9 +8,15 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
-import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
+import type {
+  PlayerId,
+  RiftboundCardMeta,
+  RiftboundGameState,
+  RiftboundMoves,
+} from "../../../types";
 import { type EffectContext, executeEffect } from "../../../abilities/effect-executor";
 import { evaluateLegionCondition } from "../../../abilities/legion-conditions";
+import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import {
   type CostReductionContext,
@@ -38,11 +44,27 @@ export function hasStaticEffect(cardId: string, effectType: string): boolean {
       continue;
     }
     const effect = (ability as { effect?: { type?: string } }).effect;
-    if (effect?.type === effectType) {
+    if (flattenStaticEffects(effect).some((e) => e.type === effectType)) {
       return true;
     }
   }
   return false;
+}
+
+/**
+ * A static ability may bundle several effects under a `sequence` wrapper
+ * (rule-id: unl-016-219 — "I have +1 [Might] and enter ready"). Enter-state
+ * checks must look inside it, the way the static-ability recalculation does.
+ */
+function flattenStaticEffects(effect: unknown): { type?: string }[] {
+  const e = effect as { type?: string; effects?: unknown[] } | undefined;
+  if (!e) {
+    return [];
+  }
+  if (e.type === "sequence" && Array.isArray(e.effects)) {
+    return e.effects.flatMap((inner) => flattenStaticEffects(inner));
+  }
+  return [e];
 }
 
 /**
@@ -67,7 +89,7 @@ export function staticEnterReadyApplies(
       effect?: { type?: string };
       condition?: Record<string, unknown>;
     };
-    if (effect?.type !== "enter-ready") {
+    if (!flattenStaticEffects(effect).some((e) => e.type === "enter-ready")) {
       continue;
     }
     if (!condition || evaluateEnterReadyCondition(condition, state, playerId, cardId, zones) !== false) {
@@ -172,6 +194,11 @@ function evaluateEnterReadyCondition(
         );
       }
       return undefined;
+    }
+    // rule 728 / [Level N] (rule-id: unl-151-219) — "[Level 3][>] I enter
+    // ready": the gate holds only while the controller has that much XP.
+    case "while-level": {
+      return evaluateWhileLevel(state, playerId as PlayerId, (condition.threshold as number) ?? 0);
     }
     default: {
       return undefined;

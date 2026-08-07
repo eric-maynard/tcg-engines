@@ -45,6 +45,22 @@ describe("Rengar, Trophy Hunter (unl-120-219)", () => {
     expect((await game.p1.try((p) => p.play("rengar", { to: "bf2" }))).ok).toBe(false);
   });
 
+  // rule 577.3.c / 813.1.c — [Ambush] is printed here as a self-granting
+  // static, which must still read as the printed keyword.
+  test("[Ambush]: playable on the opponent's turn to a battlefield where you have units", async () => {
+    const game = await scenario()
+      .active(P2)
+      .resources(P1, { energy: 5, power: { body: 5 } })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", { might: 2, name: "Scout" }, "scout")
+      .hand(P1, CARD, "rengar")
+      .build();
+
+    await game.p1.play("rengar", { to: "bf1" });
+    await game.settle();
+    expect(game.locationOf("rengar")).toBe("bf1");
+  });
+
   test("base is still a legal destination", async () => {
     const game = await board().build();
     await game.p1.play("rengar", { to: "base" });

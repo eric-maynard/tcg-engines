@@ -61,6 +61,14 @@ export interface CardDefinitionLookup {
    */
   readonly copyAttachedUnitText?: boolean;
   /**
+   * Shady Spectacles-style marker (ven-137-166): "As this is attached to a
+   * unit, choose another friendly unit. The equipped unit becomes a copy of
+   * that unit for as long as this is attached to it." rule 477.1.b — the copy
+   * replaces the HOLDER's traits (not the equipment's text, which is
+   * `copyAttachedUnitText`).
+   */
+  readonly copyChosenUnitToHolder?: boolean;
+  /**
    * The Zero Drive marker: when set, the card's banish effect records
    * every banished target in `exiledByThis` meta instead of only moving it
    * to trash, and when the card leaves the board those cards return.
@@ -77,6 +85,8 @@ export interface CardDefinitionLookup {
     readonly keyword?: string;
     readonly value?: number;
     readonly cost?: unknown;
+    /** rule 204.3.b: X paid in [rainbow] Power rather than Energy. */
+    readonly xCost?: string;
     readonly replaces?: string;
     readonly replacement?: unknown;
     readonly duration?: string;
@@ -100,6 +110,35 @@ export interface CardDefinitionLookup {
  */
 export class CardDefinitionRegistry {
   private readonly definitions = new Map<string, CardDefinitionLookup>();
+  /** Pre-copy definitions of instances currently copying another card (rule 477.1.b). */
+  private readonly copyOriginals = new Map<string, CardDefinitionLookup>();
+
+  /**
+   * rule 477.1.b: `holderId` becomes a copy of `sourceId` — its traits (name,
+   * Might, keywords, abilities) are replaced for as long as the copy lasts.
+   * Separately granted keywords live on card meta and are untouched (477.2.a).
+   */
+  becomeCopyOf(holderId: string, sourceId: string): void {
+    const source = this.definitions.get(sourceId);
+    const current = this.definitions.get(holderId);
+    if (!source || !current) {
+      return;
+    }
+    if (!this.copyOriginals.has(holderId)) {
+      this.copyOriginals.set(holderId, current);
+    }
+    this.definitions.set(holderId, { ...source, id: holderId });
+  }
+
+  /** End a `becomeCopyOf` copy, restoring the instance's printed definition. */
+  revertCopy(holderId: string): void {
+    const original = this.copyOriginals.get(holderId);
+    if (!original) {
+      return;
+    }
+    this.copyOriginals.delete(holderId);
+    this.definitions.set(holderId, original);
+  }
 
   /**
    * Register a card definition by ID.
@@ -127,9 +166,27 @@ export class CardDefinitionRegistry {
     if (def.keywords?.includes(keyword)) {
       return true;
     }
-    return (def.abilities ?? []).some(
-      (a) => a.type === "keyword" && a.keyword === keyword,
-    );
+    if ((def.abilities ?? []).some((a) => a.type === "keyword" && a.keyword === keyword)) {
+      return true;
+    }
+    // rule-id: unl-120-219 — some defs encode a printed keyword as an
+    // unconditional static that grants it to itself ([Ambush] on Rengar).
+    // That is still a printed keyword and must read as one before the
+    // static-ability recalc has stamped card meta (same rule as `cantReady`).
+    return (def.abilities ?? []).some((a) => {
+      const ab = a as {
+        type?: string;
+        condition?: unknown;
+        effect?: { type?: string; keyword?: string; target?: unknown };
+      };
+      return (
+        ab.type === "static" &&
+        ab.condition === undefined &&
+        ab.effect?.type === "grant-keyword" &&
+        ab.effect.keyword === keyword &&
+        (ab.effect.target === undefined || ab.effect.target === "self")
+      );
+    });
   }
 
   /**
