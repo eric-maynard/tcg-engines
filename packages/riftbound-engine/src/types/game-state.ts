@@ -261,9 +261,11 @@ export interface GrantedAbility {
  */
 export interface DelayedTrigger {
   sourceCardId: CardId;
-  trigger: { event: string; on?: string };
+  trigger: { event: string; on?: string; afterAttack?: boolean };
   effect: unknown;
   duration: "turn" | "permanent";
+  /** rule 355.13 (sfd-184-221) — granted "you may …" triggers prompt on firing. */
+  optional?: boolean;
 }
 
 /**
@@ -1072,6 +1074,17 @@ export interface RiftboundGameState {
   lastKilledUnitMight?: number;
 
   /**
+   * rule 359.3.f (sfd-162-221) — instance id and CONTROLLER of the unit most
+   * recently killed by a `kill` effect, snapshotted as it left the board so
+   * "if it was a friendly unit" reads last-known control (control reverts to
+   * the owner on the way to the trash).
+   */
+  lastKilledUnitId?: string;
+
+  /** @see lastKilledUnitId */
+  lastKilledUnitController?: string;
+
+  /**
    * Number of units each player has moved this turn.
    *
    * Used by move-escalation effects (e.g., Mageseeker Investigator) that
@@ -1145,6 +1158,21 @@ export interface RiftboundGameState {
    * covered) and cleared at Ending Step (rule 517.2.b).
    */
   turnStatics?: { controllerId: PlayerId; sourceCardId: CardId; effect: unknown }[];
+
+  /**
+   * rule 390.2 (sfd-166-221, Rally the Troops): delayed triggered abilities a
+   * spell installed on a PLAYER rather than on a permanent ("When a friendly
+   * unit is played this turn, buff it"). Offered to the trigger matcher as a
+   * floating ability controlled by `playerId`; turn-scoped entries expire at
+   * the Ending Step (rule 517.2.b).
+   */
+  playerDelayedTriggers?: {
+    playerId: string;
+    sourceCardId: string;
+    trigger: { event: string; on?: string };
+    effect: unknown;
+    duration: "turn" | "permanent";
+  }[];
 
   /**
    * A pending player decision that blocks all other moves until resolved.

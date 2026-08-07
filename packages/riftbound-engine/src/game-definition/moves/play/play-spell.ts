@@ -848,7 +848,10 @@ export const playSpell: Defs["playSpell"] = {
           state,
           context.playerId as string,
           cardId as string,
-          { board },
+          // rule-id: sfd-141-221 — targets aren't chosen yet at this gate, so
+          // let a "spells that choose me cost less" aura count; the move's
+          // condition re-checks it against the real targets.
+          { assumeChooseDiscount: true, board },
           metaForAfford,
           potential,
         )
@@ -1586,6 +1589,10 @@ export const playSpell: Defs["playSpell"] = {
       );
       if (repeatCost && repeatCost.length > 0) {
         const meta = createMetaAccessor(context.cards);
+        // rule 820.2.a (sfd-151-221) — the two executions' target GROUPS are
+        // offered once per unordered pair of groups (swapping them is the same
+        // play), each group in a canonical order so a caller can name it.
+        const offeredGroupPairs = new Set<string>();
         for (const base of baseVariants) {
           // rule-id: sfd-122-221 — Rule 820.1.c.3: each Repeat instance is
           // paid at most once, so n never exceeds the number of instances.
@@ -1629,14 +1636,20 @@ export const playSpell: Defs["playSpell"] = {
                 ? tgt.quantity
                 : 0;
             if (perExecution >= 2 && base.targets?.length === perExecution && n === 1) {
-              const firstGroup = base.targets;
-              const key = (ids: readonly string[]) => [...ids].sort().join("+");
+              const firstGroup = [...base.targets].sort();
               for (const other of baseVariants) {
-                const alt = other.targets;
-                if (alt?.length !== perExecution || key(alt) === key(firstGroup)) {
+                if (other.targets?.length !== perExecution) {
                   continue;
                 }
-                results.push({ ...base, repeatCount: n, targets: [...firstGroup, ...alt] });
+                const alt = [...other.targets].sort();
+                const [lo, hi] =
+                  firstGroup.join("+") <= alt.join("+") ? [firstGroup, alt] : [alt, firstGroup];
+                const pairKey = `${lo.join("+")}|${hi.join("+")}`;
+                if (lo.join("+") === hi.join("+") || offeredGroupPairs.has(pairKey)) {
+                  continue;
+                }
+                offeredGroupPairs.add(pairKey);
+                results.push({ ...base, repeatCount: n, targets: [...lo, ...hi] });
               }
             }
           }
