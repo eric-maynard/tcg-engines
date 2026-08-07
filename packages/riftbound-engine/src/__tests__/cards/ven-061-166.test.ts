@@ -109,7 +109,7 @@ describe("Decree of Insight (ven-061-166)", () => {
     expect(game.p1.can("cast", "decree")).toBe(false);
   });
 
-  test.failing("BUG: 'Ignore [Deflect] while paying this spell's cost' — a Deflect Body unit is targetable with exactly 1 energy and NO power, and only [1] is paid", async () => {
+  test("'Ignore [Deflect] while paying this spell's cost' — a Deflect Body unit is targetable with exactly 1 energy and NO power, and only [1] is paid", async () => {
     // Expected (809.1.d + card text): legal, costs {energy:1}, resolves to 1 Might. Actual: the
     // engine still demands the Deflect power surcharge, so the target is not offered / cast fails.
     const game = await scenario()

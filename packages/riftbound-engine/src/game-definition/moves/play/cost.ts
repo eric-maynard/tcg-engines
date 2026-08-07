@@ -1469,6 +1469,29 @@ export function payDeflectSurcharge(
   return true;
 }
 
+/**
+ * rule 809.1.d (rule-id: ven-061-166) — "Ignore [Deflect] while paying this
+ * spell's cost": the source waives the Deflect additional cost entirely, so it
+ * is neither quoted while choosing targets nor deducted when the cost is paid.
+ * Recognised as an `{type:"ignore-deflect"}` effect, or from the printed clause
+ * while the card's text is still unparsed (`raw`).
+ */
+export function sourceIgnoresDeflect(sourceCardId?: string): boolean {
+  if (sourceCardId === undefined) {
+    return false;
+  }
+  for (const ability of getGlobalCardRegistry().getAbilities(sourceCardId) ?? []) {
+    const effect = (ability as { effect?: { type?: string; text?: string } }).effect;
+    if (effect?.type === "ignore-deflect") {
+      return true;
+    }
+    if (typeof effect?.text === "string" && /ignore\s+\[?deflect\]?/i.test(effect.text)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function getDeflectSurcharge(
   _state: RiftboundGameState,
   _playerId: string,
@@ -1478,8 +1501,9 @@ export function getDeflectSurcharge(
     getCardController?: (cardId: CoreCardId) => string | undefined;
     getCardMeta?: (cardId: CoreCardId) => unknown;
   },
+  sourceCardId?: string,
 ): number {
-  if (!_targets || _targets.length === 0) {
+  if (!_targets || _targets.length === 0 || sourceIgnoresDeflect(sourceCardId)) {
     return 0;
   }
   const registry = getGlobalCardRegistry();
@@ -2828,7 +2852,7 @@ export function canAffordCard(
       extras,
       mergePower(nextPlay.power ?? {}, getSelfScaledPowerReduction(state, playerId, cardId, extras)),
     ),
-    getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards),
+    getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards, cardId),
   );
   const basePower = reducePowerCost(baseCost.power, deflect.waived, pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
@@ -2981,7 +3005,7 @@ export function deductCost(
       extras,
       mergePower(nextPlay.power ?? {}, getSelfScaledPowerReduction(draft, playerId, cardId, extras)),
     ),
-    getDeflectSurcharge(draft, playerId, extras.targets, extras.board?.cards),
+    getDeflectSurcharge(draft, playerId, extras.targets, extras.board?.cards, cardId),
   );
   const basePower = reducePowerCost(cost.power, deflect.waived, pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);

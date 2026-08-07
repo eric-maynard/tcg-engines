@@ -30,6 +30,16 @@ export function parseCounterEffect(text: string): CounterEffect | undefined {
   if (!match) {
     return undefined;
   }
+  // rule 429.3 (rule-id: ven-039-166) — "Counter a spell if an opponent has
+  // played ANOTHER spell this turn": a gate checked as the counter resolves.
+  // "Another" excludes the spell being countered, so an opponent's first spell
+  // of the turn can never arm it against itself.
+  if (/\bif an opponent has played another spell this turn\b/i.test(text)) {
+    return {
+      condition: { type: "opponent-played-another-spell" },
+      type: "counter",
+    } as unknown as CounterEffect;
+  }
   // rule-id: unl-131-219 — "Counter a spell. Return it to its owner's hand
   // instead of putting it in their trash." overrides the countered spell's
   // destination.

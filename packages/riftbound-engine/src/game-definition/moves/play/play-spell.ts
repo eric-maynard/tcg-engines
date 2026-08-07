@@ -2258,6 +2258,20 @@ export const playSpell: Defs["playSpell"] = {
       const withEvents = draft as { turnEvents?: Record<string, string[]> };
       withEvents.turnEvents ??= {};
       (withEvents.turnEvents[playerId as string] ??= []).push("played-spell");
+      // rule 429.3 (rule-id: ven-039-166) — "ANOTHER spell": a gate that has to
+      // tell the spell being answered apart from the rest, so record WHICH
+      // spell was played, not just that one was.
+      withEvents.turnEvents[playerId as string]?.push(`played-spell:${cardId as string}`);
+    }
+
+    // rule 419.4.a (rule-id: ven-044-166) — the play-card trigger fires when
+    // this spell RESOLVES, by which time the tally below has already counted
+    // it, so remember which card of the turn it was as it is played.
+    {
+      const withOrdinals = draft as { spellPlayOrdinals?: Record<string, number> };
+      withOrdinals.spellPlayOrdinals ??= {};
+      withOrdinals.spellPlayOrdinals[cardId as string] =
+        (draft.cardsPlayedThisTurn?.[playerId] ?? 0) + 1;
     }
 
     // Rule 724 (Legion) tracker: count this spell play so subsequent

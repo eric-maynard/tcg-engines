@@ -42,6 +42,46 @@ function ransomIsPayable(
   return true;
 }
 
+/**
+ * rule 429.3 (rule-id: ven-039-166) — "if an opponent has played ANOTHER spell
+ * this turn": only spells count (units and gear do not), only an opponent's,
+ * only this turn (`turnEvents` is cleared at every turn start), and never the
+ * spell being countered nor the countering spell itself.
+ */
+function counterGateMet(
+  gate: Record<string, unknown>,
+  ctx: EffectContext,
+  targetId: string | undefined,
+): boolean {
+  if (gate.type !== "opponent-played-another-spell") {
+    return true;
+  }
+  const targetController =
+    targetId === undefined
+      ? undefined
+      : (ctx.cards.getCardController?.(targetId as CoreCardId) ??
+        ctx.cards.getCardOwner(targetId as CoreCardId));
+  const byPlayer = (ctx.draft.turnEvents ?? {}) as Record<string, readonly string[]>;
+  for (const [playerId, events] of Object.entries(byPlayer)) {
+    if (playerId === ctx.playerId) {
+      continue;
+    }
+    let played = events.filter((event) => event === SPELL_PLAYED).length;
+    // "ANOTHER": the spell being answered is itself one of this turn's plays
+    // (it is still on the chain), so it never satisfies its own gate.
+    if (playerId === targetController) {
+      played -= 1;
+    }
+    if (played > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Pushed by `playSpell` for every spell put on the chain (rule 425.1.b). */
+const SPELL_PLAYED = "played-spell";
+
 export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // Counter a spell — mark the next item on the chain as countered
   // So its effect is skipped during resolution (rule 543)
@@ -82,6 +122,12 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
       // rule-id: sfd-206-221 — remember "that spell" for follow-up steps, since
       // a countered spell no longer sits on the chain to be read back.
       ctx.draft.lastCounterTargetId = targetItem?.cardId;
+      // rule 429.3 (rule-id: ven-039-166) — a counter carrying its own gate
+      // does nothing at all when the gate is false: the target resolves.
+      const gate = (effect as { condition?: Record<string, unknown> }).condition;
+      if (gate !== undefined && !counterGateMet(gate, ctx, targetItem?.cardId)) {
+        return;
+      }
       // rule 158.1 (sfd-136-221) — "Counter a spell unless its controller pays
       // [N]": the ransom is a payment made WHILE this effect resolves, not an
       // additional cost, so cost-reduction statics never touch it. Pause and
