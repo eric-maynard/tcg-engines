@@ -56,10 +56,7 @@ describe("Void Drone (sfd-010-221)", () => {
     expect(one.p1.can("play", "drone")).toBe(false);
   });
 
-  // BUG — expected: energy 3 → 2 (the [2] self-discount applies to a trash play, rule 356.4).
-  // Actual: the full printed 3 is charged; the engine only honours `whenPlayedFrom:"not-hand"` and
-  // only on a [Flow] play, while the parser emitted a free-text `scope` for this card.
-  test.failing("BUG: Void Drone played from the trash is charged the full [3] — the 'from anywhere other than your hand' discount is never applied (rule 356.4)", async () => {
+  test("Void Drone played from the trash is charged only [1] — the 'from anywhere other than your hand' discount applies (rule 356.4)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .gear(P1, TRASH_GRANT, "riches")
@@ -73,8 +70,7 @@ describe("Void Drone (sfd-010-221)", () => {
     expect(game.state("drone").isExhausted).toBe(true);
   });
 
-  // BUG — expected: the trash copy is offered at 1 energy (discounted cost 1). Actual: not offered.
-  test.failing("BUG: with 1 energy a trash-play of Void Drone should be legal at its discounted cost of [1], but it is not offered", async () => {
+  test("with 1 energy a trash-play of Void Drone is legal at its discounted cost of [1]", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1 })
       .gear(P1, TRASH_GRANT, "riches")

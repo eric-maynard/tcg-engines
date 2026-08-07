@@ -262,6 +262,21 @@ function evaluateEnterReadyCondition(
       }
       return count >= min;
     }
+    // rule 143.4 (rule-id: unl-037-219) — the parser leaves gates it cannot
+    // model as `{type:"custom", text}`. A gate that cannot be shown to HOLD
+    // must not grant ready: units enter exhausted by default.
+    case "custom": {
+      const text = String(condition.text ?? "").toLowerCase();
+      const events = state.turnEvents?.[playerId] ?? [];
+      if (/friendly unit died during your beginning phase/.test(text)) {
+        return events.includes("friendly-died-in-beginning");
+      }
+      // rule-id: unl-008-219 — "if a unit died this turn" (either side).
+      if (/^if a unit died this turn$/.test(text)) {
+        return events.includes("friendly-died") || events.includes("enemy-died");
+      }
+      return false;
+    }
     default: {
       return undefined;
     }
@@ -1698,7 +1713,13 @@ function getSelfScaledEnergyReduction(
     // anywhere other than your hand": a flat self-discount gated on the play's
     // origin zone. A [Flow] play always comes from the trash (rule 829.1.b).
     if ((effect as { whenPlayedFrom?: unknown }).whenPlayedFrom === "not-hand") {
-      if (extras.viaFlow) {
+      // rule 356.4 (rule-id: sfd-010-221) — the gate reads the play's ORIGIN
+      // zone, not the play mode: any play of the card while it is not in its
+      // owner's hand (trash / banishment / deck) is discounted too.
+      const inHand = zones
+        .getCardsInZone("hand" as CoreZoneId, playerId as CorePlayerId)
+        .some((id) => (id as string) === cardId);
+      if (extras.viaFlow || !inHand) {
         total += Math.max(0, decodeCostAmount(effect.by ?? effect.reduction ?? effect.amount).energy);
       }
       continue;
