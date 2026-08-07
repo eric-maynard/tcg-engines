@@ -73,19 +73,18 @@ describe("Zenith Blade (ogn-262-298)", () => {
     expect(game.gameState.battlefields.bf1?.contested).toBe(true);
   });
 
-  test.failing("BUG: the destination is fixed — only 'that enemy unit's battlefield' (bf1), never another battlefield", async () => {
-    // Expected: no destination menu offering bf2; the ally can only land at bf1.
-    // Actual: the engine opens a free choose-destination prompt listing bf1 AND bf2.
+  test("the destination is fixed — only 'that enemy unit's battlefield' (bf1), never another battlefield", async () => {
+    // The destination menu must hold exactly bf1; bf2 is never offered.
+    // Checked on arrival — settling past this point fights the showdown the
+    // arrival stages (323.9), which recalls the losing attacker to base.
     const game = await board().build();
     await game.p1.cast("zb", { targets: ["foe", "ally"] });
     const stop = await game.settle();
-    if (stop.reason === "unanswered") {
-      const d = game.decision();
-      const keys = d?.kind === "pick" ? d.options.map((o) => o.key) : [];
-      expect(keys).toEqual(["battlefield-bf1"]);
-      await game.p1.pick("battlefield-bf1");
-      await game.settle();
-    }
+    expect(stop.reason).toBe("unanswered");
+    const d = game.decision();
+    const keys = d?.kind === "pick" ? d.options.map((o) => o.key) : [];
+    expect(keys).toEqual(["battlefield-bf1"]);
+    await game.p1.pick("battlefield-bf1");
     expect(game.locationOf("ally")).toBe("bf1");
   });
 
