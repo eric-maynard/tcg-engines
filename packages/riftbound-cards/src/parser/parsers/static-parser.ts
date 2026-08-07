@@ -1052,6 +1052,27 @@ function parseStaticAbilityInner(
     };
   }
 
+  // rule 824 (rule-id: unl-091-219) — "[Level N][>] This costs [2] less." and
+  // its "[4] less instead" twin: the bare self-discount wording used inside
+  // gated blocks. "instead" REPLACES the lower tier's discount rather than
+  // stacking with it, so the flag has to survive into the ability.
+  const thisCostBareMatch = cleanText.match(/^This costs?\s+(.+?)\s+less(\s+instead)?\.?$/i);
+  if (thisCostBareMatch) {
+    return {
+      ability: {
+        effect: {
+          ...(thisCostBareMatch[2] ? { instead: true } : {}),
+          reduction: thisCostBareMatch[1],
+          target: "self" as AnyTarget,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // "This spell's Energy cost is reduced by ..." - spell cost reduction
   const spellCostMatch = cleanText.match(/^This spell's Energy cost is reduced by\s+(.+?)\.?$/i);
   if (spellCostMatch) {
@@ -1493,6 +1514,28 @@ function parseStaticAbilityInner(
     return {
       ability: {
         condition: { condition: { type: "in-combat" }, type: "not" } as unknown as Condition,
+        effect: {
+          keyword: "Untargetable",
+          target: "self",
+          type: "grant-keyword",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // rule 757 (rule-id: unl-059-219) — a bare "I can't be chosen by enemy spells
+  // and abilities." is a CONTINUOUS self-protection, not a one-shot spell
+  // effect: it is a static granting the virtual Untargetable keyword to self,
+  // which the target resolver reads live (including under a [Level N] gate).
+  const cantBeChosenAlways = cleanText.match(
+    /^I can(?:'|’)?t be chosen by enemy spells and abilities\.?$/i,
+  );
+  if (cantBeChosenAlways) {
+    return {
+      ability: {
         effect: {
           keyword: "Untargetable",
           target: "self",

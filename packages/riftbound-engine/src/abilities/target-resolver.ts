@@ -516,11 +516,17 @@ const MIGHTY_THRESHOLD = 5;
 function selfProtectionConditionHolds(
   condition: unknown,
   meta: Partial<RiftboundCardMeta> | undefined,
+  controllerXp?: number,
 ): boolean {
   if (condition === undefined) {
     return true;
   }
-  const c = condition as { type?: string; condition?: unknown; conditions?: unknown[] };
+  const c = condition as {
+    type?: string;
+    condition?: unknown;
+    conditions?: unknown[];
+    threshold?: number;
+  };
   switch (c.type) {
     case "in-combat":
       return meta?.combatRole === "attacker" || meta?.combatRole === "defender";
@@ -528,12 +534,21 @@ function selfProtectionConditionHolds(
       return meta?.combatRole === "attacker";
     case "defending":
       return meta?.combatRole === "defender";
+    // rule 824 / 727.1.b (rule-id: unl-059-219) — "[Level N][>] I can't be
+    // chosen…": the gate is the CONTROLLER's current XP total (a threshold,
+    // never spent), read live rather than from the last static recalculation.
+    case "while-level":
+      return controllerXp !== undefined && controllerXp >= (c.threshold ?? 0);
     case "not":
-      return !selfProtectionConditionHolds(c.condition, meta);
+      return !selfProtectionConditionHolds(c.condition, meta, controllerXp);
     case "and":
-      return (c.conditions ?? []).every((sub) => selfProtectionConditionHolds(sub, meta));
+      return (c.conditions ?? []).every((sub) =>
+        selfProtectionConditionHolds(sub, meta, controllerXp),
+      );
     case "or":
-      return (c.conditions ?? []).some((sub) => selfProtectionConditionHolds(sub, meta));
+      return (c.conditions ?? []).some((sub) =>
+        selfProtectionConditionHolds(sub, meta, controllerXp),
+      );
     default:
       return false;
   }
@@ -544,7 +559,10 @@ function selfProtectionConditionHolds(
  * and abilities" when it carries the (virtual) Untargetable keyword, either
  * printed/static or granted for a duration via `grant-keyword`.
  */
-export function isUntargetable(cardId: string, ctx: Pick<TargetResolverContext, "cards">): boolean {
+export function isUntargetable(
+  cardId: string,
+  ctx: Pick<TargetResolverContext, "cards"> & Partial<Pick<TargetResolverContext, "draft">>,
+): boolean {
   const registry = getGlobalCardRegistry();
   if (registry.hasKeyword(cardId, "Untargetable")) {
     return true;
@@ -560,6 +578,11 @@ export function isUntargetable(cardId: string, ctx: Pick<TargetResolverContext, 
   const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
     | Partial<RiftboundCardMeta>
     | undefined;
+  const controller =
+    ctx.cards.getCardController?.(cardId as CoreCardId) ??
+    ctx.cards.getCardOwner(cardId as CoreCardId);
+  const controllerXp =
+    controller === undefined ? undefined : ctx.draft?.players?.[controller]?.xp;
   if (
     abilities.some(
       (a) =>
@@ -567,7 +590,7 @@ export function isUntargetable(cardId: string, ctx: Pick<TargetResolverContext, 
         a.effect?.type === "grant-keyword" &&
         a.effect.keyword === "Untargetable" &&
         (a.effect.target === undefined || a.effect.target === "self") &&
-        selfProtectionConditionHolds(a.condition, meta),
+        selfProtectionConditionHolds(a.condition, meta, controllerXp),
     )
   ) {
     return true;
