@@ -121,7 +121,7 @@ function liftModalTarget(
     return false;
   }
   const controller = choice.controllerId ?? choice.playerId;
-  const options = resolveTarget({ ...t, quantity: "all" }, {
+  const allOptions = resolveTarget({ ...t, quantity: "all" }, {
     cards: context.cards,
     choosing: true,
     draft,
@@ -130,6 +130,19 @@ function liftModalTarget(
     sourceZone: context.zones.getCardZone(choice.sourceCardId as CoreCardId),
     zones: context.zones,
   } as Parameters<typeof resolveTarget>[1]);
+  // rule 809.1.b / 356.2.a.2 (rule-id: ven-035-166) — the [Deflect] surcharge is a
+  // MANDATORY additional cost of CHOOSING that object, so a candidate whose
+  // surcharge the chooser cannot cover is not a legal choice and must never be
+  // offered (nor auto-bound for free). The source is already on the chain when a
+  // modal target is lifted, so the whole pooled Power is the budget.
+  const deflectBudget = Object.values(
+    (draft as { runePools?: Record<string, { power?: Partial<Record<string, number>> }> })
+      .runePools?.[controller]?.power ?? {},
+  ).reduce((a: number, b) => a + (b ?? 0), 0);
+  const options = allOptions.filter(
+    (id) => getDeflectSurcharge(draft, controller, [id], context.cards) <= deflectBudget,
+  );
+  const deflectFiltered = options.length < allOptions.length;
   // rule 809.1.c.1 (rule-id: sfd-077-221) — the [Deflect] surcharge is owed
   // when the target is CHOSEN, which for a modal effect is here and not at
   // cast time. A sole auto-bound candidate is charged immediately; a real
@@ -137,7 +150,25 @@ function liftModalTarget(
   const deflectTax = options.some(
     (id) => getDeflectSurcharge(draft, controller, [id], context.cards) > 0,
   );
-  if (options.length < 2) {
+  // rule 355.8 / 442.1.a (rule-id: ven-035-166) — a mode whose descriptor
+  // RESTRICTS what it may choose ("a unit that's [Empowered]") is still the
+  // controller's public choice: prompt with the sole survivor rather than
+  // auto-binding, so the restricted pool is visible (same reasoning as the
+  // fixed-destination move prompt in `chain/resolve.ts`).
+  const restrictedSole =
+    options.length === 1 &&
+    (deflectFiltered ||
+      ((t as { filter?: unknown }).filter !== undefined &&
+    resolveTarget({ ...t, filter: undefined, quantity: "all" }, {
+      cards: context.cards,
+      choosing: true,
+      draft,
+      playerId: controller,
+      sourceCardId: choice.sourceCardId,
+      sourceZone: context.zones.getCardZone(choice.sourceCardId as CoreCardId),
+      zones: context.zones,
+    } as Parameters<typeof resolveTarget>[1]).length >= 2));
+  if (options.length < 2 && !restrictedSole) {
     if (deflectTax && options.length === 1) {
       payAnyDomainPower(
         draft,
@@ -643,13 +674,18 @@ function canPayWeaponmasterEquip(
 }
 
 /**
- * All orderings of `items`. Callers only ever pass a handful of cards
- * (Predict looks at 2-3), so the factorial blow-up is bounded; longer lists
- * fall back to the current order to keep the move list finite.
+ * All orderings of `items`. Callers only ever pass a handful of cards — the
+ * largest printed Predict is 5 (rule 436.1.a: "put the rest back in any
+ * order"), so enumerate every arrangement up to that size; longer lists fall
+ * back to the current order plus its reverse to keep the move list finite.
+ * The move condition still accepts ANY permutation, so a caller-supplied
+ * order beyond this bound remains legal even when it isn't enumerated.
  */
+const MAX_ENUMERATED_ORDER = 5;
+
 function permutationsOf(items: readonly string[]): string[][] {
-  if (items.length > 4) {
-    return [[...items]];
+  if (items.length > MAX_ENUMERATED_ORDER) {
+    return [[...items], [...items].reverse()];
   }
   if (items.length <= 1) {
     return [[...items]];
