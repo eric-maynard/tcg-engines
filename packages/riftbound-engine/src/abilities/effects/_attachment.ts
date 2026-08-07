@@ -43,6 +43,20 @@ export function attachEquipment(ctx: EffectContext, equipmentId: string, unitId:
     update(unitId as CoreCardId, { equippedWith: [...current, equipmentId] });
   }
 
+  // rule 434.4: an attached card is wherever its holder is, so an Equipment
+  // already on the board travels to the unit's zone. Off-board Equipment (still
+  // being played) is placed by the play path, not here.
+  const holderZone = ctx.zones.getCardZone(unitId as CoreCardId);
+  const equipZone = ctx.zones.getCardZone(equipmentId as CoreCardId);
+  if (
+    holderZone !== undefined &&
+    equipZone !== undefined &&
+    equipZone !== holderZone &&
+    (equipZone === "base" || equipZone.startsWith("battlefield-"))
+  ) {
+    ctx.zones.moveCard({ cardId: equipmentId as CoreCardId, targetZoneId: holderZone as CoreZoneId });
+  }
+
   // rule 383.2.c / 401.1: "when you attach an Equipment to me" triggers.
   ctx.fireTriggers?.({
     cardId: unitId,

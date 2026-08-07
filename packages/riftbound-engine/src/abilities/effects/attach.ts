@@ -35,6 +35,50 @@ export function handle_attach(effect: ExecutableEffect, ctx: EffectContext, _h: 
     } as typeof ctx.draft.pendingChoice;
     return;
   }
+  // rule 434 / 355.13 (sfd-184-221) — "You may attach an Equipment with the
+  // same controller to IT": the holder is whatever an earlier step bound (the
+  // unit that just moved), and the Equipment is picked from `effect.equipment`.
+  // `optional` makes the pick declinable; with no legal Equipment nothing is
+  // asked at all (425.1.c).
+  const holderMode = (effect as unknown as { holder?: string }).holder;
+  if (holderMode === "bound") {
+    // Re-entry from the prompt: `boundTargets` is now the chosen Equipment, so
+    // the holder travels on the effect itself.
+    const stashed = (effect as unknown as { holderId?: string }).holderId;
+    if (stashed !== undefined) {
+      const picked = ctx.boundTargets?.[0];
+      if (picked !== undefined) {
+        attachEquipment(ctx, picked, stashed);
+      }
+      return;
+    }
+    const holderId = ctx.boundTargets?.[0];
+    if (holderId === undefined) {
+      return;
+    }
+    const { boundTargets: _holder, ...unbound } = ctx;
+    const candidates = getTargetIds(
+      {
+        ...effect,
+        target: { ...(effect.equipment as object), quantity: "all" },
+      } as unknown as ExecutableEffect,
+      unbound as EffectContext,
+    ).filter((id) => id !== holderId);
+    if (candidates.length === 0 || ctx.draft.pendingChoice) {
+      return;
+    }
+    const optional = (effect as unknown as { optional?: boolean }).optional === true;
+    ctx.draft.pendingChoice = {
+      ...(optional ? { anyNumber: true, maxPicks: 1, picked: [] } : {}),
+      effect: { ...effect, holderId },
+      options: candidates,
+      playerId: ctx.playerId,
+      remaining: 1,
+      sourceCardId: ctx.sourceCardId,
+      type: "choose-target",
+    } as typeof ctx.draft.pendingChoice;
+    return;
+  }
   // rule 819.1.d (sfd-054-221) — the mirror case: the SOURCE is the Equipment
   // and the pick names the unit it attaches to ("attach it to a unit you
   // control"). One candidate attaches directly, several are offered as a

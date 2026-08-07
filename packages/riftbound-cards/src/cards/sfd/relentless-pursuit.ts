@@ -1,7 +1,49 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { SpellCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Three clauses that all hang off the ONE unit the caster moves, so they ride
+ * on the move's destination prompt (`then`) rather than on sibling sequence
+ * steps: the moved unit is only known once the destination is answered.
+ * rule 434: the attach pays no Equip cost and is optional (355.13).
+ * rule 364.3: clause 3 installs a turn-scoped triggered ability on that unit.
+ */
+const abilities: Ability[] = [
+  {
+    effect: {
+      target: { controller: "friendly", type: "unit" },
+      then: {
+        effects: [
+          {
+            equipment: { controller: "friendly", type: "equipment" },
+            holder: "bound",
+            optional: true,
+            type: "attach",
+          },
+          {
+            duration: "turn",
+            effect: { target: "self", to: "base", type: "move" },
+            optional: true,
+            // rule 469.1 — the granted trigger is the hit-and-run payoff: it
+            // asks only after a conquer this unit fought for, never when it
+            // simply walked onto an open battlefield.
+            trigger: { afterAttack: true, event: "conquer", on: "self" },
+            type: "delayed-trigger",
+          },
+        ],
+        type: "sequence",
+      },
+      to: "choose",
+      type: "move",
+    },
+    timing: "action",
+    type: "spell",
+  },
+] as unknown as Ability[];
+
 export const relentlessPursuit: SpellCard = {
+  abilities,
   cardNumber: 184,
   cardType: "spell",
   domain: ["fury", "body"],
