@@ -50,6 +50,11 @@ export interface ReplacementEvent {
   readonly owner?: string;
   /** Amount (for damage/draw) */
   readonly amount?: number;
+  /**
+   * rule 443.1.a — how a `score` event is being produced ("conquer" | "hold").
+   * A replacement that declares its own `method` only applies to matching events.
+   */
+  readonly method?: string;
 }
 
 /**
@@ -144,10 +149,17 @@ function replacementApplies(
   eventCard: BoardCardEntry | undefined,
   ctx: ReplacementContext,
 ): boolean {
-  const { target, condition } = ability as {
+  const { target, condition, method } = ability as {
     target?: { controller?: string; excludeSelf?: boolean; location?: string; type?: string };
     condition?: { type?: string };
+    method?: string;
   };
+  // rule 443.1.a — a method-scoped skip ("skip the next point they would gain
+  // from CONQUERING") is not a generic score replacement: it never applies to a
+  // point gained by a different method (a Hold), and so is not consumed by one.
+  if (method !== undefined && event.method !== undefined && method !== event.method) {
+    return false;
+  }
   // rule 369.2 — the replacement only sees events matching its own target
   // description: "If a friendly UNIT would die" never applies to a gear or a
   // rune (ogn-077-298 must not replace its own "kill this instead").

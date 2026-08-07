@@ -172,6 +172,12 @@ export function applyScoreReplacement(
   state: RiftboundGameState,
   playerId: PlayerId,
   io: ScoreReplacementIO,
+  /**
+   * rule 443.1.a: how the point is being gained. Replacements that declare a
+   * `method` only match (and are only consumed by) the same method; callers
+   * that can't tell may omit it, and every replacement stays eligible.
+   */
+  method?: "conquer" | "hold",
 ): boolean {
   // rule 054.1: a static "opponents can't gain points" beats "can"; it removes
   // the POINT only — the Score itself still happened, so callers keep recording
@@ -189,7 +195,7 @@ export function applyScoreReplacement(
     zones: { getCardsInZone: io.zones.getCardsInZone },
   };
   const matches = findAllReplacements(
-    { amount: 1, owner: playerId, playerId, type: "score" },
+    { amount: 1, method, owner: playerId, playerId, type: "score" },
     ctx,
   );
   for (const match of matches) {
