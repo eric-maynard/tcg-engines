@@ -18,6 +18,7 @@ import { handle_modifyMight } from "./modify-might";
 import { handle_doubleMight } from "./double-might";
 import { handle_grantAbility } from "./grant-ability";
 import { handle_swapMight } from "./swap-might";
+import { handle_swapLocations } from "./swap-locations";
 import { handle_increaseMightTo } from "./increase-might-to";
 import { handle_gainControlOfSpell } from "./gain-control-of-spell";
 import { handle_empower } from "./empower";
@@ -46,6 +47,10 @@ import { handle_doTimes } from "./do-times";
 import { handle_fight } from "./fight";
 import { handle_play } from "./play";
 import { handle_look } from "./look";
+import {
+  handle_playBanishedCard,
+  handle_playBanishedPass,
+} from "./play-banished-pass";
 import { handle_mill } from "./mill";
 import { handle_reveal } from "./reveal";
 import { handle_revealHand } from "./reveal-hand";
@@ -92,6 +97,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "double-might": handle_doubleMight,
   "grant-ability": handle_grantAbility,
   "swap-might": handle_swapMight,
+  "swap-locations": handle_swapLocations,
   "increase-might-to": handle_increaseMightTo,
   "gain-control-of-spell": handle_gainControlOfSpell,
   "empower": handle_empower,
@@ -123,6 +129,9 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "fight": handle_fight,
   "play": handle_play,
   "look": handle_look,
+  // rule 337.1.b (ogn-115-298) — replay the public banish pass as plays.
+  "play-banished-pass": handle_playBanishedPass,
+  "play-banished-card": handle_playBanishedCard,
   // rule 440.1 — [Burn N]: put the top N cards of a Main Deck into its trash.
   "mill": handle_mill,
   "reveal": handle_reveal,
