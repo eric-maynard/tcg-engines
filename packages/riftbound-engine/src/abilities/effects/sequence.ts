@@ -285,12 +285,24 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         | undefined;
       // rule 355.13 (ogn-153-298) — a `confirm` prompt suspends the rest too:
       // the later steps resume from the prompt's `then` after the answer.
-      if ((parked?.type === "choose-mode" || parked?.type === "confirm") && parked.then === undefined) {
+      // rule 422.4 / 359.3.e (ogn-178-298) — so does a `reveal-and-pick`:
+      // "Discard 2, THEN draw 2" must not draw while the discard is unanswered
+      // (it would leak the drawn cards into the pick).
+      if (
+        (parked?.type === "choose-mode" ||
+          parked?.type === "confirm" ||
+          parked?.type === "reveal-and-pick") &&
+        parked.then === undefined
+      ) {
         const rest = seq.effects.slice(i + 1);
         if (rest.length > 0) {
           ctx.draft.pendingChoice = {
             ...(parked as object),
             then: { effects: rest, type: "sequence" },
+            // The continuation is the REST OF THE SEQUENCE, not the prompt's
+            // own follow-up: it must still run when an optional prompt is
+            // declined ("you may [Predict], then reveal the top card").
+            thenIsSequenceRest: true,
           } as typeof ctx.draft.pendingChoice;
         }
         return;

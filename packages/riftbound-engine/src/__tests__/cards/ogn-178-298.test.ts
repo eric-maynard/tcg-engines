@@ -93,6 +93,22 @@ describe("Undercover Agent (ogn-178-298)", () => {
     expect(game.p1.hand()).toHaveLength(3);
   });
 
+  test("the discard resolves BEFORE the draw (422.4 'then'): nothing is drawn until the pick is answered", async () => {
+    const game = await withHand(3).build();
+    const deckBefore = game.p1.deck().length;
+    await killAgent(game);
+    await game.settle();
+    expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
+    // The draw must not have happened yet — otherwise the drawn cards leak
+    // into the discard decision.
+    expect(game.p1.deck().length).toBe(deckBefore);
+    expect(game.p1.hand()).toHaveLength(3);
+    await game.p1.pick("h1", "h2");
+    await game.settle();
+    expect(game.p1.deck().length).toBe(deckBefore - 2);
+    expect(game.p1.hand()).toHaveLength(3);
+  });
+
   test("dying in combat also triggers Deathknell (323.4) — discard 2, draw 2", async () => {
     // Expected: the 5-Might Agent attacks a 6-Might defender and dies → Deathknell → h0/h1 discarded, 2 drawn.
     // Actual: combat deaths do not fire the die trigger; the hand is untouched.

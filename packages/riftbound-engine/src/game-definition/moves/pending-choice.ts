@@ -1591,6 +1591,18 @@ export const pendingChoiceMoves: Partial<
         if (choice.onRest === "recycle") {
           fireRecycleEvent(draft, context, choice.prompter, choice.revealed as readonly string[]);
         }
+        // rule 359.3.e — declining an optional prompt does not cancel the rest
+        // of the instruction it interrupted ("you may [Predict], THEN reveal
+        // the top card"); resume the suspended sequence remainder.
+        if ((choice as { thenIsSequenceRest?: boolean }).thenIsSequenceRest && choice.then) {
+          executeEffect(
+            choice.then as ExecutableEffect,
+            buildEffectContext(draft, choice.prompter, choice.sourceCardId ?? "", context),
+          );
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
+        }
         return;
       }
 
