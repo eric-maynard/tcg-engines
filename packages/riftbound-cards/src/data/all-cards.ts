@@ -808,6 +808,74 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-004-166": {
     abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
   },
+  // rule 828.1.d / 419.3 / 206 — Tail-Cloaked Matriarch: "[Empower] [2][chaos] /
+  // When I become [Empowered], you may choose a unit in your trash with Energy
+  // cost no more than [3] and Power cost no more than [rainbow]. Play it to your
+  // base, ignoring its cost." The parser derives the [Empower] activation but
+  // emits line 2 as a spell-shaped play with a pending value — the trash source
+  // and both printed-cost caps are lost — so both lines are declared here. Same
+  // primitive as Spectral Matron (ogn-226-298): a `from: "trash"` play with
+  // `ignoreCost: true` and two independent inclusive bounds.
+  "ven-104-166": {
+    abilities: [
+      {
+        cost: { energy: 2, power: ["chaos"] },
+        effect: { target: "self", type: "empower" },
+        restrictions: [{ type: "not-empowered" }],
+        type: "activated",
+      },
+      {
+        effect: {
+          from: "trash",
+          ignoreCost: true,
+          target: {
+            controller: "friendly",
+            filter: [{ energyCost: { lte: 3 } }, { powerCost: { lte: 1 } }],
+            type: "unit",
+          },
+          type: "play",
+        },
+        optional: true,
+        trigger: { event: "empower", on: "self" },
+        type: "triggered",
+      },
+    ],
+  },
+  // rule 359.3.e / 356.4.b / 317.2.c — Jayce, Man of Progress (VEN reprint of
+  // sfd-084-221 minus the reminder text): "When you play me, you may kill a
+  // friendly gear. If you do, you may play a gear with Energy cost no more than
+  // [7] from hand this turn, ignoring its Energy cost." The parser derives only
+  // the optional kill and drops the "If you do" rider, so the linked permission
+  // is declared here exactly as the SFD .ts definition carries it: a single-fire
+  // `play-cost` replacement that waives Energy (never Power) for one gear whose
+  // printed Energy cost is at most 7, swept at end of turn if unused.
+  "ven-175-166": {
+    abilities: [
+      {
+        effect: {
+          effects: [
+            { target: { controller: "friendly", type: "gear" }, type: "kill" },
+            {
+              condition: { type: "paid-additional-cost" },
+              then: {
+                duration: "next",
+                ignoreEnergyCost: true,
+                maxEnergyCost: 7,
+                replaces: "play-cost",
+                target: { controller: "friendly", type: "gear" },
+                type: "replacement",
+              },
+              type: "conditional",
+            },
+          ],
+          type: "sequence",
+        },
+        optional: true,
+        trigger: { event: "play-self" },
+        type: "triggered",
+      },
+    ],
+  },
   // rule 135.2 / 416.1.a — Decree of Strength: "Choose an opponent. They reveal
   // their hand and you choose a Mind card from it. They recycle that card."
   // Same primitive as Sabotage (ogn-156-298) but the pick filter is a DOMAIN,
@@ -1534,6 +1602,10 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
         effect: {
           effects: [
             {
+              // rule 383.3.b.1 — "disempower … TO empower …": the disempower is
+              // the trigger's base cost, paid when the item is finalized (before
+              // anyone gets Priority); only the empower waits for resolution.
+              costStep: true,
               target: {
                 controller: "friendly",
                 filter: "empowered",
@@ -1642,6 +1714,24 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
         cost: { energy: 3, power: ["rainbow"] },
         keyword: "Flow",
         type: "keyword",
+      },
+    ],
+  },
+  // rule 108.2 / 422.1.a — Cataclysmic Duel: "Each player chooses a unit they
+  // control. Kill the rest." The parser has no pattern for a per-player keeper
+  // choice whose complement dies, so the shape is declared here: `keep: "one"`
+  // asks every player (caster first) to name a keeper among the units they
+  // CONTROL and then kills every other unit on the board in one batch.
+  "ven-090-166": {
+    abilities: [
+      {
+        effect: {
+          keep: "one",
+          player: "each",
+          target: { controller: "friendly", quantity: "all", type: "unit" },
+          type: "kill",
+        },
+        type: "spell",
       },
     ],
   },
