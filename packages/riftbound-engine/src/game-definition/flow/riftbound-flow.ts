@@ -303,6 +303,14 @@ function runExpirationStep(context: FlowStepContext): void {
             });
           }
 
+          // rule-id: ven-126-166 — a "this turn" numeric Prevent shield (rule 437.1.b.1.a)
+          // expires unused in the Expiration Step (rule 517.2.b).
+          if (((meta as { damagePreventionShield?: number }).damagePreventionShield ?? 0) > 0) {
+            context.cards.updateCardMeta(cardId, {
+              damagePreventionShield: undefined,
+            } as unknown as Partial<RiftboundCardMeta>);
+          }
+
           // rule-id: ogn-157-298 — "you've not chosen this turn" resets (rule 517.2.b)
           if (meta.modesChosenThisTurn && meta.modesChosenThisTurn.length > 0) {
             context.cards.updateCardMeta(cardId, {
