@@ -590,8 +590,10 @@ export function resolveCombat(
       const combatDamage = damageAssignment[unit.id] ?? 0;
       const totalDamage = unit.currentDamage + combatDamage;
       // rule-id: ogn-254-298 — kill on any damage taken (bound replacement).
+      // rule 142.4.b: lethal damage is NON-ZERO damage ≥ Might, so an
+      // undamaged 0-Might unit survives a combat that assigned it nothing.
       if (
-        totalDamage >= lethalThreshold(unit, role) ||
+        (totalDamage > 0 && totalDamage >= lethalThreshold(unit, role)) ||
         (unit.diesOnAnyDamage === true && combatDamage > 0)
       ) {
         killed.push(unit.id);

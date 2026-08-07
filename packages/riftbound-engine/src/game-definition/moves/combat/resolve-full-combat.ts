@@ -272,8 +272,11 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       const def = registry.get(cardId as string);
 
       const printedMight = def?.might ?? 0;
-      // Skip non-unit cards (might === 0 or no might)
-      if (printedMight <= 0) {
+      // Skip non-unit cards (gear, …). rule 142.4.b: a 0-Might unit is a real
+      // body in combat — it takes damage (any non-zero damage is lethal) and is
+      // counted for the combat result, so printed Might alone can't exclude it.
+      const cardType = registry.getCardType(cardId as string);
+      if (cardType !== undefined ? cardType !== "unit" : printedMight <= 0) {
         continue;
       }
 
@@ -383,6 +386,13 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         defenderUnits.push(layered);
       }
     }
+
+    // rule 466.7.b — roster of units that were in this combat, so "when a
+    // combat that I was in ends" can fire for survivors (and for attackers
+    // recalled home by 466.1.a.2, which were still in it — rule 466.7.a).
+    const combatParticipantIds = new Set<string>(
+      [...attackerUnits, ...defenderUnits].map((u) => u.id as string),
+    );
 
     // rule 465.1: the Combat Damage Step only happens if both Attacking and
     // Defending units remain here when the showdown closes. If one side left
@@ -771,6 +781,27 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // Clear contested status
     battlefield.contested = false;
     battlefield.contestedBy = undefined;
+
+    // rule 466.7.b: the combat ENDS here, as the last step of the Resolution
+    // Step — after damage, kills, recalls and control are settled. Every unit
+    // that was in it and is still on the board sees it end; ones that died are
+    // in the trash and see nothing (rule 428.1.a).
+    for (const unitId of [...remainingUnits, ...recalledUnits]) {
+      if (!combatParticipantIds.has(unitId as string)) {
+        continue;
+      }
+      fireTriggers(
+        {
+          battlefieldId,
+          cardId: unitId as string,
+          playerId:
+            (cards.getCardController?.(unitId) as string | undefined) ??
+            (cards.getCardOwner(unitId) as string | undefined),
+          type: "combat-end",
+        },
+        { cards, counters, draft, zones },
+      );
+    }
 
     // rule 319.1 / 472 — the Cleanup that follows combat resolution: statics,
     // state-based checks, and the victory check for a conquer point.

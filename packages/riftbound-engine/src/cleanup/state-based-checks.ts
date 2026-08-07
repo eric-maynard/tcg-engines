@@ -341,8 +341,11 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     const def = registry.get(cardId as string);
     const baseMight = def?.might ?? 0;
 
-    // Only units have might — skip non-units
-    if (baseMight <= 0) {
+    // Only units have might — skip non-units. rule 142.4.b: a printed-0-Might
+    // unit is still a unit (any non-zero damage is lethal to it), so printed
+    // Might alone can't decide this.
+    const cardType = registry.getCardType(cardId as string);
+    if (cardType !== undefined ? cardType !== "unit" : baseMight <= 0) {
       continue;
     }
 
@@ -373,7 +376,9 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       damager !== victimController &&
       anyDamageLethalPlayers.has(damager);
 
-    if (damage >= effectiveMight || anyDamageIsLethal) {
+    // rule 142.4.b: lethal damage is NON-ZERO damage at least equal to Might —
+    // an undamaged 0-Might unit is alive.
+    if ((damage > 0 && damage >= effectiveMight) || anyDamageIsLethal) {
       // rule-id: unl-007-219 — runtime die-replacements bound to this unit
       // (installed by a resolved spell: "If it would die this turn, banish it
       // instead") take precedence over the normal kill (rule 571-573).

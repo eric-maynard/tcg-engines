@@ -112,7 +112,7 @@ describe("Scuttle Crab (unl-053-219)", () => {
     expect(game.p2.xp()).toBe(0);
   });
 
-  test.failing("BUG: Deathknell in combat — a 0-Might attacker dies to a 1-Might defender (dealing 0 back) and its controller gains 1 XP", async () => {
+  test("Deathknell in combat — a 0-Might attacker dies to a 1-Might defender (dealing 0 back) and its controller gains 1 XP", async () => {
     // Expected (323.4 / 808): Crab takes 1 ≥ 0 (non-zero) → dies; defender undamaged; P1 xp 1.
     // Actual: the combat death happens but no Deathknell trigger exists → xp stays 0.
     const game = await scenario()
@@ -130,7 +130,7 @@ describe("Scuttle Crab (unl-053-219)", () => {
     expect(game.p1.xp()).toBe(1);
   });
 
-  test.failing("BUG: the 0-Might Crab attacking a 1-Might defender should die (142.4.b) and deal no damage — the state-based check skips units whose base Might is 0", async () => {
+  test("the 0-Might Crab attacking a 1-Might defender dies (142.4.b) and deals no damage", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P2, "bf1", { might: 1, name: "Minnow" }, "minnow")
