@@ -467,7 +467,11 @@ function parseStaticAbilityInner(
   }
 
   // Try "If CONDITION, I have [KEYWORDS]"
-  const ifSelfGrantMatch = IF_SELF_GRANT_PATTERN.exec(cleanText);
+  // A "+N :rb_might:" in the granted text means this is the might+keyword form handled further
+  // below — matching here would silently drop the Might bonus.
+  const ifSelfGrantMatch = /\+\d+\s*:rb_might:/i.test(cleanText)
+    ? null
+    : IF_SELF_GRANT_PATTERN.exec(cleanText);
   if (ifSelfGrantMatch) {
     const conditionText = ifSelfGrantMatch[1];
     const keywordsText = ifSelfGrantMatch[2];
