@@ -173,11 +173,19 @@ function describePlayVariant(m, card) {
     return { label: `Play ${where}`, detail: `${baseCost} energy` };
   }
   const spec = m.params.additionalCostSpec;
-  if (m.params.sacrificeId) {
-    const sac = findCard(m.params.sacrificeId);
+  // Rule ogn-231-298: the "kill any number" additional cost enumerates one
+  // variant per subset (`sacrificeIds`), with `sacrificeId` set only for the
+  // single-unit ones — name every victim or all multi-kill subsets render as
+  // identical "Play + Accelerate" buttons.
+  const sacIds = Array.isArray(m.params.sacrificeIds) && m.params.sacrificeIds.length
+    ? m.params.sacrificeIds
+    : (m.params.sacrificeId ? [m.params.sacrificeId] : null);
+  if (sacIds) {
+    const names = sacIds.map(id => findCard(id)?.name ?? id);
+    const list = names.join(" + ");
     return {
-      label: `Play + sacrifice ${sac?.name ?? m.params.sacrificeId}`,
-      detail: `${baseCost} energy — kill ${sac?.name ?? "a permanent"} as an additional cost`,
+      label: `Play + sacrifice ${list}`,
+      detail: `${baseCost} energy — kill ${list} as an additional cost`,
     };
   }
   const parts = [];

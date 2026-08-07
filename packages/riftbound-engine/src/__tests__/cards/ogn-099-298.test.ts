@@ -58,6 +58,18 @@ describe("Garbage Grabber (ogn-099-298)", () => {
     expect(game.zoneOf("gg")).toBe("base");
   });
 
+  test("rule 416.5: the 3 simultaneously recycled cards hit the deck bottom in a RANDOM order, not trash order", async () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 30; i++) {
+      const game = await withTrash(3).build();
+      await game.p1.activate("gg");
+      const bottom = game.p1.deck().slice(-3);
+      expect(bottom.slice().sort()).toEqual(["t1", "t2", "t3"]);
+      seen.add(bottom.join(","));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
   test("with 4 cards in trash only 3 are recycled", async () => {
     const game = await withTrash(4).build();
     await game.p1.activate("gg");
