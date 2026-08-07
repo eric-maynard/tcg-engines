@@ -478,3 +478,36 @@ describe("124.1 / 191.1 / 428.1.a.1.b — a stolen unit that dies: its Deathknel
     expect(game.p2.hand()).toHaveLength(p2Hand0);
   });
 });
+
+describe("422 — a discard paid as a spell's additional COST is a discard event", () => {
+  const DISCARD_STRIKE = "ven-008-166"; // As an additional cost to play this, you may discard 1. Deal 3 (5 if paid).
+  /** Unit · 3 Might · "When you discard a card, draw 1." */
+  const SCAVENGER = {
+    abilities: [{ effect: { amount: 1, type: "draw" }, trigger: { event: "discard", on: "controller" }, type: "triggered" }],
+    cardType: "unit",
+    energyCost: 0,
+    might: 3,
+    name: "Filler Scavenger",
+  };
+
+  test("paying the discard cost fires the controller's discard listener", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 3 })
+      .battlefield("bf1", { controller: null })
+      .unit(P1, "base", SCAVENGER, "s")
+      .unit(P2, "bf1", { might: 6, name: "Target" }, "t")
+      .hand(P1, DISCARD_STRIKE, "strike")
+      .hand(P1, "ogn-175-298", "fodder")
+      .build();
+    const hand0 = game.p1.hand().length;
+    await game.p1.cast("strike", { params: { discardId: "fodder", paidAdditionalCost: true } });
+    expect(game.zoneOf("fodder")).toBe("trash");
+    await game.settle();
+    if (game.decision()?.kind === "pick") {
+      await game.p1.pick("t");
+      await game.settle();
+    }
+    expect(game.state("t").damage).toBe(5);
+    expect(game.p1.hand()).toHaveLength(hand0 - 2 + 1); // strike + fodder out, Scavenger drew 1
+  });
+});
