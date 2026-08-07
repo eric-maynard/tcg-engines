@@ -56,6 +56,15 @@ export interface RiftboundCardMeta {
   damage: number;
 
   /**
+   * rule 477.1.b.1: for a token that "becomes a copy" of a card, the copied
+   * card's instance id. The token keeps its shared `token-def-<slug>`
+   * definitionId (literal 0-Might token stats), so readers that resolve a card
+   * through its definition — the app snapshot's name/art — must follow this to
+   * the copied card's definition instead.
+   */
+  copyOfCardId?: string;
+
+  /**
    * rule 428.5.c: who dealt the most recent spell/ability damage to this
    * unit (and whether the source was a spell), so a lethal-damage cleanup
    * kill can be attributed; rule 428.5.c.2: "combat" = killed by combat
@@ -408,6 +417,13 @@ export interface SetupState {
   readonly pendingMulligan: PlayerId[];
 
   /**
+   * rule 117 — players mulligan "in turn order", so this records who has
+   * already taken their mulligan; a player may not go before the players
+   * ahead of them in turn order have.
+   */
+  mulliganedBy?: PlayerId[];
+
+  /**
    * Battlefield kept by each player during setup, keyed by player id.
    * rule 485.4.a: each player selects exactly one — "only 1 will be used".
    * rule 485.5: the selections are placed simultaneously, so a choice stays
@@ -518,8 +534,10 @@ export interface RevealAndPickChoice {
    * What to do with the revealed cards that were NOT picked. Used by
    * look/Vision effects (Rule 435) that put one card in hand and recycle
    * the rest. Omit to leave the unpicked cards where they are.
+   * rule-id: sfd-188-221 (Void Rush) — `"draw"` puts them in the prompter's
+   * hand instead ("Draw any you didn't banish").
    */
-  readonly onRest?: "recycle";
+  readonly onRest?: "recycle" | "draw";
 
   /** Card that produced the effect (used as the follow-up effect's source). */
   readonly sourceCardId?: CardId;
@@ -693,6 +711,16 @@ export interface ChooseModeChoice {
    * prompt (the later [Repeat] executions); run after the picked mode resolves.
    */
   readonly then?: unknown;
+  /**
+   * rule 820.2 (unl-182-219) — set when the mode is being chosen while the
+   * spell is PLAYED: the pick is baked into this chain item's stored effect
+   * instead of resolving now.
+   */
+  readonly bindToChainItemId?: string;
+  /** Index of the modal step inside a [Repeat] sequence (undefined = the whole effect). */
+  readonly modeSlot?: number;
+  /** Modes already locked for earlier executions (rule 355.8 narrows the menu). */
+  readonly chosenModes?: readonly number[];
 }
 
 /**
@@ -959,6 +987,13 @@ export interface RiftboundGameState {
    * turn ("opponents can't play cards this turn"). Cleared at end of turn.
    */
   cannotPlayCardsThisTurn?: Record<string, true>;
+
+  /**
+   * rule-id: sfd-078-221 (rules 206, 820.3) — per player, how many pending
+   * "next spell you play this turn has [Repeat] equal to its cost" grants are
+   * waiting. Consumed by the next spell they play; cleared at end of turn.
+   */
+  nextSpellRepeat?: Record<string, number>;
 
   /**
    * rule-id: unl-190-219 — players who can't play SPELLS for the rest of a

@@ -397,7 +397,16 @@ export function buildGameSnapshot(session: GameSession, viewingPlayer?: string) 
       return {
         cardType: def?.cardType ?? "unknown",
         controller: cardInstance?.controller ?? "",
-        definitionId: cardInstance?.definitionId ?? "",
+        // rule 477.1.b.1: a copy token's own definitionId is the shared
+        // `token-def-<slug>` (literal token art/stats) — report the copied
+        // card's definition so the client renders the copy, not a blank
+        // Reflection.
+        definitionId:
+          (baseMeta.copyOfCardId
+            ? internal.cards[baseMeta.copyOfCardId]?.definitionId
+            : undefined) ??
+          cardInstance?.definitionId ??
+          "",
         domain: def?.domain,
         energyCost: def?.energyCost,
         id: cardId,

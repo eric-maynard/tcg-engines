@@ -180,6 +180,15 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
         powerCost: copySource.powerCost ? [...copySource.powerCost] : undefined,
         tags: copySource.tags ? [...copySource.tags] : undefined,
       });
+      // rule 477.1.b.1: the token instance keeps the shared `token-def-<slug>`
+      // definitionId, which still carries the literal (0-Might "Reflection")
+      // stats — record which card it copies so readers that resolve a card
+      // through its definition (app snapshot name/art) show the copy.
+      if (copySourceId) {
+        ctx.cards.updateCardMeta?.(tokenId as CoreCardId, {
+          copyOfCardId: copySourceId,
+        } as unknown as Record<string, unknown>);
+      }
       // rule 477.2 / 477.2.a: the effect's own keywords are GRANTED on top of
       // the copied traits (ability layer), so they survive a later copy of the
       // token. Record them as grants as well as on the copy's keyword line.
