@@ -495,6 +495,59 @@ function matchesPrintedCostFilter(
 }
 
 /**
+ * rule 355.8 — a tag/name bound on a play target ("play a MECH from your
+ * trash"). Cards in the trash / hand are outside the zones the target resolver
+ * scans, so the tags are read from the registry definition here.
+ */
+function matchesCardTagFilter(cardId: string, filter: unknown): boolean {
+  if (typeof filter !== "object" || filter === null) {
+    return true;
+  }
+  const f = filter as { tag?: unknown; excludeTag?: unknown; name?: unknown };
+  const def = getGlobalCardRegistry().get(cardId) as
+    | { tags?: readonly string[]; name?: string }
+    | undefined;
+  const tags = def?.tags ?? [];
+  if (typeof f.tag === "string" && !tags.includes(f.tag)) {
+    return false;
+  }
+  if (typeof f.excludeTag === "string") {
+    const ex = f.excludeTag.toLowerCase();
+    if (tags.some((t) => t.toLowerCase() === ex)) {
+      return false;
+    }
+  }
+  if (typeof f.name === "string" && def?.name !== f.name) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * rule 356.4 (rule-id: sfd-026-221) — the Energy discount on a "play it from
+ * your trash" instruction. A plain number is used as printed; the dynamic form
+ * `{ might: "recycled" }` reads the Might of the card recycled to pay the
+ * instruction's own cost, which the payment hands back as the trigger source.
+ */
+function trashPlayEnergyReduction(effect: ExecutableEffect, ctx: EffectContext): number {
+  const raw = (effect as { reduceCost?: { energy?: unknown } }).reduceCost?.energy;
+  if (typeof raw === "number") {
+    return Math.max(0, raw);
+  }
+  if (
+    typeof raw === "object" &&
+    raw !== null &&
+    (raw as { might?: unknown }).might === "recycled" &&
+    ctx.triggerSourceId !== undefined
+  ) {
+    // The recycled card already left the board, so its board state is gone —
+    // its printed Might is the Might it had when it paid the cost.
+    return Math.max(0, getGlobalCardRegistry().getMight(ctx.triggerSourceId));
+  }
+  return 0;
+}
+
+/**
  * rule-id: ogn-196-298 — "play a unit from your trash, ignoring its Energy
  * cost. (You must still pay its Power cost.)". Rule 356.1.b: ignoring one cost
  * component leaves the others payable, so only trash cards whose remaining
@@ -504,12 +557,18 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
   const registry = getGlobalCardRegistry();
   const target = (effect as { target?: unknown }).target as { type?: string } | undefined;
   const ignoreCost = (effect as { ignoreCost?: unknown }).ignoreCost;
+  // rule 356.4 (rule-id: sfd-026-221) — "Reduce its Energy cost by the Might of
+  // the unit you recycled": the discount is only known once the cost has been
+  // paid, so it is read from the recycled card (this effect's trigger source).
+  const energyReduction = trashPlayEnergyReduction(effect, ctx);
   const extras: CostExtras =
     ignoreCost === true
       ? { ignoreBaseCost: true }
       : ignoreCost === "energy"
         ? { ignoreEnergyCost: true }
-        : {};
+        : energyReduction > 0
+          ? { additionalCost: { energy: -energyReduction } }
+          : {};
   const trash = ctx.zones.getCardsInZone(
     "trash" as CoreZoneId,
     ctx.playerId as CorePlayerId,
@@ -527,6 +586,11 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
       return false;
     }
     if (!costFilters.every((f) => matchesPrintedCostFilter(id, f, ctx))) {
+      return false;
+    }
+    // rule-id: sfd-026-221 (rule 355.8) — "play a MECH from your trash": a tag
+    // bound on the descriptor gates the candidates too.
+    if (!costFilters.every((f) => matchesCardTagFilter(id, f))) {
       return false;
     }
     return canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta);
@@ -547,6 +611,8 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
         playFrom: "trash",
         playIgnoreEnergy: extras.ignoreEnergyCost === true,
         playIgnoreCost: extras.ignoreBaseCost === true,
+        // rule 356.4 (rule-id: sfd-026-221) — the discount survives the pick.
+        playEnergyReduction: energyReduction,
         // rule-id: ogn-112-298 (rule 594) — "Then recycle it": a spell played
         // from the trash goes to the bottom of its owner's Main Deck instead of
         // back to the trash when it finishes resolving.
@@ -767,6 +833,9 @@ function playCandidatesFromHand(effect: ExecutableEffect, ctx: EffectContext): s
     }
     for (const f of filters) {
       if (typeof f.keyword === "string" && !registry.hasKeyword(id, f.keyword)) {
+        return false;
+      }
+      if (!matchesCardTagFilter(id, f)) {
         return false;
       }
       // rule 206.1 (rule-id: sfd-024-221) — "with Energy cost no more than [2]"

@@ -14,10 +14,6 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  1. Static: grant Assault 1 to friendly Mechs
  *  2. Triggered (conquer): pay (recycle another friendly unit) to play a
  *     Mech from trash with cost reduction equal to the recycled unit's Might
- *
- * FIXME: The "Reduce its Energy cost by the Might of the recycled unit" is
- * expressed via `reduceCost` with a placeholder energy amount. The engine
- * needs a variable-amount cost reduction to honor this exactly.
  */
 const abilities: Ability[] = [
   {
@@ -51,7 +47,10 @@ const abilities: Ability[] = [
     },
     effect: {
       from: "trash",
-      ignoreCost: "energy",
+      // rule 356.4 / 355.10.c.1: "Reduce its Energy cost by the Might of the
+      // unit you recycled" — the discount is the Might of the card recycled to
+      // pay this trigger's cost, which resolves as the effect's trigger source.
+      reduceCost: { energy: { might: "recycled" } },
       target: { filter: { tag: "Mech" }, type: "unit" },
       type: "play",
     },
@@ -75,5 +74,7 @@ export const rumbleHotheaded: UnitCard = {
   rulesText:
     "Your Mechs each have [Assault]. (+1 [Might] while we're attackers.)\nWhen I conquer, you may recycle another friendly unit to play a Mech from your trash. Reduce its Energy cost by the Might of the unit you recycled.",
   setId: "SFD",
-  tags: ["Rumble"],
+  // rule 522: the reminder "(+1 [Might] while WE're attackers)" counts Rumble
+  // among "your Mechs", so he carries the Mech tag himself.
+  tags: ["Rumble", "Mech"],
 };

@@ -90,7 +90,7 @@ describe("Rumble, Hotheaded (sfd-026-221)", () => {
     expect(def?.abilities).toHaveLength(2);
   });
 
-  test.failing("BUG: mis-parse — 'Reduce its Energy cost by the Might of the unit you recycled' is encoded as ignoreCost:'energy' (free) instead of a Might-sized reduction", async () => {
+  test("'Reduce its Energy cost by the Might of the unit you recycled' is encoded as a Might-sized reduction, not ignoreCost:'energy'", async () => {
     await conquerBoard().build();
     const trig = (peekDefaultCardPool()?.get(CARD)?.abilities?.[1] ?? {}) as { effect?: Record<string, unknown> };
     expect(trig.effect?.ignoreCost).toBeUndefined();
@@ -126,7 +126,7 @@ describe("Rumble, Hotheaded (sfd-026-221)", () => {
     expect(assault(game, "bubble")).toEqual([expect.objectContaining({ keyword: "Assault", value: 1 })]);
   });
 
-  test.failing("BUG: '(+1 [Might] while WE're attackers)' — Rumble is one of 'your Mechs' and should carry Assault himself (card data lacks the Mech tag)", async () => {
+  test("'(+1 [Might] while WE're attackers)' — Rumble is one of 'your Mechs' and carries Assault himself", async () => {
     const game = await scenario().unit(P1, "base", CARD, "rumble").build();
     expect(game.state("rumble").keywords).toContain("Assault");
   });
@@ -177,9 +177,7 @@ describe("Rumble, Hotheaded (sfd-026-221)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: 'play a MECH from your trash' — non-Mech units in the trash (Shipyard Skulker) must not be offered or playable", async () => {
-    // Expected: the trash pick lists only Mech-tagged units (mega, bubble); with only a Skulker in the
-    // trash nothing can be fetched. Actual: every unit in the trash is offered and can be played.
+  test("'play a MECH from your trash' — non-Mech units in the trash (Shipyard Skulker) are not offered or playable", async () => {
     const game = await conquerBoard().build();
     await conquer(game);
     await game.p1.yes();
