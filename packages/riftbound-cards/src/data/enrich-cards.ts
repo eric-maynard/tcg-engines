@@ -7,6 +7,7 @@
 
 import type { Card } from "@tcg/riftbound-types/cards";
 import { parseAbilities } from "../parser";
+import { expandHuntKeywords } from "../parser/impl/keywords";
 
 /**
  * Enrich a single card with parsed abilities.
@@ -19,9 +20,18 @@ import { parseAbilities } from "../parser";
  */
 function enrichCard(raw: Card): Card {
   const card = normalizeSpellTiming(raw);
-  // Skip if the card declares an explicit abilities array (hand-authored opt-out)
+  // Skip if the card declares an explicit abilities array (hand-authored opt-out).
+  // rule 808.1 / 729 / 823: effect-keyword shorthands (Deathknell, Vision, Hunt)
+  // still need their `triggered` sibling — the engine's trigger matcher only
+  // walks `type === "triggered"` abilities — so run that expansion here too.
   if (card.abilities !== undefined) {
-    return card;
+    if (card.abilities.length === 0) {
+      return card;
+    }
+    const expanded = expandHuntKeywords(card.abilities as Parameters<typeof expandHuntKeywords>[0]);
+    return expanded.length === card.abilities.length
+      ? card
+      : ({ ...card, abilities: expanded } as Card);
   }
   if (!card.rulesText || card.rulesText.trim().length === 0) {
     return card;

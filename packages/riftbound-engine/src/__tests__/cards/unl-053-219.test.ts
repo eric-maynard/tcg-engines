@@ -27,7 +27,7 @@ const FILLER = "ogn-175-298"; // Shipyard Skulker, vanilla 3-might
 const VENGEANCE = "ogn-229-298"; // 4 energy + [order][order] spell: Kill a unit.
 
 describe("Scuttle Crab (unl-053-219)", () => {
-  test.failing("BUG: parsed abilities should be a play-self draw trigger + a Deathknell (die) trigger ending in gain 1 XP; parser produced a lone `spell` gain-xp", async () => {
+  test("parsed abilities are a play-self draw trigger + a Deathknell (die) trigger ending in gain 1 XP", async () => {
     // Expected: [triggered play-self → draw 1, keyword Deathknell / triggered die → (…, gain-xp 1)].
     // Actual: abilities = [{ type: "spell", effect: gain-xp 1 }] — both printed abilities are lost.
     const pool = await loadDefaultCardPool();

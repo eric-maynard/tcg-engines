@@ -220,6 +220,15 @@ export const KEYWORD_TRIGGER_EVENTS: Readonly<Record<string, string>> = {
 
 export function expandHuntKeywords(abilities: Ability[]): Ability[] {
   const result: Ability[] = [];
+  // A hand-authored card may already spell out the triggered sibling next to
+  // the keyword; never install a second copy of the same event+effect.
+  const alreadyTriggered = (event: string, effect: unknown): boolean =>
+    abilities.some(
+      (a) =>
+        (a as { type?: string }).type === "triggered" &&
+        (a as { trigger?: { event?: string } }).trigger?.event === event &&
+        JSON.stringify((a as { effect?: unknown }).effect) === JSON.stringify(effect),
+    );
   for (const ab of abilities) {
     result.push(ab);
     if (ab.type !== "keyword") {
@@ -229,6 +238,9 @@ export function expandHuntKeywords(abilities: Ability[]): Ability[] {
     if (kw === "Hunt") {
       const amount = (ab as { value?: number }).value ?? 1;
       const gainXp = { amount, type: "gain-xp" } as unknown as Effect;
+      if (alreadyTriggered("conquer", gainXp)) {
+        continue;
+      }
       result.push({
         effect: gainXp,
         trigger: { event: "conquer", on: "self" },
@@ -244,7 +256,7 @@ export function expandHuntKeywords(abilities: Ability[]): Ability[] {
     const event = kw ? KEYWORD_TRIGGER_EVENTS[kw] : undefined;
     if (event) {
       const effect = (ab as { effect?: Effect }).effect;
-      if (effect) {
+      if (effect && !alreadyTriggered(event, effect)) {
         const condition = (ab as { condition?: unknown }).condition;
         result.push({
           ...(condition ? { condition } : {}),

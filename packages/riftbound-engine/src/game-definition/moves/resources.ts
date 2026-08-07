@@ -43,7 +43,21 @@ function runeAddAllowedDuringChoice(state: RiftboundGameState, playerId: string)
   if (!pending) {
     return true;
   }
-  return pending.type === "opt-in" && pending.playerId === playerId;
+  if (pending.type !== "opt-in" || pending.playerId !== playerId) {
+    return false;
+  }
+  // A costless "you may …" (rule 383.3.a) is not a Pay step: nothing can be
+  // funded, so the board stays frozen like every other pending choice.
+  const p = pending as unknown as Record<string, unknown>;
+  if (
+    p.counterRansom !== undefined ||
+    p.payChoice !== undefined ||
+    p.acceleratePlay !== undefined ||
+    p.instructedPlay !== undefined
+  ) {
+    return true;
+  }
+  return (p.resolved as { optInCost?: unknown } | undefined)?.optInCost !== undefined;
 }
 
 /**
