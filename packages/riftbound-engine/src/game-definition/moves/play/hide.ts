@@ -28,7 +28,12 @@ import {
   consumeEntersReadyReplacement,
   getGrantedAcceleratePlayCost,
 } from "./cost";
-import { findSequenceLeadTarget, spellEffectHasLegalTargets } from "./targeting";
+import { beginRevealSlotLock, isSinglePickSlot } from "./reveal-target-lock";
+import {
+  collectSequenceTargetSlots,
+  findSequenceLeadTarget,
+  spellEffectHasLegalTargets,
+} from "./targeting";
 import type { SpellEffectTargetShape } from "./targeting";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -501,6 +506,27 @@ export const hideCard: Defs["hideCard"] = {
 };
 
 /**
+ * rule-id: sfd-145-221 / unl-083-219 — a `swap-might` / `swap-locations` effect
+ * names TWO caster-chosen targets through `target1`/`target2` (`playSpell`
+ * enumerates one variant per legal pair). Returns the two descriptors as picker
+ * slots so the reveal path can ask for them one at a time.
+ */
+function pairEffectSlots(effect: unknown): readonly unknown[] | undefined {
+  const e = effect as { type?: string; target1?: unknown; target2?: unknown } | undefined;
+  if (e?.type !== "swap-might" && e?.type !== "swap-locations") {
+    return undefined;
+  }
+  const { target1, target2 } = e;
+  if (typeof target1 !== "object" || target1 === null) {
+    return undefined;
+  }
+  if (typeof target2 !== "object" || target2 === null) {
+    return undefined;
+  }
+  return [target1, target2];
+}
+
+/**
  * rule 811.1.d / 811.1.d.2 — a card played from Hidden must choose its targets
  * from options at the battlefield it was facedown at. rule 355.8: if no legal
  * target exists under that restriction, the card can't be played at all.
@@ -535,6 +561,31 @@ function hiddenSpellHasLegalTargets(
     return true;
   }
   const bfZone = getBattlefieldZoneId(battlefieldId);
+  // rule-id: sfd-145-221 — rule 811.1.d: a two-target effect ("Swap the Might of
+  // TWO units at the same battlefield") needs two DISTINCT candidates at the
+  // facedown battlefield; each descriptor being individually satisfiable is not
+  // enough, so a lone unit there makes the card unplayable from Hidden.
+  const pairSlots = pairEffectSlots(effect);
+  if (pairSlots) {
+    const pools = pairSlots.map((slot) =>
+      (
+        resolveTarget({ ...(slot as object), quantity: "all" } as never, {
+          cards: context.cards,
+          choosing: true,
+          draft: state,
+          playerId,
+          sameZone: bfZone,
+          sourceCardId: cardId,
+          sourceZone: bfZone,
+          zones: context.zones,
+        } as Parameters<typeof resolveTarget>[1]) as string[]
+      ).filter((id) => context.zones.getCardZone(id as CoreCardId) === bfZone),
+    );
+    const hasPair = pools[0]?.some((a) => pools[1]?.some((b) => b !== a)) ?? false;
+    if (!hasPair) {
+      return false;
+    }
+  }
   return spellEffectHasLegalTargets(effect, {
     battlefieldZone: bfZone,
     cards: {
@@ -583,6 +634,24 @@ function lockRevealedSpellTarget(
     | undefined;
   const item = items?.[items.length - 1];
   if (!item || item.cardId !== cardId || item.targets !== undefined) {
+    return;
+  }
+  // rule-id: ogn-220-298 (rule 355.5 / 811.1.b) — "Stun a friendly unit and an
+  // enemy unit at the same battlefield": a sequence naming TWO caster-chosen
+  // slots is asked for one prompt per slot and locked as targets [a, b],
+  // exactly like the `playSpell` pair enumeration.
+  const slots = collectSequenceTargetSlots(item.effect as SpellEffectTargetShape);
+  if (
+    findSequenceLeadTarget(item.effect as SpellEffectTargetShape) === undefined &&
+    slots !== undefined &&
+    slots.length >= 2 &&
+    slots.every((s) => isSinglePickSlot(s))
+  ) {
+    beginRevealSlotLock(
+      draft,
+      { battlefieldId, cardId, itemId: item.id, playerId, slots },
+      ctx,
+    );
     return;
   }
   // rule-id: ogn-213-298 — "Kill a unit at a battlefield. Its controller draws

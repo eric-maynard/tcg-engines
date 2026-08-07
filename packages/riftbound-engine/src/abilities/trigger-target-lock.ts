@@ -13,6 +13,7 @@ import type { CardId as CoreCardId } from "@tcg/core";
 import type { RiftboundGameState } from "../types";
 import type { TargetDescriptor } from "./target-resolver";
 import { resolveTarget } from "./target-resolver";
+import { continueRevealSlotLock } from "../game-definition/moves/play/reveal-target-lock";
 
 interface LockContext {
   // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
@@ -59,12 +60,63 @@ export function casterChosenTarget(effect: unknown): TargetDescriptor | undefine
 }
 
 /**
+ * rule 402.4 — a triggered ability that names SEVERAL Game Objects is removed
+ * from the Chain unless a legal choice exists for every slot: "return another
+ * friendly unit and an enemy unit" (sfd-132-221 Beast Below) does nothing at
+ * all when either half has no candidate, rather than resolving the half that
+ * does. Single-slot triggers are left alone — finding nothing at resolution
+ * already fizzles, which is observationally the same.
+ */
+export function triggerTargetsSatisfiable(
+  effect: unknown,
+  draft: RiftboundGameState,
+  ctx: LockContext,
+  cardId: string,
+  controller: string,
+): boolean {
+  const e = effect as { type?: string; effects?: readonly unknown[] } | null;
+  if (typeof e !== "object" || e === null || e.type !== "sequence" || !Array.isArray(e.effects)) {
+    return true;
+  }
+  const slots: TargetDescriptor[] = [];
+  for (const sub of e.effects) {
+    const t = casterChosenTarget(sub);
+    if (t) {
+      slots.push(t);
+    }
+  }
+  if (slots.length < 2) {
+    return true;
+  }
+  const sourceZone = ctx.zones.getCardZone?.(cardId as CoreCardId);
+  return slots.every(
+    (target) =>
+      resolveTarget({ ...target, quantity: "all" }, {
+        cards: ctx.cards,
+        choosing: true,
+        draft,
+        playerId: controller,
+        sourceCardId: cardId,
+        sourceZone,
+        zones: ctx.zones,
+      } as Parameters<typeof resolveTarget>[1]).length > 0,
+  );
+}
+
+/**
  * Prompt the controller of the first pending triggered item that still needs a
  * target (rule 355.5). Answering re-enters here from `pending-choice.ts`, so
  * several simultaneous triggers are targeted one after another, in chain order
  * (rule 337.1.b), before anyone receives priority.
  */
 export function lockTriggerTargets(draft: RiftboundGameState, ctx: LockContext): void {
+  if (draft.pendingChoice) {
+    return;
+  }
+  // rule-id: ogn-220-298 (rule 355.5 / 811.1.b) — a card played from [Hidden]
+  // naming several caster-chosen targets asks one prompt per slot; the answer
+  // to the previous slot lands here, so continue that lock before any trigger.
+  continueRevealSlotLock(draft, ctx);
   if (draft.pendingChoice) {
     return;
   }

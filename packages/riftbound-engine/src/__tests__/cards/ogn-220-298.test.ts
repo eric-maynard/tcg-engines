@@ -98,6 +98,41 @@ describe("Facebreaker (ogn-220-298)", () => {
     expect(game.p1.can("reveal", "fb")).toBe(false);
   });
 
+  test("Hidden reveal with several candidates: the caster still chooses BOTH units (rule 355.5 / 811.1.b) instead of the engine auto-picking", async () => {
+    const game = await scenario()
+      .resources(P1, { power: { rainbow: 1 } })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", { might: 2, name: "H1" }, "h1")
+      .unit(P1, "bf1", { might: 2, name: "H2" }, "h2")
+      .unit(P2, "bf1", { might: 5, name: "A1" }, "a1")
+      .unit(P2, "bf1", { might: 5, name: "A2" }, "a2")
+      .hand(P1, FACEBREAKER, "fb")
+      .build();
+    await game.p1.hide("fb", "bf1");
+    await game.advanceTurn();
+    await game.advanceTurn();
+    await game.p1.reveal("fb");
+    // Friendly slot first, then the enemy at the SAME battlefield — both prompted.
+    const friendly = game.decision();
+    expect(friendly?.kind).toBe("pick");
+    expect(
+      friendly?.kind === "pick" ? friendly.options.map((o) => o.card ?? o.key).sort() : [],
+    ).toEqual(["h1", "h2"]);
+    await game.p1.pick("h2");
+    const enemy = game.decision();
+    expect(enemy?.kind).toBe("pick");
+    expect(enemy?.kind === "pick" ? enemy.options.map((o) => o.card ?? o.key).sort() : []).toEqual([
+      "a1",
+      "a2",
+    ]);
+    await game.p1.pick("a2");
+    await game.settle();
+    expect(game.state("h2").isStunned).toBe(true);
+    expect(game.state("a2").isStunned).toBe(true);
+    expect(game.state("h1").isStunned).toBe(false);
+    expect(game.state("a1").isStunned).toBe(false);
+  });
+
   test("Hidden: on a later turn it plays from facedown for 0 as a Reaction during the opponent's attack there", async () => {
     const game = await scenario()
       .resources(P1, { power: { rainbow: 1 } })

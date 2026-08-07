@@ -166,6 +166,12 @@ export interface RiftboundCardMeta {
   namedCard?: string;
 
   /**
+   * Tag chosen by this card's controller via a "name a tag" effect
+   * (rule 762). Target filters `{ tag: "named" }` resolve through this.
+   */
+  namedTag?: string;
+
+  /**
    * Rule 355.8 (unl-182-219): mode indexes already picked from a "choose one
    * you haven't already chosen" effect on this card. Read by the `choice`
    * executor to hide already-taken options on subsequent Repeat casts.
@@ -451,6 +457,12 @@ export interface RevealAndPickChoice {
   /** The kind of choice that is pending. */
   readonly type: "reveal-and-pick";
 
+  /**
+   * rule 386.2 (unl-062-219 Predict) — effect to run when the prompter
+   * declines the optional pick, instead of simply ending the instruction.
+   */
+  readonly onDecline?: unknown;
+
   /** Player who triggered the choice (picks the card). */
   readonly prompter: PlayerId;
 
@@ -579,6 +591,21 @@ export interface RevealAndPickChoice {
 }
 
 /**
+ * rule 386.2 (unl-062-219 Predict): "put the rest back in any order" — the
+ * looked-at cards that stayed on top are arranged by their controller. The
+ * answer is the desired order, index 0 ending up on top of the Main Deck.
+ */
+export interface OrderCardsChoice {
+  readonly type: "order-cards";
+  /** Player who arranges the cards. */
+  readonly prompter: PlayerId;
+  /** Card whose effect asked for the arrangement. */
+  readonly sourceCardId: CardId;
+  /** Cards to arrange, in their current order (index 0 = topmost). */
+  readonly cards: readonly CardId[];
+}
+
+/**
  * Rule 762: the controller must name a legal card. The chosen name is
  * recorded on `sourceCardId`'s `namedCard` meta so linked abilities can
  * read it (e.g. Fallen Feline).
@@ -589,8 +616,8 @@ export interface NameCardChoice {
   readonly prompter: PlayerId;
   /** Card whose meta receives the chosen name. */
   readonly sourceCardId: CardId;
-  /** Card type the named card must have. */
-  readonly cardType: "spell" | "unit" | "gear";
+  /** Card type the named card must have; "tag" names a tag instead. */
+  readonly cardType: "spell" | "unit" | "gear" | "tag";
   /** Legal card names of `cardType` known to the current game's registry. */
   readonly options: readonly string[];
 }
@@ -888,6 +915,7 @@ export interface CombatDamageChoice {
 export type PendingChoice =
   | CombatDamageChoice
   | RevealAndPickChoice
+  | OrderCardsChoice
   | NameCardChoice
   | ChooseTargetChoice
   | ChooseDestinationChoice
@@ -1127,6 +1155,23 @@ export interface RiftboundGameState {
    * before play can continue.
    */
   pendingChoice?: PendingChoice;
+
+  /**
+   * rule-id: ogn-220-298 (rule 355.5 / 811.1.b) — open multi-slot target locks
+   * for spells played from [Hidden], keyed by chain item id. A card naming two
+   * caster-chosen targets is asked one prompt per slot; this keeps the picks
+   * settled so far (the reveal move has no `targets` parameter to carry them).
+   */
+  revealSlotLocks?: Record<
+    string,
+    {
+      playerId: PlayerId;
+      cardId: CardId;
+      battlefieldId: string;
+      slots: readonly unknown[];
+      picked: string[];
+    }
+  >;
 }
 
 /**
