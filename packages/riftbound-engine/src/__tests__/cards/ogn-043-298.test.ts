@@ -68,6 +68,8 @@ describe("Charm (ogn-043-298)", () => {
     await game.settle();
     await game.p1.pick("battlefield-bf2");
     await game.settle();
+    // rule 344.2 — settle() hands the Cleanup-begun showdown back once before passing Focus.
+    await game.settle();
     // The caster (P1) has no unit there, so Contested must never be credited
     // to P1 — the showdown belongs to P2, the moved unit's controller.
     expect(game.gameState.battlefields.bf2?.contestedBy).not.toBe(P1);

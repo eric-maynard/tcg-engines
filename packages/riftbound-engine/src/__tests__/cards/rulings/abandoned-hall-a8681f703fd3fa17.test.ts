@@ -73,6 +73,8 @@ describe("Ruling a8681f703fd3fa17 — Abandoned Hall sees the board AFTER the sp
     expect(game.state("ally").might).toBe(4);
     expect(game.state("resident").might).toBe(2);
     expect(game.chain()).toEqual([]);
+    // rule 344.2 — settle() hands the Cleanup-begun showdown back once before passing Focus.
+    await game.settle();
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
@@ -96,6 +98,8 @@ describe("Ruling a8681f703fd3fa17 — Abandoned Hall sees the board AFTER the sp
     expect(game.state("ally").might).toBe(3);
     expect(game.state("resident").might).toBe(3); // 2 + 1
     expect(game.chain()).toEqual([]);
+    // rule 344.2 — settle() hands the Cleanup-begun showdown back once before passing Focus.
+    await game.settle();
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
@@ -135,6 +139,8 @@ describe("Ruling a8681f703fd3fa17 — Abandoned Hall sees the board AFTER the sp
     expect(game.state("ally").might).toBe(3);
     expect(game.zoneOf("rtw")).toBe("trash");
     expect(game.chain()).toEqual([]);
+    // rule 344.2 — settle() hands the Cleanup-begun showdown back once before passing Focus.
+    await game.settle();
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 

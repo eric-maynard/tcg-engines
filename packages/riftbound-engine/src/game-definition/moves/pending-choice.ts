@@ -21,6 +21,7 @@ import type { EffectContext, ExecutableEffect } from "../../abilities/effect-exe
 import { markContestedOnArrival } from "../../abilities/effects/move";
 import { castSpellFromTrash } from "../../abilities/effects/play";
 import { contestBattlefieldOnArrival } from "./movement/contest-arrival";
+import { openPendingContestedShowdown } from "./chain/showdown";
 import { resolveTarget } from "../../abilities/target-resolver";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { lockTriggerTargets } from "../../abilities/trigger-target-lock";
@@ -264,6 +265,13 @@ function postChoiceCleanup(draft: RiftboundGameState, context: unknown): void {
   const ctx = context as Partial<PostMoveCleanupContext> | undefined;
   if (ctx?.cards && ctx?.counters && ctx?.zones && typeof ctx.zones.getCardsInZone === "function") {
     cleanupAndFireDeaths(draft, ctx as PostMoveCleanupContext);
+    // rule 323.12 / 344.2 — the Cleanup after the last choice of a resolution
+    // begins whatever Showdown that resolution staged (showdown-only
+    // battlefields first, then a staged Combat).
+    openPendingContestedShowdown(
+      draft,
+      ctx as unknown as Parameters<typeof openPendingContestedShowdown>[1],
+    );
   }
 }
 
@@ -1492,9 +1500,13 @@ export const pendingChoiceMoves: Partial<
         ) {
           contestBattlefieldOnArrival({
             arrivingUnitIds: [choice.cardId as string],
+            // rule 344.2 — this Showdown is begun by the Cleanup that follows the
+            // resolution, not by a player choosing to start it.
+            autoBegun: true,
             battlefieldId: targetZoneId.slice("battlefield-".length),
             cards: context.cards,
             counters: context.counters,
+            deferToCleanup: true,
             draft,
             playerId: arrivingController,
             zones: context.zones,

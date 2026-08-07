@@ -5,7 +5,11 @@
  */
 
 import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
-import { createInteractionState, startShowdown as startShowdownState } from "../../../chain";
+import {
+  createInteractionState,
+  getTurnState,
+  startShowdown as startShowdownState,
+} from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { isAloneAtLocation } from "./helpers";
@@ -27,12 +31,19 @@ export function contestBattlefieldOnArrival(args: {
   autoBegun?: boolean;
   battlefieldId: string;
   cards: TriggerCtx["cards"];
+  /**
+   * rule 323.12 / 323.13 — set by callers that arrive DURING a resolution: the
+   * Showdown is only staged here and the following Cleanup
+   * (`openPendingContestedShowdown`) begins it, in the mandated order
+   * (showdown-only battlefields before staged Combats).
+   */
+  deferToCleanup?: boolean;
   counters: TriggerCtx["counters"];
   draft: RiftboundGameState;
   playerId: string;
   zones: TriggerCtx["zones"];
 }): void {
-  const { arrivingUnitIds, autoBegun, battlefieldId, cards, counters, draft, playerId, zones } = args;
+  const { arrivingUnitIds, autoBegun, battlefieldId, cards, counters, deferToCleanup, draft, playerId, zones } = args;
   const bf = draft.battlefields?.[battlefieldId];
   if (!bf || bf.controller === playerId) {
     return;
@@ -63,6 +74,16 @@ export function contestBattlefieldOnArrival(args: {
   const existing = interaction.showdownStack.find(
     (sd) => sd.active && sd.battlefieldId === battlefieldId,
   );
+  // rule 323.12 / 323.13 — a Showdown staged part-way through a resolution
+  // does not begin here: the Cleanup that follows opens it, and only in the
+  // mandated order (showdown-only battlefields before staged Combats).
+  if (
+    deferToCleanup &&
+    !existing &&
+    (draft.pendingChoice || getTurnState(interaction) !== "neutral-open")
+  ) {
+    return;
+  }
   let started = interaction;
   let showdownBegan = !existing;
   if (existing) {

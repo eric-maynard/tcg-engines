@@ -713,7 +713,7 @@ describe("Empty destination → Non-Combat Showdown; enemy-held destination → 
     expect(game.decision()?.seat).toBe(P1);
   });
 
-  test.failing("BUG: 323.12 → 323.13 — when one resolution leaves a Non-Combat Showdown staged at bf1 AND a Combat staged at bf2, the showdown-only battlefield must begin first and bf2's combat waits for the next Neutral Open state; engine offers `startShowdown` for both battlefields at once (turn player could open the combat first)", async () => {
+  test("323.12 → 323.13 — when one resolution leaves a Non-Combat Showdown staged at bf1 AND a Combat staged at bf2, the showdown-only battlefield must begin first and bf2's combat waits for the next Neutral Open state; engine offers `startShowdown` for both battlefields at once (turn player could open the combat first)", async () => {
     // Setup: P1 casts March (a → ?) and, holding priority, responds with the Reaction Flank (b → ?). LIFO: Flank
     // resolves first (b → bf2, enemy-held → combat staged), then March (a → bf1, empty → showdown staged).
     // Expected after the chain: the Non-Combat Showdown at bf1 is what begins (or is the only one selectable);
