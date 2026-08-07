@@ -12,4 +12,5 @@ export const harnessedDragon: UnitCard = {
   rarity: "rare",
   rulesText: "When you play me, kill an enemy unit.",
   setId: "OGN",
+  tags: ["Dragon"], // printed DRAGON tag (missing from set data)
 };

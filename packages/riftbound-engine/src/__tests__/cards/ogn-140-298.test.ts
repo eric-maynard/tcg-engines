@@ -5,12 +5,12 @@
  *
  * Rules: 356.4 (discounts are applied while determining Total Cost), 356.4.e (a
  * discount's minimum applies only to that discount), 206 (printed cost is unchanged
- * for other effects). No printed Dragon exists in the pool yet, so the Dragons here
- * are inline units carrying the DRAGON tag.
+ * for other effects). Most Dragons here are inline units carrying the DRAGON tag; the
+ * last case uses the printed Dragons from the card pool.
  */
 
 import { describe, expect, test } from "bun:test";
-import { P1, P2, scenario } from "../../harness";
+import { P1, P2, loadDefaultCardPool, scenario } from "../../harness";
 
 const CARD = "ogn-140-298";
 const BIG_DRAGON = { energyCost: 5, might: 5, name: "Test Dragon", tags: ["Dragon"] };
@@ -83,5 +83,24 @@ describe("Herald of Scales (ogn-140-298)", () => {
     await game.p2.do("addResources", { energy: 2 });
     await game.p2.play("theirs");
     expect(game.p2.energy()).toBe(0);
+  });
+
+  test("printed Dragons in the card pool carry the DRAGON tag and get the discount", async () => {
+    const pool = await loadDefaultCardPool();
+    // rule 356.4: the aura matches on the played card's tags, so the pool must supply them.
+    for (const id of ["ogn-234-298", "ogn-038-298", "ogn-142-298", "ogn-131-298", "unl-118-219", "sfd-101-221"]) {
+      expect(pool.get(id)?.tags ?? []).toContain("Dragon");
+    }
+    // Mountain Drake (ogn-142-298): printed 9 energy, no power cost → 7 with Herald out.
+    const game = await scenario()
+      .resources(P1, { energy: 7 })
+      .unit(P1, "base", CARD, "herald")
+      .hand(P1, "ogn-142-298", "drake")
+      .build();
+    expect(game.p1.can("play", "drake")).toBe(true);
+    await game.p1.play("drake");
+    expect(game.p1.energy()).toBe(0);
+    await game.settle();
+    expect(game.zoneOf("drake")).toBe("base");
   });
 });

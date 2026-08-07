@@ -13,4 +13,5 @@ export const elderDragon: UnitCard = {
   rulesText:
     "Any amount of your damage is enough to kill enemy units.\nWhen you play me, choose up to one enemy unit at each location. Deal 1 to them.",
   setId: "UNL",
+  tags: ["Dragon"], // printed DRAGON tag (missing from set data)
 };

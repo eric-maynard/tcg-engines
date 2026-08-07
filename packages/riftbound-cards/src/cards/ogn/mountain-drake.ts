@@ -11,4 +11,5 @@ export const mountainDrake: UnitCard = {
   name: "Mountain Drake",
   rarity: "uncommon",
   setId: "OGN",
+  tags: ["Dragon"], // printed DRAGON tag (missing from set data)
 };

@@ -13,4 +13,5 @@ export const kadregrinTheInfernal: UnitCard = {
   rulesText:
     "When you play me, draw 1 for each of your [Mighty] units. (A unit is Mighty while it has 5+ [Might].)",
   setId: "OGN",
+  tags: ["Dragon"], // printed DRAGON tag (missing from set data)
 };

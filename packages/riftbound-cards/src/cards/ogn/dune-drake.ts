@@ -33,4 +33,5 @@ export const duneDrake: UnitCard = {
   rarity: "common",
   rulesText: "When I attack, give me +2 [Might] this turn if there is a ready enemy unit here.",
   setId: "OGN",
+  tags: ["Dragon"], // printed DRAGON tag (missing from set data)
 };

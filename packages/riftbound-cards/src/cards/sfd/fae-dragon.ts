@@ -13,4 +13,5 @@ export const faeDragon: UnitCard = {
   rulesText:
     "When you play me, buff up to four friendly units. (Give each a +1 [Might] buff if it doesn't have one.)\nWhen you spend a buff, play a Gold gear token exhausted.",
   setId: "SFD",
+  tags: ["Dragon"], // printed DRAGON tag (missing from set data)
 };

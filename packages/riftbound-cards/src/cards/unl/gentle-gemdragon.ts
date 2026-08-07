@@ -45,4 +45,5 @@ export const gentleGemdragon: UnitCard = {
   rarity: "uncommon",
   rulesText: "When you play me or another Dragon, ready up to 2 runes.",
   setId: "UNL",
+  tags: ["Dragon"], // printed DRAGON tag (missing from set data)
 };
