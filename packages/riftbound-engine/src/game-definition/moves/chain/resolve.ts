@@ -513,8 +513,16 @@ export function executeResolvedItem(
         ),
     );
     if (legal.length !== boundTargets.length) {
+      // rule 359.3.e.5 (unl-110-219) — "choose two units. They deal damage
+      // equal to their Mights to each other" links both choices: if either
+      // chosen unit has left the board the whole instruction does nothing and
+      // no bystander is substituted for the missing one.
+      const linkedFight =
+        effect.type === "fight" &&
+        typeof (effect as { attacker?: unknown }).attacker === "object" &&
+        typeof (effect as { defender?: unknown }).defender === "object";
       boundTargets = legal;
-      mistargeted = legal.length === 0;
+      mistargeted = legal.length === 0 || linkedFight;
     }
   }
   // rule-id: unl-119-219 (rule 355.10) — a `sequence` ("spend 3 XP, then deal
@@ -584,6 +592,28 @@ export function executeResolvedItem(
       options = options.filter(
         (id) => baseCtx.zones.getCardZone(id as CoreCardId) === hiddenZone,
       );
+    }
+    // rule 355.4.a (unl-112-219) — a choice must be able to do something: a
+    // unit already standing AT the destination cannot "move to" that
+    // battlefield, so it is never offered for a move whose destination is
+    // already fixed ("to that battlefield" / an explicit battlefield).
+    let fixedMoveDest: string | undefined;
+    if (effect.type === "move") {
+      const to = (effect as { to?: unknown }).to;
+      const destZone =
+        to === "same"
+          ? typeof trigEvt?.to === "string"
+            ? trigEvt.to
+            : undefined
+          : typeof to === "string" && to.startsWith("battlefield-")
+            ? to
+            : undefined;
+      if (typeof destZone === "string" && destZone.startsWith("battlefield-")) {
+        fixedMoveDest = destZone;
+        options = options.filter(
+          (id) => baseCtx.zones.getCardZone(id as CoreCardId) !== destZone,
+        );
+      }
     }
     // rule 809.1.c / 809.1.d (721.1.c): Deflect taxes ABILITIES as well as
     // spells — an opponent choosing a Deflect card with a triggered or
@@ -665,7 +695,10 @@ export function executeResolvedItem(
         return;
       }
       boundTargets = [];
-    } else if (options.length >= 2) {
+    } else if (options.length >= 2 || (fixedMoveDest !== undefined && options.length === 1)) {
+      // rule 355.10 (unl-112-219) — dragging a unit to a destination the
+      // trigger already fixed is still the controller's public choice, so it is
+      // prompted even when 355.4.a leaves exactly one legal candidate.
       draft.pendingChoice = {
         type: "choose-target",
         playerId: resolved.controller,
