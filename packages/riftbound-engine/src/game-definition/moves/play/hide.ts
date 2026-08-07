@@ -10,6 +10,8 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
+import { casterChosenTarget } from "../../../abilities/trigger-target-lock";
+import { resolveTarget } from "../../../abilities/target-resolver";
 import {
   addToChain,
   createInteractionState,
@@ -26,7 +28,7 @@ import {
   consumeEntersReadyReplacement,
   getGrantedAcceleratePlayCost,
 } from "./cost";
-import { spellEffectHasLegalTargets } from "./targeting";
+import { findSequenceLeadTarget, spellEffectHasLegalTargets } from "./targeting";
 import type { SpellEffectTargetShape } from "./targeting";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -556,6 +558,70 @@ function hiddenSpellHasLegalTargets(
 }
 
 /**
+ * rule 355.5 / 811.1.b (rule-id: ogn-213-298) — playing a card from Hidden
+ * follows the normal play process, so its targets are chosen when it is
+ * PLAYED, before anyone receives Priority, not when the chain item resolves.
+ * The pick is locked onto the chain item (`bindToChainItemId`), so a response
+ * that moves the chosen unit away mistargets the spell (rule 359.3.e.5).
+ * Candidates are restricted to the facedown battlefield (rule 811.1.d.2).
+ * With fewer than two options nothing is asked and resolution keeps its
+ * existing behaviour, mirroring `lockTriggerTargets`.
+ */
+function lockRevealedSpellTarget(
+  draft: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  battlefieldId: string | undefined,
+  // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
+  ctx: { cards: any; zones: any },
+): void {
+  if (draft.pendingChoice || battlefieldId === undefined) {
+    return;
+  }
+  const items = draft.interaction?.chain?.items as
+    | ({ readonly id: string } & Record<string, unknown>)[]
+    | undefined;
+  const item = items?.[items.length - 1];
+  if (!item || item.cardId !== cardId || item.targets !== undefined) {
+    return;
+  }
+  // rule-id: ogn-213-298 — "Kill a unit at a battlefield. Its controller draws
+  // 2" is a `sequence`; the lead step carries the caster-chosen target.
+  const target =
+    casterChosenTarget(item.effect) ??
+    casterChosenTarget({
+      target: findSequenceLeadTarget(item.effect as SpellEffectTargetShape),
+    });
+  if (!target) {
+    return;
+  }
+  const bfZone = getBattlefieldZoneId(battlefieldId);
+  const options = (
+    resolveTarget({ ...target, quantity: "all" }, {
+      cards: ctx.cards,
+      choosing: true,
+      draft,
+      playerId,
+      sourceCardId: cardId,
+      sourceZone: bfZone,
+      zones: ctx.zones,
+    } as Parameters<typeof resolveTarget>[1]) as string[]
+  ).filter((id) => ctx.zones.getCardZone(id as CoreCardId) === bfZone);
+  if (options.length < 2) {
+    return;
+  }
+  draft.pendingChoice = {
+    bindToChainItemId: item.id,
+    effect: item.effect as never,
+    options: options as never,
+    playerId: playerId as never,
+    remaining: 1,
+    sourceCardId: cardId as never,
+    type: "choose-target",
+  };
+}
+
+/**
  * Reveal and play a hidden card (rule 723.1.c.3).
  *
  * Playing a card from facedown OPENS a chain. For spell cards this
@@ -778,6 +844,8 @@ export const revealHidden: Defs["revealHidden"] = {
         { cardId, cardType: "spell", playerId, type: "play-from-hidden" },
         { cards, counters, draft, zones },
       );
+      // rule 355.5 / 811.1.b — targets are chosen as the card is played.
+      lockRevealedSpellTarget(draft, playerId, cardId, battlefieldId, { cards, zones });
       return;
     }
 

@@ -28,7 +28,7 @@ interface LockContext {
  * shapes ("any number of", "up to N", split damage) and for effects that
  * gather their own candidates from a private zone.
  */
-function casterChosenTarget(effect: unknown): TargetDescriptor | undefined {
+export function casterChosenTarget(effect: unknown): TargetDescriptor | undefined {
   if (typeof effect !== "object" || effect === null) {
     return undefined;
   }

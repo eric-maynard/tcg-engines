@@ -85,12 +85,13 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
     await game.p1.passPriority();
     expect(game.p2.can("reveal", "blade")).toBe(true);
     await game.p2.reveal("blade");
-    expect(game.chain().map((c) => c.cardId)).toEqual(["azir", "blade"]);
-    // Hidden Blade resolves first: P2 picks Azir → Azir dies while his trigger is still waiting.
-    await game.p2.passPriority();
-    await game.p1.passPriority();
+    // rule 355.5 / 811.1.b: the target is chosen as the card is played, before priority.
     expect(game.decision()).toMatchObject({ kind: "pick", seat: P2 });
     await game.p2.pick("azir");
+    expect(game.chain().map((c) => c.cardId)).toEqual(["azir", "blade"]);
+    // Hidden Blade resolves first → Azir dies while his trigger is still waiting.
+    await game.p2.passPriority();
+    await game.p1.passPriority();
     expect(game.zoneOf("azir")).toBe("trash");
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "azir", triggered: true })]);
   });
@@ -103,9 +104,9 @@ describe("Ruling cc1dfe2325b10a8d — Azir's 'this battlefield' is read on resol
     await game.p1.move("azir", "bf1");
     await game.p1.passPriority();
     await game.p2.reveal("blade");
+    await game.p2.pick("azir");
     await game.p2.passPriority();
     await game.p1.passPriority();
-    await game.p2.pick("azir");
     expect(game.zoneOf("azir")).toBe("trash");
     await resolveAzirTrigger(game);
     expect(game.chain()).toEqual([]);

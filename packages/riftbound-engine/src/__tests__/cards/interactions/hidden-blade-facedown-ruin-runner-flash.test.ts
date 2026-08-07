@@ -174,6 +174,8 @@ describe("Hidden Blade from facedown × Ruin Runner × Flash", () => {
   test("(d) P2 may respond to the facedown Hidden Blade with Flash; Flash resolves first (LIFO) and the unit is in base while Hidden Blade is still on the chain", async () => {
     const game = await board().build();
     await game.p1.reveal("blade");
+    // rule 355.5 / 811.1.b: the target is chosen as the card is played, before priority.
+    await game.p1.pick("bf1Vanilla");
     await game.p1.passPriority();
     expect(game.p2.can("cast", "flash")).toBe(true);
     await game.p2.cast("flash", { targets: "bf1Vanilla" });
@@ -186,7 +188,7 @@ describe("Hidden Blade from facedown × Ruin Runner × Flash", () => {
     expect(game.chain().map((c) => c.cardId)).toEqual(["blade"]);
   });
 
-  test.failing("BUG: (d) target is locked in when played, so after Flash the Blade mistargets: unit survives in base, nobody draws, Blade → trash for 0 energy (359.3.e.5, 359.3.e.14.a)", async () => {
+  test("(d) target is locked in when played, so after Flash the Blade mistargets: unit survives in base, nobody draws, Blade → trash for 0 energy (359.3.e.5, 359.3.e.14.a)", async () => {
     // Expected: playing from facedown follows the normal play process, so P1 chooses the target
     // (bf1Vanilla) BEFORE anyone gets priority (811.1.b, 355.5). Flash then moves it to base; on
     // resolution it is no longer "a unit at a battlefield" → not killed, and the linked "its
