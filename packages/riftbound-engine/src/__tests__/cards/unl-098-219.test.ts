@@ -141,7 +141,7 @@ describe("Targonian Visionary (unl-098-219)", () => {
     expect(game.state("vis").might).toBe(10);
   });
 
-  test.failing("BUG (824.1.d 'inactive as soon as'): once the Spend-XP cost is PAID (ability still on the chain) and XP < 11, the Visionary is already 6 — engine keeps showing 10 until the chain resolves", async () => {
+  test("(824.1.d 'inactive as soon as'): once the Spend-XP cost is PAID (ability still on the chain) and XP < 11, the Visionary is already 6 — engine keeps showing 10 until the chain resolves", async () => {
     // Expected: passive re-evaluates continuously; XP is below 11 right after the cost → 6 Might while P2 holds priority.
     // Actual: staticMightBonus is only recomputed after resolution (reads 10 with XP already < 11).
     const game = await scenario().xp(P1, 12).unit(P1, "base", CROWD_FAVORITE, "crowd").unit(P1, "base", CARD, "vis").build();

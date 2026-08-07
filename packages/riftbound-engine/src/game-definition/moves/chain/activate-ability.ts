@@ -20,6 +20,7 @@ import type { ExecutableEffect } from "../../../abilities/effect-executor";
 import { executeEffect } from "../../../abilities/effect-executor";
 import type { TargetDescriptor } from "../../../abilities/target-resolver";
 import { resolveTarget } from "../../../abilities/target-resolver";
+import { recalculateStaticEffects } from "../../../abilities/static-abilities";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
@@ -1593,5 +1594,14 @@ export const activateAbility: Defs["activateAbility"] = {
         );
       }
     }
+    // rule 824.1.d: a Dependent ability becomes inactive "as soon as" its
+    // condition stops holding — paying an XP/buff/exhaust cost can flip one off
+    // while the ability is still on the chain, so re-evaluate statics now
+    // rather than waiting for resolution.
+    recalculateStaticEffects({
+      cards: context.cards,
+      draft,
+      zones: context.zones,
+    } as unknown as Parameters<typeof recalculateStaticEffects>[0]);
   },
 };
