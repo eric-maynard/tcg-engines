@@ -106,9 +106,8 @@ describe("Rengar, Pouncing / Shen, Kinkou played into an ongoing combat", () => 
     expect(game.gameState.battlefields.bf1?.contested).toBe(true);
   });
 
-  test.failing("BUG: (b) once Focus reaches P2, Shen is offered → bf1 (a battlefield P2 controls) and, played there, resolves immediately as a Defender (813.3.a, 337.2, 464.2.c.3.a)", async () => {
-    // Expected: P2 may play the Reaction unit on P1's turn during the showdown to base or bf1.
-    // Actual: playUnit is only legal for the active player in a neutral-open main phase.
+  test("(b) once Focus reaches P2, Shen is offered → bf1 (a battlefield P2 controls) and, played there, resolves immediately as a Defender (813.3.a, 337.2, 464.2.c.3.a)", async () => {
+    // P2 may play the Reaction unit on P1's turn during the showdown, to base or bf1.
     const game = await attack();
     await game.p1.passFocus();
     expect(game.decision()).toMatchObject({ kind: "action", context: "showdown", seat: P2 });

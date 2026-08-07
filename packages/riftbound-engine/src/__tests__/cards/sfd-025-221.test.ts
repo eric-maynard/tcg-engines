@@ -194,9 +194,8 @@ describe("Rengar, Pouncing (sfd-025-221)", () => {
     expect(game.p2.points()).toBe(0);
   });
 
-  test.failing("BUG: flashed in as a defender mid-combat he gains the Defender designation at the next cleanup (464.2.c.3.a) — the engine leaves combatRole null", async () => {
-    // Expected: right after the Reaction play (a cleanup follows every action) Rengar reads combatRole
-    // "defender" like the Sentry beside him. Actual: null until combat ends (attacker side works).
+  test("flashed in as a defender mid-combat he gains the Defender designation at the next cleanup (464.2.c.3.a)", async () => {
+    // A cleanup follows every action, so Rengar reads combatRole "defender" like the Sentry beside him.
     const game = await scenario()
       .active(P2)
       .resources(P1, { energy: 3, power: { fury: 1 } })

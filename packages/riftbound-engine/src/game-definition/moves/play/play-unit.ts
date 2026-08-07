@@ -22,6 +22,10 @@ import {
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { canPlayViaAmbush } from "../../../keywords/keyword-effects";
 import { contestBattlefieldOnArrival } from "../movement/contest-arrival";
+import {
+  cleanupAndFireDeaths,
+  type PostMoveCleanupContext,
+} from "../../../cleanup/post-move-cleanup";
 import { applyPlayBattlefieldToken } from "./battlefield-token";
 import {
   extractBattlefieldId,
@@ -1217,6 +1221,13 @@ export const playUnit: Defs["playUnit"] = {
           zones,
         });
       }
+      // rule 464.2.c.3.a: a unit that becomes present at a battlefield during
+      // an ongoing combat gains its Attacker/Defender designation at the next
+      // Cleanup. `contestBattlefieldOnArrival` only stamps the arriving side of
+      // a battlefield its controller does NOT control, so a Reaction unit
+      // played to one you already hold (a defender joining mid-combat) needs
+      // the cleanup pass to designate it.
+      cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
     }
 
     // rule-id: ven-041-166-weaponmaster-on-play-equip
