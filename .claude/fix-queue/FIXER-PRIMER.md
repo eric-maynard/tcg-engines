@@ -52,8 +52,15 @@ Recipe: 1) dump enriched abilities. 2) JSON wrong → explicit `abilities` in th
   `resolveTarget({...tgt, quantity:"all"}, {choosing:true})`; `enumerator` emits one variant per legal target — this is what
   `game.p1.option("cast", c).fields` exposes. Only descriptors with `quantity` undefined/1 are caster-chosen at play time;
   `quantity:"all"`, `type:"player"|"battlefield"|"self"` are not. No Focus-holder check exists yet (rule 347 bugs land here).
-- Resolution-time choice for triggered/activated effects: `moves/chain/resolve.ts executeResolvedItem` raises a
-  `choose-target` pendingChoice when ≥2 options, auto-binds when exactly 1, lifts sequence lead targets.
+- TRIGGERED items are FINALIZED when queued (rules 337.1/383.3.a-b/402-404): `E/abilities/trigger-finalization.ts
+  finalizePendingItems` (run at the end of every move by `withTriggerFinalization`, moves/index.ts) asks, oldest
+  pending item first and BEFORE anyone gets priority: leading "you may" (`opt-in` + simple pay-cost, decline ⇒ item
+  removed), then the single caster-chosen target(s) (`executeResolvedItem(…, {finalizeOnly:true})` reuses the same
+  planning; ≥2 options ⇒ `choose-target` with `bindToChainItemId`, 1 ⇒ auto-bound onto `item.targets`, 0 ⇒ removed
+  per 402.4), then modes (`raisePlayTimeModeChoice`). Resolution uses `item.targets` and re-checks them against the
+  descriptor (illegal ⇒ that instruction fizzles, no re-target). Still at RESOLUTION: up-to-N/any-number picks, split
+  damage, reveal-and-pick/look, choose-destination, object-choosing costs (discard/recycle/kill), later "you may".
+  Harness: these prompts have `timing:"FIN"`; answer them right after the triggering verb (or `{answers:[…]}`), THEN settle.
 Recipe — add a filter (non-token, in-base, at-a-battlefield, other, stunned…):
 1) `T/targeting/riftbound-target-dsl.ts` — add to `SimpleFilter` if new.
 2) `E/abilities/target-resolver.ts matchesFilter` — add the `case` (token: `cardId.startsWith("token-")`, as in
@@ -127,7 +134,7 @@ effect and thread it through `reveal-and-pick.then`. If B needs A's object use `
   discarded/dying card itself; championZone excluded) → `findMatchingTriggers` → `evaluateTriggerCondition` (`legion,
   paid-additional-cost, while-empowered, while-at-battlefield, control, alone-in-combat, exists-here, fewer-runes-than-opponent`;
   unknown ⇒ true) → `orderTriggers` (turn player first) → `addToChain({triggered:true, optional, optInCost, triggerEvent})`.
-  `add-resource` effects and `ctx.resolveInline` run immediately. `optional:true` ⇒ `opt-in` prompt at resolution.
+  `add-resource` effects and `ctx.resolveInline` run immediately. `optional:true` ⇒ `opt-in` prompt at FINALIZATION (see §2 note).
   `GRANTED_KEYWORD_TRIGGERS` synthesises Vision for granted keywords. `play-self` also triggers a static recalc here.
 - Parser: `C/parser/impl/trigger-patterns.ts TRIGGER_PATTERNS` (regex → `{event, on, restrictions}`), `impl/triggers.ts
   parseTriggeredAbility` (leading/trailing "if" → `condition` via `parsers/condition-parser.ts`), `impl/keywords.ts
@@ -136,7 +143,7 @@ Recipe — trigger never fires: 1) dump abilities: need `{type:"triggered", trig
 2) Is `event` emitted (list above)? If not: add `fireTriggers` at the site and the shape to `GameEvent`/`EVENT_MAP`.
 3) Does `on` hit a handled branch AND does the event carry the owner/actor field that branch reads (`owner`, `playerId`,
    `movedBy`, `killedBy`, `chooserId`)? Else extend `triggerMatchesEvent`. 4) `restrictions`/`condition` type returning false?
-5) Triggered items sit on the chain — the test must `settle()`; `optional` ones need `yes()`.
+5) Triggered items sit on the chain — answer their FIN prompt (yes()/pick()) right after the triggering verb, then `settle()` to resolve.
 Recipe — "first/only once each turn": implement in `restrictionSatisfied` with a per-card counter on the draft (pattern:
 `draft.turnEvents` written in `fireTriggers`; clear it in flow `ending.onBegin`).
 Recipe — "when you kill X with a spell": `die` carries `killedBy/killSource/wasStunned` (kill.ts; damage kills snapshot
