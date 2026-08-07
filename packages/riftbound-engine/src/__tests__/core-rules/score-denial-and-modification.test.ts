@@ -884,7 +884,7 @@ describe("194.2(.a/.b) / 323.1 / 472 — both players at the Victory Score is a 
   // Expected (471.1.b: "1 point from the Victory Score OR HIGHER"): at 8 the lone conquer of A draws instead → still 8–8,
   // no winner; the conquer trigger still fires.
   // Actual: the conquer pays a 9th point → P1 wins.
-  test.failing("BUG: 471.1.b — at 8 (≥ VS−1) a lone conquer must draw instead of scoring the 9th; engine awards it and ends the game", async () => {
+  test("471.1.b — at 8 (≥ VS−1) a lone conquer must draw instead of scoring the 9th; engine awards it and ends the game", async () => {
     const game = await tieBoard();
     const hand0 = game.p1.hand().length;
     await game.p1.move("scout", "A");

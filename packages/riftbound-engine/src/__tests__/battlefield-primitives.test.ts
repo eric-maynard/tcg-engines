@@ -84,7 +84,19 @@ describe("victoryScoreModifier primitive (Aspirant's Climb)", () => {
     });
 
     expect(hasPlayerWon(state, "p1")).toBe(false);
-    expect(hasPlayerWon(state, "p2")).toBe(true);
+    // rule 194.2.b: 8-8 is a tie — p2 is AT its Victory Score but not ahead of
+    // p1, so nobody has won yet.
+    expect(hasPlayerWon(state, "p2")).toBe(false);
+
+    // p2 pulls ahead: 9 > 8 wins, while p1's +1 modifier still leaves it short.
+    const ahead = createState({
+      players: {
+        p1: createPlayer("p1", { victoryPoints: 8, victoryScoreModifier: 1 }),
+        p2: createPlayer("p2", { victoryPoints: 9, victoryScoreModifier: 0 }),
+      },
+    });
+    expect(hasPlayerWon(ahead, "p1")).toBe(false);
+    expect(hasPlayerWon(ahead, "p2")).toBe(true);
   });
 });
 

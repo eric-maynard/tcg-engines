@@ -32,7 +32,15 @@ export function hasPlayerWon(state: RiftboundGameState, playerId: PlayerId): boo
   if (!player) {
     return false;
   }
-  return player.victoryPoints >= getEffectiveVictoryScore(state, playerId);
+  if (player.victoryPoints < getEffectiveVictoryScore(state, playerId)) {
+    return false;
+  }
+  // rule 194.2(.a/.b) / 472: reaching the Victory Score is not enough — the
+  // player must also have MORE points than every opponent, so a tie at or above
+  // the Victory Score keeps the game going.
+  return Object.entries(state.players).every(
+    ([pid, other]) => pid === playerId || player.victoryPoints > (other?.victoryPoints ?? 0),
+  );
 }
 
 /**

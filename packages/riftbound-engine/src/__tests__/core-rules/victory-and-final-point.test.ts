@@ -545,7 +545,7 @@ describe("471.1.a.1 / 194.1.c / 340.1: ability points are not Conquer points; re
 // ---------------------------------------------------------------------------
 
 describe("194.2.a / 194.2.b / 323.1: a tie at or above the Victory Score has no winner until someone is strictly ahead at a Cleanup", () => {
-  test.failing("BUG: 194.2.b/471.1.b — 'each player gains 1 point' at 7–7 → 8–8, nobody wins; P1's lone conquer at 8 draws instead; P2 then holds to 9 and wins (engine declares a winner at the first 8 and ignores the score effect's player)", async () => {
+  test("194.2.b/471.1.b — 'each player gains 1 point' at 7–7 → 8–8, nobody wins; P1's lone conquer at 8 draws instead; P2 then holds to 9 and wins (engine declares a winner at the first 8 and ignores the score effect's player)", async () => {
     // Expected: 8–8 continues; P1's conquer of A → draw (8–8); P2's Scoring Step holds B → 9 > 8 →
     // P2 wins. Actual: engine finishes the game as soon as P1 reaches 8 mid-resolution.
     const game = await scenario()
@@ -586,7 +586,7 @@ describe("194.2.a / 194.2.b / 323.1: a tie at or above the Victory Score has no 
 // ---------------------------------------------------------------------------
 
 describe("321 / 321.1 / 319.5: no Cleanup (hence no win) while a chain item is resolving", () => {
-  test.failing("BUG: 321/323.1 — 'You gain 1 point. Then each opponent gains 1 point.' at 7–7: P1 is momentarily 8 vs 7 mid-resolution but the cleanup runs after the spell leaves the chain (8–8) → no winner; engine finishes the game between the two instructions", async () => {
+  test("321/323.1 — 'You gain 1 point. Then each opponent gains 1 point.' at 7–7: P1 is momentarily 8 vs 7 mid-resolution but the cleanup runs after the spell leaves the chain (8–8) → no winner; engine finishes the game between the two instructions", async () => {
     // Expected: 8–8, status playing, no winner (431.3.c.1's immediate win is only for repeated
     // Burn Out). Actual: status "finished", winner P1 as soon as the first instruction executes
     // (and the opponent-directed point is applied to P1 as well).
