@@ -507,6 +507,21 @@ export function spellEffectHasLegalTargets(
     if (!effect.effects.every((sub) => spellEffectHasLegalTargets(sub, ctx, affordable))) {
       return false;
     }
+    // rule 355.8 (rule-id: unl-198-219) — the sequence's OWN target: a
+    // restricted battlefield choice ("where you have units") the caster cannot
+    // make makes the whole play illegal.
+    const seqTarget = effect.target as { type?: string } | undefined;
+    if (
+      seqTarget?.type === "battlefield" &&
+      !targetDescriptorIsSatisfiable(
+        effect.target,
+        undefined,
+        ctx,
+        affordable,
+      )
+    ) {
+      return false;
+    }
     // rule-id: ogn-220-298 (rule 355.8) — "… and an enemy unit at the same
     // battlefield": some lead candidate's battlefield must also hold a legal
     // (distinct) target for the `location: "same"` step.
@@ -601,6 +616,24 @@ export function spellEffectHasLegalTargets(
   return true;
 }
 
+/**
+ * rule 355.4 / 355.8 — "where you have units" is a PRESENCE test (any unit the
+ * caster controls sitting at that battlefield), never a control test.
+ */
+function hasBattlefieldWithFriendlyUnits(ctx: Parameters<typeof resolveTarget>[1]): boolean {
+  const battlefields = Object.keys(
+    (ctx.draft as { battlefields?: Record<string, unknown> }).battlefields ?? {},
+  );
+  return battlefields.some((bfId) =>
+    ctx.zones
+      .getCardsInZone(`battlefield-${bfId}` as Parameters<typeof ctx.zones.getCardsInZone>[0])
+      .some(
+        (id) =>
+          (ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id)) === ctx.playerId,
+      ),
+  );
+}
+
 export function targetDescriptorIsSatisfiable(
   tgt: SpellEffectTargetDescriptor | undefined,
   player: string | undefined,
@@ -618,6 +651,15 @@ export function targetDescriptorIsSatisfiable(
   // rule-id: ogn-115-298 (rule 355.8) — a `pending-value` target names cards
   // produced earlier in the same resolution (revealed/banished cards), not a
   // board object chosen at play time, so it never gates castability.
+  // rule 355.8 (rule-id: unl-198-219) — "Choose a battlefield where you have
+  // units" is a RESTRICTED mandatory target: with no friendly unit at any
+  // battlefield there is no legal choice, so the card cannot be played.
+  if (
+    tgt.type === "battlefield" &&
+    (tgt as { filter?: { hasFriendlyUnits?: boolean } }).filter?.hasFriendlyUnits === true
+  ) {
+    return hasBattlefieldWithFriendlyUnits(ctx);
+  }
   if (
     tgt.type === "self" ||
     tgt.type === "player" ||
