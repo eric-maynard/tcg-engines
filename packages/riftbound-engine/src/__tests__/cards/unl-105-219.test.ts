@@ -55,8 +55,6 @@ async function fight(game: Game, bf: string): Promise<void> {
 
 describe("Imposing Challenger (unl-105-219)", () => {
   test("registry payload keeps the printed restrictions — an optional self-move trigger whose target is an ENEMY unit HERE with LESS Might, destination a different BATTLEFIELD", async () => {
-    // Expected: the effect encodes "here", the Might comparison and a battlefield-only destination.
-    // Actual: { target: { controller: enemy, type: unit }, to: "choose" } — all three restrictions dropped.
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "unit", domain: "body", energyCost: 5, might: 5, name: "Imposing Challenger" });
     expect(def?.powerCost ?? []).toEqual([]);
@@ -153,7 +151,6 @@ describe("Imposing Challenger (unl-105-219)", () => {
   });
 
   test("'an enemy unit HERE with LESS Might than me' — into Small (3) + Big (6) with Home (1) in P2's base, only Small is a legal choice", async () => {
-    // Expected: offered exactly [small]. Actual: home, small and big are all offered (no here / Might filter).
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .battlefield("bf2", { controller: null })
@@ -171,9 +168,10 @@ describe("Imposing Challenger (unl-105-219)", () => {
     }
   });
 
-  test.failing("BUG: equal Might is not 'less' — a lone 5-Might Twin here is not a legal choice, so accepting the trigger does nothing and the 5-vs-5 combat trades", async () => {
-    // Expected: after "yes" no target/destination prompt about Twin; combat: both 5s die, bf1 stays P2's (no units).
-    // Actual: Twin is offered (and could be pushed away for a free conquer).
+  test.failing("BUG: equal Might is not 'less' — with a lone 5-Might Twin here there is NO legal unit, so accepting does nothing (the Challenger must not move itself instead) and the 5-vs-5 combat trades", async () => {
+    // Expected: after "yes" no target/destination prompt at all; combat: both 5s die, nobody scores.
+    // Actual: Twin is correctly excluded, but with an empty target set the effect falls back to moving the
+    // Challenger ITSELF ("Choose a destination for Imposing Challenger") — it leaves bf1 and re-triggers.
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .battlefield("bf2", { controller: null })
@@ -183,14 +181,15 @@ describe("Imposing Challenger (unl-105-219)", () => {
     const d = await moveAndAccept(game, "bf1");
     expect(cards(d)).not.toContain("twin");
     expect(d?.source?.cardId).not.toBe("twin");
+    expect(d?.source?.cardId).not.toBe("ic"); // never "move myself"
     await game.settle();
+    expect(game.locationOf("ic")).not.toBe("bf2");
     expect(game.zoneOf("twin")).toBe("trash");
     expect(game.zoneOf("ic")).toBe("trash");
     expect(game.p1.points()).toBe(0);
   });
 
   test("'to a different battlefield' — the destination menu lists only OTHER battlefields (bf2, bf3): never a base, never bf1 itself", async () => {
-    // Expected: [battlefield-bf2, battlefield-bf3]. Actual: "base" is offered as well.
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .battlefield("bf2", { controller: null })
@@ -209,7 +208,6 @@ describe("Imposing Challenger (unl-105-219)", () => {
   });
 
   test("with a single battlefield on the board there is no 'different battlefield' — Small cannot be moved anywhere (certainly not to a base) and the plain combat happens", async () => {
-    // Expected: no destination offered / Small stays; combat 5 vs 3 kills Small. Actual: "base" is offered.
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P1, "base", CARD, "ic")
@@ -237,9 +235,10 @@ describe("Imposing Challenger (unl-105-219)", () => {
     expect(home.chain()).toEqual([expect.objectContaining({ cardId: "ic", triggered: true })]);
   });
 
-  test.failing("BUG: moving home to base triggers but no enemy is 'here' in my base — accepting finds no legal unit and nothing moves", async () => {
+  test.failing("BUG: moving home to base triggers but no enemy is 'here' in MY base — accepting finds no legal unit and nothing moves (Weak in P2's base is not 'here')", async () => {
     // Expected: after "yes" no pick naming weak/far; both stay put; P1 back in an open main phase.
-    // Actual: every enemy unit on the board is offered.
+    // Actual: "here" = base is matched against the ENEMY base too — Weak (P2's base) is chosen and a
+    // destination prompt for it appears.
     const game = await scenario()
       .battlefield("bf1", { controller: P1 })
       .battlefield("bf2", { controller: P2 })
