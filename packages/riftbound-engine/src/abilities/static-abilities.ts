@@ -338,6 +338,15 @@ export function evaluateCondition(
       const meta = ctx.cards.getCardMeta(source.id as CoreCardId) as
         | Partial<RiftboundCardMeta>
         | undefined;
+      // rule 441.1.c.1 (rule-id: ven-134-166) — "While I'm [Empowered] three
+      // times" is a tier on the empower COUNT, not the bare status.
+      const times = (condition as { times?: number }).times;
+      if (typeof times === "number") {
+        const count =
+          (meta as { empowerCount?: number } | undefined)?.empowerCount ??
+          (meta?.empowered === true ? 1 : 0);
+        return count >= times;
+      }
       return meta?.empowered === true;
     }
 
@@ -780,6 +789,15 @@ function applyStaticEffect(
 ): void {
   const effectType = effect.type as string;
 
+  // A static line may bundle several continuous effects ("I have [Deflect 3]
+  // and [Ganking]") — each half applies under the same condition and targets.
+  if (effectType === "sequence") {
+    for (const sub of (effect.effects as Record<string, unknown>[]) ?? []) {
+      applyStaticEffect(sub, targetIds, ctx, source);
+    }
+    return;
+  }
+
   if (effectType === "modify-might") {
     let amount = 0;
     const rawAmount = effect.amount;
@@ -817,6 +835,17 @@ function applyStaticEffect(
         ? (resolveStaticTargetsFromDescriptor(spec.count, source, getAllBoardCards(ctx), ctx) ?? [])
         : [];
       amount = counted.length * (typeof spec.multiplier === "number" ? spec.multiplier : 1);
+    } else if (rawAmount && typeof rawAmount === "object" && "empowerCount" in rawAmount) {
+      // rule 441.1.c.1 (rule-id: ven-134-166) — "+2 [Might] for each time I'm
+      // [Empowered]": zero times is +0, so the bonus scales with the count.
+      const srcMeta = source
+        ? (ctx.cards.getCardMeta(source.id as CoreCardId) as
+            | { empowerCount?: number; empowered?: boolean }
+            | undefined)
+        : undefined;
+      const count = srcMeta?.empowerCount ?? (srcMeta?.empowered === true ? 1 : 0);
+      const spec = rawAmount as { multiplier?: number };
+      amount = count * (typeof spec.multiplier === "number" ? spec.multiplier : 1);
     } else if (rawAmount && typeof rawAmount === "object" && "score" in rawAmount) {
       // rule-id: ogn-028-298 — dynamic static Might equal to a player's points.
       const whose = (rawAmount as { score: string }).score;

@@ -12,13 +12,25 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
     // rule 124.1 / 441.2 — Empowered is a board state on a permanent. A unit
     // that left the board before this resolved is a new object in its new
     // zone, so the status must not be written onto the card there.
+    // rule 355.9.a.4 — legends are permanents too and can be Empowered
+    // ("empower a legend, unit, or gear"); they sit in a Legend Zone.
     const zone = ctx.zones.getCardZone?.(targetId as CoreCardId) as string | undefined;
-    if (zone !== undefined && zone !== "base" && !zone.startsWith("battlefield-")) {
+    if (
+      zone !== undefined &&
+      zone !== "base" &&
+      zone !== "legendZone" &&
+      !zone.startsWith("battlefield-")
+    ) {
       continue;
     }
-    const wasEmpowered =
-      (ctx.cards.getCardMeta(targetId as CoreCardId) as { empowered?: boolean } | undefined)
-        ?.empowered ?? false;
+    const priorMeta = ctx.cards.getCardMeta(targetId as CoreCardId) as
+      | { empowered?: boolean; empowerCount?: number }
+      | undefined;
+    const wasEmpowered = priorMeta?.empowered ?? false;
+    // rule 441.1.c.1 (rule-id: ven-134-166) — cards that may be Empowered more
+    // than once scale off HOW MANY times ("+2 [Might] for each time I'm
+    // [Empowered]"), so the status carries a count alongside the flag.
+    const priorCount = priorMeta?.empowerCount ?? (wasEmpowered ? 1 : 0);
     // rule 517.2.b: "Disempower it at end of turn" rides along as a duration —
     // the flag is read by the Ending Step cleanup.
     const turnDuration = (effect as { duration?: string }).duration === "turn";
@@ -30,13 +42,16 @@ export function handle_empower(effect: ExecutableEffect, ctx: EffectContext, _h:
       targetId as CoreCardId,
       {
         empowered: effect.type === "empower",
+        empowerCount: effect.type === "empower" ? priorCount + 1 : 0,
         ...(untilEndOfTurn ? { empoweredUntilEndOfTurn: true } : {}),
         ...(effect.type === "disempower"
           ? { disempoweredUntilEndOfTurn: reEmpowerAtEndOfTurn, empoweredUntilEndOfTurn: false }
           : {}),
       } as unknown as Record<string, unknown>,
     );
-    if (wasEmpowered !== (effect.type === "empower")) {
+    // A repeat Empower (441.1.c.1) leaves the flag alone but raises the count,
+    // and per-empower statics have to be recomputed for it too.
+    if (wasEmpowered !== (effect.type === "empower") || effect.type === "empower") {
       changed = true;
     }
     // Rule 827.1.c: "When I become [Empowered]" fires on the false→true edge.

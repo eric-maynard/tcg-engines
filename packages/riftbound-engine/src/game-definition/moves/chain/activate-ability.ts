@@ -555,6 +555,27 @@ export function blockedWhileEmpowered(
 }
 
 /**
+ * rule 441.1.c.1 (rule-id: ven-134-166) — an effect may grant permission to be
+ * Empowered several times ("I can be [Empowered] up to three times"), and it
+ * then ignores 441.1.b/827.1.c.1 entirely. Such an ability carries an
+ * `empower-limit` restriction: the activation is legal until the host has been
+ * Empowered that many times.
+ */
+export function empowerActivationBlocked(
+  restrictions: readonly { type: string; condition?: unknown }[] | undefined,
+  meta: { empowered?: boolean; empowerCount?: number } | undefined,
+): boolean {
+  const limit = restrictions?.find((r) => r.type === "empower-limit") as
+    | { max?: number }
+    | undefined;
+  if (limit) {
+    const count = meta?.empowerCount ?? (meta?.empowered === true ? 1 : 0);
+    return count >= (limit.max ?? 1);
+  }
+  return blockedWhileEmpowered(restrictions) && meta?.empowered === true;
+}
+
+/**
  * rule 356.6 (rule-id: ven-163-166) — "[Empower] costs of your units here cost
  * [1] or [rainbow] less": a board static discounting an [Empower] ACTIVATION
  * cost (never a play cost) by one resource. Returns how many such discounts
@@ -896,11 +917,11 @@ export const activateAbility: Defs["activateAbility"] = {
     }
     // Rule 827.1.c.1: [Empower] carries an implicit "Play only if not
     // Empowered" — reject activation when the host is already Empowered.
-    if (blockedWhileEmpowered(abilityRestrictions)) {
+    {
       const hostMeta = context.cards.getCardMeta(cardId as CoreCardId) as
-        | { empowered?: boolean }
+        | { empowered?: boolean; empowerCount?: number }
         | undefined;
-      if (hostMeta?.empowered === true) {
+      if (empowerActivationBlocked(abilityRestrictions, hostMeta)) {
         return false;
       }
     }
@@ -1332,11 +1353,11 @@ export const activateAbility: Defs["activateAbility"] = {
           continue;
         }
         // Rule 827.1.c.1: [Empower] — skip when the host is already Empowered.
-        if (blockedWhileEmpowered(abilityRestrictions)) {
+        {
           const hostMeta = context.cards.getCardMeta(entry.hostCardId as CoreCardId) as
-            | { empowered?: boolean }
+            | { empowered?: boolean; empowerCount?: number }
             | undefined;
-          if (hostMeta?.empowered === true) {
+          if (empowerActivationBlocked(abilityRestrictions, hostMeta)) {
             continue;
           }
         }

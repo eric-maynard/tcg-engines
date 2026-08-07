@@ -262,6 +262,14 @@ function parseGrantTarget(text: string): Target {
     }
   }
 
+  // rule 442.1.a (rule-id: ven-130-166) — "Your units that are [Empowered]" gates
+  // every recipient on the Empowered status; dropping the clause would let the
+  // aura address every friendly unit. Only the explicit relative clause counts —
+  // "If I'm [Empowered], they have …" is a source-side condition, not a filter.
+  if (target.filter === undefined && /\b(?:that(?:'s| is| are)|who are)\s+\[empowered\]/.test(normalized)) {
+    target.filter = "empowered";
+  }
+
   // Check for specific types/tribes
   let foundTribe = false;
   for (const [plural, singular] of Object.entries(TRIBAL_TAGS)) {

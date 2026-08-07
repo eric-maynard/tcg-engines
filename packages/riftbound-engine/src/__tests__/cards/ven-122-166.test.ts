@@ -250,7 +250,7 @@ describe("Solari Sunhawk (ven-122-166)", () => {
     expect(plain.p1.points()).toBe(0);
   });
 
-  test.failing("BUG: partner — Aurok General ('[Empowered] your units that are Empowered have +2'): Empowered General + Empowered Sunhawk = 6, but a PLAIN Sunhawk beside them stays 3", async () => {
+  test("partner — Aurok General ('[Empowered] your units that are Empowered have +2'): Empowered General + Empowered Sunhawk = 6, but a PLAIN Sunhawk beside them stays 3", async () => {
     // Expected: hawk 3+1+2 = 6, plain 3 (not Empowered → no General bonus), General 5+2 = 7.
     // Actual: the General's bonus ignores the "that are [Empowered]" filter — the plain Sunhawk reads 5.
     const game = await scenario()
