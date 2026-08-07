@@ -231,6 +231,37 @@ export function findSplitDamageEffect(
 }
 
 /**
+ * rule-id: sfd-107-221 (rule 355.8 / 355.14.a) — "Choose an equipped friendly
+ * unit. It deals damage equal to its Might to an enemy unit": alongside the
+ * Might-reference unit the spell names the DAMAGED unit as a second
+ * caster-chosen target. Surface that (non-split) damage step's own single-card
+ * descriptor so enumeration can lock both as targets [refUnit, damagedUnit].
+ */
+export function findAmountReferenceDamageTarget(
+  effect: SpellEffectTargetShape | undefined,
+): SpellEffectTargetDescriptor | undefined {
+  if (!effect) return undefined;
+  if (
+    effect.type === "damage" &&
+    (effect as { split?: boolean }).split !== true &&
+    effect.amount?.might !== undefined &&
+    typeof effect.amount.might !== "string" &&
+    typeof effect.target === "object" &&
+    effect.target !== null &&
+    effect.target.quantity === undefined
+  ) {
+    return effect.target;
+  }
+  if (effect.type === "sequence" && Array.isArray(effect.effects)) {
+    for (const sub of effect.effects) {
+      const found = findAmountReferenceDamageTarget(sub);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/**
  * rule-id: ogn-256-298 (Fox-Fire) — aggregate legality of a multi-target pick
  * set ("any number of units at a battlefield with total Might 4 or less"):
  * "at a battlefield" (singular) pins every pick to ONE battlefield zone, and

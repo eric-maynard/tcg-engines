@@ -167,7 +167,7 @@ describe("Thwonk! (sfd-040-221)", () => {
   // different choice at play time, so both attackers can be stunned and the defender takes 0.
   // Actual: the repeat variant only carries one target; a two-target repeat cast is not a legal
   // variant, and the second execution just re-stuns the same unit.
-  test.failing("BUG: Repeat should let the second execution choose a DIFFERENT attacking unit (820.2.a) — both attackers stunned, defender unharmed", async () => {
+  test("Repeat lets the second execution choose a DIFFERENT attacking unit (820.2.a) — both attackers stunned, defender unharmed", async () => {
     const game = await siege(4).build();
     await game.p2.move(["atkA", "atkB"], "bf1");
     await game.p2.passFocus();

@@ -818,10 +818,10 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         ctx.cards.updateCardMeta(cardId, {
           attachedTo: undefined,
         } as Partial<RiftboundCardMeta>);
-      } else if (def.cardType !== "gear") {
-        // Unattached Equipment that never had a host is left where it is.
-        continue;
       }
+      // rule 435.4.a / 318: an Equipment detached from a unit AT a battlefield
+      // is present at that battlefield, so this Cleanup recalls it to base —
+      // exactly like any other loose gear (rule 518).
       ctx.zones.moveCard({
         cardId,
         targetZoneId: "base" as CoreZoneId,

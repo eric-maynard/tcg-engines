@@ -130,7 +130,7 @@ describe("Frigid Touch (sfd-066-221)", () => {
     expect(game.p1.energy()).toBe(1);
   });
 
-  test.failing("BUG: [Repeat] 820.2.a — the extra execution may choose a DIFFERENT unit (-2 to each of two units)", async () => {
+  test("[Repeat] 820.2.a — the extra execution may choose a DIFFERENT unit (-2 to each of two units)", async () => {
     // Expected: with the Repeat cost paid the caster makes choices for each execution separately, so
     // "foe" and "ally" can each take -2. Actual: only single-target variants are enumerated; the
     // repeated execution is forced onto the same unit.

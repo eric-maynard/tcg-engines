@@ -165,16 +165,30 @@ export function resolveAmount(
     // (locked at finalization per 355.15); otherwise fall back to the first
     // legal match so the expression never silently collapses to 0.
     if (typeof mightRef === "object" && mightRef !== null) {
-      const refId =
-        ctx.boundTargets?.[0] ??
-        resolveTarget(mightRef as TargetDescriptor, {
+      const pool = resolveTarget(
+        { ...(mightRef as TargetDescriptor), quantity: "all" },
+        {
           cards: ctx.cards,
           draft: ctx.draft,
           playerId: ctx.playerId,
           sourceCardId: ctx.sourceCardId,
           sourceZone: ctx.sourceZone,
           zones: ctx.zones,
-        })[0];
+        },
+      );
+      // rule-id: sfd-107-221 — the reference unit is locked at play time and
+      // travels either as this sequence's pending value (when the step's own
+      // bound target is the DAMAGED unit) or as the first bound target.
+      const chosen =
+        (ctx as { pendingSequenceValue?: readonly string[] }).pendingSequenceValue?.[0] ??
+        ctx.boundTargets?.[0];
+      // rule 359.3.e.12 / 359.3.f.2 — the Might is read on resolution: a
+      // chosen reference that no longer matches the descriptor (it stopped
+      // being equipped, left the board, …) has a null referent → no damage.
+      if (chosen !== undefined) {
+        return pool.includes(chosen) ? getEffectiveMight(chosen, ctx) : 0;
+      }
+      const refId = pool[0];
       return refId ? getEffectiveMight(refId, ctx) : 0;
     }
   }

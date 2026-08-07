@@ -52,7 +52,7 @@ async function castStrikeDown(game: Game, friendly: string, enemy: string): Prom
 }
 
 describe("Strike Down (sfd-107-221)", () => {
-  test.failing("BUG: parsed abilities should carry BOTH the might-based damage step and the detach step; only `detach` was produced", async () => {
+  test("parsed abilities should carry BOTH the might-based damage step and the detach step; only `detach` was produced", async () => {
     // Expected: one spell ability whose effect is a sequence [damage(amount = chosen unit's Might, to enemy unit), detach].
     // Actual: `{ effect: { type: "detach" } }` — the whole first sentence pair is missing.
     const def = (await loadDefaultCardPool()).get(CARD);
@@ -80,7 +80,7 @@ describe("Strike Down (sfd-107-221)", () => {
     expect(game.p1.can("cast", "sd")).toBe(false);
   });
 
-  test.failing("BUG: needs an equipped FRIENDLY unit — with only a bare friendly unit and an equipped ENEMY unit the spell is not playable", async () => {
+  test("needs an equipped FRIENDLY unit — with only a bare friendly unit and an equipped ENEMY unit the spell is not playable", async () => {
     // Expected: no legal first choice → cannot be cast (spells need legal targets to be played).
     // Actual: the engine offers the cast with no targets at all.
     const game = await scenario()
@@ -93,7 +93,7 @@ describe("Strike Down (sfd-107-221)", () => {
     expect(game.p1.can("cast", "sd")).toBe(false);
   });
 
-  test.failing("BUG: main line — pays 3+[body]; Knight (3+2) deals 5 to the enemy unit, THEN Doran's Blade is detached and stays in base", async () => {
+  test("main line — pays 3+[body]; Knight (3+2) deals 5 to the enemy unit, THEN Doran's Blade is detached and stays in base", async () => {
     // Expected: foe takes 5 (survives at 6 might), blade unattached in P1's base, knight back to 3 might.
     // Actual: no targets are accepted and no damage step exists.
     const game = await board(6).build();
@@ -112,7 +112,7 @@ describe("Strike Down (sfd-107-221)", () => {
     expect(game.zoneOf("sd")).toBe("trash");
   });
 
-  test.failing("BUG: the Equipment bonus counts — exactly lethal: a 5-might enemy dies to the 3+2 Knight", async () => {
+  test("the Equipment bonus counts — exactly lethal: a 5-might enemy dies to the 3+2 Knight", async () => {
     const game = await board(5).build();
     await castStrikeDown(game, "knight", "foe");
     await game.settle();
@@ -120,7 +120,7 @@ describe("Strike Down (sfd-107-221)", () => {
     expect(game.state("blade").attachedTo).toBeUndefined();
   });
 
-  test.failing("BUG: one short is not lethal — a 6-might enemy survives with 5 damage marked", async () => {
+  test("one short is not lethal — a 6-might enemy survives with 5 damage marked", async () => {
     const game = await board(6).build();
     await castStrikeDown(game, "knight", "foe");
     await game.settle();
@@ -128,7 +128,7 @@ describe("Strike Down (sfd-107-221)", () => {
     expect(game.state("foe").damage).toBe(5);
   });
 
-  test.failing("BUG: the enemy unit may be anywhere — an enemy at a battlefield is a legal second choice and takes the damage there", async () => {
+  test("the enemy unit may be anywhere — an enemy at a battlefield is a legal second choice and takes the damage there", async () => {
     const game = await board()
       .battlefield("theirs", { controller: P2 })
       .unit(P2, "theirs", { might: 4, name: "Sentry" }, "sentry")
@@ -140,7 +140,7 @@ describe("Strike Down (sfd-107-221)", () => {
     expect(game.state("foe").damage).toBe(0);
   });
 
-  test.failing("BUG: 'detach AN Equipment' — with two attached, 6 damage is dealt (3+2+1) and exactly one chosen Equipment comes off", async () => {
+  test("'detach AN Equipment' — with two attached, 6 damage is dealt (3+2+1) and exactly one chosen Equipment comes off", async () => {
     // Expected: P1 picks which Equipment to detach (we pick Hexdrinker); Doran's Blade stays on → knight 5 might.
     const game = await scenario()
       .resources(P1, { energy: 3, power: { body: 1 } })
@@ -161,7 +161,7 @@ describe("Strike Down (sfd-107-221)", () => {
     expect(game.state("knight").might).toBe(5);
   });
 
-  test.failing("BUG: an Equipment detached from a unit AT A BATTLEFIELD is recalled to its controller's base in the next Cleanup (435.4.a)", async () => {
+  test("an Equipment detached from a unit AT A BATTLEFIELD is recalled to its controller's base in the next Cleanup (435.4.a)", async () => {
     // Expected: blade ends unattached in P1's base. Actual (today's detach): it is left in the battlefield zone.
     const game = await scenario()
       .resources(P1, { energy: 3, power: { body: 1 } })

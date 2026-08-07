@@ -111,7 +111,7 @@ describe("Feral Strength (sfd-034-221)", () => {
     expect(rich.zoneOf("fs")).toBe("hand");
   });
 
-  test.failing("BUG: [Repeat] may choose a DIFFERENT unit for the extra execution (820.2.a) — +2 to each of two units", async () => {
+  test("[Repeat] may choose a DIFFERENT unit for the extra execution (820.2.a) — +2 to each of two units", async () => {
     // Expected: with Repeat paid the caster makes two independent target choices, e.g. ally and
     // other, each getting +2. Actual: the engine enumerates a single target set for the repeated
     // spell, so a two-unit cast is rejected as ILLEGAL_ARGS.

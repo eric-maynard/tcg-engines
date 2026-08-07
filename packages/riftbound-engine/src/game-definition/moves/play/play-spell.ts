@@ -45,6 +45,7 @@ import {
   collectIndependentTargetSlots,
   collectSequenceTargetSlots,
   findAllAtOneBattlefieldTarget,
+  findAmountReferenceDamageTarget,
   findAmountReferenceTarget,
   findReplacementChosenTarget,
   findSequenceLeadTarget,
@@ -882,12 +883,17 @@ export const playSpell: Defs["playSpell"] = {
       };
       const secondOptional =
         seqSlots?.length === 2 && isSinglePick(seqSlots[0]) && isOptionalSinglePick(seqSlots[1]);
+      // rule-id: sfd-107-221 (rule 355.8 / 355.14.a) — "…It deals damage equal
+      // to its Might to an enemy unit": the damaged unit is a second
+      // caster-chosen target alongside the Might reference, so pair them.
       const secondTgt =
-        seqSlots?.length === 2 &&
-        isSinglePick(seqSlots[0]) &&
-        (isSinglePick(seqSlots[1]) || secondOptional)
-          ? seqSlots[1]
-          : undefined;
+        refTgt !== undefined && findSplitDamageEffect(spellEffect) === undefined
+          ? findAmountReferenceDamageTarget(spellEffect)
+          : seqSlots?.length === 2 &&
+              isSinglePick(seqSlots[0]) &&
+              (isSinglePick(seqSlots[1]) || secondOptional)
+            ? seqSlots[1]
+            : undefined;
       const tgt =
         spellEffect?.target ??
         refTgt ??
@@ -1511,6 +1517,20 @@ export const playSpell: Defs["playSpell"] = {
               break;
             }
             results.push({ ...base, repeatCount: n });
+            // rule 820.2.a — the extra execution makes its OWN choices, so the
+            // caster may name a different target for each execution. Offer one
+            // variant per distinct ordered target list of length n+1 (the first
+            // slot stays this base variant's target).
+            if (isCardTarget && base.targets?.length === 1 && n === 1) {
+              const first = base.targets[0] as string;
+              for (const other of baseVariants) {
+                const alt = other.targets?.[0];
+                if (alt === undefined || alt === first) {
+                  continue;
+                }
+                results.push({ ...base, repeatCount: n, targets: [first, alt] });
+              }
+            }
           }
         }
       }
@@ -1764,6 +1784,10 @@ export const playSpell: Defs["playSpell"] = {
       effectToStore = {
         effects: repeatedEffects,
         type: "sequence",
+        // rule 820.2.a — each execution makes its own choices: when the caster
+        // named one target per execution, every copy owns a POSITIONAL slot so
+        // execution i affects targets[i] instead of all of them hitting the first.
+        ...(targets && targets.length === 1 + repeatN ? { independentTargets: true } : {}),
       };
     }
     // rule 204.3.b (ogn-268-298): an X pledged up front for a [rainbow] X spell
