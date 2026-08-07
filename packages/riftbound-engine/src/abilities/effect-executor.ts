@@ -83,6 +83,13 @@ export interface EffectContext {
   /** rule-id: ogn-220-298 — prior target's zone for `location: "same"`. */
   readonly sameZone?: string;
   /**
+   * rule-id: sfd-024-221 (rule 354.2) — cards a step actually PLAYED out of a
+   * non-board zone, written by the play handler. A hand pick is not
+   * board-resolvable, so an enclosing sequence's `pendingValue` ("Attach IT to
+   * me") reads the id back from here instead of re-resolving a target.
+   */
+  readonly playedSink?: { ids: string[] };
+  /**
    * rule-id: unl-133-219 — subject card id of the event that fired this
    * triggered ability, so `{ type: "trigger-source" }` ("it") resolves.
    */

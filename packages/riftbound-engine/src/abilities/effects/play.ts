@@ -7,6 +7,7 @@ import {
   type CostExtras,
   deductCost,
   getOptionalPlayCost,
+  hasStaticEffect,
   staticEnterReadyApplies,
 } from "../../game-definition/moves/play/cost";
 import { extractBattlefieldId } from "../../zones/zone-configs";
@@ -88,6 +89,19 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // reduction leaves the rest of the cost payable, so the play is charged here.
   if (from === "hand" && isControlledBattlefieldDest(toLocation)) {
     playFromHandToControlledBattlefield(effect, ctx);
+    return;
+  }
+  // rule-id: sfd-024-221 (rules 355.10.a / 356.1.b.1) — "play an Equipment with
+  // Energy cost no more than [2], ignoring its cost": the hand is not a board
+  // zone, the destination of a gear play is always base (rule 143.1.a.1), and
+  // "ignoring its cost" waives the whole printed cost, so the play resolves
+  // here instead of parking a pending chain item that needs a location choice.
+  if (
+    from === "hand" &&
+    toLocation === undefined &&
+    isGearTargetDescriptor((effect as { target?: unknown }).target)
+  ) {
+    playGearFromHand(effect, ctx);
     return;
   }
   if (from === "hand" && !ctx.boundTargets) {
@@ -755,9 +769,90 @@ function playCandidatesFromHand(effect: ExecutableEffect, ctx: EffectContext): s
       if (typeof f.keyword === "string" && !registry.hasKeyword(id, f.keyword)) {
         return false;
       }
+      // rule 206.1 (rule-id: sfd-024-221) — "with Energy cost no more than [2]"
+      // reads the card's PRINTED Energy cost, whatever the play will actually
+      // charge; an over-cost card is never an eligible choice.
+      const energy = (f as { energyCost?: { lte?: number; gte?: number; eq?: number } }).energyCost;
+      if (energy !== undefined) {
+        const printed = registry.getEnergyCost(id) ?? 0;
+        if (
+          (energy.lte !== undefined && printed > energy.lte) ||
+          (energy.gte !== undefined && printed < energy.gte) ||
+          (energy.eq !== undefined && printed !== energy.eq)
+        ) {
+          return false;
+        }
+      }
     }
     return true;
   });
+}
+
+/** rule-id: sfd-024-221 — a target descriptor naming an Equipment/gear card. */
+function isGearTargetDescriptor(target: unknown): boolean {
+  const type = (target as { type?: unknown } | undefined)?.type;
+  return type === "equipment" || type === "gear";
+}
+
+/**
+ * rule-id: sfd-024-221 (rules 355.10.a / 356.1.b.1 / 143.1.a.1) — "play an
+ * Equipment … ignoring its cost" from hand. The controller picks one of the
+ * eligible cards as the effect resolves; the gear enters their base and the id
+ * is reported back through `playedSink` so an enclosing sequence's
+ * `pendingValue` ("Attach it to me") can bind the card that was actually played.
+ */
+function playGearFromHand(effect: ExecutableEffect, ctx: EffectContext): void {
+  if (playerCannotPlay(ctx, ctx.playerId)) {
+    return;
+  }
+  const ignoreCost = (effect as { ignoreCost?: unknown }).ignoreCost;
+  const extras: CostExtras =
+    ignoreCost === true
+      ? { ignoreBaseCost: true }
+      : ignoreCost === "energy"
+        ? { ignoreEnergyCost: true }
+        : {};
+  const candidates = playCandidatesFromHand(effect, ctx).filter((id) =>
+    canAffordCard(ctx.draft, ctx.playerId, id, extras, ctx.cards.getCardMeta),
+  );
+  const chosen =
+    ctx.boundTargets?.find((id) => candidates.includes(id)) ??
+    (candidates.length === 1 ? candidates[0] : undefined);
+  if (chosen === undefined) {
+    if (candidates.length > 1 && !ctx.draft.pendingChoice) {
+      ctx.draft.pendingChoice = {
+        effect,
+        options: candidates,
+        playerId: ctx.playerId,
+        remaining: 1,
+        sourceCardId: ctx.sourceCardId,
+        type: "choose-target",
+      };
+    }
+    return;
+  }
+  deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
+  enterGearFromEffect(chosen, ctx);
+  const sink = (ctx as { playedSink?: { ids: string[] } }).playedSink;
+  sink?.ids.push(chosen);
+}
+
+/**
+ * rule 143.1.a.1 — gear played by an effect enters its controller's base ready
+ * (rule 143.4 exhausts units only), firing its play triggers and counting
+ * toward this turn's plays (rule 724), mirroring the playGear reducer.
+ */
+function enterGearFromEffect(cardId: string, ctx: EffectContext): void {
+  ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: "base" as CoreZoneId });
+  if (hasStaticEffect(cardId, "enters-exhausted")) {
+    ctx.counters.setFlag(cardId as CoreCardId, "exhausted", true);
+  }
+  const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? ctx.playerId;
+  ctx.fireTriggers?.({ cardId, paidAdditionalCost: false, playerId: owner, type: "play-self" });
+  ctx.fireTriggers?.({ cardId, cardType: "gear", playerId: owner, type: "play-card" });
+  if (ctx.draft.cardsPlayedThisTurn) {
+    ctx.draft.cardsPlayedThisTurn[owner] = (ctx.draft.cardsPlayedThisTurn[owner] ?? 0) + 1;
+  }
 }
 
 /**

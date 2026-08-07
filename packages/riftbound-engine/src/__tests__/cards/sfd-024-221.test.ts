@@ -128,7 +128,7 @@ describe("Rell, Magnetic (sfd-024-221)", () => {
     expect(game.zoneOf("blade")).toBe("hand");
   });
 
-  test.failing("BUG: 'yes' with Doran's Blade (2-cost) and ZERO resources: it is played free, attached to Rell (+2 → 6) before damage, so the 5-might Foe dies and Rell conquers", async () => {
+  test("BUG: 'yes' with Doran's Blade (2-cost) and ZERO resources: it is played free, attached to Rell (+2 → 6) before damage, so the 5-might Foe dies and Rell conquers", async () => {
     // Expected: blade leaves hand, ends attached to Rell, no energy/power spent, Rell 6 might beats Foe 5.
     // Actual: answering yes does nothing at all — blade stays in hand and Rell (4) dies to Foe (5).
     const game = await attack(5).hand(P1, DORANS_BLADE, "blade").build();
@@ -144,7 +144,7 @@ describe("Rell, Magnetic (sfd-024-221)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: 'Energy cost no more than [2]' — with Skyfall (3) and Doran's Blade (2) in hand only the Blade may be chosen; Skyfall alone yields nothing", async () => {
+  test("BUG: 'Energy cost no more than [2]' — with Skyfall (3) and Doran's Blade (2) in hand only the Blade may be chosen; Skyfall alone yields nothing", async () => {
     // Expected: any pick offered excludes skyfall; blade ends attached, skyfall stays in hand.
     // Actual: nothing is ever played/attached (and the hand filter ignores energyCost anyway).
     const game = await attack(5).hand(P1, SKYFALL, "skyfall").hand(P1, DORANS_BLADE, "blade").build();
@@ -165,7 +165,7 @@ describe("Rell, Magnetic (sfd-024-221)", () => {
     expect(onlyBig.state("rell").attachments).toEqual([]);
   });
 
-  test.failing("BUG: 'ignoring its cost' waives POWER too (356.1.b.1) — Long Sword (2 + [fury]) is played and attached with no fury available", async () => {
+  test("BUG: 'ignoring its cost' waives POWER too (356.1.b.1) — Long Sword (2 + [fury]) is played and attached with no fury available", async () => {
     // Expected: sword attached, Rell 6, pool untouched. Actual: nothing happens (and the parsed
     // effect only ignores the energy component).
     const game = await attack(5).hand(P1, LONG_SWORD, "sword").build();
@@ -255,7 +255,7 @@ describe("Rell, Magnetic (sfd-024-221)", () => {
     });
   });
 
-  test.failing("BUG: parsed play step should ignore the WHOLE cost ('ignoring its cost' → energy AND power, 356.1.b.1), not `ignoreCost: \"energy\"`", async () => {
+  test("BUG: parsed play step should ignore the WHOLE cost ('ignoring its cost' → energy AND power, 356.1.b.1), not `ignoreCost: \"energy\"`", async () => {
     const pool = await loadDefaultCardPool();
     const seq = (pool.get(CARD)?.abilities?.[1] as { effect?: { effects?: { ignoreCost?: unknown }[] } })?.effect?.effects ?? [];
     expect(seq[0]?.ignoreCost).toBe(true);

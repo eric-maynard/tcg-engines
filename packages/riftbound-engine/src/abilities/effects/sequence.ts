@@ -217,17 +217,28 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // Rule 354.2: a `pending-value` target references the card(s) resolved
       // by this sequence's `pendingValue.source` step — bind them explicitly
       // so target resolution never falls through to a board scan.
+      // rule-id: sfd-024-221 — "Attach IT to me" names the pending value
+      // through the step's `equipment` descriptor, not through `target`.
+      const pvTarget = subTarget ?? ((sub as { equipment?: SubTarget }).equipment as SubTarget);
       if (
         pending &&
-        subTarget &&
-        typeof subTarget !== "string" &&
-        subTarget.type === "pending-value"
+        pvTarget &&
+        typeof pvTarget !== "string" &&
+        pvTarget.type === "pending-value"
       ) {
         subCtx = { ...ctx, boundTargets: pending };
       }
+      // rule-id: sfd-024-221 (rule 354.2) — a source step that PLAYS a card out
+      // of a non-board zone has no resolvable target, so give it a sink and
+      // take the pending value from what it actually played.
+      let playedSink: { ids: string[] } | undefined;
       if (seq.pendingValue?.source === i) {
         pending = getTargetIds(sub, subCtx);
         subCtx = { ...subCtx, boundTargets: pending };
+        if (pending.length === 0) {
+          playedSink = { ids: [] };
+          subCtx = { ...subCtx, playedSink } as EffectContext;
+        }
       }
       if (sameIdx >= 0) {
         if (isSameLocationTarget(subTarget)) {
@@ -356,6 +367,9 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         sub,
         { ...subCtx, pendingSequenceValue: pending } as EffectContext,
       );
+      if (playedSink !== undefined && playedSink.ids.length > 0) {
+        pending = playedSink.ids;
+      }
       // rule 355.8 / 820.2 (unl-182-219) — a step that parked a modal prompt
       // suspends the rest of the sequence: the later Repeat executions must
       // not run (and silently auto-pick modes) while the choice is pending.

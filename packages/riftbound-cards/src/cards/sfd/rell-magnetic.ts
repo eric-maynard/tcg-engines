@@ -12,7 +12,8 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * Modeled as:
  *   1. Tank keyword.
  *   2. Triggered ability on attack: play an Equipment (energy cost <= 2)
- *      ignoring energy cost, then attach it to self. Uses pendingValue so the
+ *      ignoring its WHOLE cost (rule 356.1.b.1: Energy and Power), then
+ *      attach it to self. Uses pendingValue so the
  *      attach step references the just-played equipment.
  */
 const abilities: Ability[] = [
@@ -22,7 +23,7 @@ const abilities: Ability[] = [
       effects: [
         {
           from: "hand",
-          ignoreCost: "energy",
+          ignoreCost: true,
           target: { filter: { energyCost: { lte: 2 } }, type: "equipment" },
           type: "play",
         },
