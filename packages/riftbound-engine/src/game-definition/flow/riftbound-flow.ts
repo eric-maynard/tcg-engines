@@ -88,6 +88,14 @@ function buildFlowTriggerContext(context: {
 }
 
 /**
+ * rule 323.1 / 471.1.a.1 — a player reaching the Victory Score wins the game
+ * immediately; the remaining phases of the current turn never happen.
+ */
+function gameHasEnded(state: { status?: string }): boolean {
+  return state.status === "finished";
+}
+
+/**
  * rule 370.1 — replacement effects can run from the flow (the Beginning-Phase
  * Temporary kill). The flow context carries no counter store, so back the
  * counter API with card meta, which is what every reader consults.
@@ -485,6 +493,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             endIf: () => true,
             next: "draw",
             onBegin: (context) => {
+              // rule 323.1: once a player has won the game ends immediately —\n              // the rest of the turn (Channel/Draw/Main) never happens.
+              if (gameHasEnded(context.state)) {
+                return;
+              }
               context.state.turn = {
                 ...context.state.turn,
                 phase: "channel",
@@ -569,6 +581,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             endIf: () => true,
             next: "main",
             onBegin: (context) => {
+              // rule 323.1: the game already ended — no Draw Phase happens.
+              if (gameHasEnded(context.state)) {
+                return;
+              }
               context.state.turn = {
                 ...context.state.turn,
                 phase: "draw",
@@ -580,11 +596,18 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 context.getCurrentPlayer()) as CorePlayerId;
 
               // Check for empty deck -> Burn Out (rule 518)
-              const deckCards = context.zones.getCardsInZone(
-                "mainDeck" as CoreZoneId,
-                playerId as CorePlayerId,
-              );
-              if (deckCards.length === 0) {
+              // rule 431.3/431.3.a: when the trash is empty too the deck stays
+              // empty, so retrying the draw burns out again — repeatedly, giving
+              // an opponent 1 point each time, until an opponent wins (431.3.c.1
+              // wins immediately, so the loop always terminates).
+              for (;;) {
+                const deckCards = context.zones.getCardsInZone(
+                  "mainDeck" as CoreZoneId,
+                  playerId as CorePlayerId,
+                );
+                if (deckCards.length > 0) {
+                  break;
+                }
                 // Burn Out: shuffle trash into deck, opponent scores 1 point
                 const trashCards = context.zones.getCardsInZone(
                   "trash" as CoreZoneId,
@@ -610,6 +633,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                       }
                     }
                   }
+                }
+                if (gameHasEnded(context.state)) {
+                  // rule 323.1: the game ended mid-burnout — no card is drawn.
+                  return;
                 }
               }
 
@@ -645,6 +672,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             endIf: () => false,
             next: "ending",
             onBegin: (context) => {
+              // rule 323.1: the game already ended — the Main Phase never opens.
+              if (gameHasEnded(context.state)) {
+                return;
+              }
               context.state.turn = {
                 ...context.state.turn,
                 phase: "main",
