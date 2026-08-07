@@ -48,6 +48,15 @@ export function turnEventCountKeys(event: GameEvent): string[] {
   if ("cardId" in event && typeof event.cardId === "string") {
     keys.push(`${event.type}|c:${event.cardId}`);
   }
+  // rule-id: ven-068a-166 — "the first time you play a <type> each turn" counts
+  // only plays of that card type, so a typed play gets its own tally alongside
+  // the generic `play-card` one (see the typed-play branch of triggerMatchesEvent).
+  if (event.type === "play-card" && typeof event.cardType === "string" && event.cardType !== "spell") {
+    keys.push(`play-${event.cardType}`);
+    if (typeof pid === "string") {
+      keys.push(`play-${event.cardType}|p:${pid}`);
+    }
+  }
   return keys;
 }
 
@@ -58,19 +67,26 @@ export function turnEventCountKeys(event: GameEvent): string[] {
  * friendly unit …") → per subject/acting player.
  */
 function turnEventCountKeyFor(
-  trigger: { readonly event: string; readonly on?: string },
+  trigger: { readonly event: string; readonly on?: unknown },
   event: GameEvent,
   card: CardWithAbilities,
 ): string {
   const on = trigger.on ?? "self";
+  // rule-id: ven-068a-166 — a typed play trigger counts that card type only.
+  const eventType =
+    event.type === "play-card" &&
+    typeof event.cardType === "string" &&
+    trigger.event.split("-or-").includes(`play-${event.cardType}`)
+      ? `play-${event.cardType}`
+      : event.type;
   if (on === "any" || on === "any-player" || on === "any-unit") {
-    return event.type;
+    return eventType;
   }
   if (on === "self" && "cardId" in event && typeof event.cardId === "string") {
-    return `${event.type}|c:${event.cardId}`;
+    return `${eventType}|c:${event.cardId}`;
   }
   const pid = "owner" in event ? event.owner : "playerId" in event ? event.playerId : card.owner;
-  return `${event.type}|p:${pid}`;
+  return `${eventType}|p:${pid}`;
 }
 
 /**
@@ -102,8 +118,6 @@ export interface TriggerableAbility {
   };
   readonly effect: unknown;
   readonly optional?: boolean;
-  /** rule 383.3.a.3 — "you may" in a later part of the effect: decided on resolution. */
-  readonly optionalOnResolution?: boolean;
   readonly condition?: unknown;
 }
 
@@ -270,9 +284,16 @@ function restrictionSatisfied(
     }
     case "self-at-battlefield":
       return card.zone.startsWith("battlefield");
-    case "non-token":
-      // TODO(non-token): subject-card token status not available here.
-      return false;
+    case "non-token": {
+      // rule 187.2 (ven-068a-166) — "a non-token <card>": tokens carry a
+      // `token-` id prefix (see effects/create-token.ts), so the subject card
+      // of the event decides. No subject card → nothing to qualify.
+      const subjectId = "cardId" in event ? event.cardId : undefined;
+      if (typeof subjectId !== "string") {
+        return false;
+      }
+      return !subjectId.startsWith("token-");
+    }
     default:
       // TODO(trigger-restriction): unknown restriction type — block rather
       // than permissively fire (previous permissive behavior caused Bug A).
@@ -472,6 +493,18 @@ function triggerMatchesEvent(
       return false;
     }
     if (filters.includes("spell") && event.type === "choose" && event.sourceType !== "spell") {
+      return false;
+    }
+    // rule 383.4.b (sfd-144-221) — "When YOU choose a friendly unit" is
+    // attributed to the chooser, exactly like the `on:"self"` form above: an
+    // OPPONENT targeting one of my units must not fire my trigger. A
+    // descriptor that names its own `actor` opts out of this default.
+    if (
+      mapped === "choose" &&
+      desc.actor === undefined &&
+      "chooserId" in event &&
+      event.chooserId !== card.owner
+    ) {
       return false;
     }
     // rule 428.5: kill-attribution filters on `die` — "a STUNNED enemy unit"

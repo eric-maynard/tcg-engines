@@ -1938,8 +1938,12 @@ export const playSpell: Defs["playSpell"] = {
       // rule 820.1.d / 820.2 — [Repeat] executes the instructions an additional
       // time and the choices for EVERY execution are made while playing the
       // card, so choosing the same card for each execution is a separate
-      // targeting event: fire `choose` once per execution.
-      for (let execution = 0; execution <= repeatN; execution++) {
+      // targeting event. When one target was supplied per execution the
+      // `targets` list already enumerates every targeting event (see
+      // `independentTargets` above); only a target list SHARED by all
+      // executions is repeated here.
+      const chooseExecutions = targets.length === 1 + repeatN ? 1 : 1 + repeatN;
+      for (let execution = 0; execution < chooseExecutions; execution++) {
         for (const targetId of targets) {
           fireTriggers(
             { cardId: targetId, chooserId: playerId, sourceType: "spell", type: "choose" },
