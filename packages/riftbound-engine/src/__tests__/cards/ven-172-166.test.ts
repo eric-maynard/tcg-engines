@@ -35,4 +35,19 @@ describe("Draven, Showboat (ven-172-166)", () => {
     await onlyOpp.settle();
     expect(onlyOpp.state("draven").might).toBe(3);
   });
+
+  // rule 364: the static is continuous, so scoring a point mid-game must raise
+  // Might without replaying the card (playtest report: Might stayed 3 after a conquest).
+  test("scoring a point while Draven is on the board raises his Might immediately", async () => {
+    const game = await scenario()
+      .points(P1, 0)
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", CARD, "draven")
+      .build();
+    expect(game.state("draven").might).toBe(3);
+    await game.advanceTurn();
+    await game.advanceTurn();
+    expect(game.p1.points()).toBeGreaterThanOrEqual(1);
+    expect(game.state("draven").might).toBe(3 + game.p1.points());
+  });
 });
