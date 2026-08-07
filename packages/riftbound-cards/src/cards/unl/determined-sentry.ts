@@ -7,12 +7,13 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *
  * "I can't move to base."
  *
- * Modeled as a static grant of the CantMoveToBase keyword on self.
+ * Modeled as a static grant of the shared `NoMoveToBase` marker keyword on self —
+ * the same marker the movement moves and the move effect consult (144.4.b, 410.1.b.3).
  */
 const abilities: Ability[] = [
   {
     effect: {
-      keyword: "CantMoveToBase",
+      keyword: "NoMoveToBase",
       target: "self",
       type: "grant-keyword",
     },
