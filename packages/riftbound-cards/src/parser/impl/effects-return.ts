@@ -163,7 +163,10 @@ export function parseReturnToHandEffect(text: string): ReturnToHandEffect | unde
         .map((s) => s.trim())
         .filter((s) => s.length > 0 && s.toLowerCase() !== "and");
       target.type = "unit";
-      target.filter = tags.length === 1 ? { tag: tags[0] } : tags.map((t) => ({ tag: t }));
+      // rule 355.8 (rule-id: unl-167-219) — "Bird, Cat, Dog, or Poro" is a
+      // DISJUNCTION; a filter array would be ANDed, so emit one tag filter
+      // holding the whole list.
+      target.filter = tags.length === 1 ? { tag: tags[0] } : { tag: tags };
     } else {
       // Single capitalized word: treat as a tag
       target.type = "unit";

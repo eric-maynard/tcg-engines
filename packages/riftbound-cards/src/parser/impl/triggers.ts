@@ -5,7 +5,10 @@
 import type { TriggeredAbility } from "@tcg/riftbound-types";
 import type { DrawEffect, Effect } from "@tcg/riftbound-types/abilities/effect-types";
 import { parseLeadingIfCondition, parseTrailingIfCondition } from "../parsers/condition-parser";
+import type { AnyTarget } from "@tcg/riftbound-types/targeting";
 import { parseCost } from "../parsers/cost-parser";
+import { parseTarget } from "../parsers/target-parser";
+import { bindChosenTarget, CHOOSE_PREAMBLE_RE } from "./choose-preamble";
 import { parseEffects } from "./effects";
 import { stripReminders } from "./normalize";
 import { TRIGGER_PATTERNS } from "./trigger-patterns";
@@ -65,10 +68,17 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
     // Strip "Choose a/an <target>." targeting preamble — mirrors the spell
     // Parser's handling for effects like Solari Chief's "When you play me,
     // Choose an enemy unit. If it is stunned, kill it. Otherwise, stun it."
-    effectText = effectText.replace(
-      /^Choose (?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there))?\.\s*/i,
-      "",
-    );
+    // rule 355 (rule-id: ven-041-166) — the preamble carries the restriction
+    // ("an enemy unit here"); remember it so the trailing "it" binds to it
+    // instead of degrading to an unrestricted {type:"unit"}.
+    let chosenTarget: AnyTarget | undefined;
+    const chooseMatch = CHOOSE_PREAMBLE_RE.exec(effectText);
+    if (chooseMatch) {
+      effectText = effectText.slice(chooseMatch[0].length);
+      if (!chooseMatch[2] || !/^\s+and /i.test(chooseMatch[2])) {
+        chosenTarget = parseTarget(chooseMatch[1]);
+      }
+    }
 
     // Check for optional "you may" / "they may" / "that player may" (variants
     // Where the trigger applies to "any player" or "opponent" rather than the
@@ -231,6 +241,12 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
     }
     if (!effect) {
       continue;
+    }
+
+    // rule 355 (rule-id: ven-041-166) — bind the "Choose <target>." preamble
+    // onto the pronoun slot the following sentence left unrestricted.
+    if (chosenTarget) {
+      effect = bindChosenTarget(effect, chosenTarget);
     }
 
     // rule-id: sfd-120-221 (rule 383.3.a.3) — "you may deal that much": the

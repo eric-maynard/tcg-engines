@@ -515,6 +515,10 @@ function matchesCardTagFilter(cardId: string, filter: unknown): boolean {
   if (typeof f.tag === "string" && !tags.includes(f.tag)) {
     return false;
   }
+  // rule 355.8 (rule-id: unl-167-219) — a tag list is a disjunction.
+  if (Array.isArray(f.tag) && !(f.tag as readonly string[]).some((t) => tags.includes(t))) {
+    return false;
+  }
   if (typeof f.excludeTag === "string") {
     const ex = f.excludeTag.toLowerCase();
     if (tags.some((t) => t.toLowerCase() === ex)) {

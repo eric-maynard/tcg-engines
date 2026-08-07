@@ -119,15 +119,11 @@ describe("Effect: Return to Hand", () => {
       expect(result.success).toBe(true);
       const { target } = (
         result.abilities?.[0] as {
-          effect: { target: { filter: { tag: string }[] } };
+          effect: { target: { filter: { tag: string[] } } };
         }
       ).effect;
-      expect(target.filter).toEqual([
-        { tag: "Bird" },
-        { tag: "Cat" },
-        { tag: "Dog" },
-        { tag: "Poro" },
-      ]);
+      // rule 355.8 — one filter with a tag DISJUNCTION, not four ANDed filters.
+      expect(target.filter).toEqual({ tag: ["Bird", "Cat", "Dog", "Poro"] });
     });
 
     it("should parse 'Return all units with 2 :rb_might: or less to their owners' hands.'", () => {

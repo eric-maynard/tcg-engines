@@ -113,7 +113,10 @@ export type SimpleFilter =
  * Tag filter - matches cards with specific tags
  */
 export interface TagFilter {
-  readonly tag: string; // E.g., "Mech", "Dragon", "Sand Soldier"
+  // A single tag ("Mech", "Dragon", "Sand Soldier"), or a list read as a
+  // DISJUNCTION — "a Bird, Cat, Dog, or Poro" matches any one of them.
+  // (Filter ARRAYS on a target are conjunctions, so an OR needs one filter.)
+  readonly tag: string | readonly string[];
 }
 
 /**

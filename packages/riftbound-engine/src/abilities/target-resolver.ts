@@ -738,6 +738,12 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
     const tags = (def as { tags?: string[] } | undefined)?.tags;
     return tags?.includes(filter.tag) ?? false;
   }
+  // rule 355.8 (rule-id: unl-167-219) — "a Bird, Cat, Dog, or Poro" is one
+  // filter holding a tag DISJUNCTION; carrying all of them is not required.
+  if ("tag" in filter && Array.isArray(filter.tag)) {
+    const tags = (def as { tags?: string[] } | undefined)?.tags ?? [];
+    return (filter.tag as readonly string[]).some((t) => tags.includes(t));
+  }
   // rule-id: ven-115-166 — "non-Dragon unit" excludes cards carrying the tag
   if ("excludeTag" in filter && typeof filter.excludeTag === "string") {
     const tags = (def as { tags?: string[] } | undefined)?.tags;
