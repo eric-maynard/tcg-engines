@@ -141,7 +141,7 @@ describe("Pickpocket (sfd-074-221)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: 'no more than [1]' — a 2-cost gear (Scrapheap) is never offered as a victim", async () => {
+  test("'no more than [1]' — a 2-cost gear (Scrapheap) is never offered as a victim", async () => {
     // Expected pick options: myGold, orb, seal (all ≤ 1); scrap (2) absent. Actual: every gear on the board is offered.
     const game = await board().gear(P2, SCRAPHEAP, "scrap").build();
     await game.p1.play("pp");
@@ -154,7 +154,7 @@ describe("Pickpocket (sfd-074-221)", () => {
     expect(offered).toEqual(["myGold", "orb", "seal"]);
   });
 
-  test.failing("BUG: with only a 2-cost gear around, accepting kills nothing → Scrapheap survives, its owner draws nothing, no Gold", async () => {
+  test("with only a 2-cost gear around, accepting kills nothing → Scrapheap survives, its owner draws nothing, no Gold", async () => {
     // Expected: no legal ≤1 gear ⇒ the kill fizzles and "if you do" fails. Actual: Scrapheap is killed,
     // P2 draws off its death trigger and P1 gets a Gold token.
     const game = await scenario().resources(P1, { energy: 3 }).hand(P1, CARD, "pp").gear(P2, SCRAPHEAP, "scrap").build();

@@ -175,6 +175,7 @@ export function parseKillEffect(text: string): KillEffect | SequenceEffect | und
         type: "gear";
         controller?: "friendly" | "enemy";
         quantity?: "all" | { upTo: number };
+        filter?: unknown;
       } = {
         type: "gear" as const,
       };
@@ -189,6 +190,18 @@ export function parseKillEffect(text: string): KillEffect | SequenceEffect | und
       const upToGearMatch = targetStr.match(/up to (\w+)/i);
       if (upToGearMatch) {
         gearTarget.quantity = { upTo: wordToNumber(upToGearMatch[1]) };
+      }
+      // rule-id: sfd-074-221 (Pickpocket) — rule 206: "with Energy cost no more
+      // than [N]" is a printed-cost restriction on which gear may be chosen, so
+      // it must ride on the target as a filter, not be dropped with the clause.
+      // normalize.ts has already rewritten a printed `[N]` pip as `:rb_energy_N:`.
+      const energyLteMatch = withClause?.match(
+        /with\s+Energy cost\s+(?:no more than|of no more than)?\s*(?::rb_energy_(\d+):|\[?(\d+)\]?)(?:\s+or less)?/i,
+      );
+      if (energyLteMatch) {
+        gearTarget.filter = {
+          energyCost: { lte: Number(energyLteMatch[1] ?? energyLteMatch[2]) },
+        };
       }
       return { target: gearTarget as unknown as AnyTarget, type: "kill" };
     }
