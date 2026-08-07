@@ -20,6 +20,7 @@ import {
 } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { hiddenCapacityAt } from "../../../operations/hidden-capacity";
+import { playIsForbidden } from "../../../abilities/play-restrictions";
 import { computeStaticCostIncrease } from "../../../operations/static-cost-reduction";
 import type { CostReductionContext } from "../../../operations/static-cost-reduction";
 import { getBattlefieldZoneId, getFacedownZoneId } from "../../../zones/zone-configs";
@@ -748,6 +749,18 @@ export const revealHidden: Defs["revealHidden"] = {
     // rule-id: ogn-018-298 — a "can't be revealed here" static at the card's
     // battlefield blocks the reveal outright.
     if (revealIsPrevented(meta.hiddenAt, context.params.playerId as string, context)) {
+      return false;
+    }
+    // rule 811.1.c.3 / 419.1 — revealing a facedown card IS playing it, so a
+    // board static that forbids playing it (ven-132-166 Fallen Feline) refuses
+    // the flip exactly as it refuses the copy in hand.
+    if (
+      playIsForbidden(
+        { cards: context.cards, draft: state, zones: context.zones },
+        context.params.playerId as string,
+        context.params.cardId as string,
+      )
+    ) {
       return false;
     }
     // rule 811.6 / 335 / 338.1 — playing a card from a facedown zone still
