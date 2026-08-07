@@ -156,15 +156,15 @@ describe("Curtain Call × Marai Spire × Ezreal, Prodigy — three Repeat costs"
     expect(upFront || promptedBeforePriority).toBe(true);
   });
 
-  test.failing("BUG: with all three Repeats paid the effect executes 4 times with 4 DIFFERENT modes: draw 1, 2 to the battlefield unit, 3 to the base unit, -4 Might to the battlefield unit", async () => {
-    // Expected: 'Choose one you haven't already chosen' ⇒ every mode exactly once.
-    // Actual: one mode prompt; the engine then repeats/defaults modes on its own (e.g. picking Draw draws 4).
+  test("with all three Repeats paid the effect executes 4 times with 4 DIFFERENT modes: draw 1, 2 to the battlefield unit, 3 to the base unit, -4 Might to the battlefield unit", async () => {
     const game = await board().build();
     await game.p1.cast("cc", { repeat: 3 });
     const menus = await playOutCurtainCall(game);
     expect(game.p1.hand()).toHaveLength(1); // cc left the hand, mode 0 drew exactly 1
-    expect(game.state("bfFoe").damage).toBe(2);
-    expect(game.state("bfFoe").might).toBe(6 - 4);
+    // rule 142.4.b — Lethal Damage is non-zero damage >= the unit's CURRENT Might, so the
+    // 6-Might battlefield unit survives mode 1 (2 damage) and is then killed by mode 3
+    // (-4 [Might] ⇒ Might 2 with 2 damage marked). Its death is the proof both modes ran.
+    expect(game.zoneOf("bfFoe")).toBe("trash");
     expect(game.state("baseFoe").damage).toBe(3);
     // A mode already chosen is never offered again.
     for (const [i, menu] of menus.entries()) {
