@@ -81,7 +81,14 @@ export function openPendingContestedShowdown(
   // Player's own step instead — 323.13 makes that choice theirs.
   const pending =
     staged.find((x) => !x.isCombat) ??
-    staged.find((x) => x.attacker === draft.turn.activePlayer);
+    staged.find(
+      (x) =>
+        x.attacker === draft.turn.activePlayer ||
+        // rule 323.13 (unl-202-219) — a Combat the TURN PLAYER's own effect
+        // staged (dragging an enemy unit in) begins in this Cleanup even though
+        // the arriving unit's controller is the attacker.
+        x.bf.stagedBy === draft.turn.activePlayer,
+    );
   if (!pending) {
     return;
   }

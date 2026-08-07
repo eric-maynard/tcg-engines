@@ -54,6 +54,31 @@ const PROMPTLESS_STEP_TYPES: readonly string[] = [
 const isLeadTarget = (t: SubTarget): boolean =>
   typeof t === "object" && t.type !== "pending-value" && t.location !== "same";
 
+/**
+ * rule 355.10 (rule-id: unl-198-219) — the battlefield a sequence chooses.
+ * Prefers a battlefield where the controller has units (the printed
+ * restriction on every "choose a battlefield where you have units" card);
+ * returns the `battlefield-<id>` zone, or undefined when none qualifies.
+ */
+function chooseSequenceBattlefield(
+  target: TargetDescriptor,
+  ctx: EffectContext,
+  resolverCtx: Parameters<typeof resolveTarget>[1],
+): string | undefined {
+  const bound = ctx.boundTargets?.find((id) => ctx.draft.battlefields?.[id] !== undefined);
+  const ids =
+    bound !== undefined
+      ? [bound]
+      : (resolveTarget({ ...target, quantity: "all" }, resolverCtx) as string[]);
+  const hasFriendlyUnits = (bfId: string): boolean =>
+    ctx.zones.getCardsInZone(
+      `battlefield-${bfId}` as CoreZoneId,
+      ctx.playerId as Parameters<typeof ctx.zones.getCardsInZone>[1],
+    ).length > 0;
+  const chosen = ids.find(hasFriendlyUnits);
+  return chosen === undefined ? undefined : `battlefield-${chosen}`;
+}
+
 export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
   const seq = effect as unknown as {
@@ -174,6 +199,37 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       sourceZone: ctx.sourceZone,
       zones: ctx.zones,
     };
+    // rule 355.4 / 359.3.f.4 (rule-id: unl-198-219) — "Choose a battlefield
+    // where you have units. … move … to that battlefield. Then give enemy
+    // units THERE …": the sequence's own battlefield target is the referent
+    // every later "here" reads, not the spell's own zone. Bind it once so the
+    // move destination and the debuff both land at the chosen battlefield.
+    const seqBattlefield = (effect as { target?: TargetDescriptor }).target;
+    let boundBattlefieldZone: string | undefined;
+    if (
+      seqBattlefield !== undefined &&
+      typeof seqBattlefield === "object" &&
+      seqBattlefield.type === "battlefield"
+    ) {
+      const chosen = chooseSequenceBattlefield(seqBattlefield, ctx, resolverCtx);
+      if (chosen !== undefined) {
+        boundBattlefieldZone = chosen;
+        ctx = { ...ctx, sourceZone: chosen } as EffectContext;
+        resolverCtx.sourceZone = chosen;
+      }
+    }
+    /**
+     * rule 355.4 (rule-id: unl-198-219) — a step that parks a prompt resumes
+     * from a context rebuilt off the SOURCE CARD's zone, which would lose the
+     * chosen battlefield; carry it on the prompt so "there"/"here" still means
+     * the battlefield the sequence chose.
+     */
+    const carryBattlefieldZone = (): void => {
+      const parked = ctx.draft.pendingChoice as { sourceZone?: string } | undefined;
+      if (boundBattlefieldZone !== undefined && parked && parked.sourceZone === undefined) {
+        parked.sourceZone = boundBattlefieldZone;
+      }
+    };
     // rule 359.3.e.5 (rule-id: sfd-200-221) — a locked pick that became illegal
     // before resolution is dropped from the chain item's list, so POSITION no
     // longer identifies the slot ([friendly, enemy] with the friendly gone would
@@ -207,7 +263,10 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     let leadIds: string[] = [];
     let sameBound: string[] | undefined;
     let prevPerformed: boolean | undefined;
+    /** Descriptor slot the current step consumed, so a suspended remainder keeps the later slots' picks. */
+    let stepSlotIdx = -1;
     for (let i = 0; i < seq.effects.length; i++) {
+      stepSlotIdx = -1;
       const sub = seq.effects[i];
       // rule-id: ogn-147-298 — "spend a buff to buff me and ready me": the
       // spend-buff cost gates every remaining step, not just its own `then`.
@@ -288,6 +347,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
                   : {}),
                 type: "choose-target",
               } as typeof ctx.draft.pendingChoice;
+              carryBattlefieldZone();
               return;
             }
             id = options[0] as string;
@@ -320,6 +380,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           isRestatementOf(s as { type: string }, subTarget as { type: string }),
         );
         const id = j >= 0 ? seqSlots.bound[j] : undefined;
+        stepSlotIdx = j;
         // rule 355.13 (rule-id: sfd-023-221) — an "up to N" slot the caster
         // left unchosen selects nothing; the step is skipped rather than
         // re-resolved from the board.
@@ -494,6 +555,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             type: "choose-target",
             ...(rest.length > 0 ? { then: { effects: rest, type: "sequence" } } : {}),
           } as typeof ctx.draft.pendingChoice;
+          carryBattlefieldZone();
           return;
         }
       }
@@ -532,6 +594,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
               ? { then: { effects: rest, independentExecution: true, type: "sequence" } }
               : {}),
           } as typeof ctx.draft.pendingChoice;
+          carryBattlefieldZone();
           return;
         }
       }
@@ -548,6 +611,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
         sub,
         { ...subCtx, pendingSequenceValue: pending } as EffectContext,
       );
+      carryBattlefieldZone();
       if (playedSink !== undefined && playedSink.ids.length > 0) {
         pending = playedSink.ids;
       }
@@ -597,6 +661,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             type: "opt-in",
           } as typeof ctx.draft.pendingChoice;
         }
+        carryBattlefieldZone();
         return;
       }
       // rule 355.13 (ogn-153-298) — a `confirm` prompt suspends the rest too:
@@ -615,7 +680,16 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           parked?.type === "choose-mode" ||
           parked?.type === "confirm" ||
           parked?.type === "reveal-and-pick" ||
-          (parked?.type === "choose-destination" && indepSlots !== undefined)) &&
+          // rule 355.4 (unl-202-219 Void Assault) — "Move a friendly unit, then
+          // move an enemy unit": when the LATER steps own their own locked
+          // targets, each move needs its own destination prompt, so this step's
+          // prompt must not be overwritten. The remainder resumes from the
+          // prompt carrying its slots' picks.
+          (parked?.type === "choose-destination" &&
+            (indepSlots !== undefined ||
+              (seqSlots !== undefined &&
+                stepSlotIdx >= 0 &&
+                seqSlots.bound.slice(stepSlotIdx + 1).some((id) => id !== undefined))))) &&
         parked.then === undefined
       ) {
         const rest = seq.effects.slice(i + 1);
@@ -626,7 +700,13 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           // the execution that just happened.
           const k = indepSlots ? indepSlots.findIndex((s) => s.index === i) : -1;
           const carry =
-            k >= 0 && ctx.boundTargets ? ctx.boundTargets.slice(k + 1) : undefined;
+            k >= 0 && ctx.boundTargets
+              ? ctx.boundTargets.slice(k + 1)
+              : // rule 355.8 (unl-202-219) — the remainder keeps the ids locked
+                // for the slots it still has to fill.
+                seqSlots !== undefined && stepSlotIdx >= 0
+                ? seqSlots.bound.slice(stepSlotIdx + 1).filter((id): id is string => id !== undefined)
+                : undefined;
           ctx.draft.pendingChoice = {
             ...(parked as object),
             then:
@@ -644,6 +724,7 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             thenIsSequenceRest: true,
           } as typeof ctx.draft.pendingChoice;
         }
+        carryBattlefieldZone();
         return;
       }
       // rule 436 / 359.3.e (unl-136-219 Scryer's Bloom) — "[Predict 2], THEN

@@ -41,9 +41,15 @@ export function contestBattlefieldOnArrival(args: {
   counters: TriggerCtx["counters"];
   draft: RiftboundGameState;
   playerId: string;
+  /**
+   * rule 323.13 (unl-202-219) — the player whose action caused the arrival when
+   * that is not the arriving unit's controller (a spell dragging an ENEMY unit
+   * in). The Cleanup begins the staged Combat on THIS player's turn.
+   */
+  stagedBy?: string;
   zones: TriggerCtx["zones"];
 }): void {
-  const { arrivingUnitIds, autoBegun, battlefieldId, cards, counters, deferToCleanup, draft, playerId, zones } = args;
+  const { arrivingUnitIds, autoBegun, battlefieldId, cards, counters, deferToCleanup, draft, playerId, stagedBy, zones } = args;
   const bf = draft.battlefields?.[battlefieldId];
   if (!bf || bf.controller === playerId) {
     return;
@@ -64,6 +70,9 @@ export function contestBattlefieldOnArrival(args: {
     bf.contestedBy = playerId;
     bf.showdownComplete = false;
   }
+  // rule 323.13 — remember whose action staged this, so a Combat the turn
+  // player's own effect set up is not mistaken for an off-turn Reaction move.
+  bf.stagedBy = (stagedBy ?? playerId) as typeof bf.stagedBy;
 
   const playerIds = Object.keys(draft.players);
   const defender = bf.controller ?? playerIds.find((p) => p !== playerId) ?? playerId;

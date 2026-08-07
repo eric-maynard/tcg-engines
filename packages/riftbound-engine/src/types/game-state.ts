@@ -341,6 +341,13 @@ export interface BattlefieldState {
   combatExcessDamage?: number;
 
   /**
+   * rule 323.13 (unl-202-219) — the player whose action staged the Combat here,
+   * which is not always the attacker (a spell may drag an ENEMY unit in). The
+   * Cleanup begins a staged Combat on that player's own turn.
+   */
+  stagedBy?: PlayerId;
+
+  /**
    * rule 466.1.a.2: no defending unit was left here when the Combat Cleanup
    * ran, so the surviving attackers were never recalled. Carried across the
    * deferred Resolution Step (466.2) — a unit that a pending trigger puts here
