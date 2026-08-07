@@ -16,6 +16,18 @@ export function handle_draw(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // rule 359.3.e.14.a (ogn-213-298 Hidden Blade) — "Its controller draws 2":
   // the drawer is the controller of the unit this effect acted on, not the
   // caster. With nothing bound (the linked instruction did nothing) no one draws.
+  // rule-id: unl-135-219 — "they … draw 1": `player: "opponent"` (what the
+  // parser emits for "they draw N") draws from the OPPONENT's deck into their
+  // hand, not the controller's. Without this case it fell through to the
+  // controller below.
+  if (effect.player === "opponent") {
+    const oppId = Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId);
+    if (oppId === undefined) {
+      return;
+    }
+    handle_draw({ ...effect, player: "self" }, { ...ctx, playerId: oppId }, _h);
+    return;
+  }
   if (effect.player === "target-controller") {
     const targetId = ctx.boundTargets?.[0];
     if (targetId === undefined) {

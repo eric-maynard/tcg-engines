@@ -68,9 +68,19 @@ export function formatMoveLog(
       const unitName = params.targetUnitId
         ? resolveCard(params.targetUnitId)
         : undefined;
-      return unitName
-        ? `${actor} equipped ${resolveCard(params.cardId)} to ${unitName}.`
-        : `${actor} equipped ${resolveCard(params.cardId)}.`;
+      if (unitName) {
+        return `${actor} equipped ${resolveCard(params.cardId)} to ${unitName}.`;
+      }
+      // rule 821: only Equipment is "equipped" — plain Gear (Petricite
+      // Monument) is played to the base like any other card.
+      const gearId =
+        typeof params.cardId === "string"
+          ? params.cardId.replace(/^player-[12]-(?:main|rune)-\d+-/, "")
+          : "";
+      const isEquipment = registry.get(gearId)?.cardType === "equipment";
+      return isEquipment
+        ? `${actor} equipped ${resolveCard(params.cardId)}.`
+        : `${actor} played ${resolveCard(params.cardId)} to base.`;
     }
     case "standardMove": {
       const unitNames = Array.isArray(params.unitIds)

@@ -401,6 +401,17 @@ export function deductAbilityCost(
     setFlag: (cardId: CoreCardId, flag: string, value: boolean) => void;
   },
 ): void {
+  // rule 512.2 / rule-id: unl-135-219 — an XP portion of a cost is spent from
+  // the player's XP pool (which lives outside the rune pool, so charge it
+  // before the pool guard below).
+  const xpCost = (cost.xp as number) ?? 0;
+  if (xpCost > 0) {
+    const player = draft.players[playerId];
+    if (player) {
+      player.xp = Math.max(0, player.xp - xpCost);
+    }
+  }
+
   const pool = draft.runePools[playerId];
   if (!pool) {
     return;
