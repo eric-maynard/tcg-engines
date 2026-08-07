@@ -937,7 +937,13 @@ export type AmountExpression =
   | { readonly cost: AnyTarget } // Cost of a target
   | { readonly score: "self" | "opponent" } // Player's score
   | { readonly cardsInHand: "self" | "opponent" } // Cards in hand
-  | { readonly cardsInTrash: "self" | "opponent" } // Cards in trash
+  // Cards in trash; `named` narrows to one card name ("self" = the source card's
+  // own name, rule 715.1 ven-010-166), `base` is a flat amount added to the tally
+  | {
+      readonly cardsInTrash: "self" | "opponent";
+      readonly named?: string;
+      readonly base?: number;
+    }
   | { readonly runeCount: "self" | "opponent" } // Runes channeled
   // rule-id: ogn-121-298 — reveal top N of your Main Deck, count those with
   // `withKeyword`, then recycle all revealed cards.

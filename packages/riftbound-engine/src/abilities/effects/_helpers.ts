@@ -214,7 +214,24 @@ export function resolveAmount(
       whose === "opponent"
         ? (Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId) ?? ctx.playerId)
         : ctx.playerId;
-    return ctx.zones.getCardsInZone("trash" as CoreZoneId, pid as CorePlayerId).length;
+    const inTrash = ctx.zones.getCardsInZone("trash" as CoreZoneId, pid as CorePlayerId);
+    // rule 715.1 (ven-010-166) — "1 Bonus Damage for each card with this name in
+    // your trash": `named` narrows the tally to one card name ("self" = the
+    // source's own name; the resolving copy is still on the chain, not in the
+    // trash), and `base` is the flat amount the bonus is added to.
+    const named = amount.named as string | undefined;
+    const base = typeof amount.base === "number" ? amount.base : 0;
+    if (named === undefined) {
+      return base + inTrash.length;
+    }
+    const registry = getGlobalCardRegistry();
+    const wanted = (
+      named === "self" ? (registry.get(ctx.sourceCardId)?.name ?? "") : named
+    ).toLowerCase();
+    const matches = inTrash.filter(
+      (id) => (registry.get(id as string)?.name ?? "").toLowerCase() === wanted,
+    ).length;
+    return base + matches;
   }
   if ("count" in amount) {
     // Count matching targets
