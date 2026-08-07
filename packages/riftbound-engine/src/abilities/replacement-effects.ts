@@ -42,6 +42,8 @@ export interface ReplacementEvent {
     // Might modifier (ven-181-166 Gangplank, Naval).
     | "might-decrease"
     | "play-token"
+    // rule 369.1 / 370.1 (sfd-018-221) — a player would reveal cards from a deck.
+    | "reveal"
     // rule 740.3.a — a combat that ends with units of both players still at
     // the battlefield (ogn-227-298 "recall ALL units instead").
     | "combat-tie";

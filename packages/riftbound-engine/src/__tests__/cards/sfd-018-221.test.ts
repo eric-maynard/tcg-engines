@@ -70,7 +70,7 @@ describe("Void Hatchling (sfd-018-221)", () => {
     expect((await scenario().resources(P1, { energy: 1 }).hand(P1, CARD, "vh").build()).p1.can("play", "vh")).toBe(false);
   });
 
-  test.failing("BUG: Smith's reveal with Hatchling out — P1 first looks at 'top' and recycles it; the reveal then hits the gear underneath, which Smith draws", async () => {
+  test("Smith's reveal with Hatchling out — P1 first looks at 'top' and recycles it; the reveal then hits the gear underneath, which Smith draws", async () => {
     // Expected: a P1 prompt while Smith's trigger resolves; yes → "top" to the bottom, "gear" revealed → hand, "d3" new top.
     // Actual: no `reveal` replacement exists in the engine; "top" is revealed and recycled, the gear stays buried.
     const game = await smithBoard().build();
@@ -87,7 +87,7 @@ describe("Void Hatchling (sfd-018-221)", () => {
     expect(game.zoneOf("vh")).toBe("base");
   });
 
-  test.failing("BUG: 'you MAY recycle it' — declining leaves 'top' in place, so Smith reveals that non-gear and recycles it; the gear is now on top, hand empty", async () => {
+  test("'you MAY recycle it' — declining leaves 'top' in place, so Smith reveals that non-gear and recycles it; the gear is now on top, hand empty", async () => {
     const game = await smithBoard().build();
     await game.p1.move("smith", "bf1");
     const stop = await game.settle();
@@ -161,7 +161,7 @@ describe("Void Hatchling (sfd-018-221)", () => {
     expect(game.p1.deck().slice(0, 2)).toEqual(["myTop", "my2"]);
   });
 
-  test.failing("BUG: Blind Fury cast by the OPPONENT of a Hatchling: the Hatchling's controller (P2) looks at their top card and may recycle it BEFORE it is revealed to P1", async () => {
+  test("Blind Fury cast by the OPPONENT of a Hatchling: the Hatchling's controller (P2) looks at their top card and may recycle it BEFORE it is revealed to P1", async () => {
     // Expected: after both pass on Blind Fury, the first prompt belongs to P2 (look/recycle). P2 recycles "p2top", so the card
     // Blind Fury reveals (and P1 may banish/play) is "p2gear"; "p2top" is safe on the bottom. Actual: P2 is never asked.
     const game = await scenario()
@@ -187,7 +187,7 @@ describe("Void Hatchling (sfd-018-221)", () => {
     expect(game.zoneOf("p2top")).toBe("mainDeck");
   });
 
-  test.failing("BUG: one-card deck — look at it, recycle it (it is still the top card), then reveal it: Smith draws the lone gear, no burn out", async () => {
+  test("one-card deck — look at it, recycle it (it is still the top card), then reveal it: Smith draws the lone gear, no burn out", async () => {
     const game = await scenario()
       .fillDecks(false)
       .battlefield("bf1", { controller: null })
@@ -207,7 +207,7 @@ describe("Void Hatchling (sfd-018-221)", () => {
     expect(game.p2.points()).toBe(0); // nobody burned out
   });
 
-  test.failing("BUG: two Hatchlings — two separate look/recycle steps before the single reveal (recycle twice digs two cards deep)", async () => {
+  test("two Hatchlings — two separate look/recycle steps before the single reveal (recycle twice digs two cards deep)", async () => {
     // Deck [top(unit), d2(unit), gear]. Recycle at both prompts → Smith reveals "gear" and draws it.
     const game = await scenario()
       .battlefield("bf1", { controller: null })
