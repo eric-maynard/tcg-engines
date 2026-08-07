@@ -23,7 +23,9 @@ import {
 } from "../../../zones/zone-configs";
 import { reactionWindowOpen } from "./reaction-window";
 import {
+  battlefieldHasEnemyUnits,
   canAffordCard,
+  canPlayToEnemyOccupiedBattlefield,
   staticEnterReadyApplies,
   consumeEntersReadyReplacement,
   createMetaAccessor,
@@ -299,6 +301,29 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
       }
       if (!standardTiming) {
         continue;
+      }
+      // rule 355.2 / 419.1.a (rule-id: ven-179-166) — "I can be played to a
+      // battlefield where there are enemy units" is a play-LOCATION permission,
+      // so it covers the Champion-Zone play too. It grants no Reaction timing.
+      if (canPlayToEnemyOccupiedBattlefield(cardId as string)) {
+        for (const bfId of Object.keys(state.battlefields ?? {})) {
+          const bfZoneId = getBattlefieldZoneId(bfId);
+          if (results.some((r) => r.location === bfZoneId)) {
+            continue;
+          }
+          if (
+            battlefieldHasEnemyUnits(
+              context.zones,
+              (id) =>
+                (context.cards.getCardController?.(id as CoreCardId) as string | undefined) ??
+                (context.cards.getCardOwner(id as CoreCardId) as string | undefined),
+              bfId,
+              context.playerId as string,
+            )
+          ) {
+            results.push({ location: bfZoneId, playerId: context.playerId as PlayerId });
+          }
+        }
       }
       results.push({ location: "base", playerId: context.playerId as PlayerId });
       // rule 356.2 / 355.10.a.1 (rule-id: unl-052-219) — offer the champion's

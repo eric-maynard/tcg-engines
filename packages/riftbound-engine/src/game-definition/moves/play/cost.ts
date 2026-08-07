@@ -2694,12 +2694,76 @@ export function getFlowCostForPlay(
   cardId: string,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
 ): { energy: number; power: readonly string[] } | undefined {
+  return getFlowCostOptionsForPlay(cardId, getCardMeta)[0];
+}
+
+/**
+ * rule 829.1.c.3 (rule-id: ven-113-166) — a card may carry SEVERAL [Flow]
+ * instances (a printed one plus one granted this turn); its controller chooses
+ * which Flow cost to pay. Printed first, then granted.
+ */
+export function getFlowCostOptionsForPlay(
+  cardId: string,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): { energy: number; power: readonly string[] }[] {
+  const options: { energy: number; power: readonly string[] }[] = [];
   const printed = getGlobalCardRegistry().getSpellFlowCost(cardId);
   if (printed) {
-    return printed;
+    options.push(printed);
   }
   const granted = getCardMeta?.(cardId as CoreCardId)?.grantedFlow;
-  return granted ? { energy: granted.energy, power: granted.power } : undefined;
+  if (granted) {
+    options.push({ energy: granted.energy, power: granted.power });
+  }
+  return options;
+}
+
+/**
+ * rule 829.1.c.3 — with more than one [Flow] cost available the controller
+ * picks; the engine picks for them by preferring a cost the current pool can
+ * actually cover (cheapest Energy first), falling back to the printed one.
+ */
+function chooseFlowCost(
+  cardId: string,
+  getCardMeta: ((cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined) | undefined,
+  pool: { energy: number; power: Partial<Record<string, number>> } | undefined,
+): { energy: number; power: readonly string[] } | undefined {
+  const options = getFlowCostOptionsForPlay(cardId, getCardMeta);
+  if (options.length <= 1 || !pool) {
+    return options[0];
+  }
+  const payable = options
+    .filter((option) => option.energy <= pool.energy && planPowerFromPool(option.power, pool.power))
+    .sort((a, b) => a.energy - b.energy);
+  return payable[0] ?? options[0];
+}
+
+/** Can `pips` be paid out of `have` (own domain, else pooled [rainbow])? */
+function planPowerFromPool(
+  pips: readonly string[],
+  have: Partial<Record<string, number>>,
+): boolean {
+  const left: Record<string, number> = {};
+  for (const [domain, count] of Object.entries(have)) {
+    left[domain] = count ?? 0;
+  }
+  for (const pip of pips) {
+    if (pip !== "rainbow" && (left[pip] ?? 0) > 0) {
+      left[pip] = (left[pip] ?? 0) - 1;
+      continue;
+    }
+    const wild = Object.keys(left).find((d) => (left[d] ?? 0) > 0);
+    if (pip === "rainbow" && wild !== undefined) {
+      left[wild] = (left[wild] ?? 0) - 1;
+      continue;
+    }
+    if ((left.rainbow ?? 0) > 0) {
+      left.rainbow = (left.rainbow ?? 0) - 1;
+      continue;
+    }
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -2797,6 +2861,9 @@ export function getBaseCostForPlay(
   cardId: string,
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+  // rule 829.1.c.3 — the pool the play would be paid from, so a card with two
+  // [Flow] costs is priced at the one its controller can actually pay.
+  pool?: { energy: number; power: Partial<Record<string, number>> },
 ): { energy: number; power: Partial<Record<string, number>> } {
   const registry = getGlobalCardRegistry();
   // rule 356.1 (rule-id: unl-089-219) — an alternate play cost supplants the
@@ -2809,7 +2876,7 @@ export function getBaseCostForPlay(
     return { energy: extras.altCost.energy ?? 0, power };
   }
   if (extras.viaFlow) {
-    const flow = getFlowCostForPlay(cardId, getCardMeta);
+    const flow = chooseFlowCost(cardId, getCardMeta, pool);
     if (flow) {
       const power: Partial<Record<string, number>> = {};
       for (const domain of flow.power) {
@@ -2928,7 +2995,7 @@ export function getPlayEnergyDiscountOverflow(
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
 ): number {
   const modifier = getCostModifier(cardId, getCardMeta);
-  const baseCost = getBaseCostForPlay(cardId, extras, getCardMeta);
+  const baseCost = getBaseCostForPlay(cardId, extras, getCardMeta, state.runePools[playerId]);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const boardReduction = getBoardCostReduction(state, playerId, cardId, extras);
   const selfScaled =
@@ -2962,7 +3029,7 @@ export function canAffordCard(
   }
 
   const modifier = getCostModifier(cardId, getCardMeta);
-  const baseCost = getBaseCostForPlay(cardId, extras, getCardMeta);
+  const baseCost = getBaseCostForPlay(cardId, extras, getCardMeta, pool);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
   const xAmount = Math.max(0, extras.xAmount ?? 0);
   // rule 204.3.b / 135.2.e: an X paid in [rainbow] never touches Energy.
@@ -3107,7 +3174,7 @@ export function deductCost(
   extras: CostExtras,
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
 ): void {
-  const cost = getBaseCostForPlay(cardId, extras, getCardMeta);
+  const cost = getBaseCostForPlay(cardId, extras, getCardMeta, draft.runePools[playerId]);
   const pool = draft.runePools[playerId];
   if (!pool) {
     return;
