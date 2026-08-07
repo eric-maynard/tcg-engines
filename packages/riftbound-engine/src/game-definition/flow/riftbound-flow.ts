@@ -519,6 +519,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           // is per turn for every player.
           (context.state as { spellEnergySpentThisTurn?: Record<string, number> })
             .spellEnergySpentThisTurn = {};
+          // rule 364.3.a (rule-id: sfd-143-221) — "spent … this turn" power tallies
+          // reset for every player at the start of each turn.
+          (context.state as { powerSpentThisTurn?: Record<string, number> })
+            .powerSpentThisTurn = {};
           if (context.state.cardsPlayedThisTurn) {
             // Rule 724 (Legion): reset main-deck cards-played counter at
             // The start of the turn player's turn so Legion conditions

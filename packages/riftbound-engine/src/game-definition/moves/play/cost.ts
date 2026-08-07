@@ -2152,6 +2152,29 @@ function recordSpellEnergySpent(
     ledger;
 }
 
+/**
+ * rule 364.3.a (rule-id: sfd-143-221) — "if you've spent at least [rainbow][rainbow]
+ * this turn": only POWER actually paid counts, of any domain. Energy paid and power
+ * merely sitting in the pool never do.
+ */
+export function recordPowerSpent(
+  draft: RiftboundGameState,
+  playerId: string,
+  pips: number,
+): void {
+  if (pips <= 0) {
+    return;
+  }
+  const ledger = (draft as { powerSpentThisTurn?: Record<string, number> })
+    .powerSpentThisTurn ?? {};
+  ledger[playerId] = (ledger[playerId] ?? 0) + pips;
+  (draft as { powerSpentThisTurn?: Record<string, number> }).powerSpentThisTurn = ledger;
+}
+
+function totalPowerPips(power: Partial<Record<string, number>>): number {
+  return Object.values(power).reduce((a: number, b) => a + (b ?? 0), 0);
+}
+
 export function getBaseCostForPlay(
   cardId: string,
   extras: CostExtras,
@@ -2475,6 +2498,8 @@ export function deductCost(
   if (extras.ignoreBaseCost) {
     return;
   }
+  // rule 364.3.a — tally the pips this play actually drains from the pool.
+  const powerPipsBefore = totalPowerPips(pool.power);
 
   const modifier = getCostModifier(cardId, getCardMeta);
   const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
@@ -2593,4 +2618,5 @@ export function deductCost(
     }
     rainbowOwed--;
   }
+  recordPowerSpent(draft, playerId, powerPipsBefore - totalPowerPips(pool.power));
 }

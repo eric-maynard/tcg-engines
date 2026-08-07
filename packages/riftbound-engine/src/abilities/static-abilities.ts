@@ -404,6 +404,17 @@ export function evaluateCondition(
       return (player?.xp ?? 0) >= threshold;
     }
 
+    // rule 364.3.a (rule-id: sfd-143-221) — "if you've spent at least
+    // [rainbow][rainbow] this turn": POWER pips paid by this card's controller,
+    // any domain. Continuously re-evaluated; the tally resets each turn.
+    case "spent-power": {
+      const spent =
+        (ctx.draft as { powerSpentThisTurn?: Record<string, number> }).powerSpentThisTurn?.[
+          source.owner
+        ] ?? 0;
+      return spent >= ((condition.amount as number) ?? 1);
+    }
+
     case "xp-gained-this-turn": {
       const gained = ctx.draft.xpGainedThisTurn?.[source.owner] ?? 0;
       return gained > 0;

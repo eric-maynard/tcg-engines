@@ -56,6 +56,7 @@ import {
   getPotentialRuneEnergy,
   canAffordCard,
   deductCost,
+  recordPowerSpent,
   discountOptionalPlayCost,
   getAlternatePlayCost,
   getPlayEnergyDiscountOverflow,
@@ -1374,6 +1375,8 @@ export const playUnit: Defs["playUnit"] = {
             const key = domain as keyof typeof pool.power;
             pool.power[key] = (pool.power[key] ?? 0) - 1;
           }
+          // rule 364.3.a — an additional cost's pips are power spent this turn too.
+          recordPowerSpent(draft, playerId, (need.power ?? []).length);
           paidAccelerate = optional.kind === "accelerate";
           paidAdditionalCostActual = true;
         }
