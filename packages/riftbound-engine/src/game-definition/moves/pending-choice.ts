@@ -314,6 +314,100 @@ function optInCostOf(choice: PendingChoice): Record<string, unknown> | undefined
 }
 
 /**
+ * rule 355.10.c.1 (rule-id: sfd-026-221) — the board units that can pay a
+ * "recycle another friendly unit to …" cost-within-instruction. The trash and
+ * the hand are never candidates: `from: "board"` means units in play.
+ */
+export function recycleCostCandidates(
+  state: RiftboundGameState,
+  playerId: string,
+  sourceCardId: string,
+  spec: unknown,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): string[] {
+  if (typeof context?.zones?.getCardsInZone !== "function" || !context?.cards) {
+    return [];
+  }
+  const target = (spec as { target?: Record<string, unknown> } | undefined)?.target ?? {};
+  const zoneIds = [
+    "base",
+    ...Object.keys((state as { battlefields?: Record<string, unknown> }).battlefields ?? {}).map(
+      (bf) => `battlefield-${bf}`,
+    ),
+  ];
+  const registry = getGlobalCardRegistry();
+  const out: string[] = [];
+  for (const zoneId of zoneIds) {
+    for (const raw of context.zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
+      const id = raw as string;
+      if (target.excludeSelf === true && id === sourceCardId) {
+        continue;
+      }
+      const controller =
+        context.cards.getCardController?.(id as CoreCardId) ??
+        context.cards.getCardOwner?.(id as CoreCardId);
+      const friendly = controller === playerId;
+      if (target.controller === "enemy" ? friendly : !friendly) {
+        continue;
+      }
+      if (typeof target.type === "string" && registry.getCardType(id) !== target.type) {
+        continue;
+      }
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+/**
+ * rule 355.10.c.1 (rule-id: sfd-026-221) — a cost paid WITHIN an instruction
+ * ("recycle another friendly unit to play a Mech from your trash") is only
+ * payable when the instruction itself has something to do: with no matching
+ * card in the trash nothing is recycled and nothing is played.
+ */
+function payCostInstructionIsPerformable(
+  playerId: string,
+  effect: unknown,
+  // biome-ignore lint/suspicious/noExplicitAny: move context bag is framework-typed
+  context: any,
+): boolean {
+  const e = effect as { type?: string; from?: string; target?: Record<string, unknown> } | undefined;
+  if (e?.type !== "play" || e.from !== "trash" || typeof context?.zones?.getCardsInZone !== "function") {
+    return true;
+  }
+  const target = e.target ?? {};
+  const filters = Array.isArray(target.filter)
+    ? (target.filter as readonly unknown[])
+    : target.filter !== undefined
+      ? [target.filter]
+      : [];
+  const registry = getGlobalCardRegistry();
+  return (
+    context.zones
+      .getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId)
+      .map((id: unknown) => id as string)
+      .filter((id: string) => {
+        if (typeof target.type === "string" && target.type !== "card" && registry.getCardType(id) !== target.type) {
+          return false;
+        }
+        const tags = (registry.get(id) as { tags?: readonly string[] } | undefined)?.tags ?? [];
+        return filters.every((f) => {
+          const tag = (f as { tag?: unknown } | null)?.tag;
+          return typeof tag !== "string" || tags.includes(tag);
+        });
+      }).length > 0
+  );
+}
+
+/** rule-id: sfd-026-221 — the effect an `opt-in` choice will run on accept. */
+function optInEffectOf(choice: PendingChoice): unknown {
+  return choice.type === "opt-in"
+    ? (choice.resolved as { effect?: unknown } | undefined)?.effect
+    : undefined;
+}
+
+/**
  * rule-id: sfd-119-221 — whether `playerId` can pay a "you may pay [N] to …"
  * trigger's cost right now (energy, power pips, and [Exhaust] on the source).
  */
@@ -323,7 +417,22 @@ function canPayOptInCost(
   sourceCardId: string,
   cost: Record<string, unknown>,
   context: { counters: { getFlag?: (cardId: CoreCardId, flag: string) => boolean | undefined } },
+  effect?: unknown,
 ): boolean {
+  // rule 355.10.c.1 (rule-id: sfd-026-221) — "recycle another friendly unit to
+  // …" is a cost within the instruction: with nothing to recycle (or nothing
+  // for the instruction to do) it cannot be paid, so the whole instruction is
+  // unavailable — never free, and never a recycle for no payoff.
+  const recycle = cost.recycle as { amount?: number } | undefined;
+  if (recycle && typeof recycle === "object") {
+    const needed = recycle.amount ?? 1;
+    if (recycleCostCandidates(state, playerId, sourceCardId, recycle, context).length < needed) {
+      return false;
+    }
+    if (!payCostInstructionIsPerformable(playerId, effect, context)) {
+      return false;
+    }
+  }
   const pool = state.runePools[playerId];
   if (!pool) {
     return false;
@@ -635,7 +744,10 @@ export const pendingChoiceMoves: Partial<
         // is only legal when the cost is payable.
         if (context.params.accept === true) {
           const cost = optInCostOf(choice);
-          if (cost && !canPayOptInCost(state, choice.playerId, choice.sourceCardId, cost, context)) {
+          if (
+            cost &&
+            !canPayOptInCost(state, choice.playerId, choice.sourceCardId, cost, context, optInEffectOf(choice))
+          ) {
             return false;
           }
         }
@@ -784,7 +896,8 @@ export const pendingChoiceMoves: Partial<
         // rule-id: sfd-119-221 — only offer "accept" when the pay-cost is payable.
         const cost = optInCostOf(choice);
         const canAccept =
-          !cost || canPayOptInCost(state, choice.playerId, choice.sourceCardId, cost, context);
+          !cost ||
+          canPayOptInCost(state, choice.playerId, choice.sourceCardId, cost, context, optInEffectOf(choice));
         return [
           ...(canAccept ? [{ accept: true, playerId: context.playerId as string }] : []),
           { accept: false, playerId: context.playerId as string },
@@ -1102,7 +1215,9 @@ export const pendingChoiceMoves: Partial<
           // before the effect; if it became unpayable, the trigger fizzles.
           const cost = optInCostOf(choice);
           if (cost) {
-            if (!canPayOptInCost(draft, choice.playerId, choice.sourceCardId, cost, context)) {
+            if (
+              !canPayOptInCost(draft, choice.playerId, choice.sourceCardId, cost, context, optInEffectOf(choice))
+            ) {
               if (choice.suspendedDeathCardId) {
                 postChoiceCleanup(draft, context);
               }
@@ -1115,6 +1230,35 @@ export const pendingChoiceMoves: Partial<
             // rule 422.1.a (ogn-252-298): "you may discard N to …" — the
             // paying player chooses the cards, so route the cost through the
             // discard effect and hang the trigger's own effect off its `then`.
+            // rule 355.10.c.1 (rule-id: sfd-026-221): "recycle another friendly
+            // unit to play a Mech …" — the paying player chooses the unit, so
+            // park the pick and hang the trigger's own effect off its `then`
+            // (which re-enters with the recycled card as the trigger source).
+            const recycleCost = cost.recycle as { amount?: number } | undefined;
+            if (recycleCost && typeof recycleCost === "object") {
+              const candidates = recycleCostCandidates(
+                draft,
+                choice.playerId,
+                choice.sourceCardId,
+                recycleCost,
+                context,
+              );
+              const want = recycleCost.amount ?? 1;
+              if (candidates.length < want) {
+                return;
+              }
+              draft.pendingChoice = {
+                onPicked: "recycle",
+                prompter: choice.playerId,
+                remaining: want,
+                revealed: candidates,
+                revealer: choice.playerId,
+                sourceCardId: choice.sourceCardId,
+                then: (choice.resolved as { effect?: unknown } | undefined)?.effect,
+                type: "reveal-and-pick",
+              } as typeof draft.pendingChoice;
+              return;
+            }
             const discardCount = typeof cost.discard === "number" ? cost.discard : 0;
             if (discardCount > 0) {
               executeEffect(

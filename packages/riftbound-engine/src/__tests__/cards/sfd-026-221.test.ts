@@ -196,10 +196,7 @@ describe("Rumble, Hotheaded (sfd-026-221)", () => {
     expect(onlySkulker.zoneOf("scrap")).toBe("base");
   });
 
-  test.failing("BUG: the price is recycling ANOTHER friendly unit and the Mech costs (Energy − that unit's Might): Big Scrap (3) → deck bottom, Mega-Mech (7) charges 4", async () => {
-    // Expected: after "yes" P1 picks the unit to recycle (scrap | big — never rumble), it goes to the
-    // bottom of P1's main deck, then Mega-Mech is played for 7 − 3 = 4 energy (8 → 4).
-    // Actual: no recycle choice is ever asked, nothing is recycled, and the Mech is played for free.
+  test("the price is recycling ANOTHER friendly unit and the Mech costs (Energy − that unit's Might): Big Scrap (3) → deck bottom, Mega-Mech (7) charges 4", async () => {
     const game = await conquerBoard(8).build();
     await conquer(game);
     await game.p1.yes();
@@ -214,9 +211,7 @@ describe("Rumble, Hotheaded (sfd-026-221)", () => {
     expect(game.p1.energy()).toBe(4);
   });
 
-  test.failing("BUG: with NO other friendly unit the recycle cost is unpayable, so no Mech may be played (and nothing is free)", async () => {
-    // Expected: Rumble alone conquers → either no prompt or "yes" is not acceptable; Mega-Mech stays in
-    // the trash. Actual: the engine skips the cost and plays Mega-Mech for 0.
+  test("with NO other friendly unit the recycle cost is unpayable, so no Mech may be played (and nothing is free)", async () => {
     const game = await scenario().resources(P1, { energy: 8 }).battlefield("bf1", { controller: P2 }).unit(P1, "base", CARD, "rumble").trash(P1, MEGA_MECH, "mega").build();
     await conquer(game);
     const d = game.decision();
