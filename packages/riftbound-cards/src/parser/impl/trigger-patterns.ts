@@ -38,6 +38,22 @@ export const TRIGGER_PATTERNS: {
   { event: "conquer", on: "self", pattern: /^When I conquer,\s*/i },
   { event: "hold", on: "self", pattern: /^When I hold,\s*/i },
   { event: "win-combat", on: "self", pattern: /^When I win a combat,\s*/i },
+  // rule-id: sfd-148-221 (rule 466.3.a) — "The first time I win a combat each
+  // turn": same event, gated by the per-card first-occurrence restriction.
+  {
+    event: "win-combat",
+    on: "self",
+    pattern: /^The first time I win a combat each turn,\s*/i,
+    restrictions: [{ type: "first-time-each-turn" }],
+  },
+  // rule-id: sfd-148-221 (rule 428.1) — "When I die IN COMBAT": only a death
+  // attributed to combat damage counts, so the subject carries an `in-combat`
+  // kill-source filter alongside the `self` subject check.
+  {
+    event: "die",
+    on: { filter: ["self", "in-combat"] },
+    pattern: /^When I die in combat,\s*/i,
+  },
   { event: "die", on: "self", pattern: /^When I die,\s*/i },
   { event: "move", on: "self", pattern: /^When I move,\s*/i },
   { event: "move-to-battlefield", on: "self", pattern: /^When I move to a battlefield,\s*/i },

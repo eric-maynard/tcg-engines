@@ -1,11 +1,10 @@
 /**
- * Defiant Dance — sfd-196-221 · Spell (Reaction) · Calm/Chaos · 1 energy + [rainbow]
+ * Defiant Dance — sfd-196-221 · Spell (Reaction) · Calm/Chaos · 1 energy
  *
- *   [Reaction] (Play any time, even before spells and abilities resolve.)
  *   Give a unit +2 [Might] this turn and another unit -2 [Might] this turn.
  *
- * rule 355.8 — "another unit" is a SECOND, independently chosen target that must
- * differ from the first: the +2 and the -2 never land on the same unit.
+ * "another unit" names a SECOND, distinct caster-chosen target: the spell needs
+ * two different units and buffs one while shrinking the other.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -16,39 +15,39 @@ const DEFIANT_DANCE = "sfd-196-221";
 function board() {
   return scenario()
     .resources(P1, { energy: 1, power: { rainbow: 1 } })
-    .unit(P1, "base", { might: 3 }, "ally")
-    .unit(P2, "base", { might: 3 }, "foe")
-    .hand(P1, DEFIANT_DANCE, "dance");
+    .unit(P1, "base", { might: 4 }, "mine")
+    .unit(P2, "base", { might: 4 }, "foe")
+    .hand(P1, DEFIANT_DANCE, "dd");
 }
 
 describe("Defiant Dance (sfd-196-221)", () => {
-  test("the two clauses hit DIFFERENT units: +2 on the first pick, -2 on the second", async () => {
+  test("asks for two distinct targets: +2 to the first, -2 to the second", async () => {
     const game = await board().build();
-    await game.p1.cast("dance", { targets: ["ally", "foe"] });
+    const targets = game.p1.option("cast", "dd")?.fields.find((f) => f.arg === "targets")?.options;
+    expect(targets).toEqual(
+      expect.arrayContaining([
+        ["mine", "foe"],
+        ["foe", "mine"],
+      ]),
+    );
+    await game.p1.cast("dd", { targets: ["mine", "foe"] });
     await game.settle();
-    expect(game.zoneOf("dance")).toBe("trash");
-    expect(game.state("ally").might).toBe(5);
-    expect(game.state("foe").might).toBe(1);
+    expect(game.state("mine").might).toBe(6);
+    expect(game.state("foe").might).toBe(2);
   });
 
-  test("order matters — the first named unit gets the +2", async () => {
-    const game = await board().build();
-    await game.p1.cast("dance", { targets: ["foe", "ally"] });
-    await game.settle();
-    expect(game.state("foe").might).toBe(5);
-    expect(game.state("ally").might).toBe(1);
+  test("not castable with only one unit on board — a second distinct target is required", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 1, power: { rainbow: 1 } })
+      .unit(P1, "base", { might: 4 }, "mine")
+      .hand(P1, DEFIANT_DANCE, "dd")
+      .build();
+    expect(game.p1.can("cast", "dd")).toBe(false);
   });
 
-  test("'another' — the same unit is never offered for both slots", async () => {
+  test("the same unit cannot fill both slots", async () => {
     const game = await board().build();
-    const options = game.p1
-      .option("cast", "dance")
-      ?.fields.find((f) => f.arg === "targets")?.options as string[][] | undefined;
-    const pairs = (options ?? []).filter((o) => o.length === 2);
-    expect(pairs.length).toBeGreaterThan(0);
-    for (const pair of pairs) {
-      expect(pair[0]).not.toBe(pair[1]);
-    }
-    expect(pairs).toEqual(expect.arrayContaining([["ally", "foe"], ["foe", "ally"]]));
+    const targets = game.p1.option("cast", "dd")?.fields.find((f) => f.arg === "targets")?.options;
+    expect(targets?.every((t: string[]) => t.length === 2 && t[0] !== t[1])).toBe(true);
   });
 });

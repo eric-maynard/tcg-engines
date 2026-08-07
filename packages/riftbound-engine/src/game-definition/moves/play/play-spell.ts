@@ -973,12 +973,16 @@ export const playSpell: Defs["playSpell"] = {
             }
             if (distinct && acc.includes(pool[k] as string)) continue;
             const next = [...acc, pool[k] as string];
-            tuples.push(next);
+            // rule 355.8 (sfd-196-221 Defiant Dance) — "… and ANOTHER unit …"
+            // names two mandatory, distinct targets, so a partial pick is not a
+            // legal play; only complete tuples are offered. Independent
+            // instructions without "another" may still be left unchosen.
+            if (!distinct || depth === pools.length - 1) tuples.push(next);
             build(depth + 1, k, next);
           }
         };
         build(0, 0, []);
-        if (overflowed) {
+        if (overflowed && !distinct) {
           // Guard against combinatorial blow-up on many-instruction spells.
           tuples.length = 0;
           for (const id of pools[0] ?? []) {

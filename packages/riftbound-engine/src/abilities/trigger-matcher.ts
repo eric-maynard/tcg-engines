@@ -423,6 +423,12 @@ function triggerMatchesEvent(
     ) {
       return false;
     }
+    // rule-id: sfd-148-221 (rule 428.1) — "When I die IN COMBAT": the death
+    // must be attributed to combat damage (`killSource: "combat"`), not to a
+    // spell/ability kill.
+    if (filters.includes("in-combat") && (event.type !== "die" || event.killSource !== "combat")) {
+      return false;
+    }
     if (filters.includes("stunned") && event.type === "die" && event.wasStunned !== true) {
       return false;
     }
