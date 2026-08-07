@@ -1218,6 +1218,40 @@ function expandKeywordDoubling(
   return out;
 }
 
+/**
+ * rule 383.3.a.2 / 402.1.a — ask the controller of the oldest still-optional
+ * "you may" trigger on the Chain whether to perform it, while it is being
+ * FINALIZED. Accepting clears the item's `optional` flag (it then resolves
+ * without asking again); declining removes it, so no Priority round ever
+ * happens over a trigger that will do nothing. Re-entrant: `pending-choice.ts`
+ * calls it again after each answer until no optional item is left.
+ *
+ * Items carrying an `optInCost` ("you may pay [N] to …") are left alone — their
+ * cost is charged at resolution by `executeResolvedItem`.
+ */
+export function promptFinalizationOptIn(draft: unknown): void {
+  const state = draft as RiftboundGameState;
+  if (state.pendingChoice) {
+    return;
+  }
+  const item = state.interaction?.chain?.items.find(
+    (it) =>
+      (it as { optional?: boolean }).optional === true &&
+      (it as { triggered?: boolean }).triggered === true &&
+      (it as { optInCost?: unknown }).optInCost === undefined,
+  );
+  if (!item) {
+    return;
+  }
+  (state as { pendingChoice?: unknown }).pendingChoice = {
+    finalizationChainItemId: item.id,
+    playerId: item.controller,
+    resolved: { ...item, optional: false },
+    sourceCardId: item.cardId,
+    type: "opt-in",
+  };
+}
+
 export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): number {
   // rule 359.2 / rule-id: sfd-195-221 — a `choose` event names the chooser but
   // not the chosen card's side; stamp the subject's CURRENT controller here so
@@ -1474,6 +1508,10 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
     // rule 355.5 / 808.1.d.2: each freshly finalized item chooses its own
     // Game Object now, before anyone receives priority.
     lockTriggerTargets(ctx.draft, { cards: ctx.cards, zones: ctx.zones });
+    // rule 383.3.a.2 / 402.1.a: a "you may" trigger is accepted or declined by
+    // its controller while it is FINALIZED — before anyone receives Priority
+    // over it — and a declined one is removed from the Chain.
+    //TEMPDISABLE promptFinalizationOptIn(ctx.draft);
   }
 
   for (const match of inlineMatches) {
