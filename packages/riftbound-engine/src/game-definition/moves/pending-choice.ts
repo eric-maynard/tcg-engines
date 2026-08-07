@@ -263,6 +263,34 @@ function postChoiceCleanup(draft: RiftboundGameState, context: unknown): void {
   }
 }
 
+/**
+ * rule 354.2 / 419.4.a / 423 (unl-139-219 Bone Skewer) — the play triggers of a
+ * card an effect instructed its own player to play to a fixed location, fired
+ * once the (possibly zeroed) optional additional cost has been declared.
+ */
+function fireInstructedPlayTriggers(
+  draft: RiftboundGameState,
+  context: unknown,
+  spec: { cardId: string; paidAdditionalCost: boolean; playStun: boolean; playerId: string },
+): void {
+  const { cardId, paidAdditionalCost, playStun, playerId } = spec;
+  const ctx = context as { cards: unknown; counters: unknown; zones: unknown };
+  const playCtx = {
+    cards: ctx.cards,
+    counters: ctx.counters,
+    draft,
+    zones: ctx.zones,
+  } as unknown as Parameters<typeof fireTriggers>[1];
+  fireTriggers({ cardId, paidAdditionalCost, playerId, type: "play-self" }, playCtx);
+  fireTriggers({ cardId, cardType: "unit", playerId, type: "play-card" }, playCtx);
+  if (playStun) {
+    fireTriggers({ cardId, type: "stun" }, playCtx);
+  }
+  if (draft.cardsPlayedThisTurn) {
+    draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
+  }
+}
+
 /** rule-id: sfd-119-221 — the pay-cost carried on an opt-in choice's chain item. */
 function optInCostOf(choice: PendingChoice): Record<string, unknown> | undefined {
   if (choice.type !== "opt-in") {
@@ -288,7 +316,15 @@ function canPayOptInCost(
     return false;
   }
   const energyCost = (cost.energy as number) ?? 0;
-  if (pool.energy < energyCost) {
+  // rule 429.3 (ogs-014-024 Lux, Crownguard): Energy earmarked "use only to
+  // play spells/gear" can never fund a payment demanded while a spell or
+  // ability RESOLVES (a counter's ransom, a "you may pay [N] to …") — that is
+  // not playing a card, so every earmarked point is unavailable here.
+  const earmarked = Object.values(
+    (state as { restrictedEnergy?: Record<string, Partial<Record<string, number>>> })
+      .restrictedEnergy?.[playerId] ?? {},
+  ).reduce<number>((sum, amount) => sum + (amount ?? 0), 0);
+  if (pool.energy - Math.min(earmarked, pool.energy) < energyCost) {
     return false;
   }
   const powerCost = cost.power as string[] | undefined;
@@ -942,6 +978,58 @@ export const pendingChoiceMoves: Partial<
         // the optional flag cleared so target selection etc. proceeds normally;
         // on decline the trigger fizzles.
         draft.pendingChoice = undefined;
+        // rule 356.5.a / 356.4.f.1 (unl-139-219 Bone Skewer): the instructed
+        // play already happened — the answer only records whether the (zeroed)
+        // optional additional cost counts as paid.
+        const instructed = (
+          choice as {
+            instructedPlay?: { cardId: string; playStun: boolean };
+          }
+        ).instructedPlay;
+        // rule 158.1 (sfd-136-221) — "Counter a spell unless its controller pays
+        // [N]": accepting charges the ransom in full and the counter does
+        // nothing; declining re-runs the counter with the `unless` stripped.
+        const ransom = (
+          choice as {
+            counterRansom?: {
+              boundTargets?: readonly string[];
+              effect: unknown;
+              sourcePlayerId: string;
+            };
+          }
+        ).counterRansom;
+        if (ransom) {
+          const ransomCost = optInCostOf(choice);
+          const paid =
+            context.params.accept === true &&
+            (!ransomCost ||
+              canPayOptInCost(draft, choice.playerId, choice.sourceCardId, ransomCost, context));
+          if (paid && ransomCost) {
+            deductAbilityCost(draft, choice.playerId, ransomCost, context.zones, context.counters);
+          }
+          if (!paid) {
+            executeEffect(ransom.effect as ExecutableEffect, {
+              ...buildEffectContext(draft, ransom.sourcePlayerId, choice.sourceCardId, context),
+              ...(ransom.boundTargets ? { boundTargets: ransom.boundTargets } : {}),
+            });
+          }
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
+          return;
+        }
+        if (instructed) {
+          fireInstructedPlayTriggers(draft, context, {
+            cardId: instructed.cardId,
+            paidAdditionalCost: context.params.accept === true,
+            playStun: instructed.playStun,
+            playerId: choice.playerId,
+          });
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
+          return;
+        }
         if (context.params.accept === true) {
           // rule-id: sfd-119-221 — "you may pay [N] to …": charge the cost
           // before the effect; if it became unpayable, the trigger fizzles.
@@ -1369,6 +1457,13 @@ export const pendingChoiceMoves: Partial<
         // showdown (combat when opposing units stand there), exactly as a
         // Standard Move does. Fall back to the bare Contested mark when the
         // caller's context bags are stubbed (unit tests) or the card is no unit.
+        // rule 450: Contested is attributed to the CONTROLLER of the unit that
+        // arrived, never to the player who chose the destination (ogn-043-298
+        // Charm moves an ENEMY unit).
+        const arrivingController =
+          (context.cards?.getCardController?.(choice.cardId as never) as string | undefined) ??
+          (context.cards?.getCardOwner?.(choice.cardId as never) as string | undefined) ??
+          choice.playerId;
         if (
           targetZoneId.startsWith("battlefield-") &&
           context.cards &&
@@ -1382,11 +1477,11 @@ export const pendingChoiceMoves: Partial<
             cards: context.cards,
             counters: context.counters,
             draft,
-            playerId: choice.playerId,
+            playerId: arrivingController,
             zones: context.zones,
           });
         } else {
-          markContestedOnArrival(draft, targetZoneId, choice.playerId);
+          markContestedOnArrival(draft, targetZoneId, arrivingController);
         }
         draft.pendingChoice = undefined;
         // rule-id: ogn-258-298 (rule 387) — "Move an enemy unit. Then do this:
@@ -1569,31 +1664,33 @@ export const pendingChoiceMoves: Partial<
             stunned: true,
           } as Partial<RiftboundCardMeta>);
         }
-        const playCtx = {
-          cards: context.cards,
-          counters: context.counters,
-          draft,
-          zones: context.zones,
-        };
-        fireTriggers(
-          {
-            cardId: pickedCardId as string,
-            paidAdditionalCost: false,
+        // rule 356.4.f.1 / 356.2 (unl-139-219 × unl-052-219) — "ignoring any and
+        // all costs" zeroes the AMOUNT of a folded-in optional additional cost,
+        // but the decision to pay is still the playing player's and is made
+        // before costs are determined; an optional cost counts as paid by that
+        // decision. Ask them now, then fire the play triggers with the answer so
+        // "if you paid the additional cost" riders see it.
+        if (getOptionalPlayCost(pickedCardId as string) !== undefined) {
+          draft.pendingChoice = {
+            instructedPlay: {
+              cardId: pickedCardId as string,
+              playStun: choice.playStun === true,
+              playTo: choice.playTo,
+              revealer: choice.revealer,
+            },
             playerId: playedOwner,
-            type: "play-self",
-          },
-          playCtx,
-        );
-        fireTriggers(
-          { cardId: pickedCardId as string, cardType: "unit", playerId: playedOwner, type: "play-card" },
-          playCtx,
-        );
-        if (choice.playStun === true) {
-          fireTriggers({ cardId: pickedCardId as string, type: "stun" }, playCtx);
+            resolved: {},
+            sourceCardId: choice.sourceCardId,
+            type: "opt-in",
+          } as NonNullable<typeof draft.pendingChoice>;
+          return;
         }
-        if (draft.cardsPlayedThisTurn) {
-          draft.cardsPlayedThisTurn[playedOwner] = (draft.cardsPlayedThisTurn[playedOwner] ?? 0) + 1;
-        }
+        fireInstructedPlayTriggers(draft, context, {
+          cardId: pickedCardId as string,
+          paidAdditionalCost: false,
+          playStun: choice.playStun === true,
+          playerId: playedOwner,
+        });
       } else if (
         choice.onPicked === "play" &&
         // rule 358.3.a (ogn-115-298 × ogn-026-298) — an instruction to play a
