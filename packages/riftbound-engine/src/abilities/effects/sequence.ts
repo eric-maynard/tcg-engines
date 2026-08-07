@@ -40,6 +40,24 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
     pendingValue?: { source: number };
   };
   if (seq.effects) {
+    // rule-id: sfd-206-221 (rule 355.8) — "Choose a friendly unit and a
+    // spell": the chain item the caster locked for a bare lead `counter` rides
+    // alongside the board targets. Split it off so only the counter step sees
+    // it and the remaining steps keep their own descriptor slots.
+    const counterStepIdx = seq.effects.findIndex(
+      (e) => e.type === "counter" && (e as { target?: unknown }).target === undefined,
+    );
+    let counterBoundId: string | undefined;
+    if (counterStepIdx >= 0 && ctx.boundTargets && ctx.boundTargets.length > 1) {
+      const chainItems = ctx.draft.interaction?.chain?.items ?? [];
+      const at = ctx.boundTargets.findIndex((id) =>
+        chainItems.some((it) => it !== undefined && it.cardId === id),
+      );
+      if (at >= 0) {
+        counterBoundId = ctx.boundTargets[at] as string;
+        ctx = { ...ctx, boundTargets: ctx.boundTargets.filter((_, k) => k !== at) };
+      }
+    }
     // Rule 354.2 / 309.1 / 323.6: seed from an enclosing sequence's captured
     // pending value so a nested `pending-value` reference still binds to the
     // banished card — Arcane Shift parses as [banish, [play-it, …]], and the
@@ -142,6 +160,11 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       }
       const subTarget = (sub as { target?: SubTarget }).target;
       let subCtx: EffectContext = ctx;
+      // rule-id: sfd-206-221 — hand the locked chain item to the counter step.
+      if (counterBoundId !== undefined && i === counterStepIdx) {
+        const { boundTargets: _drop, ...rest } = ctx;
+        subCtx = { ...rest, boundTargets: [counterBoundId] };
+      }
       if (indepSlots) {
         const k = indepSlots.findIndex((s) => s.index === i);
         if (k >= 0) {

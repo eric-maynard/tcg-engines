@@ -1401,6 +1401,42 @@ export const playSpell: Defs["playSpell"] = {
           playerId: context.playerId as string,
         });
       }
+      // rule-id: sfd-206-221 (rule 355.8) — "Choose a friendly unit and a
+      // spell": a sequence whose LEAD step counters names a chain item as well
+      // as the board target the later steps own. The board pick already owns
+      // the enumerated variant, so append the chain item as a second target
+      // whenever more than one item is legal to counter; with a sole legal
+      // item the handler's topmost-legal rule picks the same one anyway.
+      const seqCounterSpec =
+        counterSpec === undefined ? leadCounterEffect(spellEffect) : undefined;
+      if (seqCounterSpec) {
+        const counterChoices: string[] = [];
+        const seenItems = new Set<string>();
+        for (const item of interaction.chain?.items ?? []) {
+          if (
+            !isLegalCounterTarget(seqCounterSpec, item, cardId as string, {
+              controllerOf: (id) =>
+                context.cards.getCardController?.(id as CoreCardId) ??
+                context.cards.getCardOwner(id as CoreCardId),
+              playerId: context.playerId as string,
+            })
+          )
+            continue;
+          if (seenItems.has(item.cardId)) continue;
+          seenItems.add(item.cardId);
+          counterChoices.push(item.cardId as string);
+        }
+        if (counterChoices.length >= 2) {
+          const expanded = baseVariants.flatMap((v) =>
+            counterChoices.map((itemId) => ({
+              ...v,
+              targets: [...(v.targets ?? []), itemId],
+            })),
+          );
+          baseVariants.length = 0;
+          baseVariants.push(...expanded);
+        }
+      }
       results.push(...baseVariants);
 
       // rule-id: ven-083-166 / rule 560 — "you may pay [X] as an additional
