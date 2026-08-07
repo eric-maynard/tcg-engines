@@ -1687,6 +1687,12 @@ export const playSpell: Defs["playSpell"] = {
           } as Partial<RiftboundCardMeta>);
           exhaustCostPaid = true;
           ignoreBaseCost = optional.ignoresBaseCost === true;
+          // rule 702.2.b — paying with a buff is a spend: "When you spend a
+          // buff" triggers fire as the cost is paid.
+          fireTriggers(
+            { cardId: cardId as string, playerId, spentFrom: chosen as string, type: "spend-buff" },
+            { cards: context.cards, counters: context.counters, draft, zones },
+          );
         }
       } else if (optional?.kind === "exhaust") {
         // rule 356.2 — ogn-048-298: exhaust the chosen ready friendly
