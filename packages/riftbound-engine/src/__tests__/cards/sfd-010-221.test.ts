@@ -122,7 +122,7 @@ describe("Void Drone (sfd-010-221)", () => {
   // BUG — expected: Void Rush castable for 2+[rainbow]; banishing + playing the Drone costs 0 more.
   // Actual: Void Rush is never offered (its "banish one [revealed card]" step is gated as if it
   // needed a board target at play time), so the stacked-discount floor cannot be exercised.
-  test.failing("BUG: Void Rush (sfd-188-221) is never castable, so the Drone's stacked 3−2−2 → 0 (floored, no refund) deck play cannot happen", async () => {
+  test("Void Rush (sfd-188-221) banishes the Drone from the revealed top 2: stacked 3−2−2 → 0 (floored, no refund)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 2, power: { rainbow: 1 } })
       .deck(P1, [CARD, "ogn-175-298"], ["drone", "second"])

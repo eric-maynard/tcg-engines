@@ -48,7 +48,7 @@ async function answerLook(game: Game, seat: Seat, recycle: boolean): Promise<voi
 }
 
 describe("Void Hatchling (sfd-018-221)", () => {
-  test.failing("BUG: parsed abilities — a `reveal` replacement whose look step is an OPTIONAL recycle of exactly the top card ('you may'); the payload makes the recycle unconditional", async () => {
+  test("parsed abilities — a `reveal` replacement whose look step is an OPTIONAL recycle of exactly the top card ('you may')", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "unit", energyCost: 2, might: 2 });
     expect(def?.abilities).toHaveLength(1);

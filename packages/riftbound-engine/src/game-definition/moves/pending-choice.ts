@@ -41,6 +41,7 @@ import { canAffordPower } from "./chain/effect-context";
 import {
   discountOptionalPlayCost,
   getCardEffectiveMight,
+  getNotHandSelfEnergyReduction,
   getOptionalPlayCost,
   staticEnterReadyApplies,
 } from "./play/cost";
@@ -1619,6 +1620,16 @@ export const pendingChoiceMoves: Partial<
             });
           }
         }
+        // rule-id: sfd-188-221 — "Draw any you didn't banish": declining the
+        // optional banish draws every revealed card.
+        if (choice.onRest === "draw") {
+          for (const restId of choice.revealed) {
+            context.zones.moveCard({
+              cardId: restId as CoreCardId,
+              targetZoneId: "hand" as CoreZoneId,
+            });
+          }
+        }
         draft.pendingChoice = undefined;
         // rule-id: ogn-235-298 — declined pick still recycled the rest.
         if (choice.onRest === "recycle") {
@@ -1773,10 +1784,19 @@ export const pendingChoiceMoves: Partial<
         // rule 356.1.b.1 (ogn-025-298): "ignoring its cost" waives the whole
         // cost; rule-id ogn-115-298: "ignoring Energy costs" waives only the
         // energy — Power pips are still paid.
+        // rule 356.4 (rule-id: sfd-010-221) — the picked card is played from
+        // banishment / trash / deck, never from a hand, so its own "I cost [N]
+        // less to play from anywhere other than your hand" static stacks with
+        // the instruction's discount; the total floors at 0 (no refund).
         const energy =
           choice.playIgnoreCost || choice.playIgnoreEnergy
             ? 0
-            : Math.max(0, raw.energy - (choice.playEnergyReduction ?? 0));
+            : Math.max(
+                0,
+                raw.energy -
+                  (choice.playEnergyReduction ?? 0) -
+                  getNotHandSelfEnergyReduction(pickedCardId as string),
+              );
         const power = choice.playIgnoreCost ? {} : raw.power;
         // rule 356.4 / 419.2.a: a discount reduces the cost, it does not waive
         // it — the reduced cost must still be payable in full, otherwise the
@@ -1969,6 +1989,16 @@ export const pendingChoiceMoves: Partial<
             targetZoneId: "mainDeck" as CoreZoneId,
           });
           recycledIds.push(restId as string);
+        }
+      }
+      // rule-id: sfd-188-221 — "Draw any you didn't banish."
+      if (choice.onRest === "draw") {
+        for (const restId of revealed) {
+          if (restId === pickedCardId) continue;
+          context.zones.moveCard({
+            cardId: restId as CoreCardId,
+            targetZoneId: "hand" as CoreZoneId,
+          });
         }
       }
 

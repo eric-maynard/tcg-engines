@@ -1702,6 +1702,39 @@ function getSelfScaledPowerReduction(
  * only written by triggered effects, so a self static on a card in hand needs
  * its own path. Unrecognised scopes contribute 0.
  */
+/**
+ * rule 356.4 (rule-id: sfd-010-221 / sfd-164-221) — the printed energy value of
+ * a card's own "I cost [N] less to play from anywhere other than your hand"
+ * static. Callers that already know the play's origin is not the owner's hand
+ * (a play out of trash / banishment / deck resolved by an effect) apply it
+ * directly; `canAffordCard`'s own path checks the hand itself.
+ */
+export function getNotHandSelfEnergyReduction(cardId: string): number {
+  let total = 0;
+  for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
+    if (ability?.type !== "static") continue;
+    const effect = ability.effect as
+      | {
+          type?: string;
+          target?: unknown;
+          whenPlayedFrom?: unknown;
+          by?: unknown;
+          reduction?: unknown;
+          amount?: unknown;
+        }
+      | undefined;
+    if (
+      effect?.type !== "cost-reduction" ||
+      effect.target !== "self" ||
+      effect.whenPlayedFrom !== "not-hand"
+    ) {
+      continue;
+    }
+    total += Math.max(0, decodeCostAmount(effect.by ?? effect.reduction ?? effect.amount).energy);
+  }
+  return total;
+}
+
 function getSelfScaledEnergyReduction(
   state: RiftboundGameState,
   playerId: string,

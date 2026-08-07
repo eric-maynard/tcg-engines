@@ -198,7 +198,15 @@ export function parseReplacementAbility(text: string): Ability | undefined {
       duration: "permanent",
       replacement: {
         effects: [
-          { amount: 1, from: "deck", then: { recycle: "rest" }, type: "look" } as unknown as Effect,
+          // "You MAY recycle it": the recycle is optional and names exactly the
+          // one card looked at, not the rest of the revealed set (rule 403).
+          {
+            amount: 1,
+            from: "deck",
+            optional: true,
+            then: { optional: true, recycle: 1 },
+            type: "look",
+          } as unknown as Effect,
           { amount: 1, from: "deck", type: "reveal" } as unknown as Effect,
         ],
         type: "sequence",

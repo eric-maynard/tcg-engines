@@ -12,22 +12,22 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * Modeled as a sequence: reveal 2, banish one (optional), play it at -2
  * energy, draw the rest.
  */
+// rule 354.2 / 356.4 (rule-id: ogn-062-298-look-banish-play) — the pick is made
+// among the two revealed cards as the spell resolves, so this uses the
+// reveal-and-pick shape (`look … onPicked:"play"`) rather than a board target:
+// the optional pick is banished and played at [2] less, and everything left
+// over is drawn.
 const abilities: Ability[] = [
   {
     effect: {
-      effects: [
-        { amount: 2, from: "deck", type: "reveal" },
-        { target: { type: "card" }, type: "banish" },
-        {
-          reduceCost: { energy: 2 },
-          target: { type: "pending-value" },
-          type: "play",
-        } as unknown as Effect,
-        { amount: 1, type: "draw" },
-      ],
-      pendingValue: { source: 1 },
-      type: "sequence",
-    },
+      amount: 2,
+      from: "deck",
+      onPicked: "play",
+      onRest: "draw",
+      optional: true,
+      reduceCost: { energy: 2 },
+      type: "look",
+    } as unknown as Effect,
     timing: "action",
     type: "spell",
   },
