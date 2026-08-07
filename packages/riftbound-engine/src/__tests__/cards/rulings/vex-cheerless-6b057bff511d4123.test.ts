@@ -81,20 +81,18 @@ describe("Ruling 6b057bff511d4123 — Vex's in-combat discount can eat the Defle
     expect(game.p1.can("cast", "stupefy")).toBe(true);
   });
 
-  // Expected: Void Seeker on the Deflect Bird with Vex in combat: (3 + [fury] + Deflect [rainbow]) − Vex's
+  // Void Seeker on the Deflect Bird with Vex in combat: (3 + [fury] + Deflect [rainbow]) − Vex's
   // [1][rainbow] = 2 energy + [fury] + 0 extra power (356.4.f — the discount offsets the added [rainbow]).
-  // Actual: Vex's friendly-spell discount is not applied at all — P1 pays 3 energy + [fury] + 1 extra.
-  test.failing("BUG: ruling 6b057bff511d4123 — Vex in combat: Void Seeker on the Deflect Bird should cost 2 energy + [fury] with the Deflect [rainbow] fully offset; engine charges 3 + [fury] + 1", async () => {
+  test("ruling 6b057bff511d4123 — Vex in combat: Void Seeker on the Deflect Bird costs 2 energy + [fury] with the Deflect [rainbow] fully offset", async () => {
     const game = await board().build();
     await vexIntoCombat(game);
     expect(await costOf(game, "voidSeeker", "bird")).toEqual({ energy: 2, extra: 0, fury: 1 });
     expect(game.chain().map((c) => c.cardId)).toEqual(["voidSeeker"]);
   });
 
-  // Expected: Stupefy (1 energy) on the Deflect Bird with Vex in combat: energy cannot go below the minimum
+  // Stupefy (1 energy) on the Deflect Bird with Vex in combat: energy cannot go below the minimum
   // of [1] (356.4.e), but the [rainbow] discount still cancels the Deflect [rainbow] → exactly 1 energy, 0 power.
-  // Actual: 1 energy + 1 extra power (no discount applied).
-  test.failing("BUG: ruling 6b057bff511d4123 — Vex in combat: Stupefy on the Deflect Bird should cost exactly [1] and no power (floor [1], Deflect offset); engine still charges the extra power", async () => {
+  test("ruling 6b057bff511d4123 — Vex in combat: Stupefy on the Deflect Bird costs exactly [1] and no power (floor [1], Deflect offset)", async () => {
     const game = await board().build();
     await vexIntoCombat(game);
     expect(await costOf(game, "stupefy", "bird")).toEqual({ energy: 1, extra: 0, fury: 0 });

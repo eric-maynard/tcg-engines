@@ -649,15 +649,19 @@ export function takeNextPlayDiscount(
   playerId: string,
   cardId: string,
   consume: boolean,
-): number {
+): { energy: number; power: Partial<Record<string, number>> } {
+  const none = { energy: 0, power: {} as Partial<Record<string, number>> };
   const active = state.activeReplacements as
     | (ActiveReplacementEntry & { reduction?: unknown; amount?: unknown })[]
     | undefined;
   if (!active || active.length === 0) {
-    return 0;
+    return none;
   }
   const cardType = getGlobalCardRegistry().get(cardId)?.cardType;
   let total = 0;
+  // rule 356.4.a (ven-044-166) — "your next card costs [2][rainbow][rainbow]
+  // less": a one-shot discount may waive Power pips as well as Energy.
+  const power: Partial<Record<string, number>> = {};
   for (let i = active.length - 1; i >= 0; i--) {
     const entry = active[i];
     if (entry?.replaces !== "play-cost") {
@@ -670,12 +674,18 @@ export function takeNextPlayDiscount(
     if (targetType !== undefined && targetType !== "card" && targetType !== cardType) {
       continue;
     }
-    total += decodeCostAmount(entry.reduction ?? entry.amount).energy;
+    const decoded = decodeCostAmount(entry.reduction ?? entry.amount);
+    total += decoded.energy;
+    for (const [domain, n] of Object.entries(decoded.power)) {
+      if (n && n > 0) {
+        power[domain] = (power[domain] ?? 0) + n;
+      }
+    }
     if (consume && entry.duration === "next") {
       active.splice(i, 1);
     }
   }
-  return total;
+  return { energy: total, power };
 }
 
 /**
@@ -822,6 +832,18 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
         // additional cost; the unit is chosen and exhausted at pay time.
         if (obj.exhaust) {
           return { exhaust: obj.exhaust, kind: "exhaust" };
+        }
+        // rule 356.2.a.1 (ogn-208-298) — "As an additional cost to play me,
+        // kill a friendly unit": no "may", so the kill is MANDATORY and the
+        // play is illegal without a victim.
+        if ((obj as { kill?: unknown }).kill) {
+          return {
+            kill: (obj as { kill?: unknown }).kill,
+            kind: "kill",
+            ...((effect as { optional?: boolean }).optional === false
+              ? { mandatory: true }
+              : {}),
+          };
         }
         energy = obj.energy ?? 0;
         xp = obj.xp ?? 0;
@@ -1107,17 +1129,41 @@ function getBoardCostReduction(
 function waivedPower(
   boardReduction: StaticCostReduction,
   extras: CostExtras,
+  extraWaived?: Partial<Record<string, number>>,
 ): Partial<Record<string, number>> {
-  if (!extras.waivePower) {
+  const extraEntries = Object.entries(extraWaived ?? {});
+  if (!extras.waivePower && extraEntries.length === 0) {
     return boardReduction.power;
   }
   const out: Partial<Record<string, number>> = { ...boardReduction.power };
-  for (const [domain, n] of Object.entries(extras.waivePower)) {
+  for (const [domain, n] of [...Object.entries(extras.waivePower ?? {}), ...extraEntries]) {
     if (n && n > 0) {
       out[domain] = (out[domain] ?? 0) + n;
     }
   }
   return out;
+}
+
+/**
+ * rule-id: sfd-146-221 (rules 356.2.a.2, 356.4.f, 809.1.d) — Deflect's
+ * [rainbow] is a mandatory ADDITIONAL cost added before discounts, so an
+ * any-domain ([rainbow]) discount offsets that surcharge before it is applied
+ * to any printed pip. Returns the surcharge left owing plus the waivers still
+ * available for the printed cost.
+ */
+function offsetDeflectWithWaivedRainbow(
+  waived: Partial<Record<string, number>>,
+  deflectSurcharge: number,
+): { surcharge: number; waived: Partial<Record<string, number>> } {
+  const wild = waived.rainbow ?? 0;
+  if (wild <= 0 || deflectSurcharge <= 0) {
+    return { surcharge: deflectSurcharge, waived };
+  }
+  const used = Math.min(wild, deflectSurcharge);
+  return {
+    surcharge: deflectSurcharge - used,
+    waived: { ...waived, rainbow: wild - used },
+  };
 }
 
 /**
@@ -1736,11 +1782,12 @@ export function canAffordCard(
     getSelfConditionalEnergyReduction(state, playerId, cardId) +
     getSelfLegionEnergyReduction(state, playerId, cardId);
   const nextPlay = takeNextPlayDiscount(state, playerId, cardId, false);
+  const nextPlayEnergy = nextPlay.energy;
   // rule 356.4.e: a discount's minimum binds only that discount, and the payer
   // orders discounts — floored board auras go first so unfloored ones aren't lost.
   const adjustedEnergy = Math.max(
     0,
-    Math.max(0, applyStaticCostReduction(Math.max(0, baseCost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlay) +
+    Math.max(0, applyStaticCostReduction(Math.max(0, baseCost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy) +
       xEnergy +
       repeatSurcharge +
       (extras.additionalCost?.energy ?? 0),
@@ -1760,7 +1807,13 @@ export function canAffordCard(
   // Check power (domain requirements are not affected by cost modifiers,
   // only by board statics that waive power pips).
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
-  const basePower = reducePowerCost(baseCost.power, waivedPower(boardReduction, extras), pool.power);
+  // rule 356.4.f / 809.1.d: a [rainbow] discount cancels the Deflect surcharge
+  // (an additional cost added before discounts) before any printed pip.
+  const deflect = offsetDeflectWithWaivedRainbow(
+    waivedPower(boardReduction, extras, nextPlay.power),
+    getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards),
+  );
+  const basePower = reducePowerCost(baseCost.power, deflect.waived, pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
   const extraPower = additionalCostPower(extras);
   const powerDomains = new Set([
@@ -1772,7 +1825,7 @@ export function canAffordCard(
   // check named domains first, then cover rainbow from whatever is left.
   // Rule 721.1.c / 721.1.c.1 (unl-030-219): the Deflect surcharge is Power of
   // any Domain, so it joins the rainbow requirement rather than energy.
-  let rainbowNeed = getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards) + xPower;
+  let rainbowNeed = deflect.surcharge + xPower;
   // Rule 135.2.e.6.c (rule-id: ven-150-166): a multi-domain card's printed
   // pips are hybrid — payable only from the card's own Domains.
   const hybridDomains = getHybridPipDomains(cardId);
@@ -1872,10 +1925,11 @@ export function deductCost(
     getSelfLegionEnergyReduction(draft, playerId, cardId);
   // rule 356.4.b / 356.6: the one-shot "next spell costs [N] less" is spent here.
   const nextPlay = takeNextPlayDiscount(draft, playerId, cardId, true);
+  const nextPlayEnergy = nextPlay.energy;
   const adjustedEnergy = Math.max(
     0,
     // rule 356.4.e: floored board auras first, then unfloored discounts (see canAffordCard).
-    Math.max(0, applyStaticCostReduction(Math.max(0, cost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlay) +
+    Math.max(0, applyStaticCostReduction(Math.max(0, cost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy) +
       xEnergy +
       repeatSurcharge +
       (extras.additionalCost?.energy ?? 0),
@@ -1888,7 +1942,13 @@ export function deductCost(
   }
   pool.energy = extras.ignoreEnergyCost ? pool.energy : Math.max(0, pool.energy - adjustedEnergy);
   // Rule 820.1.c.2 / 820.3: multi-tier Repeat power costs stack on top.
-  const basePower = reducePowerCost(cost.power, waivedPower(boardReduction, extras), pool.power);
+  // rule 356.4.f / 809.1.d: a [rainbow] discount cancels the Deflect surcharge
+  // (an additional cost added before discounts) before any printed pip.
+  const deflect = offsetDeflectWithWaivedRainbow(
+    waivedPower(boardReduction, extras, nextPlay.power),
+    getDeflectSurcharge(draft, playerId, extras.targets, extras.board?.cards),
+  );
+  const basePower = reducePowerCost(cost.power, deflect.waived, pool.power);
   const repeatPower = getRepeatPowerSurcharge(cardId, repeatN, repeatTiers);
   const extraPower = additionalCostPower(extras);
   const powerDomains = new Set([
@@ -1898,7 +1958,7 @@ export function deductCost(
   ]);
   // Rule 721.1.c / 721.1.c.1 (unl-030-219): Deflect surcharge is paid in
   // Power of any Domain, never energy.
-  let rainbowOwed = getDeflectSurcharge(draft, playerId, extras.targets, extras.board?.cards) + xPower;
+  let rainbowOwed = deflect.surcharge + xPower;
   // Rule 135.2.e.6.c (rule-id: ven-150-166): a multi-domain card's printed
   // pips are hybrid — paid only from the card's own Domains.
   const hybridDomains = getHybridPipDomains(cardId);

@@ -46,10 +46,9 @@ describe("Ruling 8cedb5e8fc134531 — Astral Heron triggers off its own play to 
     expect(game.p1.energy()).toBe(1);
   });
 
-  // Expected: after the trigger resolves, P1's next card costs 2 energy and 2 power (any domain) less —
+  // After the trigger resolves, P1's next card costs 2 energy and 2 power (any domain) less —
   // Next Guy (3 + [fury]) becomes 1 + nothing, playable with the 1 energy / 0 power P1 has left.
-  // Actual: the trigger resolves as a no-op (effect parsed as raw text); Next Guy still costs 3 + [fury].
-  test.failing("BUG: ruling 8cedb5e8fc134531 — the resolved trigger discounts the next card by [2][rainbow][rainbow]; engine applies no discount", async () => {
+  test("ruling 8cedb5e8fc134531 — the resolved trigger discounts the next card by [2][rainbow][rainbow]", async () => {
     const game = await board().build();
     await game.p1.play("heron", { to: "bf1" });
     expect(heronTriggers(game)).toBe(1);

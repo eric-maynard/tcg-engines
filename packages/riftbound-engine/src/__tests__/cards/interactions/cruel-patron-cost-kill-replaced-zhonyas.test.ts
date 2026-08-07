@@ -56,7 +56,7 @@ describe("Cruel Patron × Zhonya's Hourglass × LeBlanc — replaced cost-kill i
 
   // Expected: the play offers/requires a friendly unit to kill; enemy units are never candidates.
   // Actual: no `sacrifice` choice is surfaced at all (see above).
-  test.failing("BUG: playing Cruel Patron asks for a FRIENDLY unit to kill — LeBlanc is a candidate, the enemy Bystander is not", async () => {
+  test("playing Cruel Patron asks for a FRIENDLY unit to kill — LeBlanc is a candidate, the enemy Bystander is not", async () => {
     const game = await board({ zhonyas: false }).build();
     const field = game.p1.option("play", "patron")?.fields.find((f) => f.arg === "sacrifice");
     expect(field).toBeDefined();
@@ -102,7 +102,7 @@ describe("Cruel Patron × Zhonya's Hourglass × LeBlanc — replaced cost-kill i
 
   // Expected (357.2.a): a replaced cost still counts as paid → Cruel Patron finishes being played and
   // enters the base; the 4 energy is spent. Actual: see above.
-  test.failing("BUG: with Zhonya's — the replaced cost still counts as PAID: Cruel Patron enters base and 4 energy is spent (357.2.a)", async () => {
+  test("with Zhonya's — the replaced cost still counts as PAID: Cruel Patron enters base and 4 energy is spent (357.2.a)", async () => {
     const game = await board({ zhonyas: true }).build();
     await game.p1.play("patron", { sacrifice: "leblanc" });
     await game.settle();
