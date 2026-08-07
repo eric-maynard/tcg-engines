@@ -33,7 +33,10 @@ function enrichCard(raw: Card): Card {
   }
 
   // ParseAbilities returns Ability[] directly
-  const abilities = mergeRepeatedSpellAbilities(result.abilities);
+  const abilities = unwrapSpellWrappedAbilities(
+    mergeRepeatedSpellAbilities(result.abilities),
+    card.cardType,
+  );
 
   // Return a new card object with abilities attached
   return { ...card, abilities } as Card;
@@ -72,6 +75,29 @@ function mergeRepeatedSpellAbilities<T>(abilities: readonly T[]): T[] {
       },
     } as T,
   ];
+}
+
+/**
+ * rule 813 / 806.1 (sfd-053-221 Janna, Savior) — a [Reaction] printed on a UNIT
+ * or GEAR is a timing permission (handled in `normalizeSpellTiming`), not a
+ * spell ability. The parser has no card type, so it files the rest of such a
+ * card's text under `{ type: "spell", timing, effect }`; on a non-spell card
+ * that wrapper hides a real ability (a play-self trigger, a static, …) from the
+ * engine. Lift the inner ability back to the top level.
+ */
+const ABILITY_KINDS = new Set(["triggered", "static", "activated", "keyword", "replacement"]);
+
+function unwrapSpellWrappedAbilities<T>(abilities: readonly T[], cardType: string): T[] {
+  if (cardType === "spell") {
+    return [...abilities];
+  }
+  return abilities.map((a) => {
+    const ability = a as { type?: string; effect?: { type?: string } };
+    if (ability?.type !== "spell" || !ability.effect?.type) {
+      return a;
+    }
+    return ABILITY_KINDS.has(ability.effect.type) ? (ability.effect as T) : a;
+  });
 }
 
 /**

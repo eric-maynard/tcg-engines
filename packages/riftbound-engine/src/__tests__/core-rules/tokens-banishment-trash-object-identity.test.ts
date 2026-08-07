@@ -565,9 +565,7 @@ describe("Trash is public and unordered (108.2.c, 108.2.d)", () => {
 // ===========================================================================
 
 describe("Board → trash → board is a NEW object: damage, buff, granted keywords, +Might this turn and exhaustion do not carry over (124, 124.1, 705, 747)", () => {
-  test.failing("BUG: 124 / 124.1 / 705 — U (might 3): exhausted, 2 damage, buffed, +2 this turn, granted Tank → killed → played back from trash the same turn → must be a fresh unit: might exactly 3, 0 damage, no buff/Tank/+2 (engine brings it back with damage 2, buffed, Might 4+)", async () => {
-    // Expected: the returned U reads might 3, damage 0, isBuffed false, no granted keywords, mightModifier 0.
-    // Actual: the trash copy keeps damage/buff (and so does the re-played unit).
+  test("124 / 124.1 / 705 — U (might 3): exhausted, 2 damage, buffed, +2 this turn, granted Tank → killed → played back from trash the same turn → must be a fresh unit: might exactly 3, 0 damage, no buff/Tank/+2", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P1 })
       .unit(P1, "bf1", { abilities: [RISE_FROM_TRASH], energyCost: 3, might: 3, name: "Subject U" }, "U", { buffed: true, damage: 2, exhausted: true })
@@ -602,8 +600,7 @@ describe("Board → trash → board is a NEW object: damage, buff, granted keywo
     expect(s.isExhausted).toBe(true); // 143.4 — enters exhausted as a (new) unit, not "because it was"
   });
 
-  test.failing("BUG: 705 / 747 — a killed unit's Buff counter ceases to exist: the card in the trash is not buffed and reads its printed Might (engine keeps buffed=true in the trash)", async () => {
-    // Expected: trash copy isBuffed false, might 3, damage 0. Actual: buffed=true / might 4 persist.
+  test("705 / 747 — a killed unit's Buff counter ceases to exist: the card in the trash is not buffed and reads its printed Might", async () => {
     const game = await scenario()
       .unit(P1, "base", { might: 3, name: "Subject U" }, "U", { buffed: true, damage: 1 })
       .hand(P1, KILL, "kill")
@@ -710,7 +707,7 @@ describe("Hand round-trip also resets: a bounced unit replayed pays full cost an
     expect(game.p1.champion()).toBeUndefined();
   });
 
-  test.failing("BUG: 705 / 705.1 — a buffed champion that leaves play loses its buff (engine keeps buffed=true on the trash copy)", async () => {
+  test("705 / 705.1 — a buffed champion that leaves play loses its buff", async () => {
     // Expected: CH in trash isBuffed false, might 4. Actual: buffed persists (might 5).
     const game = await scenario()
       .unit(P1, "base", { isChampion: true, might: 4, name: "Champ" }, "CH", { buffed: true })

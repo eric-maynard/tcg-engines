@@ -143,7 +143,7 @@ describe("Janna, Savior (sfd-053-221)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: bouncing the ONLY attacker ends the combat with no damage dealt — a 6-Might attacker never touches the 4-Might defender", async () => {
+  test("bouncing the ONLY attacker ends the combat with no damage dealt — a 6-Might attacker never touches the 4-Might defender", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P1, { energy: 3, power: { calm: 1 } })
@@ -186,9 +186,7 @@ describe("Janna, Savior (sfd-053-221)", () => {
     expect(game.chain().map((c) => c.cardId)).toContain("ray"); // the Ray is still waiting
   });
 
-  test.failing("BUG: …and her heal resolves first (LIFO), so Hurt (4 Might, 2 damage) survives the Ray's 3 damage", async () => {
-    // Expected: chain = [ray, janna-trigger]; trigger resolves → hurt 0 damage; Ray → 3 damage, alive.
-    // Actual: no trigger; the Ray finds hurt at 2 damage and kills it.
+  test("…and her heal resolves first (LIFO), so Hurt (4 Might, 2 damage) survives the Ray's 3 damage", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P1, { energy: 3, power: { calm: 1 } })
@@ -208,8 +206,7 @@ describe("Janna, Savior (sfd-053-221)", () => {
     expect(game.zoneOf("ray")).toBe("trash");
   });
 
-  test.failing("BUG: played to base on your own turn: heals your damaged base units; no enemy is 'here' so nothing is asked", async () => {
-    // Expected: homehurt 1→0 with no prompt. Actual: no play effect exists, damage stays.
+  test("played to base on your own turn: heals your damaged base units; no enemy is 'here' so nothing is asked", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { calm: 1 } })
       .battlefield("bf1", { controller: P1 })
@@ -226,8 +223,7 @@ describe("Janna, Savior (sfd-053-221)", () => {
     expect(game.state("homehurt").damage).toBe(0);
   });
 
-  test.failing("BUG: parsed ability shape — a top-level play-self trigger with sequence [heal friendly here, move ≤1 enemy here → base]", async () => {
-    // Actual: the triggered ability is nested inside `{ type: "spell", timing: "reaction", effect: {…triggered…} }`.
+  test("parsed ability shape — a top-level play-self trigger with sequence [heal friendly here, move ≤1 enemy here → base]", async () => {
     const pool = await loadDefaultCardPool();
     const def = pool.get(CARD);
     expect(def).toMatchObject({ cardType: "unit", energyCost: 3, isChampion: true, might: 3, timing: "reaction" });

@@ -208,6 +208,24 @@ function killUnits(targets: readonly string[], ctx: EffectContext, h: EffectHelp
       cardId: targetId as CoreCardId,
       targetZoneId: "trash" as CoreZoneId,
     });
+    // rule 124 / 124.1 / 705: leaving the board makes a new object — every
+    // counter and modifier ceases to exist. Mirrors the SBA death wipe in
+    // `state-based-checks.ts performCleanup`.
+    ctx.cards.updateCardMeta?.(targetId as CoreCardId, {
+      // scenario-seeded state lives in `__flags`; it dies with the object too.
+      __flags: undefined,
+      buffed: false,
+      combatMightModifier: 0,
+      combatRole: null,
+      damage: 0,
+      equippedWith: undefined,
+      exhausted: false,
+      grantedKeywords: undefined,
+      lastDamageSource: undefined,
+      lastDamagedBy: undefined,
+      mightModifier: 0,
+      stunned: false,
+    } as unknown as Record<string, unknown>);
     killed.push({ cardId: targetId, diedAt, owner, wasBuffed, wasStunned });
   }
   // rule-id: ogn-246-298 — a kill effect is a death: emit `die` so
