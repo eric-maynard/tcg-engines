@@ -564,6 +564,13 @@ export interface RevealAndPickChoice {
   readonly playEnergyReduction?: number;
 
   /**
+   * rule 392 (unl-169-219 Ashe, Focused) — "…and banish it. When they hold,
+   * return it to their hand (even if I'm no longer on the board)": the banish
+   * installs a permanent delayed trigger on the picking player.
+   */
+  readonly returnOnHold?: boolean;
+
+  /**
    * rule 355.2.b (sfd-170-221 Rek'Sai, Swarm Queen): "If it is a unit, you may
    * play it HERE" — the instructing card's own battlefield becomes a valid
    * location for the play even when the controller does not control it.

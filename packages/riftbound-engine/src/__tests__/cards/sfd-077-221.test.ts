@@ -248,7 +248,7 @@ describe("Rocket Barrage (sfd-077-221)", () => {
     expect(rich.zoneOf("poro")).toBe("trash");
   });
 
-  test.failing("BUG: Deflect surcharge is actually collected — after choosing the poro the spare [rainbow] is spent (809)", async () => {
+  test("Deflect surcharge is actually collected — after choosing the poro the spare [rainbow] is spent (809)", async () => {
     // Expected: energy 0, power 0 after the cast + choice. Actual: the rainbow pip is never charged.
     const rich = await scenario().resources(P1, { energy: 4, power: { mind: 1, rainbow: 1 } }).unit(P2, "base", DEFLECTOR, "poro").hand(P1, CARD, "rb").build();
     await rich.p1.cast("rb");

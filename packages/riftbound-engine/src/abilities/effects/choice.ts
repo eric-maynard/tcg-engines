@@ -1,8 +1,70 @@
 // Effect handler: "choice"
+import { getDeflectSurcharge } from "../../game-definition/moves/play/cost";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import { type EffectHelpers } from "./_helpers";
+
+/**
+ * rule 809.1.c.1 (rule-id: sfd-077-221) — a modal spell declares its target as
+ * it RESOLVES, so the [Deflect] surcharge for choosing an opponent's Deflect
+ * object is owed here rather than at cast time. Multi-candidate picks are
+ * charged by the prompt (`pending-choice.ts chargePromptedDeflectTax`); this
+ * covers the sole candidate the handler binds by itself.
+ */
+function chargeAutoBoundDeflect(picked: ExecutableEffect, ctx: EffectContext): void {
+  const tgt = picked.target as TargetDescriptor | string | undefined;
+  if (tgt === undefined || typeof tgt === "string" || ctx.boundTargets !== undefined) {
+    return;
+  }
+  const kind = (tgt as { type?: string }).type;
+  const quantity = (tgt as { quantity?: unknown }).quantity;
+  if (
+    (kind !== "unit" && kind !== "gear" && kind !== "unit-or-gear") ||
+    quantity === "all" ||
+    (typeof quantity === "number" && quantity > 1) ||
+    (typeof quantity === "object" && quantity !== null)
+  ) {
+    return;
+  }
+  const options = resolveTarget({ ...(tgt as TargetDescriptor), quantity: "all" }, {
+    cards: ctx.cards,
+    choosing: true,
+    draft: ctx.draft,
+    playerId: ctx.playerId,
+    sameZone: ctx.sameZone,
+    sourceCardId: ctx.sourceCardId,
+    sourceZone: ctx.sourceZone,
+    triggerSourceId: ctx.triggerSourceId,
+    zones: ctx.zones,
+  } as Parameters<typeof resolveTarget>[1]);
+  if (options.length !== 1) {
+    return;
+  }
+  let owed = getDeflectSurcharge(
+    ctx.draft,
+    ctx.playerId,
+    options,
+    ctx.cards as Parameters<typeof getDeflectSurcharge>[3],
+  );
+  const pool = ctx.draft.runePools?.[ctx.playerId]?.power as
+    | Record<string, number>
+    | undefined;
+  if (owed <= 0 || !pool) {
+    return;
+  }
+  // Deflect is Power of ANY Domain (721.1.c); drain the most-stocked first.
+  while (owed > 0) {
+    const key = Object.entries(pool)
+      .filter(([, v]) => (v ?? 0) > 0)
+      .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0];
+    if (key === undefined) {
+      return;
+    }
+    pool[key] = (pool[key] ?? 0) - 1;
+    owed--;
+  }
+}
 
 /**
  * rule 355.3 / 355.8 — a mode whose effect has no legal target may not be
@@ -166,6 +228,7 @@ export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: E
         modesChosenThisTurn: [...alreadyChosen, soleIndex],
       });
     }
+    chargeAutoBoundDeflect(options[soleIndex].effect, ctx);
     executeEffect(options[soleIndex].effect, ctx);
   }
 }
