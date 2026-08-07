@@ -287,6 +287,11 @@ export interface YesNoDecision extends DecisionBase {
   readonly consequence?: string;
   /** False when "yes" is not a legal answer right now (e.g. an unpayable "you may [cost] to …"). */
   readonly canAccept?: boolean;
+  /**
+   * rule 444.2.c / 429.3.a: actions that stay legal while this Pay is being
+   * demanded (Reaction [Add] abilities), offered alongside yes/no.
+   */
+  readonly actions?: readonly ActionOption[];
 }
 
 export interface IntegerDecision extends DecisionBase {

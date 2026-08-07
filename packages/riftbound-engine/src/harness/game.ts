@@ -812,8 +812,9 @@ export class SeatHandle {
     if (d && d.kind === "action") {
       return d.options;
     }
-    // rule 429.3 / 429.3.a: a pay-X prompt still offers the [Add] activations.
-    return d && d.kind === "integer" ? (d.actions ?? []) : [];
+    // rule 429.3 / 429.3.a + 444.2.c: a pay-X prompt — and an opt-in "you may
+    // pay …" — still offers the [Add] activations.
+    return d && (d.kind === "integer" || d.kind === "yes-no") ? (d.actions ?? []) : [];
   }
 
   /** Find an option by verb/moveId (+ card). */

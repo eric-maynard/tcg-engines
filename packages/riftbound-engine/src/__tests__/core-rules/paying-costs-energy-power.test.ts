@@ -691,7 +691,7 @@ describe("'You may pay [1]. If you do, …' inside a resolving trigger is skippa
   // [Reaction] Add at that moment — so with an empty pool but one READY rune "yes" must be a legal answer
   // (rune exhausted, 1 paid, 1 drawn). Actual: the engine only offers "yes" when the pool already holds the
   // energy; with just a ready rune the only legal resolution is "no" and no rune may be tapped meanwhile.
-  test.failing("BUG: 444.2.c — cannot tap a ready rune to pay an optional 'you may pay [1]' while the ability resolves; only 'decline' is offered", async () => {
+  test("444.2.c — a ready rune may be tapped to pay an optional 'you may pay [1]' while the ability resolves", async () => {
     const game = await build().rune(P1, "fury", { alias: "R" }).build();
     const hand = game.p1.hand().length;
     await game.p1.move("raider", "bf1");

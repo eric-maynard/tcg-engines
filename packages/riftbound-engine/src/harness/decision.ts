@@ -676,8 +676,16 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         costText = costText ? `${costText} and exhaust` : "Exhaust";
       }
       costText = costText ? `${costText} to use` : "Use";
+      // rule 444.2.c / 429.3.a: a Pay demanded by a resolving/finalizing ability
+      // is still a Pay step — Reaction [Add] abilities stay activatable here, so
+      // the seat's remaining actions ride alongside the yes/no.
+      const optInActions = groupActions(
+        ctx,
+        ctx.legal(seat).filter((m) => m.moveId !== "resolvePendingChoice"),
+      ).options;
       const d: YesNoDecision = {
         ...base,
+        ...(optInActions.length > 0 ? { actions: optInActions } : {}),
         // rule 383.3.b (ogn-072-298): "yes" is only legal when the opt-in cost is payable.
         canAccept: flat.some((m) => m.params.accept === true),
         consequence: "Perform the optional triggered ability",

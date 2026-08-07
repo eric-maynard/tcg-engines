@@ -79,6 +79,37 @@ export function handle_playBanishedPass(
 }
 
 /**
+ * rule-id: ogn-115-298 × ogn-064-298 (rules 337.1.b, 340.1) — "each player
+ * plays those cards" is ONE instruction: every play in the pass happens before
+ * any of the played cards resolves. The pass is modelled as one queued item per
+ * play, so a card put on the chain by an earlier play must be slotted BENEATH
+ * the play items still waiting — otherwise it would resolve before the later
+ * players have played at all, and a counterspell played last could never see it.
+ */
+function slotBeneathPendingPlays(
+  interaction: NonNullable<EffectContext["draft"]["interaction"]>,
+): typeof interaction {
+  const chain = interaction.chain;
+  if (!chain) {
+    return interaction;
+  }
+  const items = chain.items;
+  const newest = items[items.length - 1];
+  if (!newest) {
+    return interaction;
+  }
+  const firstPlayIdx = items.findIndex(
+    (it) => (it.effect as { type?: string } | undefined)?.type === "play-banished-card",
+  );
+  if (firstPlayIdx < 0 || firstPlayIdx >= items.length - 1) {
+    return interaction;
+  }
+  const reordered = [...items.slice(0, items.length - 1)];
+  reordered.splice(firstPlayIdx, 0, newest);
+  return { ...interaction, chain: { ...chain, items: reordered } };
+}
+
+/**
  * rule-id: ogn-115-298 (rule 356.1.b) — finalizing one instructed play out of
  * banishment: the Energy cost is ignored, the Power cost is not. rule 358.3.a:
  * if the remaining cost cannot be paid the play is impossible and is skipped —
@@ -95,6 +126,16 @@ export function handle_playBanishedCard(
   }
   const owner = (ctx.cards.getCardOwner(cardId as CoreCardId) as string | undefined) ?? ctx.playerId;
   if (ctx.zones.getCardZone(cardId as CoreCardId) !== "banishment") {
+    return;
+  }
+  // rule 358.3.a (ogn-115-298 × ogn-026-298) — an instruction to play a card is
+  // skipped as impossible for a player who can't play cards this turn; the card
+  // just stays banished.
+  if (
+    (ctx.draft as { cannotPlayCardsThisTurn?: Record<string, boolean> }).cannotPlayCardsThisTurn?.[
+      owner
+    ] === true
+  ) {
     return;
   }
   const extras: CostExtras =
@@ -139,6 +180,7 @@ export function handle_playBanishedCard(
       },
       Object.keys(ctx.draft.players),
     );
+    ctx.draft.interaction = slotBeneathPendingPlays(ctx.draft.interaction);
     if (ctx.draft.cardsPlayedThisTurn) {
       ctx.draft.cardsPlayedThisTurn[owner] = (ctx.draft.cardsPlayedThisTurn[owner] ?? 0) + 1;
     }
