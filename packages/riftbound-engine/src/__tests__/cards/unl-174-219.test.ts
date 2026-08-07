@@ -229,7 +229,7 @@ describe("Shard of Undoing (unl-174-219)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P2 });
   });
 
-  test.failing("BUG: only the BEGINNING Phase — a friendly unit dying in COMBAT during your Main Phase must not fire it (window modelled as 'your turn')", async () => {
+  test("only the BEGINNING Phase — a friendly unit dying in COMBAT during your Main Phase must not fire it", async () => {
     // Expected: P1's Scout dies attacking in P1's action phase → no Shard item, no prompt, P2 keeps both units.
     // Actual: the restriction is `during-turn/your`, so the Shard goes on the chain and a kill prompt opens.
     const game = await scenario()
@@ -251,7 +251,7 @@ describe("Shard of Undoing (unl-174-219)", () => {
     expect(game.zoneOf("bystander")).toBe("base");
   });
 
-  test.failing("BUG: only the BEGINNING Phase — killing your own unit with a spell in your Main Phase must not fire it either", async () => {
+  test("only the BEGINNING Phase — killing your own unit with a spell in your Main Phase must not fire it either", async () => {
     // Expected: Bystander (P2's only unit) survives. Actual: the Shard fires and, being the only
     // candidate, Bystander is killed automatically.
     const game = await scenario()

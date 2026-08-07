@@ -23,7 +23,7 @@ export interface TriggerRestriction {
  */
 export interface TriggerMatcherState {
   readonly cardsPlayedThisTurn?: Record<string, number>;
-  readonly turn?: { readonly activePlayer?: string };
+  readonly turn?: { readonly activePlayer?: string; readonly phase?: string };
   readonly turnEventCounts?: Record<string, number>;
   /** Same keys as `turnEventCounts`, but never reset — game-long tallies. */
   readonly gameEventCounts?: Record<string, number>;
@@ -268,6 +268,23 @@ function restrictionSatisfied(
       // ogn-117-298 (Viktor, Innovator): typed `during-turn` restriction —
       // compare the active player against this card's controller.
       const active = state?.turn?.activePlayer;
+      if (active === undefined) {
+        return false;
+      }
+      return restriction.whose === "opponent" ? active !== card.owner : active === card.owner;
+    }
+    case "during-phase": {
+      // rule 315 (unl-174-219 Shard of Undoing): "during your Beginning Phase"
+      // is narrower than "during your turn" — the event must land while that
+      // phase is the current one, and `whose` scopes the turn it belongs to.
+      const active = state?.turn?.activePlayer;
+      const phase = state?.turn?.phase;
+      if (phase === undefined || phase !== restriction.phase) {
+        return false;
+      }
+      if (restriction.whose === undefined) {
+        return true;
+      }
       if (active === undefined) {
         return false;
       }

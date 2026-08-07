@@ -149,6 +149,16 @@ export type TriggerRestriction =
   | { readonly type: "first-time-each-turn" }
   | { readonly type: "once-per-game" }
   | { readonly type: "during-turn"; readonly whose: "your" | "opponent" }
+  /**
+   * rule 315 — a phase-scoped window ("during your Beginning Phase",
+   * unl-174-219). `whose` additionally scopes it to the controller's own turn
+   * (default) or an opponent's.
+   */
+  | {
+      readonly type: "during-phase";
+      readonly phase: "awaken" | "beginning" | "channel" | "draw" | "main" | "ending" | "cleanup";
+      readonly whose?: "your" | "opponent";
+    }
   | { readonly type: "in-combat" }
   | { readonly type: "not-in-combat" }
   /** rule 188 — "conquer a battlefield that was uncontrolled" (sfd-116-221). */

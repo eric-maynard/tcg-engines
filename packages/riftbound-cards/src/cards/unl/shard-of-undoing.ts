@@ -10,14 +10,7 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *
  * Modeled as a `die` trigger on friendly units with two restrictions:
  *  - `first-time-each-turn` (only the first matching death per turn fires)
- *  - `during-turn` / "your" (constrains to the controller's own turn)
- *
- * The "during Beginning Phase" window is narrower than "during your
- * turn"; without a phase-scoped trigger restriction we approximate with
- * "during your turn".
- *
- * FIXME: true fidelity would require a "during Beginning Phase"
- * restriction. The engine currently only exposes turn-scope restrictions.
+ *  - `during-phase` beginning / "your" (rule 315: only your Beginning Phase)
  *
  * Effect: each opponent is forced to kill one of their own units.
  */
@@ -31,7 +24,12 @@ const abilities: Ability[] = [
     trigger: {
       event: "die",
       on: "friendly-units",
-      restrictions: [{ type: "first-time-each-turn" }, { type: "during-turn", whose: "your" }],
+      restrictions: [
+        { type: "first-time-each-turn" },
+        // rule 315: the window is your BEGINNING Phase only — a friendly death
+        // in your Main Phase (combat, your own spell) must not fire it.
+        { phase: "beginning", type: "during-phase", whose: "your" },
+      ],
     },
     type: "triggered",
   },
