@@ -64,7 +64,7 @@ describe("Ruling 29339d78dfd48122 — what Ezreal, Prodigy's discount does and d
   // Expected: Ezreal makes the optional [1][fury] cost [1] less → just [fury]; with 2 energy + 1 fury P1
   // can pay it (2 for the Cadet + fury), ends at 0/0, and "if you paid the additional cost" is satisfied
   // (356.4.c, 356.4.f.1). Actual: Ezreal's static discount is not implemented — payOptional is not offered.
-  test.failing("BUG: ruling 29339d78dfd48122 — with Ezreal the Cadet's optional cost drops the [1]: 2 energy + [fury] suffices, still counts as paid (deal 2)", async () => {
+  test("ruling 29339d78dfd48122 — with Ezreal the Cadet's optional cost drops the [1]: 2 energy + [fury] suffices, still counts as paid (deal 2)", async () => {
     const game = await cadetBoard({ energy: 2, fury: 1 }, true).build();
     expect(game.p1.option("play", "cadet")?.fields.find((f) => f.arg === "payOptional")?.options).toContain(true);
     await playCadetPaid(game);
@@ -75,7 +75,7 @@ describe("Ruling 29339d78dfd48122 — what Ezreal, Prodigy's discount does and d
 
   // Expected: alternatively Ezreal removes the [rainbow]-class pip → the optional cost is just [1]; with
   // 3 energy and NO fury P1 pays 2+1 and the trigger still fires. Actual: not implemented (see above).
-  test.failing("BUG: ruling 29339d78dfd48122 — with Ezreal the Cadet's optional cost may instead drop the [fury] pip: 3 energy and no power suffices (deal 2)", async () => {
+  test("ruling 29339d78dfd48122 — with Ezreal the Cadet's optional cost may instead drop the [fury] pip: 3 energy and no power suffices (deal 2)", async () => {
     const game = await cadetBoard({ energy: 3 }, true).build();
     expect(game.p1.option("play", "cadet")?.fields.find((f) => f.arg === "payOptional")?.options).toContain(true);
     await playCadetPaid(game);
@@ -181,7 +181,7 @@ describe("Ruling 29339d78dfd48122 — what Ezreal, Prodigy's discount does and d
   // Expected: Repeat is a keyworded optional additional cost (820.1.d) → Ezreal makes it [1]; Hard Bargain
   // + one Repeat costs 2 + 1 = 3, so P1 with Ezreal and 3 energy can cast it repeated (→ 0 energy).
   // Actual: Ezreal's discount is not implemented; at 3 energy the repeat is not offered.
-  test.failing("BUG: ruling 29339d78dfd48122 — Ezreal DOES reduce Hard Bargain's Repeat [2] to [1]: castable with one Repeat at 3 energy", async () => {
+  test("ruling 29339d78dfd48122 — Ezreal DOES reduce Hard Bargain's Repeat [2] to [1]: castable with one Repeat at 3 energy", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P2, { energy: 2 })

@@ -178,7 +178,7 @@ describe("Spectral Matron → Legion Rearguard (Accelerate) × Ezreal, Prodigy",
     expect(declined.p1.resources()).toEqual({ energy: 1, power: { fury: 1 } });
   });
 
-  test.failing("BUG: control (from hand, WITH Ezreal): Accelerate costs [1] less — 3 energy and no Fury power suffices, enters ready (356.4.c, 356.4.f.1)", async () => {
+  test("control (from hand, WITH Ezreal): Accelerate costs [1] less — 3 energy and no Fury power suffices, enters ready (356.4.c, 356.4.f.1)", async () => {
     // Expected: 2 (base) + Accelerate discounted to [fury]→dropped pip or [1]→dropped energy; with
     // 3 energy and no power P1 drops the pip and pays 3 total → ready. Actual: Ezreal's "optional
     // additional costs cost [1] or [rainbow] less" is not implemented, so the accelerated play is

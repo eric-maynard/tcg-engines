@@ -201,25 +201,21 @@ describe("Curtain Call × Marai Spire × Ezreal, Prodigy — three Repeat costs"
 
   // ---------------------------------------------------------------- + Ezreal, Prodigy
 
-  test.failing("BUG: Marai Spire + Ezreal, Prodigy — every optional cost is reduced to 0 ([1]→Spire; [rainbow]→Ezreal; [1][rainbow]→Spire+Ezreal): total is just [4] for four executions (356.4.c, 356.4.c.1)", async () => {
-    // Expected: castable with exactly 4 energy and no power, pool empty afterwards.
-    // Actual: neither discount is implemented; repeatCount 3 is unaffordable.
+  test("Marai Spire + Ezreal, Prodigy — every optional cost is reduced to 0 ([1]→Spire; [rainbow]→Ezreal; [1][rainbow]→Spire+Ezreal): total is just [4] for four executions (356.4.c, 356.4.c.1)", async () => {
     const game = await board({ spire: "p1", ezreal: true, energy: 4, power: 0 }).build();
     expect(game.p1.option("cast", "cc")?.fields.find((f) => f.name === "repeatCount")?.max).toBe(3);
     await game.p1.cast("cc", { repeat: 3 });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { fury: 0 } });
   });
 
-  test.failing("BUG: Ezreal alone (opponent's Spire): [4] + 0 + 0 + [1] — all three Repeats are payable with 5 energy and no power", async () => {
-    // Expected: [1]→0, [rainbow]→0, [1][rainbow]→[1] (Ezreal eats the rainbow) ⇒ 5 energy. Actual: unaffordable.
+  test("Ezreal alone (opponent's Spire): [4] + 0 + 0 + [1] — all three Repeats are payable with 5 energy and no power", async () => {
     const game = await board({ spire: "p2", ezreal: true, energy: 5, power: 0 }).build();
     expect(game.p1.option("cast", "cc")?.fields.find((f) => f.name === "repeatCount")?.max).toBe(3);
     await game.p1.cast("cc", { repeat: 3 });
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: Ezreal alone (opponent's Spire): alternatively [4] + [rainbow] — payable with 4 energy + 1 power", async () => {
-    // Expected: [1][rainbow]→[rainbow] when Ezreal eats the [1] instead ⇒ 4 energy + 1 power. Actual: unaffordable.
+  test("Ezreal alone (opponent's Spire): alternatively [4] + [rainbow] — payable with 4 energy + 1 power", async () => {
     const game = await board({ spire: "p2", ezreal: true, energy: 4, power: 1 }).build();
     expect(game.p1.option("cast", "cc")?.fields.find((f) => f.name === "repeatCount")?.max).toBe(3);
     await game.p1.cast("cc", { repeat: 3 });
