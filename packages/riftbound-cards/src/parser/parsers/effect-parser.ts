@@ -458,10 +458,18 @@ export function parsePreventDamageEffect(text: string): PreventDamageEffect | un
 
   if (amount === "all") {
     (effect as { amount: "all" }).amount = amount;
+  } else if (match[2] && /^\d+$/.test(match[2])) {
+    // rule 437.1.b.1.a — "Prevent the next 7 damage": the Prevent Value is a number.
+    (effect as { amount: number }).amount = Number(match[2]);
   }
 
   if (duration) {
     (effect as { duration: "turn" | "next" }).duration = duration;
+  }
+
+  // rule 355 — "…that would be dealt to it" shields the chosen unit.
+  if (/\bdealt to (?:it|that unit)\b/i.test(text)) {
+    (effect as { target: unknown }).target = { type: "unit" };
   }
 
   return effect;
