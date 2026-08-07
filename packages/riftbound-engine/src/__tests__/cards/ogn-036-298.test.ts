@@ -56,7 +56,8 @@ describe("Vi, Destructive (ogn-036-298)", () => {
 
   test("activated: repeatable while the trash has cards; not available with an empty trash", async () => {
     const game = await scenario().unit(P1, "base", CARD, "vi").trash(P1, JUNK, "j1").trash(P1, JUNK, "j2").build();
-    await game.p1.activate("vi", PUMP);
+    // rule 416.5 — two cards in trash, so the controller names which one pays.
+    await game.p1.activate("vi", PUMP, { params: { recycleIds: ["j1"] } });
     await game.settle();
     await game.p1.activate("vi", PUMP);
     await game.settle();

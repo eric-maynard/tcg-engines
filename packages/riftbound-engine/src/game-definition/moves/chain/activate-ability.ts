@@ -176,6 +176,35 @@ function eligibleRecycleCards(
   return ids.filter((id) => registry.getCardType(id) === spec.cardType);
 }
 
+/** Cap the recycle fan-out so a deep trash can't explode the move list. */
+const MAX_RECYCLE_VARIANTS = 60;
+
+/**
+ * rule 416.5 — every N-card selection the controller may make to pay a
+ * "Recycle N from your trash" cost, oldest-first so the first variant matches
+ * the reducer's default. Truncated at `MAX_RECYCLE_VARIANTS`.
+ */
+function recycleSubsets(eligible: readonly string[], amount: number): string[][] {
+  const out: string[][] = [];
+  const walk = (start: number, chosen: string[]): void => {
+    if (out.length >= MAX_RECYCLE_VARIANTS) {
+      return;
+    }
+    if (chosen.length === amount) {
+      out.push(chosen);
+      return;
+    }
+    for (let i = start; i <= eligible.length - (amount - chosen.length); i++) {
+      walk(i + 1, [...chosen, eligible[i] as string]);
+      if (out.length >= MAX_RECYCLE_VARIANTS) {
+        return;
+      }
+    }
+  };
+  walk(0, []);
+  return out;
+}
+
 /**
  * rule-id: sfd-052-221 (rule 355.10.f / 355.14.b) — an activated ability's
  * single caster-chosen card target ("Give a unit +3 Might") is chosen when
@@ -1188,6 +1217,11 @@ export const activateAbility: Defs["activateAbility"] = {
 
         // rule-id: ogn-036-298 (rule 577.2) — a "Recycle N from your trash"
         // cost is unpayable with fewer than N cards in trash.
+        // rule 416.5 (ogn-099-298 Garbage Grabber) — when the trash holds more
+        // than N eligible cards, ITS CONTROLLER chooses which N pay the cost,
+        // so enumerate one activation per legal N-subset instead of silently
+        // recycling the oldest N.
+        let recycleOptions: string[][] | undefined;
         const recycleSpec = normalizeRecycleCost(
           (ability.cost as Record<string, unknown> | undefined)?.recycle,
         );
@@ -1196,8 +1230,12 @@ export const activateAbility: Defs["activateAbility"] = {
             "trash" as CoreZoneId,
             playerId as CorePlayerId,
           );
-          if (eligibleRecycleCards(trash, recycleSpec).length < recycleSpec.amount) {
+          const eligible = eligibleRecycleCards(trash, recycleSpec);
+          if (eligible.length < recycleSpec.amount) {
             continue;
+          }
+          if (eligible.length > recycleSpec.amount) {
+            recycleOptions = recycleSubsets(eligible, recycleSpec.amount);
           }
         }
 
@@ -1307,6 +1345,7 @@ export const activateAbility: Defs["activateAbility"] = {
           sacrificeId?: string;
           discardId?: string;
           targets?: string[];
+          recycleIds?: string[];
         } = {
           abilityIndex: entry.abilityIndex,
           cardId: entry.hostCardId,
@@ -1329,6 +1368,12 @@ export const activateAbility: Defs["activateAbility"] = {
             }
           }
           bases = withTargets;
+        }
+        // rule 416.5 — one variant per legal N-card recycle selection.
+        if (recycleOptions) {
+          bases = bases.flatMap((base) =>
+            (recycleOptions as string[][]).map((recycleIds) => ({ ...base, recycleIds })),
+          );
         }
         if (discardOptions) {
           for (const base of bases) {

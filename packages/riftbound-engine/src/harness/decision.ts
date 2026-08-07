@@ -37,6 +37,7 @@ import type {
   HarnessErrorInfo,
   IntegerDecision,
   NameDecision,
+  OrderDecision,
   PickDecision,
   PickOption,
   PlayArgs,
@@ -166,6 +167,8 @@ const PARAM_ARG: Record<string, { arg: string; kind: ActionFieldKind }> = {
   domain: { arg: "domain", kind: "enum" },
   location: { arg: "to", kind: "zone" },
   paidAdditionalCost: { arg: "payOptional", kind: "bool" },
+  // rule 416.5 — the controller picks which cards pay a "Recycle N" cost.
+  recycleIds: { arg: "recycle", kind: "cards" },
   repeatCount: { arg: "repeat", kind: "int" },
   sacrificeId: { arg: "sacrifice", kind: "card" },
   sourceCardId: { arg: "source", kind: "card" },
@@ -189,6 +192,7 @@ const FOLLOW_UP_ORDER = [
   "unitIds",
   "sacrificeId",
   "discardId",
+  "recycleIds",
   "chosenTargetId",
   "domain",
   "repeatCount",
@@ -473,6 +477,18 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       };
       return d;
     }
+    // rule 386.2 (unl-062-219): "put the rest back in any order" — an
+    // arrangement decision over the cards left on top; index 0 ends up topmost.
+    case "order-cards": {
+      const d: OrderDecision = {
+        ...base,
+        id: decisionId(ctx.seq, seat, "order"),
+        items: pc.cards.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
+        kind: "order",
+        prompt: "Put the cards back in any order (first = top)",
+      };
+      return d;
+    }
     case "name-card": {
       const d: NameDecision = {
         ...base,
@@ -648,6 +664,25 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         id: decisionId(ctx.seq, seat, "yes-no"),
         kind: "yes-no",
         prompt: `${costText} ${ctx.label(pc.sourceCardId)}'s optional ability?`,
+      };
+      return d;
+    }
+    case "combat-damage": {
+      // rule 465.2.c.3 — one allocation covering this side's whole combat damage.
+      const d: DistributeDecision = {
+        ...base,
+        buckets: pc.options.map((id) => ({
+          card: id,
+          key: id,
+          label: ctx.label(id),
+          max: pc.total,
+          min: 0,
+        })),
+        defaultAllocation: { ...pc.defaultAllocation },
+        id: decisionId(ctx.seq, seat, "distribute"),
+        kind: "distribute",
+        prompt: `Assign ${pc.total} combat damage`,
+        total: pc.total,
       };
       return d;
     }
@@ -861,6 +896,33 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
         params.accept = false;
       } else {
         return err("WRONG_ANSWER_KIND", "opt-in needs a yes-no answer");
+      }
+      break;
+    }
+    case "combat-damage": {
+      // rule 465.2.c.3 — one allocation answer; zero buckets are dropped so it
+      // compares canonically against the enumerated legal assignments.
+      if (answer.kind === "distribute") {
+        const allocation: Record<string, number> = {};
+        for (const [k, n] of Object.entries(answer.allocation)) {
+          if (n > 0) allocation[k] = n;
+        }
+        params.allocation = allocation;
+      } else if (answer.kind === "pick" && answer.keys.length === 1) {
+        params.allocation = { [answer.keys[0] as string]: pc.total };
+      } else {
+        return err("WRONG_ANSWER_KIND", "Combat damage assignment needs a distribute answer");
+      }
+      break;
+    }
+    // rule 386.2 (unl-062-219): the answer is the full arrangement.
+    case "order-cards": {
+      if (answer.kind === "order") {
+        params.orderedCardIds = [...answer.keys];
+      } else if (answer.kind === "pick" && answer.keys.length === pc.cards.length) {
+        params.orderedCardIds = [...answer.keys];
+      } else {
+        return err("WRONG_ANSWER_KIND", "order-cards needs an order answer listing every card");
       }
       break;
     }

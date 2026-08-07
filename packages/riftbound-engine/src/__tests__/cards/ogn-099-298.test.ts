@@ -72,9 +72,26 @@ describe("Garbage Grabber (ogn-099-298)", () => {
 
   test("with 4 cards in trash only 3 are recycled", async () => {
     const game = await withTrash(4).build();
-    await game.p1.activate("gg");
+    await game.p1.activate("gg", undefined, { params: { recycleIds: ["t1", "t2", "t3"] } });
     await game.settle();
     expect(game.p1.trash()).toHaveLength(1);
+  });
+
+  // rule 416.5: with more cards in trash than the cost demands, its controller
+  // chooses which 3 pay — the engine must not silently take the oldest 3.
+  test("with 4 cards in trash the controller is offered each legal 3-card selection", async () => {
+    const game = await withTrash(4).build();
+    const field = game.p1.option("activateAbility", "gg")?.fields.find((f) => f.arg === "recycle");
+    expect(field).toBeDefined();
+    const sets = (field?.options as string[][]).map((o) => [...o].sort().join(","));
+    expect(sets.sort()).toEqual(["t1,t2,t3", "t1,t2,t4", "t1,t3,t4", "t2,t3,t4"]);
+  });
+
+  test("rule 416.5: the chosen 3 are the ones recycled — the unchosen card stays in trash", async () => {
+    const game = await withTrash(4).build();
+    await game.p1.activate("gg", undefined, { params: { recycleIds: ["t1", "t2", "t4"] } });
+    expect(game.p1.trash()).toEqual(["t3"]);
+    expect(game.p1.deck().slice(-3).sort()).toEqual(["t1", "t2", "t4"]);
   });
 
   test("not activatable with fewer than 3 cards in your trash", async () => {
