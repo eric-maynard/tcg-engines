@@ -92,7 +92,7 @@ describe("Tianna Crownguard (sfd-060-221)", () => {
     expect(mine.p1.resources()).toEqual({ energy: 0, power: {} });
   });
 
-  test.failing("BUG: while she is at a battlefield the opponent's CONQUER elsewhere still takes the battlefield but awards no point", async () => {
+  test("while she is at a battlefield the opponent's CONQUER elsewhere still takes the battlefield but awards no point", async () => {
     // Expected: bf3 → P2, P2 points stay 0. Actual: the conditional static fails open and P2 scores 1.
     const game = await board("bf1").active(P2).build();
     await game.p2.move("raider", "bf3");
@@ -103,7 +103,7 @@ describe("Tianna Crownguard (sfd-060-221)", () => {
     expect(game.p1.points()).toBe(0);
   });
 
-  test.failing("BUG: while she is at a battlefield the opponent's HOLD at the start of their turn awards no point", async () => {
+  test("while she is at a battlefield the opponent's HOLD at the start of their turn awards no point", async () => {
     const game = await board("bf1").active(P1).build();
     await game.advanceTurn();
     expect(game.turnPlayer()).toBe(P2);
@@ -128,7 +128,7 @@ describe("Tianna Crownguard (sfd-060-221)", () => {
     expect(game.p1.points()).toBe(1);
   });
 
-  test.failing("BUG: points from card effects are denied too — an enemy Ahri holding scores neither the hold point nor her 'score 1 point' trigger", async () => {
+  test("points from card effects are denied too — an enemy Ahri holding scores neither the hold point nor her 'score 1 point' trigger", async () => {
     // Baseline (Tianna in base): Ahri's hold is worth 2 (hold + trigger). With Tianna at bf1: 0.
     const base = await scenario().active(P1).battlefield("bf1", { controller: P1 }).battlefield("bf2", { controller: P2 }).unit(P1, "base", CARD, "tianna").unit(P2, "bf2", AHRI_ALLURING, "ahri").build();
     await base.advanceTurn({ policy: "first" });
@@ -139,7 +139,7 @@ describe("Tianna Crownguard (sfd-060-221)", () => {
     expect(locked.p2.points()).toBe(0);
   });
 
-  test.failing("BUG: denies even the winning point — opponent on 7/8 holding while she is at a battlefield stays on 7 and the game goes on", async () => {
+  test("denies even the winning point — opponent on 7/8 holding while she is at a battlefield stays on 7 and the game goes on", async () => {
     const game = await board("bf1").active(P1).victoryScore(8).points(P2, 7).build();
     await game.p1.endTurn();
     await game.settle();
@@ -164,7 +164,7 @@ describe("Tianna Crownguard (sfd-060-221)", () => {
     expect(game.p2.points()).toBe(1);
   });
 
-  test.failing("BUG: the lock is live, not retroactive — conquer while she's out (0), kill her through Deflect, conquer again the same turn (1)", async () => {
+  test("the lock is live, not retroactive — conquer while she's out (0), kill her through Deflect, conquer again the same turn (1)", async () => {
     const BIG_BOLT = { ...BOLT, abilities: [{ ...BOLT.abilities[0], effect: { ...BOLT.abilities[0].effect, amount: 4 } }], energyCost: 2, name: "Big Bolt" };
     const game = await board("bf1")
       .active(P2)

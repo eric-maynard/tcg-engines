@@ -66,44 +66,12 @@ export const scorePoint: Defs["scorePoint"] = {
 
     return true;
   },
-  enumerator: (state, context) => {
-    if (state.pendingChoice) {
-      return [];
-    }
-    if (state.status !== "playing") {
-      return [];
-    }
-    if (state.turn.activePlayer !== (context.playerId as string)) {
-      return [];
-    }
-    const interaction = state.interaction ?? createInteractionState();
-    if (getTurnState(interaction) !== "neutral-open") {
-      return [];
-    }
-
-    const scoredThisTurn = state.scoredThisTurn[context.playerId as string] ?? [];
-    const results: { playerId: string; method: "conquer" | "hold"; battlefieldId: string }[] = [];
-
-    for (const [bfId, bf] of Object.entries(state.battlefields || {})) {
-      if (bf.controller !== (context.playerId as string)) {
-        continue;
-      }
-      if (scoredThisTurn.includes(bfId)) {
-        continue;
-      }
-      if (!canPlayerScoreAtBattlefield(state, context.playerId as string, bfId)) {
-        continue;
-      }
-
-      // Player controls this BF and hasn't scored it this turn
-      results.push({
-        battlefieldId: bfId,
-        method: "conquer",
-        playerId: context.playerId as string,
-      });
-    }
-    return results;
-  },
+  // rule 468 / 469 / 410.2: Scoring is a Limited Action that happens only as
+  // part of a Hold (Scoring Step) or a Conquer (establishing Control) — it is
+  // never a discretionary action a player may take on demand. This move stays
+  // as the engine-internal entry point those two paths use, but it is never
+  // offered as a choice.
+  enumerator: () => [],
   reducer: (draft, context) => {
     const { playerId, method, battlefieldId } = context.params;
     const { cards, counters, zones } = context;
@@ -147,7 +115,8 @@ export const scorePoint: Defs["scorePoint"] = {
     if (
       !drewFinalPointInstead &&
       !teamDisqualified &&
-      !applyScoreReplacement(draft, playerId, { cards, zones })
+      // rule 443.1.a: the skip is method-specific — pass how this point is gained.
+      !applyScoreReplacement(draft, playerId, { cards, zones }, method)
     ) {
       player.victoryPoints += 1;
     }

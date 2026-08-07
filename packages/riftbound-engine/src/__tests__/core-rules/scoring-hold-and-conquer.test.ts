@@ -247,7 +247,7 @@ describe("Hold: the Turn Player scores each controlled battlefield once at the S
     expect(game.gameState.battlefields.A?.controller).toBeNull();
   });
 
-  test.failing("BUG: 468/469/410.2 — Scoring is a Limited Action (only Hold/Conquer); engine offers a discretionary `scorePoint` main-phase action that awards a point on demand", async () => {
+  test("468/469/410.2 — Scoring is a Limited Action (only Hold/Conquer); no discretionary `scorePoint` main-phase action is offered", async () => {
     // Expected: a player who merely controls A during their Main Phase has no way to "score" it — the
     // only routes are the Scoring Step (Hold) and establishing Control (Conquer). No such option exists.
     // Actual: `scorePoint:A` is enumerated for the turn player and executing it grants +1.
@@ -668,7 +668,7 @@ describe("Score triggers fire once per battlefield and are tied to the scored ba
     expect(game.p1.points()).toBe(2);
   });
 
-  test.failing("BUG: 471 / 471.1 / 383.4.d.2.c — with an enemy 'opponents can't gain points' unit at a battlefield, P1's Hold of A is still a Score (A marked scored, H's 'When I hold' triggers and draws) but the POINT is denied: P1 stays at 5; engine does not implement the restriction and awards 5→6", async () => {
+  test("471 / 471.1 / 383.4.d.2.c — with an enemy 'opponents can't gain points' unit at a battlefield, P1's Hold of A is still a Score (A marked scored, H's 'When I hold' triggers and draws) but the POINT is denied: P1 stays at 5", async () => {
     // Expected: points 5 → 5; scoredThisTurn[P1] = [A]; sentinel's hold trigger on the chain and resolving (draw 1).
     // Actual: the static "restriction" effect is ignored, so the hold point is granted (6).
     const game = await scenario()
@@ -694,7 +694,7 @@ describe("Score triggers fire once per battlefield and are tied to the scored ba
     expect(game.p1.points()).toBe(5);
   });
 
-  test.failing("BUG: cross-check (printed card) Tianna Crownguard 'While I'm at a battlefield, opponents can't gain points' — P1's hold point must be denied (stays 5); engine awards it", async () => {
+  test("cross-check (printed card) Tianna Crownguard 'While I'm at a battlefield, opponents can't gain points' — P1's hold point is denied (stays 5)", async () => {
     // Expected: 5 → 5. Actual: 5 → 6 (restriction not implemented).
     const game = await scenario()
       .turn(2)

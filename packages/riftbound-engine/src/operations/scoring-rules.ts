@@ -53,7 +53,10 @@ export function finalPointConquerDrawsInstead(
     (state.victoryScore ?? 8) +
     (player.victoryScoreModifier ?? 0) +
     getBattlefieldVictoryScoreBonus(state);
-  if (player.victoryPoints !== threshold - 1) {
+  // rule 471.1.b: the restriction applies at "1 point from the Victory Score" OR
+  // HIGHER, so a player already at/above the Victory Score (a tie at 8–8) also
+  // cannot take another point by a lone conquer.
+  if (player.victoryPoints < threshold - 1) {
     return false;
   }
   const scored = state.scoredThisTurn[playerId] ?? [];
@@ -121,9 +124,23 @@ function scoreReplacementConditionMet(
  * gain points."}}`. Nothing is retroactive: the denial only counts while the
  * card is on the board, which is why this is evaluated at the moment of the gain.
  *
- * Conditional deniers ("while I'm at a battlefield") are NOT evaluated here and
- * fail open, so a novel condition never silently stops scoring.
+ * rule 365.1: a conditional denier ("While I'm at a battlefield, opponents can't
+ * gain points.") only applies while its condition holds — `while-at-battlefield`
+ * is checked against the denier's own zone. Any other condition fails open, so a
+ * novel condition never silently stops scoring.
  */
+function denierConditionMet(condition: unknown, atBattlefield: boolean): boolean {
+  if (condition === undefined || condition === null) {
+    return true;
+  }
+  const type = (condition as { type?: string }).type;
+  if (type === "while-at-battlefield") {
+    return atBattlefield;
+  }
+  // Unknown condition: fail open (the restriction does not apply).
+  return false;
+}
+
 export function pointGainDenied(
   state: RiftboundGameState,
   playerId: PlayerId,
@@ -132,21 +149,25 @@ export function pointGainDenied(
   const registry = getGlobalCardRegistry();
   const getOwner = io.cards.getCardOwner ?? (() => undefined);
 
-  const boardCards: { id: string; owner: string | undefined }[] = [];
+  const boardCards: { id: string; owner: string | undefined; atBattlefield: boolean }[] = [];
   for (const pid of Object.keys(state.players)) {
     for (const cardId of io.zones.getCardsInZone("base" as CoreZoneId, pid as CorePlayerId)) {
-      boardCards.push({ id: cardId as string, owner: pid });
+      boardCards.push({ atBattlefield: false, id: cardId as string, owner: pid });
     }
   }
   for (const bfId of Object.keys(state.battlefields ?? {})) {
     for (const cardId of io.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
-      boardCards.push({ id: cardId as string, owner: getOwner(cardId as CoreCardId) });
+      boardCards.push({
+        atBattlefield: true,
+        id: cardId as string,
+        owner: getOwner(cardId as CoreCardId),
+      });
     }
   }
 
   for (const card of boardCards) {
     for (const ability of registry.getAbilities(card.id) ?? []) {
-      if (ability.type !== "static" || ability.condition !== undefined) {
+      if (ability.type !== "static" || !denierConditionMet(ability.condition, card.atBattlefield)) {
         continue;
       }
       const effect = ability.effect as { type?: string; restriction?: unknown } | undefined;
