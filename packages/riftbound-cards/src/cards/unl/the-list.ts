@@ -1,7 +1,35 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { GearCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * The List — unl-138-219
+ *
+ * "As you play this, name a tag." is unique to this card, so the naming step is
+ * declared explicitly; the parser handles only the [Exhaust] line below.
+ */
+const abilities: Ability[] = [
+  {
+    // rule 762: the tag is named as the card is played and recorded on it; the
+    // activated ability's `tag: "named"` filter reads it back.
+    effect: { cardType: "tag", type: "name-card" },
+    trigger: { event: "play-self" },
+    type: "triggered",
+  },
+  {
+    cost: { exhaust: true },
+    effect: {
+      amount: -2,
+      duration: "turn",
+      target: { filter: { tag: "named" }, type: "unit" },
+      type: "modify-might",
+    },
+    type: "activated",
+  },
+];
+
 export const theList: GearCard = {
+  abilities,
   cardNumber: 138,
   cardType: "gear",
   domain: "chaos",

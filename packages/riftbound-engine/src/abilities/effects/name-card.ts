@@ -8,8 +8,10 @@ export function handle_nameCard(effect: ExecutableEffect, ctx: EffectContext, _h
   // of the given type. Pause play via pendingChoice; resolvePendingChoice
   // records the chosen name on the source card's `namedCard` meta.
   const cardType =
-    (effect as unknown as { cardType?: "spell" | "unit" | "gear" }).cardType ?? "spell";
-  const options = getGlobalCardRegistry().listNames(cardType);
+    (effect as unknown as { cardType?: "spell" | "unit" | "gear" | "tag" }).cardType ?? "spell";
+  // rule 762: "name a tag" enumerates printed tags, not card names.
+  const registry = getGlobalCardRegistry();
+  const options = cardType === "tag" ? registry.listTags() : registry.listNames(cardType);
   if (options.length === 0) {
     return;
   }
