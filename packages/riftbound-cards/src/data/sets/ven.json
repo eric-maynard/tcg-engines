@@ -3979,7 +3979,7 @@
       "tags": [],
       "isChampion": false,
       "rulesText": "Choose a unit. If it's [Empowered], disempower it. Then kill it if it has 3 [Might] or less.\n[Flow] [4][order][order] (You may play this from your trash for its Flow cost. Then banish it.)",
-      "abilities": [{"_rule": "355.9.a.1 - choose ANY unit; the 3-Might test is a resolution check", "type": "spell", "effect": {"type": "sequence", "effects": [{"type": "disempower", "target": {"type": "unit"}}, {"type": "conditional", "condition": {"type": "target-might", "comparison": {"lte": 3}}, "then": {"type": "kill"}}]}}],
+      "abilities": [{"_rule": "355.9.a.1 - choose ANY unit; the 3-Might test is a resolution check", "type": "spell", "effect": {"type": "sequence", "effects": [{"type": "disempower", "target": {"type": "unit"}}, {"type": "conditional", "condition": {"type": "target-might", "comparison": {"lte": 3}}, "then": {"type": "kill"}}]}}, {"_rule": "829 - Flow [4][order][order]: play from your own trash for this alternate cost, then banish it", "type": "keyword", "keyword": "Flow", "cost": {"energy": 4, "power": ["order", "order"]}}],
       "parseSuccess": false,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/f21bbd09545d949f095756281e5506128eb4809d-744x1039.png?accountingTag=RB",
       "illustrator": null,

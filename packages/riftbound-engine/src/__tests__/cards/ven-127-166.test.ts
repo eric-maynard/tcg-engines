@@ -60,7 +60,7 @@ describe("Lacerate (ven-127-166)", () => {
     });
   });
 
-  test.failing("BUG: the hand-authored abilities omit the [Flow] keyword entirely — registry payload must also carry {type: keyword, keyword: Flow, cost: {energy 4, power [order, order]}}", async () => {
+  test("the hand-authored abilities omit the [Flow] keyword entirely — registry payload must also carry {type: keyword, keyword: Flow, cost: {energy 4, power [order, order]}}", async () => {
     // Expected: abilities = [spell …, {keyword:"Flow", cost:{energy:4, power:["order","order"]}}]. Actual: only the spell ability.
     const def = (await loadDefaultCardPool()).get(CARD);
     const flow = (def?.abilities as { type: string; keyword?: string; cost?: unknown }[] | undefined)?.find((a) => a.type === "keyword" && a.keyword === "Flow");
@@ -200,7 +200,7 @@ describe("Lacerate (ven-127-166)", () => {
     expect(sd.p1.can("cast", "lac")).toBe(false);
   });
 
-  test.failing("BUG: no Flow keyword in the def, so the trash copy is never offered — Flow [4][order][order] from the trash: castable, pays exactly 4 + 2 order, kills the 3, then Lacerate is BANISHED", async () => {
+  test("no Flow keyword in the def, so the trash copy is never offered — Flow [4][order][order] from the trash: castable, pays exactly 4 + 2 order, kills the 3, then Lacerate is BANISHED", async () => {
     // Expected (829): from the trash it is a Flow play for [4][order][order]; after resolving it goes to banishment.
     // Actual: getSpellFlowCost() finds no Flow keyword → not castable from the trash at all.
     const game = await scenario().resources(P1, { energy: 4, power: { order: 2 } }).battlefield("bf1", { controller: P2 }).unit(P2, "bf1", { might: 3 }, "victim").trash(P1, CARD, "lac").build();
