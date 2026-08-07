@@ -1,7 +1,47 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+/**
+ * Scuttle Crab — unl-053-219
+ *
+ * When you play me, draw 1.
+ * [Deathknell][>] Choose an opponent. They reveal their hand. You can look at
+ * their facedown cards this turn. Gain 1 XP.
+ *
+ * The parenthetical 0-[Might] reminder and the reveal/peek information effects
+ * carry no engine state today; the XP is the part that changes the game.
+ */
+const abilities: Ability[] = [
+  {
+    effect: { amount: 1, type: "draw" },
+    trigger: { event: "play-self" },
+    type: "triggered",
+  },
+  // rule 808.1: Deathknell is a triggered ability that fires on death for the
+  // dying unit's controller, whoever killed it and on whosever turn.
+  // rule 127: the reveal + "look at their facedown cards this turn" are
+  // information effects — a turn-scoped visibility grant on the opponent.
+  {
+    effect: {
+      effects: [
+        {
+          duration: "turn",
+          player: "opponent",
+          type: "grant-visibility",
+          zones: ["hand", "facedown"],
+        },
+        { amount: 1, type: "gain-xp" },
+      ],
+      type: "sequence",
+    },
+    keyword: "Deathknell",
+    type: "keyword",
+  },
+];
+
 export const scuttleCrab: UnitCard = {
+  abilities,
   cardNumber: 53,
   cardType: "unit",
   domain: "calm",

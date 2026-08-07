@@ -59,6 +59,7 @@ import { handle_costReduction } from "./cost-reduction";
 import { handle_costIncrease } from "./cost-increase";
 import { handle_additionalCost } from "./additional-cost";
 import { handle_gainXp } from "./gain-xp";
+import { handle_grantVisibility } from "./grant-visibility";
 import { handle_spendXp } from "./spend-xp";
 import { handle_spendBuff } from "./spend-buff";
 import { handle_predict } from "./predict";
@@ -140,6 +141,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "cost-increase": handle_costIncrease,
   "additional-cost": handle_additionalCost,
   "gain-xp": handle_gainXp,
+  "grant-visibility": handle_grantVisibility,
   "spend-xp": handle_spendXp,
   // rule-id: ogn-147-298 — "spend a buff to X" cost handler.
   "spend-buff": handle_spendBuff,

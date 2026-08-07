@@ -1179,6 +1179,19 @@ export interface RiftboundGameState {
   readonly consumedNextReplacements?: Record<string, true>;
 
   /**
+   * rule 127 — information effects ("They reveal their hand. You can look at
+   * their facedown cards this turn.", unl-053-219): a viewer may look into
+   * another player's private zones. `zones` names zone KINDS (`"hand"`,
+   * `"facedown"`). Turn-scoped grants are cleared at end of turn.
+   */
+  readonly visibilityGrants?: {
+    readonly viewer: string;
+    readonly owner: string;
+    readonly zones: readonly string[];
+    readonly duration?: "turn" | "permanent";
+  }[];
+
+  /**
    * rule 372: dying card id → source card id of the replacement effect its
    * controller chose to apply when more than one applied to that death.
    * Consumed (and cleared) by the next state-based check for that card.

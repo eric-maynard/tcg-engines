@@ -58,6 +58,41 @@ export function canSee(viewer: Viewer, zone: string, owner: string): boolean {
   return owner === viewer;
 }
 
+/** The zone KIND a visibility grant names (rule 127 private zones). */
+function visibilityZoneKind(zone: string): string | undefined {
+  if (zone === "hand") {
+    return "hand";
+  }
+  if (zone.startsWith("facedown-")) {
+    return "facedown";
+  }
+  return undefined;
+}
+
+/**
+ * rule 127 — an information effect ("They reveal their hand. You can look at
+ * their facedown cards this turn.", unl-053-219) lets one seat see into
+ * another's private zone. Secret zones (deck order) are never granted.
+ */
+export function hasVisibilityGrant(
+  engine: HarnessEngine,
+  viewer: Viewer,
+  zone: string,
+  owner: string,
+): boolean {
+  if (viewer === SPECTATOR || isSecretZone(zone)) {
+    return false;
+  }
+  const kind = visibilityZoneKind(zone);
+  if (kind === undefined) {
+    return false;
+  }
+  const grants = engine.getState().visibilityGrants ?? [];
+  return grants.some(
+    (g) => g.viewer === viewer && g.owner === owner && g.zones.includes(kind),
+  );
+}
+
 export function summarizeDecision(d: Decision | null): DecisionSummary | null {
   if (!d) {
     return null;
@@ -128,7 +163,7 @@ export function viewCard(
   const inst = internal.cards[id];
   const owner = inst?.owner ?? "";
   const zone = (inst?.zone ?? "unknown") as ZoneKey;
-  if (!canSee(viewer, zone, owner)) {
+  if (!canSee(viewer, zone, owner) && !hasVisibilityGrant(engine, viewer, zone, owner)) {
     return { hidden: true, index, owner, zone };
   }
   return buildCardState(engine, id, pool);
