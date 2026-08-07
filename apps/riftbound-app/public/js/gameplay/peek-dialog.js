@@ -130,7 +130,11 @@ function closePeekDialog() {
       );
       const rest = _peekCardIds.filter((id) => !stack.includes(id));
       if (rest.length > 0) {
-        executeMove("recycleMany", { playerId: pid, cardIds: rest }, pid);
+        // Only one move may be in flight at a time — send the remainder once
+        // the server has answered the first.
+        const send = () => executeMove("recycleMany", { playerId: pid, cardIds: rest }, pid);
+        if (typeof afterMoveSettled === "function") afterMoveSettled(send);
+        else send();
       }
     }
   }

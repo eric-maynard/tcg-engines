@@ -1294,6 +1294,17 @@
       background: #305080;
     }
 
+    /* A move is awaiting the server: the listed moves belong to a snapshot the
+       server has already left, so show them as unclickable until the next frame. */
+    #actionsList.moves-pending {
+      opacity: 0.5;
+      cursor: progress;
+    }
+
+    #actionsList.moves-pending .action-btn {
+      pointer-events: none;
+    }
+
     .action-btn .action-detail {
       font-size: 9px;
       color: #6a6288;

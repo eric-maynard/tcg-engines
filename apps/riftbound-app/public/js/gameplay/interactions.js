@@ -478,18 +478,18 @@ function quickRecycleRune(runeId, el) {
   executeMove(exhaustMove.moveId, exhaustMove.params, exhaustMove.playerId);
   showEnergyFloat(el);
 
-  // Wait for the state frame where the rune is exhausted, then recycle it.
-  let tries = 0;
-  (function tryRecycle() {
-    const exhausted = findCard(runeId)?.meta?.exhausted === true;
-    const recycleMove = exhausted ? findRuneMove("recycleRune", runeId) : null;
-    if (recycleMove) {
-      snapshotResources();
-      executeMove(recycleMove.moveId, recycleMove.params, recycleMove.playerId);
+  // Recycle on the frame that carries the exhaust result. Polling the local
+  // state on a timer instead silently abandoned the recycle whenever the
+  // round-trip outran the poll window, leaving the rune merely tapped.
+  afterMoveSettled(() => {
+    const recycleMove = findRuneMove("recycleRune", runeId);
+    if (!recycleMove) {
+      showToast("Cannot recycle this rune");
       return;
     }
-    if (++tries <= 10) setTimeout(tryRecycle, 100);
-  })();
+    snapshotResources();
+    executeMove(recycleMove.moveId, recycleMove.params, recycleMove.playerId);
+  });
 }
 
 /** Enter selected mode for legend card — activate abilities */
