@@ -325,6 +325,12 @@ export interface Target {
   readonly optional?: boolean;
 
   /**
+   * rule-id: sfd-051-221 (Guardian Angel) — "the equipped unit": the descriptor
+   * only ever matches the unit the source card is currently attached to.
+   */
+  readonly attachedToSource?: boolean;
+
+  /**
    * rule-id: ogn-256-298 (Fox-Fire) — aggregate constraint over the CHOSEN
    * set: the summed Might of all selected targets must satisfy this
    * comparison ("any number of units ... with total Might 4 or less").

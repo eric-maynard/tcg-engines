@@ -160,14 +160,14 @@ describe("Ruling 0167a87fe08432da — Smite vs Zhonya's Hourglass / Tactical Ret
   });
 
   // Expected: when Smite then resolves, P2 orders the two replacements (372). Actual: no prompt; banished.
-  test.failing("BUG: ruling 0167a87fe08432da — Tactical Retreat: P2 is asked to order Retreat's and Smite's replacements (engine: no prompt)", async () => {
+  test("ruling 0167a87fe08432da — Tactical Retreat: P2 is asked to order Retreat's and Smite's replacements (engine: no prompt)", async () => {
     const game = await retreatBoard().build();
     await smiteResolves(game, { retreat: true });
     expectOrderingDecisionForP2(game);
   });
 
   // Expected: Retreat first → victim healed, exhausted, recalled to base, not banished. Actual: banished.
-  test.failing("BUG: ruling 0167a87fe08432da — Tactical Retreat applied first saves the unit to base, healed+exhausted, not banished (engine: banished)", async () => {
+  test("ruling 0167a87fe08432da — Tactical Retreat applied first saves the unit to base, healed+exhausted, not banished (engine: banished)", async () => {
     const game = await retreatBoard().build();
     await smiteResolves(game, { retreat: true });
     expectOrderingDecisionForP2(game);
@@ -198,10 +198,9 @@ describe("Ruling 0167a87fe08432da — Smite vs Zhonya's Hourglass / Tactical Ret
     expect(game.state("victim").might).toBe(3);
   });
 
-  // Expected: P2 orders GA's and Smite's replacements; GA first → the Equipment dies in the unit's place: GA to trash,
-  // victim still on the board (not banished, not in trash). Actual: our sfd-051-221 data carries only "[Equip] [calm]"
-  // — no protective replacement exists — so there is no prompt and the victim is banished.
-  test.failing("BUG: ruling 0167a87fe08432da — Guardian Angel applied first dies instead of the unit; unit stays on the board, not banished (engine: GA has no replacement; banished)", async () => {
+  // P2 orders GA's and Smite's replacements; GA first → the Equipment dies in the unit's place: GA to trash,
+  // victim still on the board (not banished, not in trash).
+  test("ruling 0167a87fe08432da — Guardian Angel applied first dies instead of the unit; unit stays on the board, not banished", async () => {
     const game = await guardianBoard().build();
     await smiteResolves(game);
     expectOrderingDecisionForP2(game);

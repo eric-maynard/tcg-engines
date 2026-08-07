@@ -278,6 +278,7 @@ function consumeActiveDieReplacement(
   draft: RiftboundGameState,
   cardId: string,
   peek = false,
+  preferredSource?: string,
 ): ActiveDieReplacementEntry | undefined {
   const active = draft.activeReplacements as ActiveDieReplacementEntry[] | undefined;
   if (!active || active.length === 0) {
@@ -288,12 +289,32 @@ function consumeActiveDieReplacement(
     if (entry?.replaces !== "die" || !entry.targetCardIds?.includes(cardId)) {
       continue;
     }
+    // rule 372: the dying unit's controller may have named which shield applies.
+    if (preferredSource !== undefined && (entry.sourceCardId ?? cardId) !== preferredSource) {
+      continue;
+    }
     if (!peek) {
       active.splice(i, 1);
     }
     return entry;
   }
   return undefined;
+}
+
+/**
+ * rule 372 (unl-007-219 × unl-175-219) — every runtime `die` replacement bound
+ * to `cardId`. Two spells can both install one on the same unit ("banish it
+ * instead" and "heal/recall it instead"), and its controller orders them.
+ */
+function peekActiveDieReplacements(
+  draft: RiftboundGameState,
+  cardId: string,
+): ActiveDieReplacementEntry[] {
+  const active = draft.activeReplacements as ActiveDieReplacementEntry[] | undefined;
+  if (!active || active.length === 0) {
+    return [];
+  }
+  return active.filter((e) => e?.replaces === "die" && e.targetCardIds?.includes(cardId));
 }
 
 /**
@@ -403,9 +424,25 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       ) {
         boardPeek = null;
       }
+      // rule 372: an optional "you may pay … instead" shield carries its own
+      // prompt, so it never joins the ordering choice.
       const boundPeek = consumeActiveDieReplacement(ctx.draft, cardId as string, true);
+      const boundPeeks = peekActiveDieReplacements(ctx.draft, cardId as string).filter(
+        (e) => e.condition?.type !== "pay-cost",
+      );
+      // rule 372 (unl-007-219 × unl-175-219): Smite's "banish it instead" and
+      // Tactical Retreat's shield are BOTH runtime-bound — two replacements for
+      // one death with no board ability involved, so they need the same
+      // ordering choice the board-vs-bound pair already gets.
+      const orderOptions =
+        boundPeek && boardPeek && boundPeek.condition?.type !== "pay-cost"
+          ? [boardPeek.sourceCardId, boundPeek.sourceCardId ?? (cardId as string)]
+          : !boardPeek && boundPeeks.length > 1
+            ? boundPeeks.map((e) => e.sourceCardId ?? (cardId as string))
+            : [];
       let preferBound = true;
-      if (boundPeek && boardPeek && boundPeek.condition?.type !== "pay-cost") {
+      let pickedBoundSource: string | undefined;
+      if (orderOptions.length > 1) {
         const orders = (ctx.draft as { replacementOrderChoices?: Record<string, string> })
           .replacementOrderChoices;
         const picked = orders?.[cardId as string];
@@ -415,7 +452,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
           }
           ctx.draft.pendingChoice = {
             effect: { type: "noop" },
-            options: [boardPeek.sourceCardId, boundPeek.sourceCardId ?? (cardId as string)],
+            options: orderOptions,
             playerId: ctx.cards.getCardController?.(cardId) ?? ctx.cards.getCardOwner(cardId) ?? "",
             remaining: 1,
             replacementOrderFor: cardId as string,
@@ -425,13 +462,16 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
           stateChanged = true;
           continue;
         }
-        preferBound = picked !== boardPeek.sourceCardId;
+        preferBound = !boardPeek || picked !== boardPeek.sourceCardId;
+        if (preferBound) {
+          pickedBoundSource = picked;
+        }
         if (orders) {
           delete orders[cardId as string];
         }
       }
       const activeDie = preferBound
-        ? consumeActiveDieReplacement(ctx.draft, cardId as string)
+        ? consumeActiveDieReplacement(ctx.draft, cardId as string, false, pickedBoundSource)
         : undefined;
       // rule 372 (ogn-023-298): "you may pay [C] to … instead" — an optional,
       // costed replacement. Unpayable ⇒ the death proceeds normally (the
