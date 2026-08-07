@@ -550,6 +550,13 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
   if (targets.length === 0 && (effect as unknown as { optional?: boolean }).optional === true) {
     return;
   }
+  // rule 355.13 / 359.3.e.2 — an EXPLICIT target descriptor that resolves to
+  // no legal card moves nothing; only a descriptor-less move effect means "me"
+  // (rule-id: unl-105-219 Imposing Challenger, whose "you may" sits on the
+  // trigger, not on the effect).
+  if (targets.length === 0 && effect.target !== undefined) {
+    return;
+  }
   const moveTargets = targets.length === 0 ? [ctx.sourceCardId] : targets;
   const rawDest = (
     effect as unknown as {

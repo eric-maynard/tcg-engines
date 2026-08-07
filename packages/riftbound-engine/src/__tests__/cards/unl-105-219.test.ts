@@ -168,7 +168,7 @@ describe("Imposing Challenger (unl-105-219)", () => {
     }
   });
 
-  test.failing("BUG: equal Might is not 'less' — with a lone 5-Might Twin here there is NO legal unit, so accepting does nothing (the Challenger must not move itself instead) and the 5-vs-5 combat trades", async () => {
+  test("equal Might is not 'less' — with a lone 5-Might Twin here there is NO legal unit, so accepting does nothing (the Challenger must not move itself instead) and the 5-vs-5 combat trades", async () => {
     // Expected: after "yes" no target/destination prompt at all; combat: both 5s die, nobody scores.
     // Actual: Twin is correctly excluded, but with an empty target set the effect falls back to moving the
     // Challenger ITSELF ("Choose a destination for Imposing Challenger") — it leaves bf1 and re-triggers.
@@ -235,7 +235,7 @@ describe("Imposing Challenger (unl-105-219)", () => {
     expect(home.chain()).toEqual([expect.objectContaining({ cardId: "ic", triggered: true })]);
   });
 
-  test.failing("BUG: moving home to base triggers but no enemy is 'here' in MY base — accepting finds no legal unit and nothing moves (Weak in P2's base is not 'here')", async () => {
+  test("moving home to base triggers but no enemy is 'here' in MY base — accepting finds no legal unit and nothing moves (Weak in P2's base is not 'here')", async () => {
     // Expected: after "yes" no pick naming weak/far; both stay put; P1 back in an open main phase.
     // Actual: "here" = base is matched against the ENEMY base too — Weak (P2's base) is chosen and a
     // destination prompt for it appears.

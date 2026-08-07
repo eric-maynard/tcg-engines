@@ -296,9 +296,16 @@ export function resolveTarget(
     // the per-battlefield unit zone (battlefield-<cardId>), not battlefieldRow.
     const hereZone =
       ctx.sourceZone === "battlefieldRow" ? `battlefield-${ctx.sourceCardId}` : ctx.sourceZone;
+    // rule 420.1: every player has their OWN base and they are distinct
+    // locations, but they share the `base` zone id — so "here" in a base must
+    // additionally match the source's controller, never reach across.
+    const baseOwner = hereZone === "base" ? controllerOf(ctx.sourceCardId ?? "") : undefined;
     filtered = filtered.filter((id) => {
       const zone = ctx.zones.getCardZone(id as CoreCardId);
-      return zone === hereZone;
+      if (zone !== hereZone) {
+        return false;
+      }
+      return baseOwner === undefined || controllerOf(id) === baseOwner;
     });
   } else if (target.location === "here-battlefield") {
     // rule 428.1.a.1.b: "at my battlefield" — the battlefield the source is (or
