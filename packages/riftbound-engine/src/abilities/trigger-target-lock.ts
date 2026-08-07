@@ -82,32 +82,15 @@ export function lockTriggerTargets(draft: RiftboundGameState, ctx: LockContext):
     // rule 583: a "you may" trigger opts in at resolution; it chooses there too.
     item.optional !== true &&
     casterChosenTarget(item.effect) !== undefined;
-  // A lone pending trigger is equivalent whether it chooses now or at
-  // resolution, and the engine's convention is to prompt at resolution. Only
-  // DUPLICATED triggers — the same ability of the same card pending twice
-  // because something made it "trigger an additional time" — have to lock
-  // separately, so each copy carries its own Game Object (355.5) instead of
-  // collapsing onto one choice, and each can be countered on its own (425.1).
-  const key = (item: Record<string, unknown> | undefined): string =>
-    `${item?.cardId as string}|${JSON.stringify(item?.effect ?? null)}`;
-  const duplicated = new Set<string>();
-  const seen = new Set<string>();
-  for (const item of items) {
-    if (!choosesOwnTarget(item)) {
-      continue;
-    }
-    const k = key(item);
-    if (seen.has(k)) {
-      duplicated.add(k);
-    }
-    seen.add(k);
-  }
-  if (duplicated.size === 0) {
-    return;
-  }
+  // rule 808.1.d.2 / rule 355.5 — a dies-trigger is finalized while the board
+  // still holds the units it may choose, so its Game Object is chosen there
+  // (and two copies of a doubled [Deathknell] choose independently). Other
+  // event kinds keep the engine's resolution-time convention.
+  const locksAtFinalization = (item: Record<string, unknown> | undefined): boolean =>
+    (item?.triggerEvent as { type?: string } | undefined)?.type === "die";
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    if (!choosesOwnTarget(item) || item?.targets !== undefined || !duplicated.has(key(item))) {
+    if (!choosesOwnTarget(item) || item?.targets !== undefined || !locksAtFinalization(item)) {
       continue;
     }
     const target = casterChosenTarget(item?.effect);

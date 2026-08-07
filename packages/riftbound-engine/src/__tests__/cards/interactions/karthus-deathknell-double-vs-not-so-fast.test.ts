@@ -111,9 +111,7 @@ describe("Karthus doubling Ruined Rex's Deathknell vs a single Not So Fast", () 
 
   // ── contrast: no Karthus ──────────────────────────────────────────────────────────────
 
-  test.failing("BUG: no Karthus — Rex's death puts exactly ONE Deathknell item (P1's ability) on the chain, its enemy-unit target chosen by P1 as it is finalized (808.1.d.2, 355.5)", async () => {
-    // Expected: one triggered item sourced from rex, controller P1; P1 immediately prompted victimA|victimB.
-    // Actual: Ruined Rex's Deathknell never triggers at all (no chain item, no prompt, no damage).
+  test("no Karthus — Rex's death puts exactly ONE Deathknell item (P1's ability) on the chain, its enemy-unit target chosen by P1 as it is finalized (808.1.d.2, 355.5)", async () => {
     const game = await board({ karthus: false }).build();
     await killRex(game);
     await chooseRexTargetsNow(game, ["victimA"]);
