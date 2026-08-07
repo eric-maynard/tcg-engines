@@ -78,7 +78,7 @@ describe("Ruling 41492fa40ce64fb4 — Aphelios, Exalted × Svellsongur / Shady S
   // copy) is ONE attachment event → exactly one Aphelios trigger, created before he becomes a copy.
   // Actual: ven-137-166 is typed "gear" with an unparsed (raw) copy effect — equipCard rejects it, so it
   // can never be attached.
-  test.failing("BUG: ruling 41492fa40ce64fb4 — Shady Spectacles attached to Aphelios triggers him exactly once (engine: cannot attach ven-137-166 at all)", async () => {
+  test("ruling 41492fa40ce64fb4 — Shady Spectacles attached to Aphelios triggers him exactly once", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1, power: { order: 1 } })
       .unit(P1, "base", APHELIOS, "aph")

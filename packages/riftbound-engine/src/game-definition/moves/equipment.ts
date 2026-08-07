@@ -5,15 +5,21 @@
  * Equipment grants a Might bonus while attached.
  */
 
-import type { CardId as CoreCardId, GameMoveDefinitions } from "@tcg/core";
+import type {
+  CardId as CoreCardId,
+  GameMoveDefinitions,
+  PlayerId as CorePlayerId,
+  ZoneId as CoreZoneId,
+} from "@tcg/core";
 import type {
   GrantedKeyword,
   RiftboundCardMeta,
   RiftboundGameState,
   RiftboundMoves,
 } from "../../types";
-import { fireTriggers } from "../../abilities/trigger-runner";
+import { dispatchEvent } from "../../events/dispatcher";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { getBattlefieldZoneId } from "../../zones/zone-configs";
 
 /**
  * Check whether a unit has the given keyword, considering both its printed
@@ -48,6 +54,81 @@ export const equipmentMoves: Partial<
    * equipment is not already attached to another unit.
    */
   equipCard: {
+    // rule 476.1: [Equip] is a player-facing action — an Equipment already on
+    // the board can be attached to a unit you control. Without an enumerator
+    // the core rule engine treats the move as an invalid NO_ENUMERATOR
+    // placeholder, so no UI/menu surface ever offers it.
+    // The printed Equip cost is not charged on this path yet.
+    enumerator: (state, context) => {
+      if (state.pendingChoice || state.status !== "playing") {
+        return [];
+      }
+      const playerId = context.playerId as string;
+      if (state.turn.activePlayer !== playerId) {
+        return [];
+      }
+
+      const registry = getGlobalCardRegistry();
+      const zoneIds = [
+        "base",
+        ...Object.keys(state.battlefields ?? {}).map(getBattlefieldZoneId),
+      ];
+      const onBoard: string[] = [];
+      for (const pid of Object.keys(state.players)) {
+        for (const zoneId of zoneIds) {
+          for (const id of context.zones.getCardsInZone(
+            zoneId as CoreZoneId,
+            pid as CorePlayerId,
+          )) {
+            onBoard.push(id as string);
+          }
+        }
+      }
+
+      const controllerOf = (id: string) =>
+        (context.cards.getCardController?.(id as CoreCardId) ??
+          context.cards.getCardOwner(id as CoreCardId)) as string | undefined;
+
+      const equipment = onBoard.filter((id) => {
+        const def = registry.get(id);
+        if (!def || (def.cardType !== "equipment" && def.cardType !== "gear")) {
+          return false;
+        }
+        if (controllerOf(id) !== playerId) {
+          return false;
+        }
+        const meta = context.cards.getCardMeta(id as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        return !meta?.attachedTo;
+      });
+      if (equipment.length === 0) {
+        return [];
+      }
+
+      const units = onBoard.filter((id) => {
+        if (registry.get(id)?.cardType !== "unit") {
+          return false;
+        }
+        if (controllerOf(id) !== playerId) {
+          return false;
+        }
+        // rule 579 (Weaponmaster): only a Weaponmaster may hold a second piece.
+        const meta = context.cards.getCardMeta(id as CoreCardId) as
+          | Partial<RiftboundCardMeta>
+          | undefined;
+        const equipped = meta?.equippedWith ?? [];
+        return equipped.length === 0 || unitHasKeyword(id, "Weaponmaster", meta);
+      });
+
+      const results: { playerId: string; equipmentId: string; unitId: string }[] = [];
+      for (const equipmentId of equipment) {
+        for (const unitId of units) {
+          results.push({ equipmentId, playerId, unitId });
+        }
+      }
+      return results;
+    },
     condition: (state, context) => {
       if (state.status !== "playing") {
         return false;
@@ -58,7 +139,10 @@ export const equipmentMoves: Partial<
 
       const registry = getGlobalCardRegistry();
       const equipDef = registry.get(context.params.equipmentId);
-      if (!equipDef || equipDef.cardType !== "equipment") {
+      // "Gear" is the printed type; the hand-authored .ts defs spell it
+      // "equipment" while set-JSON cards (VEN) keep "gear". Both are the same
+      // card type for rule 434 (attach), so accept either spelling.
+      if (!equipDef || (equipDef.cardType !== "equipment" && equipDef.cardType !== "gear")) {
         return false;
       }
 
@@ -139,15 +223,47 @@ export const equipmentMoves: Partial<
       // `cardId` is the receiving unit so `on: "self"` matches the holder;
       // `copyAttachedUnitText` replacement effects (Svellsongur) do not add
       // A second attachment event, so this fires exactly once per attach.
-      fireTriggers(
-        { cardId: unitId, equipmentId, playerId, type: "attach-equipment" },
+      // rule 522: attaching changes the holder's Might, so the event goes
+      // through the dispatcher (which re-runs static recalc + SBA) rather than
+      // `fireTriggers` alone — otherwise "Each Equipment attached to me gives
+      // double its base Might bonus" (sfd-068-221) stays unapplied until some
+      // unrelated later move happens to trigger a recalc.
+      dispatchEvent(
         {
           cards: context.cards,
           counters: context.counters,
           draft,
           zones: context.zones,
         },
+        { cardId: unitId, equipmentId, playerId, type: "attach-equipment" },
       );
+
+      // rule 477.1.b (ven-137-166 Shady Spectacles): "As this is attached to a
+      // unit, choose another friendly unit. The equipped unit becomes a copy of
+      // that unit for as long as this is attached to it." rule 401.1/401.2: the
+      // attach trigger above is created BEFORE the copy, so a unit that only
+      // becomes a copy now does not trigger off this attachment.
+      if (equipDef?.copyChosenUnitToHolder) {
+        const zoneIds = ["base", ...Object.keys(draft.battlefields ?? {}).map(getBattlefieldZoneId)];
+        const candidates: string[] = [];
+        for (const zoneId of zoneIds) {
+          for (const id of context.zones.getCardsInZone(
+            zoneId as CoreZoneId,
+            playerId as CorePlayerId,
+          )) {
+            if (id !== unitId && registry.get(id as string)?.cardType === "unit") {
+              candidates.push(id as string);
+            }
+          }
+        }
+        // With more than one legal choice the controller would be prompted; the
+        // engine does not model that prompt yet, so only the forced case (a
+        // single "another friendly unit") applies the copy.
+        const [only, ...rest] = candidates;
+        if (only !== undefined && rest.length === 0) {
+          registry.becomeCopyOf(unitId, only);
+        }
+      }
     },
   },
 
@@ -189,6 +305,11 @@ export const equipmentMoves: Partial<
           copiedFromCardId: undefined,
         } as Partial<RiftboundCardMeta>,
       );
+
+      // rule 477.1.b: the Shady Spectacles copy lasts only while attached.
+      if (unitId) {
+        getGlobalCardRegistry().revertCopy(unitId);
+      }
 
       // Remove from unit's equippedWith list
       if (unitId) {

@@ -18,7 +18,7 @@ const CARD = "ven-027-166";
 const ORNN = "sfd-085-221"; // Ornn, Forge God — [Weaponmaster]
 
 describe("Hand Hammer (ven-027-166)", () => {
-  test.failing("BUG: it is Equipment — it can be equipped to a friendly unit (208.3)", async () => {
+  test("it is Equipment — it can be equipped to a friendly unit (208.3)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { calm: 2 } })
       .unit(P1, "base", { might: 3 }, "ally")

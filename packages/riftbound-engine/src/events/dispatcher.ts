@@ -105,6 +105,7 @@ export const EVENT_TYPES_NEEDING_RECALC: ReadonlySet<GameEventType> = new Set<Ga
   "heal",
   "stun",
   "grant-keyword",
+  "attach-equipment",
   "take-damage",
   "damageDealt",
   "counterChanged",
@@ -304,6 +305,18 @@ export function dispatchUnitDied(
     draftWithLog.recentDeaths = [];
   }
   const startLen = draftWithLog.recentDeaths.length;
+  // rule 323.5 / 808.1.d.2 — units killed by one effect all die at the same
+  // moment: publish the whole batch before the first `die` fires so statics on
+  // a unit dying alongside another still shape that death's triggers.
+  const outerBatch = (ctx.draft as DyingTogetherDraft).dyingTogether;
+  (ctx.draft as DyingTogetherDraft).dyingTogether = killed.map((e) => {
+    const id = typeof e === "string" ? e : e.cardId;
+    const o =
+      (typeof e === "string" ? undefined : e.owner) ??
+      ctx.cards.getCardOwner(id as Parameters<TriggerRunnerContext["cards"]["getCardOwner"]>[0]) ??
+      "";
+    return { cardId: id as string, owner: o as string };
+  });
   for (const entry of killed) {
     const cardId = typeof entry === "string" ? entry : entry.cardId;
     const explicitOwner = typeof entry === "string" ? undefined : entry.owner;
@@ -327,6 +340,7 @@ export function dispatchUnitDied(
           };
     total += dispatchEvent(ctx, { cardId, owner, type: "die", ...attribution });
   }
+  (ctx.draft as DyingTogetherDraft).dyingTogether = outerBatch;
   draftWithLog.__recentDeathsDepth = (draftWithLog.__recentDeathsDepth ?? 1) - 1;
   if (isOutermost) {
     // Cascade has settled — trim back to what existed before this
@@ -345,6 +359,11 @@ export function dispatchUnitDied(
  * counter (kept off the public type because it's a dispatcher implementation
  * detail).
  */
+interface DyingTogetherDraft {
+  /** rule 323.5 — the batch of units currently dying at the same moment. */
+  dyingTogether?: { cardId: string; owner: string }[];
+}
+
 interface RecentDeathsDraft {
   recentDeaths?: { cardId: string; owner: string }[];
   __recentDeathsDepth?: number;

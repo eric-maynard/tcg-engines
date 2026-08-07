@@ -91,7 +91,7 @@ describe("Ruling 8945ed2cd3a61d87 — Karthus dying together with a Deathknell u
   // Cleanup case (323.4 → 323.5): both take lethal damage from one effect and die in the same cleanup;
   // triggers are queued (step 3a) before either is moved to the trash (step 3b) → still doubled.
   // Actual: P1 draws 1 (same missing doubling).
-  test.failing("BUG: ruling 8945ed2cd3a61d87 — lethal damage to Karthus (3) and Sentry (1) in one cleanup: Deathknell should still trigger twice (P1 draws 2); engine draws 1", async () => {
+  test("ruling 8945ed2cd3a61d87 — lethal damage to Karthus (3) and Sentry (1) in one cleanup: Deathknell should still trigger twice (P1 draws 2); engine draws 1", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P2, { energy: 8, power: { rainbow: 3 } })
