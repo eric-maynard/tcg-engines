@@ -235,9 +235,8 @@ describe("Bone Skewer (unl-139-219)", () => {
     expect(game.p1.points()).toBe(0);
   });
 
-  test.failing("BUG: Accelerate on the pulled unit — P2 may opt in for free (all costs ignored, 356.5.a) and Legion Rearguard then enters READY (still stunned)", async () => {
-    // Expected: P2 is asked, accepts without paying [1][fury] (they have nothing), Rearguard is ready + stunned.
-    // Actual: the opt-in prompt is shown and accepted but the unit still enters exhausted.
+  test("Accelerate on the pulled unit — P2 may opt in for free (all costs ignored, 356.5.a) and Legion Rearguard then enters READY (still stunned)", async () => {
+    // P2 is asked, accepts without paying [1][fury] (they have nothing), Rearguard is ready + stunned.
     const game = await board().battlefield("bf2", { controller: P2 }).unit(P2, "bf2", { might: 2 }, "holder").hand(P2, REARGUARD, "rear").build();
     await skewer(game, "bf2");
     await game.p1.pick("rear");

@@ -1453,6 +1453,16 @@ export const pendingChoiceMoves: Partial<
           return;
         }
         if (instructed) {
+          // rule 717 / 356.5.a (unl-139-219 Bone Skewer × ogn-010-298) — the
+          // folded-in optional cost had its AMOUNT zeroed by "ignoring any and
+          // all costs", but electing it still buys its benefit: an accepted
+          // [Accelerate] readies the unit that already entered exhausted.
+          if (
+            context.params.accept === true &&
+            getOptionalPlayCost(instructed.cardId)?.kind === "accelerate"
+          ) {
+            context.counters.setFlag(instructed.cardId as CoreCardId, "exhausted", false);
+          }
           fireInstructedPlayTriggers(draft, context, {
             cardId: instructed.cardId,
             paidAdditionalCost: context.params.accept === true,
@@ -2339,6 +2349,31 @@ export const pendingChoiceMoves: Partial<
       // finishes before any play, so record the picks in order for a later
       // `play-banished-pass` step to replay.
       if (choice.onPicked === "banish") {
+        // rule 392 (rule-id: unl-169-219, Ashe Focused) — "When they hold,
+        // return it to their hand (even if I'm no longer on the board)": the
+        // delayed ability is player-scoped and permanent, so it survives its
+        // source leaving the board and fires on the revealer's next hold.
+        if (choice.returnOnHold === true) {
+          const pdtDraft = draft as unknown as {
+            playerDelayedTriggers?: {
+              playerId: string;
+              sourceCardId: string;
+              trigger: { event: string; on?: string };
+              effect: unknown;
+              duration: "turn" | "permanent";
+            }[];
+          };
+          pdtDraft.playerDelayedTriggers ??= [];
+          for (const id of picks) {
+            pdtDraft.playerDelayedTriggers.push({
+              duration: "permanent",
+              effect: { cardId: id as string, type: "return-banished-to-hand" },
+              playerId: choice.prompter,
+              sourceCardId: choice.sourceCardId ?? (id as string),
+              trigger: { event: "hold", on: "opponent" },
+            });
+          }
+        }
         const banishLog = draft as unknown as {
           lookBanishedCards?: { cardId: string; playerId: string; sourceCardId?: string }[];
         };
