@@ -934,11 +934,9 @@ export const revealHidden: Defs["revealHidden"] = {
         cardId: cardId as CoreCardId,
         targetZoneId: "chain" as CoreZoneId,
       });
-      fireTriggers({ cardId, playerId, type: "play-spell" }, { cards, counters, draft, zones });
-      fireTriggers(
-        { cardId, cardType: "spell", playerId, type: "play-card" },
-        { cards, counters, draft, zones },
-      );
+      // rule 419.4.a / 425.1.b: `play-spell` / `play-card` fire when the play is
+      // COMPLETED by resolution (and never for a countered card), so they are
+      // emitted once by chain/resolve.ts firePlayedCardTriggers — not here.
       // rule-id: ogn-167-298 — rule 811.1.c.3: revealing a facedown card is
       // playing it "from [Hidden]".
       fireTriggers(
