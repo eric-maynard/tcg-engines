@@ -8,6 +8,7 @@ import type {
   SequenceEffect,
 } from "@tcg/riftbound-types/abilities/effect-types";
 import type { AnyTarget, Filter, Location, SimpleFilter } from "@tcg/riftbound-types/targeting";
+import { parseMightBoundClause } from "../parsers/target-parser";
 import { parseEffect } from "./effect";
 import { parseEffects } from "./effects";
 import { parseLocationString } from "./targets";
@@ -49,6 +50,22 @@ export function parseMoveAndTakeControlEffect(text: string): SequenceEffect | un
  * Try to parse a move effect: "Move TARGET [to LOCATION]."
  */
 export function parseMoveEffect(text: string): MoveEffect | undefined {
+  // rule 710 (ven-105-166 Twilight Step) — "Move a unit with 3 [Might] or
+  // less.": a trailing Might bound restricts WHICH unit may be chosen. Strip it
+  // before the shape patterns run (they would swallow it) and re-attach it as a
+  // filter on whatever target they produce.
+  const mightBound = parseMightBoundClause(text.replace(/\.\s*$/, ""));
+  if (mightBound) {
+    const base = parseMoveEffect(`${mightBound.rest}.`);
+    const baseTarget = base?.target;
+    if (base && typeof baseTarget === "object" && baseTarget !== null) {
+      const existing = (baseTarget as { filter?: Filter | Filter[] }).filter;
+      const filter = existing === undefined ? mightBound.filter : [...[existing].flat(), mightBound.filter];
+      return { ...base, target: { ...(baseTarget as object), filter } as AnyTarget };
+    }
+    return base;
+  }
+
   // Swap pattern: "Move me to its location and it to my original location"
   // Represent as a self-move to the chosen unit's location ("here").
   if (/^move me to its location and it to my original location\.?$/i.test(text)) {
