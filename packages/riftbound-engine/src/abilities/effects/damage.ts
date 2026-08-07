@@ -341,7 +341,10 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       zones: { getCardsInZone: ctx.zones.getCardsInZone },
     };
     const replacement = checkReplacement(
-      { amount, cardId: targetId, owner, type: "take-damage" },
+      // rule 437.2 (ven-025-166) — this handler only ever deals spell/ability
+      // damage, so its controller is the source controller a shield scoped to
+      // "enemy spells and abilities" tests against.
+      { amount, cardId: targetId, owner, sourceController: ctx.playerId, type: "take-damage" },
       replacementCtx as Parameters<typeof checkReplacement>[1],
     );
     if (replacement) {

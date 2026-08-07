@@ -64,6 +64,13 @@ export interface ReplacementEvent {
    * A replacement that declares its own `method` only applies to matching events.
    */
   readonly method?: string;
+  /**
+   * rule 437.2 (rule-id: ven-025-166) — the player controlling the spell or
+   * ability producing this event. Only the spell/ability damage path can name
+   * it; combat damage and other callers leave it undefined, which fails a
+   * `sourceController`-scoped replacement closed.
+   */
+  readonly sourceController?: string;
 }
 
 /**
@@ -158,7 +165,8 @@ function replacementApplies(
   eventCard: BoardCardEntry | undefined,
   ctx: ReplacementContext,
 ): boolean {
-  const { target, condition, method } = ability as {
+  const { target, condition, method, sourceController } = ability as {
+    sourceController?: string;
     target?: {
       attachedToSource?: boolean;
       controller?: string;
@@ -167,9 +175,36 @@ function replacementApplies(
       self?: boolean;
       type?: string;
     };
-    condition?: { type?: string };
+    condition?: { type?: string; amount?: number };
     method?: string;
   };
+  // rule 437.2 (rule-id: ven-025-166) — "damage that ENEMY spells and abilities
+  // would deal": scoped by the controller of the damage SOURCE. Fail closed
+  // when the caller could not name one (combat damage is dealt by units, not
+  // by a spell or ability, so it is never replaced by such a shield).
+  if (sourceController !== undefined) {
+    if (event.sourceController === undefined) {
+      return false;
+    }
+    const friendly = event.sourceController === card.owner;
+    if (sourceController === "enemy" ? friendly : !friendly) {
+      return false;
+    }
+  }
+  // rule 430.1 (rule-id: ven-025-166) — "while you control N or more runes":
+  // counts the rune POOL of the replacement's own controller; undrawn runes in
+  // the rune deck are not controlled. "While" is continuous, so this is
+  // re-evaluated at the moment the replaced event would happen.
+  if (condition?.type === "runes-at-least" || condition?.type === "runes-at-most") {
+    const runes = ctx.zones.getCardsInZone(
+      "runePool" as CoreZoneId,
+      card.owner as CorePlayerId,
+    ).length;
+    const amount = condition.amount ?? 0;
+    if (condition.type === "runes-at-least" ? runes < amount : runes > amount) {
+      return false;
+    }
+  }
   // rule 369.2 — "if … would … ME": a self-scoped replacement only ever sees
   // events affecting its own source (ven-181-166 Gangplank, Naval).
   if (target?.self === true && event.cardId !== card.id) {

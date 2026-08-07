@@ -414,6 +414,14 @@ export interface ReplacementAbility {
   /** Condition for replacement to apply */
   readonly condition?: Condition;
 
+  /**
+   * rule 437.2 (rule-id: ven-025-166) — "prevent all damage that ENEMY spells
+   * and abilities would deal to me": scopes the replacement by who controls
+   * the damage SOURCE, not by who owns the affected card. Fail-closed — a
+   * caller that cannot name the source controller never matches.
+   */
+  readonly sourceController?: "friendly" | "enemy";
+
   /** What happens instead */
   readonly replacement: Effect | "prevent";
 
