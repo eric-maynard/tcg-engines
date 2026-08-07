@@ -41,7 +41,14 @@ function formatMoveDescription(moveId, params) {
     case "recallUnit": return `${r(params.unitId)}`;
     case "hideCard": return `at ${bf(params.battlefieldId)}`;
     case "scorePoint": return `${bf(params.battlefieldId)}`;
-    case "activateAbility": return `${r(params.cardId)}${params.targets?.length ? " → " + r(params.targets) : ""}`;
+    // Inherited abilities (Heimerdinger) share cardId — name the source card and
+    // ability slot so the options are distinguishable.
+    case "activateAbility": {
+      const from = params.sourceCardId && params.sourceCardId !== params.cardId
+        ? ` — ${r(params.sourceCardId)}${Number.isInteger(params.abilityIndex) ? ` ability ${params.abilityIndex + 1}` : ""}`
+        : (Number.isInteger(params.abilityIndex) && params.abilityIndex > 0 ? ` — ability ${params.abilityIndex + 1}` : "");
+      return `${r(params.cardId)}${from}${params.targets?.length ? " → " + r(params.targets) : ""}`;
+    }
     case "resolveFullCombat": return `${bf(params.battlefieldId)}`;
     case "passChainPriority": return null;
     case "passShowdownFocus": return null;
@@ -279,12 +286,16 @@ function renderActions() {
         // enters targeting mode — never a silent first-target pick.
         const groups = {};
         for (const m of moves) {
-          const key = `${m.params?.cardId ?? ""}#${m.params?.abilityIndex ?? ""}`;
+          const key = `${m.params?.cardId ?? ""}#${m.params?.abilityIndex ?? ""}#${m.params?.sourceCardId ?? ""}`;
           (groups[key] ??= []).push(m);
         }
         for (const variants of Object.values(groups)) {
           const cid = variants[0].params?.cardId;
-          const name = findCard(cid)?.name ?? cid ?? label;
+          const srcId = variants[0].params?.sourceCardId;
+          const baseName = findCard(cid)?.name ?? cid ?? label;
+          const name = srcId && srcId !== cid
+            ? `${baseName} — ${findCard(srcId)?.name ?? srcId}`
+            : baseName;
           const targetIds = [...new Set(variants.map(moveTargetId).filter(Boolean))];
           const detail = targetIds.length
             ? `${name} — ${targetIds.length} target${targetIds.length === 1 ? "" : "s"}…`
