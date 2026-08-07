@@ -309,6 +309,16 @@ function triggerMatchesEvent(
     if ("cardId" in event && event.cardId !== card.id) {
       return false;
     }
+    // rule 383.1 (sfd-047-221) — "When YOU buff me" is attributed to the
+    // buffing player: an opponent's effect buffing this card must not fire it.
+    if (mapped === "buff" && "playerId" in event && event.playerId !== card.owner) {
+      return false;
+    }
+    // rule 383.4.b (sfd-057-221) — "When YOU choose me" is attributed to the
+    // chooser: an opponent choosing this card must not fire its own trigger.
+    if (mapped === "choose" && "chooserId" in event && event.chooserId !== card.owner) {
+      return false;
+    }
     if ("battlefieldId" in event && !("cardId" in event) && card.zone === "battlefieldRow") {
       // Battlefield card self-triggers (hold, conquer): match by battlefieldId.
       // The controller who holds/conquers may differ from the card's deck owner.

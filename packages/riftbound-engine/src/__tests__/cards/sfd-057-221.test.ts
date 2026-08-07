@@ -75,7 +75,7 @@ describe("Irelia, Fervent (sfd-057-221)", () => {
   // BUG — expected: "When YOU choose me" is controller-only, so an enemy Void Seeker puts only itself
   // on the chain and its 4 damage kills the 4-Might Irelia. Actual: the enemy targeting also fires
   // her trigger (chain = [Void Seeker, Irelia]), she goes to 5 Might and survives exactly-lethal.
-  test.failing("BUG: an opponent choosing Irelia fires her 'when YOU choose me' trigger — enemy Void Seeker's exactly-lethal 4 should kill her with no +1", async () => {
+  test("an opponent choosing Irelia fires her 'when YOU choose me' trigger — enemy Void Seeker's exactly-lethal 4 should kill her with no +1", async () => {
     const exact = await scenario()
       .active(P2)
       .resources(P2, { energy: 3, power: { fury: 1 } })

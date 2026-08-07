@@ -95,7 +95,7 @@ describe("Simian Ancestor (sfd-047-221)", () => {
     expect(game.state("simian").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: 'When YOU buff me' — an opponent buffing Simian must not ready it (cf. 'when you stun/deal' controller attribution)", async () => {
+  test("'When YOU buff me' — an opponent buffing Simian must not ready it (cf. 'when you stun/deal' controller attribution)", async () => {
     // Expected: the buff lands but "you" (Simian's controller) did not perform it → no trigger,
     // Simian stays exhausted. Actual: the buff trigger matches on the buffed card only and ignores
     // who buffed, so P2's spell readies P1's Simian.
