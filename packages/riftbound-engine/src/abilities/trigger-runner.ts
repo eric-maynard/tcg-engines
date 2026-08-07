@@ -51,6 +51,24 @@ const KEYWORD_SELF_TRIGGER_EVENTS: Readonly<Record<string, string>> = {
   Vision: "play-self",
 };
 
+/**
+ * rule-id: unl-095-219 (rule 364.3) — triggered abilities an effect installed
+ * on this card for a duration ("When it wins a combat this turn, gain 2 XP").
+ */
+function delayedTriggerAbilities(
+  meta: Partial<RiftboundCardMeta> | undefined,
+): TriggerableAbility[] {
+  const out: TriggerableAbility[] = [];
+  for (const dt of meta?.delayedTriggers ?? []) {
+    out.push({
+      effect: dt.effect as never,
+      trigger: { event: dt.trigger.event, on: dt.trigger.on ?? "self" },
+      type: "triggered",
+    });
+  }
+  return out;
+}
+
 function grantedKeywordAbilities(
   meta: Partial<RiftboundCardMeta> | undefined,
 ): TriggerableAbility[] {
@@ -524,7 +542,8 @@ export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
   // rule-id: ogn-100-298 — include triggers implied by granted effect keywords.
   const abilitiesOf = (cardId: CoreCardId): TriggerableAbility[] => {
     const printed = toTriggerableAbilities(cardId as string);
-    const granted = grantedKeywordAbilities(ctx.cards.getCardMeta(cardId));
+    const meta = ctx.cards.getCardMeta(cardId);
+    const granted = [...grantedKeywordAbilities(meta), ...delayedTriggerAbilities(meta)];
     return granted.length > 0 ? [...printed, ...granted] : printed;
   };
 
@@ -572,7 +591,14 @@ export function getBoardCards(ctx: TriggerRunnerContext): CardWithAbilities[] {
   // Get cards from battlefieldRow (battlefield cards themselves)
   const battlefieldRowCards = ctx.zones.getCardsInZone("battlefieldRow" as CoreZoneId);
   for (const cardId of battlefieldRowCards) {
-    const owner = ctx.cards.getCardOwner(cardId) ?? "";
+    // rule 471.2.a: a battlefield card belongs to no deck — "When you conquer
+    // here" is controlled by whoever controls the battlefield right now (the
+    // conqueror, already stamped before the `conquer` event fires), so that
+    // player is the trigger's controller and the one its effect acts for.
+    const owner =
+      ctx.draft.battlefields[cardId as string]?.controller ??
+      ctx.cards.getCardOwner(cardId) ??
+      "";
     boardCards.push({
       abilities: toTriggerableAbilities(cardId as string),
       id: cardId as string,

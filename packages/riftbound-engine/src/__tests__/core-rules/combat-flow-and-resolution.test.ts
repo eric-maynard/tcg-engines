@@ -213,7 +213,7 @@ describe("Combat damage step: both pass → attacker assigns first, damage dealt
     expect(game.state("D").combatRole).toBeNull();
   });
 
-  test.failing("BUG: 466.3.a — the surviving defender WON the combat, so its 'When I win a combat' trigger should fire (engine never emits win-combat)", async () => {
+  test("466.3.a — the surviving defender WON the combat, so its 'When I win a combat' trigger fires", async () => {
     // Expected: D is the only designated player's unit remaining → P2 won → D's trigger draws 1.
     // Actual: the engine never fires a `win-combat` event, so P2's hand is unchanged.
     const game = await scenario()
@@ -300,7 +300,7 @@ describe("Tie (740.3.a): both sides survive → attacker recalled exhausted, eve
     expect(turnStateOf(game)).toBe("neutral-open");
   });
 
-  test.failing("BUG: 466.7.a — the Attacker designation must be removed from a recalled attacker (engine leaves combatRole='attacker' on units recalled to base)", async () => {
+  test("466.7.a — the Attacker designation is removed from a recalled attacker", async () => {
     // Expected: after combat ends, A (recalled to base) has no combat designation.
     // Actual: resolveFullCombat only clears combatRole on units still at the battlefield.
     const game = await scenario()
@@ -877,7 +877,7 @@ describe("The Final Point via a lone combat Conquer is refused (draw instead) un
     expect(game.gameState.scoredThisTurn[P1]).toContain("bf1");
   });
 
-  test.failing("BUG: 471.2.a — in the draw-instead case the battlefield was still Conquered, so 'When you conquer here' triggers fire while points stay 7", async () => {
+  test("471.2.a — in the draw-instead case the battlefield was still Conquered, so 'When you conquer here' triggers fire while points stay 7", async () => {
     // Expected: points 7, hand +1 (draw-instead) +1 (conquer-here trigger) once it resolves.
     // Actual: the engine scores the 8th point and finishes the game.
     const game = await scenario()

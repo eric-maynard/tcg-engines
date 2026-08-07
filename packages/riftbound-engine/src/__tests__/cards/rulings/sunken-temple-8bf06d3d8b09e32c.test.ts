@@ -68,7 +68,7 @@ describe("Ruling 8bf06d3d8b09e32c — Sunken Temple counts a conqueror that is M
     expect(game.state("attacker").might).toBe(3);
   });
 
-  test.failing("BUG: ruling 8bf06d3d8b09e32c — same conquer at the OPPONENT's Sunken Temple card: 'you' is whoever conquers here, so P1 is still offered pay-[1]-draw-1; engine only fires the trigger for the battlefield card's owner", async () => {
+  test("ruling 8bf06d3d8b09e32c — same conquer at the OPPONENT's Sunken Temple card: 'you' is whoever conquers here, so P1 is still offered pay-[1]-draw-1; engine only fires the trigger for the battlefield card's owner", async () => {
     // Expected: identical to the previous test. Actual: no trigger at all when P2 owns the battlefield card.
     const game = await board({ attacker: LAURENT_DUELIST, defenderMight: 4, owner: P2 }).build();
     const hand = game.p1.hand().length;

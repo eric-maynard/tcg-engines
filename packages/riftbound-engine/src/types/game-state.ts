@@ -121,6 +121,13 @@ export interface RiftboundCardMeta {
    */
   grantedAbilities?: GrantedAbility[];
 
+  /**
+   * rule-id: unl-095-219 (rule 364.3) — triggered abilities installed on this
+   * card by an effect ("When it wins a combat this turn, gain 2 XP"). Read by
+   * `getBoardCards`; turn-scoped entries expire at the Ending Step (517.2.b).
+   */
+  delayedTriggers?: DelayedTrigger[];
+
   /** Temporary Might modifier from effects (added to base Might; reset per duration) */
   mightModifier?: number;
 
@@ -231,6 +238,16 @@ export interface GrantedKeyword {
 export interface GrantedAbility {
   sourceCardId: CardId;
   abilityIndex: number;
+  duration: "turn" | "permanent";
+}
+
+/**
+ * rule-id: unl-095-219 — a triggered ability granted to a card for a duration.
+ */
+export interface DelayedTrigger {
+  sourceCardId: CardId;
+  trigger: { event: string; on?: string };
+  effect: unknown;
   duration: "turn" | "permanent";
 }
 

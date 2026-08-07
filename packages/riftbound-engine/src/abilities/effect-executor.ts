@@ -13,6 +13,7 @@ import type {
 import type { RiftboundGameState } from "../types";
 import type { TargetDescriptor } from "./target-resolver";
 import { EFFECT_HANDLERS } from "./effects";
+import { handle_delayedTrigger } from "./effects/delayed-trigger";
 import type { EffectHelpers } from "./effects/_helpers";
 import {
   checkBecomesMighty,
@@ -158,7 +159,11 @@ const EFFECT_HELPERS: EffectHelpers = {
  * Execute a single effect.
  */
 export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): void {
-  const fn = EFFECT_HANDLERS[effect.type];
+  // rule-id: unl-095-219 — "delayed-trigger" installs a triggered ability on a
+  // card for a duration; kept out of EFFECT_HANDLERS so the map stays the
+  // parser-facing catalogue of printable effects.
+  const fn =
+    effect.type === "delayed-trigger" ? handle_delayedTrigger : EFFECT_HANDLERS[effect.type];
   if (fn) {
     if (effect.type === "counter" && !ctx.draft.pendingChoice) {
       // "That spell" always means the one THIS counter hits — a counter that

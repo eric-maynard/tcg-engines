@@ -104,7 +104,7 @@ describe("Draven, Vanquisher (sfd-020-221)", () => {
     expect(game.state("draven").might).toBe(6);
   });
 
-  test.failing("BUG: When I win a combat (attacking, sole survivor): a Gold gear token is played to base, exhausted", async () => {
+  test("When I win a combat (attacking, sole survivor): a Gold gear token is played to base, exhausted", async () => {
     const game = await attacking(0, 2).build();
     expect(goldOf(game, "p1")).toHaveLength(0);
     await game.p1.move("draven", "bf1");

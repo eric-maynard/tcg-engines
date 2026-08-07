@@ -9,7 +9,7 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { CombatUnit } from "../../../combat";
-import { PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE, resolveCombat } from "../../../combat";
+import { NO_COMBAT_DAMAGE, PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE, resolveCombat } from "../../../combat";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { findAllReplacements } from "../../../abilities/replacement-effects";
 import { createInteractionState, getTurnState } from "../../../chain";
@@ -294,7 +294,8 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           const eff = ability.effect as { type?: string; keyword?: string; target?: unknown };
           if (
             eff?.type === "grant-keyword" &&
-            eff.keyword === PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE &&
+            (eff.keyword === PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE ||
+              eff.keyword === NO_COMBAT_DAMAGE) &&
             (eff.target === undefined || eff.target === "self") &&
             !grantedKeywords.some((gk) => gk.keyword === eff.keyword)
           ) {
@@ -335,8 +336,11 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         // damage assignment and never dealt lethal damage.
         ...(unitIgnoresDamage(cardId as string, draft) ? { immuneToDamage: true } : {}),
         // rule 423.1.b: a stunned unit deals no combat damage (it still takes damage).
+        // Same for a unit carrying the NoCombatDamage marker ("I don't deal combat
+        // damage." — sfd-082-221), printed or granted by a static.
         ...(meta?.stunned === true ||
-        (meta as { __flags?: Record<string, boolean> } | undefined)?.__flags?.stunned === true
+        (meta as { __flags?: Record<string, boolean> } | undefined)?.__flags?.stunned === true ||
+        allKeywords.includes(NO_COMBAT_DAMAGE)
           ? { dealsNoCombatDamage: true }
           : {}),
       };
@@ -516,15 +520,41 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       return;
     }
 
+    // rule 466.1.a.2: defenders still present → the attackers are recalled,
+    // whether the defenders won the combat or it was a tie.
+    const attackersRecalled = defendersLeft.length > 0;
     let winner: "attacker" | "defender" | "tie";
     if (attackersLeft.length > 0 && defendersLeft.length === 0) {
       winner = "attacker";
-    } else if (attackersLeft.length === 0 && defendersLeft.length === 0) {
-      winner = "tie";
-    } else {
-      // rule 466.1.a.2 / 466.3.d: defenders still present → attackers recalled.
+    } else if (attackersLeft.length === 0 && defendersLeft.length > 0) {
       winner = "defender";
+    } else {
+      // rule 740.3.a / 466.3.d: nobody left here, or units of BOTH players
+      // left — No Result, so neither side won.
+      winner = "tie";
     }
+
+    // rule 466.3.a — the units still here on the side that carried the combat
+    // won it, so their "When I win a combat" triggers fire. A tie (740.3.a)
+    // has no winner, so nothing fires.
+    if (winner !== "tie") {
+      for (const unitId of winner === "attacker" ? attackersLeft : defendersLeft) {
+        fireTriggers(
+          {
+            battlefieldId,
+            cardId: unitId as string,
+            playerId:
+              (cards.getCardController?.(unitId) as string | undefined) ??
+              (cards.getCardOwner(unitId) as string | undefined),
+            type: "win-combat",
+          },
+          { cards, counters, draft, zones },
+        );
+      }
+    }
+
+    // Units recalled to base by this resolution (rule 466.1.a.2).
+    const recalledUnits: CoreCardId[] = [];
 
     // Apply outcome based on winner
     if (winner === "attacker") {
@@ -580,18 +610,25 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       // Emit "conquer" event so triggered abilities fire
       // rule-id: ogn-034-298 — this conquer happened after an attack, so it
       // carries the excess damage the attackers assigned (rule 626.1.d.2).
-      fireTriggers(
-        {
-          afterAttack: true,
-          battlefieldId,
-          excessDamage,
-          playerId: attackingPlayer,
-          type: "conquer",
-        },
-        { cards, counters, draft, zones },
-      );
+      // rule 471.2.c: Conquer abilities only trigger when the battlefield is
+      // actually Scored, so re-taking one this player already scored this turn
+      // establishes control without firing them. rule 471.2.a: the
+      // draw-instead Final Point case (471.1.b.1) still Conquered, so its
+      // triggers do fire.
+      if (!alreadyScored) {
+        fireTriggers(
+          {
+            afterAttack: true,
+            battlefieldId,
+            excessDamage,
+            playerId: attackingPlayer,
+            type: "conquer",
+          },
+          { cards, counters, draft, zones },
+        );
+      }
 
-    } else if (winner === "defender") {
+    } else if (attackersRecalled) {
       // rule 740.3.a — units of BOTH players still here in step 3d of the
       // Combat Cleanup is a tie. rule-id: ogn-227-298 (Symbol of the Solari):
       // a `combat-tie` replacement owned by the attacker replaces the
@@ -620,15 +657,19 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
               (registry.get(id as string)?.might ?? 0) > 0
             : cards.getCardOwner(id) === attackingPlayer,
         )) {
+        // rule 466.7.a: a recalled attacker leaves the combat, so its
+        // designation must be cleared too — it is no longer here below.
+        recalledUnits.push(survivorId as CoreCardId);
         zones.moveCard({
           cardId: survivorId as CoreCardId,
           targetZoneId: "base" as CoreZoneId,
         });
       }
     }
-    // Clear combat roles for all remaining units at this battlefield
+    // rule 466.7.a: remove the Attacker/Defender designation from every unit
+    // that was in this combat — those still here and those recalled to base.
     const remainingUnits = zones.getCardsInZone(battlefieldZoneId);
-    for (const unitId of remainingUnits) {
+    for (const unitId of [...remainingUnits, ...recalledUnits]) {
       cards.updateCardMeta(unitId, {
         combatRole: null,
       } as Partial<RiftboundCardMeta>);
