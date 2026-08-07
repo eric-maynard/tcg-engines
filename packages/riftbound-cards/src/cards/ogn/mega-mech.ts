@@ -11,4 +11,7 @@ export const megaMech: UnitCard = {
   name: "Mega-Mech",
   rarity: "common",
   setId: "OGN",
+  // rule 105.2 — printed MECH tag (missing from set data); "your Mechs"
+  // statics and "another friendly Mech" targets filter on it.
+  tags: ["Mech"],
 };

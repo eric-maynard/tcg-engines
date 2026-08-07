@@ -70,6 +70,18 @@ export const standardMove: Defs["standardMove"] = {
     const toBase = destination === "base";
     for (const unitId of unitIds) {
       const zone = context.zones.getCardZone(unitId as CoreCardId) as string | undefined;
+      // rule 350.1 / unl-150-219 (Vex, Apathetic): "they can't move it this
+      // turn" is modelled as a granted `NoMove` keyword — such a unit may take
+      // no move leg at all.
+      if (
+        hasKeyword(
+          unitId,
+          "NoMove",
+          (id: CoreCardId) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
+        )
+      ) {
+        return false;
+      }
       // Rule 144.4.b: base → battlefield, or battlefield → base.
       if (toBase) {
         if (!zone?.startsWith("battlefield-")) {
@@ -180,6 +192,17 @@ export const standardMove: Defs["standardMove"] = {
         continue;
       }
 
+      // rule 350.1 / unl-150-219: a unit told it "can't move this turn".
+      if (
+        hasKeyword(
+          cardId as string,
+          "NoMove",
+          (id: CoreCardId) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
+        )
+      ) {
+        continue;
+      }
+
       readyUnits.push(cardId as string);
     }
 
@@ -223,6 +246,10 @@ export const standardMove: Defs["standardMove"] = {
           if (!hasKeyword(cardId as string, "Ganking", metaAccessor)) {
             continue;
           }
+          // rule 350.1 / unl-150-219: "can't move it this turn".
+          if (hasKeyword(cardId as string, "NoMove", metaAccessor)) {
+            continue;
+          }
           gankers.push(cardId as string);
         }
       }
@@ -253,6 +280,10 @@ export const standardMove: Defs["standardMove"] = {
         }
         // sfd-014-221: units carrying NoMoveToBase are never offered a base leg.
         if (hasKeyword(cardId as string, "NoMoveToBase", metaAccessor)) {
+          continue;
+        }
+        // rule 350.1 / unl-150-219: "can't move it this turn".
+        if (hasKeyword(cardId as string, "NoMove", metaAccessor)) {
           continue;
         }
         readyBfUnits.push(cardId as string);

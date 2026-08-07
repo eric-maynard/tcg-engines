@@ -25,7 +25,7 @@ function leaveLobby() {
   lobbyId = null;
   lobbyCode = null;
   lobbyRole = null;
-  isSandboxGame = false;
+  setSandboxGame(false);
   showMenu();
 }
 
@@ -280,13 +280,13 @@ function setGameMode(mode) {
     // Promote this lobby to Single Player: server fills the opponent
     // slot with a Goldfish and flips sandbox mode on. Bypasses the
     // SANDBOX_ENABLED env gate — this is a first-class lobby mode.
-    isSandboxGame = true;
+    setSandboxGame(true);
     lobbyWs.send(JSON.stringify({ type: "set_single_player", enabled: true }));
   } else {
     // Demote single-player if the host re-picks Duel/Match, then
     // broadcast the underlying Bo1/Bo3 mode.
     if (isSandboxGame) {
-      isSandboxGame = false;
+      setSandboxGame(false);
       lobbyWs.send(JSON.stringify({ type: "set_single_player", enabled: false }));
     }
     lobbyWs.send(JSON.stringify({ type: "set_mode", mode }));
@@ -392,7 +392,7 @@ async function startSoloGame() {
   lobbyId = data.lobbyId;
   lobbyCode = data.code;
   lobbyRole = "host";
-  isSandboxGame = true;
+  setSandboxGame(true);
   viewingPlayer = P1;
 
   // Open the WS, and once open: set deck → start. The lobby_update handler
@@ -422,7 +422,7 @@ async function hostSandbox() {
   lobbyId = data.lobbyId;
   lobbyCode = data.code;
   lobbyRole = "host";
-  isSandboxGame = true;
+  setSandboxGame(true);
   viewingPlayer = P1;
 
   document.getElementById("lobbyMenu").classList.add("hidden");

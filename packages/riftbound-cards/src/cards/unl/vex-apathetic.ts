@@ -12,7 +12,21 @@ import { createCardId } from "@tcg/riftbound-types/cards";
 const abilities: Ability[] = [
   { keyword: "Deflect", type: "keyword", value: 1 },
   {
-    effect: { target: { type: "trigger-source" }, type: "stun" },
+    // rule 350.1 — "They can't move it this turn" is a movement restriction on
+    // the stunned unit, modelled as a turn-duration granted `NoMove` keyword
+    // that the movement moves consult (same shape as `NoMoveToBase`).
+    effect: {
+      effects: [
+        { target: { type: "trigger-source" }, type: "stun" },
+        {
+          duration: "turn",
+          keyword: "NoMove",
+          target: { type: "trigger-source" },
+          type: "grant-keyword",
+        },
+      ],
+      type: "sequence",
+    },
     trigger: {
       event: "play-unit",
       on: "opponent",

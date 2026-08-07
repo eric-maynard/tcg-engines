@@ -63,6 +63,10 @@ export const gankingMove: Defs["gankingMove"] = {
     if (!hasKeyword(context.params.unitId, "Ganking", metaAccessor)) {
       return false;
     }
+    // rule 350.1 / unl-150-219 (Vex, Apathetic): "they can't move it this turn".
+    if (hasKeyword(context.params.unitId, "NoMove", metaAccessor)) {
+      return false;
+    }
 
     return true;
   },
@@ -108,6 +112,11 @@ export const gankingMove: Defs["gankingMove"] = {
 
         // Rule 722: Only units with the Ganking keyword can move battlefield-to-battlefield
         if (!hasKeyword(cardId as string, "Ganking", metaAccessor)) {
+          continue;
+        }
+
+        // rule 350.1 / unl-150-219: "can't move it this turn".
+        if (hasKeyword(cardId as string, "NoMove", metaAccessor)) {
           continue;
         }
 

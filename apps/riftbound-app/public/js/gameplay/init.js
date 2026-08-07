@@ -86,7 +86,7 @@ document.addEventListener("click", (e) => {
       gameId = s.gameId;
       viewingPlayer = s.viewingPlayer || P1;
       lobbyRole = s.lobbyRole || null;
-      isSandboxGame = s.isSandbox || false;
+      setSandboxGame(s.isSandbox || false);
       if (s.playerNames) playerNames = s.playerNames;
       document.getElementById("startScreen").classList.add("hidden");
       connectWs();

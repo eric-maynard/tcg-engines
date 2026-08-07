@@ -107,6 +107,19 @@ let lobbyRole = null; // "host" | "guest"
 let lobbyWs = null;
 let isSandboxGame = false;
 
+/**
+ * Flip sandbox/goldfish mode. Always go through this instead of assigning
+ * `isSandboxGame` directly: the Actions panel renders its sandbox-only
+ * controls (Duplicate) once at DOMContentLoaded, long before the lobby knows
+ * the mode, so every flip has to re-render it.
+ */
+function setSandboxGame(value) {
+  isSandboxGame = Boolean(value);
+  if (typeof renderActionPanel === "function") {
+    renderActionPanel();
+  }
+}
+
 // Coin flip state
 let _coinFlipOnDone = null;
 let _coinFlipShown = false; // Guard against re-triggering

@@ -12,4 +12,7 @@ export const bubbleBot: UnitCard = {
   rarity: "common",
   rulesText: "When you play me, ready another friendly Mech.",
   setId: "SFD",
+  // rule 105.2 — printed MECH tag (missing from set data); its own
+  // "ready another friendly Mech" counts other Mechs, not itself.
+  tags: ["Mech"],
 };

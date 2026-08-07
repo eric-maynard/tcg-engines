@@ -13,4 +13,6 @@ export const breakneckMech: UnitCard = {
   rulesText:
     "Your Mechs have [Deflect] and [Ganking]. (Opponents must pay [rainbow] to choose us with a spell or ability. We can move from battlefield to battlefield.)\nI enter ready if you control another Mech.",
   setId: "SFD",
+  // rule 105.2 — printed MECH tag (missing from set data).
+  tags: ["Mech"],
 };

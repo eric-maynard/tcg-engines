@@ -136,6 +136,10 @@ export const tokenMoves: Partial<
           keywords: def.keywords ? [...def.keywords] : undefined,
           might: def.might,
           name: def.name,
+          // rule 105.2 / sfd-062-221 — a token's name IS its tag (a Mech token
+          // is a Mech), so "another friendly Mech" filters can match it; mirrors
+          // `tokenTags` in abilities/effects/create-token.ts.
+          tags: [def.name],
         });
       }
 
@@ -159,6 +163,10 @@ export const tokenMoves: Partial<
           keywords: def.keywords ? [...def.keywords] : undefined,
           might: def.might,
           name: def.name,
+          // rule 105.2 / sfd-062-221 — a token's name IS its tag (a Mech token
+          // is a Mech), so "another friendly Mech" filters can match it; mirrors
+          // `tokenTags` in abilities/effects/create-token.ts.
+          tags: [def.name],
         });
       }
     },
