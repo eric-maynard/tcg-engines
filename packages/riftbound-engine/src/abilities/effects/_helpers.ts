@@ -9,6 +9,7 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta } from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { additionalCostWasPaid } from "../../operations/additional-costs-paid";
 import { effectiveTags } from "../card-tags";
 import { scoreWithinConditionMet } from "../../operations/score-within";
 import type { TargetDescriptor } from "../target-resolver";
@@ -717,7 +718,7 @@ export function evaluateEffectCondition(
     case "paid-additional-cost": {
       // rule-id: ven-083-166 / rule 560 — playSpell records whether the
       // caster elected the optional additional cost; absent means unpaid.
-      if (ctx.draft.additionalCostsPaid?.[ctx.sourceCardId] === true) return true;
+      if (additionalCostWasPaid(ctx.draft, ctx.sourceCardId, (condition as { costId?: string }).costId)) return true;
       // rule 560 (unl-164-219) — a play-self trigger carries the flag on its
       // firing event; unit plays do not record it on the draft.
       if ((ctx as { paidAdditionalCost?: boolean }).paidAdditionalCost === true) return true;

@@ -124,14 +124,98 @@ export interface SpendCost {
 // ============================================================================
 
 /**
- * Additional cost that can be optionally paid
+ * rule 356 — one component of a card's Total Cost: resources (Energy, Power
+ * pips — `"rainbow"` = Power of any Domain, rule 135.2.e.5 — XP) and/or
+ * non-standard object payments (rule 357.2: kill / discard / exhaust / recycle
+ * / spend a buff / return to hand / banish), each naming what may pay it.
+ */
+export interface CostComponent {
+  readonly energy?: number;
+  readonly power?: readonly (Domain | string)[];
+  readonly xp?: number;
+  /** [Exhaust] on the source itself (activated abilities). */
+  readonly exhaustSelf?: true;
+  /** Exhaust another permanent matching the descriptor (`{type:"legend"}` = your legend). */
+  readonly exhaust?: Target | { readonly type: string };
+  readonly kill?: Target | "self" | { readonly anyNumber: true; readonly target?: Target };
+  /** N cards from hand, or a descriptor of what may be discarded. */
+  readonly discard?: number | Target;
+  readonly recycle?: { readonly from: "trash" | "board" | "hand"; readonly target?: Target; readonly amount: number } | "self";
+  readonly spendBuff?: Target | { readonly anyNumber: true };
+  readonly returnToHand?: Target | { readonly type?: string; readonly controller?: string };
+  readonly banish?: Target | "self";
+}
+
+/**
+ * rule 356.2 — an additional cost of playing a card (or finalizing a trigger):
+ * MANDATORY (356.2.a: "as an additional cost, kill …", Deflect) or optional
+ * (356.2.b: "you may … as an additional cost"; Accelerate; each Repeat tier).
+ * `id` is stable per card so "if you paid THIS cost" is answerable
+ * (`additionalCostsPaid[cardId]` lists paid ids).
  *
- * @example Accelerate: { cost: { energy: 1, power: ["fury"] }, effect: "enter-ready" }
+ * @example Accelerate: { id: "accelerate", mandatory: false, cost: { energy: 1, power: ["fury"] }, effect: "enter-ready" }
  */
 export interface AdditionalCost {
-  readonly cost: Cost;
+  readonly id: string;
+  readonly mandatory: boolean;
+  readonly cost: CostComponent;
+  /** "for each X paid this way, reduce my cost by …" (kill-any-number / spend-any-buffs). */
+  readonly perUnit?: { readonly reduces: CostComponent };
+  /** "If you do, …" rider: an effect, `"enter-ready"`, `"ignore-cost"`, or a cost-reduction. */
+  readonly ifPaid?: unknown;
+  /** rule 364.3.a — the OFFER may itself be gated ("if you've played a spell this turn, you may pay …"). */
+  readonly condition?: unknown;
+  /** rule 809 — Deflect: the component is owed once per chosen opposing target. */
+  readonly perTarget?: boolean;
+  /** @deprecated legacy shape — use `mandatory`. */
   readonly optional?: boolean;
+  /** @deprecated legacy shape — use `ifPaid`. */
   readonly effect?: string;
+}
+
+/** rule 356.1.a — "play me for [Cost]" replaces the Base Cost (Flow, alt cost, Hidden-for-0, self trash play). */
+export interface PlayCostAlternative {
+  readonly id: string;
+  readonly cost: CostComponent;
+  /** Zones the card must be played from for this alternative (e.g. `["trash"]` for Flow). */
+  readonly from?: readonly string[];
+  readonly condition?: unknown;
+}
+
+/**
+ * rule 356 — everything that determines a card's Total Cost, derived once
+ * from its abilities/keywords plus board statics: printed base, alternatives,
+ * additional costs (mandatory + optional, several independent ones per card),
+ * Repeat tiers and an X component.
+ */
+export interface PlayCostModel {
+  readonly base: CostComponent;
+  readonly alternatives: readonly PlayCostAlternative[];
+  readonly additional: readonly AdditionalCost[];
+  /** rule 820 — nth extra resolution pays `repeat[min(n, len-1)]`. */
+  readonly repeat?: readonly CostComponent[];
+  readonly x?: { readonly resource: "energy" | "power" };
+}
+
+/**
+ * The cost choices a player makes in step 2 of a play (rule 355.1): which
+ * alternative cost, and which optional additional costs are paid — each with
+ * the objects chosen to pay it (rule 357.2) and/or a count / elected shape.
+ */
+export interface PlayCostSelection {
+  readonly alternativeId?: string;
+  readonly paid?: Readonly<
+    Record<
+      string,
+      | true
+      | {
+          readonly objects?: readonly string[];
+          readonly count?: number;
+          /** rule 356.4.c.1 — the discounted shape the payer elects for a flexible "[1] or [A] less". */
+          readonly spec?: { readonly energy?: number; readonly power?: readonly string[]; readonly xp?: number };
+        }
+    >
+  >;
 }
 
 /**

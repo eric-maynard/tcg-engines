@@ -20,6 +20,7 @@ import type {
 } from "@tcg/core";
 import { getActiveShowdown } from "../chain/chain-state";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { additionalCostWasPaid } from "../operations/additional-costs-paid";
 import type { GrantedKeyword, RiftboundCardMeta, RiftboundGameState } from "../types";
 
 const MIGHTY_THRESHOLD = 5;
@@ -436,7 +437,7 @@ export function evaluateCondition(
     }
 
     case "paid-additional-cost": {
-      return ctx.draft.additionalCostsPaid?.[source.id] === true;
+      return additionalCostWasPaid(ctx.draft, source.id, condition.costId as string | undefined);
     }
 
     // rule 824.1.c.1 / 108.2 — "[Level N]" reads "you" = the card's CONTROLLER,

@@ -4,6 +4,6 @@ import { type EffectHelpers } from "./_helpers";
 
 export function handle_additionalCost(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   if (ctx.draft.additionalCostsPaid) {
-    ctx.draft.additionalCostsPaid[ctx.sourceCardId] = true;
+    (ctx.draft.additionalCostsPaid as Record<string, boolean | readonly string[]>)[ctx.sourceCardId] = true;
   }
 }
