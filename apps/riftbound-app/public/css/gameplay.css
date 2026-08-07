@@ -1806,6 +1806,24 @@
       padding-bottom: 24px;
     }
     .chain-overlay.targeting .chain-box { pointer-events: auto; }
+    /* [rule:chain-overlay-targeting-clickthrough] Client-side targeting (a
+       reaction spell played off the chain, body.targeting-mode) picks cards on
+       the board — including base units that sit under the centred #chainBox.
+       While a pick is pending the box must neither swallow those clicks nor
+       cover the board: dock it under the target banner and make it inert.
+       Esc / the banner buttons end targeting and restore it. */
+    body.targeting-mode #chainOverlay.visible {
+      justify-content: flex-start;
+      padding-top: 96px;
+      background: rgba(5,3,15,0.2);
+    }
+    body.targeting-mode #chainOverlay.visible .chain-box {
+      pointer-events: none;
+      opacity: 0.6;
+      max-width: 420px;
+      transform: scale(0.8);
+      transform-origin: top center;
+    }
 
     .resource-delta.energy { color: #5a9fff; }
     .resource-delta.fury { color: #e06060; }
