@@ -7,10 +7,44 @@
 
 import type { AnyTarget, Condition, Effect, StaticAbility, Target } from "@tcg/riftbound-types";
 import { parseConditionFromText } from "./condition-parser";
+import { parseCost } from "./cost-parser";
 
 // ============================================================================
 // Types
 // ============================================================================
+
+const NUMBER_WORDS: Record<string, number> = {
+  eight: 8,
+  five: 5,
+  four: 4,
+  nine: 9,
+  one: 1,
+  seven: 7,
+  six: 6,
+  ten: 10,
+  three: 3,
+  two: 2,
+  zero: 0,
+};
+
+/**
+ * rule 190.4 / 356.4 (rule-id: ven-119-166) — structured gates for the
+ * "I cost … less if CONDITION" self discount. Returns undefined when the
+ * clause isn't one this parser can model, so the caller can fall back.
+ */
+function parseSelfCostCondition(clause: string): Condition | undefined {
+  const bfUnits = clause.match(
+    /^you control a battlefield with exactly (\w+) units? there$/i,
+  );
+  if (bfUnits) {
+    const raw = bfUnits[1].toLowerCase();
+    const count = /^\d+$/.test(raw) ? Number(raw) : NUMBER_WORDS[raw];
+    if (count !== undefined) {
+      return { count, type: "control-battlefield-with-units" } as unknown as Condition;
+    }
+  }
+  return parseConditionFromText("If " + clause + ",")?.condition;
+}
 
 export interface StaticAbilityParseResult {
   readonly ability: StaticAbility;
@@ -1025,6 +1059,31 @@ function parseStaticAbilityInner(
   // "I cost COST less [for each QUALIFIER]." or "I cost COST less to play from..."
   // Also handles the bare "I cost COST less [instead]." form (no scope) used
   // Inside [Level N] gated static abilities.
+  // rule 356.4 / 356.6 (rule-id: ven-119-166) — "I cost [2][order] less if you
+  // control a battlefield with exactly two units there.": a trailing-condition
+  // self discount whose reduction carries BOTH an energy and a power component.
+  // Left as a free-text `scope` the gate would be silently ignored at pay time,
+  // so emit a structured condition + a decoded {energy, power} reduction.
+  const selfCostLessIfMatch = cleanText.match(/^I cost\s+(.+?)\s+less\s+if\s+(.+?)\.?$/i);
+  if (selfCostLessIfMatch) {
+    const condition = parseSelfCostCondition(selfCostLessIfMatch[2].trim());
+    if (condition) {
+      return {
+        ability: {
+          condition,
+          effect: {
+            reduction: parseCost(selfCostLessIfMatch[1]),
+            target: "self" as AnyTarget,
+            type: "cost-reduction",
+          } as unknown as Effect,
+          type: "static",
+        },
+        endIndex: text.length,
+        startIndex: 0,
+      };
+    }
+  }
+
   const selfCostScopeMatch = cleanText.match(/^I cost\s+(.+?)\s+less\s+(.+?)\.?$/i);
   if (selfCostScopeMatch) {
     // rule 356.4 — "to play from anywhere other than your hand" is an origin-zone

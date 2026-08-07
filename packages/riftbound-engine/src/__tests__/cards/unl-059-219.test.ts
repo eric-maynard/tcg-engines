@@ -78,7 +78,7 @@ describe("Master Yi, Unstoppable (unl-059-219)", () => {
     expect((await inHand(2, 10, 2).build()).p1.can("play", "yi")).toBe(false); // one XP short of the first discount
   });
 
-  test.failing("BUG: [Level 3] I cost [2][calm] less — at exactly 3 XP a pool of 10 energy + 2 calm plays him and is emptied; 9+2 or 10+1 is not enough", async () => {
+  test("[Level 3] I cost [2][calm] less — at exactly 3 XP a pool of 10 energy + 2 calm plays him and is emptied; 9+2 or 10+1 is not enough", async () => {
     // Expected: cost 10 + [calm][calm] at 3–5 XP. Actual: the while-level cost-reduction statics are never
     // consulted by the cost calculator — 12 + 3 calm is demanded at every XP total.
     const game = await inHand(3, 10, 2).build();

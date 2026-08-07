@@ -367,6 +367,39 @@ function evaluateEnterReadyCondition(
       }
       return count >= min;
     }
+    // rule 190.4 / 356.4 (rule-id: ven-119-166) — "if you control a battlefield
+    // with exactly N units there": read at play time, per battlefield THIS
+    // player controls, counting every unit standing there. Any one qualifying
+    // battlefield satisfies the gate; the card being played is never counted
+    // (its cost is locked before it arrives).
+    case "control-battlefield-with-units": {
+      if (!zones) {
+        return false;
+      }
+      const want = (condition.count as number | undefined) ?? 0;
+      const registry = getGlobalCardRegistry();
+      for (const bfId of Object.keys(state.battlefields ?? {})) {
+        if (state.battlefields?.[bfId]?.controller !== playerId) {
+          continue;
+        }
+        const zoneId = getBattlefieldZoneId(bfId) as CoreZoneId;
+        let n = 0;
+        for (const pid of Object.keys(state.players ?? {})) {
+          for (const id of zones.getCardsInZone(zoneId, pid as CorePlayerId)) {
+            if ((id as string) === cardId) {
+              continue;
+            }
+            if (registry.getCardType(id as string) === "unit") {
+              n++;
+            }
+          }
+        }
+        if (n === want) {
+          return true;
+        }
+      }
+      return false;
+    }
     // rule 143.4 (rule-id: unl-037-219) — the parser leaves gates it cannot
     // model as `{type:"custom", text}`. A gate that cannot be shown to HOLD
     // must not grant ready: units enter exhausted by default.
@@ -1627,11 +1660,14 @@ export function getCardEffectiveMight(
   getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
 ): number {
   const registry = getGlobalCardRegistry();
-  const baseMight = registry.getMight(cardId);
-  if (baseMight === 0) {
+  const printedMight = registry.getMight(cardId);
+  if (printedMight === 0) {
     return 0;
   }
   const meta = getCardMeta?.(cardId as CoreCardId);
+  // rule 323.5 — "its base Might becomes N" replaces the printed base; every
+  // other layer still stacks on top of it.
+  const baseMight = meta?.baseMightOverride ?? printedMight;
   const roleBonus = getCombatRoleMightBonus(cardId, meta);
   const buffBonus = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
   const mightMod = meta?.mightModifier ?? 0;
@@ -2094,6 +2130,56 @@ function countHoldPointsThisTurn(state: RiftboundGameState, playerId: string): n
 }
 
 /**
+ * rule 356.6 (rule-id: ven-119-166) — the POWER half of a self static
+ * "I cost [N][domain] less if CONDITION". `getSelfConditionalEnergyReduction`
+ * only removes the energy component; the pips in the same reduction have to be
+ * waived from the printed power cost too, neither component below 0.
+ */
+function getSelfConditionalPowerReduction(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+): Partial<Record<string, number>> {
+  const out: Partial<Record<string, number>> = {};
+  for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const { effect, condition } = ability as {
+      effect?: { type?: string; target?: unknown; scope?: unknown; by?: unknown; reduction?: unknown; amount?: unknown };
+      condition?: Record<string, unknown>;
+    };
+    if (effect?.type !== "cost-reduction" || effect.target !== "self") {
+      continue;
+    }
+    if (effect.scope !== undefined || effect.by !== undefined || !condition) {
+      continue;
+    }
+    if (
+      evaluateEnterReadyCondition(
+        condition,
+        state,
+        playerId,
+        cardId,
+        extras.board?.zones,
+        extras.board?.cards,
+      ) !== true
+    ) {
+      continue;
+    }
+    for (const [domain, n] of Object.entries(
+      decodeCostAmount(effect.reduction ?? effect.amount).power,
+    )) {
+      if (n && n > 0) {
+        out[domain] = (out[domain] ?? 0) + n;
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * rule 466 (rule-id: sfd-055-221) — the POWER half of a self static
  * "I cost [N][domain] less for each …". `getSelfScaledEnergyReduction` only
  * yields energy; the pips it decodes have to be waived from the printed power
@@ -2108,7 +2194,12 @@ function getSelfScaledPowerReduction(
   if (!extras.board?.zones) {
     return {};
   }
-  const out: Partial<Record<string, number>> = {};
+  const out: Partial<Record<string, number>> = getSelfConditionalPowerReduction(
+    state,
+    playerId,
+    cardId,
+    extras,
+  );
   for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
     if (ability?.type !== "static") {
       continue;
