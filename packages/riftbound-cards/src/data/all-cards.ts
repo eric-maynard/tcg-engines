@@ -919,6 +919,45 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+  // rule 441.1.c.1 / 827.1 — Kayle, Justified: four printed lines, of which the
+  // parser only shapes the first. "I can be [Empowered] up to three times" is a
+  // permission that replaces the implicit "only if not Empowered" gate with an
+  // `empower-limit` (activate-ability.ts empowerActivationBlocked); the Might
+  // line scales off the empower COUNT (zero times is +0); the keyword line is a
+  // tier that turns on at exactly three (`while-empowered` with `times`).
+  "ven-134-166": {
+    abilities: [
+      {
+        cost: { energy: 3 },
+        effect: { target: "self", type: "empower" },
+        restrictions: [{ max: 3, type: "empower-limit" }],
+        type: "activated",
+      },
+      {
+        effect: { max: 3, target: "self", type: "empower-permission" },
+        type: "static",
+      },
+      {
+        effect: {
+          amount: { empowerCount: true, multiplier: 2 },
+          target: "self",
+          type: "modify-might",
+        },
+        type: "static",
+      },
+      {
+        condition: { times: 3, type: "while-empowered" },
+        effect: {
+          effects: [
+            { keyword: "Deflect", target: { type: "self" }, type: "grant-keyword", value: 3 },
+            { keyword: "Ganking", target: { type: "self" }, type: "grant-keyword" },
+          ],
+          type: "sequence",
+        },
+        type: "static",
+      },
+    ],
+  },
   // rule 827.1.c.2 — Legion Marauder: "[Empower] — [1] or [body]". The parser
   // has no either/or activation-cost shape, so the two complete costs are
   // declared as `costOptions` (exactly one of them is paid; see
@@ -1356,6 +1395,40 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
         condition: { type: "while-empowered" },
         effect: { amount: 1, controller: "friendly", type: "additional-might-reduction" },
         type: "static",
+      },
+    ],
+  },
+  // rule 383.3.b / 442.1.a — Profiteer: "you may disempower something you
+  // control to empower a legend, unit, or gear." The disempower is the base
+  // cost of the trigger (only an Empowered object of YOURS can pay it, so the
+  // `control` condition keeps the trigger off the chain when nothing can), and
+  // the empower has no controller restriction. The parser leaves the whole
+  // line as raw text.
+  "ven-082-166": {
+    abilities: [
+      {
+        condition: {
+          target: { controller: "friendly", filter: "empowered", type: "permanent" },
+          type: "control",
+        },
+        effect: {
+          effects: [
+            {
+              target: {
+                controller: "friendly",
+                filter: "empowered",
+                promptWhenSingle: true,
+                type: "permanent",
+              },
+              type: "disempower",
+            },
+            { target: { types: ["legend", "unit", "gear"] }, type: "empower" },
+          ],
+          type: "sequence",
+        },
+        optional: true,
+        trigger: { event: "play-self" },
+        type: "triggered",
       },
     ],
   },

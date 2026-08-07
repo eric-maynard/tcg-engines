@@ -69,6 +69,14 @@ export function normalizeTokens(text: string): string {
     /\[(fury|calm|mind|body|chaos|order|rainbow)\]/gi,
     (_match, domain: string) => `:rb_rune_${domain.toLowerCase()}:`,
   );
+  // rule 818 — some printings ship a cost keyword without its brackets
+  // ("Equip [body] (...)" instead of "[Equip] [fury] (...)"). Re-bracket a bare
+  // cost keyword that opens a line and is immediately followed by its cost
+  // token, so the keyword parsers see the canonical form.
+  result = result.replace(
+    /(^|\n)([ \t]*)(Accelerate|Equip|Repeat|Flow)(?=\s+:rb_(?:energy_\d+|rune_[a-z]+):)/g,
+    (_match, lead: string, indent: string, keyword: string) => `${lead}${indent}[${keyword}]`,
+  );
   // Collapse runs of whitespace left behind by arrow/entity removal.
   result = result.replace(/\s{2,}/g, " ");
   return result;
