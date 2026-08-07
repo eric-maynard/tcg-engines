@@ -19,6 +19,25 @@ export function canHoldUnlimitedBuffs(cardId: string): boolean {
 }
 
 export function handle_buff(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
+  // rule 355.10 (unl-051-219 Ivern) — "do this: [Buff] a friendly unit" is a
+  // resolution-time choice by the controller, made after the look/pick that
+  // gated it, so it is not the ability's declared target: ask when several
+  // units qualify. Opt-in via `chooseTarget` so plain buffs stay silent.
+  if ((effect as { chooseTarget?: boolean }).chooseTarget === true && !ctx.draft.pendingChoice) {
+    const target = effect.target as Record<string, unknown>;
+    const options = getTargetIds({ ...effect, target: { ...target, quantity: "all" } }, ctx);
+    if (options.length > 1) {
+      ctx.draft.pendingChoice = {
+        effect: { ...effect, chooseTarget: false, target: { ...target, excludeBound: false } },
+        options,
+        playerId: ctx.playerId,
+        remaining: 1,
+        sourceCardId: ctx.sourceCardId,
+        type: "choose-target",
+      } as typeof ctx.draft.pendingChoice;
+      return;
+    }
+  }
   const targets = getTargetIds(effect, ctx);
   // rule-id: ogn-136-298 — only fall back to the source when the ability has NO
   // target descriptor ("buff me"). A targeted buff that finds no legal target

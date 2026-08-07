@@ -376,6 +376,18 @@ export function evaluateEffectCondition(
         ] ?? 0;
       return channeled < wanted;
     }
+    // rule 422 (unl-080-219 Hwei) — "do the following based on the discarded
+    // card's type": the branch is dictated by what was discarded, never picked.
+    case "discarded-card-type": {
+      const want = condition.cardType as string | undefined;
+      const ids =
+        (ctx.draft as { lastDiscardedCardIds?: Record<string, string[]> }).lastDiscardedCardIds?.[
+          ctx.playerId
+        ] ?? [];
+      if (ids.length === 0 || want === undefined) return false;
+      const registry = getGlobalCardRegistry();
+      return ids.some((id) => registry.get(id)?.cardType === want);
+    }
     case "has-xp": {
       const threshold = (condition.threshold as number) ?? 1;
       const player = ctx.draft.players[ctx.playerId];
@@ -569,6 +581,18 @@ export function evaluateEffectCondition(
             ?.damage ?? 0;
         return dmg >= might;
       });
+    }
+    // rule 355.10 (unl-051-219 Ivern) — "Then if you revealed a Bird, Cat,
+    // Dog, or Poro, do this: …": the linked follow-up reads the TAGS of the
+    // card that was just revealed/picked (the trigger-source), as revealed.
+    // No card revealed (the optional pick was declined) ⇒ false.
+    case "trigger-source-tag": {
+      const subject = ctx.triggerSourceId;
+      if (!subject) return false;
+      const wanted = ((condition.tags as string[] | undefined) ?? []).map((t) => t.toLowerCase());
+      if (wanted.length === 0) return false;
+      const tags = (getGlobalCardRegistry().get(subject)?.tags ?? []) as readonly string[];
+      return tags.some((t) => wanted.includes(String(t).toLowerCase()));
     }
     case "while-at-battlefield": {
       // rule-id: ogn-223-298 — "if I am at a battlefield": the subject is the
