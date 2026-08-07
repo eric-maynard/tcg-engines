@@ -34,7 +34,8 @@ function board() {
 describe("Stormbringer (ogn-250-298)", () => {
   test("cost: 6 energy + 2 rainbow deducted, spell resolves to trash; unaffordable with 1 rainbow or 5 energy", async () => {
     const game = await board().build();
-    await game.p1.cast("sb", { targets: "bf1" });
+    // rule 355.8: both the Might-reference base unit and the battlefield are chosen as it is played.
+    await game.p1.cast("sb", { targets: ["big", "bf1"] });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { rainbow: 0 } });
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sb", controller: P1, triggered: false })]);
     await game.settle();
@@ -50,9 +51,7 @@ describe("Stormbringer (ogn-250-298)", () => {
     expect(game.p1.can("cast", "sb")).toBe(false);
   });
 
-  test.failing("BUG: 'Choose a friendly unit in your base' — the cast asks for one of YOUR BASE units (big | small), not a unit afield", async () => {
-    // Expected: a targets field offering exactly the friendly base units. Actual: the parsed spell has
-    // no unit choice at all — the only choice offered is the battlefield (bf1 | bf2).
+  test("'Choose a friendly unit in your base' — the cast asks for one of YOUR BASE units (big | small), not a unit afield", async () => {
     const game = await board().build();
     const fields = game.p1.option("cast", "sb")?.fields ?? [];
     const unitChoices = fields.flatMap((f) => (f.options ?? []) as string[][]).flat();
@@ -61,9 +60,8 @@ describe("Stormbringer (ogn-250-298)", () => {
     expect(unitChoices).not.toContain("e5");
   });
 
-  test.failing("BUG: deals damage equal to the chosen unit's Might (4) to ALL enemy units at the chosen battlefield only", async () => {
-    // Expected: choosing Big (4 Might) and bf1 → E3 (3) dies, E5 takes 4; units at bf2 untouched.
-    // Actual: the damage amount resolves from the spell itself (no Might) so nothing is dealt.
+  test("deals damage equal to the chosen unit's Might (4) to ALL enemy units at the chosen battlefield only", async () => {
+    // Choosing Big (4 Might) and bf1 → E3 (3) dies, E5 takes 4; units at bf2 untouched.
     const game = await board().build();
     await game.p1.cast("sb", { targets: ["big", "bf1"] });
     await game.settle();
@@ -74,8 +72,8 @@ describe("Stormbringer (ogn-250-298)", () => {
     expect(game.state("afield").damage).toBe(0);
   });
 
-  test.failing("BUG: '…then move your unit there' — the chosen base unit ends up at that battlefield", async () => {
-    // Expected: after the damage, Big moves from base to bf1 (Small stays home). Actual: no move effect is parsed.
+  test("'…then move your unit there' — the chosen base unit ends up at that battlefield", async () => {
+    // After the damage, Big moves from base to bf1 (Small stays home).
     const game = await board().build();
     await game.p1.cast("sb", { targets: ["big", "bf1"] });
     await game.settle();

@@ -55,7 +55,7 @@ describe("Annie, Stubborn (ogs-010-024)", () => {
     expect(game.zoneOf("spellA")).toBe("trash");
   });
 
-  test.failing("BUG: only SPELLS in YOUR trash are offered — not units, not the opponent's trash", async () => {
+  test("only SPELLS in YOUR trash are offered — not units, not the opponent's trash", async () => {
     // Expected: a pick prompt for P1 listing exactly spellA/spellB. Actual: no prompt at all.
     const game = await board().build();
     await game.p1.play("annie");
@@ -72,9 +72,7 @@ describe("Annie, Stubborn (ogs-010-024)", () => {
     expect(game.zoneOf("theirs")).toBe("trash");
   });
 
-  test.failing("BUG: with no spell in your trash Annie still stays in play and nothing is returned", async () => {
-    // Expected: the trigger finds no legal card and does nothing; Annie remains in base.
-    // Actual: Annie bounces herself back to hand.
+  test("with no spell in your trash Annie still stays in play and nothing is returned", async () => {
     const game = await scenario()
       .resources(P1, { energy: 4, power: { chaos: 1 } })
       .trash(P1, SKULKER, "deadUnit")

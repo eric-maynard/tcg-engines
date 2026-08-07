@@ -116,11 +116,14 @@ export function boundBattlefieldZone(
   boundTargets: readonly string[] | undefined,
   draft: RiftboundGameState,
 ): string | undefined {
-  if (!isAllAtOneBattlefield(target) || boundTargets?.length !== 1) {
+  if (!isAllAtOneBattlefield(target) || !boundTargets?.length) {
     return undefined;
   }
-  const bfId = boundTargets[0] as string;
-  return draft.battlefields?.[bfId] ? `battlefield-${bfId}` : undefined;
+  // rule-id: ogn-250-298 (rule 355.8) — a spell may lock a Might-reference unit
+  // alongside the battlefield ([refUnit, bfId]); the battlefield id names the
+  // zone wherever it sits in the bound list.
+  const bfId = boundTargets.find((id) => draft.battlefields?.[id] !== undefined);
+  return bfId === undefined ? undefined : `battlefield-${bfId}`;
 }
 
 /**
@@ -242,6 +245,13 @@ export function resolveTarget(
       const def = registry.get(id);
       return def?.cardType === "gear" || def?.cardType === "equipment";
     });
+  } else if (target.type === "spell" && zoneLocation) {
+    // rule 355.8 (rule-id: ogs-010-024) — "a spell from your trash" names a card
+    // TYPE: units/gear/runes in the same zone are never legal choices. Only a
+    // zone-scoped pool is filtered — a locationless `{type:"spell"}` descriptor
+    // (rule-id: ogn-032-298 "the next spell you play") is criteria for a card
+    // played later, not a selection from the board.
+    filtered = filtered.filter((id) => registry.get(id)?.cardType === "spell");
   } else if (target.type === "permanent") {
     filtered = filtered.filter((id) => {
       const def = registry.get(id);
