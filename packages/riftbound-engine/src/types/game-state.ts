@@ -512,6 +512,13 @@ export interface RevealAndPickChoice {
   readonly playEnergyReduction?: number;
 
   /**
+   * rule 355.2.b (sfd-170-221 Rek'Sai, Swarm Queen): "If it is a unit, you may
+   * play it HERE" — the instructing card's own battlefield becomes a valid
+   * location for the play even when the controller does not control it.
+   */
+  readonly playHere?: string;
+
+  /**
    * rule 356.1.b.1 (ogn-025-298 Blind Fury): "play it, ignoring its cost" —
    * the play charges nothing at all, energy and power alike.
    */

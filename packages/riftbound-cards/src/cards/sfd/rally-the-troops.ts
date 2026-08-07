@@ -8,8 +8,8 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * "[Action] When a friendly unit is played this turn, buff it.
  *  Draw 1."
  *
- * Modeled as a sequence: install a turn-duration delayed trigger via a
- * grant-keyword (BuffOnPlay), then draw 1.
+ * Rule 390.2: sentence 2 installs a turn-scoped delayed triggered ability on
+ * the controller (no permanent carries it), then draw 1.
  */
 const abilities: Ability[] = [
   {
@@ -17,9 +17,10 @@ const abilities: Ability[] = [
       effects: [
         {
           duration: "turn",
-          keyword: "BuffPlayedUnitsThisTurn",
+          effect: { target: { type: "trigger-source" }, type: "buff" },
           target: "controller",
-          type: "grant-keyword",
+          trigger: { event: "play-unit-or-play-token-unit", on: "friendly-units" },
+          type: "delayed-trigger",
         },
         { amount: 1, type: "draw" },
       ],

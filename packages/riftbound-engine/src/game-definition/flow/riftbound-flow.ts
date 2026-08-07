@@ -436,6 +436,14 @@ function runExpirationStep(context: FlowStepContext): void {
         if (context.state.turnStatics) {
           context.state.turnStatics = undefined;
         }
+        // rule 517.2.b (rule-id: sfd-166-221) — "this turn" player-scoped
+        // delayed triggers expire with the turn that installed them.
+        if (context.state.playerDelayedTriggers) {
+          const remaining = context.state.playerDelayedTriggers.filter(
+            (e) => e?.duration !== "turn",
+          );
+          context.state.playerDelayedTriggers = remaining.length > 0 ? remaining : undefined;
+        }
 }
 
 /**

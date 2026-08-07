@@ -17,9 +17,10 @@ export function handle_delayedTrigger(
   _h: EffectHelpers,
 ): void {
   const dt = effect as unknown as {
-    trigger?: { event?: string; on?: string };
+    trigger?: { event?: string; on?: string; afterAttack?: boolean };
     effect?: unknown;
     duration?: string;
+    optional?: boolean;
   };
   if (!dt.trigger?.event || !dt.effect) {
     return;
@@ -28,6 +29,29 @@ export function handle_delayedTrigger(
   // The effect reaches here as part of a chain item (an immer draft node), so
   // snapshot it into plain data before it is stored on card meta.
   const stored = JSON.parse(JSON.stringify(dt.effect)) as unknown;
+  // rule 390.2 (rule-id: sfd-166-221) — "When a friendly unit is played this
+  // turn, buff it" hangs on the PLAYER, not on a permanent: no unit is chosen
+  // and the window outlives the spell that created it.
+  if ((effect as { target?: unknown }).target === "controller") {
+    const draft = ctx.draft as unknown as {
+      playerDelayedTriggers?: {
+        playerId: string;
+        sourceCardId: string;
+        trigger: { event: string; on?: string };
+        effect: unknown;
+        duration: "turn" | "permanent";
+      }[];
+    };
+    draft.playerDelayedTriggers ??= [];
+    draft.playerDelayedTriggers.push({
+      duration,
+      effect: stored,
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      trigger: { event: dt.trigger.event, on: dt.trigger.on },
+    });
+    return;
+  }
   for (const targetId of getTargetIds(effect, ctx)) {
     const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
       | Partial<RiftboundCardMeta>
@@ -41,8 +65,13 @@ export function handle_delayedTrigger(
           {
             duration,
             effect: stored,
+            ...(dt.optional === true ? { optional: true } : {}),
             sourceCardId: ctx.sourceCardId,
-            trigger: { event: dt.trigger.event, on: dt.trigger.on ?? "self" },
+            trigger: {
+              ...(dt.trigger.afterAttack === true ? { afterAttack: true } : {}),
+              event: dt.trigger.event,
+              on: dt.trigger.on ?? "self",
+            },
           },
         ],
       } as unknown as Record<string, unknown>,

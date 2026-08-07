@@ -91,7 +91,13 @@ function delayedTriggerAbilities(
   for (const dt of meta?.delayedTriggers ?? []) {
     out.push({
       effect: dt.effect as never,
-      trigger: { event: dt.trigger.event, on: dt.trigger.on ?? "self" },
+      // rule 355.13 (sfd-184-221) — a granted "you may …" trigger still asks.
+      ...(dt.optional === true ? { optional: true } : {}),
+      trigger: {
+        ...(dt.trigger.afterAttack === true ? { afterAttack: true } : {}),
+        event: dt.trigger.event,
+        on: dt.trigger.on ?? "self",
+      },
       type: "triggered",
     });
   }
@@ -1207,6 +1213,32 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       }
       boardCards.push({ abilities: [], id: dead.cardId, owner: dead.controller, zone: "dying" });
     }
+  }
+  // rule 390.2 (rule-id: sfd-166-221) — player-scoped delayed triggers ("When
+  // a friendly unit is played this turn, buff it") float: their source spell is
+  // in the trash, so offer them as a separate entry owned by the installer.
+  for (const pdt of (
+    ctx.draft as unknown as {
+      playerDelayedTriggers?: {
+        playerId: string;
+        sourceCardId: string;
+        trigger: { event: string; on?: string };
+        effect: unknown;
+      }[];
+    }
+  ).playerDelayedTriggers ?? []) {
+    boardCards.push({
+      abilities: [
+        {
+          effect: pdt.effect as never,
+          trigger: { event: pdt.trigger.event, on: pdt.trigger.on ?? "controller" },
+          type: "triggered",
+        },
+      ],
+      id: pdt.sourceCardId,
+      owner: pdt.playerId,
+      zone: "floating",
+    });
   }
   const allMatches = findMatchingTriggers(event, boardCards, ctx.draft);
 

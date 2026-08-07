@@ -256,12 +256,17 @@ function parseSimpleEffect(text: string): Effect | undefined {
   if (gearTokenMatch) {
     const amount = wordToNumber(gearTokenMatch[1]);
     const token = { name: gearTokenMatch[2], type: gearTokenMatch[3] as "gear" };
-    const effect: { type: "create-token"; token: typeof token; amount?: number } = {
-      token,
-      type: "create-token",
-    };
+    const effect: { type: "create-token"; token: typeof token; amount?: number; ready?: boolean } =
+      {
+        token,
+        type: "create-token",
+      };
     if (amount > 1) {
       effect.amount = amount;
+    }
+    // rule 184.1 (rule-id: sfd-155-221): "…gear token exhausted" enters exhausted.
+    if (gearTokenMatch[4]) {
+      effect.ready = false;
     }
     return effect;
   }
