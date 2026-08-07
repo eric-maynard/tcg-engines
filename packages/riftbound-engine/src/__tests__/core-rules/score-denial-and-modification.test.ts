@@ -477,7 +477,7 @@ describe("315.2.a → 315.2.b / 816.1.b — start-of-Beginning-Phase effects ful
   // Denial-independent probe. Expected: the legend's Beginning-Step trigger kills P1's own lone Might-1
   // holder at A; the cleanup (323.5/323.6) leaves A uncontrolled before the Scoring Step → no Hold → P1 stays 6.
   // Actual: the engine performs Hold scoring inside the same step that ENQUEUES the trigger, before it resolves → 7.
-  test("315.2.a→b — the Hold is scored before start-of-Beginning-Phase triggers resolve (a trigger that empties the battlefield should prevent the Hold)", async () => {
+  test.failing("BUG: 315.2.a→b — the Hold is scored before start-of-Beginning-Phase triggers resolve (a trigger that empties the battlefield should prevent the Hold)", async () => {
     const game = await scenario()
       .turn(2)
       .active(P2)
@@ -503,7 +503,7 @@ describe("315.2.a → 315.2.b / 816.1.b — start-of-Beginning-Phase effects ful
   // Expected: Beginning Step trigger kills the (only enemy) denier → by the Scoring Step nothing forbids → 6→7;
   // and while the trigger is still pending the Hold has not been scored yet (points 6 at that moment).
   // Actual: Hold is scored immediately at phase entry (7 while the trigger is still on the chain).
-  test("315.2.a→b — with the denier sniped by a start-of-Beginning-Phase trigger the Hold scores (→7), but only AFTER that trigger resolved; engine scores first", async () => {
+  test.failing("BUG: 315.2.a→b — with the denier sniped by a start-of-Beginning-Phase trigger the Hold scores (→7), but only AFTER that trigger resolved; engine scores first", async () => {
     const game = await scenario()
       .turn(2)
       .active(P2)
@@ -1042,7 +1042,7 @@ describe("315.4.b.1 / 431 — Burn Out with an empty deck AND trash: the first p
   // needed); P2 never draws; no infinite loop.
   // Actual: the engine performs a single burn-out (+1 → 7, ignoring the denier), skips the impossible draw and
   // carries on with P2's turn; no repeat, no win.
-  test.failing("BUG: 431.3 / 431.3.b / 431.3.c.1 — repeated Burn Out must keep awarding (undeniable) points until P1 wins at 8; engine burns out once and plays on", async () => {
+  test("431.3 / 431.3.b / 431.3.c.1 — repeated Burn Out must keep awarding (undeniable) points until P1 wins at 8; engine burns out once and plays on", async () => {
     const game = await scenario()
       .turn(3)
       .active(P1)

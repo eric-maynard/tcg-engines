@@ -163,6 +163,10 @@ describe("helpers.advancePhase (real flow hooks fire)", () => {
       phase: "draw",
       runePools: { [P1]: { energy: 3, power: { fury: 1 } } },
     });
+    // rule 431.1: the minimal engine has no deck, and an empty deck + empty
+    // trash burns out repeatedly until an opponent wins (431.3.a) — which
+    // ends the game and freezes the flow. Give P1 a card to draw.
+    createCard(engine, "deck-card", { cardType: "spell", owner: P1, zone: "mainDeck" });
 
     // Sanity: we are in draw phase with resources.
     expect(getState(engine).runePools[P1].energy).toBe(3);

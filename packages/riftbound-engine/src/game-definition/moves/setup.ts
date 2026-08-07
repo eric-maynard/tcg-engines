@@ -13,6 +13,7 @@ import type {
 } from "@tcg/core";
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { applyBattlefieldPermanentEffects } from "../../operations/battlefield-setup-effects";
+import { GAME_MODES } from "../../modes/game-modes";
 
 /**
  * Setup move definitions
@@ -132,9 +133,24 @@ export const setupMoves: Partial<
    * Selected battlefields are placed in play during transitionToPlay.
    */
   selectBattlefield: {
+    // rule 485.4.a / 485.5: a player picks exactly one of their three battlefields —
+    // "only 1 will be used". A second selection by the same player is illegal.
+    condition: (state, context) => {
+      if (state.status !== "setup" || !state.setup) {
+        return false;
+      }
+      const { playerId } = context.params;
+      return state.setup.battlefieldChoices?.[playerId] === undefined;
+    },
+
     reducer: (draft, context) => {
-      const { battlefieldId, discardIds } = context.params;
+      const { playerId, battlefieldId, discardIds } = context.params;
       const { zones } = context;
+
+      if (draft.setup) {
+        draft.setup.battlefieldChoices ??= {};
+        draft.setup.battlefieldChoices[playerId] = battlefieldId;
+      }
 
       // Move selected battlefield to battlefield row
       zones.moveCard({
@@ -394,6 +410,26 @@ export const setupMoves: Partial<
           if (pid) {
             draft.firstTurnNumber[pid] = i + 1;
           }
+        }
+
+        // rule 487.7: in a multiplayer game only the LAST player in Turn Order
+        // channels the extra rune — a player who is neither first nor last
+        // channels the normal 2. In a duel the last player IS the second player,
+        // so rule 644.7 is the same statement.
+        draft.extraRunePlayerId = ordered[ordered.length - 1] as PlayerId;
+
+        // rule 487.7: in the multiplayer modes the player going FIRST skips
+        // their first Draw Phase entirely (they already act first).
+        const mode =
+          ordered.length >= 4
+            ? Object.keys(draft.teams ?? {}).length > 0
+              ? "magmaChamber"
+              : "ffa4"
+            : ordered.length === 3
+              ? "ffa3"
+              : "duel";
+        if (GAME_MODES[mode].firstPlayerSkipsDraw) {
+          draft.skipFirstDrawFor = firstPlayer;
         }
       }
 

@@ -138,7 +138,7 @@ describe("471.1.a.1 / 472: Hold is not subject to the Final Point restriction", 
     expect(game.gameState.battlefields.B?.controller).toBe(P2);
   });
 
-  test.failing("BUG: 323.1/319.2/472 — engine never runs the victory check after a Hold; the turn continues (channel + draw) instead of P1 winning at the Beginning→Channel cleanup", async () => {
+  test("323.1/319.2/472 — the victory check runs after a Hold; the turn continues (channel + draw) instead of P1 winning at the Beginning→Channel cleanup", async () => {
     // Expected: P1 8 > 5 at the first Cleanup after the Scoring Step → status over, winner P1,
     // and the Channel/Draw/Main phases of that turn never happen. Actual: status stays "playing",
     // P1 channels 2 runes and draws a card.

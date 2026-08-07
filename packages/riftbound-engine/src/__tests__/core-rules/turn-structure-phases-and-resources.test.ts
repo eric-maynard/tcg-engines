@@ -349,7 +349,7 @@ describe("Draw Phase and Burn Out (315.4.b, 431)", () => {
   // Expected (431.3): deck AND trash empty → each draw attempt burns out again, P2 goes 5→6→7→8 and wins
   // immediately (431.3.c.1). Actual: the engine performs a single Burn Out (P2 = 6), draws nothing and
   // simply continues into P1's Main Phase.
-  test.failing("BUG: 431.3 — with an empty deck and empty trash the engine burns out only once (opponent +1) instead of repeating until the opponent wins", async () => {
+  test("431.3 — with an empty deck and empty trash the engine burns out only once (opponent +1) instead of repeating until the opponent wins", async () => {
     const game = await scenario()
       .turn(4)
       .active(P2)
@@ -708,7 +708,7 @@ describe("Hold in the Beginning Phase (315.2.b.2, 469–471, 323.6)", () => {
   // check at the next Cleanup (323.1, after the Beginning→Channel transition per 319.2) ends the game before
   // Channel/Draw. Actual: P1 reaches 8 points but the game keeps going (runes channeled, card drawn, Main
   // Phase opened) — no win is ever declared for a Hold point.
-  test.failing("BUG: 323.1/471.1.a.1 — reaching the Victory Score via Hold does not end the game; the turn continues into Channel/Draw/Main", async () => {
+  test("323.1/471.1.a.1 — reaching the Victory Score via Hold does not end the game; the turn continues into Channel/Draw/Main", async () => {
     const game = await scenario()
       .turn(6)
       .active(P2)
