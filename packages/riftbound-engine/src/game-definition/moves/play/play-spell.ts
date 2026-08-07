@@ -945,9 +945,16 @@ export const playSpell: Defs["playSpell"] = {
         );
         // Instructions naming the SAME descriptor are interchangeable, so only
         // non-decreasing picks are distinct plays.
-        const uniform = indepSlots.every(
-          (s) => JSON.stringify(s.target) === JSON.stringify(indepSlots[0].target),
-        );
+        // rule 355.8 (sfd-196-221 Defiant Dance) — "… and ANOTHER unit …": the
+        // slots share a descriptor but must resolve to different cards, and the
+        // instructions are NOT interchangeable (+2 vs -2), so every ordered
+        // pair of distinct candidates is its own play.
+        const distinct = (spellEffect as { distinctTargets?: boolean }).distinctTargets === true;
+        const uniform =
+          !distinct &&
+          indepSlots.every(
+            (s) => JSON.stringify(s.target) === JSON.stringify(indepSlots[0].target),
+          );
         // rule-id: ogn-248-298 (rule 355.8) — the guard must count the tuples
         // actually generated, not the raw product of the pools: with uniform
         // descriptors only non-decreasing picks are built (3 units × 6
@@ -964,6 +971,7 @@ export const playSpell: Defs["playSpell"] = {
               overflowed = true;
               return;
             }
+            if (distinct && acc.includes(pool[k] as string)) continue;
             const next = [...acc, pool[k] as string];
             tuples.push(next);
             build(depth + 1, k, next);
@@ -1636,6 +1644,8 @@ export const playSpell: Defs["playSpell"] = {
         xAmount: xCostIsPower(cardId) ? undefined : xAmount,
       },
       createMetaAccessor(context.cards),
+      // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.
+      { counters: context.counters, zones: context.zones },
     );
 
     // rule-id: sfd-078-221 — the grant applies to the NEXT spell only: consume

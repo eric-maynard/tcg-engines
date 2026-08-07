@@ -141,7 +141,7 @@ export function parseModifyMightEffect(text: string): ModifyMightEffect | Sequen
 
   // Handle compound: "Give TARGET1 +N :rb_might: this turn and another TARGET2 -M :rb_might: this turn."
   const compoundMatch = text.match(
-    /^Give ((?:a|an|another|two|three|four|five|\d+)?\s*(?:friendly |enemy |attacking enemy )?(?:unit|units|me|it)(?:\s+(?:at a battlefield|here|there))?)\s+(?:each\s+)?([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(?:to a minimum of (\d+)\s*:rb_might:))?\s+and\s+(?:another\s+)?((?:a|an|another|two|three|four|five|\d+)?\s*(?:friendly |enemy |attacking enemy )?(?:unit|units|me|it)(?:\s+(?:at a battlefield|here|there))?)\s+([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(?:to a minimum of (\d+)\s*:rb_might:))?\.?$/i,
+    /^Give ((?:a|an|another|two|three|four|five|\d+)?\s*(?:friendly |enemy |attacking enemy )?(?:unit|units|me|it)(?:\s+(?:at a battlefield|here|there))?)\s+(?:each\s+)?([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(?:to a minimum of (\d+)\s*:rb_might:))?\s+and\s+(another\s+)?((?:a|an|another|two|three|four|five|\d+)?\s*(?:friendly |enemy |attacking enemy )?(?:unit|units|me|it)(?:\s+(?:at a battlefield|here|there))?)\s+([+-]\d+)\s*:rb_might:\s*(this turn)?(?:,?\s*(?:to a minimum of (\d+)\s*:rb_might:))?\.?$/i,
   );
   if (compoundMatch) {
     const effect1: {
@@ -169,15 +169,27 @@ export function parseModifyMightEffect(text: string): ModifyMightEffect | Sequen
       duration?: "turn";
       minimum?: number;
     } = {
-      amount: Number.parseInt(compoundMatch[6], 10),
-      target: parseTarget(compoundMatch[5]),
+      amount: Number.parseInt(compoundMatch[7], 10),
+      target: parseTarget(compoundMatch[6]),
       type: "modify-might",
     };
-    if (compoundMatch[7]) {
+    if (compoundMatch[8]) {
       effect2.duration = "turn";
     }
-    if (compoundMatch[8] !== undefined) {
-      effect2.minimum = Number.parseInt(compoundMatch[8], 10);
+    if (compoundMatch[9] !== undefined) {
+      effect2.minimum = Number.parseInt(compoundMatch[9], 10);
+    }
+
+    // rule 355.8 — "… and ANOTHER unit …" names a second, independently chosen
+    // target that must differ from the first; without "another" the two
+    // clauses share one chosen object ("it").
+    if (compoundMatch[5]) {
+      return {
+        distinctTargets: true,
+        effects: [effect1 as Effect, effect2 as Effect],
+        independentTargets: true,
+        type: "sequence",
+      } as SequenceEffect;
     }
 
     return {

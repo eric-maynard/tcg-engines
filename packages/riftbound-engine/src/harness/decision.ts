@@ -1029,6 +1029,20 @@ export function narrowVariants(ctx: DecisionContext, option: ActionOption, args:
       variants = kept;
     }
   }
+  // A supplied `targets` list matches either order (set match) so tests need not
+  // know slot order, but when the enumerator offers BOTH orders they mean
+  // different things ("+2 to a unit and -2 to ANOTHER"): honour the exact order.
+  {
+    const ordered = asArray(args.targets);
+    if (ordered) {
+      const exact = variants.filter(
+        (v) => Array.isArray(v.params.targets) && sameOrdered(v.params.targets as unknown[], ordered),
+      );
+      if (exact.length > 0) {
+        variants = exact;
+      }
+    }
+  }
   // Collapse exact duplicates (enumerators occasionally emit them).
   const seen = new Map<string, FlatMove>();
   for (const v of variants) {

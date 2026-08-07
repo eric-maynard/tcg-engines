@@ -504,7 +504,7 @@ describe("471.1.a.1 / 194.1.c / 340.1: ability points are not Conquer points; re
     expect(game.winner()).toBe(P1);
   });
 
-  test.failing("BUG: 340.1/323.1 — Run 2: P2 responds to CU's trigger with 'target player loses 1 point'; LIFO → 7→6 then 6→7, never 8 at any cleanup, no winner; engine awards the conquer point up front (and ignores the score effect's player)", async () => {
+  test("340.1/323.1 — Run 2: P2 responds to CU's trigger with 'target player loses 1 point'; LIFO → 7→6 then 6→7, never 8 at any cleanup, no winner", async () => {
     // Expected: P1 ends at 7 controlling A, game continues. Actual: P1 wins on the conquer.
     const game = await scenario()
       .victoryScore(8)
