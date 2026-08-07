@@ -394,6 +394,18 @@ export function evaluateTriggerCondition(
     }
     return ctx.cards.getCardMeta(sourceCardId as CoreCardId)?.empowered === true;
   }
+  if (c.type === "not-dealt-damage-this-turn") {
+    // rule 520 (rule-id: ven-024-166) — combat cleanup healed the marked
+    // damage (rule 466.1.a.1) before the combat-end trigger is checked, so the
+    // gate reads the turn-scoped flag stamped when damage was dealt.
+    if (!ctx || !sourceCardId) {
+      return true;
+    }
+    const meta = ctx.cards.getCardMeta(sourceCardId as CoreCardId) as
+      | { dealtDamageThisTurn?: boolean }
+      | undefined;
+    return meta?.dealtDamageThisTurn !== true;
+  }
   if (c.type === "while-mighty" && (c as { target?: unknown }).target === undefined) {
     // rule 708/710 — "if I was [Mighty]" reads the source's own effective
     // Might. rule 808.1.d.3: for a Deathknell the attributes are noted as the

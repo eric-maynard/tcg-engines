@@ -813,6 +813,15 @@ export function parseLeadingIfCondition(
       effectText: rest,
     };
   }
+  // rule 520 (rule-id: ven-024-166) — "if I haven't been dealt damage this
+  // turn". Marked damage is healed by combat cleanup, so this reads a
+  // turn-scoped "was dealt damage" flag, not the current damage.
+  if (/^I haven't been dealt damage this turn$/i.test(clause)) {
+    return {
+      condition: { type: "not-dealt-damage-this-turn" } as unknown as Condition,
+      effectText: rest,
+    };
+  }
   // "if I was [Mighty]"
   if (/^I was \[Mighty\]$/i.test(clause)) {
     return { condition: { type: "while-mighty" }, effectText: rest };

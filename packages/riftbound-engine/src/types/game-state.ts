@@ -74,6 +74,15 @@ export interface RiftboundCardMeta {
   lastDamagedBy?: PlayerId;
   lastDamageSource?: "spell" | "ability" | "combat";
 
+  /**
+   * rule 520 — whether damage has been DEALT to this unit at any point in the
+   * current turn. Marked damage is healed by combat cleanup (rule 466.1.a.1)
+   * and at the Ending Step, so "has been dealt damage this turn" gates cannot
+   * read `damage`; this flag survives the heals and is cleared with them at
+   * end of turn.
+   */
+  dealtDamageThisTurn?: boolean;
+
   /** Whether the card has a buff counter */
   buffed: boolean;
 

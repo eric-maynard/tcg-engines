@@ -81,7 +81,13 @@ export function addDamage(
     }
     return getDamage(ops, cardId);
   }
-  return setDamage(ops, cardId, getDamage(ops, cardId) + amount, extraMeta);
+  // rule 520 — damage was DEALT here. Combat cleanup and the Ending Step heal
+  // the marked damage away, so record the fact separately for "haven't been
+  // dealt damage this turn" gates (rule-id: ven-024-166).
+  return setDamage(ops, cardId, getDamage(ops, cardId) + amount, {
+    ...(extraMeta ?? {}),
+    dealtDamageThisTurn: true,
+  });
 }
 
 /** Remove up to `amount` damage (heal); returns the new total. */
