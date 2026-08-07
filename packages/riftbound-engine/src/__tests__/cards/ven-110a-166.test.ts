@@ -96,8 +96,7 @@ describe("Mel, Defiant Soul (ven-110a-166)", () => {
     expect(abilities.find((a) => a.type === "triggered")).toMatchObject({ trigger: { event: "empower", on: "self" }, type: "triggered" });
   });
 
-  test.failing("BUG: registry payload should ALSO carry the activated [Empower] (cost: discard a SPELL, gate not-empowered) and a structured banish effect (enemy / battlefield / ≤3 Might), not a raw string", async () => {
-    // Expected: 2 abilities — activated empower + triggered banish. Actual: 1 ability, the trigger, with `{type:"raw"}`.
+  test("registry payload should ALSO carry the activated [Empower] (cost: discard a SPELL, gate not-empowered) and a structured banish effect (enemy / battlefield / ≤3 Might), not a raw string", async () => {
     const abilities = ((await loadDefaultCardPool()).get(CARD)?.abilities ?? []) as { type: string; cost?: unknown; effect?: { type: string } }[];
     expect(abilities).toHaveLength(2);
     const activated = abilities.find((a) => a.type === "activated");
@@ -161,7 +160,7 @@ describe("Mel, Defiant Soul (ven-110a-166)", () => {
     expect((await board().active(P2).build()).p1.can("activate", "mel")).toBe(false);
   });
 
-  test.failing("BUG: becoming Empowered (own ability) → banish: only ENEMY units AT A BATTLEFIELD with ≤3 Might are offered (small, tiny); the chosen one goes to BANISHMENT, not trash", async () => {
+  test("becoming Empowered (own ability) → banish: only ENEMY units AT A BATTLEFIELD with ≤3 Might are offered (small, tiny); the chosen one goes to BANISHMENT, not trash", async () => {
     const game = await board().build();
     await game.p1.activate("mel", 0, { discard: "cleave" });
     const offered = await resolveChoosing(game, "small");
@@ -196,8 +195,7 @@ describe("Mel, Defiant Soul (ven-110a-166)", () => {
     expect(game.zoneOf("tiny")).toBe("battlefield-bf1"); // nothing banished before resolution
   });
 
-  test.failing("BUG: …and when that trigger resolves the lone legal Tiny (2 Might, enemy, at a battlefield) is BANISHED; the 5-Might Wall stays", async () => {
-    // Expected: tiny → banishment. Actual: the trigger's effect is `raw` and resolves as a no-op.
+  test("…and when that trigger resolves the lone legal Tiny (2 Might, enemy, at a battlefield) is BANISHED; the 5-Might Wall stays", async () => {
     const game = await sanctionBoard().build();
     await sanctionEmpower(game, "mel");
     await resolveChoosing(game, "tiny");
@@ -218,7 +216,7 @@ describe("Mel, Defiant Soul (ven-110a-166)", () => {
     }
   });
 
-  test.failing("BUG: Might filter is EFFECTIVE Might — a printed-3 enemy buffed to 4 is not offered, a damaged printed-4 is not offered, a printed-2 is; with it as the only choice it is banished", async () => {
+  test("Might filter is EFFECTIVE Might — a printed-3 enemy buffed to 4 is not offered, a damaged printed-4 is not offered, a printed-2 is; with it as the only choice it is banished", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P1, "base", CARD, "mel")
@@ -253,7 +251,7 @@ describe("Mel, Defiant Soul (ven-110a-166)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: banish is not a death (427.2.a) — a Deathknell unit banished by Mel does not trigger its Deathknell (no card drawn)", async () => {
+  test("banish is not a death (427.2.a) — a Deathknell unit banished by Mel does not trigger its Deathknell (no card drawn)", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: P2 })
       .unit(P1, "base", CARD, "mel")

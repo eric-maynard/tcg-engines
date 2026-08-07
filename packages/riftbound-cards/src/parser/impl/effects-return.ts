@@ -51,9 +51,10 @@ export function parseBanishEffect(text: string): BanishEffect | undefined {
     return { target: target as unknown as AnyTarget, type: "banish" };
   }
 
-  // General target: "Banish [a/an/all/another] [damaged/stunned] [friendly/enemy] unit(s) [here/at a battlefield]."
+  // General target: "Banish [a/an/all/another] [damaged/stunned] [friendly/enemy] unit(s)
+  // [here/at a battlefield] [with N [Might] or less/more]."
   const match = text.match(
-    /^Banish ((?:(?:a|an|all|another)\s+)?(?:damaged\s+|stunned\s+)?(?:friendly\s+|enemy\s+)?(?:unit|units|gear|gears)(?:\s+(?:at a battlefield|here|there))?)\.?$/i,
+    /^Banish ((?:(?:a|an|all|another)\s+)?(?:damaged\s+|stunned\s+)?(?:friendly\s+|enemy\s+)?(?:unit|units|gear|gears)(?:\s+(?:at a battlefield|here|there))?)(?:\s+with\s+(\d+)\s*:rb_might:\s*or\s*(less|more))?\.?$/i,
   );
   if (!match) {
     return undefined;
@@ -65,7 +66,7 @@ export function parseBanishEffect(text: string): BanishEffect | undefined {
     type: "unit" | "gear";
     controller?: "friendly" | "enemy";
     location?: Location;
-    filter?: string;
+    filter?: unknown;
     quantity?: "all";
     excludeSelf?: boolean;
   } = { type: isGear ? "gear" : "unit" };
@@ -82,10 +83,23 @@ export function parseBanishEffect(text: string): BanishEffect | undefined {
     target.location = "battlefield";
   }
 
+  const filters: unknown[] = [];
   if (targetStr.includes("damaged")) {
-    target.filter = "damaged";
+    filters.push("damaged");
   } else if (targetStr.includes("stunned")) {
-    target.filter = "stunned";
+    filters.push("stunned");
+  }
+  // "with N [Might] or less/more" — compared against EFFECTIVE Might by the resolver.
+  if (match[2] !== undefined) {
+    const bound = Number.parseInt(match[2], 10);
+    filters.push({
+      might: match[3].toLowerCase() === "more" ? { gte: bound } : { lte: bound },
+    });
+  }
+  if (filters.length === 1) {
+    target.filter = filters[0];
+  } else if (filters.length > 1) {
+    target.filter = filters;
   }
 
   if (/^all\b/.test(targetStr)) {
