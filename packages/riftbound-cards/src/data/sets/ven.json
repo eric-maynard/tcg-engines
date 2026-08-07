@@ -564,7 +564,44 @@
       "isChampion": false,
       "rulesText": "[Action] (Play on your turn or in showdowns.)\nAs an additional cost to play this, you may discard 1.\nDeal 3 to a unit at a battlefield. If you paid the additional cost, deal 5 to it instead.",
       "abilities": [
-        null
+        {
+          "_rule": "rule-id: ven-008-166 — rule 356.2.b / 204.2: the optional \"discard 1\" is an additional COST chosen and paid as the spell is played; playSpell enumerates the paidAdditionalCost variant from this static.",
+          "effect": {
+            "additionalCost": {
+              "discard": 1
+            },
+            "optional": true,
+            "type": "additional-cost-option"
+          },
+          "type": "static"
+        },
+        {
+          "_rule": "rule-id: ven-008-166 — rule 355.8: the damaged unit is a single caster-chosen target picked at play time; \"deal 5 instead\" replaces the amount when the additional cost was paid, so both branches name the same unit.",
+          "effect": {
+            "condition": {
+              "type": "paid-additional-cost"
+            },
+            "else": {
+              "amount": 3,
+              "target": {
+                "location": "battlefield",
+                "type": "unit"
+              },
+              "type": "damage"
+            },
+            "then": {
+              "amount": 5,
+              "target": {
+                "location": "battlefield",
+                "type": "unit"
+              },
+              "type": "damage"
+            },
+            "type": "conditional"
+          },
+          "timing": "action",
+          "type": "spell"
+        }
       ],
       "parseSuccess": true,
       "imageUrl": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/game_data_live/90293ef9407950d171f5fdd040da289a0f6da487-744x1039.png?accountingTag=RB",
