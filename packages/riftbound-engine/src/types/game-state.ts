@@ -733,6 +733,12 @@ export interface ChooseTargetChoice {
    */
   readonly triggerToZone?: string;
   /**
+   * rule 355.4 (unl-198-219): a zone the parked effect had already chosen
+   * ("Choose a battlefield … move a unit to THAT battlefield"), carried
+   * across the prompt so "here"/"there" still resolve to it afterwards.
+   */
+  readonly sourceZone?: string;
+  /**
    * Rule 355.14.h (unl-192-219): when set, the pick is a target to DROP —
    * the stored effect is re-executed with this list minus the picked id as
    * its bound targets, preserving the reference unit at index 0.
@@ -876,6 +882,25 @@ export interface ConfirmChoice {
 }
 
 /**
+ * rule-id: unl-130-219 (rules 182–185, 411.4) — "choose an opponent. THEY play
+ * a … token": with two or more opponents the chooser names the seat, and the
+ * stored effect then resolves with that seat as the token's owner/controller.
+ */
+export interface ChoosePlayerChoice {
+  readonly type: "choose-player";
+  /** Player who names a seat (the effect's controller). */
+  readonly playerId: PlayerId;
+  /** Seats that may be named. */
+  readonly options: readonly PlayerId[];
+  /** Executed once a seat is named, with `ownerId` set to that seat. */
+  readonly effect: unknown;
+  /** Card that produced the effect. */
+  readonly sourceCardId?: CardId;
+  /** Human-readable prompt text. */
+  readonly prompt?: string;
+}
+
+/**
  * Rule 583 (unl-021-219): a "you may …" triggered ability has resolved off the
  * chain and its controller must accept or decline before the effect runs.
  */
@@ -1002,6 +1027,7 @@ export type PendingChoice =
   | ChooseTargetChoice
   | ChooseDestinationChoice
   | ChooseModeChoice
+  | ChoosePlayerChoice
   | ConfirmChoice
   | OptInChoice
   | WeaponmasterEquipChoice;

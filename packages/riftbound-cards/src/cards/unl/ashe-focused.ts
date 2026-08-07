@@ -17,6 +17,9 @@ const abilities: Ability[] = [
   {
     effect: {
       onPicked: "banish",
+      // rule 392 — "When they hold, return it to their hand (even if I'm no
+      // longer on the board)": a permanent, player-scoped delayed trigger.
+      returnOnHold: true,
       target: { type: "player", which: "opponent" },
       type: "reveal-hand",
     },

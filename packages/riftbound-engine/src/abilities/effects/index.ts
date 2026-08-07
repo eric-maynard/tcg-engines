@@ -13,6 +13,7 @@ import { handle_recall } from "./recall";
 import { handle_move } from "./move";
 import { handle_discard } from "./discard";
 import { handle_recycle } from "./recycle";
+import { handle_returnBanishedToHand } from "./return-banished-to-hand";
 import { handle_returnToHand } from "./return-to-hand";
 import { handle_modifyMight } from "./modify-might";
 import { handle_doubleMight } from "./double-might";
@@ -44,6 +45,7 @@ import { handle_optional } from "./optional";
 import { handle_choice } from "./choice";
 import { handle_eachPlayerMay } from "./each-player-may";
 import { handle_forEach } from "./for-each";
+import { handle_choosePerLocation } from "./choose-per-location";
 import { handle_doTimes } from "./do-times";
 import { handle_fight } from "./fight";
 import { handle_play } from "./play";
@@ -91,6 +93,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "move": handle_move,
   "discard": handle_discard,
   "recycle": handle_recycle,
+  "return-banished-to-hand": handle_returnBanishedToHand,
   "return-to-hand": handle_returnToHand,
   "modify-might": handle_modifyMight,
   "double-might": handle_doubleMight,
@@ -125,6 +128,7 @@ export const EFFECT_HANDLERS: Record<string, EffectHandler> = {
   "choice": handle_choice,
   "each-player-may": handle_eachPlayerMay,
   "for-each": handle_forEach,
+  "choose-per-location": handle_choosePerLocation,
   "do-times": handle_doTimes,
   "fight": handle_fight,
   "play": handle_play,

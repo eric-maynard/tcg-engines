@@ -727,6 +727,9 @@ export function pickDefaultForChoice(choice: PendingChoice): string | number | u
   if (choice.type === "choose-mode") {
     return choice.options[0];
   }
+  if (choice.type === "choose-player") {
+    return choice.options[0];
+  }
   if (choice.type === "order-cards") {
     return undefined;
   }
@@ -950,6 +953,14 @@ export const pendingChoiceMoves: Partial<
         }
         return choice.options.includes(context.params.pickedMode as number);
       }
+      // rule-id: unl-130-219 (rules 182–185) — only the chooser may name a
+      // seat, and only one of the offered seats.
+      if (choice.type === "choose-player") {
+        if (choice.playerId !== context.params.playerId) {
+          return false;
+        }
+        return choice.options.includes(context.params.pickedPlayerId as never);
+      }
       if (choice.type === "choose-target") {
         if (choice.playerId !== context.params.playerId) {
           return false;
@@ -1125,6 +1136,15 @@ export const pendingChoiceMoves: Partial<
         }
         return choice.options.map((idx) => ({
           pickedMode: idx,
+          playerId: context.playerId as string,
+        }));
+      }
+      if (choice.type === "choose-player") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        return choice.options.map((seat) => ({
+          pickedPlayerId: seat,
           playerId: context.playerId as string,
         }));
       }
@@ -1341,6 +1361,27 @@ export const pendingChoiceMoves: Partial<
           } as Parameters<typeof executeResolvedItem>[0],
           draft,
           context,
+        );
+        if (!draft.pendingChoice) {
+          postChoiceCleanup(draft, context);
+        }
+        return;
+      }
+
+      if (choice.type === "choose-player") {
+        // rule-id: unl-130-219 (rules 182–185, 411.4) — "choose an opponent.
+        // THEY play …": the named seat owns/controls whatever the effect makes.
+        draft.pendingChoice = undefined;
+        const picked = context.params.pickedPlayerId as string;
+        const playerCtx = buildEffectContext(
+          draft,
+          choice.playerId,
+          choice.sourceCardId as CardId,
+          context,
+        );
+        executeEffect(
+          { ...(choice.effect as Record<string, unknown>), ownerId: picked } as ExecutableEffect,
+          playerCtx,
         );
         if (!draft.pendingChoice) {
           postChoiceCleanup(draft, context);
@@ -1848,15 +1889,22 @@ export const pendingChoiceMoves: Partial<
           for (const id of pickedSoFar) {
             fireTriggers({ cardId: id, chooserId: choice.playerId, sourceType, type: "choose" }, trigCtx);
           }
+          // rule 355.4 (unl-198-219) — the battlefield the effect had already
+          // chosen ("…move a unit to THAT battlefield. Then … units there")
+          // outlives the prompt; without it "here" falls back to the source
+          // card's own zone, which for a resolving spell is the trash.
+          const carriedZone = (choice as { sourceZone?: string }).sourceZone;
+          const zoneCarry = typeof carriedZone === "string" ? { sourceZone: carriedZone } : {};
           executeEffect(choice.effect as ExecutableEffect, {
             ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+            ...zoneCarry,
             boundTargets: pickedSoFar,
           });
           if (chainedThen) {
-            executeEffect(
-              chainedThen,
-              buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
-            );
+            executeEffect(chainedThen, {
+              ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+              ...zoneCarry,
+            });
           }
           postChoiceCleanup(draft, context);
           return;
@@ -1919,10 +1967,15 @@ export const pendingChoiceMoves: Partial<
         // read from the trigger condition survives the target prompt, so the
         // triggering move's destination must reach the effect context.
         const promptTriggerToZone = (choice as { triggerToZone?: string }).triggerToZone;
+        // rule 355.4 (unl-198-219) — "…to THAT battlefield … enemy units
+        // there": a zone the parked effect had already chosen outlives the
+        // prompt; without it "here" would fall back to the source card's zone.
+        const promptSourceZone = (choice as { sourceZone?: string }).sourceZone;
         const effectCtx = {
           ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
           boundTargets,
           ...(typeof promptTriggerToZone === "string" ? { triggerToZone: promptTriggerToZone } : {}),
+          ...(typeof promptSourceZone === "string" ? { sourceZone: promptSourceZone } : {}),
         };
         executeEffect(choice.effect as ExecutableEffect, effectCtx);
         // rule 820.2 (unl-182-219) — resume a suspended continuation carried on

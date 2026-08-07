@@ -99,6 +99,10 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
     ...(revealEff.playStun === true ? { playStun: true } : {}),
     // rule 355.13 — "You may choose a unit from it".
     ...(revealEff.optional === true ? { optional: true } : {}),
+    // rule 392 (unl-169-219) — "When they hold, return it to their hand".
+    ...((effect as unknown as { returnOnHold?: boolean }).returnOnHold === true
+      ? { returnOnHold: true }
+      : {}),
     // rule 356.1 (unl-135-219) — "They reveal their hand. You may pay 2 XP to
     // choose a card from their hand": the reveal itself is never gated on the
     // payment; only the pick is.
