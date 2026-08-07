@@ -58,13 +58,13 @@ describe("Legion Quartermaster (sfd-044-221)", () => {
     expect(game.p1.can("play", "lq")).toBe(false);
   });
 
-  test.failing("BUG: the additional cost is mandatory — with no friendly gear on the board he cannot be played (356.2.a.1)", async () => {
+  test("the additional cost is mandatory — with no friendly gear on the board he cannot be played (356.2.a.1)", async () => {
     // Expected: not legal. Actual: the returnToHand cost is ignored entirely and the play is offered.
     const game = await scenario().resources(P1, { energy: 5 }).hand(P1, CARD, "lq").build();
     expect(game.p1.can("play", "lq")).toBe(false);
   });
 
-  test.failing("BUG: an ENEMY gear, or a friendly gear in hand, does not satisfy 'return a friendly gear' — still unplayable", async () => {
+  test("an ENEMY gear, or a friendly gear in hand, does not satisfy 'return a friendly gear' — still unplayable", async () => {
     const game = await scenario()
       .resources(P1, { energy: 5 })
       .gear(P2, SEAL_OF_FOCUS, "theirSeal")
@@ -74,7 +74,7 @@ describe("Legion Quartermaster (sfd-044-221)", () => {
     expect(game.p1.can("play", "lq")).toBe(false);
   });
 
-  test.failing("BUG: paying the cost returns the friendly gear to its owner's hand; the Quartermaster lands in base", async () => {
+  test("paying the cost returns the friendly gear to its owner's hand; the Quartermaster lands in base", async () => {
     // Expected: seal in P1's hand after the play. Actual: seal never leaves the base.
     const game = await scenario().resources(P1, { energy: 3 }).gear(P1, SEAL_OF_FOCUS, "seal").hand(P1, CARD, "lq").script(P1, ["seal"]).build();
     await game.p1.play("lq");
@@ -86,7 +86,7 @@ describe("Legion Quartermaster (sfd-044-221)", () => {
     expect(game.p1.gear()).toEqual([]);
   });
 
-  test.failing("BUG: with two friendly gear exactly ONE (the chosen one) is returned; the other and the enemy's gear stay put", async () => {
+  test("with two friendly gear exactly ONE (the chosen one) is returned; the other and the enemy's gear stay put", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .gear(P1, SEAL_OF_FOCUS, "keep")
@@ -104,7 +104,7 @@ describe("Legion Quartermaster (sfd-044-221)", () => {
     expect(game.state("theirs").owner).toBe(P2);
   });
 
-  test.failing("BUG: 'its OWNER's hand' — a gear P1 controls but P2 owns goes back to P2's hand, not P1's", async () => {
+  test("'its OWNER's hand' — a gear P1 controls but P2 owns goes back to P2's hand, not P1's", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .card("borrowed", { controller: P1, def: SEAL_OF_FOCUS, owner: P2, zone: "base" })
@@ -120,7 +120,7 @@ describe("Legion Quartermaster (sfd-044-221)", () => {
     expect(game.p1.hand()).not.toContain("borrowed");
   });
 
-  test.failing("BUG: Equipment is gear — an attached Doran's Shield can pay the cost; it detaches to hand and its unit loses the +1", async () => {
+  test("Equipment is gear — an attached Doran's Shield can pay the cost; it detaches to hand and its unit loses the +1", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .unit(P1, "base", { might: 2, name: "Squire" }, "squire", { equippedWith: ["shield"] })
@@ -161,8 +161,14 @@ describe("Legion Quartermaster (sfd-044-221)", () => {
     expect(game.p1.hand()).toHaveLength(1);
   });
 
-  test.failing("BUG: partner line — a returned 0-cost Seal of Focus can simply be replayed the same turn", async () => {
-    const game = await scenario().resources(P1, { energy: 3 }).gear(P1, SEAL_OF_FOCUS, "seal", { exhausted: true }).hand(P1, CARD, "lq").script(P1, ["seal"]).build();
+  test("partner line — a returned Seal of Focus can simply be replayed the same turn", async () => {
+    // Seal of Focus is printed at 0 energy + one [calm] pip, so the replay needs that pip in pool.
+    const game = await scenario()
+      .resources(P1, { energy: 3, power: { calm: 1 } })
+      .gear(P1, SEAL_OF_FOCUS, "seal", { exhausted: true })
+      .hand(P1, CARD, "lq")
+      .script(P1, ["seal"])
+      .build();
     await game.p1.play("lq");
     await game.settle();
     expect(game.zoneOf("seal")).toBe("hand");

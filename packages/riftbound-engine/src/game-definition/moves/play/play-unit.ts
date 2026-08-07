@@ -224,6 +224,41 @@ function friendlyKillableUnits(
   return out;
 }
 
+/**
+ * Friendly gear (including attached Equipment) on the board — rule 356.2.a.1
+ * payment pool. "Friendly" is CONTROL, not ownership, so scan every seat's
+ * board zones and filter by controller.
+ */
+function friendlyBoardGear(
+  state: RiftboundGameState,
+  zones: BoardZones,
+  cards: {
+    getCardOwner: (id: CoreCardId) => unknown;
+    getCardController?: (id: CoreCardId) => unknown;
+  },
+  playerId: string,
+): string[] {
+  const zoneIds = ["base", ...Object.keys(state.battlefields ?? {}).map(getBattlefieldZoneId)];
+  const out: string[] = [];
+  for (const zoneId of zoneIds) {
+    for (const seat of Object.keys(state.runePools ?? {})) {
+      for (const id of zones.getCardsInZone(zoneId as CoreZoneId, seat as CorePlayerId)) {
+        const type = getGlobalCardRegistry().getCardType(id as string);
+        if (type !== "gear" && type !== "equipment") {
+          continue;
+        }
+        const controller =
+          (cards.getCardController?.(id as CoreCardId) as string | undefined) ??
+          (cards.getCardOwner(id as CoreCardId) as string | undefined);
+        if (controller === playerId && !out.includes(id as string)) {
+          out.push(id as string);
+        }
+      }
+    }
+  }
+  return out;
+}
+
 /** Non-empty subsets of `ids`, smallest first. Capped so enumeration stays bounded. */
 function buffSpendSubsets(ids: readonly string[]): string[][] {
   if (ids.length > 5) {
@@ -328,7 +363,12 @@ export const playUnit: Defs["playUnit"] = {
       Boolean(targetBfId) &&
       (standardTimingOk || reactionTimingOk) &&
       canPlayToAttackedBattlefield(context.params.cardId as string) &&
-      battlefieldIsAttackedBy(state, targetBfId as string, context.params.playerId as string)
+      battlefieldIsAttackedBy(state, targetBfId as string, context.params.playerId as string, {
+        getController: (id) =>
+          (context.cards.getCardController?.(id) as string | undefined) ??
+          (context.cards.getCardOwner(id) as string | undefined),
+        zones: context.zones,
+      })
     ) {
       // rule 355.2 (sfd-025-221): "I can be played to a battlefield you're
       // attacking" — the contested battlefield this player moved onto.
@@ -474,6 +514,23 @@ export const playUnit: Defs["playUnit"] = {
       context.params.sacrificeId === undefined
     ) {
       return false;
+    }
+
+    // rule 356.2.a.1 (sfd-044-221) — "As an additional cost to play me, return
+    // a friendly gear to its owner's hand": mandatory, and the named payment
+    // must really be a friendly gear on the board.
+    if (mandatoryCost?.kind === "return-to-hand") {
+      const bounceId = context.params.sacrificeId as string | undefined;
+      if (bounceId === undefined) {
+        return mandatoryCost.mandatory !== true;
+      }
+      if (
+        !friendlyBoardGear(state, context.zones, context.cards, context.params.playerId as string).includes(
+          bounceId,
+        )
+      ) {
+        return false;
+      }
     }
 
     // rule 560 / 702.2.b (ogn-150-298) — "you may spend any number of buffs as
@@ -969,6 +1026,30 @@ export const playUnit: Defs["playUnit"] = {
             sacrificeId,
           });
         }
+      } else if (optional?.kind === "return-to-hand") {
+        // rule 356.2.a.1 (sfd-044-221) — one paid variant per friendly gear
+        // that could be returned; a MANDATORY cost has no unpaid variant, so
+        // with no friendly gear the card is simply unplayable.
+        const bounceOptions = friendlyBoardGear(state, context.zones, context.cards, context.playerId as string);
+        if (optional.mandatory) {
+          for (let i = results.length - 1; i >= 0; i--) {
+            if (
+              results[i]?.cardId === (cardId as string) &&
+              (results[i] as { sacrificeId?: string }).sacrificeId === undefined
+            ) {
+              results.splice(i, 1);
+            }
+          }
+        }
+        for (const sacrificeId of bounceOptions) {
+          results.push({
+            cardId: cardId as string,
+            location: "base",
+            paidAdditionalCost: true,
+            playerId: context.playerId as string,
+            sacrificeId,
+          });
+        }
       }
     }
     // rule 355.2 (ogn-070-298): while an enemy Mageseeker Warden is at a
@@ -1153,6 +1234,39 @@ export const playUnit: Defs["playUnit"] = {
           // rule 357.2.a: a cost replaced this way still counts as paid.
           executeEffect(
             { target: { type: "unit" }, type: "kill" },
+            {
+              boundTargets: [sacrificeId as string],
+              cards: context.cards,
+              counters,
+              draft,
+              fireTriggers: (event) =>
+                fireTriggers(event, { cards: context.cards, counters, draft, zones }),
+              playerId,
+              sourceCardId: cardId as string,
+              zones,
+            },
+          );
+          paidAdditionalCostActual = true;
+        }
+      } else if (optional?.kind === "return-to-hand" && sacrificeId) {
+        // rule 356.2.a.1 (sfd-044-221) — pay the cost now, while the play is
+        // being finalized: the gear is in its OWNER's hand before anything can
+        // respond, and it stays there even if the unit never lands.
+        const zone = context.zones.getCardZone(sacrificeId as CoreCardId);
+        const inPlay =
+          zone === "base" || (typeof zone === "string" && zone.startsWith("battlefield-"));
+        const controller =
+          (context.cards.getCardController?.(sacrificeId as CoreCardId) as string | undefined) ??
+          (context.cards.getCardOwner(sacrificeId as CoreCardId) as string | undefined);
+        const type = getGlobalCardRegistry().getCardType(sacrificeId as string);
+        if (
+          controller === playerId &&
+          inPlay &&
+          sacrificeId !== cardId &&
+          (type === "gear" || type === "equipment")
+        ) {
+          executeEffect(
+            { target: { type: "gear" }, type: "return-to-hand" },
             {
               boundTargets: [sacrificeId as string],
               cards: context.cards,
