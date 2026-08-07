@@ -826,6 +826,12 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
       {
         effect: {
+          // rule 402.1 / 355.10 — the printed "you may" governs the whole
+          // instruction ("you may CHOOSE a unit … Play it"), so finalization
+          // asks a plain yes/no and the trash pick waits for resolution;
+          // rule 355.2: "to your base" pins the destination, so no location
+          // is ever offered.
+          chooseAtResolution: true,
           from: "trash",
           ignoreCost: true,
           target: {
@@ -833,6 +839,7 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
             filter: [{ energyCost: { lte: 3 } }, { powerCost: { lte: 1 } }],
             type: "unit",
           },
+          toLocation: "base",
           type: "play",
         },
         optional: true,
