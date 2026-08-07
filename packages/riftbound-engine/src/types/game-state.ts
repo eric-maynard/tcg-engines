@@ -555,6 +555,12 @@ export interface RevealAndPickChoice {
     readonly excludeCardTypes?: readonly string[];
     /** rule-id: unl-139-219 — "choose a unit from it": allowed card types. */
     readonly cardTypes?: readonly string[];
+    /**
+     * rule 135.2 (ven-085-166 Decree of Strength) — "choose a Mind card from
+     * it": the pick filter is a DOMAIN, not a card type. A multi-domain card
+     * matches when ANY of its domains is listed.
+     */
+    readonly domains?: readonly string[];
     readonly maxMight?: number;
     /**
      * rule 206 (unl-064-219 Fate Weaver) — "a spell with Energy cost [4] or
