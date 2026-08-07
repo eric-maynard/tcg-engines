@@ -100,6 +100,29 @@ function getAllBoardCards(ctx: StaticAbilityContext): BoardCard[] {
 }
 
 /**
+ * rule 615.1 (rule-id: sfd-054-221) — "Your Equipment EVERYWHERE have
+ * [Quick-Draw]": a static whose target descriptor says `location:"anywhere"`
+ * also addresses cards outside the board, so hand copies are collected here.
+ * They never act as static SOURCES, only as targets.
+ */
+function getOffBoardGrantCards(ctx: StaticAbilityContext): BoardCard[] {
+  const cards: BoardCard[] = [];
+  for (const playerId of Object.keys(ctx.draft.players)) {
+    for (const cardId of ctx.zones.getCardsInZone(
+      "hand" as CoreZoneId,
+      playerId as CorePlayerId,
+    )) {
+      cards.push({ id: cardId as string, owner: playerId, zone: "hand" });
+    }
+  }
+  return cards;
+}
+
+function isBoardZone(zone: string): boolean {
+  return zone !== "hand";
+}
+
+/**
  * Evaluate whether a static ability's condition is met.
  */
 export function evaluateCondition(
@@ -430,7 +453,7 @@ function resolveStaticTargetsFromDescriptor(
   if (t.type === "spell") {
     return [];
   }
-  if (t.type !== "unit" && t.type !== "gear") {
+  if (t.type !== "unit" && t.type !== "gear" && t.type !== "equipment") {
     return undefined;
   }
   const isGroup =
@@ -441,6 +464,11 @@ function resolveStaticTargetsFromDescriptor(
     t.quantity === "all";
   if (!isGroup) {
     return undefined;
+  }
+  // rule 143.1 — the champion zone (and hand) is not the board, so a static
+  // whose source waits there functions on nobody.
+  if (source.zone === "championZone" || source.zone === "hand") {
+    return [];
   }
   // rule 105.2 — a base is not a battlefield: "at my battlefield" addresses
   // nobody while the source sits anywhere other than a battlefield.
@@ -456,6 +484,19 @@ function resolveStaticTargetsFromDescriptor(
         return false;
       }
       if (t.type === "gear" && cardType !== "gear" && cardType !== "equipment") {
+        return false;
+      }
+      // rule 208.3 / 476.1 — "Equipment" is the strict subset of gear with the
+      // printed [Equip] ability; plain gear must not be addressed.
+      if (
+        t.type === "equipment" &&
+        cardType !== "equipment" &&
+        !(cardType === "gear" && registry.hasKeyword(c.id, "Equip"))
+      ) {
+        return false;
+      }
+      // Only an "anywhere"-scoped static reaches cards off the board.
+      if (t.location !== "anywhere" && !isBoardZone(c.zone)) {
         return false;
       }
       if (t.controller === "friendly" && c.owner !== source.owner) {
@@ -660,11 +701,14 @@ function applyStaticEffect(
  */
 export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
   const boardCards = getAllBoardCards(ctx);
+  // "…everywhere" statics also address hand cards; they are stripped and
+  // re-granted alongside the board so a grant ends when its source leaves.
+  const grantableCards = [...boardCards, ...getOffBoardGrantCards(ctx)];
   const registry = getGlobalCardRegistry();
   let anyApplied = false;
 
   // Step 1: Strip all static modifications
-  for (const card of boardCards) {
+  for (const card of grantableCards) {
     const meta = ctx.cards.getCardMeta(card.id as CoreCardId) as
       | Partial<RiftboundCardMeta>
       | undefined;
@@ -759,7 +803,7 @@ export function recalculateStaticEffects(ctx: StaticAbilityContext): boolean {
           // group target descriptor (e.g. "Your token units") over self.
           const targetIds =
             affects === undefined
-              ? (resolveStaticTargetsFromDescriptor(passEffect.target, card, boardCards, ctx) ??
+              ? (resolveStaticTargetsFromDescriptor(passEffect.target, card, grantableCards, ctx) ??
                 defaultTargetIds)
               : defaultTargetIds;
           applyStaticEffect(passEffect, targetIds, ctx, card);

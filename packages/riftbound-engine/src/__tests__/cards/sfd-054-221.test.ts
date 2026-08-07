@@ -43,7 +43,7 @@ describe("Jax, Unmatched (sfd-054-221)", () => {
     expect(abilities[0]).toEqual({ keyword: "Deflect", type: "keyword", value: 1 });
   });
 
-  test.failing("BUG: registry payload — the static must address your EQUIPMENT (not all gear) EVERYWHERE (not just the board)", async () => {
+  test("registry payload — the static must address your EQUIPMENT (not all gear) EVERYWHERE (not just the board)", async () => {
     // Expected: target { type: "equipment", controller: "friendly", location: "anywhere" } so plain gear is
     // excluded and hand/deck/trash copies are included. Actual: { type: "gear", controller: "friendly" }.
     await scenario().build();
@@ -112,7 +112,7 @@ describe("Jax, Unmatched (sfd-054-221)", () => {
     expect(game.state("theirs").keywords).not.toContain("Quick-Draw");
   });
 
-  test.failing("BUG: 'Equipment' only — a plain gear (Seal of Insight) must not gain Quick-Draw", async () => {
+  test("'Equipment' only — a plain gear (Seal of Insight) must not gain Quick-Draw", async () => {
     // Expected: only cardType "equipment" is addressed. Actual: the parsed target type "gear" also
     // matches ordinary gear, so the Seal is granted Quick-Draw (and with it Reaction timing).
     const game = await scenario().unit(P1, "base", CARD, "jax").gear(P1, DORANS_SHIELD, "shield").gear(P1, SEAL, "seal").build();
@@ -120,7 +120,7 @@ describe("Jax, Unmatched (sfd-054-221)", () => {
     expect(game.state("seal").keywords).not.toContain("Quick-Draw");
   });
 
-  test.failing("BUG: 'everywhere' — an Equipment in HAND has Quick-Draw while Jax is on the board", async () => {
+  test("'everywhere' — an Equipment in HAND has Quick-Draw while Jax is on the board", async () => {
     // Expected: the hand copy is granted Quick-Draw (that is what enables Reaction plays). Actual: static
     // grants are only evaluated for board permanents, so the hand copy shows no granted keyword.
     const game = await scenario().unit(P1, "base", CARD, "jax").hand(P1, DORANS_SHIELD, "shield").build();
@@ -144,7 +144,7 @@ describe("Jax, Unmatched (sfd-054-221)", () => {
     expect(game.p1.legal().some((o) => o.card === "shield")).toBe(false);
   });
 
-  test.failing("BUG: Quick-Draw ⇒ Reaction (819.1.b): with Jax on the board, P1 may play an Equipment from hand in response on the OPPONENT's turn", async () => {
+  test("Quick-Draw ⇒ Reaction (819.1.b): with Jax on the board, P1 may play an Equipment from hand in response on the OPPONENT's turn", async () => {
     // Expected: after P2's bolt goes on the chain and P2 passes, P1 (1 energy) is offered playing Doran's
     // Shield; doing so spends 1 energy and, on resolution, attaches it to a unit P1 controls (Jax is the
     // only one) — Jax becomes 6 Might before the bolt resolves. Actual: playGear is only ever legal in a

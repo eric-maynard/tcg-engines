@@ -11,6 +11,9 @@ import type {
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { createInteractionState, getTurnState } from "../../../chain";
+import { isLegalTiming } from "../../../chain/chain-state";
+import { attachEquipment } from "../../../abilities/effects/_attachment";
+import { hasKeyword } from "../movement/helpers";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import {
   hasStaticEffect,
@@ -37,17 +40,28 @@ export const playGear: Defs["playGear"] = {
     if (state.cannotPlayCardsThisTurn?.[context.params.playerId as string]) {
       return false;
     }
-    if (state.turn.activePlayer !== context.params.playerId) {
-      return false;
-    }
-    if (state.turn.phase !== "main") {
-      return false;
-    }
-    // Rule 140.1.b/c + 508.1.a: Playing Gear is a Discretionary Action,
-    // legal only in a Neutral Open state (no chain, no showdown).
+    // rule 819.1.b (sfd-054-221) — [Quick-Draw] gives the Equipment [Reaction],
+    // so it may be played at Reaction speed: any open state, on either player's
+    // turn. Everything else is a Discretionary Action (140.1.b/c + 508.1.a),
+    // legal only in a Neutral Open state on your own Main Phase.
     const interaction = state.interaction ?? createInteractionState();
-    if (getTurnState(interaction) !== "neutral-open") {
-      return false;
+    const quickDraw = hasKeyword(context.params.cardId as string, "Quick-Draw", (id) =>
+      context.cards.getCardMeta(id),
+    );
+    if (quickDraw) {
+      if (!isLegalTiming("reaction", getTurnState(interaction))) {
+        return false;
+      }
+    } else {
+      if (state.turn.activePlayer !== context.params.playerId) {
+        return false;
+      }
+      if (state.turn.phase !== "main") {
+        return false;
+      }
+      if (getTurnState(interaction) !== "neutral-open") {
+        return false;
+      }
     }
 
     const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
@@ -83,14 +97,14 @@ export const playGear: Defs["playGear"] = {
     if (state.pendingChoice) {
       return [];
     }
-    if (state.turn.activePlayer !== (context.playerId as string)) {
-      return [];
-    }
-    if (state.turn.phase !== "main") {
-      return [];
-    }
     const interaction = state.interaction ?? createInteractionState();
-    if (getTurnState(interaction) !== "neutral-open") {
+    // rule 819.1.b — Quick-Draw Equipment is enumerated at Reaction speed; see
+    // the condition above. Everything else needs your own open Main Phase.
+    const openTurn =
+      state.turn.activePlayer === (context.playerId as string) &&
+      state.turn.phase === "main" &&
+      getTurnState(interaction) === "neutral-open";
+    if (!openTurn && !isLegalTiming("reaction", getTurnState(interaction))) {
       return [];
     }
 
@@ -119,6 +133,12 @@ export const playGear: Defs["playGear"] = {
       if (!def || (def.cardType !== "gear" && def.cardType !== "equipment")) {
         continue;
       }
+      if (
+        !openTurn &&
+        !hasKeyword(cardId as string, "Quick-Draw", (id) => context.cards.getCardMeta(id))
+      ) {
+        continue;
+      }
       // Cards with interactive cost reduction are enumerated against their
       // Base cost; the actual cost is computed per-target at play time.
       if (!registry.canAfford(cardId as string, affordPool)) {
@@ -136,7 +156,11 @@ export const playGear: Defs["playGear"] = {
     const { cardId, playerId, chosenTargetId } = context.params;
     const { zones } = context;
 
-    deductCost(draft, playerId, cardId, { chosenTargetId }, createMetaAccessor(context.cards));
+    // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.
+    deductCost(draft, playerId, cardId, { chosenTargetId }, createMetaAccessor(context.cards), {
+      counters: context.counters,
+      zones: context.zones,
+    });
 
     zones.moveCard({
       cardId: cardId as CoreCardId,
@@ -160,6 +184,36 @@ export const playGear: Defs["playGear"] = {
       { cardId, cardType: "gear", playerId, type: "play-card" },
       { cards: context.cards, counters: context.counters, draft, zones },
     );
+
+    // rule 819.1.d (sfd-054-221) — [Quick-Draw]: "When you play it, attach it
+    // to a unit you control." With exactly one friendly unit the attachment is
+    // forced, so it happens right here; with several the controller would be
+    // prompted (not modelled yet).
+    if (hasKeyword(cardId, "Quick-Draw", (id) => context.cards.getCardMeta(id))) {
+      const zoneIds = ["base", ...Object.keys(draft.battlefields ?? {}).map((bf) => `battlefield-${bf}`)];
+      const registry = getGlobalCardRegistry();
+      const units: string[] = [];
+      for (const zoneId of zoneIds) {
+        for (const id of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
+          if (registry.get(id as string)?.cardType === "unit") {
+            units.push(id as string);
+          }
+        }
+      }
+      if (units.length === 1) {
+        attachEquipment(
+          {
+            cards: context.cards,
+            counters: context.counters,
+            draft,
+            playerId,
+            zones,
+          } as never,
+          cardId,
+          units[0] as string,
+        );
+      }
+    }
 
     // Rule 724 (Legion) tracker: count this gear/equipment play.
     if (draft.cardsPlayedThisTurn) {
