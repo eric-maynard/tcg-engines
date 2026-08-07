@@ -90,7 +90,7 @@ const readState = () => p.evaluate(() => {
       handCount: document.querySelectorAll('#player-hand .card').length,
       baseCount: document.querySelectorAll('#player-base .card').length,
       baseExhausted: document.querySelectorAll('#player-base .card.card--exhausted').length,
-      bfExhausted: document.querySelectorAll('[id^="bf-"] .card.card--exhausted, .bf-zone .card.card--exhausted').length,
+      bfExhausted: document.querySelectorAll('#battlefieldRow .card.card--exhausted, [id^="bf-"] .card.card--exhausted, .bf-zone .card.card--exhausted').length,
       runeCount: document.querySelectorAll('#player-runePool .card').length,
       runeExhausted: document.querySelectorAll('#player-runePool .card.exhausted').length,
       resourceBar: document.getElementById('resourceBar')?.textContent?.replace(/\s+/g, ' ').trim(),

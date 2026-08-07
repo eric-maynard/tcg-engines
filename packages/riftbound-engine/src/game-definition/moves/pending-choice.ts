@@ -64,7 +64,13 @@ function liftModalTarget(
     t.type === "trigger-source" ||
     t.type === "player" ||
     t.type === "battlefield" ||
-    t.quantity === "all"
+    t.quantity === "all" ||
+    // rule 355.10 (sfd-049-221) — only a SINGLE caster-chosen target is
+    // declared through this prompt. "Ready 2 runes" names a multi-object
+    // target set, not one choice; lifting it here would prompt for one rune
+    // and drop the rest. Those resolve inside the handler via resolveTarget.
+    (typeof t.quantity === "number" && t.quantity > 1) ||
+    (typeof t.quantity === "object" && t.quantity !== null)
   ) {
     return false;
   }
