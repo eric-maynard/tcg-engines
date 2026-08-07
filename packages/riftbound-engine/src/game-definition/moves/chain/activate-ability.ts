@@ -63,6 +63,19 @@ function abilityTimingClass(
  * is keyed by the HOST card, so a copy of the ability on another card keeps its
  * own allowance.
  */
+/**
+ * rule-id: sfd-075-221 — the acting source type for `use-activated-ability`.
+ * rule 151: Equipment is a kind of gear (and [Equip] is an activated ability),
+ * so both report "gear" to "an activated ability of a gear" triggers.
+ */
+function activationSourceType(hostCardId: string): string | undefined {
+  const cardType = getGlobalCardRegistry().getCardType(hostCardId);
+  if (cardType === "equipment") {
+    return "gear";
+  }
+  return cardType ?? undefined;
+}
+
 export function abilityUseKey(hostCardId: string, abilityIndex: number): string {
   return `activate|${hostCardId}|${abilityIndex}`;
 }
@@ -1246,6 +1259,18 @@ export const activateAbility: Defs["activateAbility"] = {
     if (effectType === "add-resource" || effectType === "add") {
       const effectCtx = buildEffectContext(draft, playerId, cardId, context);
       executeEffect(ability.effect as ExecutableEffect, effectCtx);
+      // rule-id: sfd-075-221 — rule 429.2: an [Add] ability resolving
+      // immediately is still an activated ability being USED, so "when you use
+      // an activated ability of a gear" still sees it.
+      fireTriggers(
+        {
+          cardId: cardId as string,
+          playerId: playerId as string,
+          sourceType: activationSourceType(cardId as string),
+          type: "use-activated-ability",
+        },
+        { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+      );
       return;
     }
 
@@ -1268,6 +1293,18 @@ export const activateAbility: Defs["activateAbility"] = {
         type: "ability",
       },
       turnOrder,
+    );
+    // rule-id: sfd-075-221 — rule 206.1: "when you use an activated ability"
+    // fires as the ability is activated. Firing it AFTER `addToChain` puts the
+    // trigger above the ability on the chain, so it resolves first.
+    fireTriggers(
+      {
+        cardId: cardId as string,
+        playerId: playerId as string,
+        sourceType: activationSourceType(cardId as string),
+        type: "use-activated-ability",
+      },
+      { cards: context.cards, counters: context.counters, draft, zones: context.zones },
     );
     // Rule 359.2: "when you choose me" triggers fire when the target is
     // chosen — at finalization for play-time targets (parity with playSpell).

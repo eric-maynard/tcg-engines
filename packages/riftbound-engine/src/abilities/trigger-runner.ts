@@ -181,6 +181,10 @@ export function toTriggerableAbilities(cardId: string): TriggerableAbility[] {
           on: a.trigger.on,
           restrictions: (a.trigger as { restrictions?: readonly { type: string; count?: number }[] })
             .restrictions,
+          // rule-id: sfd-075-221 — "an activated ability of a GEAR" qualifies
+          // the acting source; dropping it here would fire the trigger on
+          // every activated ability, legend and unit ones included.
+          sourceType: (a.trigger as { sourceType?: string }).sourceType,
         },
         type: "triggered",
       });
@@ -306,6 +310,18 @@ export function evaluateTriggerCondition(
     // combat (empty battlefield, rule 316.8.b.1) assigned none, so it fails.
     const needed = (c as { amount?: number }).amount ?? 1;
     return ((event as { excessDamage?: number }).excessDamage ?? 0) >= needed;
+  }
+  if (c.type === "played-power-cost") {
+    // rule 206.1 (rule-id: sfd-100-221, Yordle Explorer) — "a card with Power
+    // cost [rainbow][rainbow] or more" reads the PRINTED Power cost of the
+    // played card. Additional costs and Accelerate pips are paid on top of it
+    // (rule 206) and never raise it, so read the registry, not what was spent.
+    const needed = (c as { amount?: number }).amount ?? 1;
+    const playedId = (event as { cardId?: string }).cardId;
+    if (playedId === undefined) {
+      return false;
+    }
+    return getGlobalCardRegistry().getPowerCost(playedId).length >= needed;
   }
   if (c.type === "while-empowered") {
     // Rule 827 (rule-id: ven-136-166): `[Empowered][>]` triggers fire only

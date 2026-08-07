@@ -42,7 +42,7 @@ function board() {
 }
 
 describe("Prize of Progress (sfd-075-221)", () => {
-  test.failing("BUG: parsed trigger should be scoped to GEAR abilities; the payload has no gear qualifier (would also fire on legend/unit abilities)", async () => {
+  test("parsed trigger should be scoped to GEAR abilities; the payload has no gear qualifier (would also fire on legend/unit abilities)", async () => {
     const def = (await loadDefaultCardPool()).get(CARD);
     expect(def).toMatchObject({ cardType: "unit", energyCost: 4, might: 3, powerCost: ["mind"] });
     expect(def?.abilities).toHaveLength(1);
@@ -65,7 +65,7 @@ describe("Prize of Progress (sfd-075-221)", () => {
     expect((await scenario().resources(P1, { energy: 3, power: { mind: 1 } }).hand(P1, CARD, "pp").build()).p1.can("play", "pp")).toBe(false);
   });
 
-  test.failing("BUG: using Seal of Insight ([Exhaust]: Add [mind]) gives the Prize +1 Might this turn; it wears off next turn", async () => {
+  test("using Seal of Insight ([Exhaust]: Add [mind]) gives the Prize +1 Might this turn; it wears off next turn", async () => {
     // Expected: trigger → 4 might (mightModifier 1) until end of turn. Actual: no `use-activated-ability` event exists; stays 3.
     const game = await board().build();
     await game.p1.activate("seal");
@@ -78,7 +78,7 @@ describe("Prize of Progress (sfd-075-221)", () => {
     expect(game.state("pp").might).toBe(3);
   });
 
-  test.failing("BUG: each use is its own trigger — Seal then Orb (on the enemy) makes it 3 → 5 this turn", async () => {
+  test("each use is its own trigger — Seal then Orb (on the enemy) makes it 3 → 5 this turn", async () => {
     const game = await board().build();
     await game.p1.activate("seal");
     await game.settle();
@@ -89,7 +89,7 @@ describe("Prize of Progress (sfd-075-221)", () => {
     expect(game.state("pp").might).toBe(5);
   });
 
-  test.failing("BUG: chain order — Orb of Regret aimed at the Prize: the +1 trigger sits above the Orb ability and resolves first; net 3", async () => {
+  test("chain order — Orb of Regret aimed at the Prize: the +1 trigger sits above the Orb ability and resolves first; net 3", async () => {
     const game = await board().build();
     await game.p1.activate("orb", 0, { targets: "pp" });
     // Orb's ability is chain item 1; the Prize trigger must be stacked on top of it.
@@ -117,7 +117,7 @@ describe("Prize of Progress (sfd-075-221)", () => {
     expect(game.state("pp").might).toBe(5);
   });
 
-  test.failing("BUG: two Prizes on the board each get +1 from one single gear activation", async () => {
+  test("two Prizes on the board each get +1 from one single gear activation", async () => {
     const game = await board().unit(P1, "base", CARD, "pp2").build();
     await game.p1.activate("seal");
     await game.settle();

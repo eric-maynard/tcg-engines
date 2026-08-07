@@ -26,6 +26,11 @@ export const TRIGGER_PATTERNS: {
   event: string;
   on?: string | TriggerPatternSubject;
   restrictions?: readonly { type: string; count?: number }[];
+  /**
+   * rule-id: sfd-075-221 — card type the acting SOURCE must have ("an
+   * activated ability of a gear"); matched against the event's `sourceType`.
+   */
+  sourceType?: string;
 }[] = [
   // rule-id: ogn-067-298 — "to a battlefield" is captured (group 1) so the
   // parser can gate the trigger on a while-at-battlefield condition.
@@ -237,6 +242,7 @@ export const TRIGGER_PATTERNS: {
     event: "use-activated-ability",
     on: "controller",
     pattern: /^When you use an activated ability of a gear,\s*/i,
+    sourceType: "gear",
   },
   // "When you draw your second card each turn, ..."
   {

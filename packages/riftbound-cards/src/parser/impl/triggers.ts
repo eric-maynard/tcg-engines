@@ -232,7 +232,13 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       timing?: string;
       location?: string;
       restrictions?: readonly { type: string; count?: number }[];
+      sourceType?: string;
     } = { event: tp.event };
+    // rule-id: sfd-075-221 — "of a gear" qualifies the acting source, not the
+    // subject, so it rides alongside `on` rather than in `restrictions`.
+    if (tp.sourceType) {
+      trigger.sourceType = tp.sourceType;
+    }
     if (typeof tp.on === "object") {
       // Object-shaped subject (TriggerSubjectQuery) is emitted verbatim —
       // rule 428.5: "When you kill a [stunned] enemy unit" = die + actor/filter.
