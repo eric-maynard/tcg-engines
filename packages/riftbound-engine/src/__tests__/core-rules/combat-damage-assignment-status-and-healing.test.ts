@@ -488,7 +488,7 @@ describe("Combat Cleanup heals ALL units at ALL locations (466.1.a.1, 143.3.b.2,
     expect(game.p1.points()).toBe(1);
   });
 
-  test.failing("BUG: 466.1.a.1 — 'Heal all Units' has no location qualifier: a damaged unit in P1's BASE and a damaged P2 unit at ANOTHER battlefield are healed by the Combat Cleanup at bf1 (engine heals only the combatants)", async () => {
+  test("466.1.a.1 — 'Heal all Units' has no location qualifier: a damaged unit in P1's BASE and a damaged P2 unit at ANOTHER battlefield are healed by the Combat Cleanup at bf1 (engine heals only the combatants)", async () => {
     // Expected: X (base, 2 dmg) and Y (bf2, 1 dmg) read 0 damage right after the bf1 combat.
     // Actual: resolveFullCombat clears damage only on the attacker/defender units at bf1.
     const game = await scenario()

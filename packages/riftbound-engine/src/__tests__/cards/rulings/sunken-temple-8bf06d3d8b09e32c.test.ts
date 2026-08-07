@@ -82,7 +82,7 @@ describe("Ruling 8bf06d3d8b09e32c — Sunken Temple counts a conqueror that is M
     expect(game.p1.hand()).toHaveLength(hand + 1);
   });
 
-  test.failing("BUG: ruling 8bf06d3d8b09e32c — contrast: a conqueror that is NOT Mighty (plain 3 Might, no Assault) conquers but gets no Sunken Temple offer; engine offers the pay/draw regardless of Might", async () => {
+  test("ruling 8bf06d3d8b09e32c — contrast: a conqueror that is NOT Mighty (plain 3 Might, no Assault) conquers but gets no Sunken Temple offer; engine offers the pay/draw regardless of Might", async () => {
     // Expected: conquer scores the point and play returns straight to P1's main phase — no yes/no, hand and
     // energy unchanged. Actual: the "one or more Mighty units" qualifier is not checked; P1 is offered the draw.
     const game = await board({ attacker: { might: 3, name: "Plain Squire" }, defenderMight: 1, owner: P1 }).build();

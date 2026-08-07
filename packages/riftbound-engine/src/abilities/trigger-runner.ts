@@ -433,7 +433,157 @@ export function evaluateTriggerCondition(
       hereZone,
     );
   }
+  // rule 383.2.a.1 — an `and` compound gates the trigger on every clause it
+  // holds, but only the clauses understood here may veto it; the rest stay
+  // permissive, exactly as they are on their own. (`pay-cost` is never a gate:
+  // it is charged at opt-in time — see `extractPayCost`.)
+  if (c.type === "and" && ctx && Array.isArray((c as { conditions?: unknown[] }).conditions)) {
+    for (const sub of (c as { conditions: unknown[] }).conditions) {
+      if (
+        (sub as { type?: string } | undefined)?.type === "has-at-least" &&
+        !evaluateHasAtLeastCondition(sub as { type?: string }, ctx, controllerId, event, sourceCardId)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (c.type === "has-at-least" && ctx) {
+    // rule-id: sfd-218-221 (Sunken Temple) — "with one or more [Mighty] units"
+    // is part of the trigger condition: with no Mighty unit here the ability
+    // never goes on the chain (rule 466.5.d/466.6 evaluate it while the combat
+    // designations — and their Might bonuses — are still in place).
+    return evaluateHasAtLeastCondition(c, ctx, controllerId, event, sourceCardId);
+  }
   return true;
+}
+
+/** rule 708/710 — Mighty is 5+ CURRENT Might. */
+const MIGHTY_MIGHT = 5;
+
+/**
+ * rule 807.1.c/.d.1 — a combat-only bonus (Assault while attacking, Shield
+ * while defending) is part of current Might for as long as the designation
+ * lasts, so it counts toward Mighty while a combat trigger is evaluated.
+ */
+function currentMightForTriggers(cardId: string, ctx: TriggerRunnerContext): number {
+  const registry = getGlobalCardRegistry();
+  const def = registry.get(cardId) as
+    | { might?: number; keywords?: readonly string[]; abilities?: readonly unknown[] }
+    | undefined;
+  const meta = ctx.cards.getCardMeta(cardId as CoreCardId) as Partial<RiftboundCardMeta> | undefined;
+  let equipBonus = 0;
+  for (const equipId of meta?.equippedWith ?? []) {
+    equipBonus += registry.getMightBonus(equipId as string);
+  }
+  let might =
+    (def?.might ?? 0) +
+    (meta?.buffed ? 1 : 0) +
+    (meta?.extraBuffs ?? 0) +
+    (meta?.mightModifier ?? 0) +
+    (meta?.staticMightBonus ?? 0) +
+    (meta?.combatMightModifier ?? 0) +
+    equipBonus;
+  const role = meta?.combatRole;
+  if (role === "attacker" || role === "defender") {
+    const roleKeyword = role === "attacker" ? "Assault" : "Shield";
+    for (const kw of def?.keywords ?? []) {
+      if (kw === roleKeyword) {
+        might += 1;
+      }
+    }
+    for (const raw of def?.abilities ?? []) {
+      const ability = raw as { type?: string; keyword?: string; value?: number };
+      if (ability.type === "keyword" && ability.keyword === roleKeyword) {
+        might += ability.value ?? 1;
+      }
+    }
+    for (const gk of meta?.grantedKeywords ?? []) {
+      if (gk.keyword === roleKeyword) {
+        might += gk.value ?? 1;
+      }
+    }
+  }
+  return Math.max(0, might);
+}
+
+/**
+ * `{ type: "has-at-least", count, target }` — count units matching `target`
+ * (controller, `location: "here"`, the `mighty` filter) against `count`.
+ * Filters this helper does not understand keep the clause permissive.
+ */
+function evaluateHasAtLeastCondition(
+  condition: { type?: string },
+  ctx: TriggerRunnerContext,
+  controllerId: string,
+  event: GameEvent,
+  sourceCardId?: string,
+): boolean {
+  const c = condition as {
+    count?: number;
+    target?: { type?: string; controller?: string; location?: string; filter?: unknown };
+  };
+  const target = c.target;
+  if (!target || typeof target !== "object") {
+    return true;
+  }
+  const needed = c.count ?? 1;
+  const filters =
+    target.filter === undefined ? [] : Array.isArray(target.filter) ? target.filter : [target.filter];
+  if (filters.some((f) => f !== "mighty")) {
+    return true;
+  }
+
+  const zoneIds: string[] = [];
+  if (target.location === "here") {
+    const bfId = (event as { battlefieldId?: unknown }).battlefieldId;
+    if (typeof bfId === "string") {
+      zoneIds.push(`battlefield-${bfId}`);
+    } else if (sourceCardId) {
+      const zone = ctx.zones.getCardZone?.(sourceCardId as CoreCardId) as string | undefined;
+      if (zone?.startsWith("battlefield-") === true) {
+        zoneIds.push(zone);
+      }
+    }
+    if (zoneIds.length === 0) {
+      return true;
+    }
+  } else {
+    for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+      zoneIds.push(`battlefield-${bfId}`);
+    }
+  }
+
+  const registry = getGlobalCardRegistry();
+  let count = 0;
+  for (const zoneId of zoneIds) {
+    for (const rawId of ctx.zones.getCardsInZone(zoneId as CoreZoneId)) {
+      const id = rawId as string;
+      const def = registry.get(id) as { cardType?: string; might?: number } | undefined;
+      if (target.type === "unit" && def?.cardType !== "unit" && (def?.might ?? 0) <= 0) {
+        continue;
+      }
+      const owner =
+        ctx.cards.getCardController?.(id as CoreCardId) ??
+        (ctx.cards.getCardOwner(id as CoreCardId) as string | undefined) ??
+        "";
+      if (target.controller === "enemy") {
+        if (owner === controllerId || owner === "") {
+          continue;
+        }
+      } else if (target.controller === "friendly" && owner !== controllerId) {
+        continue;
+      }
+      if (filters.includes("mighty") && currentMightForTriggers(id, ctx) < MIGHTY_MIGHT) {
+        continue;
+      }
+      count++;
+      if (count >= needed) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**

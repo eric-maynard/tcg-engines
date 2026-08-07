@@ -67,7 +67,10 @@ describe("Warwick, Hunter (ogn-159-298)", () => {
     await game.p1.move("ww", "bf1");
     await game.settle();
     expect(game.zoneOf("home")).toBe("base");
-    expect(game.state("home").damage).toBe(1);
+    // rule 466.1.a.1: the Combat Cleanup at bf1 heals ALL units, so `home`'s
+    // pre-existing damage is gone by now — what this asserts is that the hunt
+    // trigger never reached it (it is alive in base, not in the trash).
+    expect(game.state("home").damage).toBe(0);
   });
 
   test("'enemy' only: a damaged friendly unit attacking alongside Warwick is not killed", async () => {

@@ -17,6 +17,7 @@ import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import { openPendingContestedShowdown } from "../chain/showdown";
 import type { PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { getCardEffectiveMight } from "../play/cost";
 import { unitIgnoresDamage } from "../../../operations/damage-immunity";
 import type {
   GrantedKeyword,
@@ -464,6 +465,42 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
         } as Partial<RiftboundCardMeta>);
       }
     }
+
+    // rule 466.1.a.1: the Combat Cleanup's step 3c is "Heal all Units" — it has
+    // no location qualifier, so damage on units outside this combat (in a base
+    // or at another battlefield) is cleared too. Lethally damaged bystanders are
+    // left alone: they are killed by the cleanup below before any healing.
+    const combatantIds = new Set<string>([...attackerUnits, ...defenderUnits].map((u) => u.id));
+    const healZoneIds: string[] = [];
+    for (const playerId of Object.keys(draft.players ?? {})) {
+      for (const id of zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)) {
+        if (!combatantIds.has(id as string)) {
+          healZoneIds.push(id as string);
+        }
+      }
+    }
+    for (const bfId of Object.keys(draft.battlefields ?? {})) {
+      for (const id of zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
+        if (!combatantIds.has(id as string)) {
+          healZoneIds.push(id as string);
+        }
+      }
+    }
+    for (const id of healZoneIds) {
+      const bystanderMeta = cards.getCardMeta(id as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      const dmg = bystanderMeta?.damage ?? 0;
+      if (dmg <= 0) {
+        continue;
+      }
+      if (dmg >= getCardEffectiveMight(id as string, (cid) => cards.getCardMeta(cid) as Partial<RiftboundCardMeta> | undefined)) {
+        continue;
+      }
+      counters.clearCounter?.(id as CoreCardId, "damage");
+      cards.updateCardMeta(id as CoreCardId, { damage: 0 } as Partial<RiftboundCardMeta>);
+    }
+
     cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
 
     // rule 466.1.a.2: with no defending unit left here when the Combat Cleanup
