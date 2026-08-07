@@ -44,7 +44,15 @@ export function handle_revealHand(effect: ExecutableEffect, ctx: EffectContext, 
   let playTo: string | undefined;
   if (revealEff.chooseBattlefield === true) {
     const bound = ctx.boundTargets?.[0];
-    const bfIds = Object.keys(ctx.draft.battlefields ?? {});
+    const allBfIds = Object.keys(ctx.draft.battlefields ?? {});
+    // rule 811.1.d.2 / 723.1.d — a card played from Hidden may only choose at
+    // the battlefield it was facedown at: lock the destination there (single
+    // option ⇒ auto-chosen) instead of offering the whole board.
+    const hiddenBfIds =
+      ctx.hiddenZone === undefined
+        ? allBfIds
+        : allBfIds.filter((id) => `battlefield-${id}` === ctx.hiddenZone);
+    const bfIds = hiddenBfIds.length > 0 ? hiddenBfIds : allBfIds;
     if (bound !== undefined) {
       playTo = bound.startsWith("battlefield-") ? bound : `battlefield-${bound}`;
     } else if (bfIds.length >= 2) {

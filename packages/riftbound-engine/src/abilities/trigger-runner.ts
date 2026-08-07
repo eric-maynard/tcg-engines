@@ -487,6 +487,19 @@ export function evaluateTriggerCondition(
     }
     return friendly === 1 && enemy === 1;
   }
+  if (c.type === "not-died-alone" && ctx) {
+    // rule 740.2.a (unl-156-219 Loyal Poro, "[Deathknell] — If I didn't die
+    // alone, draw 1") — exactly the negation of the alone test below, judged
+    // at the location the unit died at.
+    return !evaluateTriggerCondition(
+      { type: "while-alone" },
+      state,
+      controllerId,
+      event,
+      ctx,
+      sourceCardId,
+    );
+  }
   if (c.type === "while-alone" && ctx) {
     // rule 740.2.a — a unit is alone when NO OTHER FRIENDLY unit shares its
     // location (enemies don't matter). rule 428.1.a.1.b: a dying unit is
