@@ -60,7 +60,7 @@ describe("Needlessly Large Yordle (sfd-055-221)", () => {
     expect(lowPower.p1.can("play", "yordle")).toBe(false);
   });
 
-  test.failing("BUG: after scoring 1 point from holding this turn it costs 8 energy + [calm][calm]", async () => {
+  test("after scoring 1 point from holding this turn it costs 8 energy + [calm][calm]", async () => {
     // Expected: the Beginning Phase hold of bf1 scores 1 → discount [2][calm] → playable for exactly 8 + 2 calm.
     // Actual: the "for each point you scored from holding this turn" scope is not evaluated; full price is demanded.
     const game = await aboutToHold(1).build();
@@ -70,18 +70,18 @@ describe("Needlessly Large Yordle (sfd-055-221)", () => {
     expect(game.gameState.scoredThisTurn[P1]).toEqual(["bf1"]);
     await game.p1.do("addResources", { energy: 8, power: { calm: 2 } });
     expect(game.p1.can("play", "yordle")).toBe(true);
-    await game.p1.play("yordle");
+    await game.p1.play("yordle", { to: "base" });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0 } });
     expect(game.zoneOf("yordle")).toBe("base");
   });
 
-  test.failing("BUG: after holding two battlefields this turn (2 points) it costs 6 energy + [calm]", async () => {
+  test("after holding two battlefields this turn (2 points) it costs 6 energy + [calm]", async () => {
     // Expected: 10 - 2×2 = 6 energy and 3 - 2 = 1 calm. Actual: full price.
     const game = await aboutToHold(2).build();
     await game.advanceTurn();
     expect(game.p1.points()).toBe(2);
     await game.p1.do("addResources", { energy: 6, power: { calm: 1 } });
-    await game.p1.play("yordle");
+    await game.p1.play("yordle", { to: "base" });
     expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0 } });
     expect(game.zoneOf("yordle")).toBe("base");
   });

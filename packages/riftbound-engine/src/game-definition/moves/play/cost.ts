@@ -279,6 +279,7 @@ function getSelfConditionalEnergyReduction(
   state: RiftboundGameState,
   playerId: string,
   cardId: string,
+  extras?: CostExtras,
 ): number {
   let total = 0;
   for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
@@ -295,7 +296,11 @@ function getSelfConditionalEnergyReduction(
     if (effect.scope !== undefined || effect.by !== undefined || !condition) {
       continue;
     }
-    if (evaluateEnterReadyCondition(condition, state, playerId) !== true) {
+    // rule 356.4 (rule-id: sfd-076-221) — board-reading gates such as "if you
+    // control a Mech" need zone access; without it they cannot hold.
+    if (
+      evaluateEnterReadyCondition(condition, state, playerId, cardId, extras?.board?.zones) !== true
+    ) {
       continue;
     }
     total += Math.max(0, decodeCostAmount(effect.reduction ?? effect.amount).energy);
@@ -1573,6 +1578,63 @@ function applyFlexibleRepeatReduction(
 }
 
 /**
+ * rule 315.2.b / 467 — points this player scored THIS turn from HOLDING.
+ * `scoredThisTurn` records every battlefield scored by either method, so the
+ * ones taken by conquering (`conqueredThisTurn`) are removed.
+ */
+function countHoldPointsThisTurn(state: RiftboundGameState, playerId: string): number {
+  const scored = (state.scoredThisTurn?.[playerId] ?? []) as readonly string[];
+  const conquered = new Set((state.conqueredThisTurn?.[playerId] ?? []) as readonly string[]);
+  return scored.filter((bfId) => !conquered.has(bfId)).length;
+}
+
+/**
+ * rule 466 (rule-id: sfd-055-221) — the POWER half of a self static
+ * "I cost [N][domain] less for each …". `getSelfScaledEnergyReduction` only
+ * yields energy; the pips it decodes have to be waived from the printed power
+ * cost as well, so they are returned here and merged into the waived-power map.
+ */
+function getSelfScaledPowerReduction(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+): Partial<Record<string, number>> {
+  if (!extras.board?.zones) {
+    return {};
+  }
+  const out: Partial<Record<string, number>> = {};
+  for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const effect = ability.effect as
+      | { type?: string; target?: unknown; scope?: unknown; reduction?: unknown; amount?: unknown; by?: unknown }
+      | undefined;
+    if (effect?.type !== "cost-reduction" || effect.target !== "self") {
+      continue;
+    }
+    if (typeof effect.scope !== "string") {
+      continue;
+    }
+    if (!effect.scope.toLowerCase().startsWith("for each point you scored from holding this turn")) {
+      continue;
+    }
+    const count = countHoldPointsThisTurn(state, playerId);
+    if (count <= 0) {
+      continue;
+    }
+    const pips = decodeCostAmount(effect.reduction ?? effect.amount ?? effect.by).power;
+    for (const [domain, n] of Object.entries(pips)) {
+      if (n && n > 0) {
+        out[domain] = (out[domain] ?? 0) + n * count;
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * rule-id: ven-096-166 (rule 466) — the played card's OWN static
  * "I cost [N] less for each …" reduction, scaled by a countable scope read
  * off the trash. Board statics skip the played card, and `costModifier` is
@@ -1652,10 +1714,16 @@ function getSelfScaledEnergyReduction(
       total += Math.max(0, Math.min(perCard * played, Math.max(0, printed - floor)));
       continue;
     }
-    // rule 419.1 (rule-id: ven-096-166) — playing a card puts it on the chain
-    // BEFORE its cost is determined, so a card played out of the trash never
-    // counts itself; only the other copies still there reduce the cost.
-    if (scope.startsWith("for each card with my name in your trash")) {
+    // rule 315.2.b / 467 (rule-id: sfd-055-221) — "for each point you scored
+    // from holding this turn": only Beginning-Phase holds count, so the
+    // battlefields this player took by CONQUERING are excluded, and the
+    // opponent's own scoring is irrelevant.
+    if (scope.startsWith("for each point you scored from holding this turn")) {
+      count = countHoldPointsThisTurn(state, playerId);
+    } else if (scope.startsWith("for each card with my name in your trash")) {
+      // rule 419.1 (rule-id: ven-096-166) — playing a card puts it on the chain
+      // BEFORE its cost is determined, so a card played out of the trash never
+      // counts itself; only the other copies still there reduce the cost.
       const name = registry.get(cardId)?.name;
       const trash = zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId);
       count = name
@@ -2052,7 +2120,7 @@ export function canAffordCard(
   // rule-id: ven-096-166 — self static "I cost [N] less for each …".
   const selfScaled =
     getSelfScaledEnergyReduction(state, playerId, cardId, extras) +
-    getSelfConditionalEnergyReduction(state, playerId, cardId) +
+    getSelfConditionalEnergyReduction(state, playerId, cardId, extras) +
     getSelfLegionEnergyReduction(state, playerId, cardId);
   const nextPlay = takeNextPlayDiscount(state, playerId, cardId, false);
   const nextPlayEnergy = nextPlay.energy;
@@ -2084,7 +2152,13 @@ export function canAffordCard(
   // rule 356.4.f / 809.1.d: a [rainbow] discount cancels the Deflect surcharge
   // (an additional cost added before discounts) before any printed pip.
   const deflect = offsetDeflectWithWaivedRainbow(
-    waivedPower(boardReduction, extras, nextPlay.power),
+    // rule 466 (rule-id: sfd-055-221) — a self scaled discount can waive power
+    // pips as well as energy.
+    waivedPower(
+      boardReduction,
+      extras,
+      mergePower(nextPlay.power ?? {}, getSelfScaledPowerReduction(state, playerId, cardId, extras)),
+    ),
     getDeflectSurcharge(state, playerId, extras.targets, extras.board?.cards),
   );
   const basePower = reducePowerCost(baseCost.power, deflect.waived, pool.power);
@@ -2199,7 +2273,7 @@ export function deductCost(
   // rule-id: ven-096-166 — self static "I cost [N] less for each …".
   const selfScaled =
     getSelfScaledEnergyReduction(draft, playerId, cardId, extras) +
-    getSelfConditionalEnergyReduction(draft, playerId, cardId) +
+    getSelfConditionalEnergyReduction(draft, playerId, cardId, extras) +
     getSelfLegionEnergyReduction(draft, playerId, cardId);
   // rule 356.4.b / 356.6: the one-shot "next spell costs [N] less" is spent here.
   const nextPlay = takeNextPlayDiscount(draft, playerId, cardId, true);
@@ -2224,7 +2298,13 @@ export function deductCost(
   // rule 356.4.f / 809.1.d: a [rainbow] discount cancels the Deflect surcharge
   // (an additional cost added before discounts) before any printed pip.
   const deflect = offsetDeflectWithWaivedRainbow(
-    waivedPower(boardReduction, extras, nextPlay.power),
+    // rule 466 (rule-id: sfd-055-221) — a self scaled discount can waive power
+    // pips as well as energy.
+    waivedPower(
+      boardReduction,
+      extras,
+      mergePower(nextPlay.power ?? {}, getSelfScaledPowerReduction(draft, playerId, cardId, extras)),
+    ),
     getDeflectSurcharge(draft, playerId, extras.targets, extras.board?.cards),
   );
   const basePower = reducePowerCost(cost.power, deflect.waived, pool.power);
