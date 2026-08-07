@@ -1,5 +1,6 @@
 // Effect handler: "draw"
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
+import { getDepartedOwner } from "../../operations/leave-board";
 import { refillDeckOrBurnOut } from "../../operations/points";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
@@ -33,9 +34,15 @@ export function handle_draw(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     if (targetId === undefined) {
       return;
     }
+    // rule 186.1 / 183 — a token that has ceased to exist still names the
+    // player who controlled it: fall back to the kill's last-known control
+    // snapshot (kill.ts) and then to departed-owner LKI, or "Its controller
+    // draws 2" silently does nothing whenever the killed object was a token.
     const pid =
       ctx.cards.getCardController?.(targetId as CoreCardId) ??
-      ctx.cards.getCardOwner(targetId as CoreCardId);
+      ctx.cards.getCardOwner(targetId as CoreCardId) ??
+      (ctx.draft.lastKilledUnitId === targetId ? ctx.draft.lastKilledUnitController : undefined) ??
+      getDepartedOwner(ctx.draft, targetId as string);
     if (pid === undefined) {
       return;
     }

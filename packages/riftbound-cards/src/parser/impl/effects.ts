@@ -41,6 +41,27 @@ export function parseEffects(text: string): Effect | undefined {
   // Try "If <cond>, A. Otherwise, B" — a pure if/else conditional that
   // Belongs in a single effect slot. Used by cards like Solari Chief:
   // "If it is stunned, kill it. Otherwise, stun it."
+  // rule 827 (ven-021-166 Akali, Deadly Weapon) — "<instruction> N …. If I'm
+  // [Empowered], <verb> M instead.": the rider REPLACES the printed amount
+  // while Empowered. Without this the trailing sentence fails the strict
+  // sentence split and is silently dropped by the single-effect fallback.
+  const empoweredInstead = cleaned.match(
+    /^(.+?[^.])\.\s*If (?:this is|I(?:'m| am))\s*\[?Empowered\]?,\s*(?:[a-z]+\s+)?(\d+)(?:\s+[^.]*?)?\s+instead\.?\s*$/is,
+  );
+  if (empoweredInstead) {
+    const base = parseEffects(`${empoweredInstead[1]}.`);
+    const amount = Number(empoweredInstead[2]);
+    const baseAmount = (base as { amount?: unknown } | undefined)?.amount;
+    if (base && typeof baseAmount === "number" && baseAmount !== amount) {
+      return {
+        condition: { type: "while-empowered" },
+        else: base,
+        then: { ...base, amount },
+        type: "conditional",
+      } as unknown as Effect;
+    }
+  }
+
   const ifElseEffect = parseIfElseEffect(cleaned);
   if (ifElseEffect) {
     return ifElseEffect;

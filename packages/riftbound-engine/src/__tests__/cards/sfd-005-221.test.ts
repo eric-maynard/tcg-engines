@@ -77,6 +77,18 @@ describe("Detonate (sfd-005-221)", () => {
     expect(game.p2.hand()).toHaveLength(p2Hand);
   });
 
+  test("killing a TOKEN gear still makes its controller draw 2 (186.1 — the token stops existing, its controller does not)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 1, power: { fury: 1 } })
+      .card("token-gold", { def: { cardType: "gear", name: "Gold" }, owner: P1, zone: "base" })
+      .hand(P1, CARD, "det")
+      .build();
+    const p1Hand = game.p1.hand().length;
+    await game.p1.cast("det", { targets: "token-gold" });
+    await game.settle();
+    expect(game.p1.hand()).toHaveLength(p1Hand - 1 + 2);
+  });
+
   test("standard timing: not castable on the opponent's turn", async () => {
     const game = await board().active(P2).build();
     expect(game.p1.can("cast", "det")).toBe(false);
