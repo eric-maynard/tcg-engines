@@ -80,6 +80,12 @@ export interface LKISnapshot {
   readonly unitsHere: readonly { readonly id: string; readonly controller: string }[];
   /** rule 740.2.a: no other friendly unit shared its location. */
   readonly wasAlone: boolean;
+  /**
+   * rule 708/710 + 807.1.d.1 — effective Might ≥ 5 as it left, including the
+   * combat-only bonus (Assault while attacking / Shield while defending),
+   * which is still in place when a combat death happens.
+   */
+  readonly wasMighty: boolean;
   readonly lastDamagedBy?: string;
   readonly lastDamageSource?: "spell" | "ability" | "combat";
   /** rule 383.3.d: this card carried a "your [X] effects trigger an additional time" static. */
@@ -206,6 +212,44 @@ function controllerOf(ctx: LeaveBoardContext, cardId: string): string {
   return ctx.cards?.getCardController?.(cardId as CoreCardId) ?? ownerOf(ctx, cardId) ?? "";
 }
 
+/**
+ * rule 807.1.d.1 / 466.7.a — a combat-only Might bonus (Assault while
+ * attacking, Shield while defending) is still part of current Might when a
+ * combat death happens: designations are removed only at the very end of
+ * combat. Callers that read "the Might it had as it left" must include it.
+ */
+export function combatMightBonus(
+  cardId: string,
+  meta: Partial<RiftboundCardMeta> | undefined,
+): number {
+  const def = getGlobalCardRegistry().get(cardId) as
+    | { keywords?: readonly string[]; abilities?: readonly unknown[] }
+    | undefined;
+  let bonus = meta?.combatMightModifier ?? 0;
+  const role = meta?.combatRole;
+  if (role !== "attacker" && role !== "defender") {
+    return bonus;
+  }
+  const roleKeyword = role === "attacker" ? "Assault" : "Shield";
+  for (const kw of def?.keywords ?? []) {
+    if (kw === roleKeyword) {
+      bonus += 1;
+    }
+  }
+  for (const raw of def?.abilities ?? []) {
+    const ability = raw as { type?: string; keyword?: string; value?: number };
+    if (ability.type === "keyword" && ability.keyword === roleKeyword) {
+      bonus += ability.value ?? 1;
+    }
+  }
+  for (const gk of meta?.grantedKeywords ?? []) {
+    if (gk.keyword === roleKeyword) {
+      bonus += gk.value ?? 1;
+    }
+  }
+  return bonus;
+}
+
 function hasTriggerDouble(cardId: string): boolean {
   return ((getGlobalCardRegistry().getAbilities(cardId) ?? []) as readonly {
     type?: string;
@@ -283,6 +327,9 @@ export function snapshotLKI(ctx: LeaveBoardContext, cardId: string): LKISnapshot
     triggerDoubler: hasTriggerDouble(cardId),
     unitsHere,
     wasAlone: !unitsHere.some((u) => u.controller === controller),
+    // rule 708/710 — Mighty reads effective Might; rule 807.1.d.1 keeps the
+    // attacker/defender bonus alive through a combat death.
+    wasMighty: baseMight > 0 && might + combatMightBonus(cardId, meta) >= 5,
     zone,
   };
   const draft = ctx.draft as LkiDraft;
@@ -602,6 +649,7 @@ export function buildLeaveEvent(result: LeaveResult, batchIndex?: number): GameE
       type: "die",
       wasAlone: lki.wasAlone,
       wasBuffed: lki.buffed,
+      wasMighty: lki.wasMighty,
       wasStunned: lki.stunned,
     } as GameEvent;
   }

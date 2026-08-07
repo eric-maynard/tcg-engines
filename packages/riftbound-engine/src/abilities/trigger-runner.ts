@@ -334,19 +334,6 @@ export function evaluateTriggerCondition(
     }
     return getGlobalCardRegistry().getPowerCost(playedId).length >= needed;
   }
-  if (c.type === "while-mighty" && ctx && sourceCardId) {
-    // rule 708/710 (rule-id: sfd-167-221, Unsung Hero) — "If I was [Mighty]"
-    // gates the trigger on effective Might >= 5. rule 808.1.d.3: for a death
-    // trigger the attributes are noted as the unit leaves, so read the LKI
-    // snapshot (the card in the trash is a new object with printed Might).
-    if (event.type === "die" && (event as { cardId?: string }).cardId === sourceCardId) {
-      const lki = getLKI(ctx.draft, sourceCardId);
-      if (lki !== undefined) {
-        return lki.might >= MIGHTY_MIGHT;
-      }
-    }
-    return currentMightForTriggers(sourceCardId, ctx) >= MIGHTY_MIGHT;
-  }
   if (c.type === "while-empowered") {
     // Rule 827 (rule-id: ven-136-166): `[Empowered][>]` triggers fire only
     // while the source is Empowered.

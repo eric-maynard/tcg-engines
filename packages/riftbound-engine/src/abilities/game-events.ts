@@ -32,7 +32,18 @@ export type GameEvent =
   // `alone` (rule 740.2.a) = no OTHER unit its controller controls is at that
   // battlefield, so "attacks or defends alone" triggers can match.
   | { type: "attack"; cardId: string; battlefieldId: string; owner?: string; alone?: boolean }
-  | { type: "defend"; cardId: string; battlefieldId: string; owner?: string; alone?: boolean }
+  // rule 383.4.f.2.a (sfd-126-221) — however many of your units defend, YOU
+  // defend once per combat. `batchIndex` = position among that owner's
+  // defenders, so player-scoped ("when you defend") matchers take only index 0
+  // while unit-scoped ("when I defend") matchers still see every unit.
+  | {
+      type: "defend";
+      cardId: string;
+      battlefieldId: string;
+      owner?: string;
+      alone?: boolean;
+      batchIndex?: number;
+    }
   // rule-id: ogn-034-298 — combat conquers carry `afterAttack` and the excess
   // damage the attacker assigned to enemy units (rule 626.1.d.2).
   | {
@@ -67,6 +78,8 @@ export type GameEvent =
       wasStunned?: boolean;
       /** rule 702: the unit carried a buff as it died ("a buffed friendly unit dies"). */
       wasBuffed?: boolean;
+      /** rule 708/710 + 808.1.d.3: it had 5+ effective Might as it died ("if I was [Mighty]"). */
+      wasMighty?: boolean;
       // rule 428.1.a.1.b / 740.2.a — last-known information stamped by
       // `operations/leave-board.ts`: who controlled it, whether no other
       // friendly unit shared its location, what was attached, and which
