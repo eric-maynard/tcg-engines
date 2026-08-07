@@ -30,6 +30,12 @@ export function parseCardTarget(targetText: string): {
     target.controller = "enemy";
   } else if (lower.includes("friendly")) {
     target.controller = "friendly";
+  } else if (/\b(?:you|i)\s+control\b/.test(lower)) {
+    // rule 108.2 — "you"/"I" on a permanent means its CONTROLLER, so "units you
+    // control" is a friendly-only audience (not every unit on the board).
+    target.controller = "friendly";
+  } else if (/\bopponents?\s+controls?\b/.test(lower)) {
+    target.controller = "enemy";
   }
 
   if (lower.includes("all ") || lower.includes("each ")) {

@@ -16,6 +16,7 @@ import {
   parseIfElseEffect,
   parseIfYouDoEffect,
 } from "./effects-conditional";
+import { parseSelfControlEffect } from "./effects-control";
 import { parseReturnToHandEffect } from "./effects-return";
 import { buildSequenceWithPendingValue, parseAndCompoundEffect } from "./effects-sequence";
 import { normalizeTokens, stripReminders } from "./normalize";
@@ -169,6 +170,14 @@ export function parseEffects(text: string): Effect | undefined {
     if (leftEff && rightEff) {
       return { effects: [leftEff, rightEff], type: "sequence" } as SequenceEffect;
     }
+  }
+
+  // rule 108.2 (rule-id: ven-133-166) — "gain control of this and recall it"
+  // names the SOURCE on both sides; the generic " and " split below would
+  // re-read the trailing "recall it" as a freely chosen unit.
+  const selfControl = parseSelfControlEffect(cleaned);
+  if (selfControl) {
+    return selfControl;
   }
 
   // Try splitting on " and " as a sequence separator BEFORE single-effect parse

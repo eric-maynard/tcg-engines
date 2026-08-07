@@ -49,7 +49,7 @@ describe("Glowstone (ven-133-166)", () => {
     });
   });
 
-  test.failing("BUG: payload — ability #1 must be a structured control-change + recall (it is raw text) and the damage must be scoped to units YOU control", async () => {
+  test("payload — ability #1 must be a structured control-change + recall (it is raw text) and the damage must be scoped to units YOU control", async () => {
     // Expected: abilities[1].effect is executable (not {type:"raw"}); abilities[2] damage target carries controller "friendly".
     // Actual: #1 is { type: "raw", text: … } and #2 targets { type: "unit", quantity: "all" } with no controller.
     const def = (await loadDefaultCardPool()).get(CARD);
@@ -99,7 +99,7 @@ describe("Glowstone (ven-133-166)", () => {
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "gs", controller: P1 })]);
   });
 
-  test.failing("BUG: 'Choose a player. They gain control of this and recall it.' — choosing P2 puts an exhausted, un-Empowered Glowstone under P2's control in P2's base", async () => {
+  test("'Choose a player. They gain control of this and recall it.' — choosing P2 puts an exhausted, un-Empowered Glowstone under P2's control in P2's base", async () => {
     // Expected: on resolution P1 picks a player (both offered); picking P2 → controller P2, listed in P2's base, owner still P1.
     // Actual: the effect is unparsed raw text — no prompt, Glowstone stays with P1.
     const game = await scenario().gear(P1, CARD, "gs", { empowered: true }).build();
@@ -133,8 +133,7 @@ describe("Glowstone (ven-133-166)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: 'units YOU control' — enemy units take no damage from Glowstone's end-of-turn blast", async () => {
-    // Expected: P2's 1-Might unit is untouched. Actual: the damage hits every unit on the board and kills it.
+  test("'units YOU control' — enemy units take no damage from Glowstone's end-of-turn blast", async () => {
     const game = await scenario().gear(P1, CARD, "gs").unit(P1, "base", { might: 2 }, "mine").unit(P2, "base", { might: 1, name: "Bystander" }, "theirs").build();
     await game.p1.endTurn();
     await game.settle();
@@ -154,7 +153,7 @@ describe("Glowstone (ven-133-166)", () => {
     expect(game.zoneOf("mine")).toBe("trash");
   });
 
-  test.failing("BUG: hot potato — handed to P2, it does NOT fire at the end of P1's turn; at the end of P2's turn it dies into P1's trash (owner) and only P2's units take 5", async () => {
+  test("hot potato — handed to P2, it does NOT fire at the end of P1's turn; at the end of P2's turn it dies into P1's trash (owner) and only P2's units take 5", async () => {
     // Expected per 108.2: controller P2 → "your turn" is P2's. Actual: control never changes (raw effect), so it blows up on P1.
     const game = await scenario()
       .gear(P1, CARD, "gs", { empowered: true })

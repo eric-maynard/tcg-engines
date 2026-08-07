@@ -76,6 +76,31 @@ export function parseGainControlOfSpellEffect(text: string): GainControlOfSpellE
 }
 
 /**
+ * rule 411.4 / rule 108.2 (rule-id: ven-133-166 Glowstone) — "Choose a player.
+ * They gain control of this and recall it.": the named seat takes the SOURCE
+ * card, so BOTH steps name "self". This has to be tried before the generic
+ * " and " compound split, which would re-read the trailing "recall it" as a
+ * freely chosen unit. `parseEffects` wraps the result with `player: "choose"`,
+ * which re-runs it for the chosen seat.
+ */
+export function parseSelfControlEffect(text: string): Effect | SequenceEffect | undefined {
+  const match = text.match(
+    /^(?:(?:They|that player)\s+)?(?:takes?|gains?) control of (?:this|me|myself)(?:\s+and recalls? (?:it|this|me))?\.?$/i,
+  );
+  if (!match) {
+    return undefined;
+  }
+  const takeControl = { target: "self", type: "take-control" } as unknown as Effect;
+  if (!/\band recalls?\b/i.test(text)) {
+    return takeControl;
+  }
+  return {
+    effects: [takeControl, { target: "self", type: "recall" } as unknown as Effect],
+    type: "sequence",
+  } as SequenceEffect;
+}
+
+/**
  * Try to parse a take-control effect: "Take control of TARGET." or "Take control of it and recall it."
  */
 export function parseTakeControlEffect(text: string): Effect | SequenceEffect | undefined {
@@ -89,6 +114,11 @@ export function parseTakeControlEffect(text: string): Effect | SequenceEffect | 
       ],
       type: "sequence",
     };
+  }
+
+  const selfControl = parseSelfControlEffect(text);
+  if (selfControl) {
+    return selfControl;
   }
 
   // Handle "Take control of TARGET."
