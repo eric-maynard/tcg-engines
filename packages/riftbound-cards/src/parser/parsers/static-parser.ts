@@ -237,7 +237,10 @@ function parseGrantTarget(text: string): Target {
   } else if (
     /\bfriendly\b/.test(normalized) ||
     /\byour\b/.test(normalized) ||
-    /\bmy\b/.test(normalized)
+    /\bmy\b/.test(normalized) ||
+    // rule 108.2 (ven-076-166) — "gear you control" names the same pool as
+    // "your gear": possession is by CONTROL, however it is phrased.
+    /\byou control\b/.test(normalized)
   ) {
     target.controller = "friendly";
   }
@@ -268,7 +271,9 @@ function parseGrantTarget(text: string): Target {
       break;
     }
   }
-  if (!foundTribe && normalized.includes("equipment")) {
+  // rule 208.3 (ven-076-166) — "the number of gear you control" counts gear,
+  // not units; without this the count silently addresses the unit pool.
+  if (!foundTribe && (normalized.includes("equipment") || /\bgears?\b/.test(normalized))) {
     target.type = "gear";
   }
 

@@ -831,6 +831,27 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+  // rule 442.1 / 355.8 — Guttural Roar: "Give a unit +2 [Might] this turn. If
+  // it's [Empowered], give it +4 [Might] this turn instead." The "instead"
+  // replaces the +2 rather than stacking with it, and the branch is decided from
+  // the CHOSEN unit's status at resolution, so the conditional carries the
+  // caster-chosen target and the branches carry none. The parser keeps only the
+  // flat +2, so both tiers are declared here.
+  "ven-072-166": {
+    abilities: [
+      {
+        effect: {
+          condition: { type: "target-empowered" },
+          else: { amount: 2, duration: "turn", type: "modify-might" },
+          target: { type: "unit" },
+          then: { amount: 4, duration: "turn", type: "modify-might" },
+          type: "conditional",
+        },
+        timing: "action",
+        type: "spell",
+      },
+    ],
+  },
   // rule 356.3 — Helm of Suppression: "Opponents' spells cost [1] more. If this
   // is [Empowered], they cost [1][rainbow] more instead." The parser has no
   // "instead" cost-increase shape, so both tiers are declared here as mutually
@@ -1193,6 +1214,22 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
         replacement: { amount: 3, target: "self", type: "modify-might" },
         target: { self: true },
         type: "replacement",
+      },
+    ],
+  },
+  // rule 356.6 / 827.1.c.3 — Risen Altar: "[Empower] costs of your units here
+  // cost [1] or [rainbow] less." A battlefield aura discounting the Empower
+  // ACTIVATION cost (not a play cost) of its controller's units at that
+  // battlefield by one resource; read by activate-ability.ts
+  // empowerCostDiscount.
+  "ven-163-166": {
+    abilities: [
+      {
+        effect: {
+          target: { controller: "friendly", location: "here", type: "unit" },
+          type: "empower-cost-reduction",
+        },
+        type: "static",
       },
     ],
   },
