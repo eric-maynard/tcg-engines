@@ -32,6 +32,9 @@ export type TriggerEvent =
   | "defend" // When defending
   | "win-combat" // When winning a combat
   | "lose-combat" // When losing a combat
+  // rule 466.7.b — "When a combat that I was in ends"; fires at the end of the
+  // Resolution Step, after damage, kills, recalls and control are settled.
+  | "combat-end"
   | "conquer" // When conquering a battlefield
   | "hold" // When holding a battlefield (scoring)
   | "showdown-begin" // rule-id: unl-079-219 — When a showdown (combat or non-combat) begins
@@ -261,6 +264,7 @@ export function isCombatTrigger(trigger: Trigger): boolean {
     trigger.event === "defend" ||
     trigger.event === "win-combat" ||
     trigger.event === "lose-combat" ||
+    trigger.event === "combat-end" ||
     trigger.event === "conquer" ||
     trigger.event === "hold"
   );

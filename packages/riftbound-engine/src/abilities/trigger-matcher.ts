@@ -208,6 +208,8 @@ const EVENT_MAP: Record<string, string> = {
   // rule-id: sfd-075-221 — rule 206.1: using an activated ability.
   "use-activated-ability": "use-activated-ability",
   "win-combat": "win-combat",
+  // rule 466.7.b — "When a combat that I was in ends".
+  "combat-end": "combat-end",
 };
 
 /**

@@ -131,6 +131,10 @@ export type GameEvent =
   // `playerId` is that player, so "When you win a combat" (on: "controller")
   // only matches their cards.
   | { type: "win-combat"; cardId: string; battlefieldId: string; playerId?: string }
+  // rule 466.7.b — a combat ends as the last step of the Resolution Step.
+  // Fired once per unit that WAS in that combat and is still on the board,
+  // including attackers recalled home by rule 466.1.a.2 (466.7.a).
+  | { type: "combat-end"; cardId: string; battlefieldId: string; playerId?: string }
   // rule-id: unl-079-219 — fired whenever a showdown (combat OR non-combat)
   // opens at a battlefield ("When a showdown begins here").
   | { type: "showdown-begin"; battlefieldId: string; playerId: string; isCombat: boolean }
