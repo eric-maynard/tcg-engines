@@ -414,7 +414,7 @@ describe("Rune Pool empties at the start of the Main Phase and at the end of the
   // Expected (316.3 "Each player's Rune Pool empties"): energy P2 floated as a Reaction during P1's Beginning
   // Phase is lost when P1's Main Phase starts. Actual: only the Turn Player's pool is emptied (draw.onEnd),
   // so P2 carries 1 energy into P1's Main Phase.
-  test.failing("BUG: 316.3 — only the Turn Player's pool is emptied when the Main Phase starts; the opponent keeps energy floated during the Beginning Phase", async () => {
+  test("316.3 — EACH player's pool is emptied when the Main Phase starts; energy the opponent floated during the Beginning Phase is lost too", async () => {
     const game = await scenario()
       .turn(4)
       .active(P2)
@@ -559,7 +559,7 @@ describe("Expiration Step: 'this turn' effects and stun expire at the end of the
   // an end-of-turn trigger is still on the chain the '+2 Might this turn' must still apply (Might 4).
   // Actual: the engine expires all 'this turn' effects in the same hook that queues the end-of-turn trigger,
   // so the unit already reads Might 2 while the Ending Step chain is open.
-  test.failing("BUG: 317.1/317.2.c — 'this turn' effects expire before end-of-turn triggers resolve (buff already gone during the Ending Step)", async () => {
+  test("317.1/317.2.c — 'this turn' effects expire only after end-of-turn triggers resolve (buff still live during the Ending Step)", async () => {
     const game = await scenario()
       .unit(P1, "base", { might: 2 }, "u")
       .hand(P1, PLUS2_THIS_TURN, "surge")
@@ -736,7 +736,7 @@ describe("Hold in the Beginning Phase (315.2.b.2, 469–471, 323.6)", () => {
   // P1's only unit at bfA, control is lost at the following cleanup (323.6), so the Scoring Step finds no
   // controlled battlefield → no Hold point (P1 stays at 3). Actual: the engine awards the Hold point in the
   // same step that queues the trigger, before it resolves — P1 ends on 4 with an empty, uncontrolled bfA.
-  test.failing("BUG: 315.2.a/315.2.b — Hold is scored before start-of-Beginning-Phase triggers resolve (unit killed by the trigger still earns the point)", async () => {
+  test("315.2.a/315.2.b — Hold is scored only AFTER start-of-Beginning-Phase triggers resolve (a unit killed by the trigger earns no point)", async () => {
     const RAZER = {
       abilities: [
         {

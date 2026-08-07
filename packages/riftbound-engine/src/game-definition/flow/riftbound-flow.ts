@@ -127,6 +127,320 @@ function buildFlowEffectContext(
   };
 }
 
+/** Context shape shared by the flow phase hooks that run a whole turn step. */
+type FlowStepContext = Parameters<typeof buildFlowTriggerContext>[0] & {
+  getCurrentPlayer: () => CorePlayerId;
+  cards: {
+    queryCards: (
+      predicate: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => boolean,
+    ) => CoreCardId[];
+    setCardController?: (cardId: CoreCardId, playerId: CorePlayerId) => void;
+    updateCardMeta?: (cardId: CoreCardId, meta: Partial<RiftboundCardMeta>) => void;
+  };
+};
+
+/**
+ * rule 315.2.a→b / 317.1→317.2: a step that follows a trigger step may not run
+ * until those triggers have resolved. The phase's endIf already holds the phase
+ * open while the chain lives; these helpers remember that the step still owes
+ * its work so the phase's onEnd runs it exactly once. When nothing went on the
+ * chain the step runs inline, as before.
+ */
+type DeferredStep = "hold-scoring" | "expiration";
+type DeferredStepState = { __deferredFlowSteps?: Record<string, boolean> };
+
+function stepMustWaitForChain(state: RiftboundGameState): boolean {
+  return (state.interaction?.chain?.active ?? false) || state.pendingChoice !== undefined;
+}
+
+function deferStep(state: RiftboundGameState, step: DeferredStep): void {
+  const s = state as RiftboundGameState & DeferredStepState;
+  s.__deferredFlowSteps = { ...(s.__deferredFlowSteps ?? {}), [step]: true };
+}
+
+function takeDeferredStep(state: RiftboundGameState, step: DeferredStep): boolean {
+  const s = state as RiftboundGameState & DeferredStepState;
+  if (s.__deferredFlowSteps?.[step] !== true) {
+    return false;
+  }
+  s.__deferredFlowSteps = { ...s.__deferredFlowSteps, [step]: false };
+  return true;
+}
+
+/** Scoring Step of the Beginning Phase (rule 315.2.b / 515.2.b). */
+function runHoldScoringStep(context: FlowStepContext): void {
+        const playerId = context.getCurrentPlayer();
+        const triggerCtx = buildFlowTriggerContext(context);
+
+        // Scoring step (rule 515.2.b): Holding
+        // Score 1 point for each battlefield the turn player controls
+        for (const [bfId, bf] of Object.entries(context.state.battlefields)) {
+          if (bf.controller === playerId) {
+            const scored = context.state.scoredThisTurn[playerId] ?? [];
+            if (!scored.includes(bfId)) {
+              // Blocked if a battlefield ability (e.g. Forgotten Monument)
+              // Prevents this player from scoring here right now.
+              const scoringAllowed = canPlayerScoreAtBattlefield(
+                context.state,
+                playerId,
+                bfId,
+              );
+              const player = context.state.players[playerId];
+              // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
+              if (
+                player &&
+                scoringAllowed &&
+                !applyScoreReplacement(context.state, playerId, context)
+              ) {
+                player.victoryPoints += 1;
+              }
+
+              if (!context.state.scoredThisTurn[playerId]) {
+                context.state.scoredThisTurn[playerId] = [];
+              }
+              context.state.scoredThisTurn[playerId].push(bfId);
+
+              // Emit "hold" event so triggered abilities fire (e.g. Altar to Unity)
+              if (scoringAllowed) {
+                fireTriggers({ battlefieldId: bfId, playerId, type: "hold" }, triggerCtx);
+              }
+            }
+          }
+        }
+
+        // rule 471.1.a.1: a hold that reaches the Victory Score wins
+        // immediately — unlike conquer it has no "scored every
+        // battlefield" requirement. The scoring step runs outside any
+        // move reducer, so the win check must happen here.
+        if (hasPlayerWon(context.state, playerId)) {
+          context.state.status = "finished";
+          context.state.winner = playerId;
+        }
+
+        // rule 364: passive abilities track game state continuously — the
+        // scoring step changed points outside any move, so re-apply statics
+        // (e.g. "My Might is increased by your points") now rather than
+        // waiting for the next move's cleanup pass.
+        if (context.cards.updateCardMeta) {
+          recalculateStaticEffects({
+            cards: {
+              getCardMeta: context.cards.getCardMeta,
+              getCardOwner: context.cards.getCardOwner ?? (() => undefined),
+              updateCardMeta: context.cards.updateCardMeta,
+            },
+            draft: context.state,
+            zones: context.zones,
+          });
+        }
+}
+
+/** Expiration Step of the Ending Phase (rule 317.2 / 517.2). */
+function runExpirationStep(context: FlowStepContext): void {
+        // Collect all board cards for cleanup
+        const allBoardCards: CoreCardId[] = [];
+        for (const pid of Object.keys(context.state.players)) {
+          allBoardCards.push(
+            ...context.zones.getCardsInZone("base" as CoreZoneId, pid as CorePlayerId),
+          );
+        }
+        for (const bfId of Object.keys(context.state.battlefields)) {
+          allBoardCards.push(
+            ...context.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId),
+          );
+        }
+
+        for (const cardId of allBoardCards) {
+          const meta = context.cards.getCardMeta(cardId);
+          if (!meta) {
+            continue;
+          }
+
+          // Clear all damage from units (rule 517.2.a / 317.2.b) — marked
+          // damage lives in BOTH meta.damage and the reserved __counters
+          // bag (effects/damage.ts and assignDamage write both), so the
+          // heal must zero both or readers taking the max still see it.
+          const damageCounters = (meta as { __counters?: Record<string, number> }).__counters;
+          if ((meta.damage ?? 0) > 0 || (damageCounters?.damage ?? 0) > 0) {
+            context.cards.updateCardMeta(cardId, {
+              __counters: { ...(damageCounters ?? {}), damage: 0 },
+              damage: 0,
+            } as Partial<RiftboundCardMeta>);
+          }
+
+          // Clear stun at Ending Step (rule 423.1.a.2) — the stun effect writes
+          // counters.setFlag → __flags.stunned; seeds/mirrors use top-level stunned.
+          const stunFlags = (meta as { __flags?: Record<string, boolean> }).__flags;
+          if (meta.stunned || stunFlags?.stunned === true) {
+            context.cards.updateCardMeta(cardId, {
+              __flags: { ...(stunFlags ?? {}), stunned: false },
+              stunned: false,
+            } as Partial<RiftboundCardMeta>);
+          }
+
+          // Expire turn-scoped granted keywords (rule 517.2.b)
+          if (meta.grantedKeywords && meta.grantedKeywords.length > 0) {
+            const remaining = meta.grantedKeywords.filter(
+              (gk: { duration: string }) => gk.duration !== "turn",
+            );
+            context.cards.updateCardMeta(cardId, {
+              grantedKeywords: remaining.length > 0 ? remaining : undefined,
+            });
+          }
+
+          // rule-id: ven-142-166 — expire turn-scoped granted abilities (rule 517.2.b)
+          if (meta.grantedAbilities && meta.grantedAbilities.length > 0) {
+            const remaining = meta.grantedAbilities.filter(
+              (ga: { duration: string }) => ga.duration !== "turn",
+            );
+            context.cards.updateCardMeta(cardId, {
+              grantedAbilities: remaining.length > 0 ? remaining : undefined,
+            });
+          }
+
+          // rule-id: unl-095-219 — expire turn-scoped delayed triggers (rule 517.2.b)
+          if (meta.delayedTriggers && meta.delayedTriggers.length > 0) {
+            const remaining = meta.delayedTriggers.filter(
+              (dt: { duration: string }) => dt.duration !== "turn",
+            );
+            context.cards.updateCardMeta(cardId, {
+              delayedTriggers: remaining.length > 0 ? remaining : undefined,
+            });
+          }
+
+          // rule-id: ogn-157-298 — "you've not chosen this turn" resets (rule 517.2.b)
+          if (meta.modesChosenThisTurn && meta.modesChosenThisTurn.length > 0) {
+            context.cards.updateCardMeta(cardId, {
+              modesChosenThisTurn: [],
+            } as Partial<RiftboundCardMeta>);
+          }
+
+          // Reset turn-scoped Might modifier (rule 517.2.b)
+          if (meta.mightModifier && meta.mightModifier !== 0) {
+            context.cards.updateCardMeta(cardId, { mightModifier: 0 });
+          }
+          // rule-id: sfd-110-221 — combat-scoped portion goes with it.
+          if (meta.combatMightModifier) {
+            context.cards.updateCardMeta(cardId, { combatMightModifier: 0 });
+          }
+        }
+
+        // rule 317.1 / 455 (sfd-202-221 Hostile Takeover) — "…at end of
+        // turn" control changes expire now: the permanent re-layers to
+        // the next surviving control effect (else its owner) and, when
+        // the effect said so, is recalled to its controller's base.
+        // Recall is not a move (rule 458.1), so board state is kept.
+        for (const cardId of allBoardCards) {
+          const meta = context.cards.getCardMeta(cardId) as
+            | Partial<RiftboundCardMeta>
+            | undefined;
+          const effects = meta?.controlEffects;
+          if (!effects || effects.length === 0) {
+            continue;
+          }
+          const expiring = effects.filter((e) => e.duration === "end-of-turn");
+          if (expiring.length === 0) {
+            continue;
+          }
+          const surviving = effects.filter((e) => e.duration !== "end-of-turn");
+          context.cards.updateCardMeta(cardId, {
+            controlEffects: surviving.length > 0 ? surviving : undefined,
+          } as Partial<RiftboundCardMeta>);
+          const owner = context.cards.getCardOwner?.(cardId);
+          const desired = surviving[surviving.length - 1]?.controllerId ?? owner;
+          if (desired) {
+            context.cards.setCardController?.(cardId, desired as CorePlayerId);
+          }
+          if (expiring.some((e) => e.recallOnExpiry === true)) {
+            const from = context.zones.getCardZone?.(cardId);
+            context.zones.moveCard({ cardId, targetZoneId: "base" as CoreZoneId });
+            // rule 323.6 / 190.4.c — a battlefield left without a unit
+            // its controller controls is lost immediately (the Ending
+            // Step is an Open State).
+            if (from?.startsWith("battlefield-")) {
+              const bf = context.state.battlefields[from.slice("battlefield-".length)];
+              const stillThere = context.zones
+                .getCardsInZone(from as CoreZoneId)
+                .some(
+                  (id) =>
+                    (context.cards.getCardController?.(id) ??
+                      context.cards.getCardOwner?.(id)) === bf?.controller,
+                );
+              if (bf?.controller && !stillThere) {
+                bf.controller = null;
+              }
+            }
+          }
+        }
+
+        // rule-id: ven-113-166 (rule 517.2.b) — turn-scoped granted
+        // [Flow] expires at end of turn. The card sits in the trash, not
+        // on the board, so sweep every card that carries the grant.
+        const flowGrantCards = context.cards.queryCards(
+          (_id, m) => (m as Partial<RiftboundCardMeta>).grantedFlow?.duration === "turn",
+        );
+        for (const cardId of flowGrantCards) {
+          context.cards.updateCardMeta(cardId, {
+            grantedFlow: undefined,
+          } as Partial<RiftboundCardMeta>);
+        }
+
+        // rule-id: ogn-197-298 — "this turn" Might modifiers expire at
+        // end of turn regardless of zone (rule 517.2.b). A unit that left
+        // the board (hand / facedown / etc.) must not carry a stale
+        // modifier into a later replay (e.g. Teemo revealed from Hidden).
+        const staleMightCards = context.cards.queryCards(
+          (_id, m) => ((m as Partial<RiftboundCardMeta>).mightModifier ?? 0) !== 0,
+        );
+        for (const cardId of staleMightCards) {
+          context.cards.updateCardMeta(cardId, {
+            mightModifier: 0,
+          } as Partial<RiftboundCardMeta>);
+        }
+
+        // Empty all rune pools (rule 517.2.c)
+        for (const playerId of Object.keys(context.state.runePools)) {
+          const pool = context.state.runePools[playerId];
+          if (pool) {
+            pool.energy = 0;
+            pool.power = {};
+          }
+        }
+
+        // Clear turn-based tracking
+        const currentPlayer = context.getCurrentPlayer();
+        context.state.conqueredThisTurn[currentPlayer] = [];
+        context.state.scoredThisTurn[currentPlayer] = [];
+
+        // Clear consumed-next replacement markers so turn-scoped
+        // Single-fire replacements (Tactical Retreat, Highlander, etc.)
+        // Start fresh next turn.
+        if (context.state.consumedNextReplacements) {
+          context.state.consumedNextReplacements = {};
+        }
+        // rule-id: ogn-026-298 — "can't play cards this turn" expires.
+        if (context.state.cannotPlayCardsThisTurn) {
+          context.state.cannotPlayCardsThisTurn = undefined;
+        }
+        // rule-id: sfd-078-221 — an unused "next spell has [Repeat]"
+        // grant expires with the turn.
+        if (context.state.nextSpellRepeat) {
+          context.state.nextSpellRepeat = undefined;
+        }
+        // rule-id: unl-007-219 — expire "this turn" runtime replacements
+        // (rule 517.2) so an unspent die→banish rider doesn't leak into
+        // later turns.
+        if (context.state.activeReplacements) {
+          context.state.activeReplacements = (
+            context.state.activeReplacements as { duration?: string }[]
+          ).filter((e) => e?.duration !== "turn" && e?.duration !== "next");
+        }
+        // rule 517.2.b (ogn-053-298) — "this turn" continuous effects expire;
+        // the next static pass drops their Might/keyword contributions.
+        if (context.state.turnStatics) {
+          context.state.turnStatics = undefined;
+        }
+}
+
 /**
  * Riftbound flow definition
  *
@@ -436,65 +750,19 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               const triggerCtx = buildFlowTriggerContext(context);
               fireTriggers({ playerId: playerId as string, type: "start-of-turn" }, triggerCtx);
 
-              // Scoring step (rule 515.2.b): Holding
-              // Score 1 point for each battlefield the turn player controls
-              for (const [bfId, bf] of Object.entries(context.state.battlefields)) {
-                if (bf.controller === playerId) {
-                  const scored = context.state.scoredThisTurn[playerId] ?? [];
-                  if (!scored.includes(bfId)) {
-                    // Blocked if a battlefield ability (e.g. Forgotten Monument)
-                    // Prevents this player from scoring here right now.
-                    const scoringAllowed = canPlayerScoreAtBattlefield(
-                      context.state,
-                      playerId,
-                      bfId,
-                    );
-                    const player = context.state.players[playerId];
-                    // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
-                    if (
-                      player &&
-                      scoringAllowed &&
-                      !applyScoreReplacement(context.state, playerId, context)
-                    ) {
-                      player.victoryPoints += 1;
-                    }
-
-                    if (!context.state.scoredThisTurn[playerId]) {
-                      context.state.scoredThisTurn[playerId] = [];
-                    }
-                    context.state.scoredThisTurn[playerId].push(bfId);
-
-                    // Emit "hold" event so triggered abilities fire (e.g. Altar to Unity)
-                    if (scoringAllowed) {
-                      fireTriggers({ battlefieldId: bfId, playerId, type: "hold" }, triggerCtx);
-                    }
-                  }
-                }
+              // rule 315.2.a before 315.2.b — the Scoring Step waits for the
+              // Beginning Step's triggers, so a battlefield vacated by such a
+              // trigger earns no Hold point.
+              if (stepMustWaitForChain(context.state)) {
+                deferStep(context.state, "hold-scoring");
+              } else {
+                runHoldScoringStep(context);
               }
+            },
 
-              // rule 471.1.a.1: a hold that reaches the Victory Score wins
-              // immediately — unlike conquer it has no "scored every
-              // battlefield" requirement. The scoring step runs outside any
-              // move reducer, so the win check must happen here.
-              if (hasPlayerWon(context.state, playerId)) {
-                context.state.status = "finished";
-                context.state.winner = playerId;
-              }
-
-              // rule 364: passive abilities track game state continuously — the
-              // scoring step changed points outside any move, so re-apply statics
-              // (e.g. "My Might is increased by your points") now rather than
-              // waiting for the next move's cleanup pass.
-              if (context.cards.updateCardMeta) {
-                recalculateStaticEffects({
-                  cards: {
-                    getCardMeta: context.cards.getCardMeta,
-                    getCardOwner: context.cards.getCardOwner ?? (() => undefined),
-                    updateCardMeta: context.cards.updateCardMeta,
-                  },
-                  draft: context.state,
-                  zones: context.zones,
-                });
+            onEnd: (context) => {
+              if (takeDeferredStep(context.state, "hold-scoring")) {
+                runHoldScoringStep(context);
               }
             },
 
@@ -722,6 +990,17 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 phase: "main",
               };
 
+              // rule 316.3: as the Main Phase begins EACH player's Rune Pool
+              // empties — not just the turn player's (draw.onEnd covers only
+              // that one), so energy an opponent floated for a Reaction during
+              // the Beginning/Channel/Draw Phases is lost here.
+              for (const pool of Object.values(context.state.runePools)) {
+                if (pool) {
+                  pool.energy = 0;
+                  pool.power = {};
+                }
+              }
+
               // rule-id: 516-main-phase-start (ven-067-166 Bottled
               // Constellation): "At the start of your Main Phase" triggers
               // fire for the turn player as the Main Phase opens.
@@ -771,208 +1050,18 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 );
               }
 
-              // Collect all board cards for cleanup
-              const allBoardCards: CoreCardId[] = [];
-              for (const pid of Object.keys(context.state.players)) {
-                allBoardCards.push(
-                  ...context.zones.getCardsInZone("base" as CoreZoneId, pid as CorePlayerId),
-                );
+              // rule 317.1 before 317.2 — "this turn" effects stay live while
+              // an end-of-turn trigger is still on the chain.
+              if (stepMustWaitForChain(context.state)) {
+                deferStep(context.state, "expiration");
+              } else {
+                runExpirationStep(context);
               }
-              for (const bfId of Object.keys(context.state.battlefields)) {
-                allBoardCards.push(
-                  ...context.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId),
-                );
-              }
+            },
 
-              for (const cardId of allBoardCards) {
-                const meta = context.cards.getCardMeta(cardId);
-                if (!meta) {
-                  continue;
-                }
-
-                // Clear all damage from units (rule 517.2.a / 317.2.b) — marked
-                // damage lives in BOTH meta.damage and the reserved __counters
-                // bag (effects/damage.ts and assignDamage write both), so the
-                // heal must zero both or readers taking the max still see it.
-                const damageCounters = (meta as { __counters?: Record<string, number> }).__counters;
-                if ((meta.damage ?? 0) > 0 || (damageCounters?.damage ?? 0) > 0) {
-                  context.cards.updateCardMeta(cardId, {
-                    __counters: { ...(damageCounters ?? {}), damage: 0 },
-                    damage: 0,
-                  } as Partial<RiftboundCardMeta>);
-                }
-
-                // Clear stun at Ending Step (rule 423.1.a.2) — the stun effect writes
-                // counters.setFlag → __flags.stunned; seeds/mirrors use top-level stunned.
-                const stunFlags = (meta as { __flags?: Record<string, boolean> }).__flags;
-                if (meta.stunned || stunFlags?.stunned === true) {
-                  context.cards.updateCardMeta(cardId, {
-                    __flags: { ...(stunFlags ?? {}), stunned: false },
-                    stunned: false,
-                  } as Partial<RiftboundCardMeta>);
-                }
-
-                // Expire turn-scoped granted keywords (rule 517.2.b)
-                if (meta.grantedKeywords && meta.grantedKeywords.length > 0) {
-                  const remaining = meta.grantedKeywords.filter(
-                    (gk: { duration: string }) => gk.duration !== "turn",
-                  );
-                  context.cards.updateCardMeta(cardId, {
-                    grantedKeywords: remaining.length > 0 ? remaining : undefined,
-                  });
-                }
-
-                // rule-id: ven-142-166 — expire turn-scoped granted abilities (rule 517.2.b)
-                if (meta.grantedAbilities && meta.grantedAbilities.length > 0) {
-                  const remaining = meta.grantedAbilities.filter(
-                    (ga: { duration: string }) => ga.duration !== "turn",
-                  );
-                  context.cards.updateCardMeta(cardId, {
-                    grantedAbilities: remaining.length > 0 ? remaining : undefined,
-                  });
-                }
-
-                // rule-id: unl-095-219 — expire turn-scoped delayed triggers (rule 517.2.b)
-                if (meta.delayedTriggers && meta.delayedTriggers.length > 0) {
-                  const remaining = meta.delayedTriggers.filter(
-                    (dt: { duration: string }) => dt.duration !== "turn",
-                  );
-                  context.cards.updateCardMeta(cardId, {
-                    delayedTriggers: remaining.length > 0 ? remaining : undefined,
-                  });
-                }
-
-                // rule-id: ogn-157-298 — "you've not chosen this turn" resets (rule 517.2.b)
-                if (meta.modesChosenThisTurn && meta.modesChosenThisTurn.length > 0) {
-                  context.cards.updateCardMeta(cardId, {
-                    modesChosenThisTurn: [],
-                  } as Partial<RiftboundCardMeta>);
-                }
-
-                // Reset turn-scoped Might modifier (rule 517.2.b)
-                if (meta.mightModifier && meta.mightModifier !== 0) {
-                  context.cards.updateCardMeta(cardId, { mightModifier: 0 });
-                }
-                // rule-id: sfd-110-221 — combat-scoped portion goes with it.
-                if (meta.combatMightModifier) {
-                  context.cards.updateCardMeta(cardId, { combatMightModifier: 0 });
-                }
-              }
-
-              // rule 317.1 / 455 (sfd-202-221 Hostile Takeover) — "…at end of
-              // turn" control changes expire now: the permanent re-layers to
-              // the next surviving control effect (else its owner) and, when
-              // the effect said so, is recalled to its controller's base.
-              // Recall is not a move (rule 458.1), so board state is kept.
-              for (const cardId of allBoardCards) {
-                const meta = context.cards.getCardMeta(cardId) as
-                  | Partial<RiftboundCardMeta>
-                  | undefined;
-                const effects = meta?.controlEffects;
-                if (!effects || effects.length === 0) {
-                  continue;
-                }
-                const expiring = effects.filter((e) => e.duration === "end-of-turn");
-                if (expiring.length === 0) {
-                  continue;
-                }
-                const surviving = effects.filter((e) => e.duration !== "end-of-turn");
-                context.cards.updateCardMeta(cardId, {
-                  controlEffects: surviving.length > 0 ? surviving : undefined,
-                } as Partial<RiftboundCardMeta>);
-                const owner = context.cards.getCardOwner?.(cardId);
-                const desired = surviving[surviving.length - 1]?.controllerId ?? owner;
-                if (desired) {
-                  context.cards.setCardController?.(cardId, desired as CorePlayerId);
-                }
-                if (expiring.some((e) => e.recallOnExpiry === true)) {
-                  const from = context.zones.getCardZone?.(cardId);
-                  context.zones.moveCard({ cardId, targetZoneId: "base" as CoreZoneId });
-                  // rule 323.6 / 190.4.c — a battlefield left without a unit
-                  // its controller controls is lost immediately (the Ending
-                  // Step is an Open State).
-                  if (from?.startsWith("battlefield-")) {
-                    const bf = context.state.battlefields[from.slice("battlefield-".length)];
-                    const stillThere = context.zones
-                      .getCardsInZone(from as CoreZoneId)
-                      .some(
-                        (id) =>
-                          (context.cards.getCardController?.(id) ??
-                            context.cards.getCardOwner?.(id)) === bf?.controller,
-                      );
-                    if (bf?.controller && !stillThere) {
-                      bf.controller = null;
-                    }
-                  }
-                }
-              }
-
-              // rule-id: ven-113-166 (rule 517.2.b) — turn-scoped granted
-              // [Flow] expires at end of turn. The card sits in the trash, not
-              // on the board, so sweep every card that carries the grant.
-              const flowGrantCards = context.cards.queryCards(
-                (_id, m) => (m as Partial<RiftboundCardMeta>).grantedFlow?.duration === "turn",
-              );
-              for (const cardId of flowGrantCards) {
-                context.cards.updateCardMeta(cardId, {
-                  grantedFlow: undefined,
-                } as Partial<RiftboundCardMeta>);
-              }
-
-              // rule-id: ogn-197-298 — "this turn" Might modifiers expire at
-              // end of turn regardless of zone (rule 517.2.b). A unit that left
-              // the board (hand / facedown / etc.) must not carry a stale
-              // modifier into a later replay (e.g. Teemo revealed from Hidden).
-              const staleMightCards = context.cards.queryCards(
-                (_id, m) => ((m as Partial<RiftboundCardMeta>).mightModifier ?? 0) !== 0,
-              );
-              for (const cardId of staleMightCards) {
-                context.cards.updateCardMeta(cardId, {
-                  mightModifier: 0,
-                } as Partial<RiftboundCardMeta>);
-              }
-
-              // Empty all rune pools (rule 517.2.c)
-              for (const playerId of Object.keys(context.state.runePools)) {
-                const pool = context.state.runePools[playerId];
-                if (pool) {
-                  pool.energy = 0;
-                  pool.power = {};
-                }
-              }
-
-              // Clear turn-based tracking
-              const currentPlayer = context.getCurrentPlayer();
-              context.state.conqueredThisTurn[currentPlayer] = [];
-              context.state.scoredThisTurn[currentPlayer] = [];
-
-              // Clear consumed-next replacement markers so turn-scoped
-              // Single-fire replacements (Tactical Retreat, Highlander, etc.)
-              // Start fresh next turn.
-              if (context.state.consumedNextReplacements) {
-                context.state.consumedNextReplacements = {};
-              }
-              // rule-id: ogn-026-298 — "can't play cards this turn" expires.
-              if (context.state.cannotPlayCardsThisTurn) {
-                context.state.cannotPlayCardsThisTurn = undefined;
-              }
-              // rule-id: sfd-078-221 — an unused "next spell has [Repeat]"
-              // grant expires with the turn.
-              if (context.state.nextSpellRepeat) {
-                context.state.nextSpellRepeat = undefined;
-              }
-              // rule-id: unl-007-219 — expire "this turn" runtime replacements
-              // (rule 517.2) so an unspent die→banish rider doesn't leak into
-              // later turns.
-              if (context.state.activeReplacements) {
-                context.state.activeReplacements = (
-                  context.state.activeReplacements as { duration?: string }[]
-                ).filter((e) => e?.duration !== "turn" && e?.duration !== "next");
-              }
-              // rule 517.2.b (ogn-053-298) — "this turn" continuous effects expire;
-              // the next static pass drops their Might/keyword contributions.
-              if (context.state.turnStatics) {
-                context.state.turnStatics = undefined;
+            onEnd: (context) => {
+              if (takeDeferredStep(context.state, "expiration")) {
+                runExpirationStep(context);
               }
             },
 

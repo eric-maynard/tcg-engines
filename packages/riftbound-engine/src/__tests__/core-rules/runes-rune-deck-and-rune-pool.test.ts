@@ -265,7 +265,7 @@ describe("167 / 316.2–316.4 — every player's pool empties at the START of ea
   // Expected (167: "Every player's Rune Pool empties at the start of EACH player's Main Phase"): energy P2
   // floated (via a Reaction Add) during P1's Beginning Phase is lost when P1's Main Phase starts.
   // Actual: only the turn player's pool is emptied (draw.onEnd) — P2 carries the energy into P1's Main Phase.
-  test.failing("BUG: 167 / 316.3 — the OFF-turn player's pool must also empty when the turn player's Main Phase starts; engine only empties the turn player's", async () => {
+  test("167 / 316.3 — the OFF-turn player's pool also empties when the turn player's Main Phase starts", async () => {
     const game = await scenario()
       .turn(2)
       .active(P2)

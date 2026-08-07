@@ -477,7 +477,7 @@ describe("315.2.a → 315.2.b / 816.1.b — start-of-Beginning-Phase effects ful
   // Denial-independent probe. Expected: the legend's Beginning-Step trigger kills P1's own lone Might-1
   // holder at A; the cleanup (323.5/323.6) leaves A uncontrolled before the Scoring Step → no Hold → P1 stays 6.
   // Actual: the engine performs Hold scoring inside the same step that ENQUEUES the trigger, before it resolves → 7.
-  test.failing("BUG: 315.2.a→b — the Hold is scored before start-of-Beginning-Phase triggers resolve (a trigger that empties the battlefield should prevent the Hold)", async () => {
+  test("315.2.a→b — the Hold is scored only after start-of-Beginning-Phase triggers resolve (a trigger that empties the battlefield prevents the Hold)", async () => {
     const game = await scenario()
       .turn(2)
       .active(P2)
@@ -503,7 +503,7 @@ describe("315.2.a → 315.2.b / 816.1.b — start-of-Beginning-Phase effects ful
   // Expected: Beginning Step trigger kills the (only enemy) denier → by the Scoring Step nothing forbids → 6→7;
   // and while the trigger is still pending the Hold has not been scored yet (points 6 at that moment).
   // Actual: Hold is scored immediately at phase entry (7 while the trigger is still on the chain).
-  test.failing("BUG: 315.2.a→b — with the denier sniped by a start-of-Beginning-Phase trigger the Hold scores (→7), but only AFTER that trigger resolved; engine scores first", async () => {
+  test("315.2.a→b — with the denier sniped by a start-of-Beginning-Phase trigger the Hold scores (→7), but only AFTER that trigger resolved", async () => {
     const game = await scenario()
       .turn(2)
       .active(P2)
@@ -884,7 +884,7 @@ describe("194.2(.a/.b) / 323.1 / 472 — both players at the Victory Score is a 
   // Expected (471.1.b: "1 point from the Victory Score OR HIGHER"): at 8 the lone conquer of A draws instead → still 8–8,
   // no winner; the conquer trigger still fires.
   // Actual: the conquer pays a 9th point → P1 wins.
-  test("471.1.b — at 8 (≥ VS−1) a lone conquer must draw instead of scoring the 9th; engine awards it and ends the game", async () => {
+  test("471.1.b — at 8 (≥ VS−1) a lone conquer draws instead of scoring the 9th", async () => {
     const game = await tieBoard();
     const hand0 = game.p1.hand().length;
     await game.p1.move("scout", "A");

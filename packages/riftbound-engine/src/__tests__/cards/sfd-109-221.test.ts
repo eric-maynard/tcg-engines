@@ -57,7 +57,9 @@ describe("Akshan, Mischievous (sfd-109-221) — played by Dazzling Aurora", () =
     const game = await auroraRevealsAkshan();
     await game.p1.pick("base");
     expect(game.zoneOf("akshan")).toBe("base");
-    expect(game.p1.power("body")).toBe(2);
+    // Declining spends nothing, but answering the prompt closes the Ending Step:
+    // the turn rotates and rule 517.2.c / 316.3 empty the unspent [body][body].
+    expect(game.p1.power("body")).toBe(0);
     await game.settle();
     expect(game.state("theirAurora").controller).toBe(P2);
   });
