@@ -1238,7 +1238,14 @@ export const pendingChoiceMoves: Partial<
           const pickedSoFar = [...(choice.picked ?? []), ...newPicks];
           // rule 355.13 (ogn-073-298): "up to N" caps the accumulated picks.
           const capped = typeof choice.maxPicks === "number" && pickedSoFar.length >= choice.maxPicks;
-          if (!declined && !capped) {
+          // rule-id: sfd-079-221 (rule 355.13) — "move ANY NUMBER of your
+          // units" is one simultaneous choice: an answer that names the whole
+          // set (`pickedCardIds`) IS the chooser's answer, so it finalizes
+          // instead of re-prompting for more. Single `pickedCardId` answers
+          // keep the accumulate-until-declined flow.
+          const answeredAsSet =
+            Array.isArray(multiPicked) && (choice as { answerAsSet?: boolean }).answerAsSet === true;
+          if (!declined && !capped && !answeredAsSet) {
             const tgt = (choice.effect as { target?: unknown }).target as
               | Parameters<typeof isLegalMultiTargetSet>[0]
               | undefined;
@@ -1442,6 +1449,20 @@ export const pendingChoiceMoves: Partial<
             cardId: choice.cardId as CoreCardId,
             targetZoneId: targetZoneId as CoreZoneId,
           });
+        }
+        // rule-id: sfd-079-221 (rule 449) — "move any number of your units to an
+        // open battlefield" is ONE move of a group: every other unit in the
+        // group travels to the destination its controller just picked.
+        for (const extraId of ((choice as { alsoMoveCardIds?: readonly string[] })
+          .alsoMoveCardIds ?? []) as readonly string[]) {
+          if (context.zones.getCardZone?.(extraId as CoreCardId) === targetZoneId) {
+            continue;
+          }
+          context.zones.moveCard({
+            cardId: extraId as CoreCardId,
+            targetZoneId: targetZoneId as CoreZoneId,
+          });
+          markContestedOnArrival(draft, targetZoneId, choice.playerId);
         }
         draft.pendingChoice = undefined;
         // rule-id: ogs-015-024 (rule 439.2.a/.b.1) — a created token is placed,

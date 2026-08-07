@@ -532,6 +532,11 @@ export function executeResolvedItem(
           options: legal,
           remaining: legal.length,
           anyNumber: true,
+          // rule-id: sfd-079-221 (rule 355.13 / 449) — "move any number of your
+          // units to an open battlefield" is ONE simultaneous choice followed by
+          // ONE move, so the chooser names the whole set in a single answer
+          // instead of accumulating one unit per prompt.
+          ...(effect?.type === "move" ? { answerAsSet: true } : {}),
           picked: [],
         };
         return;

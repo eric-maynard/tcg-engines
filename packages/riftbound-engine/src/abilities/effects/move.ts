@@ -598,6 +598,49 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     return;
   }
 
+  // rule-id: sfd-079-221 (rule 170.11.c) — "move any number of your units to an
+  // OPEN battlefield": open = uncontrolled AND unoccupied, so an empty
+  // battlefield either side controls is not a legal destination. With no open
+  // battlefield the instruction resolves doing nothing (rule 425.1.c); the
+  // whole group travels to the single destination the controller picks.
+  if (dest === "open-battlefield") {
+    const open = Object.entries(ctx.draft.battlefields ?? {})
+      .filter(
+        ([bfId, bf]) =>
+          bf.controller === null &&
+          ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId).length === 0,
+      )
+      .map(([bfId]) => `battlefield-${bfId}`);
+    if (open.length === 0) {
+      return;
+    }
+    if (open.length > 1 && !ctx.draft.pendingChoice) {
+      const [first, ...rest] = moveTargets;
+      if (first === undefined) {
+        return;
+      }
+      ctx.draft.pendingChoice = {
+        alsoMoveCardIds: rest,
+        cardId: first,
+        options: open,
+        playerId: ctx.playerId,
+        sourceCardId: ctx.sourceCardId,
+        type: "choose-destination",
+      } as RiftboundGameState["pendingChoice"];
+      return;
+    }
+    const landing = open[0] as string;
+    for (const cardId of moveTargets) {
+      if (ctx.zones.getCardZone(cardId as CoreCardId) === landing) {
+        continue;
+      }
+      const landed = moveCardWithEvent(ctx, cardId, landing);
+      markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, cardId));
+    }
+    stageCombatOnArrival(ctx, landing);
+    return;
+  }
+
   let targetZone: string;
   // rule-id: ogn-177-298 — "I may be moved WITH IT": follow the triggering
   // move to its destination. No such event → nothing to follow.

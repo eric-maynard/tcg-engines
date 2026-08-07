@@ -125,7 +125,7 @@ describe("Bard, Mercurial (sfd-079-221)", () => {
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "bard", controller: P1, triggered: true })]);
   });
 
-  test.failing("BUG: paid → move both Chimes to the OPEN battlefield (not the empty enemy-held or own-held ones); they contest and conquer it", async () => {
+  test("paid → move both Chimes to the OPEN battlefield (not the empty enemy-held or own-held ones); they contest and conquer it", async () => {
     // Expected: only `open` is a legal destination (170.11.c); a and b end up there, P1 conquers it
     // (+1 point). Actual: the additional cost / trigger are not implemented, nothing moves.
     const game = await board().build();
@@ -142,7 +142,7 @@ describe("Bard, Mercurial (sfd-079-221)", () => {
     expect(game.state("legend").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: 'any number' includes just one — moving only Chime A leaves Chime B and Bard in base", async () => {
+  test("'any number' includes just one — moving only Chime A leaves Chime B and Bard in base", async () => {
     const game = await board().build();
     await game.p1.play("bard", { payOptional: true, to: "base" });
     await answerTrigger(game, ["a"], "open");
@@ -153,7 +153,7 @@ describe("Bard, Mercurial (sfd-079-221)", () => {
     expect(game.state("legend").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: paid but NO open battlefield exists (every battlefield is controlled or occupied) → the trigger resolves doing nothing; the legend stays exhausted (425.1.c)", async () => {
+  test("paid but NO open battlefield exists (every battlefield is controlled or occupied) → the trigger resolves doing nothing; the legend stays exhausted (425.1.c)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 4, power: { mind: 1 } })
       .legend(P1, LEGEND, "legend")
