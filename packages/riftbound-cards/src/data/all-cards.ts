@@ -837,6 +837,20 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   // the CHOSEN unit's status at resolution, so the conditional carries the
   // caster-chosen target and the branches carry none. The parser keeps only the
   // flat +2, so both tiers are declared here.
+  // rule 208.1 — Fretful Feline: "When I become ready, give me +2 [Might] this
+  // turn." "me" is self-bound, but the set-JSON generator emitted a chooseable
+  // `target: {type:"unit"}`, which makes the resolver prompt for any unit on the
+  // board (and lets the bonus land on an ally). Declare the self target here.
+  "ven-071-166": {
+    abilities: [
+      {
+        effect: { amount: 2, duration: "turn", target: "self", type: "modify-might" },
+        optional: false,
+        trigger: { event: "ready", on: "self" },
+        type: "triggered",
+      },
+    ],
+  },
   "ven-072-166": {
     abilities: [
       {
@@ -1269,6 +1283,99 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
         effect: {
           target: { controller: "friendly", location: "here", type: "unit" },
           type: "empower-cost-reduction",
+        },
+        type: "static",
+      },
+    ],
+  },
+  // rule 355.10.c.1 / 471.1.a.1 — Bottled Constellation: "At the start of your
+  // Main Phase, you may kill 3 other friendly units and/or gear to score 1
+  // point." The three kills are a cost WITHIN the instruction, so they ride as
+  // the trigger's `pay-cost` condition: with fewer than three other friendly
+  // permanents the option cannot be taken at all (never a partial kill, never a
+  // free point). The effect kills the three the controller picks and then
+  // scores — an "effect" point, so the Final-Point restriction never applies.
+  // The parser leaves the whole clause as a `raw` no-op.
+  "ven-067-166": {
+    abilities: [
+      {
+        condition: {
+          cost: {
+            kill: {
+              amount: 3,
+              target: { controller: "friendly", excludeSelf: true, types: ["unit", "gear"] },
+            },
+          },
+          type: "pay-cost",
+        },
+        effect: {
+          effects: [
+            {
+              target: {
+                controller: "friendly",
+                excludeSelf: true,
+                quantity: { upTo: 3 },
+                types: ["unit", "gear"],
+              },
+              type: "kill",
+            },
+            { amount: 1, type: "score" },
+          ],
+          type: "sequence",
+        },
+        optional: true,
+        trigger: { event: "main-phase", on: "controller" },
+        type: "triggered",
+      },
+    ],
+  },
+  // rule 425 / 827 — Mel, Newly Awakened. The two ungated lines parse fine; the
+  // [Empowered] line's phrasing is unique to this card, so the whole ability
+  // list is authored here (an explicit `abilities` bypasses the parser).
+  // The `uncounterable-spells` static is read by play-spell.ts
+  // controllerSpellsUncounterable.
+  "ven-069-166": {
+    abilities: [
+      {
+        effect: { amount: 1, type: "draw" },
+        trigger: { event: "play-self" },
+        type: "triggered",
+      },
+      {
+        cost: { energy: 3 },
+        effect: { target: "self", type: "empower" },
+        restrictions: [{ type: "not-empowered" }],
+        type: "activated",
+      },
+      {
+        condition: { type: "while-empowered" },
+        effect: { controller: "friendly", type: "uncounterable-spells" },
+        type: "static",
+      },
+      {
+        condition: { type: "while-empowered" },
+        effect: { amount: 1, controller: "friendly", type: "additional-might-reduction" },
+        type: "static",
+      },
+    ],
+  },
+  // rule 356.4 / 466 — Shock Blast: "This costs [2] less if you control
+  // something that's [Empowered]." A flat self-discount on the ENERGY only,
+  // gated on a board condition rather than a countable scope; read by
+  // moves/play/cost.ts getSelfScaledEnergyReduction. The parser drops the line.
+  "ven-059-166": {
+    abilities: [
+      {
+        effect: { amount: 4, target: { location: "battlefield", type: "unit" }, type: "damage" },
+        timing: "action",
+        type: "spell",
+      },
+      {
+        effect: {
+          by: 2,
+          condition: { controller: "friendly", type: "control-empowered" },
+          target: "self",
+          type: "cost-reduction",
         },
         type: "static",
       },
