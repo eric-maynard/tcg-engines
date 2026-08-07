@@ -235,6 +235,32 @@ function peekActiveDieReplacements(
 }
 
 /**
+ * Trigger-runner context built from a cleanup context. Stripped test stubs may
+ * omit the optional counter/zone ops, so they fall back to no-ops.
+ */
+function cleanupTriggerContext(ctx: CleanupContext): TriggerRunnerContext {
+  const zonesAny = ctx.zones as unknown as Partial<TriggerRunnerContext["zones"]>;
+  const countersAny = ctx.counters as unknown as Partial<TriggerRunnerContext["counters"]>;
+  const noop = () => {};
+  return {
+    cards: ctx.cards,
+    counters: {
+      addCounter: countersAny.addCounter ?? noop,
+      clearCounter: ctx.counters.clearCounter,
+      removeCounter: countersAny.removeCounter,
+      setFlag: ctx.counters.setFlag,
+    },
+    draft: ctx.draft,
+    zones: {
+      drawCards: zonesAny.drawCards ?? noop,
+      getCardZone: zonesAny.getCardZone,
+      getCardsInZone: ctx.zones.getCardsInZone,
+      moveCard: ctx.zones.moveCard,
+    },
+  } as TriggerRunnerContext;
+}
+
+/**
  * Run all state-based checks and cleanup (rules 518-526).
  *
  * Returns what changed so callers can fire appropriate triggers.
@@ -575,10 +601,25 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       if (meta?.combatRole) {
         continue;
       }
+      const side = ctx.cards.getCardOwner(cardId);
+      const role = side === attackerSide ? "attacker" : "defender";
       ctx.cards.updateCardMeta(cardId, {
-        combatRole: ctx.cards.getCardOwner(cardId) === attackerSide ? "attacker" : "defender",
+        combatRole: role,
       } as Partial<RiftboundCardMeta>);
       stateChanged = true;
+      // rule 383.4.e — gaining the designation IS attacking/defending, so the
+      // unit's attack/defend triggers fire right here, exactly as they do when
+      // the Combat Showdown opens.
+      fireTriggers(
+        {
+          alone: units.filter((id) => ctx.cards.getCardOwner(id) === side).length === 1,
+          battlefieldId: bfId,
+          cardId,
+          owner: side,
+          type: role === "attacker" ? "attack" : "defend",
+        } as never,
+        cleanupTriggerContext(ctx),
+      );
     }
   }
 

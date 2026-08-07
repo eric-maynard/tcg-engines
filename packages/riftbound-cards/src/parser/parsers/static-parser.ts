@@ -418,8 +418,16 @@ function parseStaticAbilityInner(
     const ability: StaticAbility = { effect, type: "static" };
     if (conditionClause) {
       const condResult = parseConditionFromText(`if ${conditionClause},`);
-      if (condResult?.condition) {
-        (ability as { condition: Condition }).condition = condResult.condition;
+      // rule 740.2.a — "if an enemy unit is alone there" restricts the
+      // permission to a destination holding exactly one enemy unit; the generic
+      // condition parser has no shape for it, so name it explicitly.
+      const condition =
+        condResult?.condition ??
+        (/enem\w*\s+unit\s+is\s+alone/i.test(conditionClause)
+          ? ({ location: "destination", type: "enemy-unit-alone" } as unknown as Condition)
+          : undefined);
+      if (condition) {
+        (ability as { condition: Condition }).condition = condition;
       }
     }
     return {

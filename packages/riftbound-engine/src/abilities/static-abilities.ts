@@ -443,8 +443,11 @@ export function evaluateCondition(
       return spent >= ((condition.amount as number) ?? 1);
     }
 
+    // rule 191.4.a — an ability's controller is its source's CONTROLLER, so
+    // "if you've gained XP this turn" reads the thief's ledger for a stolen unit.
     case "xp-gained-this-turn": {
-      const gained = ctx.draft.xpGainedThisTurn?.[source.owner] ?? 0;
+      const gained =
+        ctx.draft.xpGainedThisTurn?.[controllerOf(ctx, source.id, source.owner)] ?? 0;
       return gained > 0;
     }
 
