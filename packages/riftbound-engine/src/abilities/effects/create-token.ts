@@ -13,6 +13,31 @@ let tokenSeq = 0;
  * [rainbow]", whatever minted it. Keyed by token slug.
  */
 const NAMED_TOKEN_ABILITIES: Record<string, readonly unknown[]> = {
+  // rule 187.11 (ven-144-166): a Shadow Clone token always has "When I attack,
+  // you may banish a unit from your trash. If you do, give me [Assault 4] this
+  // turn." — only units in the controller's own trash qualify.
+  "shadow-clone": [
+    {
+      effect: {
+        effects: [
+          { target: { location: "trash", type: "unit" }, type: "banish" },
+          {
+            duration: "turn",
+            keyword: "Assault",
+            target: "self",
+            type: "grant-keyword",
+            value: 4,
+          },
+        ],
+        type: "sequence",
+      },
+      // rule 402.1 / 583: "you may" is the chain item's opt-in, asked as the
+      // trigger finalizes — declining banishes nothing and grants nothing.
+      optional: true,
+      trigger: { event: "attack", on: "self" },
+      type: "triggered",
+    },
+  ],
   gold: [
     {
       cost: { exhaust: true, kill: "self" },
@@ -36,10 +61,11 @@ function tokenTags(tokenDef: { name: string; tags?: readonly string[] }): string
  * token unit while I'm at a battlefield, you may play that token and an
  * additional copy of it instead." Scans the creating player's board for an
  * unconsumed `play-token` replacement whose `while-at-battlefield` condition
- * holds, marks it consumed for the turn, and returns the number of extra
- * copies to create (0 or 1).
+ * holds and returns its consumed-key, or undefined when none applies.
+ * rule 355.13: "you may" — the key is only marked consumed once the
+ * controller accepts, so declining leaves the once-each-turn use available.
  */
-function applyPlayTokenReplacement(ctx: EffectContext): number {
+function findPlayTokenReplacement(ctx: EffectContext): string | undefined {
   const matches = findAllReplacements(
     { owner: ctx.playerId, playerId: ctx.playerId, type: "play-token" },
     {
@@ -69,14 +95,17 @@ function applyPlayTokenReplacement(ctx: EffectContext): number {
         continue;
       }
     }
-    if (!ctx.draft.consumedNextReplacements) {
-      (ctx.draft as { consumedNextReplacements?: Record<string, true> }).consumedNextReplacements =
-        {};
-    }
-    (ctx.draft.consumedNextReplacements as Record<string, true>)[key] = true;
-    return 1;
+    return key;
   }
-  return 0;
+  return undefined;
+}
+
+/** Marks a `play-token` replacement used for the turn (rule: once each turn). */
+function consumePlayTokenReplacement(ctx: EffectContext, key: string): void {
+  if (!ctx.draft.consumedNextReplacements) {
+    (ctx.draft as { consumedNextReplacements?: Record<string, true> }).consumedNextReplacements = {};
+  }
+  (ctx.draft.consumedNextReplacements as Record<string, true>)[key] = true;
 }
 
 export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
@@ -104,10 +133,16 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
       return;
     }
   }
-  let count = resolveAmount(effect.amount ?? 1, ctx);
-  // Rule unl-086-219: a play-token replacement adds one additional copy.
-  if (count > 0 && tokenDef.type !== "gear") {
-    count += applyPlayTokenReplacement(ctx);
+  const tokenReplacement = effect as {
+    extraTokenCopies?: number;
+    replacementKey?: string;
+    skipTokenReplacement?: boolean;
+  };
+  const count = resolveAmount(effect.amount ?? 1, ctx);
+  // Rule unl-086-219: this execution IS the accepted additional copy — the
+  // once-each-turn use is spent only now, never by a declined offer.
+  if (count > 0 && tokenReplacement.replacementKey) {
+    consumePlayTokenReplacement(ctx, tokenReplacement.replacementKey);
   }
   // rule 811.1.d.3: a hidden spell / hidden permanent's play effect that plays
   // a unit must play it at the battlefield the card was facedown at.
@@ -298,5 +333,34 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
     // rule-id: sfd-154-221 — a rider that acts on the token ("… to ready it")
     // names the ids this effect just minted, so bind them for the rider.
     h.executeEffect(then, createdIds.length > 0 ? { ...ctx, boundTargets: createdIds } : ctx);
+  }
+  // rule 355.13 / unl-086-219 (Zilean): "you may play that token and an
+  // additional copy of it instead" — the extra copy is OPTIONAL, so its
+  // controller is asked instead of it being applied silently. Accepting
+  // re-enters this handler for the one extra token (and only then spends the
+  // once-each-turn use); declining leaves the use available.
+  if (
+    !tokenReplacement.skipTokenReplacement &&
+    tokenDef.type !== "gear" &&
+    count > 0 &&
+    createdIds.length > 0 &&
+    !ctx.draft.pendingChoice
+  ) {
+    const key = findPlayTokenReplacement(ctx);
+    if (key !== undefined) {
+      ctx.draft.pendingChoice = {
+        effect: {
+          ...effect,
+          amount: 1,
+          replacementKey: key,
+          skipTokenReplacement: true,
+          then: undefined,
+        },
+        playerId: ctx.playerId,
+        prompt: "Play an additional copy of the token?",
+        sourceCardId: ctx.sourceCardId,
+        type: "confirm",
+      } as typeof ctx.draft.pendingChoice;
+    }
   }
 }

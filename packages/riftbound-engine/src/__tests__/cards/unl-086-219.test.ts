@@ -30,10 +30,39 @@ describe("Zilean, Time Mage (unl-086-219)", () => {
 
     await game.p1.playGear("fountain1");
     await game.settle();
+    // rule 355.13: "you may" — the replacement is offered, not applied silently.
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    await game.p1.yes();
+    await game.settle();
     expect(sprites(game)).toHaveLength(2);
 
     // Once each turn: the second token play this turn is not doubled.
     await game.p1.playGear("fountain2");
+    await game.settle();
+    expect(sprites(game)).toHaveLength(3);
+  });
+
+  test("declining the 'you may' plays just the one token and leaves the once-each-turn use available", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 4, power: { mind: 2 } })
+      .battlefield("bf1", { controller: P1 })
+      .unit(P1, "bf1", ZILEAN, "zilean")
+      .hand(P1, SPRITE_FOUNTAIN, "fountain1")
+      .hand(P1, SPRITE_FOUNTAIN, "fountain2")
+      .build();
+
+    await game.p1.playGear("fountain1");
+    await game.settle();
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    await game.p1.no();
+    await game.settle();
+    expect(sprites(game)).toHaveLength(1);
+
+    // Declined ⇒ not consumed: the next token play this turn is offered again.
+    await game.p1.playGear("fountain2");
+    await game.settle();
+    expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
+    await game.p1.yes();
     await game.settle();
     expect(sprites(game)).toHaveLength(3);
   });
