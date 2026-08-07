@@ -171,6 +171,14 @@ function existsHereFilterMatches(
       return flag("exhausted");
     case "ready":
       return !flag("exhausted");
+    // rule 445.2 / 464.2 — combat designations: "another unit attacking with
+    // me" is another unit that holds the Attacker designation here.
+    case "attacking":
+      return meta.combatRole === "attacker";
+    case "defending":
+      return meta.combatRole === "defender";
+    case "in-combat":
+      return meta.combatRole === "attacker" || meta.combatRole === "defender";
     default:
       // Unknown filter strings match everything, as elsewhere in the resolver.
       return true;
