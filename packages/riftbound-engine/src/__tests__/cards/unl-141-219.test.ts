@@ -37,6 +37,29 @@ describe("Evelynn, Entrancing (unl-141-219)", () => {
     expect(game.locationOf("foe")).toBe("bf1");
   });
 
+  test("pulling an enemy unit onto Evelynn's own battlefield applies Contested (450) and stages combat (464.2.c)", async () => {
+    const game = await scenario()
+      .battlefield("bf1", { controller: P1 })
+      .battlefield("bf2", { controller: P2 })
+      .facedown(P1, "bf1", EVELYNN, "eve")
+      .unit(P2, "bf2", { might: 3, name: "Mech" }, "foe")
+      .build();
+
+    await game.p1.reveal("eve");
+    await game.settle();
+    if (game.decision()?.kind === "yes-no") {
+      await game.p1.yes();
+      await game.settle();
+    }
+    if (game.decision()?.kind === "pick") {
+      await game.p1.pick("foe");
+      await game.settle();
+    }
+    expect(game.locationOf("foe")).toBe("bf1");
+    // rule 450: the ARRIVING unit's controller (P2) applies Contested, not the mover.
+    expect(game.gameState.battlefields.bf1).toMatchObject({ contested: true, contestedBy: P2 });
+  });
+
   test("has Backline and Hidden", async () => {
     const game = await scenario()
       .battlefield("bf1", { controller: null })

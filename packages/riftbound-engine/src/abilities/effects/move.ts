@@ -696,7 +696,11 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     if (from) {
       origins.push(from);
     }
-    moveCardWithEvent(ctx, targetId, targetZone);
+    const landed = moveCardWithEvent(ctx, targetId, targetZone);
+    // rule 450: a unit arriving at a battlefield its own controller does not
+    // control applies Contested — including when an effect drags an ENEMY unit
+    // onto the source's battlefield (unl-141-219 Evelynn, `to: "here"`).
+    markContestedOnArrival(ctx.draft, landed, arrivingController(ctx, targetId));
   }
   stageCombatOnArrival(ctx, targetZone);
 
