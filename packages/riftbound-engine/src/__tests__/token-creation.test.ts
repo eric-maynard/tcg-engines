@@ -17,6 +17,7 @@ import {
   setGlobalCardRegistry,
 } from "../operations/card-lookup";
 import type { EffectContext, ExecutableEffect } from "../abilities/effect-executor";
+import { RIFTBOUND_TOKEN_DEFS } from "../game-definition/moves/token";
 import { executeEffect } from "../abilities/effect-executor";
 import type { RiftboundGameState } from "../types";
 
@@ -299,6 +300,38 @@ describe("Token Creation Effect (rule 170-178)", () => {
 
     const def = registry.get(ctx.createdTokens[0]!);
     expect(def?.keywords).toContain("Temporary");
+  });
+
+  test("the shared token-def-<slug> entry is refreshed, not first-writer-wins", () => {
+    // rule 187.1: the app snapshot resolves a token's stats through the shared
+    // `token-def-<slug>` id. A stale registration (sandbox catalog / earlier
+    // game) must not make a 3-Might Sprite render as a 1-Might one.
+    registry.register("token-def-sprite", {
+      cardType: "unit",
+      id: "token-def-sprite",
+      keywords: ["Backline"],
+      might: 1,
+      name: "Sprite",
+    } as never);
+
+    const draft = createMockState();
+    const ctx = createMockEffectContext(draft, { playerId: "p1", sourceCardId: "source-card" });
+    executeEffect(
+      {
+        location: "base",
+        token: { keywords: ["Temporary"], might: 3, name: "Sprite", type: "unit" },
+        type: "create-token",
+      } as ExecutableEffect,
+      ctx,
+    );
+
+    expect(registry.get("token-def-sprite")?.might).toBe(3);
+    expect(registry.get(ctx.createdTokens[0]!)?.might).toBe(3);
+  });
+
+  test("the sandbox token catalog Sprite matches the printed token (3 Might, no keywords)", () => {
+    expect(RIFTBOUND_TOKEN_DEFS.Sprite.might).toBe(3);
+    expect(RIFTBOUND_TOKEN_DEFS.Sprite.keywords).toBeUndefined();
   });
 
   test("no-ops gracefully when createCardInZone is not provided", () => {

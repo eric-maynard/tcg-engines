@@ -67,9 +67,10 @@ export const RIFTBOUND_TOKEN_DEFS: Record<TokenName, TokenDefinition> = {
     name: "Sand Soldier",
     type: "unit",
   },
+  // rule 187.1 — every printed Sprite token (unl-t07) is a 3-Might unit with
+  // no keywords; the catalog stats must match the ability-minted token.
   Sprite: {
-    keywords: ["Backline"],
-    might: 1,
+    might: 3,
     name: "Sprite",
     type: "unit",
   },

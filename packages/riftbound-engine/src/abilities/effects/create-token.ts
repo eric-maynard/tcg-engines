@@ -119,7 +119,11 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   const tokenDefinitionId = `token-def-${tokenSlug}`;
   // rule 187.5: a rules-defined token (Gold, …) carries its printed abilities.
   const namedAbilities = NAMED_TOKEN_ABILITIES[tokenSlug];
-  if (!registry.get(tokenDefinitionId)) {
+  // Registered unconditionally (not first-writer-wins): the shared id is
+  // process-global, so a stale registration from the sandbox `addToken`
+  // catalog or an earlier game would otherwise make the app snapshot report
+  // the wrong Might/keywords for a token this effect mints.
+  {
     registry.register(tokenDefinitionId, {
       abilities: namedAbilities ? ([...namedAbilities] as never) : undefined,
       cardType: tokenDef.type === "gear" ? "gear" : "unit",
