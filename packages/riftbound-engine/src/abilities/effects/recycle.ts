@@ -1,32 +1,18 @@
 // Effect handler: "recycle"
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import type { RiftboundCardMeta } from "../../types";
+import { leaveBoard } from "../../operations/leave-board";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds, resolveAmount } from "./_helpers";
 
 /**
  * rule 416.1.a / rule-id: ogn-110-298 — recycle a specific card to the bottom
- * of its owner's Main Deck, clearing board-only state like the kill/bounce paths.
+ * of its owner's Main Deck through the leave-board choke point: a NEW object
+ * with no board state (rule 124.1), Equipment detached (457.1), and a token
+ * ceases to exist instead of entering the deck (rule 186.1 / 185.2.e).
  */
-function recycleToDeckBottom(cardId: string, ctx: EffectContext): void {
-  ctx.zones.moveCard({
-    cardId: cardId as CoreCardId,
-    position: "bottom",
-    targetZoneId: "mainDeck" as CoreZoneId,
-  });
-  ctx.counters.setFlag(cardId as CoreCardId, "exhausted", false);
-  ctx.counters.setFlag(cardId as CoreCardId, "stunned", false);
-  ctx.counters.setFlag(cardId as CoreCardId, "buffed", false);
-  ctx.cards.updateCardMeta?.(cardId as CoreCardId, {
-    buffed: false,
-    combatRole: null,
-    damage: 0,
-    exhausted: false,
-    grantedKeywords: undefined,
-    mightModifier: 0,
-    stunned: false,
-  } as Partial<RiftboundCardMeta> as Record<string, unknown>);
+export function recycleToDeckBottom(cardId: string, ctx: EffectContext): void {
+  leaveBoard(ctx, cardId, "deck-bottom", { by: ctx.playerId, kind: "recycle", source: ctx.sourceCardId });
 }
 
 type KeepCategory = "unit" | "gear" | "rune" | "hand";

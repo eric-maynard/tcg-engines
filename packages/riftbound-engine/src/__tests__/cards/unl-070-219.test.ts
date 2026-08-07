@@ -26,9 +26,12 @@ describe("Turn to Dust (unl-070-219)", () => {
     await game.settle();
     expect(game.state("dirk").grantedKeywords.map((k) => k.keyword)).toContain("Temporary");
     // rule 816.1.b: Temporary only acts at the controller's next Beginning Phase,
-    // so an unqualified grant must not expire at end of turn.
+    // so an unqualified grant must not expire at end of turn — it is still there
+    // when P2's Beginning Phase looks for it and kills the gear (the card in the
+    // trash is a new object and tracks no grants, rule 124.1).
     await game.advanceTurn(); // → P2's turn begins
-    expect(game.state("dirk").grantedKeywords.map((k) => k.keyword)).toContain("Temporary");
+    expect(game.zoneOf("dirk")).toBe("trash");
+    expect(game.state("dirk").grantedKeywords).toEqual([]);
   });
 
   test("the gear is killed at the start of its controller's next Beginning Phase", async () => {

@@ -107,14 +107,14 @@ export interface LeaveBoardContext {
   readonly draft: RiftboundGameState;
   readonly zones: {
     moveCard(params: { cardId: CoreCardId; targetZoneId: CoreZoneId; position?: "top" | "bottom" | number }): void;
-    getCardsInZone(zoneId: CoreZoneId, playerId?: CorePlayerId): CoreCardId[];
+    getCardsInZone?(zoneId: CoreZoneId, playerId?: CorePlayerId): CoreCardId[];
     getCardZone?(cardId: CoreCardId): string | undefined;
     removeCardFromGame?(params: { cardId: CoreCardId }): void;
     drawCards?(params: unknown): unknown;
   };
   readonly cards: {
     getCardMeta?(cardId: CoreCardId): object | undefined;
-    getCardOwner(cardId: CoreCardId): string | undefined;
+    getCardOwner?(cardId: CoreCardId): string | undefined;
     getCardController?(cardId: CoreCardId): string | undefined;
     setCardController?(cardId: CoreCardId, controllerId: CorePlayerId): void;
     updateCardMeta?(cardId: CoreCardId, meta: Record<string, unknown>): void;
@@ -172,14 +172,18 @@ export function zoneOfCard(ctx: LeaveBoardContext, cardId: string): string | und
   if (direct !== undefined) {
     return direct as string;
   }
+  const list = ctx.zones.getCardsInZone;
+  if (!list) {
+    return undefined;
+  }
   for (const zoneId of [...boardZoneIds(ctx.draft), "hand", "trash", "banishment", "mainDeck", "legendZone", "championZone"]) {
-    if (ctx.zones.getCardsInZone(zoneId as CoreZoneId).some((id) => (id as string) === cardId)) {
+    if (list(zoneId as CoreZoneId).some((id) => (id as string) === cardId)) {
       return zoneId;
     }
   }
   for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
     const z = `facedown-${bfId}`;
-    if (ctx.zones.getCardsInZone(z as CoreZoneId).some((id) => (id as string) === cardId)) {
+    if (list(z as CoreZoneId).some((id) => (id as string) === cardId)) {
       return z;
     }
   }
@@ -189,17 +193,17 @@ export function zoneOfCard(ctx: LeaveBoardContext, cardId: string): string | und
 function metaOf(ctx: LeaveBoardContext, cardId: string): Partial<RiftboundCardMeta> & {
   __flags?: Record<string, boolean>;
 } {
-  return (ctx.cards.getCardMeta?.(cardId as CoreCardId) ?? {}) as Partial<RiftboundCardMeta> & {
+  return (ctx.cards?.getCardMeta?.(cardId as CoreCardId) ?? {}) as Partial<RiftboundCardMeta> & {
     __flags?: Record<string, boolean>;
   };
 }
 
+function ownerOf(ctx: LeaveBoardContext, cardId: string): string | undefined {
+  return ctx.cards?.getCardOwner?.(cardId as CoreCardId);
+}
+
 function controllerOf(ctx: LeaveBoardContext, cardId: string): string {
-  return (
-    ctx.cards.getCardController?.(cardId as CoreCardId) ??
-    ctx.cards.getCardOwner(cardId as CoreCardId) ??
-    ""
-  );
+  return ctx.cards?.getCardController?.(cardId as CoreCardId) ?? ownerOf(ctx, cardId) ?? "";
 }
 
 function hasTriggerDouble(cardId: string): boolean {
@@ -223,7 +227,7 @@ export function snapshotLKI(ctx: LeaveBoardContext, cardId: string): LKISnapshot
   const meta = metaOf(ctx, cardId);
   const flags = meta.__flags ?? {};
   const zone = zoneOfCard(ctx, cardId);
-  const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? "";
+  const owner = ownerOf(ctx, cardId) ?? "";
   const controller = controllerOf(ctx, cardId) || owner;
   const buffed = meta.buffed === true || flags.buffed === true;
   let equipBonus = 0;
@@ -244,7 +248,7 @@ export function snapshotLKI(ctx: LeaveBoardContext, cardId: string): LKISnapshot
         )
       : 0;
   const unitsHere: { id: string; controller: string }[] = [];
-  if (isBoardZone(zone)) {
+  if (isBoardZone(zone) && ctx.zones.getCardsInZone) {
     const ids =
       zone === "base"
         ? ctx.zones.getCardsInZone("base" as CoreZoneId, controller as CorePlayerId)
@@ -342,7 +346,7 @@ export function resetObjectState(ctx: LeaveBoardContext, cardId: string): void {
   counters?.setFlag?.(id, "stunned", false);
   counters?.setFlag?.(id, "buffed", false);
   clearDamage(ctx, cardId);
-  ctx.cards.updateCardMeta?.(id, {
+  ctx.cards?.updateCardMeta?.(id, {
     __flags: undefined,
     attachedTo: undefined,
     buffed: false,
@@ -367,8 +371,8 @@ export function resetObjectState(ctx: LeaveBoardContext, cardId: string): void {
     staticMightBonus: undefined,
     stunned: false,
   });
-  const owner = ctx.cards.getCardOwner(id);
-  if (owner !== undefined && ctx.cards.setCardController && controllerOf(ctx, cardId) !== owner) {
+  const owner = ownerOf(ctx, cardId);
+  if (owner !== undefined && ctx.cards?.setCardController && controllerOf(ctx, cardId) !== owner) {
     ctx.cards.setCardController(id, owner as CorePlayerId);
   }
 }
@@ -379,7 +383,7 @@ export function resetObjectState(ctx: LeaveBoardContext, cardId: string): void {
  * recalled to base; a leaving Equipment drops off its holder.
  */
 export function detachOnLeave(ctx: LeaveBoardContext, cardId: string): void {
-  const update = ctx.cards.updateCardMeta;
+  const update = ctx.cards?.updateCardMeta;
   if (!update) {
     return;
   }
@@ -439,7 +443,7 @@ export function buildReplacementEffectContext(
     zones: {
       drawCards: (zonesAny.drawCards ?? noop) as EffectContext["zones"]["drawCards"],
       getCardZone: (id: CoreCardId) => zoneOfCard(ctx, id as string),
-      getCardsInZone: ctx.zones.getCardsInZone,
+      getCardsInZone: ctx.zones.getCardsInZone ?? (() => []),
       moveCard: ctx.zones.moveCard,
       removeCardFromGame: ctx.zones.removeCardFromGame,
     },
@@ -456,16 +460,19 @@ export function applyDieReplacement(ctx: LeaveBoardContext, cardId: string): boo
   if (RUNNING_DIE_REPLACEMENTS.has(cardId)) {
     return false;
   }
-  const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? "";
+  if (!ctx.zones.getCardsInZone) {
+    return false;
+  }
+  const owner = ownerOf(ctx, cardId) ?? "";
   const match = checkReplacement(
     { cardId, owner, type: "die" },
     {
       cards: {
         getCardMeta: (id: CoreCardId) => metaOf(ctx, id as string),
-        getCardOwner: (id: CoreCardId) => ctx.cards.getCardOwner(id),
+        getCardOwner: (id: CoreCardId) => ownerOf(ctx, id as string),
       },
       draft: ctx.draft,
-      zones: ctx.zones,
+      zones: ctx.zones as { getCardsInZone: NonNullable<LeaveBoardContext["zones"]["getCardsInZone"]> },
     },
   );
   if (!match || RUNNING_DIE_REPLACEMENTS.has(match.sourceCardId)) {

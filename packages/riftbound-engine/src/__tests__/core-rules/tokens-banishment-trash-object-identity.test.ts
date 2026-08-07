@@ -306,9 +306,7 @@ describe("Token → hand / deck / banishment ceases to exist; token recalled or 
     expect(d?.kind === "pick" ? d.options.map((o) => o.key).toSorted() : []).toEqual(["mainDeck-bottom", "mainDeck-top"]);
   });
 
-  test.failing("BUG: 186.1 / 185.2.e — a token recycled into the Main Deck ceases to exist immediately: deck size unchanged, token nowhere (engine leaves the token object inside mainDeck)", async () => {
-    // Expected: after the owner answers "bottom", the main deck has the same size and the token is gone.
-    // Actual: the token id sits in mainDeck (deck +1) until some later cleanup.
+  test("186.1 / 185.2.e — a token recycled into the Main Deck ceases to exist immediately: deck size unchanged, token nowhere", async () => {
     const game = await scenario().unit(P1, "base", LISTENER, "L").hand(P1, MAKE_RECRUIT, "mk").hand(P1, RECYCLE, "recycle").build();
     const tok = await makeToken(game);
     const deck = game.p1.deck().length;

@@ -23,15 +23,13 @@ import type {
   ZoneId as CoreZoneId,
   FlowDefinition,
 } from "@tcg/core";
-import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
-import { executeEffect } from "../../abilities/effect-executor";
-import type { ReplacementContext } from "../../abilities/replacement-effects";
-import { checkReplacement, markReplacementConsumed } from "../../abilities/replacement-effects";
+import type { EffectContext } from "../../abilities/effect-executor";
 import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getChannelCountLimit } from "../../operations/channel-limits";
+import { type LeaveBoardContext, removeFromBoard } from "../../operations/leave-board";
 import {
   beginAdditionalTurn,
   dequeueExtraTurn,
@@ -655,6 +653,7 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               const vacatedBattlefields = new Set<string>();
 
               const tempRegistry = getGlobalCardRegistry();
+              const temporaryIds: string[] = [];
               for (const cardId of tempKillCards) {
                 const owner = context.cards.getCardOwner?.(cardId);
                 if (owner !== turnPlayerId) {
@@ -671,42 +670,30 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   if (fromBattlefield) {
                     vacatedBattlefields.add(fromBattlefield);
                   }
-                  // rule 370.1 / 371.2— the Temporary kill is a death like any
-                  // other, so a board "if a friendly unit would die, … instead"
-                  // replacement applies to it. Such a replacement has no "may",
-                  // so it is forced: no prompt, and the death never happens.
-                  const replacementMatch = checkReplacement(
-                    { cardId: cardId as string, owner: owner as string, type: "die" },
-                    {
-                      cards: context.cards as unknown as ReplacementContext["cards"],
-                      draft: context.state,
-                      zones: context.zones,
-                    },
-                  );
-                  if (replacementMatch) {
-                    markReplacementConsumed(context.state, replacementMatch);
-                    const repl = replacementMatch.replacement as ExecutableEffect | "prevent";
-                    if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
-                      executeEffect(repl, {
-                        ...buildFlowEffectContext(context),
-                        playerId: replacementMatch.sourceOwner,
-                        sourceCardId: replacementMatch.sourceCardId,
-                        triggerSourceId: cardId as string,
-                      });
-                    }
-                    continue;
-                  }
-                  context.zones.moveCard({
-                    cardId,
-                    targetZoneId: "trash" as CoreZoneId,
-                  });
-                  // rule 186.1 — a token in a non-board zone ceases to exist.
-                  // The Beginning-Phase kill runs outside performCleanup, so
-                  // sweepOffBoardTokens would not see it until the next move.
-                  if ((cardId as string).startsWith("token-")) {
-                    context.zones.removeCardFromGame?.({ cardId });
-                  }
+                  temporaryIds.push(cardId as string);
                 }
+              }
+              // rule 728.1.b / 428.1 — the [Temporary] kill is a death like any
+              // other: one simultaneous batch through the leave-board choke
+              // point, so board die replacements apply (370.1 — forced, no
+              // prompt), Equipment detaches (457.1), the card resets (124.1),
+              // tokens cease (186.1) and `die` fires with last-known
+              // information so Deathknells go on the chain (held by endIf).
+              if (temporaryIds.length > 0) {
+                const flowTriggerCtx = buildFlowTriggerContext(context);
+                removeFromBoard(
+                  {
+                    cards: context.cards as unknown as LeaveBoardContext["cards"],
+                    // no counter store in the flow: meta-backed flags/counters
+                    counters: buildFlowEffectContext(context).counters,
+                    draft: context.state,
+                    zones: context.zones,
+                  },
+                  temporaryIds,
+                  "trash",
+                  { by: turnPlayerId as string, kind: "temporary" },
+                  (event) => fireTriggers(event, flowTriggerCtx),
+                );
               }
 
               // rule 323.6: control of a Battlefield is lost as soon as the

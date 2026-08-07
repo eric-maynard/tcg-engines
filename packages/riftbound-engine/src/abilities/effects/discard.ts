@@ -1,7 +1,26 @@
 // Effect handler: "discard"
-import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
+import type { PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
+import { removeFromBoard } from "../../operations/leave-board";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
+
+/**
+ * rule 422 — discard `cardIds` from `ctx.playerId`'s hand as ONE instruction:
+ * the choke point moves them and emits one `discard` event per card tagged
+ * with its batch position (ogn-202-298 "one or more" fires once).
+ */
+export function discardCards(cardIds: readonly string[], ctx: EffectContext): void {
+  if (cardIds.length === 0) {
+    return;
+  }
+  removeFromBoard(
+    ctx,
+    cardIds,
+    "trash",
+    { by: ctx.playerId, kind: "discard", source: ctx.sourceCardId },
+    ctx.fireTriggers,
+  );
+}
 
 export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   // Rule unl-121-219: "They discard 1" — player:"opponent" must resolve
@@ -27,10 +46,7 @@ export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: 
         .getCardsInZone("hand" as CoreZoneId, pid as CorePlayerId)
         .map((id) => id as string);
       const n = wholeHand ? phand.length : resolveAmount(effect.amount ?? 1, pctx);
-      for (let i = 0; i < Math.min(n, phand.length); i++) {
-        ctx.zones.moveCard({ cardId: phand[i] as CoreCardId, targetZoneId: "trash" as CoreZoneId });
-        ctx.fireTriggers?.({ batchIndex: i, cardId: phand[i], playerId: pid, type: "discard" });
-      }
+      discardCards(phand.slice(0, Math.min(n, phand.length)), pctx);
       if (then) h.executeEffect(then, pctx);
     }
     return;
@@ -67,12 +83,9 @@ export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: 
   } else {
     // No choice to make (discarding at least the whole hand): rule 422.2 —
     // discard as many as possible.
-    for (let i = 0; i < n; i++) {
-      ctx.zones.moveCard({ cardId: hand[i] as CoreCardId, targetZoneId: "trash" as CoreZoneId });
-      // Rule ogn-006-298: emit the discard event for auto-discarded cards.
-      // Rule ogn-202-298: tag batch position so "one or more" fires once.
-      ctx.fireTriggers?.({ batchIndex: i, cardId: hand[i], playerId: ctx.playerId, type: "discard" });
-    }
+    // Rule ogn-006-298: emit the discard event for auto-discarded cards.
+    // Rule ogn-202-298: batch positions so "one or more" fires once.
+    discardCards(hand.slice(0, n), ctx);
     const then = (effect as { then?: ExecutableEffect }).then;
     if (then) h.executeEffect(then, ctx);
   }

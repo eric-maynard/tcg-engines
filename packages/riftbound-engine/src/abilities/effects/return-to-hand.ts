@@ -1,63 +1,26 @@
 // Effect handler: "return-to-hand"
-import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
-import type { RiftboundCardMeta } from "../../types";
+import { removeFromBoard } from "../../operations/leave-board";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
-import { attachedUnitOf, detachEquipment } from "./_attachment";
 
 /**
- * rule 435 — break every attachment link a card leaving the board is part of:
- * as the worn Equipment (its holder loses the Might bonus) and as the holder
- * (its Equipment comes loose and returns to base).
+ * rule-id: ogn-172-298 / sfd-044-221 / sfd-202-221 / ogn-181-298 — a card
+ * bounced to hand leaves through the leave-board choke point: its attachment
+ * links break both ways (rule 435 / 457.1), it is a NEW object in hand with no
+ * exhaustion, damage, buffs, stun, grants, hidden status or control change
+ * (rule 124.1 / 191.1), and a token ceases to exist instead (rule 186.1).
  */
-function detachAttachments(cardId: string, ctx: EffectContext): void {
-  if (attachedUnitOf(ctx, cardId) !== undefined) {
-    detachEquipment(ctx, cardId);
+function bounceToHand(cardIds: readonly string[], ctx: EffectContext): void {
+  if (cardIds.length === 0) {
+    return;
   }
-  const held = (ctx.cards.getCardMeta?.(cardId as CoreCardId) as { equippedWith?: string[] } | undefined)
-    ?.equippedWith;
-  for (const equipId of Array.isArray(held) ? [...held] : []) {
-    detachEquipment(ctx, equipId);
-    ctx.zones.moveCard({ cardId: equipId as CoreCardId, targetZoneId: "base" as CoreZoneId });
-  }
-}
-
-/**
- * rule-id: ogn-172-298 — a unit bounced to hand leaves the board, so its
- * board-only state (exhausted, damage, buffs, stun, …) must not persist.
- * moveCard only changes zone; clear the meta explicitly like the kill path.
- */
-function bounceToHand(cardId: string, ctx: EffectContext): void {
-  // rule 435 (sfd-044-221) — a card leaving the board takes its attachment
-  // links with it: an Equipment bounced to hand detaches from its holder (which
-  // loses the Might bonus), and a bounced unit drops the Equipment it wore.
-  detachAttachments(cardId, ctx);
-  ctx.zones.moveCard({
-    cardId: cardId as CoreCardId,
-    targetZoneId: "hand" as CoreZoneId,
-  });
-  ctx.counters.setFlag(cardId as CoreCardId, "exhausted", false);
-  ctx.counters.setFlag(cardId as CoreCardId, "stunned", false);
-  ctx.counters.setFlag(cardId as CoreCardId, "buffed", false);
-  // rule 124.1 (sfd-202-221) — the card in hand is a new object: a temporary
-  // control change does not survive the zone change either.
-  const owner = ctx.cards.getCardOwner(cardId as CoreCardId);
-  if (owner !== undefined) {
-    ctx.cards.setCardController?.(cardId as CoreCardId, owner);
-  }
-  ctx.cards.updateCardMeta?.(cardId as CoreCardId, {
-    buffed: false,
-    controlEffects: undefined,
-    combatRole: null,
-    damage: 0,
-    exhausted: false,
-    grantedKeywords: undefined,
-    // rule-id: ogn-181-298 — a facedown card returned to hand stops being hidden.
-    hidden: false,
-    hiddenAt: undefined,
-    mightModifier: 0,
-    stunned: false,
-  } as Partial<RiftboundCardMeta> as Record<string, unknown>);
+  removeFromBoard(
+    ctx,
+    cardIds,
+    "hand",
+    { by: ctx.playerId, kind: "bounce", source: ctx.sourceCardId },
+    ctx.fireTriggers,
+  );
 }
 
 export function handle_returnToHand(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
@@ -68,10 +31,8 @@ export function handle_returnToHand(effect: ExecutableEffect, ctx: EffectContext
   // enemy unit" bounces itself when the board is empty.
   const hasTargetSpec = "target" in effect && effect.target != null;
   if (targets.length === 0 && !hasTargetSpec) {
-    bounceToHand(ctx.sourceCardId, ctx);
+    bounceToHand([ctx.sourceCardId], ctx);
   } else {
-    for (const targetId of targets) {
-      bounceToHand(targetId, ctx);
-    }
+    bounceToHand(targets, ctx);
   }
 }

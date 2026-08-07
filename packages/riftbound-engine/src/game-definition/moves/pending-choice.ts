@@ -29,6 +29,7 @@ import { addToChain, createInteractionState } from "../../chain";
 import { cleanupAndFireDeaths } from "../../cleanup/post-move-cleanup";
 import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { leaveBoard } from "../../operations/leave-board";
 import type {
   PendingChoice,
   RiftboundCardMeta,
@@ -1603,12 +1604,15 @@ export const pendingChoiceMoves: Partial<
         // rule-id: unl-204-219-owner-chooses-top-or-bottom — owner-choice
         // recycle surfaces mainDeck-top / mainDeck-bottom as destinations.
         if (zoneId === "mainDeck-top" || zoneId === "mainDeck-bottom") {
-          context.counters.clearAllCounters(choice.cardId as CoreCardId);
-          context.zones.moveCard({
-            cardId: choice.cardId as CoreCardId,
-            position: zoneId === "mainDeck-top" ? "top" : "bottom",
-            targetZoneId: "mainDeck" as CoreZoneId,
-          });
+          // rule 124.1 / 186.1 / 457.1 — recycling off the board runs through
+          // the leave-board choke point: new object, Equipment detached, and a
+          // token ceases to exist instead of entering the deck (185.2.e).
+          leaveBoard(
+            { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+            choice.cardId as string,
+            zoneId === "mainDeck-top" ? "deck-top" : "deck-bottom",
+            { by: choice.playerId, kind: "recycle" },
+          );
           draft.pendingChoice = undefined;
           // rule-id: ogn-235-298 — the owner recycled a card to their Main Deck.
           fireRecycleEvent(draft, context, choice.playerId, [choice.cardId as string]);

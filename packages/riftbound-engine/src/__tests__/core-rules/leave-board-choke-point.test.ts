@@ -237,3 +237,128 @@ describe("383.3.d / 370.1.a.2 — a trigger doubler dying in the same batch stil
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 });
+
+// ===========================================================================
+// Every other leave path runs through the same choke point
+// ===========================================================================
+
+/** Unit · 2 Might · [Temporary] [Deathknell] Draw 1. */
+const FLEETING = {
+  abilities: [
+    { keyword: "Temporary", type: "keyword" },
+    { effect: { amount: 1, type: "draw" }, keyword: "Deathknell", type: "keyword" },
+    { effect: { amount: 1, type: "draw" }, trigger: { event: "die", on: "self" }, type: "triggered" },
+  ],
+  cardType: "unit",
+  energyCost: 0,
+  keywords: ["Temporary", "Deathknell"],
+  might: 2,
+  name: "Filler Fleeting",
+};
+/** Unit · 2 Might · "Kill this: Draw 1." + [Deathknell] Draw 1. */
+const MARTYR = {
+  abilities: [
+    { cost: { kill: "self" }, effect: { amount: 1, type: "draw" }, type: "activated" },
+    { effect: { amount: 1, type: "draw" }, keyword: "Deathknell", type: "keyword" },
+    { effect: { amount: 1, type: "draw" }, trigger: { event: "die", on: "self" }, type: "triggered" },
+  ],
+  cardType: "unit",
+  energyCost: 0,
+  keywords: ["Deathknell"],
+  might: 2,
+  name: "Filler Martyr",
+};
+/** "Banish a unit." / "Return a unit to its owner's hand." */
+const BANISH = spell("Banish", { target: { type: "unit" }, type: "banish" });
+const BOUNCE = spell("Bounce", { target: { type: "unit" }, type: "return-to-hand" });
+
+describe("728.1.b / 428.1 — the Beginning-Phase [Temporary] kill is a death through the choke point", () => {
+  test("a buffed, damaged Temporary Deathknell unit: killed at its controller's next Beginning Phase, Deathknell draws, trash copy is reset, Mourner sees it die", async () => {
+    const game = await scenario()
+      .active(P2)
+      .unit(P1, "base", FLEETING, "f", { buffed: true, exhausted: true })
+      .unit(P1, "base", MOURNER, "m")
+      .build();
+    const hand0 = game.p1.hand().length;
+    await game.advanceTurn(); // → P1's turn: Beginning Phase kills the Temporary unit
+    expect(game.turnPlayer()).toBe(P1);
+    expect(game.zoneOf("f")).toBe("trash");
+    expect(game.state("f").isBuffed).toBe(false);
+    expect(game.state("f").isExhausted).toBe(false);
+    // Deathknell (+1) and Mourner (+1) resolved inside the Beginning Phase, then the Draw Phase (+1).
+    expect(game.p1.hand()).toHaveLength(hand0 + 3);
+    expect(game.violations()).toEqual([]);
+  });
+
+  test("a Temporary TOKEN ceases to exist after its death is published (186.1) — Mourner still draws", async () => {
+    const game = await scenario()
+      .active(P1)
+      .unit(P1, "base", MOURNER, "m")
+      .hand(P1, spell("Make Temp", { location: "base", token: { keywords: ["Temporary"], might: 1, name: "Spriteling", type: "unit" }, type: "create-token" }), "mk")
+      .build();
+    await game.p1.cast("mk");
+    await game.settle();
+    const tok = game.p1.units("base").find((id) => game.state(id).isToken);
+    expect(tok).toBeDefined();
+    await game.advanceTurn(); // → P2
+    expect(game.has(tok as string)).toBe(true);
+    const hand0 = game.p1.hand().length;
+    await game.advanceTurn(); // → P1: token killed
+    expect(game.has(tok as string)).toBe(false);
+    expect(game.p1.hand()).toHaveLength(hand0 + 2); // Mourner + Draw Phase
+  });
+});
+
+describe("428.1.a.1 — a kill paid as an activation COST is an Active Kill: Deathknell and listeners fire, the card resets", () => {
+  test("'Kill this: Draw 1' on a Deathknell unit → ability (+1), Deathknell (+1) and Mourner (+1) all resolve", async () => {
+    const game = await scenario()
+      .unit(P1, "base", MARTYR, "y", { buffed: true })
+      .unit(P1, "base", MOURNER, "m")
+      .build();
+    const hand0 = game.p1.hand().length;
+    await game.p1.activate("y", 0);
+    expect(game.zoneOf("y")).toBe("trash");
+    expect(game.state("y").isBuffed).toBe(false);
+    await game.settle();
+    expect(game.p1.hand()).toHaveLength(hand0 + 3);
+    expect(game.violations()).toEqual([]);
+  });
+});
+
+describe("427.1 / 124.1 / 186.1 — banish and bounce leave without dying: reset, no Deathknell, tokens cease", () => {
+  test("banish a buffed, damaged Deathknell unit wearing a Sword: banishment holds a fresh card, Sword back in base unattached, no draw", async () => {
+    const SWORD = { cardType: "equipment", mightBonus: 2, name: "Filler Sword" };
+    const game = await scenario()
+      .active(P2)
+      .unit(P1, "base", DK_DRAWER, "d", { buffed: true, damage: 1, equippedWith: ["sw"] })
+      .gear(P1, SWORD, "sw", { attachedTo: "d" })
+      .unit(P1, "base", MOURNER, "m")
+      .hand(P2, BANISH, "ban")
+      .build();
+    const hand0 = game.p1.hand().length;
+    await game.p2.cast("ban", { targets: "d" });
+    await game.settle();
+    expect(game.zoneOf("d")).toBe("banishment");
+    expect(game.state("d").isBuffed).toBe(false);
+    expect(game.state("d").damage).toBe(0);
+    expect(game.state("d").attachments).toEqual([]);
+    expect(game.zoneOf("sw")).toBe("base");
+    expect(game.state("sw").attachedTo).toBeUndefined();
+    expect(game.p1.hand()).toHaveLength(hand0); // not a death
+    expect(game.chain()).toEqual([]);
+  });
+
+  test("bounce a stunned, exhausted unit: the hand copy is ready, unstunned, printed Might", async () => {
+    const game = await scenario()
+      .active(P2)
+      .unit(P1, "base", { might: 3, name: "Victim" }, "v", { exhausted: true, mightModifier: 2, stunned: true })
+      .hand(P2, BOUNCE, "b")
+      .build();
+    await game.p2.cast("b", { targets: "v" });
+    await game.settle();
+    expect(game.zoneOf("v")).toBe("hand");
+    expect(game.state("v").isExhausted).toBe(false);
+    expect(game.state("v").isStunned).toBe(false);
+    expect(game.state("v").might).toBe(3);
+  });
+});

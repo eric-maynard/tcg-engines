@@ -20,6 +20,7 @@ import {
   isLegalTiming,
 } from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { removeFromBoard } from "../../../operations/leave-board";
 import { canPlayViaAmbush } from "../../../keywords/keyword-effects";
 import { contestBattlefieldOnArrival } from "../movement/contest-arrival";
 import {
@@ -1177,7 +1178,14 @@ export const playUnit: Defs["playUnit"] = {
       const owner = context.cards.getCardOwner(discardId as CoreCardId);
       const inHand = zones.getCardZone(discardId as CoreCardId) === "hand";
       if (owner === playerId && inHand && discardId !== cardId) {
-        zones.moveCard({ cardId: discardId as CoreCardId, targetZoneId: "trash" as CoreZoneId });
+        // rule 422 — a discard paid as a cost is still a discard event.
+        removeFromBoard(
+          { cards: context.cards, counters, draft, zones },
+          [discardId as string],
+          "trash",
+          { by: playerId, kind: "discard", source: cardId as string },
+          (event) => fireTriggers(event, { cards: context.cards, counters, draft, zones }),
+        );
         discardPaid = true;
         energyDiscount = optional.energyDiscount ?? 0;
       }

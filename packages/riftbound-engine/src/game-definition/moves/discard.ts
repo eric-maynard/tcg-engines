@@ -12,6 +12,7 @@ import type {
 } from "@tcg/core";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
+import { leaveBoard, removeFromBoard } from "../../operations/leave-board";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { burnOut } from "../../operations/points";
 
@@ -26,13 +27,16 @@ export const discardMoves: Partial<
   GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>
 > = withPostMoveCleanup({
   banishCard: {
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { cardId } = context.params;
-      context.counters.clearAllCounters(cardId as CoreCardId);
-      context.zones.moveCard({
-        cardId: cardId as CoreCardId,
-        targetZoneId: "banishment" as CoreZoneId,
-      });
+      // rule 427.1 / 124.1 / 186.1 — through the leave-board choke point.
+      removeFromBoard(
+        { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        [cardId as string],
+        "banishment",
+        { kind: "banish" },
+        (event) => fireTriggers(event, { cards: context.cards, counters: context.counters, draft, zones: context.zones }),
+      );
     },
   },
 
@@ -103,15 +107,14 @@ export const discardMoves: Partial<
     reducer: (draft, context) => {
       const { cardId } = context.params;
       const playerId = context.cards.getCardOwner(cardId as CoreCardId) ?? "";
-      context.zones.moveCard({
-        cardId: cardId as CoreCardId,
-        targetZoneId: "trash" as CoreZoneId,
-      });
-      // Rule ogn-006-298: emit the discard event so "When you discard me…"
-      // self-triggers can fire.
-      fireTriggers(
-        { cardId: cardId as string, playerId, type: "discard" },
+      // rule 422 / ogn-006-298: the choke point moves it and emits `discard`
+      // so "When you discard me…" self-triggers can fire.
+      removeFromBoard(
         { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        [cardId as string],
+        "trash",
+        { by: playerId, kind: "discard" },
+        (event) => fireTriggers(event, { cards: context.cards, counters: context.counters, draft, zones: context.zones }),
       );
     },
   },
@@ -129,25 +132,31 @@ export const discardMoves: Partial<
   },
 
   killUnit: {
-    reducer: (_draft, context) => {
+    reducer: (draft, context) => {
       const { cardId } = context.params;
-      context.counters.clearAllCounters(cardId as CoreCardId);
-      context.zones.moveCard({
-        cardId: cardId as CoreCardId,
-        targetZoneId: "trash" as CoreZoneId,
-      });
+      // rule 428.1 — a sandbox kill is a real death: die replacements,
+      // Equipment detach (457.1), 124.1 reset, token cease (186.1) and a
+      // `die` event with last-known information (Deathknell fires).
+      removeFromBoard(
+        { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        [cardId as string],
+        "trash",
+        { kind: "kill" },
+        (event) => fireTriggers(event, { cards: context.cards, counters: context.counters, draft, zones: context.zones }),
+      );
     },
   },
 
   recycleCard: {
     reducer: (draft, context) => {
       const { cardId } = context.params;
-      context.counters.clearAllCounters(cardId as CoreCardId);
-      context.zones.moveCard({
-        cardId: cardId as CoreCardId,
-        position: "bottom",
-        targetZoneId: "mainDeck" as CoreZoneId,
-      });
+      // rule 416.1.a / 124.1 / 186.1 — through the leave-board choke point.
+      leaveBoard(
+        { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        cardId as string,
+        "deck-bottom",
+        { kind: "recycle" },
+      );
       // rule-id: ogn-235-298 — emit `recycle` for the card's owner so "When
       // you recycle one or more cards to your Main Deck" triggers fire.
       // Guarded so unit-test stubs that omit the full context bags don't crash.

@@ -12,7 +12,7 @@ import type { CardId as CoreCardId } from "@tcg/core";
 
 /** Structural slice every move / effect / cleanup / flow context satisfies. */
 export interface DamageStoreOps {
-  readonly cards: {
+  readonly cards?: {
     getCardMeta?(cardId: CoreCardId): object | undefined;
     updateCardMeta?(cardId: CoreCardId, meta: Record<string, unknown>): void;
   };
@@ -29,7 +29,7 @@ interface DamageMeta {
 
 /** Current marked damage on a card (counter store, falling back to the mirror). */
 export function getDamage(ops: DamageStoreOps, cardId: string): number {
-  const meta = ops.cards.getCardMeta?.(cardId as CoreCardId) as DamageMeta | undefined;
+  const meta = ops.cards?.getCardMeta?.(cardId as CoreCardId) as DamageMeta | undefined;
   return Math.max(0, meta?.__counters?.damage ?? 0, meta?.damage ?? 0);
 }
 
@@ -53,16 +53,18 @@ export function setDamage(
       counters.addCounter?.(id, "damage", next);
     }
   }
-  const meta = ops.cards.getCardMeta?.(id) as DamageMeta | undefined;
-  // Contexts without a counter store (flow hooks, stripped test stubs) still
-  // carry the reserved bag on meta when a real engine wrote it earlier — keep
-  // it in step so `max(counter, mirror)` readers agree.
+  const meta = ops.cards?.getCardMeta?.(id) as DamageMeta | undefined;
+  // Contexts whose counter ops are absent or stubbed (flow hooks, meta-backed
+  // shims, test doubles) leave the reserved bag untouched — patch it through
+  // the meta update so `max(counter, mirror)` readers agree everywhere.
   const bag = meta?.__counters;
   const patch: Record<string, unknown> = { damage: next, ...(extraMeta ?? {}) };
-  if (bag !== undefined && (bag.damage ?? 0) !== next && !counters?.clearCounter) {
-    patch.__counters = { ...bag, damage: next };
+  if (bag !== undefined && (bag.damage ?? 0) !== next) {
+    const rest = { ...bag };
+    delete rest.damage;
+    patch.__counters = next > 0 ? { ...rest, damage: next } : rest;
   }
-  ops.cards.updateCardMeta?.(id, patch);
+  ops.cards?.updateCardMeta?.(id, patch);
   return next;
 }
 
@@ -75,7 +77,7 @@ export function addDamage(
 ): number {
   if (amount <= 0) {
     if (extraMeta) {
-      ops.cards.updateCardMeta?.(cardId as CoreCardId, extraMeta);
+      ops.cards?.updateCardMeta?.(cardId as CoreCardId, extraMeta);
     }
     return getDamage(ops, cardId);
   }

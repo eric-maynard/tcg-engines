@@ -22,6 +22,7 @@ import { resolveTarget } from "../../../abilities/target-resolver";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { removeFromBoard } from "../../../operations/leave-board";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getDeflectSurcharge, getPotentialRuneEnergy } from "../play/cost";
 import type { SpellEffectTargetShape } from "../play/targeting";
@@ -1325,14 +1326,15 @@ export const activateAbility: Defs["activateAbility"] = {
         if (!discardId) {
           return;
         }
-        context.zones.moveCard({
-          cardId: discardId as CoreCardId,
-          targetZoneId: "trash" as CoreZoneId,
-        });
-        // Rule ogn-006-298: emit the discard event for the paid-as-cost card.
-        fireTriggers(
-          { cardId: discardId as string, playerId, type: "discard" },
-          { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        // rule 422 / ogn-006-298: a discard paid as a cost is still a discard —
+        // one choke point moves it and emits the `discard` event.
+        const costCtx = buildEffectContext(draft, playerId, cardId, context);
+        removeFromBoard(
+          costCtx,
+          [discardId as string],
+          "trash",
+          { by: playerId, kind: "discard", source: cardId as string, sourceKind: "ability" },
+          costCtx.fireTriggers,
         );
       }
 
@@ -1379,18 +1381,18 @@ export const activateAbility: Defs["activateAbility"] = {
         if (!killId) {
           return;
         }
-        context.zones.moveCard({
-          cardId: killId as CoreCardId,
-          targetZoneId: "trash" as CoreZoneId,
-        });
-        // rule 186.1 — a token that leaves the board ceases to exist; paying a
-        // "Kill this" cost with a token must not leave a card in the trash.
-        // Cleanup does not run on the cost-payment path, so sweep it here.
-        if ((killId as string).startsWith("token-")) {
-          (
-            context.zones as { removeCardFromGame?: (p: { cardId: CoreCardId }) => void }
-          ).removeCardFromGame?.({ cardId: killId as CoreCardId });
-        }
+        // rule 428.1.a.1 — a kill paid as a cost is an Active Kill like any
+        // other: die replacements may apply (357.2.a: still paid), Equipment
+        // detaches (457.1), the card resets (124.1), a token ceases to exist
+        // (186.1) and `die` fires with last-known information (Deathknell).
+        const costCtx = buildEffectContext(draft, playerId, cardId, context);
+        removeFromBoard(
+          costCtx,
+          [killId as string],
+          "trash",
+          { by: playerId, kind: "cost", source: cardId as string, sourceKind: "ability" },
+          costCtx.fireTriggers,
+        );
       }
     }
 
