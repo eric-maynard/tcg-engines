@@ -102,7 +102,7 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
   // rule-id: ven-091-166 (Corrupted Dragon) — optional "here" location and
   // "each with N :rb_might: or less" per-unit Might filter on the chosen set.
   const anyNumberMatch = text.match(
-    /^Move any number of (your |friendly |enemy )?((?:\w+\s+)?units?)(?:\s+at a battlefield|\s+(here))?(?:\s+(?:each )?with (\d+) :rb_might: or (less|more))?\s+to\s+(base|here|its base|your base|their base|a battlefield|battlefield|this battlefield|an open battlefield|a single location)\.?$/i,
+    /^Move any number of (your |friendly |enemy )?((?:\w+\s+)?units?)(?:\s+(at a battlefield)|\s+(here))?(?:\s+(?:each )?with (\d+) :rb_might: or (less|more))?\s+to\s+(base|here|its base|your base|their base|a battlefield|battlefield|this battlefield|an open battlefield|a single location)\.?$/i,
   );
   if (anyNumberMatch) {
     const controllerRaw = anyNumberMatch[1]?.trim().toLowerCase();
@@ -111,9 +111,11 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
     // (e.g. "token") is a target filter that must not be dropped.
     const unitPhrase = anyNumberMatch[2].toLowerCase();
     const qualifier = unitPhrase.replace(/\s*units?$/, "").trim();
-    const hereStr = anyNumberMatch[3];
-    const mightN = anyNumberMatch[4];
-    const mightDir = anyNumberMatch[5]?.toLowerCase();
+    // rule 355.11.b: "at a battlefield" is a location restriction — units in a base are never legal.
+    const atBattlefieldStr = anyNumberMatch[3];
+    const hereStr = anyNumberMatch[4];
+    const mightN = anyNumberMatch[5];
+    const mightDir = anyNumberMatch[6]?.toLowerCase();
     const target: {
       type: "unit";
       controller?: "friendly" | "enemy";
@@ -126,6 +128,8 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
     };
     if (hereStr) {
       target.location = "here";
+    } else if (atBattlefieldStr) {
+      target.location = "battlefield";
     }
     if (controllerRaw === "your" || controllerRaw === "friendly") {
       target.controller = "friendly";
@@ -156,7 +160,7 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
       const mightFilter = { might: mightDir === "more" ? { gte: n } : { lte: n } } as Filter;
       target.filter = target.filter ? [target.filter as Filter, mightFilter] : mightFilter;
     }
-    const to = parseLocationString(anyNumberMatch[6]);
+    const to = parseLocationString(anyNumberMatch[7]);
     return { target: target as AnyTarget, to, type: "move" };
   }
 

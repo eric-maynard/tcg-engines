@@ -54,7 +54,7 @@ function targetSets(game: { p1: { option: (v: string, c: string) => { fields: re
 }
 
 describe("Emperor's Divide (sfd-043-221)", () => {
-  test.failing("BUG: parsed abilities should carry the 'at a battlefield' restriction (target.location) — the parser drops it", async () => {
+  test("parsed abilities carry the 'at a battlefield' restriction (target.location)", async () => {
     // Expected: move target = friendly units, quantity any, location "battlefield". Actual: no `location`
     // key at all, which is why base units become legal targets (see the target-set BUG below).
     const def = (await loadDefaultCardPool()).get(CARD);
@@ -100,7 +100,7 @@ describe("Emperor's Divide (sfd-043-221)", () => {
     expect(!enemy.ok && enemy.error.code).toBe("ILLEGAL_ARGS");
   });
 
-  test.failing("BUG: 'units AT A BATTLEFIELD' — a friendly unit sitting in the base must not be a legal target", async () => {
+  test("'units AT A BATTLEFIELD' — a friendly unit sitting in the base is not a legal target", async () => {
     // Expected: "home" never appears in any target set and naming it is ILLEGAL_ARGS.
     // Actual: the location filter is missing, so base units are offered (and "moved" to where they already are).
     const game = await board().build();
@@ -110,7 +110,7 @@ describe("Emperor's Divide (sfd-043-221)", () => {
     expect(!r.ok && r.error.code).toBe("ILLEGAL_ARGS");
   });
 
-  test.failing("BUG: 'at A battlefield' (singular, cf. Fox-Fire 355.11.b) — units from two different battlefields cannot be mixed in one cast", async () => {
+  test("'at A battlefield' (singular, cf. Fox-Fire 355.11.b) — units from two different battlefields cannot be mixed in one cast", async () => {
     // Expected: no set contains both a bf1 unit and "far" (bf2). Actual: a+far, b+far, a+b+far … are all offered.
     const game = await board().build();
     const norm = targetSets(game);
