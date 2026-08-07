@@ -21,6 +21,16 @@ const abilities: Ability[] = [
     },
     type: "static",
   } as unknown as Ability,
+  // rule 757 / 355.9.b — "I can't be chosen by enemy spells and abilities" is
+  // the (virtual) Untargetable keyword granted to self while he is in play.
+  {
+    effect: {
+      keyword: "Untargetable",
+      target: "self",
+      type: "grant-keyword",
+    },
+    type: "static",
+  } as unknown as Ability,
   {
     effect: {
       amount: 2,
