@@ -1868,12 +1868,22 @@ export const pendingChoiceMoves: Partial<
           // declined, and the next prompt belongs to the SPELL's controller
           // chain, not this chooser.
           const chainedThen = (choice as { then?: unknown }).then as ExecutableEffect | undefined;
+          // rule 355.4 (unl-198-219) — the zone the parked effect had already
+          // chosen ("…to THAT battlefield … enemy units there") outlives the
+          // prompt; without it "here" falls back to the source card's own zone,
+          // which for a resolving spell is the trash.
+          const declineCarriedZone = (choice as { sourceZone?: string }).sourceZone;
+          const declineZoneCarry =
+            typeof declineCarriedZone === "string" ? { sourceZone: declineCarriedZone } : {};
           if (pickedSoFar.length === 0) {
             if (chainedThen) {
-              executeEffect(
-                chainedThen,
-                buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
-              );
+              // rule 355.13 (unl-198-219) — "you may move UP TO ONE …": zero is
+              // a legal answer and the REST of the sequence still resolves, at
+              // the battlefield the effect already chose.
+              executeEffect(chainedThen, {
+                ...buildEffectContext(draft, choice.playerId, choice.sourceCardId, context),
+                ...declineZoneCarry,
+              });
               postChoiceCleanup(draft, context);
             }
             return;
@@ -2152,6 +2162,8 @@ export const pendingChoiceMoves: Partial<
             deferToCleanup: true,
             draft,
             playerId: arrivingController,
+            // rule 323.13 (unl-202-219) — the caster dragged this unit here.
+            stagedBy: choice.playerId as string,
             zones: context.zones,
           });
         } else {
