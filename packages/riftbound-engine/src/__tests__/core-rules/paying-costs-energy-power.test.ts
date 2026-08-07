@@ -413,7 +413,7 @@ describe("Determine Total Cost (356.3, 356.4, 356.4.e, 356.6, 356.1.c)", () => {
   // unfloored −7 aura the player orders the floored discount first (8→7) and then −7 → total 0, playable from an
   // empty pool. Actual: the engine clamps the FINAL total to the largest minimum among all board auras, so the
   // spell costs 1 and is refused.
-  test.failing("BUG: 356.4.e — a 'to a minimum of N' on one board discount is applied to the combined total of all board discounts", async () => {
+  test("356.4.e — a 'to a minimum of N' on one board discount binds only that discount", async () => {
     const apprentice = fillerUnit(1, [], { abilities: [discountAura("spell", 1, 1)], domain: "calm", might: 1, name: "Apprentice-alike (test)" });
     const bigDiscount = legendWith("Grand Archivist −7 spells (test legend)", [discountAura("spell", 7)], "calm");
     const game = await scenario()

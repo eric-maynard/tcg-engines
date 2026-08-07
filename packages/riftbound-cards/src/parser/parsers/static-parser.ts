@@ -654,6 +654,26 @@ function parseStaticAbilityInner(
     };
   }
 
+  // rule-id: ogn-028-298 — "My Might is increased by your points."
+  // Dynamic static self-might scaling with the controller's score.
+  const pointsMightMatch = cleanText.match(
+    /^My Might is increased by your points\.?$/i,
+  );
+  if (pointsMightMatch) {
+    return {
+      ability: {
+        effect: {
+          amount: { score: "self" },
+          target: "self" as AnyTarget,
+          type: "modify-might",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // "While CONDITION, I have [an additional] +N :rb_might:." - conditional static self-might
   const whileConditionMightMatch = cleanText.match(
     /^(While .+?),\s*I have(?:\s+an additional)?\s+\+(\d+)\s*:rb_might:\.?$/i,

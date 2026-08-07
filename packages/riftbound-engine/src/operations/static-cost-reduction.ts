@@ -74,10 +74,18 @@ export interface CostPlayContext {
   readonly viaFlow?: boolean;
 }
 
+/** One matching board discount, kept separate so its own floor binds only it. */
+export interface StaticCostReductionEntry {
+  readonly energy: number;
+  readonly minimum: number;
+}
+
 export interface StaticCostReduction {
   readonly reduction: number;
   readonly minimum: number;
   readonly power: Partial<Record<string, number>>;
+  /** rule 356.4.e — per-discount breakdown; each entry's `minimum` binds only itself. */
+  readonly entries?: readonly StaticCostReductionEntry[];
 }
 
 const RUNE_TOKEN_RE = /:rb_rune_(fury|calm|mind|body|chaos|order|rainbow):|\[(fury|calm|mind|body|chaos|order|rainbow)\]/gi;
@@ -163,6 +171,7 @@ export function computeStaticCostReduction(
   let totalReduction = 0;
   let maxMinimum = 0;
   const totalPower: Partial<Record<string, number>> = {};
+  const entries: StaticCostReductionEntry[] = [];
 
   // Build the per-player scan zone list (base/legend/champion + every bf).
   const zonesToScan: string[] = [...PLAYER_BOARD_ZONES];
@@ -258,12 +267,17 @@ export function computeStaticCostReduction(
         if (minEnergy > maxMinimum) {
           maxMinimum = minEnergy;
         }
+        // rule 356.4.e: that minimum applies only to THIS discount, so keep
+        // the discounts separate instead of folding them into one floor.
+        if (amt.energy > 0) {
+          entries.push({ energy: Math.max(0, amt.energy), minimum: minEnergy });
+        }
         }
       }
     }
   }
 
-  return { minimum: maxMinimum, power: totalPower, reduction: totalReduction };
+  return { entries, minimum: maxMinimum, power: totalPower, reduction: totalReduction };
 }
 
 /**
@@ -660,6 +674,20 @@ export function applyStaticCostReduction(
 ): number {
   if (reduction.reduction <= 0) {
     return Math.max(printedEnergy, 0);
+  }
+  const {entries} = reduction;
+  if (entries && entries.length > 0) {
+    // rule 356.4.e — each discount's "to a minimum of N" binds only that
+    // discount, and rule 356.4.d.1 lets the player order them freely, so
+    // apply the floored discounts first (highest floor first) to get the
+    // cheapest legal result.
+    const ordered = [...entries].sort((a, b) => b.minimum - a.minimum);
+    let cost = Math.max(printedEnergy, 0);
+    for (const entry of ordered) {
+      const floor = Math.max(Math.min(entry.minimum, cost), 0);
+      cost = Math.max(cost - entry.energy, floor);
+    }
+    return cost;
   }
   const after = printedEnergy - reduction.reduction;
   // "to a minimum of [1]" floors the discount; it never raises a cheaper card.
