@@ -54,6 +54,14 @@ kill-any-number / spend-buff / discard optional costs on `playUnit`, mandatory s
 `trigger-double` static (in-tree), trigger target lock at finalization for single targets (untracked
 `abilities/trigger-target-lock.ts`, WIP).
 
+**G1 / WP1 landed** (2691333, 708c4b7, 0faa4b0): `E/operations/points.ts` is the score/victory choke point —
+`awardPoints` (054.1 denial → 443 per-method skips → 471.1.b Final Point → add + per-method `pointsGainedThisTurn`
+ledger), `losePoints`, `markScored`/`scoreBattlefield` (471.2.c), `scoreEvents` (`hold`/`conquer` + new `score`
+GameEvent), `burnOut`/`refillDeckOrBurnOut` (431.3), `effectiveVictoryScore` (battlefield + board statics),
+`checkVictory` (only status/winner writer; end of `performCleanup`, flow Hold step, burn-outs; no-op mid-resolution).
+All nine former `victoryPoints` writers route through it; `scorePoint` is never enumerated. Remaining G1-adjacent
+work lives in other gaps: excess-damage conquer prompts (G2/G12), `win-combat`-first-time restriction (G14).
+
 ---
 
 ## Per-gap detail
