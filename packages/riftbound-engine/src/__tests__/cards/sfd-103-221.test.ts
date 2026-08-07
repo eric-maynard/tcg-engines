@@ -57,7 +57,7 @@ describe("Jaull-Fish (sfd-103-221)", () => {
     expect((await scenario().resources(P1, { energy: 7, power: { fury: 2 } }).hand(P1, CARD, "fish").build()).p1.can("play", "fish")).toBe(false);
   });
 
-  test.failing("BUG: one friendly Mighty unit → costs 5 energy (+2 body)", async () => {
+  test("one friendly Mighty unit → costs 5 energy (+2 body)", async () => {
     // Expected: 7 − 2 = 5 energy is enough and is fully spent. Actual: the parsed scope
     // "for each of your [Mighty] units" is not one the cost engine counts, so the price stays 7.
     const game = await withMighty(1, 5).build();
@@ -68,7 +68,7 @@ describe("Jaull-Fish (sfd-103-221)", () => {
     expect(game.zoneOf("fish")).toBe("base");
   });
 
-  test.failing("BUG: the discount scales — two Mighty → 3 energy, three Mighty → 1 energy; the [body][body] is never discounted", async () => {
+  test("the discount scales — two Mighty → 3 energy, three Mighty → 1 energy; the [body][body] is never discounted", async () => {
     const two = await withMighty(2, 3).build();
     expect(two.p1.can("play", "fish")).toBe(true);
     await two.p1.play("fish");
@@ -78,7 +78,7 @@ describe("Jaull-Fish (sfd-103-221)", () => {
     expect((await withMighty(3, 1, 1).build()).p1.can("play", "fish")).toBe(false); // power still due in full
   });
 
-  test.failing("BUG: four Mighty units floor the Energy cost at 0 (356.6) — playable with 0 energy + 2 body, and nothing goes negative", async () => {
+  test("four Mighty units floor the Energy cost at 0 (356.6) — playable with 0 energy + 2 body, and nothing goes negative", async () => {
     const game = await withMighty(4, 0).build();
     expect(game.p1.can("play", "fish")).toBe(true);
     await game.p1.play("fish");
@@ -88,7 +88,7 @@ describe("Jaull-Fish (sfd-103-221)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: Mighty is CURRENT Might (710) — a buffed 4-Might unit (=5) and a damaged 5-Might unit both count → 3 energy", async () => {
+  test("Mighty is CURRENT Might (710) — a buffed 4-Might unit (=5) and a damaged 5-Might unit both count → 3 energy", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3, power: { body: 2 } })
       .unit(P1, "base", { might: 4, name: "Buffed Four" }, "buffed", { buffed: true })
@@ -137,7 +137,7 @@ describe("Jaull-Fish (sfd-103-221)", () => {
     expect(game.state("fish").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: Accelerate + discount — with four Mighty units the [2]-per-unit discount also eats the Accelerate energy (356.4.f): 0 energy + [body]×3, enters ready", async () => {
+  test("Accelerate + discount — with four Mighty units the [2]-per-unit discount also eats the Accelerate energy (356.4.f): 0 energy + [body]×3, enters ready", async () => {
     // Expected: total energy max(0, 7 + 1 − 8) = 0; power body×3; the optional cost still counts as paid
     // (356.4.f.1) so it enters ready. Actual: no discount is applied at all (needs 8 energy).
     const game = await withMighty(4, 0, 3).build();
@@ -147,7 +147,7 @@ describe("Jaull-Fish (sfd-103-221)", () => {
     expect(game.state("fish").isReady).toBe(true);
   });
 
-  test.failing("BUG: self-synergy — a Jaull-Fish already on the board is Mighty, so the second copy costs 5", async () => {
+  test("self-synergy — a Jaull-Fish already on the board is Mighty, so the second copy costs 5", async () => {
     const game = await scenario().resources(P1, { energy: 5, power: { body: 2 } }).unit(P1, "base", CARD, "first").hand(P1, CARD, "second").build();
     expect(game.state("first").might).toBe(6);
     expect(game.p1.can("play", "second")).toBe(true);

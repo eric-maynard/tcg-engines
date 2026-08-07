@@ -190,6 +190,22 @@ export const costPaid: Invariant = {
       if (ex.params.viaFlow === true || ex.params.chosenTargetId !== undefined) {
         continue;
       }
+      // rule-id: ogn-014-298 — a card whose OWN static scales its Energy cost
+      // ("reduced by the highest Might among units you control") legitimately
+      // pays less than the printed cost; the invariant cannot recompute it.
+      const selfScales = (
+        (registry.getAbilities(cardId) ?? []) as readonly {
+          type?: string;
+          effect?: { type?: string };
+        }[]
+      ).some(
+        (a) =>
+          a.type === "static" &&
+          (a.effect?.type === "cost-reduction" || a.effect?.type === "cost-increase"),
+      );
+      if (selfScales) {
+        continue;
+      }
       const def = registry.get(cardId);
       const before = prev.state.runePools[ex.seat];
       const after = cur.state.runePools[ex.seat];

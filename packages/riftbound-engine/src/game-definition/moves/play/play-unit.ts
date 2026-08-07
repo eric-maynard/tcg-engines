@@ -55,6 +55,7 @@ import {
   canAffordCard,
   deductCost,
   discountOptionalPlayCost,
+  getPlayEnergyDiscountOverflow,
   hasPlayFromTrashGrant,
 } from "./cost";
 import type { CostExtras } from "./cost";
@@ -1218,6 +1219,17 @@ export const playUnit: Defs["playUnit"] = {
           ? { [killAnyCost.domain]: sacrificed.length }
           : undefined;
 
+    // rule 356.4.f (rule-id: sfd-103-221) — Energy discount left over once the
+    // printed cost is already 0. It keeps eating an optional additional cost
+    // (charged below), so read it BEFORE `deductCost` consumes one-shot riders.
+    const discountOverflow = getPlayEnergyDiscountOverflow(
+      draft,
+      playerId,
+      cardId,
+      { board },
+      createMetaAccessor(context.cards),
+    );
+
     deductCost(
       draft,
       playerId,
@@ -1279,12 +1291,15 @@ export const playUnit: Defs["playUnit"] = {
         // "optional additional costs you pay cost [1] or [rainbow] less" statics.
         const need = discountOptionalPlayCost(draft, playerId, optional.cost, board) ?? {};
         const xpOk = (need.xp ?? 0) === 0 || xpPaid;
+        // rule 356.4.f / 356.4.f.1 — a discount that overflowed the printed
+        // Energy cost also pays this one, and paying 0 still counts as paying.
+        const needEnergy = Math.max(0, (need.energy ?? 0) - discountOverflow);
         const canPay =
           xpOk &&
-          pool.energy >= (need.energy ?? 0) &&
+          pool.energy >= needEnergy &&
           (need.power ?? []).every((d: string) => (pool.power[d as keyof typeof pool.power] ?? 0) >= 1);
         if (canPay) {
-          pool.energy -= need.energy ?? 0;
+          pool.energy -= needEnergy;
           for (const domain of need.power ?? []) {
             const key = domain as keyof typeof pool.power;
             pool.power[key] = (pool.power[key] ?? 0) - 1;

@@ -277,21 +277,6 @@ function evaluateEnterReadyCondition(
       }
       return false;
     }
-    // rule 143.4 (rule-id: unl-037-219) — the parser leaves gates it cannot
-    // model as `{type:"custom", text}`. A gate that cannot be shown to HOLD
-    // must not grant ready: units enter exhausted by default.
-    case "custom": {
-      const text = String(condition.text ?? "").toLowerCase();
-      const events = state.turnEvents?.[playerId] ?? [];
-      if (/friendly unit died during your beginning phase/.test(text)) {
-        return events.includes("friendly-died-in-beginning");
-      }
-      // rule-id: unl-008-219 — "if a unit died this turn" (either side).
-      if (/^if a unit died this turn$/.test(text)) {
-        return events.includes("friendly-died") || events.includes("enemy-died");
-      }
-      return false;
-    }
     default: {
       return undefined;
     }
@@ -1707,21 +1692,14 @@ function getSelfScaledPowerReduction(
  * a card's own "I cost [N] less to play from anywhere other than your hand"
  * static. Callers that already know the play's origin is not the owner's hand
  * (a play out of trash / banishment / deck resolved by an effect) apply it
- * directly; `canAffordCard`'s own path checks the hand itself.
+ * directly; `canAffordCard`'s path checks the hand itself.
  */
 export function getNotHandSelfEnergyReduction(cardId: string): number {
   let total = 0;
   for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
     if (ability?.type !== "static") continue;
     const effect = ability.effect as
-      | {
-          type?: string;
-          target?: unknown;
-          whenPlayedFrom?: unknown;
-          by?: unknown;
-          reduction?: unknown;
-          amount?: unknown;
-        }
+      | { type?: string; target?: unknown; whenPlayedFrom?: unknown; by?: unknown; reduction?: unknown; amount?: unknown }
       | undefined;
     if (
       effect?.type !== "cost-reduction" ||
@@ -1820,6 +1798,24 @@ function getSelfScaledEnergyReduction(
     // opponent's own scoring is irrelevant.
     if (scope.startsWith("for each point you scored from holding this turn")) {
       count = countHoldPointsThisTurn(state, playerId);
+    } else if (/^for each of your \[?mighty\]? units?/.test(scope)) {
+      // rule 710 (rule-id: sfd-103-221) — "Mighty" reads CURRENT Might on the
+      // board (buffs count, damage never lowers Might), only units you control,
+      // and never the copy being played (it is on the chain, not in your base).
+      const cards = extras.board?.cards;
+      const consider = (id: CoreCardId): void => {
+        if ((id as string) === cardId) return;
+        if (registry.getCardType(id as string) !== "unit") return;
+        const controller = cards?.getCardController?.(id) ?? cards?.getCardOwner(id);
+        if (controller !== playerId) return;
+        if (getCardEffectiveMight(id as string, cards?.getCardMeta) >= 5) count += 1;
+      };
+      for (const id of zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)) {
+        consider(id);
+      }
+      for (const bfId of Object.keys(state.battlefields ?? {})) {
+        for (const id of zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) consider(id);
+      }
     } else if (scope.startsWith("for each card with my name in your trash")) {
       // rule 419.1 (rule-id: ven-096-166) — playing a card puts it on the chain
       // BEFORE its cost is determined, so a card played out of the trash never
@@ -1843,6 +1839,21 @@ function getSelfScaledEnergyReduction(
     total += Math.max(0, per) * count;
   }
   return total;
+}
+
+/**
+ * rule 356.4.f (rule-id: sfd-103-221) — "Discounts can reduce additional costs,
+ * including to 0." A discount larger than the printed Energy cost is not lost:
+ * the overflow keeps eating the Energy half of an optional additional cost
+ * (e.g. [Accelerate]'s [1]). Paying 0 still counts as paying it (356.4.f.1).
+ */
+function applyDiscountOverflowToAdditionalCost(additionalEnergy: number, discounted: number): number {
+  // A negative "additional cost" is a discount rider ("if you do, I cost [N]
+  // less") — it is never clamped, only real extra Energy is.
+  if (additionalEnergy <= 0) {
+    return additionalEnergy;
+  }
+  return Math.max(0, additionalEnergy - Math.max(0, -discounted));
 }
 
 /** Per-domain tally of an optional additional cost's power pips. */
@@ -2185,6 +2196,36 @@ function consumeRestrictedEnergy(
   }
 }
 
+/**
+ * rule 356.4.f (rule-id: sfd-103-221) — how much Energy discount is left over
+ * once the printed Energy cost has been reduced to 0. Callers that charge an
+ * optional additional cost outside `deductCost` shave its Energy half by this,
+ * because "discounts can reduce additional costs, including to 0".
+ */
+export function getPlayEnergyDiscountOverflow(
+  state: RiftboundGameState,
+  playerId: string,
+  cardId: string,
+  extras: CostExtras,
+  getCardMeta?: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined,
+): number {
+  const modifier = getCostModifier(cardId, getCardMeta);
+  const baseCost = getBaseCostForPlay(cardId, extras, getCardMeta);
+  const interactive = getInteractiveReduction(cardId, extras.chosenTargetId, getCardMeta);
+  const boardReduction = getBoardCostReduction(state, playerId, cardId, extras);
+  const selfScaled =
+    getSelfScaledEnergyReduction(state, playerId, cardId, extras) +
+    getSelfConditionalEnergyReduction(state, playerId, cardId, extras) +
+    getSelfLegionEnergyReduction(state, playerId, cardId);
+  const nextPlayEnergy = takeNextPlayDiscount(state, playerId, cardId, false).energy;
+  const discounted =
+    applyStaticCostReduction(Math.max(0, baseCost.energy + modifier), boardReduction) -
+    interactive -
+    selfScaled -
+    nextPlayEnergy;
+  return Math.max(0, -discounted);
+}
+
 export function canAffordCard(
   state: RiftboundGameState,
   playerId: string,
@@ -2226,13 +2267,15 @@ export function canAffordCard(
   const nextPlayEnergy = nextPlay.energy;
   // rule 356.4.e: a discount's minimum binds only that discount, and the payer
   // orders discounts — floored board auras go first so unfloored ones aren't lost.
+  const discounted =
+    applyStaticCostReduction(Math.max(0, baseCost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy;
   const adjustedEnergy = Math.max(
     0,
-    Math.max(0, applyStaticCostReduction(Math.max(0, baseCost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy) +
+    Math.max(0, discounted) +
       xEnergy +
       repeatSurcharge +
       boardIncrease.energy +
-      (extras.additionalCost?.energy ?? 0),
+      applyDiscountOverflowToAdditionalCost(extras.additionalCost?.energy ?? 0, discounted),
   );
 
   // Rule 357.1.a: ready runes can be exhausted for energy during Pay Costs,
@@ -2378,14 +2421,16 @@ export function deductCost(
   // rule 356.4.b / 356.6: the one-shot "next spell costs [N] less" is spent here.
   const nextPlay = takeNextPlayDiscount(draft, playerId, cardId, true);
   const nextPlayEnergy = nextPlay.energy;
+  // rule 356.4.e: floored board auras first, then unfloored discounts (see canAffordCard).
+  const discounted =
+    applyStaticCostReduction(Math.max(0, cost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy;
   const adjustedEnergy = Math.max(
     0,
-    // rule 356.4.e: floored board auras first, then unfloored discounts (see canAffordCard).
-    Math.max(0, applyStaticCostReduction(Math.max(0, cost.energy + modifier), boardReduction) - interactive - selfScaled - nextPlayEnergy) +
+    Math.max(0, discounted) +
       xEnergy +
       repeatSurcharge +
       boardIncrease.energy +
-      (extras.additionalCost?.energy ?? 0),
+      applyDiscountOverflowToAdditionalCost(extras.additionalCost?.energy ?? 0, discounted),
   );
 
   // rule 356.1.b: "ignoring its Energy cost" skips only that component.
