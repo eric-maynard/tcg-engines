@@ -491,7 +491,7 @@ describe("Copy limits: 3 per full card name including the Chosen Champion; signa
     expect(champs.valid).toBe(true);
   });
 
-  test.failing("BUG: 103.2.d.2 — a Signature card whose champion tag is NOT the legend's tag must be rejected; validateDeck has no notion of 'signature' beyond 'non-champion sharing the legend tag' and accepts it", async () => {
+  test("103.2.d.2 — a Signature card whose champion tag is NOT the legend's tag must be rejected; validateDeck has no notion of 'signature' beyond 'non-champion sharing the legend tag' and accepts it", async () => {
     // Expected: valid === false with a signature-tag error for a signature card tagged "U" under a tag-"T" legend.
     // Actual: the card is simply not counted as a signature and the deck validates.
     const legend = legendL();

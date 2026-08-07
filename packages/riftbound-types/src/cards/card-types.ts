@@ -85,6 +85,12 @@ export interface BaseCard {
 
   /** Domain identity (for deck building) */
   readonly domain?: Domain | Domain[];
+
+  /**
+   * Marks a Signature card (rule 103.2.d). A Signature card is legal only in a
+   * deck whose legend's champion tag it carries (rule 103.2.d.2).
+   */
+  readonly isSignature?: boolean;
 }
 
 /**
@@ -254,6 +260,13 @@ export interface EquipmentCard extends BaseCard {
    * the equipment while attached.
    */
   readonly copyAttachedUnitText?: boolean;
+
+  /**
+   * Shady Spectacles-style marker (ven-137-166): when true, attaching this
+   * equipment makes the EQUIPPED unit become a copy of another chosen
+   * friendly unit for as long as it stays attached. rule 477.1.b.
+   */
+  readonly copyChosenUnitToHolder?: boolean;
 
   /**
    * The Zero Drive-style marker: when true, the card's banish effect

@@ -297,6 +297,32 @@ const validateSignatureLimit = (mainDeck: Card[], legend: LegendCard): DeckValid
 };
 
 /**
+ * Validate that every Signature card carries the legend's champion tag.
+ *
+ * rule 103.2.d.2: a Signature card may only be included in a deck whose
+ * Champion Legend shares its champion tag.
+ */
+const validateSignatureTags = (mainDeck: Card[], legend: LegendCard): DeckValidationError[] => {
+  const errors: DeckValidationError[] = [];
+
+  for (const card of mainDeck) {
+    if (card.isSignature !== true) {
+      continue;
+    }
+    const hasChampionTag =
+      legend.championTag !== undefined && (card.tags?.includes(legend.championTag) ?? false);
+    if (!hasChampionTag) {
+      errors.push({
+        code: "SIGNATURE_TAG_MISMATCH",
+        message: `Signature card "${card.name}" does not carry the legend's champion tag "${legend.championTag ?? ""}"`,
+      });
+    }
+  }
+
+  return errors;
+};
+
+/**
  * Validate rune deck size (rule 103.3.a)
  */
 const validateRuneDeckSize = (runeDeck: RuneCard[]): DeckValidationError[] => {
@@ -396,6 +422,7 @@ const collectMainDeckErrors = (
   ...validateChosenChampion(config.chosenChampion, config.legend),
   ...validateMainDeckDomainIdentity(config.mainDeck, legendDomains),
   ...validateSignatureLimit(config.mainDeck, config.legend),
+  ...validateSignatureTags(config.mainDeck, config.legend),
 ];
 
 /**
