@@ -1618,6 +1618,12 @@ export const pendingChoiceMoves: Partial<
       const pickedCardId = picks[picks.length - 1] as string;
       /** rule 337.1.b (ogn-242-298) — a "banish it and play it" pick, finalized below. */
       let pendingPlayFinalize: string | undefined;
+      /**
+       * rule 355.1.a / 356.1.b.3 (ogn-226-298 × ogn-010-298) — a unit an effect
+       * played from the trash "ignoring its cost" still gets its own optional
+       * additional costs: [Accelerate] is offered once the pick has settled.
+       */
+      let accelerateAfterPick: { cardId: string; playerId: string } | undefined;
       let remaining = choice.remaining ?? 1;
       let taken = choice.taken ?? 0;
       let revealed = choice.revealed as readonly string[];
@@ -1864,6 +1870,9 @@ export const pendingChoiceMoves: Partial<
               draft.cardsPlayedThisTurn[playedOwner] =
                 (draft.cardsPlayedThisTurn[playedOwner] ?? 0) + 1;
             }
+            // rule 356.2.b.1 / 805.2.b — the play's [Accelerate] is still the
+            // playing player's to elect; paying it readies the unit.
+            accelerateAfterPick = { cardId: pickedCardId as string, playerId: playedOwner };
           } else if (isSpell) {
             // rule 354.2 / 419.1 (ogn-115-298) — the instructed spell play puts
             // it on the chain under the instructed player; it resolves there and
@@ -1965,6 +1974,14 @@ export const pendingChoiceMoves: Partial<
           triggerSourceId: pickedCardId as string,
         };
         executeEffect(choice.then as ExecutableEffect, effectCtx);
+      }
+      if (accelerateAfterPick) {
+        maybeOfferAccelerate(
+          draft,
+          accelerateAfterPick.cardId,
+          accelerateAfterPick.playerId,
+          context,
+        );
       }
       // rule 319.7 / rule-id: ogn-019-298 — the pick changed game state (a
       // discard, recycle, banish…), so refresh statics + SBA like the other
