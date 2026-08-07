@@ -487,6 +487,14 @@ export interface RevealAndPickChoice {
   readonly playIgnoreEnergy?: boolean;
 
   /**
+   * rule 337.1.b / 337.2 (ogn-242-298 Baited Hook): "banish a unit from among
+   * them … and play it" — the play is part of THIS instruction, so it
+   * finalizes as soon as the ability finishes resolving (the player picks a
+   * location and the unit enters the board) instead of waiting on the chain.
+   */
+  readonly playImmediate?: boolean;
+
+  /**
    * rule 594 (ogn-112-298 Kai'Sa, Evolutionary): "play a spell from your trash
    * … Then recycle it" — the spell goes to the bottom of its owner's Main Deck
    * when it leaves the chain instead of back to the trash.

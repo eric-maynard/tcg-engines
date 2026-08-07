@@ -445,7 +445,7 @@ describe("resolvePendingChoice move", () => {
   });
 
   // rule-id: ogn-062-298-look-banish-play (Reinforce)
-  it("onPicked play: banishes the pick, pays cost less the reduction, and adds it to the chain", () => {
+  it("onPicked play: banishes the pick, pays cost less the reduction, and finalizes the play onto the board", () => {
     registry.register("rp-big-unit", {
       cardType: "unit",
       energyCost: 7,
@@ -460,6 +460,7 @@ describe("resolvePendingChoice move", () => {
       onPicked: "play",
       onRest: "recycle",
       playEnergyReduction: 5,
+      playImmediate: true,
       prompter: "p1",
       revealed: ["rp-spell", "rp-big-unit"],
       revealer: "p1",
@@ -484,8 +485,9 @@ describe("resolvePendingChoice move", () => {
     expect(moves.some((m) => m.targetZoneId === "hand")).toBe(false);
     expect(moves[1]).toMatchObject({ cardId: "rp-spell", position: "bottom", targetZoneId: "mainDeck" });
     expect(state.runePools.p1?.energy).toBe(2);
-    const items = state.interaction?.chain?.items ?? [];
-    expect(items.some((i: { cardId?: string }) => i.cardId === "rp-big-unit")).toBe(true);
+    // rule 337.1.b / 337.2: the pending play finalizes at once — the unit
+    // enters the board rather than waiting as a chain item.
+    expect(moves[moves.length - 1]).toMatchObject({ cardId: "rp-big-unit", targetZoneId: "base" });
     expect(state.pendingChoice).toBeUndefined();
   });
 

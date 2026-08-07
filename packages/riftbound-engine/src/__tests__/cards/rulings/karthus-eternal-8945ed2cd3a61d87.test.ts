@@ -75,7 +75,7 @@ describe("Ruling 8945ed2cd3a61d87 — Karthus dying together with a Deathknell u
   // it triggers an additional time → P1 draws 2 in total.
   // Actual: P1 draws 1 — the engine never applies Karthus's "trigger an additional time" static (it draws
   // 1 even when Karthus survives), so a fortiori not in the simultaneous-death case.
-  test.failing("BUG: ruling 8945ed2cd3a61d87 — The Ruination kills Karthus + Sentry together: Sentry's Deathknell should trigger twice (P1 draws 2); engine draws 1 (Karthus doubling not applied)", async () => {
+  test("ruling 8945ed2cd3a61d87 — The Ruination kills Karthus + Sentry together: Sentry's Deathknell should trigger twice (P1 draws 2); engine draws 1 (Karthus doubling not applied)", async () => {
     const game = await ruinationBoard(true).build();
     const hand = game.p1.hand().length;
     const deck = game.p1.deck().length;

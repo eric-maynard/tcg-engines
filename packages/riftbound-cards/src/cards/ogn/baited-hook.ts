@@ -21,6 +21,7 @@ const abilities: Ability[] = [
           ignoreCost: true,
           maxMightAboveKilled: 1,
           onPicked: "play",
+          playImmediately: true,
           onRest: "recycle",
           optional: true,
           type: "look",

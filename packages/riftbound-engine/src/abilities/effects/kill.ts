@@ -213,8 +213,16 @@ function killUnits(targets: readonly string[], ctx: EffectContext, h: EffectHelp
   // rule-id: ogn-246-298 — a kill effect is a death: emit `die` so
   // Deathknell / "when a friendly unit dies" triggers fire.
   if (ctx.fireTriggers) {
+    // rule 323.5 / 808.1.d.2 — one kill instruction kills them all at the same
+    // moment, so the whole batch must be published before the first `die`
+    // fires: a unit dying alongside another is still present for statics that
+    // shape that death's triggers (ogn-236-298 Karthus, Eternal).
+    const draft = ctx.draft as { dyingTogether?: { cardId: string; owner: string }[] };
+    const outerBatch = draft.dyingTogether;
+    draft.dyingTogether = killed.map(({ cardId, owner }) => ({ cardId, owner }));
     for (const { cardId, diedAt, owner, wasBuffed, wasStunned } of killed) {
       ctx.fireTriggers({ cardId, diedAt, killSource, killedBy: ctx.playerId, owner, type: "die", wasBuffed, wasStunned });
     }
+    draft.dyingTogether = outerBatch;
   }
 }

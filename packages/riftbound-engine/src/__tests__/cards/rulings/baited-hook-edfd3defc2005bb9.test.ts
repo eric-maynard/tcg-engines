@@ -71,7 +71,7 @@ describe("Ruling edfd3defc2005bb9 — Baited Hook: killed unit's Deathknell reso
   // it above the Sentry trigger; it finalizes (location) and enters the board; its "draw 1" play trigger lands
   // on top and resolves FIRST; the Sentry's Deathknell draw resolves LAST. Actual: Hook's pick simply draws
   // the chosen card to hand — nothing is banished or played, so no play trigger ever exists.
-  test.failing("BUG: ruling edfd3defc2005bb9 — (Sentry/Yordle) the picked unit is played above the Deathknell; its play trigger resolves before the Deathknell (engine draws the picked card instead of playing it)", async () => {
+  test("ruling edfd3defc2005bb9 — (Sentry/Yordle) the picked unit is played above the Deathknell; its play trigger resolves before the Deathknell (engine draws the picked card instead of playing it)", async () => {
     const game = await board(WATCHFUL_SENTRY, LECTURING_YORDLE).build();
     const handBefore = game.p1.hand().length;
     await activateHook(game);

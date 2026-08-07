@@ -44,6 +44,7 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     reduceCost?: { energy?: number };
     ignoreEnergyCost?: boolean;
     ignoreCost?: boolean;
+    playImmediately?: boolean;
     maxMightAboveKilled?: number;
     followUp?: unknown;
   };
@@ -75,6 +76,9 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     // rule 356.1.b.1 (ogn-242-298) — "play it, ignoring its cost": nothing is
     // paid, energy and power alike.
     ...(onPicked === "play" && lookEff.ignoreCost ? { playIgnoreCost: true } : {}),
+    // rule 337.1.b (ogn-242-298) — "banish … and play it" as one instruction:
+    // the play finalizes with the ability, it does not wait on the chain.
+    ...(onPicked === "play" && lookEff.playImmediately ? { playImmediate: true } : {}),
     // rule-id: ogn-062-298-look-pick-filter — "banish a unit from among
     // them" must restrict the pick; thread the effect's filter through so
     // isValidPendingPick rejects non-matching revealed cards.
