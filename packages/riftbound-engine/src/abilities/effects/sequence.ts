@@ -31,6 +31,19 @@ type SequenceSlots = {
 const isSameLocationTarget = (t: SubTarget): boolean =>
   typeof t === "object" && t.location === "same";
 
+/**
+ * rule 477.3.b — `increase-might-to`/`swap-might` whose `target1` is the source
+ * itself: the single caster choice is `target2`, so the sequence prompts for it
+ * like an ordinary `target` step and binds it as boundTargets[0].
+ */
+function isFixedFirstMightStep(sub: { type?: string; target1?: unknown }): boolean {
+  if (sub.type !== "increase-might-to" && sub.type !== "swap-might") {
+    return false;
+  }
+  const t1 = sub.target1;
+  return t1 === undefined || t1 === "self" || (t1 as { type?: string })?.type === "self";
+}
+
 /** Descriptors that name a fixed referent — never a controller choice (rule 355.10). */
 const PROMPTLESS_TARGET_TYPES: readonly string[] = [
   "self",
@@ -285,7 +298,31 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       if (sub.type === "spend-xp" && !canSpendXp(sub, ctx)) {
         break;
       }
-      const subTarget = (sub as { target?: SubTarget }).target;
+      // rule 383.3.b (rule-id: ven-101-166) — "banish a card from any trash TO
+      // give a unit [Assault 2]": a cost within instructions at the start of an
+      // effect gates every remaining step. An unpayable cost (no card in any
+      // trash) means nothing after it happens, so the step must not fall
+      // through as a silent no-op and let the payoff resolve for free.
+      if ((sub as { costStep?: boolean }).costStep === true) {
+        const costTarget = (sub as { target?: SubTarget }).target;
+        const payable =
+          typeof costTarget === "object" && costTarget !== null
+            ? resolveTarget({ ...(costTarget as TargetDescriptor), quantity: "all" }, {
+                ...resolverCtx,
+                choosing: true,
+              } as Parameters<typeof resolveTarget>[1])
+            : [];
+        if (payable.length === 0) {
+          break;
+        }
+      }
+      // rule 477.3.b (rule-id: ven-079-166) — a directional Might step
+      // ("Increase MY Might to its Might, then …") names its only caster choice
+      // in `target2`; without this the step would prompt on its own and drop
+      // every later step of the sequence.
+      const subTarget =
+        (sub as { target?: SubTarget }).target ??
+        (isFixedFirstMightStep(sub) ? (sub as { target2?: SubTarget }).target2 : undefined);
       let subCtx: EffectContext = ctx;
       // rule-id: sfd-206-221 — hand the locked chain item to the counter step.
       if (counterBoundId !== undefined && i === counterStepIdx) {
@@ -579,7 +616,11 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
           { ...(subTarget as TargetDescriptor), quantity: "all" },
           { ...resolverCtx, choosing: true } as Parameters<typeof resolveTarget>[1],
         );
-        if (options.length > 1) {
+        // rule 383.3.b.1 (rule-id: ven-082-166) — a cost-payment slot is always
+        // the controller's own choice, so it prompts even with one candidate.
+        const promptSingle =
+          (subTarget as { promptWhenSingle?: boolean }).promptWhenSingle === true;
+        if (options.length > 1 || (promptSingle && options.length === 1)) {
           const rest = seq.effects.slice(i + 1);
           ctx.draft.pendingChoice = {
             effect: sub,
