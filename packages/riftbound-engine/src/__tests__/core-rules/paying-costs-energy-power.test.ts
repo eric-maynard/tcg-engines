@@ -513,7 +513,7 @@ describe("'Ignoring its cost' zeroes the base cost only; a chosen optional addit
   // still CHOOSE the optional Accelerate cost; it is added to the total (1E + [Fury]) and must be paid, and the
   // unit then enters ready. Actual: when a unit is played by an effect the engine never offers the optional
   // additional cost (it hard-codes "not paid"), so the unit always enters exhausted and the pool is untouched.
-  test.failing("BUG: 355.1.a/356.1.b.3 — a unit played 'ignoring its cost' by an effect is never offered its optional Accelerate cost", async () => {
+  test("355.1.a/356.1.b.3 — a unit played 'ignoring its cost' by an effect is still offered its optional Accelerate cost", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1, power: { fury: 1 } })
       .battlefield("bf1", { controller: P2 })

@@ -345,7 +345,16 @@ function offerAccelerateOnInstructedPlay(cardId: string, ctx: EffectContext): vo
   ctx.draft.pendingChoice = {
     acceleratePlay: { cardId, cost, readyOnly: true },
     playerId: ctx.playerId,
-    resolved: { optInCost: cost },
+    // rule 356.2.b.1 — accepting charges `optInCost` and then runs the
+    // resolved effect: the unit that already entered flips to ready.
+    resolved: {
+      cardId,
+      controller: ctx.playerId,
+      effect: { target: cardId, type: "ready" },
+      optInCost: cost,
+      triggered: true,
+      type: "ability",
+    },
     sourceCardId: ctx.sourceCardId,
     type: "opt-in",
   } as NonNullable<EffectContext["draft"]["pendingChoice"]>;
