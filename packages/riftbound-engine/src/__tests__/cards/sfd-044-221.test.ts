@@ -139,10 +139,10 @@ describe("Legion Quartermaster (sfd-044-221)", () => {
     expect(game.state("squire").might).toBe(2);
   });
 
-  test.failing("BUG: partner line — bounce Poro Snax as the cost, replay it for 1 and draw again ('When you play this, draw 1')", async () => {
-    // 3 (Quartermaster) + 1 (Snax replay) energy. Expected end state: both on board, P1 drew exactly one card.
+  test("partner line — bounce Poro Snax as the cost, replay it for 1 and draw again ('When you play this, draw 1')", async () => {
+    // 3 (Quartermaster) + 1 energy and one [calm] pip (Snax is printed [1][calm]). Expected end state: both on board, P1 drew exactly one card.
     const game = await scenario()
-      .resources(P1, { energy: 4 })
+      .resources(P1, { energy: 4, power: { calm: 1 } })
       .gear(P1, PORO_SNAX, "snax")
       .hand(P1, CARD, "lq")
       .script(P1, ["snax"])
