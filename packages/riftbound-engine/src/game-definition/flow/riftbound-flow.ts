@@ -31,6 +31,7 @@ import { recalculateStaticEffects } from "../../abilities/static-abilities";
 import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { getChannelCountLimit } from "../../operations/channel-limits";
 import { dequeueExtraTurn } from "../../operations/turn-queue";
 import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
@@ -505,6 +506,16 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 baseChannelCount = 3;
               }
 
+              // rule 515.3.b: a static on the board may cap the channel count
+              // (ven-036-166 Sandstone Chimera: "players only channel 1 rune").
+              const channelLimit = getChannelCountLimit(
+                Object.keys(context.state.battlefields ?? {}),
+                (zoneId) => context.zones.getCardsInZone(zoneId as CoreZoneId) ?? [],
+              );
+              if (channelLimit !== undefined) {
+                baseChannelCount = Math.min(baseChannelCount, channelLimit);
+              }
+
               const runesInDeck = context.zones.getCardsInZone(
                 "runeDeck" as CoreZoneId,
                 playerId as CorePlayerId,
@@ -739,6 +750,16 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   );
                   context.cards.updateCardMeta(cardId, {
                     grantedAbilities: remaining.length > 0 ? remaining : undefined,
+                  });
+                }
+
+                // rule-id: unl-095-219 — expire turn-scoped delayed triggers (rule 517.2.b)
+                if (meta.delayedTriggers && meta.delayedTriggers.length > 0) {
+                  const remaining = meta.delayedTriggers.filter(
+                    (dt: { duration: string }) => dt.duration !== "turn",
+                  );
+                  context.cards.updateCardMeta(cardId, {
+                    delayedTriggers: remaining.length > 0 ? remaining : undefined,
                   });
                 }
 
