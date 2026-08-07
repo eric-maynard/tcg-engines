@@ -344,6 +344,16 @@ export function evaluateTriggerCondition(
     // Condition, so out of range the ability never goes on the chain at all.
     return scoreWithinConditionMet(c, state, controllerId);
   }
+  if (c.type === "played-types-this-turn") {
+    // rule 185 / 383.2.a (rule-id: ven-173-166) — "if you've played a non-token
+    // unit, a non-token gear, and a spell this turn". The per-player ledger is
+    // stamped in fireTriggers on every `play-card` and cleared at turn start.
+    const need = (c as { types?: readonly string[] }).types ?? [];
+    const log =
+      (state as { turnEvents?: Record<string, readonly string[]> }).turnEvents?.[controllerId] ??
+      [];
+    return need.every((t) => log.includes(`played-${t}`));
+  }
   if (c.type === "paid-additional-cost") {
     // Zaun Punk (sfd-160-221) et al: the payoff fires only when the optional
     // additional cost was actually paid. The play event carries the flag; if
@@ -1446,12 +1456,44 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
       draft.gameEventCounts[key] = (draft.gameEventCounts[key] ?? 0) + 1;
     }
   }
+  // rule 377.2.b (ven-125-166) — "if you've chosen an enemy unit this turn":
+  // every choose flows through here, so log an enemy-unit choice against the
+  // CHOOSER for the rest of the turn (cleared with `turnEvents` at turn start).
+  if (event.type === "choose" && "chooserId" in event && event.chooserId) {
+    const chooser = event.chooserId as string;
+    const subjectOwner = (event as { owner?: string }).owner;
+    if (
+      subjectOwner !== undefined &&
+      subjectOwner !== chooser &&
+      getGlobalCardRegistry().getCardType(event.cardId as string) === "unit"
+    ) {
+      const draft = ctx.draft as { turnEvents?: Record<string, string[]> };
+      draft.turnEvents ??= {};
+      (draft.turnEvents[chooser] ??= []).push("chose-enemy-unit");
+    }
+  }
   // rule-id: ogn-019-298 — "If you've discarded a card this turn" statics read a
   // per-player log of this turn's events; every discard flows through here.
   if (event.type === "discard" && event.playerId) {
     const draft = ctx.draft as { turnEvents?: Record<string, string[]> };
     draft.turnEvents ??= {};
     (draft.turnEvents[event.playerId] ??= []).push("discarded");
+  }
+  // rule-id: ven-173-166 — "if you've played a non-token unit, a non-token gear,
+  // and a spell this turn": every play flows through here, so log the played
+  // card's type against the player for the rest of the turn.
+  if (event.type === "play-card" && event.playerId) {
+    const draft = ctx.draft as { turnEvents?: Record<string, string[]> };
+    draft.turnEvents ??= {};
+    const log = (draft.turnEvents[event.playerId] ??= []);
+    const cardType = (event as { cardType?: string }).cardType;
+    if (cardType !== undefined) {
+      log.push(`played-${cardType}`);
+      // rule 185 — a token is not a card, so it never satisfies "non-token".
+      if (!String((event as { cardId?: string }).cardId ?? "").startsWith("token-")) {
+        log.push(`played-non-token-${cardType}`);
+      }
+    }
   }
   // rule-id: ogn-144-298 — "If an enemy unit has died this turn": log the
   // death against every OTHER player as `enemy-died` (and the owner as

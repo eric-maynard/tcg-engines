@@ -421,6 +421,26 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
     remaining = remaining.replace(useOnlyAtBattlefield[0], " ").trim();
   }
 
+  // rule 377.2.b (ven-125-166 Hungry Wolf): "Use only if you've chosen an enemy
+  // unit this turn and only once each turn." — two play restrictions riding on
+  // one activated ability. Strip them so the effect text parses, and hand the
+  // engine structured restrictions to gate activation on.
+  const useOnlyChosenEnemy = remaining.match(
+    /\s*Use only if you(?:'ve|’ve| have)\s+chosen an enemy unit this turn/i,
+  );
+  if (useOnlyChosenEnemy) {
+    restrictions = [...(restrictions ?? []), { type: "chosen-enemy-unit-this-turn" }];
+    remaining = remaining.replace(useOnlyChosenEnemy[0], " ").trim();
+  }
+
+  // rule 377.2.b — "(Use) only once each turn", either as its own trailing
+  // sentence or hung off a preceding restriction with "and".
+  const onlyOnceEachTurn = remaining.match(/\s*(?:and\s+)?(?:Use\s+)?only once each turn\.?\s*$/i);
+  if (onlyOnceEachTurn) {
+    restrictions = [...(restrictions ?? []), { type: "once-per-turn" }];
+    remaining = remaining.slice(0, remaining.length - onlyOnceEachTurn[0].length).trim();
+  }
+
   // Extract "Spend this Energy only during showdowns" restriction (mana mod)
   const showdownEnergyOnly = remaining.match(/\s*Spend this Energy only during showdowns\.?\s*$/i);
   if (showdownEnergyOnly) {

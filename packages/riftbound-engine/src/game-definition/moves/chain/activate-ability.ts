@@ -118,6 +118,22 @@ function oncePerTurnExhausted(
   return (state.turnEventCounts?.[abilityUseKey(hostCardId, abilityIndex)] ?? 0) >= 1;
 }
 
+/**
+ * rule 377.2.b (ven-125-166) — "Use only if you've chosen an enemy unit this
+ * turn": a turn-scoped history flag logged by `fireTriggers` on every `choose`
+ * of an enemy unit; it is cleared with `turnEvents` at the turn boundary.
+ */
+function chosenEnemyRestrictionUnmet(
+  state: { turnEvents?: Record<string, readonly string[]> },
+  restrictions: readonly { type: string }[] | undefined,
+  playerId: string,
+): boolean {
+  if (!restrictions?.some((r) => r.type === "chosen-enemy-unit-this-turn")) {
+    return false;
+  }
+  return !(state.turnEvents?.[playerId] ?? []).includes("chose-enemy-unit");
+}
+
 function normalizeRecycleCost(raw: unknown): { amount: number; cardType?: string } | undefined {
   if (typeof raw === "number") {
     return raw > 0 ? { amount: raw } : undefined;
@@ -915,6 +931,10 @@ export const activateAbility: Defs["activateAbility"] = {
     if (oncePerTurnExhausted(state, abilityRestrictions, cardId as string, abilityIndex as number)) {
       return false;
     }
+    // rule 377.2.b: "Use only if you've chosen an enemy unit this turn."
+    if (chosenEnemyRestrictionUnmet(state, abilityRestrictions, playerId as string)) {
+      return false;
+    }
     // Rule 827.1.c.1: [Empower] carries an implicit "Play only if not
     // Empowered" — reject activation when the host is already Empowered.
     {
@@ -1350,6 +1370,10 @@ export const activateAbility: Defs["activateAbility"] = {
         if (
           oncePerTurnExhausted(state, abilityRestrictions, entry.hostCardId as string, entry.abilityIndex)
         ) {
+          continue;
+        }
+        // rule 377.2.b: "Use only if you've chosen an enemy unit this turn."
+        if (chosenEnemyRestrictionUnmet(state, abilityRestrictions, playerId as string)) {
           continue;
         }
         // Rule 827.1.c.1: [Empower] — skip when the host is already Empowered.
