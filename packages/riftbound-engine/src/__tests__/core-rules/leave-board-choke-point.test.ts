@@ -454,3 +454,27 @@ describe("428.1.a.1.b — 'when an enemy unit dies HERE' is located by where the
     expect(game.p1.hand()).toHaveLength(hand0 - 2 + 1);
   });
 });
+
+describe("124.1 / 191.1 / 428.1.a.1.b — a stolen unit that dies: its Deathknell is its CONTROLLER's, and the trash copy reverts to its owner", () => {
+  const STEAL = spell("Filler Steal", { duration: "permanent", target: { controller: "enemy", type: "unit" }, type: "take-control" });
+
+  test("P1 steals P2's Deathknell drawer, then it is killed: P1 (controller as it died) draws, the card in P2's trash is P2's again", async () => {
+    const game = await scenario()
+      .unit(P2, "base", DK_DRAWER, "d")
+      .hand(P1, STEAL, "steal")
+      .hand(P1, KILL, "kill")
+      .build();
+    await game.p1.cast("steal", { targets: "d" });
+    await game.settle();
+    expect(game.state("d").controller).toBe(P1);
+    const p1Hand0 = game.p1.hand().length;
+    const p2Hand0 = game.p2.hand().length;
+    await game.p1.cast("kill", { targets: "d" });
+    await game.settle();
+    expect(game.zoneOf("d")).toBe("trash");
+    expect(game.state("d").owner).toBe(P2);
+    expect(game.state("d").controller).toBe(P2);
+    expect(game.p1.hand()).toHaveLength(p1Hand0 - 1 + 1); // cast Kill, drew from the Deathknell it controlled
+    expect(game.p2.hand()).toHaveLength(p2Hand0);
+  });
+});
