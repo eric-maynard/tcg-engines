@@ -570,8 +570,29 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
   // the unit you recycled": the discount is only known once the cost has been
   // paid, so it is read from the recycled card (this effect's trigger source).
   const energyReduction = trashPlayEnergyReduction(effect, ctx);
+  // rule 356.1.b.1 / 357.2 — "Play a unit from your trash that costs no more
+  // Energy and no more Power than the killed unit, ignoring its cost": the
+  // unit killed to pay this card's mandatory additional cost sets two
+  // independent caps, and the play itself is free. That unit is in the trash
+  // by now but is not a candidate — targets are locked (355.5) before the
+  // additional cost is paid (357).
+  const mandatoryKill = getOptionalPlayCost(ctx.sourceCardId);
+  const killedForCost =
+    mandatoryKill?.kind === "kill" && mandatoryKill.mandatory === true
+      ? ctx.draft.lastKilledUnitId
+      : undefined;
+  const killedCaps =
+    killedForCost === undefined
+      ? undefined
+      : {
+          energy: registry.getEnergyCost(killedForCost) ?? 0,
+          id: killedForCost,
+          power: (registry.getPowerCost(killedForCost) ?? []).length,
+        };
   const extras: CostExtras =
-    ignoreCost === true
+    killedCaps !== undefined
+      ? { ignoreBaseCost: true }
+      : ignoreCost === true
       ? { ignoreBaseCost: true }
       : ignoreCost === "energy"
         ? { ignoreEnergyCost: true }
@@ -593,6 +614,17 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
     const cardType = registry.getCardType(id);
     if (target?.type && target.type !== "card" && target.type !== cardType) {
       return false;
+    }
+    if (killedCaps !== undefined) {
+      if (id === killedCaps.id) {
+        return false;
+      }
+      if ((registry.getEnergyCost(id) ?? 0) > killedCaps.energy) {
+        return false;
+      }
+      if ((registry.getPowerCost(id) ?? []).length > killedCaps.power) {
+        return false;
+      }
     }
     if (!costFilters.every((f) => matchesPrintedCostFilter(id, f, ctx))) {
       return false;
