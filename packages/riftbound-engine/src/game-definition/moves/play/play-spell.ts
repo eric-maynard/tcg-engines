@@ -2149,6 +2149,20 @@ export const playSpell: Defs["playSpell"] = {
       };
     }
 
+    // rule 359.3.e.5 / 359.3.e.8 (rule-id: unl-072-219 Crescent Strike) — "…and
+    // 1 to each other enemy unit THERE": the battlefield is fixed when the
+    // spell is played, so record it now. Moving the chosen unit away in
+    // response mistargets only that unit; the splash still resolves there.
+    if (
+      typeof (effectToStore as { splashOthers?: unknown } | undefined)?.splashOthers === "number" &&
+      targets?.[0] !== undefined
+    ) {
+      const aimedZone = context.zones.getCardZone(targets[0] as CoreCardId) as string | undefined;
+      if (aimedZone?.startsWith("battlefield-")) {
+        effectToStore = { ...(effectToStore as Record<string, unknown>), _splashZone: aimedZone };
+      }
+    }
+
     // Add spell to the chain (rule 537)
     const interaction = draft.interaction ?? createInteractionState();
     const turnOrder = Object.keys(draft.players);
