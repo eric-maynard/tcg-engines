@@ -1,4 +1,4 @@
-import type { Ability } from "@tcg/riftbound-types";
+import type { Ability, Condition } from "@tcg/riftbound-types";
 import type { UnitCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
@@ -9,12 +9,15 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  [Action][>] [1][rainbow], [Exhaust]: [Stun] an enemy unit attacking here."
  *
  * Modeled as:
- *   - Static grants EntersReady (conditional by play location — approx.).
+ *   - Static grants EntersReady, conditional on entering a battlefield.
  *   - Activated ability: pay 1+rainbow + exhaust → stun an attacking enemy
  *     here.
  */
 const abilities: Ability[] = [
   {
+    // rule 143.4: the enter-ready clause is CONDITIONAL on the play
+    // destination — played to the base, Shadow enters exhausted like any unit.
+    condition: { type: "played-to-battlefield" } as unknown as Condition,
     effect: {
       keyword: "EntersReady",
       target: "self",

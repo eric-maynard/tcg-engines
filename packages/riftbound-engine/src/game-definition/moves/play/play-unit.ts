@@ -290,7 +290,7 @@ function holdsChainPriority(state: RiftboundGameState, playerId: string): boolea
  *  - a Neutral Open state → only the turn player (rule 316.5.b: nobody else
  *    holds priority there, so [Reaction] opens no window).
  */
-function reactionWindowOpen(state: RiftboundGameState, playerId: string): boolean {
+export function reactionWindowOpen(state: RiftboundGameState, playerId: string): boolean {
   if (holdsChainPriority(state, playerId)) {
     return true;
   }
