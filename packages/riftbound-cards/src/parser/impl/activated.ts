@@ -5,7 +5,7 @@
 import type { ActivatedAbility } from "@tcg/riftbound-types";
 import type { Cost } from "@tcg/riftbound-types/abilities/cost-types";
 import type { Effect, SequenceEffect } from "@tcg/riftbound-types/abilities/effect-types";
-import { parseCost } from "../parsers/cost-parser";
+import { parseAdditionalCostText, parseCost } from "../parsers/cost-parser";
 import { parseActivationCost, parseResourcePayload } from "./costs";
 import { parseEffect } from "./effect";
 import { parseEffects } from "./effects";
@@ -71,6 +71,26 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
       };
     }
     return ability;
+  }
+
+  // Rule 827.1.c.1 (ven-124-166 Escaped Grayback): the [Empower] cost is not
+  // always symbolic — "[Empower] — Kill a friendly unit" pays with a prose
+  // cost. Handled after the symbol form so token costs keep their exact
+  // parse; the em dash is required here so this never swallows prose that is
+  // not a cost.
+  const empowerProseMatch = stripReminders(empowerLine).match(
+    /^\[Empower\]\s*(?:—|-)\s*(.+?)\.?\s*$/i,
+  );
+  if (empowerProseMatch) {
+    const proseCost = parseAdditionalCostText(empowerProseMatch[1]);
+    if (Object.keys(proseCost).length > 0) {
+      return {
+        cost: proseCost as Cost,
+        effect: { target: "self", type: "empower" } as unknown as Effect,
+        restrictions: [{ type: "not-empowered" }],
+        type: "activated",
+      } as ActivatedAbility;
+    }
   }
 
   // Compound: ":rb_energy_N::rb_rune_X:, Recycle <noun> from your trash, :rb_exhaust:: EFFECT"

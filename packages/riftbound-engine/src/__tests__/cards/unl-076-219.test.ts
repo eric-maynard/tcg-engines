@@ -14,6 +14,14 @@ describe("Petal Pixie (unl-076-219)", () => {
     expect(game.state("pixie").might).toBe(2);
   });
 
+  test("alone in base with a Temporary ally in base: still 2 — base is not 'my battlefield'", async () => {
+    const game = await scenario()
+      .unit(P1, "base", CARD, "pixie")
+      .unit(P1, "base", { keywords: ["Temporary"], might: 1 }, "temp")
+      .build();
+    expect(game.state("pixie").might).toBe(2);
+  });
+
   test("counts your Temporary units at its location", async () => {
     const game = await scenario()
       .battlefield("bf1")

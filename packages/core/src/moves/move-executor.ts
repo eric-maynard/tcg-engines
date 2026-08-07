@@ -1,6 +1,6 @@
 import { produce } from "immer";
 import type { GameMoveDefinition } from "../game-definition/move-definitions";
-import type { MoveContext, MoveResult } from "./move-system";
+import type { ConditionFailure, MoveContext, MoveResult } from "./move-system";
 
 /**
  * Generic move map type for runtime lookup
@@ -61,12 +61,15 @@ export function executeMove<TGameState>(
   // 2. Check condition
   if (moveDef.condition) {
     try {
-      const isValid = moveDef.condition(state, context);
-      if (!isValid) {
+      // A ConditionFailure is a truthy object — only a literal `true` means
+      // legal, otherwise a detailed rejection would be read as approval.
+      const result = moveDef.condition(state, context);
+      if (result !== true) {
+        const failure = result === false ? undefined : (result as ConditionFailure);
         return {
-          error: `Move '${moveId}' condition not met`,
-          errorCode: "CONDITION_FAILED",
-          errorContext: { moveId },
+          error: failure?.reason ?? `Move '${moveId}' condition not met`,
+          errorCode: failure?.errorCode ?? "CONDITION_FAILED",
+          errorContext: { moveId, ...(failure?.context ?? {}) },
           success: false,
         };
       }

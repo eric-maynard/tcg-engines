@@ -82,6 +82,9 @@ function connectWs() {
     try { msg = JSON.parse(e.data); } catch { return; }
     // Test-harness hook (read-only): lets an external driver await move_accepted/move_rejected deterministically.
     try { window.__rbLastFrame = { type: msg.type, seq: msg.seq, requestId: msg.requestId, error: msg.error, errorCode: msg.errorCode, moveId: msg.moveId, at: Date.now() }; } catch {}
+    // The server has answered — release the executeMove() in-flight guard.
+    if (typeof clearInFlightMove === "function") clearInFlightMove();
+    else window.__rbInFlightMove = null;
 
     switch (msg.type) {
       case "sync":
@@ -145,7 +148,10 @@ function connectWs() {
       case "move_rejected":
         console.warn("[WS] Move rejected:", msg.error);
         addLogEntry(`Error: ${msg.error}`);
-        if (typeof showToast === "function") showToast(`Move rejected: ${msg.error}`);
+        if (typeof showToast === "function") showToast(explainMoveRejection(msg.error, msg.moveId));
+        // The panel was rendered from a snapshot the server has already left —
+        // pull a fresh one so the stale buttons disappear.
+        if (typeof requestResync === "function") requestResync();
         break;
 
       case "player_connected":
@@ -185,6 +191,10 @@ function connectWs() {
         handlePing(msg);
         break;
     }
+
+    // Run follow-up work registered for "once the server has answered", now
+    // that gameState/availableMoves reflect this frame.
+    if (typeof notifyMoveSettled === "function") notifyMoveSettled();
   };
 
   ws.onclose = (e) => {

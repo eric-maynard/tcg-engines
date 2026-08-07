@@ -22,8 +22,78 @@ function executeMove(moveId, params, playerId) {
     return;
   }
 
+  // A move stays "in flight" until the server answers it. Sidebar/action
+  // buttons are rendered from the last `availableMoves` snapshot, so ANY click
+  // before move_accepted arrives is aimed at a state the server has already
+  // left — re-sending the same move, or a second move whose cost the first one
+  // just spent, only produces an opaque "condition not met" toast. Drop every
+  // send while a move is outstanding and mark the panel busy so the stale
+  // buttons are visibly unclickable.
+  const signature = `${moveId}:${pid}:${JSON.stringify(params ?? null)}`;
+  if (window.__rbInFlightMove) return;
+  window.__rbInFlightMove = signature;
+  setActionsBusy(true);
+  // Safety net: never wedge the UI if a frame is lost.
+  clearTimeout(window.__rbInFlightTimer);
+  window.__rbInFlightTimer = setTimeout(() => { clearInFlightMove(); }, 5000);
+
   const requestId = `req-${++requestCounter}`;
   ws.send(JSON.stringify({ type: "move", moveId, params, requestId }));
+}
+
+/** Grey out + disable the action panel while a move is awaiting the server. */
+function setActionsBusy(busy) {
+  const list = document.getElementById("actionsList");
+  if (!list) return;
+  list.classList.toggle("moves-pending", !!busy);
+  list.querySelectorAll("button").forEach(b => { b.disabled = !!busy; });
+}
+
+/**
+ * Follow-up work that must run on the frame carrying the previous move's
+ * result (e.g. recycle a rune once its exhaust has landed). Polling the client
+ * state instead loses the follow-up whenever the round-trip is slow.
+ */
+function afterMoveSettled(cb) {
+  (window.__rbMoveSettled ??= []).push(cb);
+}
+
+/** Called from the WS frame handler once gameState/availableMoves are current. */
+function notifyMoveSettled() {
+  const cbs = window.__rbMoveSettled || [];
+  window.__rbMoveSettled = [];
+  for (const cb of cbs) { try { cb(); } catch (err) { console.warn("[moveSettled]", err); } }
+}
+
+/**
+ * Turn an engine rejection ("Move 'playUnit' condition not met") into something
+ * a player can act on. Almost every rejection reaching the client is a stale
+ * button: the snapshot it was rendered from is gone.
+ */
+function explainMoveRejection(error, moveId) {
+  const raw = String(error ?? "");
+  if (/condition not met/i.test(raw)) {
+    const id = moveId || raw.match(/Move '([^']+)'/)?.[1];
+    const what = MOVE_REJECTION_LABELS[id] || "That action";
+    return `${what} is no longer available — the board changed. Options refreshed.`;
+  }
+  return `Move rejected: ${raw}`;
+}
+
+const MOVE_REJECTION_LABELS = {
+  playUnit: "Playing that unit",
+  playSpell: "Casting that spell",
+  playGear: "Playing that gear",
+  activateAbility: "That ability",
+  recycleRune: "Recycling that rune",
+  exhaustRune: "Tapping that rune",
+  standardMove: "That move",
+};
+
+/** Release the in-flight latch and re-enable the action panel. */
+function clearInFlightMove() {
+  window.__rbInFlightMove = null;
+  setActionsBusy(false);
 }
 
 // Phase Bar, End Turn, Game Over

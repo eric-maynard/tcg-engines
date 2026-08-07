@@ -617,6 +617,13 @@ function resolveStaticTargetsFromDescriptor(
       if ((t.location === "here" || t.location === "battlefield") && c.zone !== source.zone) {
         return false;
       }
+      // rule 355.1 (unl-076-219): "at my battlefield" is the battlefield the
+      // source is at — a base is not a battlefield, so nothing qualifies there.
+      if (t.location === "here-battlefield") {
+        if (!source.zone?.startsWith("battlefield") || c.zone !== source.zone) {
+          return false;
+        }
+      }
       if (t.filter !== undefined) {
         if (typeof t.filter === "string") {
           if (t.filter === "token") {
@@ -776,7 +783,18 @@ function applyStaticEffect(
     if (!keyword) {
       return;
     }
-    const value = effect.value as number | undefined;
+    let value = typeof effect.value === "number" ? effect.value : undefined;
+    // rule 807.1.c (sfd-131-221) — "I have [Assault] equal to the number of
+    // enemy units here": the value is a continuously evaluated board count,
+    // recomputed on every static recalculation.
+    const rawValue = effect.value;
+    if (rawValue && typeof rawValue === "object" && "count" in rawValue) {
+      const spec = rawValue as { count: unknown; multiplier?: number };
+      const counted = source
+        ? (resolveStaticTargetsFromDescriptor(spec.count, source, getAllBoardCards(ctx), ctx) ?? [])
+        : [];
+      value = counted.length * (typeof spec.multiplier === "number" ? spec.multiplier : 1);
+    }
     // rule 809 (ogn-063-298) — "have [Keyword] if they didn't already": a card
     // that already prints the keyword gets nothing, so values never sum.
     const onlyIfMissing = effect.ifMissing === true;

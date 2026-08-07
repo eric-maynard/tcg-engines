@@ -38,15 +38,17 @@ function parseForEachQualifier(qualifier: string): Target | undefined {
   const q = raw.toLowerCase();
 
   // rule-id: unl-076-219 — "of your units with [KEYWORD] at my battlefield".
-  // "at my battlefield" / "here" both mean the source's own location.
-  const keywordHere = /^(?:of\s+)?your units? with \[([\w-]+)\](?:\s+(?:at my battlefield|here))?$/i.exec(
+  // rule 355.1: a base is NOT a battlefield, so "at my battlefield" counts
+  // nothing while the source sits in base — that is `here-battlefield`, not the
+  // looser `here` (which does treat base as a location).
+  const keywordHere = /^(?:of\s+)?your units? with \[([\w-]+)\](?:\s+(at my battlefield|here))?$/i.exec(
     raw,
   );
   if (keywordHere) {
     return {
       controller: "friendly",
       filter: { keyword: keywordHere[1] },
-      location: "here",
+      location: /battlefield/i.test(keywordHere[2] ?? "") ? "here-battlefield" : "here",
       type: "unit",
     } as unknown as Target;
   }
@@ -83,6 +85,13 @@ function parseForEachQualifier(qualifier: string): Target | undefined {
  */
 const GRANT_KEYWORD_PATTERN =
   /^(.+?)\s+have\s+\[(\w+(?:-\w+)?)\](?:\s+and\s+\[(\w+(?:-\w+)?)\])?(?:\s*,\s*(?:and\s*)?\[(\w+(?:-\w+)?)\])?\.?/i;
+
+/**
+ * Pattern for "I have [KEYWORD] equal to the number of QUALIFIER" — a self
+ * grant whose numeric value is a live board count (sfd-131-221).
+ */
+const COUNTED_SELF_GRANT_PATTERN =
+  /^I have\s+\[(\w+(?:-\w+)?)\]\s+equal to the number of\s+(.+?)\.?$/i;
 
 /**
  * Pattern for "While CONDITION, I have [KEYWORDS]" - conditional self-grant
@@ -492,6 +501,27 @@ function parseStaticAbilityInner(
         startIndex: 0,
       };
     }
+  }
+
+  // rule 807.1.c (sfd-131-221) — "I have [KEYWORD] equal to the number of
+  // QUALIFIER": the keyword's VALUE is a continuously evaluated count of the
+  // board cards matching the qualifier, not a flat grant of one instance.
+  const countedSelfGrant = COUNTED_SELF_GRANT_PATTERN.exec(cleanText);
+  if (countedSelfGrant) {
+    const counted = parseGrantTarget(countedSelfGrant[2]);
+    return {
+      ability: {
+        effect: {
+          keyword: countedSelfGrant[1],
+          target: "self",
+          type: "grant-keyword",
+          value: { count: counted },
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
   }
 
   // Try grant keyword: "TARGET have [KEYWORD]"
