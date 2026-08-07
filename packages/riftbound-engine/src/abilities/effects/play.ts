@@ -679,7 +679,13 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
   }
   deductCost(ctx.draft, ctx.playerId, chosen, extras, ctx.cards.getCardMeta);
   if (registry.getCardType(chosen) === "unit") {
-    enterUnitFromEffect(chosen, "base", ctx);
+    // rule 355.2 / 355.4 — a unit entering play from off-board is placed at its
+    // player's base OR any battlefield they control, their choice. The shared
+    // `choose-destination` handler finalizes the play (exhaust, play triggers,
+    // play count, [Accelerate] offer) exactly as the pick path does.
+    if (!offerOffBoardPlayDestination(chosen, ctx)) {
+      enterUnitFromEffect(chosen, "base", ctx);
+    }
     return;
   }
   if (registry.getCardType(chosen) === "spell") {
@@ -690,6 +696,36 @@ function playFromTrash(effect: ExecutableEffect, ctx: EffectContext): void {
       ctx,
     );
   }
+}
+
+/**
+ * rule 355.2 / 355.4 — offer the destination for a unit played from off-board
+ * when its controller has more than one legal place to put it. Returns true
+ * when a prompt was parked (the play finalizes in the `choose-destination`
+ * handler); false when the base is the only destination and the caller should
+ * place the unit itself.
+ */
+function offerOffBoardPlayDestination(cardId: string, ctx: EffectContext): boolean {
+  if (ctx.draft.pendingChoice) {
+    return false;
+  }
+  const options = [
+    "base",
+    ...Object.entries(ctx.draft.battlefields ?? {})
+      .filter(([, bf]) => (bf as { controller?: string }).controller === ctx.playerId)
+      .map(([bfId]) => `battlefield-${bfId}`),
+  ];
+  if (options.length < 2) {
+    return false;
+  }
+  ctx.draft.pendingChoice = {
+    cardId,
+    options,
+    playerId: ctx.playerId,
+    sourceCardId: ctx.sourceCardId,
+    type: "choose-destination",
+  } as typeof ctx.draft.pendingChoice;
+  return true;
 }
 
 /**

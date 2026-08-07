@@ -380,6 +380,30 @@ function evaluateEnterReadyCondition(
  * self cost-reductions without a condition, or with a condition this module
  * cannot evaluate, contribute 0 here.
  */
+/**
+ * rule 355.10.a (rule-id: unl-168-219) — does any card chosen as a target of
+ * this play carry one of the named tags? `assumeChooseDiscount` stands in for
+ * the answer at the enumeration gate, where nothing has been chosen yet.
+ */
+function chosenTargetHasTag(extras: CostExtras | undefined, wanted: readonly string[]): boolean {
+  if (wanted.length === 0) {
+    return false;
+  }
+  if (extras?.assumeChooseDiscount === true) {
+    return true;
+  }
+  const registry = getGlobalCardRegistry();
+  const chosen = [
+    ...(extras?.targets ?? []),
+    ...(extras?.chosenTargetId ? [extras.chosenTargetId] : []),
+  ];
+  return chosen.some((id) =>
+    ((registry.get(id) as { tags?: readonly string[] } | undefined)?.tags ?? []).some((t) =>
+      wanted.includes(t.toLowerCase()),
+    ),
+  );
+}
+
 function getSelfConditionalEnergyReduction(
   state: RiftboundGameState,
   playerId: string,
@@ -400,6 +424,21 @@ function getSelfConditionalEnergyReduction(
       continue;
     }
     if (effect.scope !== undefined || effect.by !== undefined || !condition) {
+      continue;
+    }
+    // rule 356.4 / 355.10.a (rule-id: unl-168-219) — "This costs [2] less if you
+    // choose a Bird, Cat, Dog, or Poro": the gate reads the TARGET chosen as the
+    // card is played. Targets aren't picked yet at the enumeration gate, so the
+    // discount is assumed there (`assumeChooseDiscount`) and the move's
+    // condition re-checks it against the real targets.
+    if ((condition as { type?: unknown }).type === "chooses-tag") {
+      const wanted = ((condition as { tags?: readonly string[] }).tags ?? []).map((t) =>
+        t.toLowerCase(),
+      );
+      if (!chosenTargetHasTag(extras, wanted)) {
+        continue;
+      }
+      total += Math.max(0, decodeCostAmount(effect.reduction ?? effect.amount).energy);
       continue;
     }
     // rule 356.4 (rule-id: sfd-076-221) — board-reading gates such as "if you

@@ -13,12 +13,23 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  */
 const abilities: Ability[] = [
   {
+    // rule 356.4 — the discount reads the unit chosen as this spell is played.
+    condition: { tags: ["Bird", "Cat", "Dog", "Poro"], type: "chooses-tag" },
+    effect: { reduction: 2, target: "self", type: "cost-reduction" },
+    type: "static",
+  },
+  {
     effect: {
       from: "trash",
       ignoreCost: true,
       target: {
         controller: "friendly",
-        filter: [{ energyCost: { lte: 2 } }],
+        // rule 206: "no more than [2] and no more than [rainbow]" is two
+        // independent printed-cost bounds; [rainbow] is one Power pip.
+        filter: [{ energyCost: { lte: 2 } }, { powerCost: { lte: 1 } }],
+        // rule 355.10.a: the trash is public, so the unit is a target chosen as
+        // this spell is played (which is what the tag discount below reads).
+        location: "trash",
         type: "unit",
       },
       type: "play",
