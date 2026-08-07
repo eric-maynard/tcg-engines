@@ -546,12 +546,16 @@ function triggerMatchesEvent(
       }
     }
     if (desc.location === "here") {
+      // rule 428.1.a.1.b — a death is located where the unit was as it died
+      // (last-known information stamped on the `die` event).
       const evLoc =
         "battlefieldId" in event
           ? event.battlefieldId
           : "to" in event
             ? String(event.to).replace(/^battlefield-/, "")
-            : undefined;
+            : "diedAt" in event && typeof event.diedAt === "string"
+              ? event.diedAt.replace(/^battlefield-/, "")
+              : undefined;
       const cardLoc = card.zone?.replace(/^battlefield-/, "");
       if (evLoc !== cardLoc && evLoc !== card.id) {
         return false;

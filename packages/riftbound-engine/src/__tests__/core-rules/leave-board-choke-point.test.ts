@@ -414,3 +414,43 @@ describe("520 / 124.1 — one damage store: every writer keeps the counter and i
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
   });
 });
+
+// ===========================================================================
+// LKI on the event: "dies here" and discard-as-cost
+// ===========================================================================
+
+describe("428.1.a.1.b — 'when an enemy unit dies HERE' is located by where the unit was as it died", () => {
+  /** Unit · 3 Might · "When an enemy unit dies here, draw 1." */
+  const GRAVEWATCH = {
+    abilities: [
+      {
+        effect: { amount: 1, type: "draw" },
+        trigger: { event: "die", on: { controller: "enemy", location: "here", type: "unit" } },
+        type: "triggered",
+      },
+    ],
+    cardType: "unit",
+    energyCost: 0,
+    might: 3,
+    name: "Filler Gravewatch",
+  };
+
+  test("enemy killed at MY battlefield → draw 1; enemy killed at the other battlefield → nothing", async () => {
+    const game = await scenario()
+      .battlefield("bf1", { controller: P1 })
+      .battlefield("bf2", { controller: P2 })
+      .unit(P1, "bf1", GRAVEWATCH, "g")
+      .unit(P2, "bf1", { might: 1, name: "Near" }, "near")
+      .unit(P2, "bf2", { might: 1, name: "Far" }, "far")
+      .hand(P1, KILL, "k1")
+      .hand(P1, KILL, "k2")
+      .build();
+    const hand0 = game.p1.hand().length;
+    await game.p1.cast("k1", { targets: "far" });
+    await game.settle();
+    expect(game.p1.hand()).toHaveLength(hand0 - 1);
+    await game.p1.cast("k2", { targets: "near" });
+    await game.settle();
+    expect(game.p1.hand()).toHaveLength(hand0 - 2 + 1);
+  });
+});
