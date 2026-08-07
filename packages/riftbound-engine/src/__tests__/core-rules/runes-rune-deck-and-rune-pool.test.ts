@@ -573,6 +573,8 @@ describe("103.3.a / 103.3.a.1 / 161.2.a — the Rune Deck is exactly 12 runes wi
   const battlefields: BattlefieldCard[] = [
     { cardType: "battlefield", id: id(), name: "Filler Field A" },
     { cardType: "battlefield", id: id(), name: "Filler Field B" },
+    // rule 485.4.a: a duel deck provides three battlefields
+    { cardType: "battlefield", id: id(), name: "Filler Field C" },
   ];
   const mainDeck: Card[] = Array.from({ length: 40 }, () => unit());
   const runes = (fury: number, mind: number, calm = 0): RuneCard[] => [

@@ -75,11 +75,14 @@ const makeRune = (overrides: Partial<RuneCard> = {}): RuneCard => ({
   ...overrides,
 });
 
+let battlefieldNameCounter = 0;
+
+// rule 103.4.c: battlefields in a deck must have different names, so default to distinct ones.
 const makeBattlefield = (overrides: Partial<BattlefieldCard> = {}): BattlefieldCard => ({
   cardType: "battlefield",
   domain: "fury" as Domain,
   id: createCardId(nextId()),
-  name: "Test Battlefield",
+  name: `Test Battlefield ${(battlefieldNameCounter += 1)}`,
   ...overrides,
 });
 
@@ -99,7 +102,7 @@ const makeRuneDeck = (count: number, domain: Domain = "fury"): RuneCard[] =>
  * Create a valid deck config with sensible defaults.
  */
 const makeValidConfig = (overrides: Partial<DeckConfig> = {}): DeckConfig => ({
-  battlefields: [makeBattlefield(), makeBattlefield()],
+  battlefields: [makeBattlefield(), makeBattlefield(), makeBattlefield()],
   chosenChampion: makeChampion(),
   legend: makeLegend(),
   mainDeck: makeMainDeck(40),
@@ -650,6 +653,7 @@ describe("Deck Validation", () => {
       const deck = makeMainDeck(40, "body");
       const runeDeck = makeRuneDeck(12, "body");
       const battlefields = [
+        makeBattlefield({ domain: "body" as Domain }),
         makeBattlefield({ domain: "body" as Domain }),
         makeBattlefield({ domain: "body" as Domain }),
       ];

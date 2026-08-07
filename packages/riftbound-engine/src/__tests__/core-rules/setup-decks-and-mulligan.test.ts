@@ -326,7 +326,7 @@ describe("Deck construction: a minimal legal deck (103, 103.1, 103.2, 103.2.c, 1
     expect(noMode.errors).toEqual([]);
   });
 
-  test.failing("BUG: 485.4.a / 486.4.a — a duel/match DECK provides THREE battlefields (2 is the number IN PLAY, 485.4); validateDeck(mode duel|match) rejects 3 with WRONG_BATTLEFIELD_COUNT", async () => {
+  test("485.4.a / 486.4.a — a duel/match DECK provides THREE battlefields (2 is the number IN PLAY, 485.4); validateDeck(mode duel|match) rejects 3 with WRONG_BATTLEFIELD_COUNT", async () => {
     // Expected: valid === true, no WRONG_BATTLEFIELD_COUNT for 3 battlefields in duel and match.
     // Actual: BATTLEFIELD_COUNT_BY_MODE.duel/match === 2 conflates "in play" with "in deck".
     for (const mode of ["duel", "match"] as const) {
@@ -618,7 +618,7 @@ describe("Chosen Champion: a CHAMPION unit whose champion tag matches the Champi
 // ===========================================================================
 
 describe("Battlefields: exactly three per deck, distinct names, Domain Identity if applicable (103.4, 103.4.a, 103.4.b, 103.4.c, 485.4.a, 486.4.a)", () => {
-  test.failing("BUG: 103.4.c — two battlefields sharing a name must be rejected by validateDeck", async () => {
+  test("103.4.c — two battlefields sharing a name must be rejected by validateDeck", async () => {
     // Expected: valid === false with a duplicate-battlefield error for [Ridge, Ridge, Marsh].
     // Actual: validateDeck only checks domain and (mode) count; duplicates pass.
     const cfg = legalConfig();
@@ -654,7 +654,7 @@ describe("Battlefields: exactly three per deck, distinct names, Domain Identity 
     }
   });
 
-  test.failing("BUG: 485.4.a / 486.4.a — only TWO battlefields in a duel/match deck must be rejected (the deck provides 3; 2 is merely how many end up in play) — validateDeck accepts 2", async () => {
+  test("485.4.a / 486.4.a — only TWO battlefields in a duel/match deck must be rejected (the deck provides 3; 2 is merely how many end up in play) — validateDeck accepts 2", async () => {
     // Expected: WRONG_BATTLEFIELD_COUNT (or equivalent) for a 2-battlefield deck in duel and match.
     // Actual: BATTLEFIELD_COUNT_BY_MODE.duel === 2, so 2 validates and 3 is what gets rejected.
     const cfg = legalConfig();

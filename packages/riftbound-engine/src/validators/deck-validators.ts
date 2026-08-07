@@ -87,19 +87,22 @@ const COUNT_INCREMENT = 1;
 const NO_ERRORS = 0;
 
 /**
- * Required battlefield count per game mode.
- * - duel: 2 battlefields (one per player, rule 644)
+ * Required battlefield count per game mode — how many the DECK provides, not how
+ * many end up in play.
+ * rule 485.4.a / 486.4.a: a duel/match deck provides 3 battlefields; only 2 of them
+ * are put into play (rule 485.4), so the deck count is 3, never 2.
+ * - duel: 3 battlefields in the deck (2 in play, rule 485.4)
  * - ffa3: 3 battlefields (one per player, rule 645)
  * - ffa4: 4 battlefields (one per player, rule 646)
  * - magmaChamber: 3 battlefields (rule 647)
- * - match: 2 battlefields (same as duel)
+ * - match: 3 battlefields (same as duel)
  */
 const BATTLEFIELD_COUNT_BY_MODE: Record<GameMode, number> = {
-  duel: 2,
+  duel: 3,
   ffa3: 3,
   ffa4: 4,
   magmaChamber: 3,
-  match: 2,
+  match: 3,
 };
 
 // ============================================================================
@@ -384,6 +387,30 @@ const validateBattlefieldDomainIdentity = (
 };
 
 /**
+ * Validate that no two battlefields in a deck share a name.
+ * rule 103.4.c: the battlefields in a deck must all have different names.
+ */
+const validateBattlefieldNamesDistinct = (
+  battlefields: BattlefieldCard[],
+): DeckValidationError[] => {
+  const seen = new Set<string>();
+  const reported = new Set<string>();
+  const errors: DeckValidationError[] = [];
+  for (const battlefield of battlefields) {
+    const name = battlefield.name;
+    if (seen.has(name) && !reported.has(name)) {
+      reported.add(name);
+      errors.push({
+        code: "DUPLICATE_BATTLEFIELD_NAME",
+        message: `Battlefields in a deck must have different names, but "${name}" appears more than once`,
+      });
+    }
+    seen.add(name);
+  }
+  return errors;
+};
+
+/**
  * Validate battlefield count for deck construction.
  * Required count depends on game mode. If no mode is specified, skip the check.
  */
@@ -436,6 +463,7 @@ const collectSupportDeckErrors = (
   ...validateRuneDeckDomainIdentity(config.runeDeck, legendDomains),
   ...validateBattlefieldDomainIdentity(config.battlefields, legendDomains),
   ...validateBattlefieldCount(config.battlefields, config.mode),
+  ...validateBattlefieldNamesDistinct(config.battlefields),
 ];
 
 // ============================================================================
