@@ -234,7 +234,11 @@ export async function handleGameRoutes(req: Request, url: URL, _ctx: RouteCtx): 
       // Spawn: any of the ~1000 defs is testable regardless of loaded deck.
       const def = allCards.find((c) => c.id === body.defId);
       if (!def) return json({ error: "unknown defId" }, 404);
-      found = `${pid}-main-999-${body.defId}`;
+      // Ids must stay unique: a second spawn of the same defId would otherwise
+      // overwrite the copy already on board and double its triggers.
+      let seq = 999;
+      while ((internal as any).cards[`${pid}-main-${seq}-${body.defId}`]) {seq++;}
+      found = `${pid}-main-${seq}-${body.defId}`;
       (internal as any).cards[found] = { controller: pid, definitionId: body.defId, owner: pid, position: undefined, zone: "hand" };
       (internal as any).cardMetas[found] = { buffed: false, combatRole: null, damage: 0, exhausted: false, hidden: false, stunned: false };
       getGlobalCardRegistry().register(found, def as any);

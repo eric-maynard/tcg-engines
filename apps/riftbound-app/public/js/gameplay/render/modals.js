@@ -238,9 +238,32 @@ function describePlayVariant(m, card) {
       detail: `${baseCost} energy + ${spec.xp} XP as an additional cost`,
     };
   }
+  // rule 805.2 / 717: only [Accelerate] makes the unit enter ready. The
+  // enumerator emits the same `{paidAdditionalCost, additionalCostSpec}` shape
+  // for a generic "you may pay N as an additional cost" (ven-101-166 Gust
+  // Monk), so check the printed keyword before promising a ready entry.
+  const text = card?.rulesText ?? "";
+  const hasAccelerate = /\[\s*Accelerate\b/i.test(text)
+    || (Array.isArray(card?.keywords)
+      && card.keywords.some(k => String(k?.name ?? k).toLowerCase() === "accelerate"));
+  if (hasAccelerate && (spec?.energy || spec?.power?.length)) {
+    return {
+      label: `Play + Accelerate`,
+      detail: `${baseCost} + ${extra} — enters ready`,
+    };
+  }
+  // sfd-079-221 (Bard): the exhaust-a-legend cost ships no spec at all.
+  if (!parts.length && /exhaust\s+(your|my)\s+legend/i.test(text)) {
+    return {
+      label: `Play + exhaust legend`,
+      detail: `${baseCost} energy — exhaust your legend as an additional cost`,
+    };
+  }
   return {
-    label: `Play + Accelerate`,
-    detail: `${baseCost} + ${extra} — enters ready`,
+    label: parts.length ? `Play + pay ${extra}` : `Play + additional cost`,
+    detail: parts.length
+      ? `${baseCost} energy + ${extra} as an additional cost`
+      : `${baseCost} energy + an additional cost`,
   };
 }
 
