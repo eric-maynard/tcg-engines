@@ -57,7 +57,17 @@ function runeAddAllowedDuringChoice(state: RiftboundGameState, playerId: string)
   ) {
     return true;
   }
-  return (p.resolved as { optInCost?: unknown } | undefined)?.optInCost !== undefined;
+  const optInCost = (p.resolved as { optInCost?: Record<string, unknown> } | undefined)?.optInCost;
+  if (!optInCost || typeof optInCost !== "object") {
+    return false;
+  }
+  // rule-id: ven-067-166 — a cost a rune can never fund ("kill 3 other friendly
+  // units and/or gear") is no more a Pay step than a costless "you may": only an
+  // Energy/Power portion opens the rune window.
+  return (
+    ((optInCost.energy as number) ?? 0) > 0 ||
+    (Array.isArray(optInCost.power) && optInCost.power.length > 0)
+  );
 }
 
 /**
