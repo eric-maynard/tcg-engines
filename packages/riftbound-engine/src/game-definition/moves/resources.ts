@@ -13,11 +13,12 @@ import type {
 } from "@tcg/core";
 import type { Domain, RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
 
 /**
  * Resource move definitions
  */
-export const resourceMoves: Partial<
+const resourceMoveDefs: Partial<
   GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>
 > = {
   /**
@@ -266,4 +267,24 @@ export const resourceMoves: Partial<
       }
     },
   },
+};
+
+/**
+ * rule 430.1 / 518-526: the number of runes a player has is a continuous
+ * condition ("While you have 8+ runes, I have +4 [Might]"), so a move that
+ * grows or shrinks the rune pool is followed by a Cleanup — otherwise the
+ * static Might bonus stays stale until some unrelated move recalculates.
+ * Only those moves are wrapped: `addResources` / `spendResources` shuffle
+ * energy and power inside a play that is still in progress, and a Cleanup
+ * there would reap board state that play still depends on.
+ */
+export const resourceMoves: Partial<
+  GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>
+> = {
+  ...resourceMoveDefs,
+  ...withPostMoveCleanup({
+    channelRunes: resourceMoveDefs.channelRunes,
+    exhaustRune: resourceMoveDefs.exhaustRune,
+    recycleRune: resourceMoveDefs.recycleRune,
+  }),
 };

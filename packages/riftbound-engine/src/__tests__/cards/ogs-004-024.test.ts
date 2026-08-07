@@ -82,6 +82,16 @@ describe("Yi, Meditative (ogs-004-024)", () => {
     expect(game.state("yi").might).toBe(8);
   });
 
+  test("continuous — recycling a rune down to 7 drops Yi back to 4 Might immediately", async () => {
+    const game = await withRunes(8).build();
+    await game.p1.play("yi");
+    await game.settle();
+    expect(game.state("yi").might).toBe(8);
+    await game.p1.recycleRune();
+    expect(game.p1.runes()).toHaveLength(7);
+    expect(game.state("yi").might).toBe(4);
+  });
+
   test("cost: 5 energy + 1 calm deducted and Yi enters exhausted; unaffordable at 4 energy or without calm", async () => {
     const game = await scenario().resources(P1, { energy: 6, power: { calm: 1 } }).hand(P1, CARD, "yi").build();
     expect(game.p1.can("play", "yi")).toBe(true);

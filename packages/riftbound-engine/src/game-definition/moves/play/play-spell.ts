@@ -91,6 +91,47 @@ function exhaustCostCandidates(
 }
 
 /**
+ * rule-id: unl-131-219 (rule 355.8) — the counter effect a spell leads with,
+ * whether it is the whole spell ("Counter a spell") or the first step of a
+ * sequence ("Counter a spell… [Predict]"). Either way the spell to counter is
+ * a caster-chosen target locked at play time, so both shapes take the
+ * chain-item targeting branch instead of falling through to "no targets".
+ */
+function leadCounterEffect(effect: unknown): { target?: unknown } | undefined {
+  const e = effect as { type?: string; effects?: unknown[] } | undefined;
+  if (e?.type === "counter") {
+    return e as { target?: unknown };
+  }
+  if (e?.type === "sequence" && Array.isArray(e.effects)) {
+    const first = e.effects[0] as { type?: string } | undefined;
+    if (first?.type === "counter") {
+      return first as { target?: unknown };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The counter whose chain-item target the caster locks at play time. A spell
+ * that is only a counter always qualifies; a sequence qualifies when the
+ * counter is its lead step and no LATER step names a board target of its own
+ * (sfd-206-221 Riposte's "…give a friendly unit +Might" owns the play-time
+ * pick, so its counter keeps the resolution-time topmost-spell rule).
+ */
+function counterChainTarget(effect: unknown): { target?: unknown } | undefined {
+  const spec = leadCounterEffect(effect);
+  if (spec === undefined) {
+    return undefined;
+  }
+  if ((effect as { type?: string } | undefined)?.type === "counter") {
+    return spec;
+  }
+  return findSequenceLeadTarget(effect as SpellEffectTargetShape | undefined) === undefined
+    ? spec
+    : undefined;
+}
+
+/**
  * rule 356.2.b / 702.2.b (ogn-146-298 Wallop) — friendly units carrying a buff
  * counter, any one of which can be spent as an optional additional cost.
  */
@@ -297,6 +338,19 @@ export const playSpell: Defs["playSpell"] = {
         ) {
           return false;
         }
+      } else if (optional?.kind === "discard") {
+        // rule 356.2.b / 204.2 (ven-008-166) — "you may discard 1 as an
+        // additional cost": the named card must be another card in the
+        // caster's own hand.
+        const discardId = context.params.discardId as string | undefined;
+        if (
+          !discardId ||
+          discardId === (context.params.cardId as string) ||
+          context.zones.getCardZone(discardId as CoreCardId) !== "hand" ||
+          context.cards.getCardOwner(discardId as CoreCardId) !== context.params.playerId
+        ) {
+          return false;
+        }
       } else if (optional?.kind !== "pay") {
         return false;
       } else {
@@ -398,7 +452,8 @@ export const playSpell: Defs["playSpell"] = {
     // location / filter such as "in combat with an enemy Fury unit"); the
     // ≥1-legal-target gate above only proves SOME candidate exists.
     const spellTgt = (spellAbility?.effect as SpellEffectTargetShape | undefined)?.target;
-    const isCounterSpell = (spellAbility?.effect as { type?: string } | undefined)?.type === "counter";
+    const counterSpec = counterChainTarget(spellAbility?.effect);
+    const isCounterSpell = counterSpec !== undefined;
     // rule-id: ogn-045-298 (rule 355.8) — a counter's supplied target names a
     // chain item, validated against the chain rather than the board.
     if (isCounterSpell && context.params.targets?.length) {
@@ -409,7 +464,7 @@ export const playSpell: Defs["playSpell"] = {
         !chainItems.some(
           (item) =>
             (item.cardId === t[0] || item.id === t[0]) &&
-            isLegalCounterTarget(spellAbility?.effect as { target?: unknown }, item, undefined, {
+            isLegalCounterTarget(counterSpec, item, undefined, {
               controllerOf: (id) =>
                 context.cards.getCardController?.(id as CoreCardId) ??
                 context.cards.getCardOwner(id as CoreCardId),
@@ -699,6 +754,7 @@ export const playSpell: Defs["playSpell"] = {
       paidAdditionalCost?: boolean;
       additionalCostSpec?: { energy?: number; power?: readonly string[] };
       sacrificeId?: string;
+      discardId?: string;
     }[] = [];
     for (const cardId of handCards) {
       const def = registry.get(cardId as string);
@@ -841,8 +897,9 @@ export const playSpell: Defs["playSpell"] = {
         findReplacementChosenTarget(spellEffect) ??
         (secondTgt ? seqSlots?.[0] : findSequenceLeadTarget(spellEffect));
       // rule-id: ogn-045-298 — a counter's target is a chain item (own branch below).
+      const counterSpec = counterChainTarget(spellEffect);
       const isCardTarget =
-        spellEffect?.type !== "counter" &&
+        counterSpec === undefined &&
         // rule-id: ogn-198-298 — an off-board play's card is chosen from the
         // trash/hand as the effect resolves, never as a play-time board target.
         (offBoardPlayZone(spellEffect) === undefined ||
@@ -1304,7 +1361,7 @@ export const playSpell: Defs["playSpell"] = {
             targets: [bfId],
           });
         }
-      } else if (spellEffect?.type === "counter") {
+      } else if (counterSpec) {
         // rule-id: ogn-064-298 (rule 355.8) — "Counter a spell": the spell to
         // counter is a caster-chosen target locked at play time. Enumerate one
         // Play per legal chain item so the caster picks when several are
@@ -1315,7 +1372,7 @@ export const playSpell: Defs["playSpell"] = {
         // whenever it is unambiguous; further copies are named by chain-item id.
         const seen = new Set<string>();
         for (const item of interaction.chain?.items ?? []) {
-          if (!isLegalCounterTarget(spellEffect, item, undefined, {
+          if (!isLegalCounterTarget(counterSpec, item, undefined, {
               controllerOf: (id) =>
                 context.cards.getCardController?.(id as CoreCardId) ??
                 context.cards.getCardOwner(id as CoreCardId),
@@ -1381,6 +1438,22 @@ export const playSpell: Defs["playSpell"] = {
       ) {
         for (const base of baseVariants) {
           results.push({ ...base, paidAdditionalCost: true });
+        }
+      }
+      // rule 356.2.b / 204.2 (ven-008-166) — "you may discard N as an
+      // additional cost": one paid variant per other card in hand.
+      if (optionalPay?.kind === "discard" && (optionalPay.discard ?? 0) === 1) {
+        for (const base of baseVariants) {
+          for (const fodder of handCards) {
+            if ((fodder as string) === (cardId as string)) {
+              continue;
+            }
+            results.push({
+              ...base,
+              discardId: fodder as string,
+              paidAdditionalCost: true,
+            });
+          }
         }
       }
       // rule 356.2 — ogn-048-298: "you may exhaust a friendly unit" — one paid
@@ -1526,7 +1599,7 @@ export const playSpell: Defs["playSpell"] = {
         findReplacementChosenTarget(spellEffect) ??
         findSequenceLeadTarget(spellEffect);
       const isCardTarget =
-        spellEffect?.type !== "counter" &&
+        counterChainTarget(spellEffect) === undefined &&
         // rule-id: ogn-198-298 — an off-board play's card is chosen from the
         // trash/hand as the effect resolves, never as a play-time board target.
         (offBoardPlayZone(spellEffect) === undefined ||
@@ -1570,6 +1643,7 @@ export const playSpell: Defs["playSpell"] = {
   reducer: (draft, context) => {
     const { cardId, playerId, xAmount, repeatCount, viaFlow, paidAdditionalCost, sacrificeId } =
       context.params;
+    const discardId = context.params.discardId as string | undefined;
     let { targets } = context.params;
     const { zones } = context;
 
@@ -1609,6 +1683,18 @@ export const playSpell: Defs["playSpell"] = {
           exhaustCostPaid = true;
           const rest = (targets ?? []).slice(1);
           targets = rest.length > 0 ? rest : undefined;
+        }
+      } else if (optional?.kind === "discard") {
+        // rule 356.2.b / 204.2 (ven-008-166) — discard the declared hand card
+        // now; costs are paid as the spell is played, before it hits the chain.
+        if (
+          discardId &&
+          discardId !== cardId &&
+          zones.getCardZone(discardId as CoreCardId) === "hand" &&
+          context.cards.getCardOwner(discardId as CoreCardId) === playerId
+        ) {
+          zones.moveCard({ cardId: discardId as CoreCardId, targetZoneId: "trash" as CoreZoneId });
+          exhaustCostPaid = true;
         }
       } else if (optional?.kind === "pay") {
         // rule-id: unl-140-219 (rule 560) — "spend N XP as an additional
