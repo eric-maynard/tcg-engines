@@ -12,4 +12,6 @@ export const direwing: UnitCard = {
   rarity: "common",
   rulesText: "I enter ready if you control another Dragon.",
   setId: "SFD",
+  // rule 763.1: "another Dragon" implies Direwing is itself a Dragon.
+  tags: ["Dragon"],
 };

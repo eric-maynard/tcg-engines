@@ -103,7 +103,7 @@ describe("Direwing (sfd-094-221)", () => {
     expect(game.state("dw").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: 'another' — a lone Direwing does not count itself; the first of two Direwings enters exhausted, the second ready", async () => {
+  test("'another' — a lone Direwing does not count itself; the first of two Direwings enters exhausted, the second ready", async () => {
     // Expected: first Direwing (no other Dragon) exhausted; second Direwing sees the first (a
     // Dragon) and enters ready. Actual: the first already enters ready (unconditional), and the
     // card data carries no Dragon tag so the second could not see it either.
@@ -121,7 +121,7 @@ describe("Direwing (sfd-094-221)", () => {
     expect(game.state("dw1").isExhausted).toBe(true); // the first is not retroactively readied
   });
 
-  test.failing("BUG: Direwing itself is a Dragon (card data should carry the Dragon tag implied by 'another Dragon')", async () => {
+  test("Direwing itself is a Dragon (card data should carry the Dragon tag implied by 'another Dragon')", async () => {
     const pool = await loadDefaultCardPool();
     expect(pool.get(CARD)?.tags ?? []).toContain("Dragon");
   });
