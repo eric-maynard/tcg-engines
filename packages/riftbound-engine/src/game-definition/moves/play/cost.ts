@@ -135,6 +135,8 @@ const STATUS_META_FILTERS: Record<
   ((meta: Record<string, unknown> | undefined) => boolean) | undefined
 > = {
   damaged: (meta) => ((meta?.damage as number | undefined) ?? 0) > 0,
+  // rule 827 (rule-id: ven-059-166) — "something that's [Empowered]".
+  empowered: (meta) => meta?.empowered === true,
   exhausted: (meta) => meta?.exhausted === true,
   ready: (meta) => meta?.exhausted !== true,
   stunned: (meta) => meta?.stunned === true,
@@ -344,6 +346,19 @@ function evaluateEnterReadyCondition(
               return (def?.tags ?? []).some((x) => x.toLowerCase() === tag.toLowerCase());
             });
             if (!tagOk) {
+              continue;
+            }
+            // rule 423.1 (rule-id: ven-059-166) — a string filter names a board
+            // status ("empowered", "stunned", …) read from card meta. One this
+            // module cannot decide never counts, so an unmodellable gate stays
+            // shut rather than discounting unconditionally.
+            const statusOk = filters.every((f) => {
+              if (typeof f !== "string") return true;
+              const probe = STATUS_META_FILTERS[f];
+              if (!probe) return false;
+              return probe(cards?.getCardMeta(id as CoreCardId) as Record<string, unknown> | undefined);
+            });
+            if (!statusOk) {
               continue;
             }
             count++;
@@ -2271,6 +2286,28 @@ function getSelfScaledEnergyReduction(
         playerId,
         ((effect as { distinctTags?: readonly string[] }).distinctTags ?? []),
       );
+    } else if (/^for each (?:other )?gear you control/.test(scope)) {
+      // rule 356.4 / 108.2 (rule-id: ven-064-166) — "for each gear you control"
+      // reads the board when the cost is determined: control, not ownership, so
+      // an opponent's gear never counts. The card being played is on the chain,
+      // not on the board, so it never counts itself.
+      const cards = extras.board?.cards;
+      const consider = (id: CoreCardId): void => {
+        if ((id as string) === cardId) return;
+        const type = registry.getCardType(id as string);
+        if (type !== "gear" && type !== "equipment") return;
+        const controller = cards?.getCardController?.(id) ?? cards?.getCardOwner(id);
+        if (controller !== playerId) return;
+        count += 1;
+      };
+      for (const id of zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)) {
+        consider(id);
+      }
+      for (const bfId of Object.keys(state.battlefields ?? {})) {
+        for (const id of zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
+          consider(id);
+        }
+      }
     } else if (scope.startsWith("for each card with my name in your trash")) {
       // rule 419.1 (rule-id: ven-096-166) — playing a card puts it on the chain
       // BEFORE its cost is determined, so a card played out of the trash never
