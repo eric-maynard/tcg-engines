@@ -24,21 +24,65 @@ import type { AnyTarget, Quantity, Target, TargetController } from "@tcg/riftbou
  * parseTarget("an enemy unit")
  * // Returns: { type: "unit", controller: "enemy" }
  */
+/**
+ * rule 710 (ven-105-166 Twilight Step) — split a trailing "with N [Might] or
+ * less / or more" clause off a target phrase. The bound is a ceiling/floor on
+ * the candidate's CURRENT Might and includes the named value. Returns the noun
+ * phrase without the clause plus the filter to attach to it.
+ */
+export function parseMightBoundClause(
+  text: string,
+): { filter: { might: { gte?: number; lte?: number } }; rest: string } | undefined {
+  const match = text
+    .replace(/[.,;:]+\s*$/, "")
+    .trim()
+    .match(/^(.+?)\s+with\s+(\d+)\s*(?::rb_might:|\[might\]|might)\s+or\s+(less|fewer|more|greater)$/i);
+  if (!match) return undefined;
+  const bound = Number.parseInt(match[2], 10);
+  const dir = match[3].toLowerCase();
+  const atMost = dir === "less" || dir === "fewer";
+  return { filter: { might: atMost ? { lte: bound } : { gte: bound } }, rest: match[1] };
+}
+
 export function parseTarget(text: string): AnyTarget {
   // Bracketed keywords/states ("[Mighty] units") read as plain adjectives here.
   const normalized = text
     .toLowerCase()
     .trim()
     .replace(/\[([^\]]+)\]/g, "$1")
-    // rule-id: ven-061-166 — "an enemy Body ([body]) unit": the parenthesised
-    // icon only restates the domain word, and leaving it in breaks the noun
-    // phrase (parentheses are not word characters).
-    .replace(/\(\s*(?::rb_[a-z0-9_]+:\s*)+\)/g, " ")
     .replace(/\s+/g, " ")
     // A target phrase lifted from the tail of a sentence keeps its terminal
     // punctuation ("a legend."); it is not part of the noun phrase.
     .replace(/[.,;:]+$/, "")
     .trim();
+
+  // rule 206 (ven-080-166) — "a gear with Energy cost no more than my Might":
+  // a cost ceiling read off the SOURCE's Might at execution, not a fixed number.
+  const selfMightCostMatch = normalized.match(
+    /^(.+?)\s+with\s+(?:an?\s+)?energy cost(?:\s+of)?\s+no more than my might$/,
+  );
+  if (selfMightCostMatch) {
+    const base = parseTarget(selfMightCostMatch[1]);
+    if (typeof base === "object" && "type" in base) {
+      const existing = (base as { filter?: unknown }).filter;
+      const ceiling = { energyCostAtMostSelfMight: true };
+      const filter = existing === undefined ? ceiling : [...[existing].flat(), ceiling];
+      return { ...(base as object), filter } as Target;
+    }
+  }
+
+  // rule 710 (ven-105-166 Twilight Step) — "a unit with 3 [Might] or less": a
+  // numeric ceiling/floor on the candidate's CURRENT Might, read at the moment
+  // the choice is made. "or less"/"or more" include the named value.
+  const mightBound = parseMightBoundClause(normalized);
+  if (mightBound) {
+    const base = parseTarget(mightBound.rest);
+    if (typeof base === "object" && "type" in base) {
+      const existing = (base as { filter?: unknown }).filter;
+      const filter = existing === undefined ? mightBound.filter : [...[existing].flat(), mightBound.filter];
+      return { ...(base as object), filter } as Target;
+    }
+  }
 
   // rule 355.10 — "a friendly unit without [Temporary]": the trailing clause is
   // an exclusion filter on the choice, not part of the noun phrase.
@@ -117,13 +161,7 @@ export function parseTarget(text: string): AnyTarget {
     // ("[Mighty] units" — rule 710) which is a filter, not a tribal tag.
     if (tagStr && tagStr.length > 0) {
       const stateFilter = STATE_ADJECTIVE_FILTERS[tagStr];
-      // rule 122.2 (rule-id: ven-061-166) — a domain adjective ("an enemy Body
-      // unit") narrows by the card's Domain, which is never a tribal tag.
-      result.filter = stateFilter
-        ? stateFilter
-        : DOMAIN_WORDS.has(tagStr)
-          ? { domain: tagStr }
-          : { tag: capitalizeTag(tagStr) };
+      result.filter = stateFilter ? stateFilter : { tag: capitalizeTag(tagStr) };
     }
 
     return result as Target;
@@ -158,9 +196,6 @@ export function parseTarget(text: string): AnyTarget {
   // Default to unit target
   return { type: "unit" };
 }
-
-/** rule 122.2 — the six Domains; as an adjective they filter by Domain, not tag. */
-const DOMAIN_WORDS = new Set(["fury", "calm", "mind", "body", "chaos", "order"]);
 
 /** Adjectives that describe a unit's state rather than a tribal tag. */
 const STATE_ADJECTIVE_FILTERS: Record<string, string> = {

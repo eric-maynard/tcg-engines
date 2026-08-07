@@ -148,6 +148,15 @@ export interface EnergyCostFilter {
 }
 
 /**
+ * rule 206 (ven-080-166 Noxian Demolitionist): "with Energy cost no more than
+ * my Might" — the ceiling is the SOURCE's Might read as the instruction
+ * executes, so it cannot be baked into a static `Comparison`.
+ */
+export interface EnergyCostAtMostSelfMightFilter {
+  readonly energyCostAtMostSelfMight: true;
+}
+
+/**
  * Power cost comparison filter
  */
 export interface PowerCostFilter {
@@ -210,6 +219,7 @@ export type Filter =
   | MightFilter
   | CostFilter
   | EnergyCostFilter
+  | EnergyCostAtMostSelfMightFilter
   | PowerCostFilter
   | KeywordFilter
   | ExcludeKeywordFilter
