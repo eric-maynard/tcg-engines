@@ -94,7 +94,7 @@ describe("Sivir, Ambitious (sfd-120-221)", () => {
     expect(rich.state("sivir").might).toBe(6);
   });
 
-  test.failing("BUG: 7 into a 2-Might defender (5 excess) → conquer, then 'you may deal that much': 5 damage to ANY enemy unit — MidHome (5) dies", async () => {
+  test("7 into a 2-Might defender (5 excess) → conquer, then 'you may deal that much': 5 damage to ANY enemy unit — MidHome (5) dies", async () => {
     // Expected: opt-in → pick among bighome/midhome (def0 is dead) → 5 damage kills the 5-Might unit.
     // Actual: the prompt appears but the `excess-damage` variable resolves to 0 — nothing is dealt.
     const game = await raid(2).build();
@@ -113,7 +113,7 @@ describe("Sivir, Ambitious (sfd-120-221)", () => {
     expect(game.state("bighome").damage).toBe(0);
   });
 
-  test.failing("BUG: 'that much' scales with the excess: 7 into a 1-Might defender = 6 → BigHome (7) survives with exactly 6 damage", async () => {
+  test("'that much' scales with the excess: 7 into a 1-Might defender = 6 → BigHome (7) survives with exactly 6 damage", async () => {
     const game = await raid(1).build();
     await game.p1.move("sivir", "bf1");
     await game.settle();
@@ -124,7 +124,7 @@ describe("Sivir, Ambitious (sfd-120-221)", () => {
     expect(game.state("bighome").damage).toBe(6);
   });
 
-  test.failing("BUG: excess is summed over all defenders: 7 into two 1-Might units = 5 excess → 5 damage kills MidHome", async () => {
+  test("excess is summed over all defenders: 7 into two 1-Might units = 5 excess → 5 damage kills MidHome", async () => {
     const game = await raid(1, 1).build();
     await game.p1.move("sivir", "bf1");
     // First-option policy: answers any damage-assignment prompt, accepts the opt-in, picks bighome (listed first).

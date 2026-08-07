@@ -80,7 +80,7 @@ function totalPooledPower(state: RiftboundGameState, playerId: string): number {
  * Pay `amount` Power of any Domain, draining the most-stocked Domain first.
  * Pays nothing and returns false when the player is short (rule 404.2).
  */
-function payAnyDomainPower(
+export function payAnyDomainPower(
   draft: RiftboundGameState,
   playerId: string,
   amount: number,
@@ -103,6 +103,34 @@ function payAnyDomainPower(
     anyPool[key] = (anyPool[key] ?? 0) - 1;
   }
   return true;
+}
+
+/**
+ * Replace every `{ variable: "<name>" }` amount expression inside an effect
+ * tree with its bound numeric value. Used for variables whose value is known
+ * only from the triggering event (rule 626.1.d.2 "that much"), so the number
+ * travels with the effect through a resolution-time prompt.
+ */
+function bindNamedAmounts<T>(effect: T, variables: Record<string, number>): T {
+  if (effect === null || typeof effect !== "object") {
+    return effect;
+  }
+  if (Array.isArray(effect)) {
+    return effect.map((e) => bindNamedAmounts(e, variables)) as unknown as T;
+  }
+  const out: Record<string, unknown> = { ...(effect as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(out)) {
+    if (value === null || typeof value !== "object") {
+      continue;
+    }
+    const name = (value as { variable?: unknown }).variable;
+    if (typeof name === "string" && variables[name] !== undefined) {
+      out[key] = variables[name];
+      continue;
+    }
+    out[key] = bindNamedAmounts(value, variables);
+  }
+  return out as T;
 }
 
 /**
@@ -276,7 +304,7 @@ export function executeResolvedItem(
     typeof rawEffect & { _xPledged?: boolean };
   const _variables =
     pledgePaid === undefined ? storedVariables : { ...(storedVariables ?? {}), x: pledgePaid };
-  const effect = effectRest as ExecutableEffect;
+  let effect = effectRest as ExecutableEffect;
 
   const baseCtx = buildEffectContext(draft, resolved.controller, resolved.cardId, context);
 
@@ -284,8 +312,33 @@ export function executeResolvedItem(
   // `location: "move-to-or-from"` targets resolve against only the
   // battlefields the triggering move touched.
   const trigEvt = resolved.triggerEvent as
-    | { from?: string; to?: string; cardId?: string; fromHiddenAt?: string; diedAt?: string }
+    | {
+      from?: string;
+      to?: string;
+      cardId?: string;
+      fromHiddenAt?: string;
+      diedAt?: string;
+      excessDamage?: number;
+    }
     | undefined;
+  // rule 626.1.d.2 (rule-id: sfd-120-221, ogn-034-298) — "deal that much": the
+  // conquer event carries the excess damage the attackers assigned, and
+  // `{ variable: "excess-damage" }` amounts read it. The value is substituted
+  // into the effect itself (not just the context) because the amount must
+  // survive a resolution-time target prompt, which re-executes the stored
+  // effect from `pending-choice.ts` with a fresh context.
+  const mergedVariables: Record<string, number> | undefined =
+    _variables !== undefined || typeof trigEvt?.excessDamage === "number"
+      ? {
+        ...(_variables ?? {}),
+        ...(typeof trigEvt?.excessDamage === "number"
+          ? { "excess-damage": trigEvt.excessDamage }
+          : {}),
+      }
+      : undefined;
+  if (typeof trigEvt?.excessDamage === "number") {
+    effect = bindNamedAmounts(effect, { "excess-damage": trigEvt.excessDamage });
+  }
   // rule 428.1.a.1.b — a dies-trigger sees the board as it was: "here" / "at my
   // battlefield" mean where the unit died, not the trash it now sits in.
   if (typeof trigEvt?.diedAt === "string" && trigEvt.cardId === resolved.cardId) {
@@ -470,9 +523,9 @@ export function executeResolvedItem(
     // Domain (rule 809.1.c.1), incurred when the target is chosen. A target
     // whose surcharge the controller cannot pay is not a legal choice; when
     // none remain the pending ability is removed without resolving
-    // (rule 404.2 — removed, NOT countered). Only the auto-bound single
-    // candidate is charged here; a prompted multi-candidate pick still owes
-    // its surcharge at pick time (choose-target branch of `pending-choice.ts`).
+    // (rule 404.2 — removed, NOT countered). The auto-bound single candidate
+    // is charged here; a prompted multi-candidate pick carries `deflectTax` on
+    // the prompt and is charged at pick time in `pending-choice.ts`.
     let deflectTax = false;
     if (resolved.type !== "spell" && options.length > 0) {
       const surchargeOf = (id: string): number =>
@@ -510,6 +563,7 @@ export function executeResolvedItem(
         anyNumber: true,
         maxPicks: upTo,
         picked: [],
+        ...(deflectTax ? { deflectTax: true as const } : {}),
       };
       return;
     }
@@ -538,6 +592,7 @@ export function executeResolvedItem(
           // instead of accumulating one unit per prompt.
           ...(effect?.type === "move" ? { answerAsSet: true } : {}),
           picked: [],
+          ...(deflectTax ? { deflectTax: true as const } : {}),
         };
         return;
       }
@@ -554,6 +609,9 @@ export function executeResolvedItem(
         // battlefield": the destination is fixed by the triggering move, so it
         // must survive the target prompt.
         ...(typeof trigEvt?.to === "string" ? { triggerToZone: trigEvt.to } : {}),
+        // rule 809.1.c.1 — the surcharge for choosing a [Deflect] card is owed
+        // at PICK time; the prompt carries the obligation to `pending-choice.ts`.
+        ...(deflectTax ? { deflectTax: true as const } : {}),
       };
       return;
     } else {
@@ -604,7 +662,7 @@ export function executeResolvedItem(
 
   const effectCtx: EffectContext = {
     ...baseCtx,
-    ...(_variables ? { variables: _variables } : {}),
+    ...(mergedVariables ? { variables: mergedVariables } : {}),
     ...(boundTargets ? { boundTargets } : {}),
     ...(triggerSourceId ? { triggerSourceId } : {}),
     // rule-id: ogn-177-298 — where the triggering move went ("with it").
