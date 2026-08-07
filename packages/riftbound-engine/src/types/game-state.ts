@@ -537,7 +537,7 @@ export interface RevealAndPickChoice {
    * rule-id: sfd-188-221 (Void Rush) — `"draw"` puts them in the prompter's
    * hand instead ("Draw any you didn't banish").
    */
-  readonly onRest?: "recycle" | "draw";
+  readonly onRest?: "recycle" | "draw" | "trash";
 
   /** Card that produced the effect (used as the follow-up effect's source). */
   readonly sourceCardId?: CardId;

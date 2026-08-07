@@ -60,7 +60,7 @@ describe("Lightning Rush (ven-156-166)", () => {
 
   // rule 416.1 — "Put the rest into your trash": the unpicked looked-at cards
   // go to the trash, NOT to the bottom of the Main Deck.
-  test.failing("BUG: unpicked looked-at cards go to the trash, not back into the deck", async () => {
+  test("unpicked looked-at cards go to the trash, not back into the deck", async () => {
     const game = await inHand().build();
     await game.p1.play("rush");
     await game.settle();
@@ -71,7 +71,7 @@ describe("Lightning Rush (ven-156-166)", () => {
     expect(game.p1.deck()[0]).toBe("c4");
   });
 
-  test.failing("BUG: declining still trashes all three looked-at cards", async () => {
+  test("declining still trashes all three looked-at cards", async () => {
     const game = await inHand().build();
     await game.p1.play("rush");
     await game.settle();

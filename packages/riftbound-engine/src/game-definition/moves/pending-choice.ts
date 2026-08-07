@@ -1818,6 +1818,16 @@ export const pendingChoiceMoves: Partial<
             });
           }
         }
+        // rule 416.1 (ven-156-166) — "Put the rest into your trash": declining
+        // the optional pick still trashes every looked-at card.
+        if (choice.onRest === "trash") {
+          for (const restId of choice.revealed) {
+            context.zones.moveCard({
+              cardId: restId as CoreCardId,
+              targetZoneId: "trash" as CoreZoneId,
+            });
+          }
+        }
         // rule-id: sfd-188-221 — "Draw any you didn't banish": declining the
         // optional banish draws every revealed card.
         if (choice.onRest === "draw") {
@@ -2198,6 +2208,16 @@ export const pendingChoiceMoves: Partial<
             targetZoneId: "mainDeck" as CoreZoneId,
           });
           recycledIds.push(restId as string);
+        }
+      }
+      // rule 416.1 (ven-156-166) — "Put the rest into your trash."
+      if (choice.onRest === "trash") {
+        for (const restId of revealed) {
+          if (restId === pickedCardId) continue;
+          context.zones.moveCard({
+            cardId: restId as CoreCardId,
+            targetZoneId: "trash" as CoreZoneId,
+          });
         }
       }
       // rule-id: sfd-188-221 — "Draw any you didn't banish."
