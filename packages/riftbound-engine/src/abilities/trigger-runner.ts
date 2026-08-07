@@ -1508,10 +1508,6 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
     // rule 355.5 / 808.1.d.2: each freshly finalized item chooses its own
     // Game Object now, before anyone receives priority.
     lockTriggerTargets(ctx.draft, { cards: ctx.cards, zones: ctx.zones });
-    // rule 383.3.a.2 / 402.1.a: a "you may" trigger is accepted or declined by
-    // its controller while it is FINALIZED — before anyone receives Priority
-    // over it — and a declined one is removed from the Chain.
-    //TEMPDISABLE promptFinalizationOptIn(ctx.draft);
   }
 
   for (const match of inlineMatches) {
