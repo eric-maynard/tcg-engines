@@ -361,6 +361,21 @@ describe("Passing Priority and all-pass resolution (338.1.b.1, 339, 340.1, 340.2
     expect(game.p2.can("cast", "p2react")).toBe(true);
   });
 
+  // rule 312.1.b / 338.1.b.1 — passing hands Priority to the next player, so the
+  // passer may take NO further Discretionary Action until Priority comes back:
+  // not a [Reaction] spell, not a rune recycle (both are Discretionary).
+  test("after P1 passes, P1 has no Discretionary Action left — no [Reaction] cast and no rune recycle are enumerated (312.1.b, 338.1.b.1)", async () => {
+    const game = await board().hand(P1, REACTION_DRAW, "p1react").runes(P1, "fury", 2).build();
+    await game.p1.cast("s1");
+    await game.p1.passPriority();
+    expect(priorityHolder(game)).toBe(P2);
+    expect(game.p1.can("cast", "p1react")).toBe(false);
+    expect(game.p1.legal().map((o) => o.moveId)).not.toContain("recycleRune");
+    expect(game.p1.legal().map((o) => o.moveId)).not.toContain("playSpell");
+    // Positive control: the Priority holder may do both.
+    expect(game.p2.can("cast", "p2react")).toBe(true);
+  });
+
   test("P2 also passes → S1 resolves exactly once, goes to trash, chain empty, Neutral Open, P1 acts", async () => {
     const game = await board().build();
     const p1Hand = game.p1.hand().length;

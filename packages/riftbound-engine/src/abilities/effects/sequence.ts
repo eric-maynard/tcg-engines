@@ -474,24 +474,39 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // controller pays [N]" parks the ransom question; a later Repeat
       // execution must not run (and demand a second ransom) before it is
       // answered. It resumes from the prompt's `then`.
-      if (parked?.counterRansom !== undefined && parked.then === undefined) {
+      if (parked?.counterRansom !== undefined) {
         const rest = seq.effects.slice(i + 1);
         if (rest.length > 0) {
+          const ransom = parked.counterRansom as {
+            boundTargets?: readonly string[];
+            effect: unknown;
+            sourcePlayerId: string;
+          };
           const carry = repeatedCounterTargets
             ? ctx.boundTargets?.slice(i + 1)
             : (subCtx.boundTargets as readonly string[] | undefined);
+          const restSeq =
+            carry !== undefined && carry.length > 0
+              ? {
+                  boundTargetsOverride: carry,
+                  effects: rest,
+                  ...(repeatedCounterTargets ? { independentTargets: true } : {}),
+                  type: "sequence",
+                }
+              : { effects: rest, independentExecution: true, type: "sequence" };
+          // Paying keeps the spell and the remaining executions still run;
+          // declining lets THIS counter land first, then the rest.
           ctx.draft.pendingChoice = {
-            ...(parked as object),
-            then:
-              carry !== undefined && carry.length > 0
-                ? {
-                    boundTargetsOverride: carry,
-                    effects: rest,
-                    ...(repeatedCounterTargets ? { independentTargets: true } : {}),
-                    type: "sequence",
-                  }
-                : { effects: rest, independentExecution: true, type: "sequence" },
-            thenIsSequenceRest: true,
+            payChoice: {
+              ...(ransom.boundTargets ? { boundTargets: ransom.boundTargets } : {}),
+              else: { effects: [ransom.effect, restSeq], type: "sequence" },
+              sourcePlayerId: ransom.sourcePlayerId,
+              then: restSeq,
+            },
+            playerId: (parked as { playerId?: string }).playerId,
+            resolved: (parked as { resolved?: unknown }).resolved,
+            sourceCardId: (parked as { sourceCardId?: string }).sourceCardId,
+            type: "opt-in",
           } as typeof ctx.draft.pendingChoice;
         }
         return;
