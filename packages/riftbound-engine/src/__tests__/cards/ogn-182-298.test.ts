@@ -26,8 +26,8 @@ describe("Scrapheap (ogn-182-298)", () => {
     expect(poor.p1.can("play", "heap")).toBe(false);
   });
 
-  // The parsed trigger event `play-discard-or-die-self` is never raised by the engine, so none
-  // of the three branches below draws today (hand/deck unchanged, no chain item).
+  // rule 402/427: the parser emits `play-self-or-discard-or-die`, whose "-or-" parts each
+  // resolve to a real engine event, so all three branches below draw.
   test("'When this is played … draw 1' — playing it puts a trigger on the chain and draws 1", async () => {
     const game = await scenario().resources(P1, { energy: 2 }).hand(P1, SCRAPHEAP, "heap").build();
     const deckBefore = game.p1.deck().length;
