@@ -248,6 +248,25 @@ export const equipmentMoves: Partial<
         );
       }
 
+      // rule-id: sfd-075-221 — rule 151 / 206.1: [Equip] is an activated
+      // ability of a gear (Equipment is a kind of gear), so "when you use an
+      // activated ability of a gear" sees it. It fires as the ability is
+      // activated, i.e. after the cost is paid and before the attach resolves.
+      dispatchEvent(
+        {
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          zones: context.zones,
+        },
+        {
+          cardId: equipmentId,
+          playerId,
+          sourceType: "gear",
+          type: "use-activated-ability",
+        },
+      );
+
       // Mark equipment as attached to the unit. Equipment flagged with
       // `copyAttachedUnitText` (Svellsongur) also records `copiedFromCardId`
       // So its activated abilities enumerator exposes the unit's abilities.

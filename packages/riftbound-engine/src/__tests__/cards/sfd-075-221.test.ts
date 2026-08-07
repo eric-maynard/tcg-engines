@@ -103,7 +103,7 @@ describe("Prize of Progress (sfd-075-221)", () => {
     expect(game.state("pp").might).toBe(3);
   });
 
-  test.failing("BUG: [Equip] is an activated gear ability — equipping World Atlas onto the Prize gives 3 + 2 + 1 = 6 this turn, 5 next turn", async () => {
+  test("[Equip] is an activated gear ability — equipping World Atlas onto the Prize gives 3 + 2 + 1 = 6 this turn, 5 next turn", async () => {
     const game = await scenario()
       .resources(P1, { energy: 0, power: { mind: 1 } })
       .unit(P1, "base", CARD, "pp")
