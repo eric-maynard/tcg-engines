@@ -59,7 +59,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     });
   });
 
-  test.failing("BUG: parsed friendly side should be a plain friendly unit with no location limit — not a `tag: \"Unit Anywhere\"` filter", async () => {
+  test("parsed friendly side should be a plain friendly unit with no location limit — not a `tag: \"Unit Anywhere\"` filter", async () => {
     const card = (await import("../../../../riftbound-cards/src/data/all-cards")).getAllCards().find((c) => c.id === CARD) as unknown as { abilities: { effect: { attacker: Record<string, unknown> } }[] };
     const attacker = card.abilities[0]!.effect.attacker;
     expect(attacker).toMatchObject({ controller: "friendly", type: "unit" });
@@ -67,7 +67,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(attacker.location ?? "anywhere").not.toBe("battlefield");
   });
 
-  test.failing("BUG: cost — castable for 3 energy (no power), all 3 deducted, one chain item; with 2 energy it is not castable", async () => {
+  test("cost — castable for 3 energy (no power), all 3 deducted, one chain item; with 2 energy it is not castable", async () => {
     const game = await board().build();
     expect(game.p1.can("cast", "mo")).toBe(true);
     await game.p1.cast("mo", { targets: ["brawler", "raider"] });
@@ -76,7 +76,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect((await board(2).build()).p1.can("cast", "mo")).toBe(false);
   });
 
-  test.failing("BUG: a friendly 4 in BASE and an enemy 3 at bf1 hit each other — Raider dies, Brawler keeps 3 damage, spell to trash", async () => {
+  test("a friendly 4 in BASE and an enemy 3 at bf1 hit each other — Raider dies, Brawler keeps 3 damage, spell to trash", async () => {
     const game = await board().build();
     await game.p1.cast("mo", { targets: ["brawler", "raider"] });
     await game.settle();
@@ -87,7 +87,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(game.zoneOf("mo")).toBe("trash");
   });
 
-  test.failing("BUG: 'friendly unit ANYWHERE' — a friendly unit at a DIFFERENT battlefield (bf2) may fight an enemy at bf1; the smaller friendly dies, the enemy keeps 2", async () => {
+  test("'friendly unit ANYWHERE' — a friendly unit at a DIFFERENT battlefield (bf2) may fight an enemy at bf1; the smaller friendly dies, the enemy keeps 2", async () => {
     const game = await board().build();
     await game.p1.cast("mo", { targets: ["scout", "twin"] });
     await game.settle();
@@ -96,7 +96,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(game.state("twin").damage).toBe(2);
   });
 
-  test.failing("BUG: legal pairs = {brawler, scout} × {raider, twin}; the enemy Giant in its base is never offered and choosing it is refused", async () => {
+  test("legal pairs = {brawler, scout} × {raider, twin}; the enemy Giant in its base is never offered and choosing it is refused", async () => {
     const game = await board().build();
     const pairs = targetPairs(game);
     expect(pairs).toHaveLength(4);
@@ -116,7 +116,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(noFriendly.p1.can("cast", "mo")).toBe(false);
   });
 
-  test.failing("BUG: equal Mights trade — Brawler (4) and Twin (4) both die", async () => {
+  test("equal Mights trade — Brawler (4) and Twin (4) both die", async () => {
     const game = await board().build();
     await game.p1.cast("mo", { targets: ["brawler", "twin"] });
     await game.settle();
@@ -124,7 +124,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(game.zoneOf("twin")).toBe("trash");
   });
 
-  test.failing("BUG: current Might counts — a buffed Brawler (5) deals 5: Twin (4) dies and Brawler survives with 4", async () => {
+  test("current Might counts — a buffed Brawler (5) deals 5: Twin (4) dies and Brawler survives with 4", async () => {
     const game = await board().unit(P1, "base", { might: 4, name: "Pumped" }, "pumped", { buffed: true }).build();
     expect(game.state("pumped").might).toBe(5);
     await game.p1.cast("mo", { targets: ["pumped", "twin"] });
@@ -134,7 +134,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(game.state("pumped").damage).toBe(4);
   });
 
-  test.failing("BUG: [Repeat] [3] on the SAME pair — 6 energy, one chain item, two exchanges before any death check: Raider takes 8, Brawler takes 6 ≥ 4 and dies too (142.4.a / 319.5)", async () => {
+  test("[Repeat] [3] on the SAME pair — 6 energy, one chain item, two exchanges before any death check: Raider takes 8, Brawler takes 6 ≥ 4 and dies too (142.4.a / 319.5)", async () => {
     const game = await board(6).build();
     await game.p1.cast("mo", { repeat: 1, targets: ["brawler", "raider"] });
     expect(game.p1.energy()).toBe(0);
@@ -145,7 +145,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(game.zoneOf("mo")).toBe("trash");
   });
 
-  test.failing("BUG: [Repeat] must be affordable — with 5 energy the repeated cast is refused (nothing spent) while the plain cast goes through", async () => {
+  test("[Repeat] must be affordable — with 5 energy the repeated cast is refused (nothing spent) while the plain cast goes through", async () => {
     const game = await board(5).build();
     const r = await game.p1.try((p) => p.cast("mo", { repeat: 1, targets: ["brawler", "raider"] }));
     expect(r.ok).toBe(false);
@@ -156,7 +156,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(game.zoneOf("mo")).toBe("chain");
   });
 
-  test.failing("BUG: [Action] timing — legal with Focus in your own combat showdown; there an attacking Lucian (2 + Assault = 3) deals 3, killing Raider before combat damage", async () => {
+  test("[Action] timing — legal with Focus in your own combat showdown; there an attacking Lucian (2 + Assault = 3) deals 3, killing Raider before combat damage", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .battlefield("bf1", { controller: P2 })
@@ -178,7 +178,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(game.zoneOf("lucian")).toBe("trash"); // took 3 ≥ 3 (Assault Might is his lethal bar too)
   });
 
-  test.failing("BUG: [Action] timing — castable on your own turn in the open main phase, NOT on the opponent's turn outside a showdown", async () => {
+  test("[Action] timing — castable on your own turn in the open main phase, NOT on the opponent's turn outside a showdown", async () => {
     const mine = await board().build();
     expect(mine.p1.can("cast", "mo")).toBe(true);
     const theirs = await board().active(P2).build();

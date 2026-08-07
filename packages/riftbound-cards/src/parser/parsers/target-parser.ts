@@ -57,7 +57,7 @@ export function parseTarget(text: string): AnyTarget {
 
   // Parse "[a/an/that/the] [another] [controller] [TAG] CARD_TYPE [here/at a battlefield]"
   const cardTypePattern =
-    /^(?:(a|an|that|the)\s+)?(?:(another)\s+)?(friendly\s+|enemy\s+|your\s+|my\s+)?((?:\w+\s+)*?)(unit|units|gear|gears|legend|legends|rune|runes|equipment|spell|card|permanent)(s?)(?:\s+(here|at a battlefield|there))?$/i;
+    /^(?:(a|an|that|the)\s+)?(?:(another)\s+)?(friendly\s+|enemy\s+|your\s+|my\s+)?((?:\w+\s+)*?)(unit|units|gear|gears|legend|legends|rune|runes|equipment|spell|card|permanent)(s?)(?:\s+(here|at a battlefield|there|anywhere))?$/i;
   const match = normalized.match(cardTypePattern);
 
   if (match) {
@@ -86,7 +86,9 @@ export function parseTarget(text: string): AnyTarget {
       result.excludeSelf = true;
     }
 
-    if (locationStr) {
+    // "anywhere" is an explicit absence of a location limit (base or any
+    // battlefield), so it contributes no `location` key at all.
+    if (locationStr && locationStr !== "anywhere") {
       if (locationStr === "here") {
         result.location = "here";
       } else if (locationStr === "at a battlefield") {
