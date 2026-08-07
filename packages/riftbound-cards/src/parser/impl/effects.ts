@@ -8,6 +8,7 @@ import type {
   SequenceEffect,
 } from "@tcg/riftbound-types/abilities/effect-types";
 import { parseCost } from "../parsers/cost-parser";
+import { parsePhaseInsteadRider } from "../parsers/phase-instead";
 import { parseEffect } from "./effect";
 import {
   parseChoiceEffect,
@@ -60,6 +61,13 @@ export function parseEffects(text: string): Effect | undefined {
         type: "conditional",
       } as unknown as Effect;
     }
+  }
+
+  // rule 318 (unl-172-219 LeBlanc, Fragmented) — "<instruction> N. If it's your
+  // <Phase> Phase, <verb> M instead." replaces the printed amount.
+  const phaseInstead = parsePhaseInsteadRider(cleaned, parseEffects);
+  if (phaseInstead) {
+    return phaseInstead;
   }
 
   const ifElseEffect = parseIfElseEffect(cleaned);

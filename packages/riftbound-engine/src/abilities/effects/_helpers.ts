@@ -9,6 +9,7 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta } from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { scoreWithinConditionMet } from "../../operations/score-within";
 import type { TargetDescriptor } from "../target-resolver";
 import { boundBattlefieldZone, resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
@@ -393,6 +394,16 @@ export function evaluateEffectCondition(
     // so anything still reaching the evaluator was played from hand.
     case "played-from-hand":
       return true;
+    // rule 318 (unl-172-219) — "If it's your <Phase> Phase": checked as the
+    // effect executes. rule 319 — every phase belongs to the turn player, so
+    // "your" additionally demands that the controller IS the turn player; the
+    // opponent's Beginning Phase never satisfies it.
+    case "during-phase": {
+      const wanted = String(condition.phase ?? "").toLowerCase();
+      const turn = ctx.draft.turn as { activePlayer?: string; phase?: string } | undefined;
+      if (String(turn?.phase ?? "").toLowerCase() !== wanted) return false;
+      return condition.whose === "you" ? turn?.activePlayer === ctx.playerId : true;
+    }
     case "has-xp": {
       const threshold = (condition.threshold as number) ?? 1;
       const player = ctx.draft.players[ctx.playerId];
@@ -413,19 +424,14 @@ export function evaluateEffectCondition(
       );
       return baseCards.length > 0;
     }
-    case "score-within": {
-      const range = (condition.range as number) ?? 0;
-      const { victoryScore } = ctx.draft;
-      for (const pid of Object.keys(ctx.draft.players)) {
-        if (pid !== ctx.playerId) {
-          const score = ctx.draft.players[pid]?.victoryPoints ?? 0;
-          if (Math.abs(victoryScore - score) <= range) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }
+    // rule 383.2.a.1 — same predicate as the play-cost gate and the trigger
+    // gate; the parser emits `points`, older hand-authored shapes use `range`.
+    case "score-within":
+      return scoreWithinConditionMet(
+        condition as { points?: number; range?: number; whose?: string },
+        ctx.draft as never,
+        ctx.playerId,
+      );
     case "count": {
       const target = condition.target as TargetDescriptor | undefined;
       const cmp = condition.comparison as

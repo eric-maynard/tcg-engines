@@ -13,6 +13,7 @@ import type {
   EffectKeywordAbility,
   Location,
 } from "@tcg/riftbound-types";
+import { parsePhaseInsteadRider } from "./phase-instead";
 
 // ============================================================================
 // Types
@@ -451,6 +452,14 @@ function parseEffectWithTrigger(text: string): Effect | undefined {
       // Return the effect directly - the trigger is implicit in Legion
       return effect;
     }
+  }
+
+  // rule 318 (unl-172-219) — "[Deathknell] Draw 1. If it's your Beginning
+  // Phase, draw 2 instead.": the keyword's effect text can carry the same
+  // amount-replacing phase rider spelled-out effect text does.
+  const phaseInstead = parsePhaseInsteadRider(cleanText, parseSimpleEffect);
+  if (phaseInstead) {
+    return phaseInstead;
   }
 
   // Try parsing as simple effect
