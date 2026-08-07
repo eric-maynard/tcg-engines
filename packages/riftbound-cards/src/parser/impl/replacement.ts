@@ -51,6 +51,31 @@ export function parseAdditionalCostAbility(text: string): Ability | undefined {
     } as Ability;
   }
 
+  // rule 356.2.a.1 (sfd-160-221) — "You may kill a friendly gear as an
+  // additional cost to play me." The optional twin of Cruel Patron's mandatory
+  // form: emit the same `additionalCost:{kill: Target}` descriptor that
+  // getOptionalPlayCost reads, with `optional: true` so the unpaid play stays legal.
+  const youMayKillMatch = text.match(
+    /^You may kill (?:a|an)\s+(friendly |enemy )?(unit|gear)\s+as an additional cost to play (?:me|this)\.?$/i,
+  );
+  if (youMayKillMatch) {
+    const controller = youMayKillMatch[1]?.trim().toLowerCase();
+    const kill: { type: string; controller?: string } = {
+      type: youMayKillMatch[2].toLowerCase(),
+    };
+    if (controller === "friendly" || controller === "enemy") {
+      kill.controller = controller;
+    }
+    return {
+      effect: {
+        additionalCost: { kill },
+        optional: true,
+        type: "additional-cost-option",
+      } as unknown as Effect,
+      type: "static",
+    } as Ability;
+  }
+
   // "You may spend N XP as an additional cost to play me/this[. If you do, ...]"
   // UNL-set champion progression: emits an `xp` additional cost.
   // The optional trailing "If you do, I cost [N] less." payoff is captured

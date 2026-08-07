@@ -14,6 +14,17 @@ import { createCardId } from "@tcg/riftbound-types/cards";
 const abilities: Ability[] = [
   { keyword: "Hidden", type: "keyword" },
   { keyword: "Ganking", type: "keyword" },
+  // rule 356.2 / 560 — "You may pay [fury] as an additional cost to play me":
+  // the shape getOptionalPlayCost reads (the parser emits the same for cards
+  // without hand-authored abilities).
+  {
+    effect: {
+      additionalCost: ":rb_rune_fury:",
+      optional: true,
+      type: "additional-cost-option",
+    } as unknown as Ability["effect"],
+    type: "static",
+  } as Ability,
   {
     condition: { type: "paid-additional-cost" },
     effect: {

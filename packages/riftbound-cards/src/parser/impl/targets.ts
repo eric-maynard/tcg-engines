@@ -124,6 +124,12 @@ export function parseLocationString(locationStr: string): Location {
   if (normalized === "here" || normalized === "to here" || normalized === "this battlefield") {
     return "here";
   }
+  // rule 355.4 (sfd-125-221) — "to the same battlefield" is the battlefield the
+  // triggering move went to, not a free choice; the engine reads `same` off
+  // ctx.triggerToZone.
+  if (normalized === "the same battlefield" || normalized === "to the same battlefield") {
+    return "same";
+  }
   if (
     normalized === "battlefield" ||
     normalized === "a battlefield" ||

@@ -241,7 +241,7 @@ export function parseMoveEffect(text: string): MoveEffect | undefined {
   // Flexible fallback for sentences that have extra trailing clauses
   // E.g., "Move a unit you control to a battlefield you control..."
   const flexMoveMatch = text.match(
-    /^Move (a|an|another) (friendly |enemy )?(unit|units|gear)(?:\s+you control)?(?:\s+to\s+(base|here|its base|your base|a battlefield|battlefield|the same battlefield|a battlefield you control))?(?:\s+.*)$/i,
+    /^Move (a|an|another) (friendly |enemy )?(unit|units|gear)(?:\s+you control)?(?:\s+to\s+(base|here|its base|your base|a battlefield|battlefield|the same battlefield|a battlefield you control))?(?:\s+.*)?\.?$/i,
   );
   if (flexMoveMatch) {
     const quantityStr = flexMoveMatch[1].toLowerCase();
