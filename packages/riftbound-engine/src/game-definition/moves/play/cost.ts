@@ -1229,6 +1229,40 @@ export function getGrantedAcceleratePlayCost(
  * caster controls (or owns, when no controller accessor is available) never
  * contribute a surcharge.
  */
+/**
+ * rule 809.1.c.1 (rule-id: sfd-077-221) — pay the [Deflect] surcharge for
+ * `targets` out of `playerId`'s pooled Power (any Domain, most-stocked Domain
+ * first). Used wherever a target is CHOSEN after the source was already paid
+ * for: a modal spell/ability picks its target as it resolves, so the surcharge
+ * was never quoted at play time. Returns false (paying nothing) when short.
+ */
+export function payDeflectSurcharge(
+  draft: RiftboundGameState,
+  playerId: string,
+  targets: readonly string[],
+  cards?: Parameters<typeof getDeflectSurcharge>[3],
+): boolean {
+  const amount = getDeflectSurcharge(draft, playerId, [...targets], cards);
+  if (amount <= 0) {
+    return true;
+  }
+  const pool = draft.runePools[playerId]?.power as Partial<Record<string, number>> | undefined;
+  const pooled = pool ? Object.values(pool).reduce((a: number, b) => a + (b ?? 0), 0) : 0;
+  if (!pool || pooled < amount) {
+    return false;
+  }
+  for (let i = 0; i < amount; i++) {
+    const key = Object.entries(pool)
+      .filter(([, v]) => (v ?? 0) > 0)
+      .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0];
+    if (key === undefined) {
+      return false;
+    }
+    pool[key] = (pool[key] ?? 0) - 1;
+  }
+  return true;
+}
+
 export function getDeflectSurcharge(
   _state: RiftboundGameState,
   _playerId: string,

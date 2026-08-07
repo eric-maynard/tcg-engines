@@ -1325,6 +1325,26 @@ export const playUnit: Defs["playUnit"] = {
       results.push(...killAnyVariants);
       if (paidVariant) {
         results.push(...paidVariants);
+        // rule 805.2 (unl-024-219, Accelerate) — an optional additional cost is
+        // a cost of PLAYING me, not of playing me to my base: every non-base
+        // location already offered for the free play gets a paid twin, so
+        // "[Accelerate] and land ready at a battlefield I control" is legal.
+        const paidLocations = new Set(
+          results
+            .filter(
+              (r) =>
+                r.cardId === (cardId as string) &&
+                r.paidAdditionalCost !== true &&
+                r.location !== undefined &&
+                r.location !== "base",
+            )
+            .map((r) => r.location as string),
+        );
+        for (const location of paidLocations) {
+          for (const variant of paidVariants) {
+            results.push({ ...variant, location });
+          }
+        }
       } else if (optional?.kind === "kill") {
         const killDescriptor = {
           ...(optional.kill as Record<string, unknown>),
