@@ -158,7 +158,13 @@ export const conquerBattlefield: Defs["conquerBattlefield"] = {
     const drewInstead =
       scoringAllowed && finalPointConquerDrawsInstead(draft, playerId, battlefieldId, context);
     // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
-    if (player && scoringAllowed && !drewInstead && !applyScoreReplacement(draft, playerId, context)) {
+    if (
+      player &&
+      scoringAllowed &&
+      !drewInstead &&
+      // rule 443.1.a: method-scoped skips only match a conquer here.
+      !applyScoreReplacement(draft, playerId, context, "conquer")
+    ) {
       player.victoryPoints += 1;
     }
 

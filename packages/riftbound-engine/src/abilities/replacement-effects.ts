@@ -180,7 +180,9 @@ function replacementApplies(
   // rule 443.1.a — a method-scoped skip ("skip the next point they would gain
   // from CONQUERING") is not a generic score replacement: it never applies to a
   // point gained by a different method (a Hold), and so is not consumed by one.
-  if (method !== undefined && event.method !== undefined && method !== event.method) {
+  // Fail closed when the caller could not name the method: a conquer-scoped skip
+  // must never be applied to (or consumed by) a point gained some other way.
+  if (method !== undefined && method !== event.method) {
     return false;
   }
   // rule 369.2 — the replacement only sees events matching its own target

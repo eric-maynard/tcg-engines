@@ -229,7 +229,7 @@ describe("443.1.a / 443.2 — 'skip the next point they would gain from CONQUERI
   // Expected (443.1.a third example, 469.2): Hold is a different method → P1 3→4 at the Scoring Step.
   // Actual: the engine's `score` replacement matcher has no notion of the scoring method — the
   // conquer-only skip also swallows (and is consumed by) the Hold point → P1 stays 3.
-  test.failing("BUG: 443.1.a / 469.2 — a conquer-only skip must not touch the Hold point; engine's score replacement ignores the method", async () => {
+  test("443.1.a / 469.2 — a conquer-only skip must not touch the Hold point", async () => {
     const game = await skipBoard();
     await game.p2.endTurn();
     await game.settle();
@@ -241,7 +241,7 @@ describe("443.1.a / 443.2 — 'skip the next point they would gain from CONQUERI
   // Expected (443.2, 383.4.c.2.c, 470): the combat conquer of B is replaced with nothing → +0, but the
   // conquer trigger still draws 1 and B is marked scored.
   // Actual: the skip was already (wrongly) spent on the Hold, so the conquer pays out +1.
-  test.failing("BUG: 443.2 — the skipped conquer gains 0 (trigger still fires, B still scored); engine pays the point because the skip was burnt on the Hold", async () => {
+  test("443.2 — the skipped conquer gains 0, but the trigger still fires and B is still scored", async () => {
     const game = await skipBoard();
     await game.p2.endTurn();
     await game.settle();
