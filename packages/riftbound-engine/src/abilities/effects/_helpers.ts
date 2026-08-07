@@ -403,9 +403,13 @@ export function resolveAmount(
 export function checkBecomesMighty(cardId: string, mightBefore: number, ctx: EffectContext): boolean {
   const mightAfter = getEffectiveMight(cardId, ctx);
   // rule 441 (rule-id: ven-177-166) — "When my Might becomes N or more" is a
-  // threshold-crossing trigger on effective Might from ANY source, so every
-  // Might change publishes both endpoints and the matcher compares thresholds.
-  if (ctx.fireTriggers && mightAfter > mightBefore) {
+  // threshold-crossing trigger on effective Might from ANY source, so the raise
+  // publishes both endpoints and the matcher compares thresholds. The phrasing
+  // is always self-referential, so only a card printing one needs the event.
+  const printsMightThreshold = (getGlobalCardRegistry().getAbilities(cardId) ?? []).some(
+    (a) => a.type === "triggered" && (a as { trigger?: { event?: string } }).trigger?.event === "might-becomes",
+  );
+  if (printsMightThreshold && ctx.fireTriggers && mightAfter > mightBefore) {
     const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? "";
     ctx.fireTriggers({
       cardId,

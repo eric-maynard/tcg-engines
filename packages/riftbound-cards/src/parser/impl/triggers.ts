@@ -266,6 +266,13 @@ export function parseTriggeredAbilityInner(text: string): TriggeredAbility | und
       sourceType?: string;
       afterAttack?: boolean;
     } = { event: tp.event };
+    // rule-id: ven-177-166 — "becomes N or more": the captured number is the
+    // Might threshold the event must cross upward.
+    if (tp.event === "might-becomes" && match[1]) {
+      trigger.restrictions = [
+        { count: Number.parseInt(match[1], 10), type: "might-threshold" },
+      ];
+    }
     // rule-id: sfd-120-221 (rule 469.1) — "conquer AFTER AN ATTACK" never fires
     // for a unit that walked onto an open battlefield.
     if (tp.afterAttack) {

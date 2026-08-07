@@ -51,6 +51,7 @@ export type TriggerEvent =
   | "take-damage" // When taking damage
   | "deal-damage" // When dealing damage
   | "become-mighty" // When becoming Mighty (5+ Might)
+  | "might-becomes" // When Might crosses a printed threshold ("becomes 10 or more")
   | "buff" // When buffed
   | "spend-buff" // When buff is spent
   | "ready" // When readied
@@ -165,7 +166,12 @@ export type TriggerRestriction =
   | { readonly type: "in-combat" }
   | { readonly type: "not-in-combat" }
   /** rule 188 — "conquer a battlefield that was uncontrolled" (sfd-116-221). */
-  | { readonly type: "battlefield-was-uncontrolled" };
+  | { readonly type: "battlefield-was-uncontrolled" }
+  /**
+   * rule-id: ven-177-166 — "When my Might becomes 10 or more": `count` is the
+   * bound the Might must cross upward for the trigger to fire.
+   */
+  | { readonly type: "might-threshold"; readonly count: number };
 
 // ============================================================================
 // Trigger Definition

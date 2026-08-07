@@ -120,6 +120,9 @@ export type GameEvent =
   | { type: "main-phase"; playerId: string }
   | { type: "end-of-turn"; playerId: string }
   | { type: "become-mighty"; cardId: string; owner: string }
+  // rule-id: ven-177-166 — a Might increase, carrying both endpoints so
+  // "when my Might becomes N or more" can be matched as a threshold crossing.
+  | { type: "might-becomes"; cardId: string; owner: string; might: number; previousMight: number }
   | { type: "empower"; cardId: string; owner: string }
   | { type: "heal"; cardId: string; amount: number }
   // rule-id: unl-055-219 — `owner` = stunned unit's controller, `stunnedBy` =

@@ -49,6 +49,13 @@ export const TRIGGER_PATTERNS: {
     pattern: /^As (?:I'm|I am|you reveal me)(?: revealed)?(?: from (?:your|my|the top of your|the top of my) (?:Main )?[Dd]eck)?,\s*/i,
   },
   { event: "become-mighty", on: "self", pattern: /^When I become \[Mighty\],\s*/i },
+  // rule-id: ven-177-166 — "When my Might becomes 10 or more": a threshold
+  // crossing on effective Might; the number is captured as `threshold`.
+  {
+    event: "might-becomes",
+    on: "self",
+    pattern: /^When my \[?Might\]? becomes (\d+) or more,\s*/i,
+  },
   // rule 441.2.a / 828.1.d (rule-id: ven-047-166) — "When I become [Empowered]"
   // is keyed on the false→true edge, whoever empowers me.
   { event: "empower", on: "self", pattern: /^When I become \[Empowered\],\s*/i },

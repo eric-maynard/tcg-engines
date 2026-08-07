@@ -192,6 +192,8 @@ const EVENT_MAP: Record<string, string> = {
   hide: "hide",
   hold: "hold",
   "main-phase": "main-phase",
+  // rule-id: ven-177-166 — "When my Might becomes N or more".
+  "might-becomes": "might-becomes",
   move: "move",
   "play-card": "play-card",
   // rule-id: ogn-167-298 — rule 811.1.c.3.
@@ -226,6 +228,16 @@ function restrictionSatisfied(
   state: TriggerMatcherState | undefined,
 ): boolean {
   switch (restriction.type) {
+    // rule-id: ven-177-166 — "When my Might becomes 10 or more": fires only on
+    // the upward CROSSING — below the bound before, at or above it after (so
+    // 4 → 9 does nothing, 4 → 10 and 9 → 15 both fire, 10 → 11 does not re-fire).
+    case "might-threshold": {
+      if (event.type !== "might-becomes") {
+        return false;
+      }
+      const bound = restriction.count ?? 0;
+      return event.previousMight < bound && event.might >= bound;
+    }
     case "nth-time-each-turn": {
       const n = restriction.count ?? 1;
       if (trigger.event === "play-card") {
@@ -439,6 +451,15 @@ function triggerMatchesEvent(
   // rule-id: sfd-120-221 (rule 469.1) — "conquer after an attack": only a
   // conquer produced by combat carries `afterAttack`.
   if (trigger.afterAttack === true && (event as { afterAttack?: boolean }).afterAttack !== true) {
+    return false;
+  }
+
+  // rule-id: ven-177-166 — a Might threshold trigger carries its bound as a
+  // `might-threshold` restriction; without one the event can't be judged.
+  if (
+    event.type === "might-becomes" &&
+    !(trigger.restrictions ?? []).some((r) => r.type === "might-threshold")
+  ) {
     return false;
   }
 
