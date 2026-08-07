@@ -98,6 +98,11 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   let targetZone: string;
   if (hiddenUnitZone) {
     targetZone = hiddenUnitZone;
+  } else if (effect.location === "origin") {
+    // rule 359.3.f.3 (unl-082-219) — "when I move from a location, play … THERE":
+    // "there" is the origin, snapshotted when the move happened, so the token
+    // lands where the mover left even if it has since moved again or been bounced.
+    targetZone = ctx.triggerFrom ?? ctx.sourceZone ?? "base";
   } else if (effect.location === "here" && ctx.sourceZone) {
     targetZone = ctx.sourceZone;
   } else if (effect.location && effect.location !== "here") {

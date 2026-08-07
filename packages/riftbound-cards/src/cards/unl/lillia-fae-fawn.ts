@@ -12,8 +12,9 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *
  * Two abilities:
  *  1. Accelerate keyword with its payment cost
- *  2. Triggered on self move-from-battlefield: spawn a Temporary Sprite
- *     token at the origin location
+ *  2. Triggered on any self move (rule 198.1: bases are locations too, so
+ *     base origins qualify): spawn a Temporary Sprite token at the ORIGIN
+ *     (rule 359.3.f.3 — "there" is snapshotted when she moves)
  */
 const abilities: Ability[] = [
   {
@@ -23,7 +24,7 @@ const abilities: Ability[] = [
   },
   {
     effect: {
-      location: "here",
+      location: "origin",
       token: {
         keywords: ["Temporary"],
         might: 3,
@@ -32,7 +33,8 @@ const abilities: Ability[] = [
       },
       type: "create-token",
     },
-    trigger: { event: "move-from-battlefield", on: "self" },
+    // rule 198.1: a base is a location, so base→battlefield triggers too.
+    trigger: { event: "move", on: "self" },
     type: "triggered",
   },
 ];

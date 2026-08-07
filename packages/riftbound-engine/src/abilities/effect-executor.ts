@@ -111,6 +111,13 @@ export interface EffectContext {
    * card was played from Hidden at — units it plays must be played there.
    */
   readonly hiddenZone?: string;
+  /**
+   * rule 359.3.f.3 — zone id the triggering `move` event's subject left. A
+   * move trigger that acts "there" (the ORIGIN) reads this instead of the
+   * source's current zone, so bouncing the mover in response cannot relocate
+   * the effect.
+   */
+  readonly triggerFrom?: string;
   readonly zones: {
     moveCard: (params: {
       cardId: CoreCardId;
@@ -203,19 +210,27 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
  * install is its own entry, so a doubled trigger delays two copies.
  */
 function installNextMainPhaseEffect(effect: ExecutableEffect, ctx: EffectContext): void {
-  const { delayUntil: _delayUntil, ...rest } = effect as unknown as Record<string, unknown>;
+  // rule 383.3.a — a "you may" on a delayed effect is asked when the delayed
+  // ability resolves, not when it is installed; carry the flag on the entry.
+  const {
+    delayUntil: _delayUntil,
+    optional,
+    ...rest
+  } = effect as unknown as Record<string, unknown>;
   const draft = ctx.draft as unknown as {
     playerDelayedTriggers?: {
       playerId: string;
       sourceCardId: string;
       trigger: { event: string; on?: string };
       effect: unknown;
+      optional?: boolean;
       duration: "turn" | "permanent";
     }[];
   };
   draft.playerDelayedTriggers ??= [];
   draft.playerDelayedTriggers.push({
     duration: "turn",
+    ...(optional === true ? { optional: true } : {}),
     // The effect arrives as an immer draft node; snapshot it as plain data.
     effect: JSON.parse(JSON.stringify(rest)) as unknown,
     playerId: ctx.playerId,
