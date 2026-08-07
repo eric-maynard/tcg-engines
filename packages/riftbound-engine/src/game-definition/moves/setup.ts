@@ -200,7 +200,12 @@ export const setupMoves: Partial<
       if (state.status !== "setup" || !state.setup) {
         return false;
       }
-      const { playerId } = context.params;
+      const { playerId, battlefieldId } = context.params;
+      // rule 486.6: a battlefield used in a decided game of a Match is removed
+      // for the rest of that match and can no longer be selected.
+      if (state.match?.usedBattlefields.includes(battlefieldId as string)) {
+        return false;
+      }
       return state.setup.battlefieldChoices?.[playerId] === undefined;
     },
 
@@ -475,6 +480,74 @@ export const setupMoves: Partial<
           targetZoneId: "mainDeck" as CoreZoneId,
         });
       }
+    },
+  },
+
+  /**
+   * Start the next game of a Match (rules 486.5, 486.5.a, 486.6).
+   *
+   * A Match is best-of-three with the same decks. The finished game's result is
+   * recorded, the battlefields that were in play are removed for the rest of the
+   * match when the game was DECISIVE (486.6) — a drawn game re-presents the same
+   * battlefields instead (486.5.a) — and the setup sequence re-opens so both
+   * players choose again from what is left. `selectBattlefield` refuses any
+   * battlefield already recorded as used, so game 3 is forced onto the last one.
+   */
+  startNextGame: {
+    condition: (state) => {
+      if (state.status !== "finished") {
+        return false;
+      }
+      const results = state.match?.results ?? [];
+      // rule 486.5: a match is over once someone has won two games (or three
+      // games have been played out).
+      if (results.length >= 3) {
+        return false;
+      }
+      const wins: Record<string, number> = {};
+      for (const r of results) {
+        if (r.winner) {
+          wins[r.winner] = (wins[r.winner] ?? 0) + 1;
+        }
+      }
+      return !Object.values(wins).some((n) => n >= 2);
+    },
+
+    reducer: (draft, context) => {
+      const drawn = context.params.drawn === true || draft.winner === undefined;
+
+      const match = draft.match ?? { gameNumber: 1, results: [], usedBattlefields: [] };
+      match.results.push(drawn ? { drawn: true } : { winner: draft.winner });
+      if (!drawn) {
+        // rule 486.6: the battlefields used in that game leave the match.
+        for (const battlefieldId of Object.keys(draft.battlefields)) {
+          if (!match.usedBattlefields.includes(battlefieldId)) {
+            match.usedBattlefields.push(battlefieldId);
+          }
+        }
+      }
+      match.gameNumber = match.results.length + 1;
+      draft.match = match;
+
+      // Re-open setup for the next game: a fresh board, no points, no winner.
+      draft.status = "setup";
+      draft.winner = undefined;
+      draft.battlefields = {};
+      draft.setup = {
+        battlefieldChoices: {},
+        completedBy: [],
+        pendingMulligan: [],
+        rolls: {},
+        step: "rollForFirst",
+      };
+      for (const player of Object.values(draft.players)) {
+        player.victoryPoints = 0;
+        player.xp = 0;
+        player.turnsTaken = 0;
+      }
+      draft.conqueredThisTurn = {};
+      draft.scoredThisTurn = {};
+      draft.xpGainedThisTurn = {};
     },
   },
 

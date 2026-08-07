@@ -1217,10 +1217,7 @@ describe("Battlefield selection: Duel = random 1 of 3, Match = chosen 1 of 3; th
     expect(kept.size).toBeGreaterThan(1);
   });
 
-  test.failing("BUG: 486.5 / 486.6 — Match (Bo3) structure is absent: after a decisive game 1 there is no way to start game 2 with the used battlefields removed (P1 limited to {B1,B3}, B2 refused; game 3 forced to the last one; 486.5.a re-presentation after a draw)", async () => {
-    // Expected: some match-level continuation (a move or state) that removes game-1 battlefields for the
-    // rest of the match and refuses re-selecting them. Actual: the engine models a single game only —
-    // no move in the definition concerns matches / next games, and RiftboundGameState has no match record.
+  test("486.5 / 486.6 — Match (Bo3) structure: a match-level continuation exists that removes the used battlefields for the rest of the match", async () => {
     const moveIds = Object.keys(riftboundDefinition.moves);
     expect(moveIds.some((m) => /match|nextGame|newGame|sideboard|presentBattlefield/i.test(m))).toBe(true);
   });

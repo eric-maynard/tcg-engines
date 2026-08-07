@@ -85,6 +85,13 @@ export interface RiftboundMoves {
   /** Mulligan: choose up to 2 cards to set aside and redraw (rule 117) */
   mulligan: { playerId: PlayerId; keepCards?: CardId[] };
 
+  /**
+   * Begin the next game of a Match (rule 486.5 / 486.6). Records the finished
+   * game's result, removes its battlefields from the rest of the match unless
+   * the game was drawn (486.5.a), and re-opens the setup sequence.
+   */
+  startNextGame: { playerId: PlayerId; drawn?: boolean };
+
   // ============================================
   // Chain & Showdown Moves
   // ============================================
