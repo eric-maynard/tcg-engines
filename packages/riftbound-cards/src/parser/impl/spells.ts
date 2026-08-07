@@ -55,6 +55,9 @@ const SPELL_COST_RIDER_RES: readonly RegExp[] = [
   /^If an enemy unit has died this turn, this costs[^.]*\./i,
   /^If an opponent's score is within \d+ points? of the Victory Score, this costs[^.]*\./i,
   /^If you(?:'re|’re) within \d+ points? of winning, this costs[^.]*\./i,
+  // rule 356.4 / 827 (rule-id: ven-059-166) — trailing-condition rider
+  // ("This costs [2] less if you control something that's [Empowered].").
+  /^This costs\s+[^.]*?\s+less\s+if\s+[^.]*\./i,
 ];
 
 // rule 356.2.b / rule 560 — "As you play this, you may … as an additional
@@ -148,6 +151,9 @@ export function parseSpellAbility(text: string): SpellAbility | TriggeredAbility
   effectText = effectText.replace(/^I cost[^.]*\.\s*/i, "");
   // Strip "This spell's Energy cost is reduced..." preamble
   effectText = effectText.replace(/^This spell's Energy cost[^.]*\.\s*/i, "");
+  // rule 356.4 (rule-id: ven-059-166) — strip the "This costs N less if …"
+  // rider; `parseSpellCostRiders` lifts it into its own static.
+  effectText = effectText.replace(/^This costs\s+[^.]*?\s+less\s+if\s+[^.]*\.\s*/i, "");
   // Strip "Ignore [Deflect] while paying this spell's cost." preamble — a
   // static cost rider, not the spell's targeted effect (Rule 355.8 target
   // parsing must reach the effect sentence that follows).

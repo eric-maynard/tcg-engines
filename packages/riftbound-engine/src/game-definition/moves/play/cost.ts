@@ -2194,6 +2194,46 @@ function getSelfScaledEnergyReduction(
     if (effect?.type !== "cost-reduction" || effect.target !== "self") {
       continue;
     }
+    // rule 356.4 / 466 (rule-id: ven-059-166) — "This costs [N] less if you
+    // control something that's [Empowered]": a flat self-discount gated on a
+    // board CONDITION rather than a countable scope. "Something" is any
+    // permanent — unit, gear or equipment — and only ones the caster controls.
+    const gate = (effect as { condition?: { type?: string; controller?: string } }).condition;
+    if (gate?.type === "control-empowered") {
+      const cards = extras.board?.cards;
+      const wantEnemy = gate.controller === "enemy";
+      const controlsEmpowered = (id: CoreCardId): boolean => {
+        if ((id as string) === cardId) return false;
+        const meta = cards?.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined;
+        if (meta?.empowered !== true) return false;
+        const controller = cards?.getCardController?.(id) ?? cards?.getCardOwner(id);
+        return wantEnemy ? controller !== playerId : controller === playerId;
+      };
+      let found = zones
+        .getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId)
+        .some(controlsEmpowered);
+      if (!found && wantEnemy) {
+        for (const other of Object.keys(state.players ?? {})) {
+          if (other === playerId) continue;
+          if (zones.getCardsInZone("base" as CoreZoneId, other as CorePlayerId).some(controlsEmpowered)) {
+            found = true;
+            break;
+          }
+        }
+      }
+      if (!found) {
+        for (const bfId of Object.keys(state.battlefields ?? {})) {
+          if (zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId).some(controlsEmpowered)) {
+            found = true;
+            break;
+          }
+        }
+      }
+      if (found) {
+        total += Math.max(0, decodeCostAmount(effect.by ?? effect.reduction ?? effect.amount).energy);
+      }
+      continue;
+    }
     // rule 356.4 (rule-id: sfd-164-221) — "I cost [N] less to play from
     // anywhere other than your hand": a flat self-discount gated on the play's
     // origin zone. A [Flow] play always comes from the trash (rule 829.1.b).

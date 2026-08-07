@@ -86,6 +86,17 @@ function buildControlTarget(subject: string): Target | undefined {
     } as Target;
   }
 
+  // rule 827 (rule-id: ven-059-166) — "something that's [Empowered]": the
+  // subject is any permanent you control, not just a unit, so it must stay
+  // `type:"card"` for gear to count.
+  if (/^something(?: that(?:'s| is))?\s*(?::rb_empowered:|\[?empowered\]?)$/i.test(s)) {
+    return {
+      controller: "friendly",
+      filter: "empowered",
+      type: "card",
+    } as Target;
+  }
+
   // State filter + optional controller + unit.
   // E.g., "stunned enemy unit", "ready friendly unit", "damaged unit".
   const stateMatch = s.match(
@@ -196,6 +207,17 @@ function parseControlPhrase(text: string): Condition | undefined {
           type: "control",
         } as Condition;
       }
+      return { target, type: "control" } as Condition;
+    }
+  }
+
+  // rule 827 (rule-id: ven-059-166) — "you control something that's
+  // [Empowered]" carries no quantifier word; the bare subject still names one
+  // permanent.
+  const bareMatch = text.match(/^you control (something\b.*)$/i);
+  if (bareMatch) {
+    const target = buildControlTarget(bareMatch[1]);
+    if (target) {
       return { target, type: "control" } as Condition;
     }
   }
