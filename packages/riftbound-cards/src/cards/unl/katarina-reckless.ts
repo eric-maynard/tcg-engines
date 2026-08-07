@@ -11,9 +11,9 @@ import { createCardId } from "@tcg/riftbound-types/cards";
 const abilities: Ability[] = [
   {
     type: "triggered",
-    trigger: { event: "reveal", on: { controller: "friendly" } },
-    // "hide" isn't a distinct engine event yet; approximate using reveal
-    // As a placeholder until a "hide-card" event is added.
+    // rule 811.1.c.2: Hiding a card is its own action (not a play), and the
+    // hide move emits a `hide` event carrying the hiding player.
+    trigger: { event: "hide", on: { controller: "friendly" } },
     effect: { target: "self", type: "ready" },
   },
   {
