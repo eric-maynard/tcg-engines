@@ -49,6 +49,13 @@ export interface CombatUnit {
    * shield: its Prevent Value is All, so no assignment is ever lethal to it.
    */
   readonly preventsNextDamageInstance?: boolean;
+  /**
+   * rule 142.4.c (unl-118-219 Elder Dragon) — an opposing static lowered this
+   * unit's lethal-damage value ("Any amount of your damage is enough to kill
+   * enemy units"), so combat damage ASSIGNMENT (465.2.c.3) needs this much and
+   * no more before moving to the next unit.
+   */
+  readonly lethalDamageOverride?: number;
 }
 
 /**
@@ -118,6 +125,11 @@ function lethalThreshold(unit: CombatUnit, role?: "attacker" | "defender"): numb
   // mandatory assignment piles the whole side's damage onto it.
   if (unit.preventsNextDamageInstance === true) {
     return Number.MAX_SAFE_INTEGER;
+  }
+  // rule 142.4.c: an opposing "any amount of your damage is lethal" static
+  // replaces this unit's lethal-damage value outright (never raises it).
+  if (unit.lethalDamageOverride !== undefined) {
+    return Math.max(0, Math.min(unit.lethalDamageOverride, unit.baseMight + (unit.preventValue ?? 0)));
   }
   let might = unit.baseMight;
   if (role === "defender") {
@@ -209,8 +221,10 @@ export function distributeDamage(
 
     // How much damage to make this unit lethal (accounting for existing damage)
     const effectiveHealth = lethalThreshold(unit, role) - unit.currentDamage;
-    // Must assign at least lethal damage before moving to next unit
-    const lethal = Math.max(0, effectiveHealth);
+    // Must assign at least lethal damage before moving to next unit.
+    // rule 143.2.b — a unit only dies to NON-ZERO damage, so a 0-Might
+    // (debuffed) unit still costs one point to kill.
+    const lethal = Math.max(1, effectiveHealth);
     const toAssign = Math.min(remaining, lethal);
 
     assignment[unit.id] = toAssign;
@@ -284,7 +298,8 @@ export function planDamageAssignment(
   const tier: Record<string, number> = {};
   for (const unit of sorted) {
     order.push(unit.id);
-    need[unit.id] = Math.max(0, lethalThreshold(unit, role) - unit.currentDamage);
+    // rule 143.2.b — non-zero damage is required even at 0 Might.
+    need[unit.id] = Math.max(1, lethalThreshold(unit, role) - unit.currentDamage);
     // rule 465.2.c.8 — Tank AND Backline on the same unit: the assigning
     // player chooses which one to honour, so neither tier is imposed on it.
     tier[unit.id] =

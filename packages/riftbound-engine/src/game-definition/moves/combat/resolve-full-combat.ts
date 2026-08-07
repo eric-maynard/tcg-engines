@@ -23,6 +23,7 @@ import { openPendingContestedShowdown } from "../chain/showdown";
 import type { PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import { getCardEffectiveMight } from "../play/cost";
+import { collectAnyDamageLethalPlayers } from "../../../operations/lethal-damage";
 import { unitIgnoresDamage } from "../../../operations/damage-immunity";
 import { addDamage, clearDamage, getDamage, setDamage } from "../../../operations/damage-store";
 import type {
@@ -253,6 +254,11 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           (e.replacement as { type?: string } | undefined)?.type === "kill",
       ) ?? -1;
 
+    // rule 142.4.c — an enemy board static ("Any amount of your damage is
+    // enough to kill enemy units") lowers this unit's lethal-damage value, and
+    // combat damage assignment (465.2.c.3) must use that lowered value.
+    const anyDamageLethalPlayers = collectAnyDamageLethalPlayers({ cards, draft, zones });
+
     for (const cardId of unitIds) {
       const owner = cards.getCardOwner(cardId) ?? "";
       const meta = cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
@@ -340,6 +346,12 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
           ? { preventsNextDamageInstance: true }
           : {}),
         ...(killOnDamageIdx(cardId as string) >= 0 ? { diesOnAnyDamage: true } : {}),
+        // rule 142.4.c: any damage from the opposing side is lethal to this unit.
+        ...([...anyDamageLethalPlayers].some(
+          (p) => p !== ((cards.getCardController?.(cardId) ?? owner) as string),
+        )
+          ? { lethalDamageOverride: 1 }
+          : {}),
         // rule 465.2.c.10 (ogn-189-298): "I don't take damage" — skipped for
         // damage assignment and never dealt lethal damage.
         ...(unitIgnoresDamage(cardId as string, draft, () => meta as { empowered?: boolean; combatRole?: string } | undefined) ? { immuneToDamage: true } : {}),
