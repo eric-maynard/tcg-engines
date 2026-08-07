@@ -286,6 +286,14 @@ export interface EquipmentCard extends BaseCard {
    * whose Might is used. Used by Hextech Gauntlets.
    */
   readonly interactiveCostReduction?: "target-might";
+
+  /**
+   * Atakhan-style marker (rule 356.4): when a "you may kill a friendly unit as
+   * an additional cost" is paid, this card costs [1] less for each Energy the
+   * killed unit costs and one `powerDomain` pip less for each of its Power
+   * pips (of any Domain). Both discounts floor at zero.
+   */
+  readonly sacrificeCostDiscount?: { readonly powerDomain: string };
 }
 
 // ============================================================================

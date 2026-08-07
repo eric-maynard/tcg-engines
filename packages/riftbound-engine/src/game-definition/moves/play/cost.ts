@@ -1706,6 +1706,30 @@ export function getKillAnyNumberCost(
   return undefined;
 }
 
+/**
+ * rule-id: unl-170-219 (rule 356.4) — "you may kill a friendly unit as an
+ * additional cost to play me. If you do, I cost [1] less for each Energy it
+ * costs and [D] less for each Power it costs." Prices ONE named victim: the
+ * Energy discount is its printed Energy cost, and each of its Power pips (of
+ * ANY Domain) waives one [D] pip. Undefined when the played card carries no
+ * `sacrificeCostDiscount` marker.
+ */
+export function getSacrificeCostDiscount(
+  cardId: string,
+  sacrificeId: string,
+): { energy: number; power: Partial<Record<string, number>> } | undefined {
+  const registry = getGlobalCardRegistry();
+  const marker = registry.get(cardId)?.sacrificeCostDiscount;
+  if (!marker) {
+    return undefined;
+  }
+  const pips = registry.getPowerCost(sacrificeId).length;
+  return {
+    energy: registry.getEnergyCost(sacrificeId),
+    power: pips > 0 ? { [marker.powerDomain]: pips } : {},
+  };
+}
+
 export type RepeatTiers = readonly { energy: number; power: readonly string[] }[];
 
 /**

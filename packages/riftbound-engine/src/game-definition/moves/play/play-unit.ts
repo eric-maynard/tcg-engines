@@ -53,6 +53,7 @@ import {
   getBuffSpendCost,
   getKillAnyNumberCost,
   getOptionalPlayCost,
+  getSacrificeCostDiscount,
   createMetaAccessor,
   getPotentialRuneEnergy,
   canAffordCard,
@@ -839,6 +840,20 @@ export const playUnit: Defs["playUnit"] = {
         return false;
       }
     }
+    // rule-id: unl-170-219 (rule 356.4) — a paid "kill a friendly unit" cost
+    // whose card carries the discount rider prices the play against the named
+    // victim's printed cost. Only a real friendly board unit counts.
+    const killDiscount =
+      mandatoryCost?.kind === "kill" &&
+      typeof context.params.sacrificeId === "string" &&
+      friendlyKillableUnits(state, context.zones, context.params.playerId as string).includes(
+        context.params.sacrificeId as string,
+      )
+        ? getSacrificeCostDiscount(
+            context.params.cardId as string,
+            context.params.sacrificeId as string,
+          )
+        : undefined;
     if (
       !canAffordCard(
         state,
@@ -846,7 +861,13 @@ export const playUnit: Defs["playUnit"] = {
         context.params.cardId,
         payable
           ? { additionalCost: { energy: payable.energy, power: payable.power }, board, ...(altCost ? { altCost } : {}) }
-          : { board, ...(altCost ? { altCost } : {}) },
+          : {
+              board,
+              ...(altCost ? { altCost } : {}),
+              ...(killDiscount
+                ? { additionalCost: { energy: -killDiscount.energy }, waivePower: killDiscount.power }
+                : {}),
+            },
         createMetaAccessor(context.cards),
         getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId),
       )
@@ -1113,6 +1134,38 @@ export const playUnit: Defs["playUnit"] = {
         results.push(...discardVariants);
         results.push(...buffVariants);
         results.push(...killAnyVariants);
+        // rule-id: unl-170-219 (rule 356.4) — "kill a friendly unit … I cost
+        // [1] less per Energy and [D] less per Power it costs": the discount
+        // is what makes the play affordable, so the paid variants must be
+        // offered even though the printed cost is out of reach.
+        if (standardTiming && getOptionalPlayCost(cardId as string)?.kind === "kill") {
+          for (const victim of friendlyKillableUnits(
+            state,
+            context.zones,
+            context.playerId as string,
+          )) {
+            const discount = getSacrificeCostDiscount(cardId as string, victim);
+            if (
+              discount &&
+              canAffordCard(
+                state,
+                context.playerId as string,
+                cardId as string,
+                { additionalCost: { energy: -discount.energy }, board, waivePower: discount.power },
+                metaForAfford,
+                potential,
+              )
+            ) {
+              results.push({
+                cardId: cardId as string,
+                location: "base",
+                paidAdditionalCost: true,
+                playerId: context.playerId as string,
+                sacrificeId: victim,
+              });
+            }
+          }
+        }
         continue;
       }
 
@@ -1501,12 +1554,25 @@ export const playUnit: Defs["playUnit"] = {
         }
       }
     }
+    // rule-id: unl-170-219 (rule 356.4) — the named victim's printed cost is
+    // the discount; re-derived from the board, never trusted from the caller.
+    const killDiscount =
+      optional?.kind === "kill" &&
+      typeof sacrificeId === "string" &&
+      friendlyKillableUnits(draft, zones, playerId).includes(sacrificeId)
+        ? getSacrificeCostDiscount(cardId, sacrificeId)
+        : undefined;
+    if (killDiscount) {
+      energyDiscount += killDiscount.energy;
+    }
     const waivePower =
       buffCost && spentBuffs.length > 0
         ? { [buffCost.domain]: spentBuffs.length }
         : killAnyCost && sacrificed.length > 0
           ? { [killAnyCost.domain]: sacrificed.length }
-          : undefined;
+          : killDiscount && Object.keys(killDiscount.power).length > 0
+            ? killDiscount.power
+            : undefined;
 
     // rule 356.4.f (rule-id: sfd-103-221) — Energy discount left over once the
     // printed cost is already 0. It keeps eating an optional additional cost

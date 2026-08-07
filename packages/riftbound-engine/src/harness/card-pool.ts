@@ -146,6 +146,7 @@ export function toLookupPayload(
     moveEscalation: def.moveEscalation as boolean | undefined,
     name: overrides?.name ?? def.name ?? def.id ?? instanceId,
     powerCost: def.powerCost ? [...def.powerCost] : undefined,
+    sacrificeCostDiscount: def.sacrificeCostDiscount as { powerDomain: string } | undefined,
     tags: def.tags,
     timing: def.timing,
     tracksExiledCards: def.tracksExiledCards as boolean | undefined,
