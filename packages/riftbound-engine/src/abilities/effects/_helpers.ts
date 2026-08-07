@@ -402,6 +402,19 @@ export function resolveAmount(
  */
 export function checkBecomesMighty(cardId: string, mightBefore: number, ctx: EffectContext): boolean {
   const mightAfter = getEffectiveMight(cardId, ctx);
+  // rule 441 (rule-id: ven-177-166) — "When my Might becomes N or more" is a
+  // threshold-crossing trigger on effective Might from ANY source, so every
+  // Might change publishes both endpoints and the matcher compares thresholds.
+  if (ctx.fireTriggers && mightAfter > mightBefore) {
+    const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? "";
+    ctx.fireTriggers({
+      cardId,
+      might: mightAfter,
+      owner,
+      previousMight: mightBefore,
+      type: "might-becomes",
+    });
+  }
   if (mightBefore < MIGHTY_THRESHOLD && mightAfter >= MIGHTY_THRESHOLD) {
     // Fire become-mighty trigger if fireTriggers is available
     if (ctx.fireTriggers) {
