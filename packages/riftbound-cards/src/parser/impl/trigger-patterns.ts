@@ -316,6 +316,18 @@ export const TRIGGER_PATTERNS: {
     on: "self",
     pattern: /^When you play me or when I hold,\s*/i,
   },
+  // "When you play me or when I score, ..." (ven-182-166 Illaoi)
+  // rule 383.4.c/383.4.d — "I score" is either half of a Score made at a
+  // battlefield THIS unit is present at (conquer or hold), which the engine
+  // publishes as the generic `score` event; both halves name this card, so
+  // `on: "self"`.
+  {
+    event: "play-self-or-score",
+    on: "self",
+    pattern: /^When you play (?:me|this) or when I score,\s*/i,
+  },
+  // "When I score, ..." — the score half on its own.
+  { event: "score", on: "self", pattern: /^When I score,\s*/i },
   // "The first time a friendly unit dies each turn, ..." (Wraith of Echoes)
   {
     event: "die",

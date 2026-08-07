@@ -487,7 +487,14 @@ function triggerMatchesEvent(
       if (event.battlefieldId !== card.id) {
         return false;
       }
-    } else if ((mapped === "hold" || mapped === "conquer") && "battlefieldId" in event && !("cardId" in event)) {
+    } else if (
+      // rule 383.4.c.2 / 383.4.d.2.a (ven-182-166) — "when I score" is the
+      // generic `score` event read from THIS unit's seat: it must be present at
+      // the battlefield that scored, exactly like its `hold`/`conquer` halves.
+      (mapped === "hold" || mapped === "conquer" || mapped === "score") &&
+      "battlefieldId" in event &&
+      !("cardId" in event)
+    ) {
       // Rule 383.4.d.2.a: a unit's self-hold trigger requires the unit to be
       // present at the held battlefield — a unit at base never "holds".
       // rule 383.4.c.2: likewise "When I conquer" needs THIS unit present at
