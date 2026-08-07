@@ -896,10 +896,15 @@ function conquerByPresence(ctx: CleanupContext, bfId: string, playerId: string):
     player &&
     !alreadyScored &&
     canPlayerScoreAtBattlefield(draft, playerId as CorePlayerId, bfId) &&
-    !applyScoreReplacement(draft, playerId as CorePlayerId, {
-      cards: ctx.cards,
-      zones: ctx.zones,
-    } as never)
+    !applyScoreReplacement(
+      draft,
+      playerId as CorePlayerId,
+      {
+        cards: ctx.cards,
+        zones: ctx.zones,
+      } as never,
+      "conquer",
+    )
   ) {
     player.victoryPoints += 1;
   }
