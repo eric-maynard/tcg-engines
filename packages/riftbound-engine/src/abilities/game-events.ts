@@ -64,6 +64,25 @@ export type GameEvent =
       wasStunned?: boolean;
       /** rule 702: the unit carried a buff as it died ("a buffed friendly unit dies"). */
       wasBuffed?: boolean;
+      // rule 428.1.a.1.b / 740.2.a — last-known information stamped by
+      // `operations/leave-board.ts`: who controlled it, whether no other
+      // friendly unit shared its location, what was attached, and which
+      // kill path produced the death.
+      controller?: string;
+      wasAlone?: boolean;
+      attachments?: string[];
+      cause?: "kill" | "sba" | "temporary" | "cost";
+    }
+  // rule 124.1 — a permanent left the board without dying (banish, bounce,
+  // recycle). Emitted by `operations/leave-board.ts` with its LKI.
+  | {
+      type: "leave-board";
+      cardId: string;
+      owner: string;
+      controller?: string;
+      from?: string;
+      to?: string;
+      cause: "banish" | "recycle" | "bounce" | "replaced";
     }
   // rule-id: unl-133-219 — `owner` = moved unit's controller, `movedBy` = the
   // player whose action/effect moved it ("When you move an enemy unit").

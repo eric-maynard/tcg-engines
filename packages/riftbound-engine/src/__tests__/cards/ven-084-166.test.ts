@@ -26,7 +26,10 @@ describe("Ambessa, The Wolf (ven-084-166)", () => {
       .build();
     await game.p1.cast("fs", { targets: ["ambessa", "ambessa"] });
     await game.settle();
-    expect(game.state("ambessa")?.damage).toBe(6);
+    // 3 + 3 on a 4-Might unit is lethal (rule 520): she dies, and the card in
+    // the trash is a fresh object with no damage tracked (rule 124.1).
+    expect(game.zoneOf("ambessa")).toBe("trash");
+    expect(game.state("ambessa")?.damage).toBe(0);
   });
 
   test("Empowered and in base (not in combat): spell damage does nothing", async () => {

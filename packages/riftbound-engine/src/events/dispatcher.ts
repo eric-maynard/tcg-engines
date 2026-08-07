@@ -43,6 +43,12 @@ import {
 } from "../abilities/trigger-runner";
 import type { CleanupContext } from "../cleanup/state-based-checks";
 import { performCleanup } from "../cleanup/state-based-checks";
+import {
+  type LeaveBoardContext,
+  type LeaveResult,
+  emitLeaveEvents,
+  snapshotLKI,
+} from "../operations/leave-board";
 import type { GameEvent, GameEventRecord, GameEventType } from "./game-event";
 
 /**
@@ -255,116 +261,28 @@ function hasCleanupCapableContext(ctx: DispatchContext): boolean {
 }
 
 /**
- * Emit `die` events for a batch of units that have just been killed — the
- * **single emission point** for "a unit died". Replaces the scattered
- * `fireDieTriggers` call sites (combat Damage Step, chain cleanup, counter-
- * mutation moves, phase hooks): each death-causing path marks its units
- * dead, then calls this once.
+ * Emit `die` events for a batch of units the state-based pass has just
+ * killed, through {@link dispatchEvent} (so Deathknell / "when a unit dies"
+ * cascade into further maintenance). The event payload and batch semantics
+ * come from `operations/leave-board.ts emitLeaveEvents`.
  *
- * Per unit it dispatches `{ type: "die", cardId, owner }` through
- * {@link dispatchEvent}, so Deathknell (rule 813), "when I die" and "when
- * a friendly/enemy unit dies" triggered abilities all fire through the same
- * listener poll, and any event log sees the deaths.
- *
- * Owner is resolved via `ctx.cards.getCardOwner` unless the caller already
- * knows it (a unit is in the trash by the time `die` fires, but its meta /
- * owner mapping is still intact — callers that snapshot the owner *before*
- * moving the card pass it explicitly to be safe).
- *
- * @param killed - card ids, or `{ cardId, owner }` pairs.
+ * @param killed - `leaveBoard` results from `performCleanup().deaths` (bare
+ *   ids are accepted for legacy callers).
  * @returns total number of listener abilities that fired across all deaths.
  */
 export function dispatchUnitDied(
   ctx: DispatchContext,
-  killed: readonly (
-    | string
-    | {
-        cardId: string;
-        owner?: string;
-        /** rule 428.1.a.1.b: zone occupied as it died. */
-        diedAt?: string;
-        // rule 428.5: kill attribution forwarded onto the `die` event.
-        killedBy?: string;
-        killSource?: "spell" | "ability" | "combat";
-        wasStunned?: boolean;
-        wasBuffed?: boolean;
-      }
-  )[],
+  killed: readonly (string | LeaveResult)[],
 ): number {
-  let total = 0;
-  // Maintain a recent-deaths log on the draft so the target resolver's
-  // `just-died-trash` mode (rule 813 Deathknell + "play me from trash"
-  // Shapes — Glasc Mixologist, Heedless Resurrection, p0639) can target
-  // The dying card itself. We BUFFER entries before dispatching, then
-  // Truncate the log when the outermost dispatch returns. We use a stack
-  // Depth on the draft to know when the cascade settles.
-  const draftWithLog = ctx.draft as RecentDeathsDraft;
-  const isOutermost = !draftWithLog.__recentDeathsDepth;
-  draftWithLog.__recentDeathsDepth = (draftWithLog.__recentDeathsDepth ?? 0) + 1;
-  if (!draftWithLog.recentDeaths) {
-    draftWithLog.recentDeaths = [];
-  }
-  const startLen = draftWithLog.recentDeaths.length;
-  // rule 323.5 / 808.1.d.2 — units killed by one effect all die at the same
-  // moment: publish the whole batch before the first `die` fires so statics on
-  // a unit dying alongside another still shape that death's triggers.
-  const outerBatch = (ctx.draft as DyingTogetherDraft).dyingTogether;
-  (ctx.draft as DyingTogetherDraft).dyingTogether = killed.map((e) => {
-    const id = typeof e === "string" ? e : e.cardId;
-    const o =
-      (typeof e === "string" ? undefined : e.owner) ??
-      ctx.cards.getCardOwner(id as Parameters<TriggerRunnerContext["cards"]["getCardOwner"]>[0]) ??
-      "";
-    return { cardId: id as string, owner: o as string };
-  });
-  for (const entry of killed) {
-    const cardId = typeof entry === "string" ? entry : entry.cardId;
-    const explicitOwner = typeof entry === "string" ? undefined : entry.owner;
-    const owner =
-      explicitOwner ??
-      ctx.cards.getCardOwner(cardId as Parameters<TriggerRunnerContext["cards"]["getCardOwner"]>[0]) ??
-      "";
-    draftWithLog.recentDeaths.push({
-      cardId: cardId as string,
-      owner: owner as string,
-    });
-    const attribution =
-      typeof entry === "string"
-        ? {}
-        : {
-            ...(entry.diedAt !== undefined ? { diedAt: entry.diedAt } : {}),
-            ...(entry.killedBy !== undefined ? { killedBy: entry.killedBy } : {}),
-            ...(entry.killSource !== undefined ? { killSource: entry.killSource } : {}),
-            ...(entry.wasStunned !== undefined ? { wasStunned: entry.wasStunned } : {}),
-            ...(entry.wasBuffed !== undefined ? { wasBuffed: entry.wasBuffed } : {}),
-          };
-    total += dispatchEvent(ctx, { cardId, owner, type: "die", ...attribution });
-  }
-  (ctx.draft as DyingTogetherDraft).dyingTogether = outerBatch;
-  draftWithLog.__recentDeathsDepth = (draftWithLog.__recentDeathsDepth ?? 1) - 1;
-  if (isOutermost) {
-    // Cascade has settled — trim back to what existed before this
-    // Outermost call so the next batch sees a clean log. We don't simply
-    // `length = 0` because a re-entrant Deathknell might `play` from the
-    // Log; truncating to startLen is correct (start was 0 for outermost,
-    // So this effectively clears it).
-    draftWithLog.recentDeaths.length = startLen;
-  }
-  return total;
-}
-
-/**
- * Internal shape we attach to the draft for the recent-deaths bookkeeping —
- * mirrors what's declared in `types/game-state.ts` but adds the cascade-depth
- * counter (kept off the public type because it's a dispatcher implementation
- * detail).
- */
-interface DyingTogetherDraft {
-  /** rule 323.5 — the batch of units currently dying at the same moment. */
-  dyingTogether?: { cardId: string; owner: string }[];
-}
-
-interface RecentDeathsDraft {
-  recentDeaths?: { cardId: string; owner: string }[];
-  __recentDeathsDepth?: number;
+  const leaveCtx = ctx as unknown as LeaveBoardContext;
+  // The leave-board choke point owns the payload (LKI: diedAt, controller,
+  // wasBuffed/wasStunned/wasAlone, attachments, kill attribution) and the
+  // batch bookkeeping (rule 370.1.a.2 / 808.1.d.2); a bare id from a legacy
+  // caller gets a best-effort snapshot of the already-moved card.
+  const results: LeaveResult[] = killed.map((entry) =>
+    typeof entry === "string"
+      ? { cardId: entry, cause: { kind: "sba" }, left: true, lki: snapshotLKI(leaveCtx, entry), to: "trash" }
+      : entry,
+  );
+  return emitLeaveEvents(leaveCtx, results, (event) => dispatchEvent(ctx, event));
 }

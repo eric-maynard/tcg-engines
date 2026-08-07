@@ -130,9 +130,7 @@ describe("Immortal Phoenix — which kill sources count as 'you kill a unit with
       expect(game.chain()).toHaveLength(0);
     });
 
-    test.failing("BUG: the replayed Phoenix is a new object — the 5 damage from Sky Splitter is cleared by the trash round-trip (124.1)", async () => {
-      // Expected: board → trash → board clears all damage; Phoenix sits in base at 0 damage.
-      // Actual: it comes back still carrying the 5 damage that killed it.
+    test("the replayed Phoenix is a new object — the 5 damage from Sky Splitter is cleared by the trash round-trip (124.1)", async () => {
       const game = await ownPhoenixBoard().build();
       await game.p1.cast("sky", { targets: "phoenix" });
       await game.settle();

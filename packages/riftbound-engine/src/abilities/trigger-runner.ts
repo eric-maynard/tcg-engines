@@ -12,6 +12,7 @@ import type {
 } from "@tcg/core";
 import { addToChain, createInteractionState } from "../chain/chain-state";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { getLKI, getLeavingBatch } from "../operations/leave-board";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { EffectContext, ExecutableEffect } from "./effect-executor";
 import { executeEffect } from "./effect-executor";
@@ -428,12 +429,16 @@ export function evaluateTriggerCondition(
     // location (enemies don't matter). rule 428.1.a.1.b: a dying unit is
     // judged at the location it occupied as it died, not from the trash.
     let hereZone: string | undefined;
-    if (
-      event.type === "die" &&
-      (event as { cardId?: string }).cardId === sourceCardId &&
-      typeof (event as { diedAt?: string }).diedAt === "string"
-    ) {
-      hereZone = (event as { diedAt: string }).diedAt;
+    if (event.type === "die" && (event as { cardId?: string }).cardId === sourceCardId) {
+      // The leave-board choke point stamped the answer from the pre-event
+      // board (its batch-mates were still there); prefer it over a re-count.
+      const stamped = (event as { wasAlone?: boolean }).wasAlone;
+      if (typeof stamped === "boolean") {
+        return stamped;
+      }
+      if (typeof (event as { diedAt?: string }).diedAt === "string") {
+        hereZone = (event as { diedAt: string }).diedAt;
+      }
     }
     if (hereZone === undefined && sourceCardId) {
       hereZone = ctx.zones.getCardZone?.(sourceCardId as CoreCardId) as string | undefined;
@@ -1138,11 +1143,14 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
   }
   // rule-id: sfd-167-221 (Unsung Hero) — Deathknell: kill moves the unit to
   // trash before `die` fires, so include the dying card so "When I die" matches.
+  // rule 428.1.a.1.b: its abilities are controlled by whoever controlled it as
+  // it died (last-known information from the leave-board choke point).
   if (event.type === "die" && !boardCards.some((c) => c.id === event.cardId)) {
+    const lki = getLKI(ctx.draft, event.cardId);
     boardCards.push({
       abilities: toTriggerableAbilities(event.cardId),
       id: event.cardId,
-      owner: event.owner,
+      owner: (event as { controller?: string }).controller ?? lki?.controller ?? event.owner,
       zone: ctx.zones.getCardZone?.(event.cardId as CoreCardId) ?? "trash",
     });
   }
@@ -1164,21 +1172,15 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
   // rule 323.5 / 808.1.d.2 — units that die together leave the board only
   // AFTER their death triggers are queued, so a card dying in the same batch
   // is still present for statics that shape those triggers ("your [Deathknell]
-  // effects trigger an additional time"). Listed with no abilities and a
-  // `dying` zone so it can never match a trigger itself.
+  // effects trigger an additional time"). Read from the leave-board batch's
+  // last-known information; listed with no abilities and a `dying` zone so it
+  // can never match a trigger itself.
   if (event.type === "die") {
-    const dying = (ctx.draft as { dyingTogether?: readonly { cardId: string; owner: string }[] })
-      .dyingTogether;
-    const doubles = (cardId: string): boolean =>
-      ((getGlobalCardRegistry().getAbilities(cardId) ?? []) as readonly {
-        type?: string;
-        effect?: { type?: string };
-      }[]).some((a) => a.type === "static" && a.effect?.type === "trigger-double");
-    for (const dead of dying ?? []) {
-      if (boardCards.some((c) => c.id === dead.cardId) || !doubles(dead.cardId)) {
+    for (const dead of getLeavingBatch(ctx.draft)) {
+      if (!dead.triggerDoubler || boardCards.some((c) => c.id === dead.cardId)) {
         continue;
       }
-      boardCards.push({ abilities: [], id: dead.cardId, owner: dead.owner, zone: "dying" });
+      boardCards.push({ abilities: [], id: dead.cardId, owner: dead.controller, zone: "dying" });
     }
   }
   const allMatches = findMatchingTriggers(event, boardCards, ctx.draft);

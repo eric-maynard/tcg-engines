@@ -204,21 +204,16 @@ describe("Disarming Rake (sfd-032-221)", () => {
     expect(game.zoneOf("holder")).toBe("base"); // the holder itself is not harmed
   });
 
-  test.failing("BUG: killing an attached Equipment must detach it — the holder loses the +1 Might (716 / 143.1)", async () => {
-    // Expected: once Guardian Angel is in the trash it is attached to nothing; Holder is back to 2 Might
-    // with no attachments. Actual: the kill moves the card but leaves attachedTo/equippedWith intact,
-    // so Holder keeps 3 Might and still lists the dead Equipment.
+  test("killing an attached Equipment must detach it — the holder loses the +1 Might (716 / 143.1)", async () => {
+    // Once Guardian Angel is in the trash it is attached to nothing; Holder is back to 2 Might
+    // with no attachments.
     const game = await scenario()
-      .active(P2)
-      .gear(P2, GUARDIAN_ANGEL, "ga")
-      .unit(P2, "base", { might: 2, name: "Holder" }, "holder")
+      .resources(P1, { energy: 3, power: { calm: 1 } })
+      .gear(P2, GUARDIAN_ANGEL, "ga", { attachedTo: "holder" })
+      .unit(P2, "base", { might: 2, name: "Holder" }, "holder", { equippedWith: ["ga"] })
       .hand(P1, CARD, "rake")
       .build();
-    await game.p2.do("equipCard", { equipmentId: "ga", playerId: P2, unitId: "holder" });
-    await game.settle();
     expect(game.state("holder").might).toBe(3);
-    await game.advanceTurn();
-    await game.p1.do("addResources", { energy: 3, playerId: P1, power: { calm: 1 } });
     await playAndAccept(game);
     await game.settle(); // single legal target → forced pick
     expect(game.zoneOf("ga")).toBe("trash");

@@ -1214,6 +1214,9 @@ describe("315.2.b / 383.4.d.2 / 383.3.c / 813.1.c.1 / 335: a Hold Effect in the 
     // Channel (2 runes) and Draw (1 card) happened on the way.
     expect(game.p1.runes()).toHaveLength(runes0 + 2);
     expect(game.p1.hand()).toHaveLength(hand0 + 1);
-    expect(game.state("V").damage).toBe(2);
+    // The hold trigger dealt 2 to the 2-Might V: lethal (520), so it died and
+    // sits in the trash as a fresh object (124.1) — no stale damage store.
+    expect(game.zoneOf("V")).toBe("trash");
+    expect(game.state("V").damage).toBe(0);
   });
 });

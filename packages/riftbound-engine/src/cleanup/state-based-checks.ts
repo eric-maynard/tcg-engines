@@ -24,7 +24,7 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
-import type { EffectContext, ExecutableEffect } from "../abilities/effect-executor";
+import type { ExecutableEffect } from "../abilities/effect-executor";
 import { executeEffect } from "../abilities/effect-executor";
 import {
   buildConsumedKey,
@@ -34,9 +34,20 @@ import {
 import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { canAffordPower } from "../game-definition/moves/chain/effect-context";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { clearDamage as clearDamageStore, getDamage } from "../operations/damage-store";
 import { hiddenCapacityAt } from "../operations/hidden-capacity";
+import {
+  type LeaveResult,
+  buildReplacementEffectContext,
+  clearLKI,
+  leaveBoard,
+  snapshotBatch,
+} from "../operations/leave-board";
 import { checkVictory, type PointsIO, scoreBattlefield } from "../operations/points";
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState } from "../types";
+
+// The die choke point owns replacement application; kept importable from here.
+export { applyDieReplacement } from "../operations/leave-board";
 
 /**
  * Context needed for state-based checks.
@@ -96,122 +107,21 @@ function sweepOffBoardTokens(ctx: CleanupContext): boolean {
   return removed;
 }
 
-/**
- * Adapt the cleanup context into an EffectContext for running a board
- * die-replacement's effect. Real move/flow contexts are structural supersets
- * of CleanupContext, so optional operations are picked up when present and
- * stubbed otherwise. The would-be-dying unit is exposed as `trigger-source`.
- */
-function buildReplacementEffectContext(
-  ctx: CleanupContext,
-  match: { sourceCardId: string; sourceOwner: string },
-  dyingCardId: string,
-): EffectContext {
-  const zonesAny = ctx.zones as unknown as Partial<EffectContext["zones"]>;
-  const countersAny = ctx.counters as unknown as Partial<EffectContext["counters"]>;
-  const noop = () => {};
-  const getCardZone =
-    zonesAny.getCardZone ??
-    ((id: CoreCardId) =>
-      getBoardZoneIds(ctx).find((z) => ctx.zones.getCardsInZone(z as CoreZoneId).includes(id)));
-  return {
-    cards: ctx.cards as unknown as EffectContext["cards"],
-    counters: {
-      addCounter: countersAny.addCounter ?? noop,
-      clearCounter: ctx.counters.clearCounter,
-      removeCounter: countersAny.removeCounter ?? noop,
-      setFlag: ctx.counters.setFlag,
-    },
-    draft: ctx.draft,
-    playerId: match.sourceOwner,
-    sourceCardId: match.sourceCardId,
-    triggerSourceId: dyingCardId,
-    zones: {
-      drawCards: zonesAny.drawCards ?? noop,
-      getCardZone,
-      getCardsInZone: ctx.zones.getCardsInZone,
-      moveCard: ctx.zones.moveCard,
-    },
-  };
-}
-
-/**
- * Apply a board `die` replacement (Zhonya's Hourglass ogn-077-298) to a unit
- * that is about to be killed outright — i.e. by an instruction rather than by
- * lethal damage found in a cleanup pass.
- *
- * Returns true when the death was replaced; the caller must then NOT move the
- * unit to the trash and must NOT fire its `die` triggers.
- *
- * rule 370.1.a.1 / 369.1 — the replacement is mandatory and the replaced death
- * never happens, so the unit's Deathknell (808.1.d.1) never resolves.
- */
-/**
- * rule 370.1.b — a replacement effect applies only once to a given event, and
- * the kill it performs itself ("kill this instead") is not replaced again by
- * the same source. Tracks the sources whose replacement is currently running.
- */
-const RUNNING_DIE_REPLACEMENTS = new Set<string>();
-
-/**
- * rule 124.1 — damage lives in BOTH the `damage` counter and the mirrored
- * `meta.damage`; clearing only one leaves stale damage that follows the card
- * through a zone change (a unit replayed from the trash came back pre-damaged).
- */
+/** rule 124.1 — single damage store: clear the counter and its meta mirror together. */
 function clearDamage(ctx: CleanupContext, cardId: string): void {
-  ctx.cards.updateCardMeta(cardId as CoreCardId, { damage: 0 } as Partial<RiftboundCardMeta>);
-  ctx.counters.clearCounter(cardId as CoreCardId, "damage");
-}
-
-export function applyDieReplacement(ctx: CleanupContext, cardId: string): boolean {
-  if (RUNNING_DIE_REPLACEMENTS.has(cardId)) {
-    return false;
-  }
-  const owner = ctx.cards.getCardOwner(cardId as CoreCardId) ?? "";
-  const match = checkReplacement(
-    { cardId, owner, type: "die" },
-    { cards: ctx.cards, draft: ctx.draft, zones: ctx.zones },
-  );
-  if (!match || RUNNING_DIE_REPLACEMENTS.has(match.sourceCardId)) {
-    return false;
-  }
-  markReplacementConsumed(ctx.draft, match);
-  clearDamage(ctx, cardId);
-  const repl = match.replacement as ExecutableEffect | "prevent" | undefined;
-  if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
-    RUNNING_DIE_REPLACEMENTS.add(match.sourceCardId);
-    try {
-      executeEffect(repl, buildReplacementEffectContext(ctx, match, cardId));
-    } finally {
-      RUNNING_DIE_REPLACEMENTS.delete(match.sourceCardId);
-    }
-  }
-  return true;
+  clearDamageStore(ctx, cardId);
 }
 
 /**
- * Result of running state-based checks.
+ * rule 428.5.c: a lethal-damage kill — the `leaveBoard` result whose LKI
+ * snapshot (taken before the meta wipe) feeds the `die` event.
  */
-/**
- * rule 428.5.c: a lethal-damage kill with its attribution snapshot (taken
- * before the dying unit's meta is wiped) — feeds the `die` event.
- */
-export interface CleanupDeath {
-  readonly cardId: string;
-  readonly owner: string;
-  /** rule 428.1.a.1.b: zone occupied as it died. */
-  readonly diedAt?: string;
-  readonly killedBy?: string;
-  readonly killSource?: "spell" | "ability" | "combat";
-  readonly wasStunned?: boolean;
-  /** rule 702: the unit carried a buff as it died. */
-  readonly wasBuffed?: boolean;
-}
+export type CleanupDeath = LeaveResult;
 
 export interface CleanupResult {
   /** Card IDs of units killed by damage >= might */
   readonly killed: string[];
-  /** Same kills as `killed`, with owner + kill attribution for the `die` event */
+  /** Same kills as `killed`, as leave-board results carrying the LKI for the `die` event */
   readonly deaths?: CleanupDeath[];
   /** Card IDs of hidden cards removed */
   readonly hiddenRemoved: string[];
@@ -358,9 +268,10 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
   // board (Soraka saves an ally dying alongside her) — so match board die
   // replacements for every damaged unit BEFORE any of them is trashed.
   const preDieReplacements = new Map<string, ReturnType<typeof checkReplacement>>();
+  const damagedIds: string[] = [];
   for (const { cardId } of boardCards) {
-    const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
-    if ((meta?.damage ?? 0) > 0) {
+    if (getDamage(ctx, cardId as string) > 0) {
+      damagedIds.push(cardId as string);
       const owner = ctx.cards.getCardOwner(cardId) ?? "";
       preDieReplacements.set(
         cardId as string,
@@ -371,10 +282,13 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       );
     }
   }
+  // rule 428.1.a.1.b / 740.2.a — last-known information for every candidate,
+  // taken while the whole simultaneous batch is still on the board.
+  const preLKI = snapshotBatch(ctx, damagedIds);
 
   for (const { cardId } of boardCards) {
     const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
-    const damage = meta?.damage ?? 0;
+    const damage = getDamage(ctx, cardId as string);
 
     if (damage <= 0) {
       continue;
@@ -528,26 +442,9 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
       if (activeDie && (!payCost || autoPaid)) {
         const repl = activeDie.replacement as ExecutableEffect | "prevent" | undefined;
         if (repl && repl !== "prevent" && repl.type === "banish") {
-          const unitMeta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
-          for (const equipId of unitMeta?.equippedWith ?? []) {
-            ctx.cards.updateCardMeta(
-              equipId as CoreCardId,
-              { attachedTo: undefined, copiedFromCardId: undefined } as Partial<RiftboundCardMeta>,
-            );
-            ctx.zones.moveCard({ cardId: equipId as CoreCardId, targetZoneId: "base" as CoreZoneId });
-          }
-          ctx.zones.moveCard({ cardId, targetZoneId: "banishment" as CoreZoneId });
-          ctx.cards.updateCardMeta(cardId, {
-            buffed: false,
-            combatMightModifier: 0,
-            combatRole: null,
-            damage: 0,
-            equippedWith: undefined,
-            exhausted: false,
-            grantedKeywords: undefined,
-            mightModifier: 0,
-            stunned: false,
-          } as Partial<RiftboundCardMeta>);
+          // "banish it instead": the unit leaves for banishment as a new
+          // object (124.1) with its Equipment detached (457.1) — not a death.
+          leaveBoard(ctx, cardId as string, "banishment", { kind: "replaced" });
         } else {
           clearDamage(ctx, cardId as string);
           // rule 370.1.a.1 (ogn-023-298): run the replacement's own effect
@@ -603,64 +500,32 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         continue;
       }
 
-      // Detach any equipment before killing (equipment returns to owner's base).
-      // Also clears `copiedFromCardId` so Svellsongur stops exposing the
-      // Dying unit's abilities once it's no longer attached.
-      const unitMeta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
-      const equippedWith = unitMeta?.equippedWith ?? [];
-      for (const equipId of equippedWith) {
-        ctx.cards.updateCardMeta(
-          equipId as CoreCardId,
-          {
-            attachedTo: undefined,
-            copiedFromCardId: undefined,
-          } as Partial<RiftboundCardMeta>,
-        );
-        ctx.zones.moveCard({
-          cardId: equipId as CoreCardId,
-          targetZoneId: "base" as CoreZoneId,
-        });
+      // rule 428.1.a.2 — Passive Kill: one choke point snapshots the LKI
+      // (428.1.a.1.b diedAt / attribution / buffs), detaches Equipment
+      // (457.1), trashes the unit and resets it as a new object (124.1).
+      // Replacements were matched/prompted above, so leaveBoard skips them;
+      // the `die` events for this pass's batch are published by the caller.
+      const death = leaveBoard(
+        ctx,
+        cardId as string,
+        "trash",
+        { kind: "sba" },
+        { lki: preLKI.get(cardId as string), replacements: "skip" },
+      );
+      if (!death.left) {
+        continue;
       }
-
-      // rule 428.1.a.1.b: remember where it died before the zone change.
-      const diedAt = ctx.zones.getCardZone?.(cardId) as string | undefined;
-
-      // Kill this unit — move to trash
-      ctx.zones.moveCard({
-        cardId,
-        targetZoneId: "trash" as CoreZoneId,
-      });
-
-      // rule 428.5.c: snapshot kill attribution before the meta wipe below.
-      deaths.push({
-        cardId: cardId as string,
-        diedAt,
-        killSource: unitMeta?.lastDamageSource,
-        killedBy: unitMeta?.lastDamagedBy,
-        owner,
-        wasBuffed: unitMeta?.buffed === true,
-        wasStunned: unitMeta?.stunned === true,
-      });
-
-      // Clear all temporary metadata (rule 170+: zone change clears all mods)
-      ctx.cards.updateCardMeta(cardId, {
-        buffed: false,
-        combatMightModifier: 0,
-        combatRole: null,
-        damage: 0,
-        equippedWith: undefined,
-        exhausted: false,
-        grantedKeywords: undefined,
-        lastDamageSource: undefined,
-        lastDamagedBy: undefined,
-        mightModifier: 0,
-        stunned: false,
-      } as Partial<RiftboundCardMeta>);
-
+      deaths.push(death);
       killed.push(cardId as string);
       stateChanged = true;
     }
   }
+  // Survivors of this pass keep no LKI entry; the batch's own entries stay
+  // until its `die` events have been published by the caller.
+  clearLKI(
+    ctx.draft,
+    damagedIds.filter((id) => !killed.includes(id)),
+  );
 
   // Step 2: Remove stale combat roles (rule 521)
   // Units not at a battlefield where combat is occurring lose their combat role

@@ -185,8 +185,7 @@ describe("Pickpocket (sfd-074-221)", () => {
     expect(goldTokens(game, "p1")).toHaveLength(1);
   });
 
-  test.failing("BUG: killing an attached Equipment must also clear it from the unit's attachments (719.2) — a stale link remains", async () => {
-    // Expected: after the Dirk dies the Wielder has no attachments. Actual: the unit still lists "dirk".
+  test("killing an attached Equipment must also clear it from the unit's attachments (719.2)", async () => {
     const game = await scenario()
       .resources(P1, { energy: 3 })
       .hand(P1, CARD, "pp")

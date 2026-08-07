@@ -1,9 +1,13 @@
 // Effect handler: "kill"
-import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
-import { applyDieReplacement } from "../../cleanup/state-based-checks";
-import type { CleanupContext } from "../../cleanup/state-based-checks";
+import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
-import type { RiftboundCardMeta } from "../../types";
+import {
+  type LeaveCause,
+  type LeaveResult,
+  emitLeaveEvents,
+  leaveBoard,
+  snapshotBatch,
+} from "../../operations/leave-board";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { resolveTarget } from "../target-resolver";
 import { type EffectHelpers, getTargetIds } from "./_helpers";
@@ -179,68 +183,41 @@ export function handle_kill(effect: ExecutableEffect, ctx: EffectContext, h: Eff
   killUnits(getTargetIds(effect, ctx), ctx, h);
 }
 
-function killUnits(targets: readonly string[], ctx: EffectContext, h: EffectHelpers): void {
+/**
+ * rule 428.1.a.1 — an Active Kill (kill instruction or kill cost). Every
+ * target dies at the same moment (rule 370.1.a.2), so all of them leave the
+ * board through `leaveBoard` before the batch's `die` events are published.
+ * Exported so cost-kills (`activate-ability.ts`) share the exact path.
+ */
+export function killUnits(
+  targets: readonly string[],
+  ctx: EffectContext,
+  h: Pick<EffectHelpers, "getEffectiveMight">,
+  causeKind: "kill" | "cost" = "kill",
+): LeaveResult[] {
   // rule 428.5.b: a Kill instruction is attributed to this spell/ability's controller.
   const killSource: "spell" | "ability" =
     getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "spell" ? "spell" : "ability";
-  const killed: { cardId: string; owner: string; wasStunned: boolean; wasBuffed: boolean; diedAt?: string }[] = [];
+  const cause: LeaveCause = {
+    by: ctx.playerId,
+    kind: causeKind,
+    source: ctx.sourceCardId,
+    sourceKind: killSource,
+  };
+  const results: LeaveResult[] = [];
+  // rule 370.1.a.2 / 740.2.a — note every target before the first one moves.
+  const snaps = snapshotBatch(ctx, targets);
   ctx.draft.lastKilledUnitMight = undefined;
   for (const targetId of targets) {
-    const owner = ctx.cards.getCardOwner(targetId as CoreCardId) ?? "";
-    const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
-      | Partial<RiftboundCardMeta>
-      | undefined;
-    const wasStunned = meta?.stunned === true;
-    // rule 702: "a buffed friendly unit dies" reads the buff as it died.
-    const wasBuffed = meta?.buffed === true;
     // rule-id: unl-186-219 — "if it had N [Might] or less" reads the unit's
     // Might as it last existed on the board (last-known information).
-    ctx.draft.lastKilledUnitMight = h.getEffectiveMight(targetId, ctx);
-    // rule 428.1.a.1.b: last known location feeds "at my battlefield" triggers.
-    const diedAt = ctx.zones.getCardZone?.(targetId as CoreCardId) as string | undefined;
-    // rule 370.1.a.1 / 369.1 — a board `die` replacement (Zhonya's Hourglass)
-    // applies to a kill instruction too: the death never happens, so the unit
-    // stays on the board and its Deathknell never resolves (808.1.d.1).
-    if (applyDieReplacement(ctx as unknown as CleanupContext, targetId)) {
-      continue;
-    }
-    ctx.zones.moveCard({
-      cardId: targetId as CoreCardId,
-      targetZoneId: "trash" as CoreZoneId,
-    });
-    // rule 124 / 124.1 / 705: leaving the board makes a new object — every
-    // counter and modifier ceases to exist. Mirrors the SBA death wipe in
-    // `state-based-checks.ts performCleanup`.
-    ctx.cards.updateCardMeta?.(targetId as CoreCardId, {
-      // scenario-seeded state lives in `__flags`; it dies with the object too.
-      __flags: undefined,
-      buffed: false,
-      combatMightModifier: 0,
-      combatRole: null,
-      damage: 0,
-      equippedWith: undefined,
-      exhausted: false,
-      grantedKeywords: undefined,
-      lastDamageSource: undefined,
-      lastDamagedBy: undefined,
-      mightModifier: 0,
-      stunned: false,
-    } as unknown as Record<string, unknown>);
-    killed.push({ cardId: targetId, diedAt, owner, wasBuffed, wasStunned });
+    ctx.draft.lastKilledUnitMight = snaps.get(targetId)?.might ?? h.getEffectiveMight(targetId, ctx);
+    // rule 370.1.a.1 / 369.1 — board `die` replacements (Zhonya's Hourglass)
+    // apply inside leaveBoard: the death never happens, no Deathknell.
+    results.push(leaveBoard(ctx, targetId, "trash", cause, { lki: snaps.get(targetId) }));
   }
-  // rule-id: ogn-246-298 — a kill effect is a death: emit `die` so
-  // Deathknell / "when a friendly unit dies" triggers fire.
-  if (ctx.fireTriggers) {
-    // rule 323.5 / 808.1.d.2 — one kill instruction kills them all at the same
-    // moment, so the whole batch must be published before the first `die`
-    // fires: a unit dying alongside another is still present for statics that
-    // shape that death's triggers (ogn-236-298 Karthus, Eternal).
-    const draft = ctx.draft as { dyingTogether?: { cardId: string; owner: string }[] };
-    const outerBatch = draft.dyingTogether;
-    draft.dyingTogether = killed.map(({ cardId, owner }) => ({ cardId, owner }));
-    for (const { cardId, diedAt, owner, wasBuffed, wasStunned } of killed) {
-      ctx.fireTriggers({ cardId, diedAt, killSource, killedBy: ctx.playerId, owner, type: "die", wasBuffed, wasStunned });
-    }
-    draft.dyingTogether = outerBatch;
-  }
+  // rule-id: ogn-246-298 — a kill effect is a death: emit `die` (with the
+  // batch's LKI) so Deathknell / "when a friendly unit dies" triggers fire.
+  emitLeaveEvents(ctx, results, ctx.fireTriggers);
+  return results;
 }
