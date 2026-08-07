@@ -808,6 +808,33 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-004-166": {
     abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
   },
+  // rule 440.1 / 440.1.a — Forgotten Relic: "When you play this or at the start of
+  // your Beginning Phase, [Burn 1]. When you burn a unit this way, do this: Give a
+  // friendly unit +[Might] equal to the burned card's Might this turn." The parser
+  // gets the burn but drops the reflexive follow-up, so both halves are declared
+  // here: `then` on the mill runs once per burned UNIT with `burnedMight` bound to
+  // that card's printed Might (handle_mill), and the recipient is chosen at
+  // resolution by the Relic's controller.
+  "ven-108-166": {
+    abilities: [
+      {
+        effect: {
+          amount: 1,
+          player: "self",
+          then: {
+            amount: { variable: "burnedMight" },
+            chooseTarget: true,
+            duration: "turn",
+            target: { controller: "friendly", type: "unit" },
+            type: "modify-might",
+          },
+          type: "mill",
+        },
+        trigger: { event: "play-self-or-beginning-phase", on: "self" },
+        type: "triggered",
+      },
+    ],
+  },
   // rule 383.2.a.1 / 383.3.b — Gust Monk: "You may pay [1] as an additional cost
   // to play me. When you play me, if you paid the additional cost, banish a card
   // from any trash to give a unit [Assault 2] this turn." The parser leaves the
@@ -1528,6 +1555,28 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
           type: "cost-reduction",
         },
         type: "static",
+      },
+    ],
+  },
+  // rule 383.4.c / 185 — Swain, Visionary: "[Vision] / When I conquer, if you've
+  // played a non-token unit, a non-token gear, and a spell this turn, you score
+  // 1 point." The parser drops the conquer line and duplicates Vision as a bare
+  // play-self trigger; the keyword ability alone already synthesises that.
+  "ven-173-166": {
+    abilities: [
+      {
+        effect: { amount: 1, from: "deck", then: { recycle: 1 }, type: "look" },
+        keyword: "Vision",
+        type: "keyword",
+      },
+      {
+        condition: {
+          type: "played-types-this-turn",
+          types: ["non-token-unit", "non-token-gear", "spell"],
+        },
+        effect: { amount: 1, type: "score" },
+        trigger: { event: "conquer", on: "self" },
+        type: "triggered",
       },
     ],
   },

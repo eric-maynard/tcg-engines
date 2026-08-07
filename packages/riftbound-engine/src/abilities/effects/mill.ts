@@ -1,7 +1,9 @@
 // Effect handler: "mill" — the [Burn N] keyword action.
 import type { CardId as CoreCardId, PlayerId as CorePlayerId, ZoneId as CoreZoneId } from "@tcg/core";
+import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { refillDeckOrBurnOut } from "../../operations/points";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
+import { executeEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
 
 /**
@@ -48,5 +50,23 @@ export function handle_mill(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   }
   if (burned.length > 0) {
     ctx.fireTriggers?.({ cardIds: burned, playerId: ctx.playerId, type: "burn" } as never);
+  }
+  // rule 440.1.a — "When you burn a unit this way, do this: …". The follow-up is
+  // reflexive (part of THIS burn, not a new trigger), fires once per burned UNIT,
+  // and exposes that card's PRINTED Might as the `burnedMight` variable — the card
+  // is in the trash, so no modifiers apply.
+  const then = (effect as { then?: ExecutableEffect }).then;
+  if (then !== undefined) {
+    const registry = getGlobalCardRegistry();
+    for (const cardId of burned) {
+      if (registry.getCardType(cardId) !== "unit") {
+        continue;
+      }
+      executeEffect(then, {
+        ...ctx,
+        boundTargets: undefined,
+        variables: { ...ctx.variables, burnedMight: registry.getMight(cardId) },
+      });
+    }
   }
 }
