@@ -59,7 +59,7 @@ describe("Nocturne, Horrifying (ogn-194-298)", () => {
     expect(game.gameState.battlefields.bf2?.controller).toBe(P1);
   });
 
-  test.failing("BUG: looking at Nocturne on top of your deck (Vision) offers 'you may banish me', then 'play me for [rainbow]'", async () => {
+  test("looking at Nocturne on top of your deck (Vision) offers 'you may banish me', then 'play me for [rainbow]'", async () => {
     // Expected: while P1 looks at the top card (Nocturne), P1 may banish it; having done so P1
     // may play it paying only 1 power of any domain (energy untouched). Actual: Vision goes
     // straight to its recycle prompt; no banish/play offer exists and Nocturne stays in the deck.

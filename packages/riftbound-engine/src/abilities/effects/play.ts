@@ -6,6 +6,7 @@ import {
   canAffordCard,
   type CostExtras,
   deductCost,
+  getOptionalPlayCost,
   staticEnterReadyApplies,
 } from "../../game-definition/moves/play/cost";
 import { extractBattlefieldId } from "../../zones/zone-configs";
@@ -33,6 +34,17 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "spell"
   ) {
     replaySelfSpell(effect, ctx);
+    return;
+  }
+  // rule-id: ogn-194-298 (rules 355.13 / 356.1.a) — "you may play me for
+  // [rainbow]" on a UNIT that has just left the deck: an optional self play
+  // for a stated alternative cost, resolved outside the chain.
+  if (
+    (effect as { target?: unknown }).target === "self" &&
+    getGlobalCardRegistry().getCardType(ctx.sourceCardId) === "unit" &&
+    (effect as { cost?: unknown }).cost !== undefined
+  ) {
+    playSelfUnitForCost(effect, ctx);
     return;
   }
   // Rule 354.2: an effect that instructs a player to play a card adds that
@@ -114,6 +126,7 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         continue;
       }
       enterUnitFromEffect(targetId, here, ctx);
+      offerAccelerateOnInstructedPlay(targetId, ctx);
     }
     return;
   }
@@ -195,6 +208,147 @@ export function handle_play(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
       turnOrder,
     );
   }
+}
+
+/**
+ * rule 135.2.e.5 — pay a flat `{energy, power[]}` cost out of the player's
+ * pool. A `[rainbow]` pip is paid from whichever Domain has the most left;
+ * pooled universal Power covers a named-Domain shortfall. Kept local so the
+ * effect layer does not depend on the activated-ability move.
+ */
+function payFlatCost(
+  ctx: EffectContext,
+  cost: { energy?: number; power?: readonly string[] },
+): boolean {
+  const pool = ctx.draft.runePools[ctx.playerId];
+  if (!pool) {
+    return false;
+  }
+  const energy = cost.energy ?? 0;
+  if (pool.energy < energy) {
+    return false;
+  }
+  const power: Record<string, number> = {};
+  for (const [d, v] of Object.entries(pool.power)) {
+    if (typeof v === "number" && v > 0) {
+      power[d] = v;
+    }
+  }
+  for (const domain of cost.power ?? []) {
+    const key =
+      domain === "rainbow"
+        ? Object.entries(power).sort(([, a], [, b]) => b - a)[0]?.[0]
+        : (power[domain] ?? 0) > 0
+          ? domain
+          : (power.rainbow ?? 0) > 0
+            ? "rainbow"
+            : undefined;
+    if (key === undefined || (power[key] ?? 0) <= 0) {
+      return false;
+    }
+    power[key] = (power[key] ?? 0) - 1;
+  }
+  pool.energy -= energy;
+  for (const domain of Object.keys(pool.power)) {
+    (pool.power as Record<string, number>)[domain] = power[domain] ?? 0;
+  }
+  return true;
+}
+
+/**
+ * rule-id: ogn-194-298 (rules 355.13 / 356.1.a / 355.2) — "you may play me for
+ * [rainbow]": an optional self play for a stated ALTERNATIVE cost (the printed
+ * cost is replaced, not added to), offered while the card sits outside the
+ * board. Accepting pays exactly that cost and the unit enters its controller's
+ * base, or a battlefield they control when there is a choice.
+ */
+function playSelfUnitForCost(effect: ExecutableEffect, ctx: EffectContext): void {
+  const cardId = ctx.sourceCardId;
+  if (playerCannotPlay(ctx, ctx.playerId)) {
+    return;
+  }
+  const cost = ((effect as { cost?: { energy?: number; power?: readonly string[] } }).cost ??
+    {}) as { energy?: number; power?: readonly string[] };
+  if ((effect as { optional?: unknown }).optional === true) {
+    if (ctx.draft.pendingChoice) {
+      return;
+    }
+    // Rule 355.8: never offer a play the controller could not pay for.
+    const pool = ctx.draft.runePools[ctx.playerId];
+    if (!pool || pool.energy < (cost.energy ?? 0)) {
+      return;
+    }
+    const pips = (cost.power ?? []).length;
+    const available = Object.values(pool.power).reduce<number>(
+      (a, b) => a + (typeof b === "number" ? b : 0),
+      0,
+    );
+    if (available < pips) {
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      effect: { ...(effect as object), optional: false },
+      playerId: ctx.playerId,
+      sourceCardId: cardId,
+      type: "confirm",
+      // biome-ignore lint/suspicious/noExplicitAny: branded id types
+    } as any;
+    return;
+  }
+  if (!payFlatCost(ctx, cost)) {
+    return;
+  }
+  const destinations = ["base", ...controlledBattlefieldZones(ctx)];
+  if (destinations.length === 1) {
+    enterUnitFromEffect(cardId, "base", ctx);
+    return;
+  }
+  ctx.draft.pendingChoice = {
+    cardId,
+    options: destinations,
+    playerId: ctx.playerId,
+    sourceCardId: cardId,
+    type: "choose-destination",
+  } as typeof ctx.draft.pendingChoice;
+}
+
+/**
+ * rule 355.1.a / 356.1.b.3 — ignoring a card's cost only waives the cost it
+ * HAS: an optional additional cost such as [Accelerate] is still the playing
+ * player's to elect and to pay in full. The unit has already entered (it is on
+ * the board exhausted); accepting the prompt charges the Accelerate cost and
+ * readies it (rule 356.2.b.1). The prompt is only raised when the cost is
+ * actually payable, so a player who cannot pay is never asked.
+ */
+function offerAccelerateOnInstructedPlay(cardId: string, ctx: EffectContext): void {
+  if (ctx.draft.pendingChoice) {
+    return;
+  }
+  const optional = getOptionalPlayCost(cardId);
+  if (optional?.kind !== "accelerate") {
+    return;
+  }
+  const cost = { energy: optional.cost?.energy ?? 0, power: [...(optional.cost?.power ?? [])] };
+  const pool = ctx.draft.runePools[ctx.playerId];
+  if (!pool || pool.energy < cost.energy) {
+    return;
+  }
+  const needed: Record<string, number> = {};
+  for (const domain of cost.power) {
+    needed[domain] = (needed[domain] ?? 0) + 1;
+  }
+  for (const [domain, count] of Object.entries(needed)) {
+    if ((pool.power[domain as keyof typeof pool.power] ?? 0) < count) {
+      return;
+    }
+  }
+  ctx.draft.pendingChoice = {
+    acceleratePlay: { cardId, cost, readyOnly: true },
+    playerId: ctx.playerId,
+    resolved: { optInCost: cost },
+    sourceCardId: ctx.sourceCardId,
+    type: "opt-in",
+  } as NonNullable<EffectContext["draft"]["pendingChoice"]>;
 }
 
 /**

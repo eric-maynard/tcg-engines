@@ -15,10 +15,13 @@ const abilities: Ability[] = [
     effect: {
       effects: [
         { target: "self", type: "banish" },
+        // rule 356.1.a — "for [rainbow]" is an ALTERNATIVE cost: it replaces
+        // the printed 4 Energy + [chaos] entirely, and the play is optional.
         {
-          keyword: "AltPlayCost",
+          cost: { power: ["rainbow"] },
+          optional: true,
           target: "self",
-          type: "grant-keyword",
+          type: "play",
         },
       ],
       type: "sequence",
