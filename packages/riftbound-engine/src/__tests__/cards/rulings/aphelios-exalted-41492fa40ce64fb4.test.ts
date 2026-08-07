@@ -38,6 +38,10 @@ describe("Ruling 41492fa40ce64fb4 — Aphelios, Exalted × Svellsongur / Shady S
   test("Svellsongur attached to Aphelios: exactly ONE Aphelios trigger is put on the chain (383.2.c, 401.1)", async () => {
     const game = await svellBoard().build();
     await game.p1.do("equipCard", { equipmentId: "svell", unitId: "aph" });
+    // rule 377.3: [Equip] is an activated ability — the attach happens when its
+    // chain item resolves, so let it through first.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     // The attachment happened and Svellsongur's replacement copied Aphelios's text …
     expect(game.state("svell").attachedTo).toBe("aph");
     expect(game.state("aph").attachments).toEqual(["svell"]);
@@ -51,6 +55,10 @@ describe("Ruling 41492fa40ce64fb4 — Aphelios, Exalted × Svellsongur / Shady S
   test("Svellsongur: the single trigger resolves once (one mode choice for P1) and no second trigger ever appears", async () => {
     const game = await svellBoard().build();
     await game.p1.do("equipCard", { equipmentId: "svell", unitId: "aph" });
+    // rule 377.3: [Equip] is an activated ability — the attach happens when its
+    // chain item resolves, so let it through first.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(apheliosTriggers(game)).toHaveLength(1);
     await game.p1.passPriority();
     await game.p2.passPriority();
@@ -87,6 +95,9 @@ describe("Ruling 41492fa40ce64fb4 — Aphelios, Exalted × Svellsongur / Shady S
       .script(P1, ["ally"]) // "choose another friendly unit" for the copy
       .build();
     await game.p1.do("equipCard", { equipmentId: "shady", unitId: "aph" });
+    // rule 377.3: resolve the [Equip] activation before reading the attachment.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.state("shady").attachedTo).toBe("aph");
     expect(apheliosTriggers(game)).toHaveLength(1);
   });
@@ -104,6 +115,9 @@ describe("Ruling 41492fa40ce64fb4 — Aphelios, Exalted × Svellsongur / Shady S
       .script(P1, ["aph"]) // the unit to copy
       .build();
     await game.p1.do("equipCard", { equipmentId: "shady", unitId: "ally" });
+    // rule 377.3: resolve the [Equip] activation before reading the attachment.
+    await game.p1.passPriority();
+    await game.p2.passPriority();
     expect(game.state("shady").attachedTo).toBe("ally");
     // ally is now a copy of Aphelios …
     expect(game.state("ally").name).toBe("Aphelios, Exalted");

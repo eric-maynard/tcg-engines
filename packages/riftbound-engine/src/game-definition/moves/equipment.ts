@@ -17,16 +17,13 @@ import type {
   RiftboundGameState,
   RiftboundMoves,
 } from "../../types";
+import { addToChain } from "../../chain";
 import { createInteractionState, getTurnState } from "../../chain/chain-state";
 import { dispatchEvent } from "../../events/dispatcher";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getBattlefieldZoneId } from "../../zones/zone-configs";
 import { deductAbilityCost } from "./chain/activate-ability";
 import { canPayEquipCost, printedEquipCost } from "./equip-cost";
-import { getCardEffectiveMight } from "./play/cost";
-
-/** rule 710: a unit is [Mighty] while its current Might is 5 or more. */
-const MIGHTY_THRESHOLD = 5;
 
 /**
  * Check whether a unit has the given keyword, considering both its printed
@@ -73,6 +70,19 @@ function isAttachable(cardId: string, cardType: string): boolean {
 function equipTimingAllowed(state: RiftboundGameState): boolean {
   const turnState = getTurnState(state.interaction ?? createInteractionState());
   return turnState === "neutral-open" || turnState === "neutral-closed";
+}
+
+/**
+ * rule 377.3: [Equip] activations sitting on the chain have not attached yet;
+ * count the ones already aimed at `unitId` so a second activation on the same
+ * holder can be judged against rule 579.
+ */
+function pendingEquipCount(state: RiftboundGameState, unitId: string): number {
+  const items = state.interaction?.chain?.items ?? [];
+  return items.filter((item) => {
+    const effect = (item as { effect?: { type?: string; unitId?: string } }).effect;
+    return effect?.type === "equip-attach" && effect.unitId === unitId;
+  }).length;
 }
 
 /**
@@ -241,8 +251,12 @@ export const equipmentMoves: Partial<
         | Partial<RiftboundCardMeta>
         | undefined;
       const currentlyEquipped = unitMeta?.equippedWith ?? [];
+      // An [Equip] already on the chain has not attached yet (377.3), but its
+      // holder is spoken for: a non-Weaponmaster unit can never end up with two
+      // Equipment, so the second activation is illegal rather than a fizzle.
+      const pendingEquips = pendingEquipCount(state, context.params.unitId);
       if (
-        currentlyEquipped.length > 0 &&
+        currentlyEquipped.length + pendingEquips > 0 &&
         !unitHasKeyword(context.params.unitId, "Weaponmaster", unitMeta)
       ) {
         return false;
@@ -271,10 +285,27 @@ export const equipmentMoves: Partial<
         );
       }
 
+      // rule 377.3 / 818.1.c.1: [Equip] is an ACTIVATED ability — activating it
+      // pays the cost and puts an ability item on the chain; the attach happens
+      // only when that item resolves, after every player has had priority. The
+      // resolution half lives in the "equip-attach" effect handler.
+      const interaction = draft.interaction ?? createInteractionState();
+      draft.interaction = addToChain(
+        interaction,
+        {
+          cardId: equipmentId,
+          controller: playerId,
+          effect: { type: "equip-attach", unitId },
+          type: "ability",
+        },
+        Object.keys(draft.players),
+      );
+
       // rule-id: sfd-075-221 — rule 151 / 206.1: [Equip] is an activated
       // ability of a gear (Equipment is a kind of gear), so "when you use an
       // activated ability of a gear" sees it. It fires as the ability is
-      // activated, i.e. after the cost is paid and before the attach resolves.
+      // activated; firing it after the item is on the chain puts the trigger
+      // above the [Equip] ability so it resolves first (rule 206.1).
       dispatchEvent(
         {
           cards: context.cards,
@@ -290,115 +321,6 @@ export const equipmentMoves: Partial<
         },
       );
 
-      // rule 709/710: Might gained from an attachment can push the holder over
-      // the Mighty threshold, so sample its Might before the attach.
-      const mightBefore = getCardEffectiveMight(
-        unitId,
-        (id) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
-      );
-
-      // Mark equipment as attached to the unit. Equipment flagged with
-      // `copyAttachedUnitText` (Svellsongur) also records `copiedFromCardId`
-      // So its activated abilities enumerator exposes the unit's abilities.
-      const registry = getGlobalCardRegistry();
-      const equipDef = registry.get(equipmentId);
-      const meta: Partial<RiftboundCardMeta> = { attachedTo: unitId };
-      if (equipDef?.copyAttachedUnitText) {
-        meta.copiedFromCardId = unitId;
-      }
-      context.cards.updateCardMeta(equipmentId as CoreCardId, meta);
-
-      // Add equipment to unit's equippedWith list
-      const unitMeta = context.cards.getCardMeta(unitId as CoreCardId) as
-        | Partial<RiftboundCardMeta>
-        | undefined;
-      const currentEquipped = unitMeta?.equippedWith ?? [];
-      context.cards.updateCardMeta(
-        unitId as CoreCardId,
-        { equippedWith: [...currentEquipped, equipmentId] } as Partial<RiftboundCardMeta>,
-      );
-
-      // rule-id: sfd-049-221-attach-equipment-fires-once
-      // Rule 383.2.c / 401.1: fire the attach-equipment event so "When you
-      // Attach an Equipment to me" triggers (Aphelios, Jax) reach the chain.
-      // `cardId` is the receiving unit so `on: "self"` matches the holder;
-      // `copyAttachedUnitText` replacement effects (Svellsongur) do not add
-      // A second attachment event, so this fires exactly once per attach.
-      // rule 522: attaching changes the holder's Might, so the event goes
-      // through the dispatcher (which re-runs static recalc + SBA) rather than
-      // `fireTriggers` alone — otherwise "Each Equipment attached to me gives
-      // double its base Might bonus" (sfd-068-221) stays unapplied until some
-      // unrelated later move happens to trigger a recalc.
-      dispatchEvent(
-        {
-          cards: context.cards,
-          counters: context.counters,
-          draft,
-          zones: context.zones,
-        },
-        { cardId: unitId, equipmentId, playerId, type: "attach-equipment" },
-      );
-
-      // rule 709/710 (rule-id: sfd-180-221): a unit is Mighty while it has 5+
-      // current Might, from ANY source — an Equipment's bonus included. The
-      // attach dispatch above has re-applied statics, so the holder's Might is
-      // final here; crossing < 5 → >= 5 raises become-mighty (Fiora, Worthy).
-      const mightAfter = getCardEffectiveMight(
-        unitId,
-        (id) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
-      );
-      if (mightBefore < MIGHTY_THRESHOLD && mightAfter >= MIGHTY_THRESHOLD) {
-        dispatchEvent(
-          {
-            cards: context.cards,
-            counters: context.counters,
-            draft,
-            zones: context.zones,
-          },
-          {
-            cardId: unitId,
-            owner:
-              (context.cards.getCardOwner(unitId as CoreCardId) as string | undefined) ?? playerId,
-            type: "become-mighty",
-          },
-        );
-      }
-
-      // rule 477.1.b (ven-137-166 Shady Spectacles): "As this is attached to a
-      // unit, choose another friendly unit. The equipped unit becomes a copy of
-      // that unit for as long as this is attached to it." rule 401.1/401.2: the
-      // attach trigger above is created BEFORE the copy, so a unit that only
-      // becomes a copy now does not trigger off this attachment.
-      if (equipDef?.copyChosenUnitToHolder) {
-        const zoneIds = ["base", ...Object.keys(draft.battlefields ?? {}).map(getBattlefieldZoneId)];
-        const candidates: string[] = [];
-        for (const zoneId of zoneIds) {
-          for (const id of context.zones.getCardsInZone(
-            zoneId as CoreZoneId,
-            playerId as CorePlayerId,
-          )) {
-            if (id !== unitId && registry.get(id as string)?.cardType === "unit") {
-              candidates.push(id as string);
-            }
-          }
-        }
-        // With more than one legal choice the controller would be prompted; the
-        // rule 355.5: the controller chooses. A sole legal candidate is
-        // auto-bound (as resolution-time target choices are); two or more
-        // prompt the controller.
-        if (candidates.length === 1 && candidates[0] !== undefined) {
-          registry.becomeCopyOf(unitId, candidates[0]);
-        } else if (candidates.length > 1 && !draft.pendingChoice) {
-          draft.pendingChoice = {
-            effect: { holderId: unitId, type: "become-copy" },
-            options: candidates as never,
-            playerId: playerId as never,
-            remaining: 1,
-            sourceCardId: equipmentId as never,
-            type: "choose-target",
-          };
-        }
-      }
     },
   },
 

@@ -210,7 +210,7 @@ describe("Pendulum Blade (ven-011-166)", () => {
     expect(game.zoneOf("pb")).toBe("base"); // recalled, unattached
   });
 
-  test.failing("BUG: Equip is an activated ability and uses the chain (377.3 / 818.1.c.1) — the opponent gets priority before the attach happens", async () => {
+  test("Equip is an activated ability and uses the chain (377.3 / 818.1.c.1) — the opponent gets priority before the attach happens", async () => {
     // Expected: activating Equip pays [fury], puts a P1 ability item on the chain; the Blade is not yet
     // attached and P2 may respond; after both pass it attaches. Actual: equipCard attaches immediately, no chain.
     const game = await scenario().resources(P1, { power: { fury: 1 } }).unit(P1, "base", { might: 2 }, "ally").gear(P1, CARD, "pb").build();

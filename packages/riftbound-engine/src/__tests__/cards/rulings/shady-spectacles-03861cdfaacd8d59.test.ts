@@ -53,6 +53,12 @@ async function equipSpecs(game: Game, unit: string): Promise<void> {
   } else {
     await game.p1.do("equipCard", { equipmentId: "specs", playerId: P1, unitId: unit });
   }
+  // rule 377.3: [Equip] is an activated ability — its chain item must resolve
+  // before the Equipment is actually attached.
+  if (game.chain().some((i) => i.cardId === "specs")) {
+    await game.p1.passPriority();
+    await game.p2.passPriority();
+  }
 }
 
 describe("Ruling 03861cdfaacd8d59 — a Temporary Reflection copied again by Shady Spectacles keeps Temporary", () => {
