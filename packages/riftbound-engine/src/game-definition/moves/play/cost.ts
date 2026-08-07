@@ -18,6 +18,7 @@ import { type EffectContext, executeEffect } from "../../../abilities/effect-exe
 import { evaluateLegionCondition } from "../../../abilities/legion-conditions";
 import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { pointsGainedThisTurn } from "../../../operations/points";
 import {
   type CostReductionContext,
   type StaticCostReduction,
@@ -1629,9 +1630,8 @@ function applyFlexibleRepeatReduction(
  * ones taken by conquering (`conqueredThisTurn`) are removed.
  */
 function countHoldPointsThisTurn(state: RiftboundGameState, playerId: string): number {
-  const scored = (state.scoredThisTurn?.[playerId] ?? []) as readonly string[];
-  const conquered = new Set((state.conqueredThisTurn?.[playerId] ?? []) as readonly string[]);
-  return scored.filter((bfId) => !conquered.has(bfId)).length;
+  // Points actually GAINED from holding (a denied / replaced Hold scored 0).
+  return pointsGainedThisTurn(state, playerId, "hold");
 }
 
 /**

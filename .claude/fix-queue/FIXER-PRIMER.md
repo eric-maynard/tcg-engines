@@ -109,7 +109,8 @@ effect and thread it through `reveal-and-pick.then`. If B needs A's object use `
     RESOLUTION in `moves/chain/resolve.ts executeResolvedItem`; `hide.ts` (hide, play from hidden); `effects/create-token.ts` (play-token-unit).
   - move / attack / defend / showdown-begin: `moves/movement/standard-move.ts`, `ganking-move.ts`, `effects/move.ts moveCardWithEvent`.
   - die: `effects/kill.ts`; all damage/combat deaths via `events/dispatcher.ts dispatchUnitDied` (from `runStateMaintenance`).
-  - conquer / hold: `moves/combat/resolve-full-combat.ts`, `conquer-battlefield.ts`, `chain/showdown.ts passShowdownFocus`
+  - conquer / hold / score: built by `E/operations/points.ts scoreEvents` and fired (only when `scoreBattlefield(...).isScore`,
+    rule 471.2.c) from `moves/combat/resolve-full-combat.ts`, `conquer-battlefield.ts`, `chain/showdown.ts passShowdownFocus`
     (non-combat close), `combat/score-point.ts`; hold + start-of-turn + ready(awaken) + main-phase + end-of-turn in
     `E/game-definition/flow/riftbound-flow.ts` (`awaken/beginning/main/ending.onBegin`, ctx from `buildFlowTriggerContext` — no-op counters!).
   - discard: `effects/discard.ts`, `moves/discard.ts`, `moves/chain/activate-ability.ts` (discard cost). ready: `effects/ready.ts`, `moves/turn.ts`.
@@ -238,11 +239,21 @@ own text → `getSelfScaledEnergyReduction`; one-shot "next spell costs N less" 
 - Combat damage: `moves/combat/resolve-full-combat.ts resolveFullCombat` (legal when `bf.contested && bf.showdownComplete`
   in neutral-open; harness `settle()` auto-runs it) → build `CombatUnit`s → `combat-resolver.ts resolveCombat` → write
   `meta.damage`, heal survivors, mark `result.killed` lethal → `cleanupAndFireDeaths` (SBA deaths, Deathknell, die
-  replacements) → winner by who remains: attacker ⇒ `bf.controller`, `conqueredThisTurn`, +1 VP unless `scoredThisTurn`
-  (`E/operations/scoring-rules.ts canPlayerScoreAtBattlefield / applyScoreReplacement`), `conquer` event; defender ⇒
-  attackers recalled; nobody ⇒ controller null; `expireCombatMight`. Empty-side early exit just recalls attackers.
-- Hold scoring: flow `beginning.onBegin` (each controlled bf once per turn, `hold` event, then static recalc). Manual:
-  `moves/combat/score-point.ts`, `conquer-battlefield.ts`. Win: `game-definition/win-conditions/victory.ts hasPlayerWon`.
+  replacements) → winner by who remains: attacker ⇒ `bf.controller`, `points.ts scoreBattlefield(…,"conquer")`, `conquer`+`score`
+  events; defender ⇒ attackers recalled; nobody ⇒ controller null; `expireCombatMight`; final `cleanupAndFireDeaths`.
+- POINTS / VICTORY — ONE choke point, `E/operations/points.ts`: `awardPoints(draft, player, n, {method:"hold"|"conquer"|"effect"|
+  "burn-out", battlefieldId?, sequenceIndex?}, io)` = 054.1 denial (`isPointGainDenied`, static `restriction` "can't gain points",
+  condition via `static-abilities.evaluateCondition`) → 443.1.a per-method `scoring-rules.ts applyScoreReplacement` → 471.1.b Final
+  Point (conquer at ≥VS−1 draws unless every bf scored) → add + `pointsGainedThisTurn` ledger. `losePoints` (194.4 clamp),
+  `markScored`/`scoreBattlefield(draft, player, bfId, "hold"|"conquer", io, {previousController}) → {isScore, gained, denied,
+  replaced, drewInstead}` (gates `scoring-rules.ts canPlayerScoreAtBattlefield`, 471.2.c re-take = not a Score, 630.1.a teammate),
+  `burnOut`/`refillDeckOrBurnOut` (431.2/431.3 loop, repeat points unpreventable + immediate win), `effectiveVictoryScore` (base +
+  modifier + battlefield `increase-victory-score` + board `modify-victory-score` statics), `checkVictory(draft, {io, immediate})` =
+  the ONLY writer of `status="finished"/winner` for a points win — called at the end of `performCleanup` (no-op while a chain item
+  resolves, rule 321), after the flow Hold step, after burn-outs, and by directed score moves. NEVER write `victoryPoints` directly.
+- Hold scoring: flow `runHoldScoringStep` (after start-of-turn triggers resolve — deferred to `beginning.onEnd` when they open a
+  chain; `scoreBattlefield(…,"hold")`, `hold`+`score` events, `checkVictory`, static recalc). Manual/sandbox: `moves/combat/score-point.ts`
+  (never enumerated), `conquer-battlefield.ts`. `win-conditions/victory.ts` = read-only predicates delegating to points.ts.
 - Battlefield control loss / combat staging: `performCleanup` step 6 (controller cleared in open state with no unit).
 - Deaths happen ONLY in `performCleanup` (damage ≥ might) and `effects/kill.ts`. Flow `ending.onBegin` clears damage, stun,
   `mightModifier`, turn keywords, rune pools, `activeReplacements` (turn/next). Temporary units are trashed in
@@ -264,7 +275,7 @@ Recipe — stun: `effects/stun.ts` sets flag + `stun` event; zero its combat dam
   ({type:"die"})` → runs the replacement effect through `buildReplacementEffectContext` with the dying unit as
   `trigger-source`, clears damage); damage — `effects/damage.ts` (global prevent-all, bound entries, `checkReplacement
   ({type:"take-damage"})`) and combat `resolve-full-combat.ts killOnDamageIdx`; score — `scoring-rules.ts
-  applyScoreReplacement`; tokens — `create-token.ts applyPlayTokenReplacement`; enters-ready — `cost.ts consumeEntersReadyReplacement`.
+  applyScoreReplacement` (called only from `points.ts awardPoints`, method-scoped); tokens — `create-token.ts applyPlayTokenReplacement`; enters-ready — `cost.ts consumeEntersReadyReplacement`.
 - Parser: `C/parser/impl/replacement.ts parseReplacementAbility` ("If … would …, … instead"), "next time" spells → effect `replacement`.
 Recipe — "if X would die / be dealt damage, instead …": 1) ability `type:"replacement"` whose `replaces` equals the string
 the call site checks; 2) no call site for that event kind → add `checkReplacement` where it happens; 3) optional

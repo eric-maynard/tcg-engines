@@ -15,7 +15,8 @@ import {
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { scoreBattlefield } from "../../../operations/points";
+import type { GameEvent } from "../../../abilities/game-events";
+import { scoreBattlefield, scoreEvents } from "../../../operations/points";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -180,14 +181,7 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
 
     // If showdown ended (all passed), clean up.
     if (isShowdownEnded(draft.interaction)) {
-      let conquerEvent:
-        | {
-            type: "conquer";
-            playerId: string;
-            battlefieldId: string;
-            previousController: string | null;
-          }
-        | undefined;
+      let conquerEvents: GameEvent[] = [];
       const bf = before?.battlefieldId ? draft.battlefields[before.battlefieldId] : undefined;
       if (bf) {
         if (before?.isCombatShowdown) {
@@ -237,20 +231,17 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
                 // Rule 348.2.a.1: this is a Conquer — emit the "conquer" event
                 // (as conquerBattlefield / resolveFullCombat do) so [Hunt] and
                 // "When you conquer" triggers fire.
-                conquerEvent = {
-                  battlefieldId: before!.battlefieldId,
-                  playerId: solo,
+                conquerEvents = scoreEvents(solo, before!.battlefieldId, "conquer", {
                   previousController,
-                  type: "conquer",
-                };
+                });
               }
             }
           }
         }
       }
       draft.interaction = endShowdownState(draft.interaction);
-      if (conquerEvent) {
-        fireTriggers(conquerEvent, {
+      for (const event of conquerEvents) {
+        fireTriggers(event, {
           cards: context.cards,
           counters: context.counters,
           draft,

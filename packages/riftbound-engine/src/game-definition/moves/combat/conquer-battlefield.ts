@@ -6,7 +6,7 @@ import type { ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { createInteractionState, getActiveShowdown, getTurnState } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { checkVictory, scoreBattlefield } from "../../../operations/points";
+import { checkVictory, scoreBattlefield, scoreEvents } from "../../../operations/points";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -145,15 +145,14 @@ export const conquerBattlefield: Defs["conquerBattlefield"] = {
     // (e.g. Blade Dancer's "When you conquer, pay 1 to ready me").
     // rule 471.2.c: only when the battlefield actually Scored.
     if (isScore) {
-      fireTriggers(
-        { battlefieldId, playerId, previousController, type: "conquer" },
-        {
+      for (const event of scoreEvents(playerId, battlefieldId, "conquer", { previousController })) {
+        fireTriggers(event, {
           cards: context.cards,
           counters: context.counters,
           draft,
           zones: context.zones,
-        },
-      );
+        });
+      }
     }
 
     // rule 472 / 319.1 — the Cleanup after this action checks victory.

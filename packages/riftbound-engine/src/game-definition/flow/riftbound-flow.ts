@@ -38,7 +38,13 @@ import {
   resumeQueuedTurn,
 } from "../../operations/turn-queue";
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState } from "../../types";
-import { checkVictory, refillDeckOrBurnOut, scoreBattlefield } from "../../operations/points";
+import {
+  checkVictory,
+  clearPointsGainedThisTurn,
+  refillDeckOrBurnOut,
+  scoreBattlefield,
+  scoreEvents,
+} from "../../operations/points";
 
 /**
  * Build a TriggerRunnerContext from a flow phase context.
@@ -188,8 +194,10 @@ function runHoldScoringStep(context: FlowStepContext): void {
               context,
             );
             if (isScore) {
-              // Emit "hold" event so triggered abilities fire (e.g. Altar to Unity)
-              fireTriggers({ battlefieldId: bfId, playerId, type: "hold" }, triggerCtx);
+              // Emit "hold" (+ "score") so triggered abilities fire (e.g. Altar to Unity)
+              for (const event of scoreEvents(playerId as PlayerId, bfId, "hold")) {
+                fireTriggers(event, triggerCtx);
+              }
             }
           }
         }
@@ -392,6 +400,7 @@ function runExpirationStep(context: FlowStepContext): void {
         const currentPlayer = context.getCurrentPlayer();
         context.state.conqueredThisTurn[currentPlayer] = [];
         context.state.scoredThisTurn[currentPlayer] = [];
+        clearPointsGainedThisTurn(context.state);
 
         // Clear consumed-next replacement markers so turn-scoped
         // Single-fire replacements (Tactical Retreat, Highlander, etc.)

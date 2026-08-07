@@ -10,6 +10,7 @@
  *   effectiveVictoryScore  194.3 base + modifier + battlefield & board statics
  *   checkVictory       472 / 321 only writer of status/winner; no-op mid-resolution
  *   burnOut / refillDeckOrBurnOut  431.2 / 431.3(.b/.c.1)
+ *   pointsGainedThisTurn / scoreEvents  per-method ledger + 471.2 trigger events
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -24,13 +25,16 @@ import {
   awardPoints,
   burnOut,
   checkVictory,
+  clearPointsGainedThisTurn,
   effectiveVictoryScore,
   findWinner,
   isPointGainDenied,
   losePoints,
   markScored,
+  pointsGainedThisTurn,
   refillDeckOrBurnOut,
   scoreBattlefield,
+  scoreEvents,
 } from "../operations/points";
 import type { PlayerState, RiftboundGameState } from "../types";
 
@@ -383,5 +387,42 @@ describe("burnOut / refillDeckOrBurnOut — rule 431", () => {
     const io = createIO();
     expect(refillDeckOrBurnOut(state, "p1", io)).toBe(false);
     expect(state.status).toBe("playing");
+  });
+});
+
+describe("pointsGainedThisTurn ledger and scoreEvents", () => {
+  test("awardPoints records what was actually gained per method; denied / drawn-instead gains record nothing; clear resets", () => {
+    registry.register("denier", { abilities: [DENY_OPPONENTS], cardType: "unit", id: "denier", might: 1, name: "Denier" });
+    const state = createState({ players: { p1: createPlayer("p1"), p2: createPlayer("p2", { victoryPoints: 7 }) } });
+    const io = createIO({ "mainDeck:p2": ["c1"] });
+    awardPoints(state, "p1", 1, { battlefieldId: "A", method: "hold" }, io);
+    awardPoints(state, "p1", 1, { battlefieldId: "B", method: "conquer" }, io);
+    awardPoints(state, "p1", 2, { method: "effect" }, io);
+    expect(pointsGainedThisTurn(state, "p1", "hold")).toBe(1);
+    expect(pointsGainedThisTurn(state, "p1", "conquer")).toBe(1);
+    expect(pointsGainedThisTurn(state, "p1", "effect")).toBe(2);
+    expect(pointsGainedThisTurn(state, "p1")).toBe(4);
+    // p2 at 7: a lone conquer draws instead → nothing recorded.
+    awardPoints(state, "p2", 1, { battlefieldId: "A", method: "conquer" }, io);
+    expect(pointsGainedThisTurn(state, "p2")).toBe(0);
+    // a denied hold records nothing either
+    const denied = createIO({ "base:p2": ["denier"] }, { denier: "p2" });
+    awardPoints(state, "p1", 1, { battlefieldId: "A", method: "hold" }, denied);
+    expect(pointsGainedThisTurn(state, "p1", "hold")).toBe(1);
+    clearPointsGainedThisTurn(state, "p1");
+    expect(pointsGainedThisTurn(state, "p1")).toBe(0);
+    clearPointsGainedThisTurn(state);
+    expect(pointsGainedThisTurn(state, "p2")).toBe(0);
+  });
+
+  test("scoreEvents: the method's own event (with its payload) then the generic `score` event", () => {
+    expect(scoreEvents("p1", "A", "hold")).toEqual([
+      { battlefieldId: "A", playerId: "p1", type: "hold" },
+      { battlefieldId: "A", method: "hold", playerId: "p1", type: "score" },
+    ]);
+    expect(scoreEvents("p1", "B", "conquer", { afterAttack: true, excessDamage: 3, previousController: null })).toEqual([
+      { afterAttack: true, battlefieldId: "B", excessDamage: 3, playerId: "p1", previousController: null, type: "conquer" },
+      { battlefieldId: "B", method: "conquer", playerId: "p1", type: "score" },
+    ]);
   });
 });

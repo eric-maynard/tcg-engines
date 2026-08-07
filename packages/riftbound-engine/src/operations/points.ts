@@ -23,6 +23,7 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
+import type { GameEvent } from "../abilities/game-events";
 import { evaluateCondition as evaluateStaticCondition } from "../abilities/static-abilities";
 import { isResolvingChainItem } from "../chain/resolution-guard";
 import type { PlayerId, RiftboundGameState } from "../types";
@@ -403,7 +404,63 @@ export function awardPoints(
   }
 
   player.victoryPoints += n;
+  recordPointsGained(draft, playerId, cause.method, n);
   return { ...NO_GAIN, gained: n };
+}
+
+// ---------------------------------------------------------------------------
+// Per-turn bookkeeping of points actually gained, by method
+// ---------------------------------------------------------------------------
+
+type PointsLedger = Partial<Record<PointMethod, number>>;
+type PointsLedgerState = { pointsGainedThisTurn?: Record<string, PointsLedger> };
+
+function recordPointsGained(
+  draft: RiftboundGameState,
+  playerId: PlayerId,
+  method: PointMethod,
+  n: number,
+): void {
+  const s = draft as RiftboundGameState & PointsLedgerState;
+  const ledger = { ...(s.pointsGainedThisTurn?.[playerId] ?? {}) };
+  ledger[method] = (ledger[method] ?? 0) + n;
+  s.pointsGainedThisTurn = { ...(s.pointsGainedThisTurn ?? {}), [playerId]: ledger };
+}
+
+/**
+ * Points `playerId` actually GAINED this turn (after denial / skips / the
+ * Final Point draw), optionally for one method — e.g. "for each point you
+ * scored from holding this turn" reads `pointsGainedThisTurn(s, p, "hold")`.
+ */
+export function pointsGainedThisTurn(
+  state: RiftboundGameState,
+  playerId: PlayerId,
+  method?: PointMethod,
+): number {
+  const ledger = (state as RiftboundGameState & PointsLedgerState).pointsGainedThisTurn?.[
+    playerId
+  ];
+  if (!ledger) {
+    return 0;
+  }
+  if (method) {
+    return ledger[method] ?? 0;
+  }
+  return Object.values(ledger).reduce((a: number, b) => a + (b ?? 0), 0);
+}
+
+/** rule 317.2 — the ledger is turn-scoped: cleared with `scoredThisTurn` in the Ending Phase. */
+export function clearPointsGainedThisTurn(draft: RiftboundGameState, playerId?: PlayerId): void {
+  const s = draft as RiftboundGameState & PointsLedgerState;
+  if (!s.pointsGainedThisTurn) {
+    return;
+  }
+  if (playerId === undefined) {
+    s.pointsGainedThisTurn = undefined;
+    return;
+  }
+  const { [playerId]: _dropped, ...rest } = s.pointsGainedThisTurn;
+  s.pointsGainedThisTurn = rest;
 }
 
 /**
@@ -580,4 +637,28 @@ export function scoreBattlefield(
     ? NO_GAIN
     : awardPoints(draft, playerId, 1, { battlefieldId, method }, io);
   return { ...award, isScore: true };
+}
+
+/**
+ * rule 471.2 / 468 — the trigger events of one Score: the method's own event
+ * (`hold` / `conquer`, with any site-specific payload such as excess damage or
+ * the previous controller) followed by the generic `score` event ("When an
+ * opponent scores"). Callers fire them only when `scoreBattlefield` reported
+ * `isScore` (471.2.c).
+ */
+export function scoreEvents(
+  playerId: PlayerId,
+  battlefieldId: string,
+  method: "hold" | "conquer",
+  extras: {
+    readonly afterAttack?: boolean;
+    readonly excessDamage?: number;
+    readonly previousController?: string | null;
+  } = {},
+): GameEvent[] {
+  const own: GameEvent =
+    method === "conquer"
+      ? { battlefieldId, playerId, type: "conquer", ...extras }
+      : { battlefieldId, playerId, type: "hold" };
+  return [own, { battlefieldId, method, playerId, type: "score" }];
 }

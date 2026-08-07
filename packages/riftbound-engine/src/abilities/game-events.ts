@@ -49,6 +49,9 @@ export type GameEvent =
       previousController?: string | null;
     }
   | { type: "hold"; playerId: string; battlefieldId: string }
+  // rule 468 / 471.2 — a player Scored (Hold or Conquer) at a battlefield;
+  // fired alongside the `hold` / `conquer` event ("When an opponent scores").
+  | { type: "score"; playerId: string; battlefieldId: string; method: "hold" | "conquer" }
   // rule 428.5: `killedBy` = the player responsible for the kill (kill
   // instruction's controller, the dealer of the lethal spell/ability damage,
   // or the opposing combatant's controller); `killSource` = what did it;

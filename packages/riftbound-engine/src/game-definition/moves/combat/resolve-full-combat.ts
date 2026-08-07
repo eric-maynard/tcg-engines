@@ -25,7 +25,7 @@ import type {
   RiftboundGameState,
   RiftboundMoves,
 } from "../../../types";
-import { scoreBattlefield } from "../../../operations/points";
+import { scoreBattlefield, scoreEvents } from "../../../operations/points";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -622,17 +622,13 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       // draw-instead Final Point case (471.1.b.1) still Conquered, so its
       // triggers do fire.
       if (isScore) {
-        fireTriggers(
-          {
-            afterAttack: true,
-            battlefieldId,
-            excessDamage,
-            playerId: attackingPlayer,
-            previousController: controllerBeforeCombat,
-            type: "conquer",
-          },
-          { cards, counters, draft, zones },
-        );
+        for (const event of scoreEvents(attackingPlayer, battlefieldId, "conquer", {
+          afterAttack: true,
+          excessDamage,
+          previousController: controllerBeforeCombat,
+        })) {
+          fireTriggers(event, { cards, counters, draft, zones });
+        }
       }
 
     } else if (attackersRecalled) {

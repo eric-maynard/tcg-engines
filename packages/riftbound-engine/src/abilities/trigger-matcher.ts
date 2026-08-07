@@ -156,6 +156,8 @@ const EVENT_MAP: Record<string, string> = {
   ready: "ready",
   // rule-id: ogn-235-298 — recycle-to-main-deck trigger event.
   recycle: "recycle",
+  // rule 468 — "When a player / an opponent scores" (Hold or Conquer).
+  score: "score",
   "showdown-begin": "showdown-begin",
   "start-of-turn": "start-of-turn",
   stun: "stun",
