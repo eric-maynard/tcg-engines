@@ -5,6 +5,7 @@
 import type { ActivatedAbility } from "@tcg/riftbound-types";
 import type { Cost } from "@tcg/riftbound-types/abilities/cost-types";
 import type { Effect, SequenceEffect } from "@tcg/riftbound-types/abilities/effect-types";
+import { parseRunesAtMostClause } from "../parsers/condition-parser";
 import { parseAdditionalCostText, parseCost } from "../parsers/cost-parser";
 import { parseActivationCost, parseResourcePayload } from "./costs";
 import { parseEffect } from "./effect";
@@ -51,7 +52,7 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
   // comma-separated ("[1], [Exhaust]"), not just juxtaposed.
   const empowerLine = text.split("\n")[0];
   const empowerKwMatch = stripReminders(empowerLine).match(
-    /^\[Empower\]\s*(?:—|-)?\s*((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)|exhaust):(?:\s*,\s*|\s*))+)\.?\s*(?:This ability costs :rb_energy_(\d+): less if ([^.]+)\.?)?\s*$/i,
+    /^\[Empower\]\s*(?:—|-)?\s*((?::rb_(?:energy_\d+|rune_(?:fury|calm|mind|body|chaos|order|rainbow)|exhaust):(?:\s*,\s*|\s*))+)\.?\s*(?:This ability costs :rb_energy_(\d+): less (?:if ([^.]+)|for each (rune) you control)\.?)?\s*$/i,
   );
   if (empowerKwMatch) {
     const cost = parseCost(empowerKwMatch[1].trim());
@@ -65,10 +66,25 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
       type: "activated",
     } as ActivatedAbility;
     if (empowerKwMatch[2]) {
-      (ability as unknown as { costModifier: unknown }).costModifier = {
-        condition: { text: empowerKwMatch[3]?.trim(), type: "raw" },
-        reduction: Number.parseInt(empowerKwMatch[2], 10),
-      };
+      const reduction = Number.parseInt(empowerKwMatch[2], 10);
+      if (empowerKwMatch[4]) {
+        // rule 827.1.c.3 (rule-id: ven-032-166) — "costs [N] less for each rune
+        // you control" scales with the rune count instead of gating on a
+        // condition; the engine multiplies the reduction by the rune total.
+        (ability as unknown as { costModifier: unknown }).costModifier = {
+          condition: { type: "per-rune-controlled" },
+          reduction,
+        };
+      } else {
+        const condText = empowerKwMatch[3]?.trim() ?? "";
+        // rule 827.1.c.3: the cost modifier is part of the Empower cost, so the
+        // condition must be structured for the engine to evaluate it.
+        const structured = parseRunesAtMostClause(condText);
+        (ability as unknown as { costModifier: unknown }).costModifier = {
+          condition: structured ?? { text: condText, type: "raw" },
+          reduction,
+        };
+      }
     }
     return ability;
   }

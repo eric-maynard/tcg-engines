@@ -319,6 +319,17 @@ export interface RunesAtLeastCondition {
 }
 
 /**
+ * "If you control N or fewer runes" — rule 430.1 counterpart of
+ * `runes-at-least`: counts the runes in your own rune pool, ready or
+ * exhausted. rule 827.1.c.3 uses it as an Empower cost modifier.
+ */
+// rule-id: ven-001-166
+export interface RunesAtMostCondition {
+  readonly type: "runes-at-most";
+  readonly amount: number;
+}
+
+/**
  * "If you couldn't channel N runes this way" — rule 430.3: a channel effect
  * moves as many runes as the Rune Deck holds, and this is true when the most
  * recent channel moved fewer than `amount`.
@@ -531,6 +542,7 @@ export type Condition =
   | OpponentControlsCondition
   | FewerRunesThanOpponentCondition
   | RunesAtLeastCondition
+  | RunesAtMostCondition
   | ChanneledFewerThanCondition
   | DiscardedCardTypeCondition
   | TargetControllerCondition

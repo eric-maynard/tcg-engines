@@ -430,6 +430,16 @@ export function evaluateTriggerCondition(
     }
     return false;
   }
+  if ((c.type === "runes-at-most" || c.type === "runes-at-least") && ctx) {
+    // rule 430.1 (rule-id: ven-001-166, ven-019-166) — "you control N or fewer
+    // runes" counts YOUR rune pool, ready or exhausted; opponents never count.
+    const runes = ctx.zones.getCardsInZone(
+      "runePool" as CoreZoneId,
+      controllerId as CorePlayerId,
+    ).length;
+    const amount = (c as { amount?: number }).amount ?? 0;
+    return c.type === "runes-at-most" ? runes <= amount : runes >= amount;
+  }
   if (c.type === "fewer-runes-than-opponent" && ctx) {
     // rule-id: ven-005-166 (Forsaken Baccai) — compare rune pool sizes; the
     // trigger only goes on the chain if some opponent controls more runes.
@@ -743,11 +753,24 @@ function evaluateHasAtLeastCondition(
   const needed = c.count ?? 1;
   const filters =
     target.filter === undefined ? [] : Array.isArray(target.filter) ? target.filter : [target.filter];
-  if (filters.some((f) => f !== "mighty")) {
+  // rule 108.2 (rule-id: unl-177-219, Ivern) — "if your units have <tag>" is a
+  // real gate: a `{ tag }` filter must be counted, not waved through. Any other
+  // filter shape stays permissive, as before.
+  const wantedTags: string[] = [];
+  for (const f of filters) {
+    if (f === "mighty") {
+      continue;
+    }
+    const tag = (f as { tag?: unknown } | null)?.tag;
+    if (typeof tag === "string") {
+      wantedTags.push(tag.toLowerCase());
+      continue;
+    }
     return true;
   }
 
   const zoneIds: string[] = [];
+  const baseOwners: string[] = [];
   if (target.location === "here") {
     const bfId = (event as { battlefieldId?: unknown }).battlefieldId;
     if (typeof bfId === "string") {
@@ -765,13 +788,28 @@ function evaluateHasAtLeastCondition(
     for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
       zoneIds.push(`battlefield-${bfId}`);
     }
+    if (target.location === undefined) {
+      // rule 108.2 — with no location named, "your units" are every unit you
+      // control on the board, and base is part of the board.
+      baseOwners.push(...Object.keys(ctx.draft.players ?? {}));
+    }
   }
 
   const registry = getGlobalCardRegistry();
-  let count = 0;
+  const candidates: string[] = [];
   for (const zoneId of zoneIds) {
-    for (const rawId of ctx.zones.getCardsInZone(zoneId as CoreZoneId)) {
-      const id = rawId as string;
+    candidates.push(...ctx.zones.getCardsInZone(zoneId as CoreZoneId).map((x) => x as string));
+  }
+  for (const pid of baseOwners) {
+    candidates.push(
+      ...ctx.zones
+        .getCardsInZone("base" as CoreZoneId, pid as CorePlayerId)
+        .map((x) => x as string),
+    );
+  }
+  let count = 0;
+  {
+    for (const id of candidates) {
       const def = registry.get(id) as { cardType?: string; might?: number } | undefined;
       if (target.type === "unit" && def?.cardType !== "unit" && (def?.might ?? 0) <= 0) {
         continue;
@@ -789,6 +827,22 @@ function evaluateHasAtLeastCondition(
       }
       if (filters.includes("mighty") && currentMightForTriggers(id, ctx) < MIGHTY_MIGHT) {
         continue;
+      }
+      if (wantedTags.length > 0) {
+        const cardTags = (
+          (registry.get(id) as { tags?: readonly string[] } | undefined)?.tags ?? []
+        ).map((t) => t.toLowerCase());
+        // rule 135.2.b.3 — a tag gained as the card was played ("choose Bird,
+        // Cat, Dog, or Poro. I gain that tag.") counts like a printed one.
+        const meta = ctx.cards.getCardMeta(id as CoreCardId) as
+          | { namedTag?: string; grantedTags?: readonly string[] }
+          | undefined;
+        const grantedTags = [...(meta?.grantedTags ?? []), ...(meta?.namedTag ? [meta.namedTag] : [])].map(
+          (t) => t.toLowerCase(),
+        );
+        if (!wantedTags.every((t) => cardTags.includes(t) || grantedTags.includes(t))) {
+          continue;
+        }
       }
       count++;
       if (count >= needed) {
@@ -1546,7 +1600,20 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
   // them on the chain, mirroring the activated-ability carve-out.
   const isImmediateAdd = (match: (typeof matches)[number]): boolean => {
     const t = (match.ability.effect as { type?: string } | undefined)?.type;
-    return (t === "add-resource" || t === "add") && match.ability.optional !== true;
+    if (match.ability.optional === true) {
+      return false;
+    }
+    // rule 135.2.b.3 (rule-id: unl-177-219) — "As you play me, name/choose …"
+    // happens WHILE the card is being played, so the naming step never opens a
+    // Chain: the choice is made before the card settles onto the board.
+    if (
+      t === "name-card" &&
+      match.event.type === "play-self" &&
+      (match.ability.effect as { asYouPlay?: boolean } | undefined)?.asYouPlay === true
+    ) {
+      return true;
+    }
+    return t === "add-resource" || t === "add";
   };
   const inlineMatches = resolveInline ? matches : matches.filter(isImmediateAdd);
 

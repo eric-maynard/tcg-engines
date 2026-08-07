@@ -316,6 +316,15 @@ export function evaluateCondition(
       return runes >= ((condition.amount as number | undefined) ?? 0);
     }
 
+    // rule 430.1 (rule-id: ven-001-166) — mirror of `runes-at-least`.
+    case "runes-at-most": {
+      const runes = ctx.zones.getCardsInZone(
+        "runePool" as CoreZoneId,
+        source.owner as CorePlayerId,
+      ).length;
+      return runes <= ((condition.amount as number | undefined) ?? 0);
+    }
+
     case "while-equipped": {
       const meta = ctx.cards.getCardMeta(source.id as CoreCardId) as
         | Partial<RiftboundCardMeta>

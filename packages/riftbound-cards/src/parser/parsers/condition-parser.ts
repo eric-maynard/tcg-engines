@@ -434,6 +434,25 @@ const IF_YOU_HAVE_PATTERN = /^(?:if|while) (you have .+?),?\s*$/i;
  * Parse a condition from the start of text
  * Returns the condition and remaining text
  */
+/**
+ * rule 430.1 (rule-id: ven-001-166) — "you control N or fewer runes" /
+ * "you have N or fewer runes". Counts only the controller's own rune pool.
+ */
+export function parseRunesAtMostClause(text: string): Condition | undefined {
+  const m = text
+    .trim()
+    .replace(/\.$/, "")
+    .match(/^you (?:control|have) (one|two|three|four|five|six|seven|eight|nine|ten|\d+) or fewer runes$/i);
+  if (!m) {
+    return undefined;
+  }
+  const amount = parseNumberWord(m[1]);
+  if (amount === undefined) {
+    return undefined;
+  }
+  return { amount, type: "runes-at-most" } as Condition;
+}
+
 export function parseConditionFromText(text: string): ConditionParseResult | undefined {
   // rule 364.3.a: "If you've gained XP this turn" is a real turn-scoped condition, not free text —
   // without this it fell through to `custom`, which the engine treats as unconditionally true.
@@ -904,6 +923,12 @@ export function parseLeadingIfCondition(
       } as unknown as Condition,
       effectText: rest,
     };
+  }
+  // rule 430.1 (rule-id: ven-001-166) — "if you control N or fewer runes"
+  // counts YOUR rune pool, ready or exhausted.
+  const runesAtMost = parseRunesAtMostClause(clause);
+  if (runesAtMost) {
+    return { condition: runesAtMost, effectText: rest };
   }
   // rule-id: ven-005-166 — "if you control fewer runes than an opponent"
   if (/^you control fewer runes than an opponent$/i.test(clause)) {
