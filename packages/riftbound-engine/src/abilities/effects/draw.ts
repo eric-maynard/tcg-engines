@@ -59,5 +59,9 @@ export function handle_draw(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
       playerId: ctx.playerId as CorePlayerId,
       to: "hand" as CoreZoneId,
     });
+    // rule 745 — a draw is one card moved from the top of your Main Deck to
+    // your hand, so "Draw N" is N separate draw events ("when you draw your
+    // second card each turn" must see each one).
+    ctx.fireTriggers?.({ playerId: ctx.playerId, type: "draw" });
   }
 }

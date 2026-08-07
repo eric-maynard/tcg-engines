@@ -942,6 +942,13 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 playerId: playerId as CorePlayerId,
                 to: "hand" as CoreZoneId,
               });
+              // rule 317 — the Draw Phase card is a draw like any other, so it
+              // is the turn player's FIRST draw of the turn for "when you draw
+              // your Nth card each turn" tallies.
+              fireTriggers(
+                { playerId: playerId as string, type: "draw" },
+                buildFlowTriggerContext(context),
+              );
             },
 
             onEnd: (context) => {

@@ -62,7 +62,9 @@ import {
   getAlternatePlayCost,
   getPlayEnergyDiscountOverflow,
   hasPlayFromTrashGrant,
+
 } from "./cost";
+import { getSelfTrashPlayCost } from "./self-trash-play";
 import { computeOptionalAdditionalCostFlexReduction } from "../../../operations/static-cost-reduction";
 import type { CostExtras } from "./cost";
 
@@ -468,7 +470,14 @@ export const playUnit: Defs["playUnit"] = {
       // trash" makes the trash a legal play-from zone for its controller.
       !(
         zone === "trash" &&
-        hasPlayFromTrashGrant(state, context.zones, context.params.playerId as string)
+        (hasPlayFromTrashGrant(state, context.zones, context.params.playerId as string) ||
+          // rule 812 / 366.1 (unl-025-219) — the card's own Legion permission
+          // makes ITS trash a legal play-from zone for its owner.
+          getSelfTrashPlayCost(
+            state,
+            context.params.playerId as string,
+            context.params.cardId as string,
+          ) !== undefined)
       )
     ) {
       return false;
@@ -811,6 +820,15 @@ export const playUnit: Defs["playUnit"] = {
     // rule 356.1 (unl-089-219) — the elected alternate play cost replaces the
     // printed cost; it is legal only while its condition holds.
     let altCost: { energy?: number; power?: readonly string[] } | undefined;
+    // rule 356.1 (unl-025-219) — a self-granted trash play always charges the
+    // permission's cost, no `altCost` election needed.
+    if (zone === "trash") {
+      altCost = getSelfTrashPlayCost(
+        state,
+        context.params.playerId as string,
+        context.params.cardId as string,
+      );
+    }
     if (context.params.altCost === true) {
       altCost = getAlternatePlayCost(
         state,
@@ -880,15 +898,30 @@ export const playUnit: Defs["playUnit"] = {
 
     // rule 419.1 (rule-id: ven-022-166) — with "You may play cards from your
     // trash" on board, trash cards are offered alongside the hand.
+    const trashCards = context.zones.getCardsInZone(
+      "trash" as CoreZoneId,
+      context.playerId as CorePlayerId,
+    );
+    // rule 812 / 366.1 (unl-025-219) — without a board-wide grant, a trash card
+    // may still carry its OWN "you may play me from your trash" permission.
     const playableCards = hasPlayFromTrashGrant(state, context.zones, context.playerId as string)
-      ? [
+      ? [...handCards, ...trashCards]
+      : [
           ...handCards,
-          ...context.zones.getCardsInZone("trash" as CoreZoneId, context.playerId as CorePlayerId),
-        ]
-      : handCards;
+          ...trashCards.filter(
+            (id) =>
+              getSelfTrashPlayCost(state, context.playerId as string, id as string) !== undefined,
+          ),
+        ];
 
     const results: RiftboundMoves["playUnit"][] = [];
     for (const cardId of playableCards) {
+      // rule 356.1 (unl-025-219) — a self-granted trash play replaces the
+      // printed cost for every affordability check below.
+      const selfTrashCost =
+        context.zones.getCardZone(cardId as CoreCardId) === "trash"
+          ? getSelfTrashPlayCost(state, context.playerId as string, cardId as string)
+          : undefined;
       const def = registry.get(cardId as string);
       if (!def || def.cardType !== "unit") {
         continue;
@@ -1066,7 +1099,7 @@ export const playUnit: Defs["playUnit"] = {
           state,
           context.playerId as string,
           cardId as string,
-          { board },
+          { board, ...(selfTrashCost ? { altCost: selfTrashCost } : {}) },
           metaForAfford,
           potential,
         )
@@ -1468,7 +1501,13 @@ export const playUnit: Defs["playUnit"] = {
 
     // rule 356.1 (unl-089-219) — the elected alternate play cost replaces the
     // printed cost. Re-derived here, never trusted from the caller.
-    const altCostSpec = altCost === true ? getAlternatePlayCost(draft, playerId, cardId) : undefined;
+    const altCostSpec =
+      // rule 356.1 (unl-025-219) — a self-granted trash play charges the
+      // permission's cost; re-derived here, never trusted from the caller.
+      (zones.getCardZone(cardId as CoreCardId) === "trash"
+        ? getSelfTrashPlayCost(draft, playerId, cardId)
+        : undefined) ??
+      (altCost === true ? getAlternatePlayCost(draft, playerId, cardId) : undefined);
     deductCost(
       draft,
       playerId,
@@ -1670,8 +1709,8 @@ export const playUnit: Defs["playUnit"] = {
     // grant "enters ready" to the units its controller plays.
     const entersReady =
       replacedReady ||
-      staticEnterReadyApplies(cardId, draft, playerId, zones) ||
-      boardEntersReadyGrantApplies(draft, zones, cardId, playerId) ||
+      staticEnterReadyApplies(cardId, draft, playerId, zones, context.cards) ||
+      boardEntersReadyGrantApplies(draft, zones, cardId, playerId, context.cards) ||
       paidAccelerate;
     if (!entersReady) {
       counters.setFlag(cardId as CoreCardId, "exhausted", true);

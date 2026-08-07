@@ -14,11 +14,12 @@ import { createCardId } from "@tcg/riftbound-types/cards";
 const abilities: Ability[] = [
   {
     effect: {
+      // rule 356.1 — [3][fury] is an ALTERNATIVE cost that exists only for the
+      // trash play; it replaces the printed 3-energy cost there.
+      cost: { energy: 3, power: ["fury"] },
       from: "trash",
       target: { controller: "friendly", type: "unit" },
       type: "play",
-      // Alternative cost captured as part of the override; the engine's
-      // Legion resolver will swap this in for the card's printed cost.
     },
     keyword: "Legion",
     type: "keyword",
