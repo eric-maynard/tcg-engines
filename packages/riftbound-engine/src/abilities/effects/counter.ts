@@ -2,8 +2,45 @@
 import type { CardId as CoreCardId, ZoneId as CoreZoneId } from "@tcg/core";
 import { removeChainItem } from "../../chain";
 import { isLegalCounterTarget } from "../../chain/counter-target";
+import { canAffordPower } from "../../game-definition/moves/chain/effect-context";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers } from "./_helpers";
+
+/**
+ * rule 158.1 / 429.3 (sfd-136-221 × ogs-014-024) — whether `payer` could
+ * actually meet a "unless its controller pays …" ransom right now. Energy
+ * earmarked "use only to play spells/gear" is not spendable on a payment
+ * demanded while a spell resolves, so it never counts. An unpayable ransom is
+ * no choice at all: the counter simply lands without a prompt.
+ */
+function ransomIsPayable(
+  draft: EffectContext["draft"],
+  payer: string,
+  cost: Record<string, unknown>,
+): boolean {
+  const pool = draft.runePools[payer];
+  if (!pool) {
+    return false;
+  }
+  const earmarked = Object.values(
+    (draft as { restrictedEnergy?: Record<string, Partial<Record<string, number>>> })
+      .restrictedEnergy?.[payer] ?? {},
+  ).reduce<number>((sum, amount) => sum + (amount ?? 0), 0);
+  if (pool.energy - Math.min(earmarked, pool.energy) < ((cost.energy as number) ?? 0)) {
+    return false;
+  }
+  const powerCost = cost.power as string[] | undefined;
+  if (powerCost && powerCost.length > 0) {
+    const needed: Record<string, number> = {};
+    for (const d of powerCost) {
+      needed[d] = (needed[d] ?? 0) + 1;
+    }
+    if (!canAffordPower(pool.power, needed)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   // Counter a spell — mark the next item on the chain as countered
@@ -44,6 +81,37 @@ export function handle_counter(effect: ExecutableEffect, ctx: EffectContext, _h:
       // rule-id: sfd-206-221 — remember "that spell" for follow-up steps, since
       // a countered spell no longer sits on the chain to be read back.
       ctx.draft.lastCounterTargetId = targetItem?.cardId;
+      // rule 158.1 (sfd-136-221) — "Counter a spell unless its controller pays
+      // [N]": the ransom is a payment made WHILE this effect resolves, not an
+      // additional cost, so cost-reduction statics never touch it. Pause and
+      // ask the targeted spell's controller; declining re-enters this handler
+      // with the `unless` clause stripped and the counter lands.
+      const ransomCost = (effect as { unless?: Record<string, unknown> }).unless;
+      if (
+        ransomCost &&
+        targetItem &&
+        !targetItem.countered &&
+        !targetItem.uncounterable
+      ) {
+        const payer =
+          ctx.cards.getCardController?.(targetItem.cardId as CoreCardId) ??
+          ctx.cards.getCardOwner(targetItem.cardId as CoreCardId);
+        if (payer && ransomIsPayable(ctx.draft, payer, ransomCost)) {
+          const { unless: _dropped, ...withoutUnless } = effect as Record<string, unknown>;
+          ctx.draft.pendingChoice = {
+            counterRansom: {
+              boundTargets: ctx.boundTargets ? [...ctx.boundTargets] : undefined,
+              effect: withoutUnless,
+              sourcePlayerId: ctx.playerId,
+            },
+            playerId: payer,
+            resolved: { optInCost: ransomCost },
+            sourceCardId: ctx.sourceCardId,
+            type: "opt-in",
+          } as typeof ctx.draft.pendingChoice;
+          return;
+        }
+      }
       // rule-id: ven-015-166 — "This can't be countered." (rule 544): the
       // counter resolves but has no effect on an uncounterable item.
       if (targetItem && !targetItem.countered && !targetItem.uncounterable) {

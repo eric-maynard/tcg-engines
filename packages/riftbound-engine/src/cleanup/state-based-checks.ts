@@ -34,6 +34,7 @@ import {
 import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { canAffordPower } from "../game-definition/moves/chain/effect-context";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
+import { hiddenCapacityAt } from "../operations/hidden-capacity";
 import {
   applyScoreReplacement,
   canPlayerScoreAtBattlefield,
@@ -752,6 +753,36 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
   }
 
+  // Step 4b: rule 107.3.b.2 / 421.4 — a Facedown Zone holding more cards than
+  // its (now reduced) maximum is trimmed immediately: the zone's CONTROLLER
+  // chooses which card to trash, and the trashed card is revealed. One prompt
+  // at a time; the check re-runs after each answer until the zone fits.
+  for (const bfId of Object.keys(ctx.draft.battlefields)) {
+    if (ctx.draft.pendingChoice) {
+      break;
+    }
+    const hiddenCards = ctx.zones.getCardsInZone(`facedown-${bfId}` as CoreZoneId);
+    if (hiddenCards.length < 2) {
+      continue;
+    }
+    const bfController = ctx.draft.battlefields[bfId]?.controller ?? null;
+    if (bfController === null) {
+      continue;
+    }
+    if (hiddenCards.length <= hiddenCapacityAt(ctx.draft, bfController, bfId, ctx)) {
+      continue;
+    }
+    ctx.draft.pendingChoice = {
+      effect: { type: "trash-facedown" },
+      options: [...hiddenCards] as CoreCardId[],
+      playerId: bfController,
+      remaining: 1,
+      sourceCardId: hiddenCards[0],
+      type: "choose-target",
+    } as typeof ctx.draft.pendingChoice;
+    stateChanged = true;
+  }
+
   // Step 5: Auto-recall gear from battlefields to base (rule 518)
   for (const bfId of Object.keys(ctx.draft.battlefields)) {
     const bfZoneId = `battlefield-${bfId}` as CoreZoneId;
@@ -759,18 +790,35 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
 
     for (const cardId of cardsAtBf) {
       const def = registry.get(cardId as string);
-      // Only auto-recall gear (not units, not equipment attached to units)
-      if (def?.cardType === "gear") {
-        const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
-        // Don't recall if it's attached as equipment
-        if (!meta?.attachedTo) {
-          ctx.zones.moveCard({
-            cardId,
-            targetZoneId: "base" as CoreZoneId,
-          });
-          stateChanged = true;
-        }
+      // Only auto-recall gear/equipment (never units)
+      if (def?.cardType !== "gear" && def?.cardType !== "equipment") {
+        continue;
       }
+      const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
+      if (meta?.attachedTo) {
+        // rule 457.1 / 323.7: once its host leaves the board the Equipment is
+        // loose at the battlefield — detach it and recall it to base. Any
+        // removal path (kill effect, bounce, banish) can orphan it, so the
+        // check lives here rather than in each remover.
+        const hostZone = ctx.zones.getCardZone?.(meta.attachedTo as CoreCardId) as
+          | string
+          | undefined;
+        const hostOnBoard = hostZone === "base" || hostZone?.startsWith("battlefield-") === true;
+        if (hostOnBoard) {
+          continue;
+        }
+        ctx.cards.updateCardMeta(cardId, {
+          attachedTo: undefined,
+        } as Partial<RiftboundCardMeta>);
+      } else if (def.cardType !== "gear") {
+        // Unattached Equipment that never had a host is left where it is.
+        continue;
+      }
+      ctx.zones.moveCard({
+        cardId,
+        targetZoneId: "base" as CoreZoneId,
+      });
+      stateChanged = true;
     }
   }
 

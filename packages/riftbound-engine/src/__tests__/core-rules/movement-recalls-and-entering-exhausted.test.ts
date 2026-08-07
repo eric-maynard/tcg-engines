@@ -458,7 +458,7 @@ describe("456.3 / 449.1 / 420.2.a: a Recall cannot be stopped by movement restri
 // ---------------------------------------------------------------------------
 
 describe("457.1 / 323.7 / 446.1: cleanup Recalls (loose gear at a battlefield; permanents in the wrong base) are not Moves", () => {
-  test.failing("BUG: 457.1/323.7 — Setup A: when a unit at bf1 is killed by a spell, its attached Equipment stays at the battlefield still 'attached' to the dead unit instead of being recalled to base at the next cleanup", async () => {
+  test("457.1/323.7 — Setup A: when a unit at bf1 is killed by a spell, its attached Equipment stays at the battlefield still 'attached' to the dead unit instead of being recalled to base at the next cleanup", async () => {
     // Expected: E unattached in P1's base after the cleanup, exhausted state kept, no move trigger.
     // Actual: E remains in battlefield-bf1 with attachedTo → the trashed unit (the kill-effect path
     // never detaches, and cleanup only auto-recalls loose cardType "gear").

@@ -86,10 +86,10 @@ describe("Ruling 0c7d5d4fd0c393b4 — Lux's [Add] [2] pays spell costs, not Hard
     expect(game.p1.energy()).toBe(2); // Lux's energy was not (could not be) spent on the ransom
   });
 
-  // Expected (the contrast that makes the ruling meaningful): with 2 ORDINARY energy left when Hard Bargain
+  // The contrast that makes the ruling meaningful: with 2 ORDINARY energy left when Hard Bargain
   // resolves, its controller is asked whether to pay [2]; paying lets Dredge Up resolve (draw 1) and empties
-  // the pool. Actual: the engine never offers the "unless … pays [2]" payment — it counters unconditionally.
-  test.failing("BUG: ruling 0c7d5d4fd0c393b4 (contrast) — with 2 real energy P1 IS asked to pay Hard Bargain's [2]; paying saves Dredge Up (draw 1, energy 0)", async () => {
+  // the pool.
+  test("ruling 0c7d5d4fd0c393b4 (contrast) — with 2 real energy P1 IS asked to pay Hard Bargain's [2]; paying saves Dredge Up (draw 1, energy 0)", async () => {
     const game = await board(4).build(); // 4 - 2 (Dredge Up) = 2 ordinary energy left
     const hand0 = game.p1.hand().length;
     await dredgeGetsBargained(game);

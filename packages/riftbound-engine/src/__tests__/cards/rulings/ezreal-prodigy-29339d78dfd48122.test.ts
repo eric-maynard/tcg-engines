@@ -150,7 +150,7 @@ describe("Ruling 29339d78dfd48122 — what Ezreal, Prodigy's discount does and d
   // Expected: with exactly 2 energy left, Hard Bargain's resolution asks P1 (yes-no) whether to pay; paying
   // costs the FULL [2] even with Ezreal out (not [1]) → energy 0, Dredge Up resolves and draws 1 (158.1).
   // Actual: the engine never offers the "unless its controller pays [2]" payment — it counters outright.
-  test.failing("BUG: ruling 29339d78dfd48122 — paying Hard Bargain's ransom with Ezreal out still costs the full [2] (P1 is asked, pays 2 → 0 left, Dredge Up draws)", async () => {
+  test("ruling 29339d78dfd48122 — paying Hard Bargain's ransom with Ezreal out still costs the full [2] (P1 is asked, pays 2 → 0 left, Dredge Up draws)", async () => {
     const { game, hand0 } = await bargained(4); // 4 - 2 = exactly 2 left
     expect(game.decision()).toMatchObject({ kind: "yes-no", seat: P1 });
     await game.p1.yes();
