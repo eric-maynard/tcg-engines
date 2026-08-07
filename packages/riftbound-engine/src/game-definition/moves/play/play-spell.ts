@@ -65,6 +65,54 @@ import {
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
 /**
+ * rule 425 (rule-id: ven-069-166) — "Your spells and abilities can't be
+ * countered": a board static owned by a card its controller has on the board.
+ * `while-empowered` gates it on the host's Empowered state (827), so the shield
+ * is on only while that host is Empowered right now.
+ */
+export function controllerSpellsUncounterable(
+  playerId: string,
+  draft: { players: Record<string, unknown>; battlefields: Record<string, unknown> },
+  zones: { getCardsInZone: (zone: CoreZoneId, player?: CorePlayerId) => readonly CoreCardId[] },
+  cards: {
+    getCardOwner: (card: CoreCardId) => CorePlayerId | undefined;
+    getCardController?: (card: CoreCardId) => CorePlayerId | undefined;
+    getCardMeta: (card: CoreCardId) => unknown;
+  },
+): boolean {
+  const registry = getGlobalCardRegistry();
+  const candidates: CoreCardId[] = [
+    ...Object.keys(draft.players).flatMap((p) => [
+      ...zones.getCardsInZone("base" as CoreZoneId, p as CorePlayerId),
+      ...zones.getCardsInZone("legendZone" as CoreZoneId, p as CorePlayerId),
+    ]),
+    ...Object.keys(draft.battlefields).flatMap((bf) =>
+      zones.getCardsInZone(`battlefield-${bf}` as CoreZoneId),
+    ),
+  ];
+  for (const cardId of candidates) {
+    const controller = cards.getCardController?.(cardId) ?? cards.getCardOwner(cardId);
+    if (controller !== playerId) {
+      continue;
+    }
+    for (const ability of registry.getAbilities(cardId as string) ?? []) {
+      const a = ability as { type?: string; condition?: { type?: string }; effect?: { type?: string } };
+      if (a.type !== "static" || a.effect?.type !== "uncounterable-spells") {
+        continue;
+      }
+      if (a.condition?.type === "while-empowered") {
+        const meta = cards.getCardMeta(cardId) as { empowered?: boolean } | undefined;
+        if (meta?.empowered !== true) {
+          continue;
+        }
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * rule 357.1.a — runes still ready in a player's rune pool. Sampled either side
  * of the Pay step so Energy added by tapping runes there is not mistaken for
  * Energy the player had banked (see `spellEnergySpentByCard`).
@@ -2239,7 +2287,10 @@ export const playSpell: Defs["playSpell"] = {
         targets,
         type: "spell",
         // rule-id: ven-015-166 — carry "This can't be countered." onto the chain item.
-        ...((spellAbility as { uncounterable?: boolean } | undefined)?.uncounterable
+        // rule 425 (rule-id: ven-069-166) — a board static ("your spells can't be
+        // countered") does the same for every spell its controller plays.
+        ...((spellAbility as { uncounterable?: boolean } | undefined)?.uncounterable ||
+        controllerSpellsUncounterable(playerId as string, draft, context.zones, context.cards)
           ? { uncounterable: true }
           : {}),
       },

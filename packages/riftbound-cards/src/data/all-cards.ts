@@ -808,6 +808,51 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-004-166": {
     abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
   },
+  // rule 383.2.a.1 / 383.3.b — Gust Monk: "You may pay [1] as an additional cost
+  // to play me. When you play me, if you paid the additional cost, banish a card
+  // from any trash to give a unit [Assault 2] this turn." The parser leaves the
+  // trigger's effect as `raw`, so it is declared here: the banish is a COST
+  // within instructions (`costStep`) paid from ANY trash (rule 355.8 —
+  // `controller: "any"` widens the off-board pool to both players, and the card
+  // lands in its OWNER's banishment), and it always asks its controller even
+  // with a single candidate. Unpayable ⇒ no Assault, even though [1] was paid.
+  "ven-101-166": {
+    abilities: [
+      {
+        effect: { additionalCost: ":rb_energy_1:", optional: true, type: "additional-cost-option" },
+        type: "static",
+      },
+      {
+        condition: { type: "paid-additional-cost" },
+        effect: {
+          effects: [
+            {
+              costStep: true,
+              target: {
+                controller: "any",
+                location: "trash",
+                promptWhenSingle: true,
+                type: "card",
+              },
+              type: "banish",
+            },
+            // rule 807.2 — a granted [Assault 2] sums with printed Assault and
+            // only adds Might while the unit is an attacker.
+            {
+              duration: "turn",
+              keyword: "Assault",
+              target: { type: "unit" },
+              type: "grant-keyword",
+              value: 2,
+            },
+          ],
+          type: "sequence",
+        },
+        trigger: { event: "play-self" },
+        type: "triggered",
+      },
+    ],
+  },
   // rule 383.2.a.1 / 442.1 — Tomb-Raider Barbara: "When you play me, if you
   // control 7 or more runes, choose an enemy gear. If it's [Empowered],
   // disempower it. Otherwise, kill it." The rune rider sits inside the trigger
@@ -1428,6 +1473,38 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
         },
         optional: true,
         trigger: { event: "play-self" },
+        type: "triggered",
+      },
+    ],
+  },
+  // rule 477.3.b / 477.3.c — Dame the Despoiler: "[Empowered][>] When I attack
+  // or defend, choose a unit here. Increase my Might to its Might this turn,
+  // then give me +1 [Might] this turn." The reference unit is the only pick
+  // ("a unit here" has no "another", so she may choose herself, for +0), and
+  // the increase is one-way. The parser leaves the effect as raw text.
+  "ven-079-166": {
+    abilities: [
+      {
+        cost: { energy: 5, power: ["body"] },
+        effect: { target: "self", type: "empower" },
+        restrictions: [{ type: "not-empowered" }],
+        type: "activated",
+      },
+      {
+        condition: { type: "while-empowered" },
+        effect: {
+          effects: [
+            {
+              duration: "turn",
+              target1: "self",
+              target2: { location: "here", type: "unit" },
+              type: "increase-might-to",
+            },
+            { amount: 1, duration: "turn", target: "self", type: "modify-might" },
+          ],
+          type: "sequence",
+        },
+        trigger: { event: "attack-or-defend", on: "self" },
         type: "triggered",
       },
     ],
