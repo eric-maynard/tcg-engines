@@ -28,6 +28,7 @@ import type {
 import type { EffectContext, ExecutableEffect } from "../abilities/effect-executor";
 import { executeEffect } from "../abilities/effect-executor";
 import type { GameEvent } from "../abilities/game-events";
+import * as replacementEffects from "../abilities/replacement-effects";
 import { checkReplacement, markReplacementConsumed } from "../abilities/replacement-effects";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { DelayedTrigger } from "../types/game-state";
@@ -73,6 +74,8 @@ export interface LKISnapshot {
   readonly buffed: boolean;
   readonly stunned: boolean;
   readonly exhausted: boolean;
+  /** rule 827 — Empowered as it left; `resetObjectState` wipes the flag. */
+  readonly empowered: boolean;
   /** Equipment attached to it (rule 457.1). */
   readonly attachments: readonly string[];
   /** The unit it was attached to, when the leaving card is itself an Equipment. */
@@ -325,6 +328,7 @@ export function snapshotLKI(ctx: LeaveBoardContext, cardId: string): LKISnapshot
     cardType: def?.cardType,
     controller,
     damage: getDamage(ctx, cardId),
+    empowered: meta.empowered === true || flags.empowered === true,
     exhausted: meta.exhausted === true || flags.exhausted === true,
     isToken: cardId.startsWith("token-"),
     lastDamageSource: meta.lastDamageSource,
@@ -685,7 +689,21 @@ export function leaveBoard(
   // rule 457.1 / 719.5 — attachments detach as the top-most card leaves.
   detachOnLeave(ctx, cardId);
 
-  const dest = destinationZone(to);
+  // rule 571 / rule-id: ven-022-166 — "if a card would go to your trash from
+  // anywhere other than your Main Deck, banish it instead". Every departure
+  // routed through leaveBoard comes from the board, the hand or the chain —
+  // never from the Main Deck — so a trash destination is always replaceable.
+  let finalTo = to;
+  if (to === "trash" && ctx.zones.getCardsInZone !== undefined) {
+    const getCardsInZone = ctx.zones.getCardsInZone.bind(ctx.zones);
+    // WIP guard: helper not exported in this tree yet — treat as "no replacement" until its owner lands it.
+    const hasT2B = (replacementEffects as { hasTrashToBanishReplacement?: (d: unknown, z: unknown, o: unknown) => boolean }).hasTrashToBanishReplacement;
+    if (hasT2B?.(ctx.draft, { getCardsInZone }, lki.owner)) {
+      finalTo = "banishment";
+    }
+  }
+
+  const dest = destinationZone(finalTo);
   ctx.zones.moveCard({
     cardId: cardId as CoreCardId,
     targetZoneId: dest.zoneId as CoreZoneId,
@@ -695,7 +713,7 @@ export function leaveBoard(
   // rule 124.1 — the card in its new zone is a new object.
   resetObjectState(ctx, cardId);
 
-  const result: LeaveResult = { cardId, cause, left: true, lki, to };
+  const result: LeaveResult = { cardId, cause, left: true, lki, to: finalTo };
 
   // rule 186.1 — a token in a non-board zone ceases to exist. Kill-family
   // deaths keep it until their `die` event has been published (428.1.a.1.b:

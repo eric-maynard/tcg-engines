@@ -392,6 +392,15 @@ export function evaluateTriggerCondition(
     if (!ctx || !sourceCardId) {
       return false;
     }
+    // rule 428.1.a.1.b / 808.1.d.3 (rule-id: ven-078-166) — a Deathknell notes
+    // the unit as it died; the object now in the trash has been reset, so read
+    // the last-known information for its own `die` event.
+    if (event.type === "die" && (event as { cardId?: string }).cardId === sourceCardId) {
+      const lki = getLKI(ctx.draft, sourceCardId);
+      if (lki !== undefined) {
+        return lki.empowered === true;
+      }
+    }
     return ctx.cards.getCardMeta(sourceCardId as CoreCardId)?.empowered === true;
   }
   if (c.type === "not-dealt-damage-this-turn") {
@@ -1050,6 +1059,18 @@ function evaluateControlCondition(
       if (f && typeof f === "object" && typeof (f as { tag?: unknown }).tag === "string") {
         const tag = (f as { tag: string }).tag.toLowerCase();
         if (!(def?.tags ?? []).some((x) => x.toLowerCase() === tag)) {
+          ok = false;
+          break;
+        }
+      }
+      // rule 442.1.a (rule-id: ven-082-166) — "something you control that's
+      // [Empowered]": disempowering a card that isn't Empowered does nothing,
+      // so only Empowered permanents satisfy the clause.
+      if (f === "empowered" || f === "not-empowered") {
+        const meta = ctx.cards.getCardMeta(id as CoreCardId) as
+          | { empowered?: boolean }
+          | undefined;
+        if ((meta?.empowered === true) !== (f === "empowered")) {
           ok = false;
           break;
         }
