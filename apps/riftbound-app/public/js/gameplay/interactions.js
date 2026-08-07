@@ -53,7 +53,13 @@ function onCardClick(cardId) {
     // rule 573 (Repeat) — the same target set may also have Repeat variants;
     // hold targeting open so the banner can offer them instead of silently
     // committing to the base cost.
-    if (move && repeatVariantsFor(interaction.pendingMoves, next).length > 0) {
+    // rule 356.2.b — likewise hold targeting open while an optional additional
+    // cost (discard / sacrifice) can still be elected for this target set.
+    if (
+      move &&
+      (repeatVariantsFor(interaction.pendingMoves, next).length > 0 ||
+        additionalCostVariantsFor(interaction.pendingMoves, next).length > 0)
+    ) {
       interaction.chosenTargets = next;
       interaction.validTargets = remainingTargetIds(
         variantsExtending(interaction.pendingMoves, next),
@@ -242,11 +248,29 @@ function isBaseCostVariant(m) {
   return !m.params?.paidAdditionalCost && !m.params?.repeatCount;
 }
 
+/**
+ * rule 355.13 — a multi-target spell may bind the SAME object more than once
+ * ("deal 1 damage to two units" can hit one unit twice), so target sets are
+ * multisets: containment must compare counts, not set membership.
+ */
+function targetCounts(list) {
+  const counts = new Map();
+  for (const id of list) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return counts;
+}
+
+/** True when every id in `chosen` appears in `list` at least as many times. */
+function containsTargetMultiset(list, chosen) {
+  const have = targetCounts(list);
+  for (const [id, n] of targetCounts(chosen)) if ((have.get(id) ?? 0) < n) return false;
+  return true;
+}
+
 /** Variants whose target set strictly contains `chosen` (more picks possible). */
 function variantsExtending(moves, chosen) {
   return (moves || []).filter(m => {
     const t = moveTargetList(m);
-    return t.length > chosen.length && chosen.every(id => t.includes(id));
+    return t.length > chosen.length && containsTargetMultiset(t, chosen);
   });
 }
 
@@ -254,7 +278,7 @@ function variantsExtending(moves, chosen) {
 function exactTargetVariant(moves, chosen) {
   const matches = (moves || []).filter(m => {
     const t = moveTargetList(m);
-    return t.length === chosen.length && chosen.every(id => t.includes(id));
+    return t.length === chosen.length && containsTargetMultiset(t, chosen);
   });
   return matches.find(isBaseCostVariant) || matches[0] || null;
 }
@@ -269,16 +293,53 @@ function repeatVariantsFor(moves, chosen) {
   return (moves || [])
     .filter(m => {
       const t = moveTargetList(m);
-      if (t.length !== chosen.length || !chosen.every(id => t.includes(id))) return false;
+      if (t.length !== chosen.length || !containsTargetMultiset(t, chosen)) return false;
       return (m.params?.repeatCount ?? 0) > 0;
     })
     .sort((a, b) => (a.params?.repeatCount ?? 0) - (b.params?.repeatCount ?? 0));
 }
 
-/** Ids that can still be added to `chosen` given the extending variants. */
+/**
+ * rule 356.2.b (ven-008-166 Ruthless Strike) — variants binding exactly `chosen`
+ * that also pay an OPTIONAL additional cost (discard / sacrifice / extra pips).
+ * The engine enumerates them alongside the base play; without an explicit opt-in
+ * the UI always takes the base variant and the paid mode is unreachable.
+ */
+function additionalCostVariantsFor(moves, chosen) {
+  return (moves || []).filter(m => {
+    if (!m.params?.paidAdditionalCost || (m.params?.repeatCount ?? 0) > 0) return false;
+    const t = moveTargetList(m);
+    return t.length === chosen.length && containsTargetMultiset(t, chosen);
+  });
+}
+
+/** Short label for the extra cost a paidAdditionalCost variant pays. */
+function additionalCostLabel(m) {
+  if (m.params?.discardId) {
+    const name = (findCard(m.params.discardId)?.name || m.params.discardId).replace(/^player-[12]-/, "");
+    return `Discard ${name}`;
+  }
+  const sacId = m.params?.sacrificeId ?? (m.params?.sacrificeIds || [])[0];
+  if (sacId) {
+    const name = (findCard(sacId)?.name || sacId).replace(/^player-[12]-/, "");
+    return `Sacrifice ${name}`;
+  }
+  return "Pay additional cost";
+}
+
+/**
+ * Ids that can still be added to `chosen` given the extending variants.
+ * rule 355.13 — an id already picked stays selectable while some variant binds
+ * it more times than it has been chosen (e.g. the [X,X] variant of a two-target spell).
+ */
 function remainingTargetIds(extending, chosen) {
+  const picked = targetCounts(chosen);
   const ids = new Set();
-  for (const m of extending) for (const id of moveTargetList(m)) if (!chosen.includes(id)) ids.add(id);
+  for (const m of extending) {
+    for (const [id, n] of targetCounts(moveTargetList(m))) {
+      if (n > (picked.get(id) ?? 0)) ids.add(id);
+    }
+  }
   return [...ids];
 }
 
@@ -303,6 +364,18 @@ function beginTargetingIfNeeded(moves, sourceCardId) {
 function beginTargetingOrPlay(moves, sourceCardId) {
   if (!moves || moves.length === 0) return;
   if (beginTargetingIfNeeded(moves, sourceCardId)) return;
+  // rule 356.2.b (ven-008-166) — with no target choice but several cost
+  // variants, playing moves[0] would silently discard the paid options.
+  if (
+    moves.length > 1 &&
+    sourceCardId &&
+    moves.some(m => m.params?.paidAdditionalCost) &&
+    typeof openPlayCostModal === "function"
+  ) {
+    openPlayCostModal(sourceCardId);
+    if (interaction.mode !== "idle") cancelInteraction();
+    return;
+  }
   const m = moves[0];
   executeMove(m.moveId, m.params, m.playerId);
   if (interaction.mode !== "idle") cancelInteraction();
@@ -343,12 +416,22 @@ function updateTargetBanner() {
     if (none) buttons.push({ label: "No target", move: none });
   }
   const repeats = chosen.length === 0 ? [] : repeatVariantsFor(interaction.pendingMoves, chosen);
+  const paid = chosen.length === 0 ? [] : additionalCostVariantsFor(interaction.pendingMoves, chosen);
   if (chosen.length > 0) {
     const done = exactTargetVariant(interaction.pendingMoves, chosen);
-    if (done) buttons.push({ label: repeats.length > 0 ? "Play" : `Done (${chosen.length})`, move: done });
+    if (done) {
+      buttons.push({
+        label: repeats.length > 0 || paid.length > 0 ? "Play" : `Done (${chosen.length})`,
+        move: done,
+      });
+    }
     // rule 573 — one button per extra Repeat the player can pay for.
     for (const m of repeats) {
       buttons.push({ label: `Repeat x${m.params.repeatCount}`, move: m });
+    }
+    // rule 356.2.b — one button per optional additional cost the player may elect.
+    for (const m of paid) {
+      buttons.push({ label: additionalCostLabel(m), move: m });
     }
   }
   const chosenNames = chosen.map(id => (findCard(id)?.name || id).replace(/^player-[12]-/, ""));
@@ -356,7 +439,9 @@ function updateTargetBanner() {
     ? `Choose a target for ${name} — Esc to cancel`
     : repeats.length > 0
       ? `${name}: ${chosenNames.join(", ")} — Play, or pay Repeat · Esc to cancel`
-      : `${name}: ${chosenNames.join(", ")} — pick another or Done · Esc to cancel`;
+      : paid.length > 0
+        ? `${name}: ${chosenNames.join(", ")} — Play, or pay the additional cost · Esc to cancel`
+        : `${name}: ${chosenNames.join(", ")} — pick another or Done · Esc to cancel`;
   showTargetBanner(text, buttons);
 }
 
