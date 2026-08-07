@@ -58,7 +58,10 @@ export function parseEffects(text: string): Effect | undefined {
   // while Empowered. Without this the trailing sentence fails the strict
   // sentence split and is silently dropped by the single-effect fallback.
   const empoweredInstead = cleaned.match(
-    /^(.+?[^.])\.\s*If (?:this is|I(?:'m| am))\s*\[?Empowered\]?,\s*(?:[a-z]+\s+)?(\d+)(?:\s+[^.]*?)?\s+instead\.?\s*$/is,
+    // rule 827 (ven-077-166 Tools of Empire) — the rider may re-state the whole
+    // instruction ("give that unit +4 [Might] this turn instead"), so anything
+    // may sit between the comma and the replacement amount.
+    /^(.+?[^.])\.\s*If (?:this is|I(?:'m| am))\s*\[?Empowered\]?,\s*(?:[^.]*?\s)?\+?(\d+)(?:\s+[^.]*?)?\s+instead\.?\s*$/is,
   );
   if (empoweredInstead) {
     const base = parseEffects(`${empoweredInstead[1]}.`);

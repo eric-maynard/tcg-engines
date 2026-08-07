@@ -29,6 +29,7 @@ import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../.
 import { getDeflectSurcharge } from "../play/cost";
 import type { SpellEffectTargetShape } from "../play/targeting";
 import {
+  findConditionalBranchTarget,
   findSequenceLeadTarget,
   offBoardPlayIsCasterChosen,
   offBoardPlayZone,
@@ -297,6 +298,13 @@ function activationChosenTarget(effect: unknown): TargetDescriptor | undefined {
   // opponents may react before it resolves — same lead-slot rule as spells.
   if (!t && (effect as { type?: string } | undefined)?.type === "sequence") {
     t = findSequenceLeadTarget(effect as SpellEffectTargetShape);
+  }
+  // rule 355.8 (rule-id: ven-077-166) — "Give a unit +2 [Might]. If this is
+  // [Empowered], give that unit +4 instead": both branches name the same
+  // caster-chosen unit, so the choice belongs to the activation and is locked
+  // when the ability is finalized on the chain — same lead-slot rule as spells.
+  if (!t && (effect as { type?: string } | undefined)?.type === "conditional") {
+    t = findConditionalBranchTarget(effect as SpellEffectTargetShape);
   }
   if (!t || typeof t !== "object") {
     return undefined;
