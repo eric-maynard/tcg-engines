@@ -196,6 +196,49 @@ export function evaluateCondition(
       return friendlyCount === 1;
     }
 
+    // rule-id: sfd-159-221 — "While you have another unit here": count the
+    // units matching the descriptor at the source's location. Rule 445.2:
+    // "here" is the source's own location (base counts as a location too), and
+    // "another" excludes the source itself.
+    case "exists-here": {
+      const target = (condition.target ?? {}) as {
+        controller?: string;
+        excludeSelf?: boolean;
+        location?: string;
+        type?: string;
+        quantity?: { atLeast?: number; exactly?: number };
+      };
+      const registry = getGlobalCardRegistry();
+      const zoneIds: string[] =
+        target.location === "battlefield"
+          ? Object.keys(ctx.draft.battlefields ?? {}).map((bf) => `battlefield-${bf}`)
+          : [source.zone];
+      let count = 0;
+      for (const zoneId of zoneIds) {
+        const ids = zoneId.startsWith("battlefield")
+          ? ctx.zones.getCardsInZone(zoneId as CoreZoneId)
+          : ctx.zones.getCardsInZone(zoneId as CoreZoneId, source.owner as CorePlayerId);
+        for (const id of ids) {
+          const cardId = id as string;
+          if (target.excludeSelf === true && cardId === source.id) {
+            continue;
+          }
+          const owner = ctx.cards.getCardOwner(id as CoreCardId) as string | undefined;
+          if (target.controller === "enemy" ? owner === source.owner : owner !== source.owner) {
+            continue;
+          }
+          if (target.type === "unit" && registry.get(cardId)?.cardType !== "unit") {
+            continue;
+          }
+          count++;
+        }
+      }
+      if (typeof target.quantity?.exactly === "number") {
+        return count === target.quantity.exactly;
+      }
+      return count >= (target.quantity?.atLeast ?? 1);
+    }
+
     // rule 430.1 — "runes you have" are the runes in your rune pool, ready or
     // exhausted; an opponent's runes never count.
     case "runes-at-least": {

@@ -282,6 +282,27 @@ function parseHasCountPhrase(text: string): Condition | undefined {
     return { count, target, type: "has-at-least" } as Condition;
   }
 
+  // rule-id: sfd-159-221 — "you have another unit here": existence of at least
+  // one OTHER friendly unit at the source's location (rule 430 / 445.2).
+  const anotherMatch = text.match(/^you have (?:an)?other (units?|cards?)(?:\s+(.+))?$/i);
+  if (anotherMatch) {
+    const subjType = anotherMatch[1].toLowerCase().replace(/s$/, "");
+    const qualifier = (anotherMatch[2] ?? "").toLowerCase();
+    return {
+      target: {
+        controller: "friendly",
+        excludeSelf: true,
+        ...(qualifier.includes("here")
+          ? { location: "here" }
+          : qualifier.includes("battlefield")
+            ? { location: "battlefield" }
+            : {}),
+        type: subjType === "unit" ? "unit" : "card",
+      } as Target,
+      type: "exists-here",
+    } as unknown as Condition;
+  }
+
   return undefined;
 }
 
@@ -396,7 +417,8 @@ const IF_OPPONENT_CONTROLS_PATTERN = /^if (an opponent controls .+?),?\s*$/i;
 /**
  * Pattern for generic "if you have N ...." — count-based
  */
-const IF_YOU_HAVE_PATTERN = /^if (you have .+?),?\s*$/i;
+// rule-id: sfd-159-221 — "While you have …" reads exactly like "If you have …".
+const IF_YOU_HAVE_PATTERN = /^(?:if|while) (you have .+?),?\s*$/i;
 
 // ============================================================================
 // Parser Functions

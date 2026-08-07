@@ -88,6 +88,30 @@ describe("Static: Might Modifier", () => {
     });
   });
 
+  describe("'another unit here' condition", () => {
+    // rule-id: sfd-159-221 — the condition must be a real one; a `custom`
+    // fallback makes the engine apply the bonus unconditionally.
+    it("should parse 'While you have another unit here, I have +1 :rb_might:.'", () => {
+      const result = parseAbilities("While you have another unit here, I have +1 :rb_might:.");
+
+      expect(result.success).toBe(true);
+      expect(result.abilities?.[0]).toEqual(
+        expect.objectContaining({
+          condition: {
+            target: {
+              controller: "friendly",
+              excludeSelf: true,
+              location: "here",
+              type: "unit",
+            },
+            type: "exists-here",
+          },
+          type: "static",
+        }),
+      );
+    });
+  });
+
   describe("equipment might bonus", () => {
     it("should parse 'Each Equipment attached to me gives double its base Might bonus.'", () => {
       const result = parseAbilities(
