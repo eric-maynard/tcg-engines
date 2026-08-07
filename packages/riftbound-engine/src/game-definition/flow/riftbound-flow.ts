@@ -310,6 +310,15 @@ function runExpirationStep(context: FlowStepContext): void {
             } as Partial<RiftboundCardMeta>);
           }
 
+          // rule 517.2.b — "haven't been dealt damage this turn" gates read this
+          // marker; it is turn-scoped, so forget it once the turn ends.
+          // rule-id: ven-024-166
+          if ((meta as { dealtDamageThisTurn?: boolean }).dealtDamageThisTurn) {
+            context.cards.updateCardMeta(cardId, {
+              dealtDamageThisTurn: false,
+            } as Partial<RiftboundCardMeta>);
+          }
+
           // rule-id: ven-099-166 — "Disempower it at end of turn" (rule 517.2.b)
           if ((meta as { empoweredUntilEndOfTurn?: boolean }).empoweredUntilEndOfTurn) {
             context.cards.updateCardMeta(cardId, {

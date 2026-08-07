@@ -185,10 +185,8 @@ describe("Affectionate Poro (ven-024-166)", () => {
   });
 
   // Expected: damage dealt LAST turn is forgotten; on P1's next turn a Tank-covered combat is clean → draw 1.
-  // Actual: no combat-end trigger support, the hand does not grow.
-  // Blocked: the end-of-turn reset of `dealtDamageThisTurn` lives in the flow's
-  // Ending Step, which is being rewritten concurrently — see riftbound-flow.ts.
-  test.failing("BUG: 'this turn' resets — pinged on turn N, clean (Tank-covered) combat on P1's next turn → draws 1", async () => {
+  // The Ending Step clears the turn-scoped `dealtDamageThisTurn` marker (rule 517.2.b).
+  test("'this turn' resets — pinged on turn N, clean (Tank-covered) combat on P1's next turn → draws 1", async () => {
     const game = await scenario()
       .resources(P1, { energy: 1 })
       .battlefield("bf1", { controller: P2 })
