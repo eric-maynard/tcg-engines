@@ -393,13 +393,16 @@ export function parseActivatedAbilityInner(text: string): ActivatedAbility | und
     remaining = remaining.slice(0, remaining.length - useOnlyMatch[0].length);
   }
 
-  // Extract "Use this ability only while I'm at a battlefield" location restriction
+  // Extract "Use this ability only while I'm at a battlefield" location restriction.
+  // rule 377.2.b (unl-160-219) — the sentence is self-contained, so it is NOT
+  // anchored to the end of the text: printed reminder text may follow it.
+  // Both the straight and the typographic apostrophe are printed.
   const useOnlyAtBattlefield = remaining.match(
-    /\s*Use this ability only while I(?:'m| am) at a battlefield\.?\s*$/i,
+    /\s*Use this ability only while I(?:'m|’m| am) at a battlefield\.?/i,
   );
   if (useOnlyAtBattlefield) {
     restrictions = [...(restrictions ?? []), { type: "self-at-battlefield" }];
-    remaining = remaining.slice(0, remaining.length - useOnlyAtBattlefield[0].length).trim();
+    remaining = remaining.replace(useOnlyAtBattlefield[0], " ").trim();
   }
 
   // Extract "Spend this Energy only during showdowns" restriction (mana mod)

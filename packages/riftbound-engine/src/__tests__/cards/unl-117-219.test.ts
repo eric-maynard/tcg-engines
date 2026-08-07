@@ -125,7 +125,7 @@ describe("Arachnoid Horror (unl-117-219)", () => {
     expect(other.p1.xp()).toBe(0);
   });
 
-  test.failing("BUG: 'I can be played to an occupied battlefield if an enemy unit is alone there' — from hand the Horror is offered base + bf1 (lone enemy) and nothing else (not bf2 with two, not empty bf3, not open bf4)", async () => {
+  test("'I can be played to an occupied battlefield if an enemy unit is alone there' — from hand the Horror is offered base + bf1 (lone enemy) and nothing else (not bf2 with two, not empty bf3, not open bf4)", async () => {
     // Expected: to ∈ {base, battlefield-bf1}. Actual: only base — the permission is not implemented.
     const game = await menuBoard().hand(P1, CARD, "ah").build();
     expect(playTo(game, "ah")).toEqual(["base", "battlefield-bf1"]);
@@ -148,7 +148,7 @@ describe("Arachnoid Horror (unl-117-219)", () => {
     expect(game.p1.resources()).toEqual({ energy: 6, power: { body: 1 } }); // nothing spent on the rejected play
   });
 
-  test.failing("BUG: the drop-in attack — played onto bf1 where a 3-Might Loner stands alone, the Horror enters there exhausted, contests bf1, and the ensuing combat kills the Loner: conquer (+1 point) and Hunt 2 (+2 XP)", async () => {
+  test("the drop-in attack — played onto bf1 where a 3-Might Loner stands alone, the Horror enters there exhausted, contests bf1, and the ensuing combat kills the Loner: conquer (+1 point) and Hunt 2 (+2 XP)", async () => {
     // Expected: play(ah → bf1) is legal; after settling: loner in trash, bf1 → P1, points 1, xp 2, Horror
     // exhausted at bf1. Actual: bf1 is not a legal play location.
     const game = await menuBoard().hand(P1, CARD, "ah").build();
@@ -169,7 +169,7 @@ describe("Arachnoid Horror (unl-117-219)", () => {
     expect(game.p1.xp()).toBe(2);
   });
 
-  test.failing("BUG: 'Friendly units can be played to an occupied battlefield if an enemy unit is alone there' — with the Horror on the board (in base) a vanilla unit in hand is offered bf1, and only bf1 among the battlefields", async () => {
+  test("'Friendly units can be played to an occupied battlefield if an enemy unit is alone there' — with the Horror on the board (in base) a vanilla unit in hand is offered bf1, and only bf1 among the battlefields", async () => {
     // Expected: to ∈ {base, battlefield-bf1} for the Recruit. Actual: only base.
     const game = await menuBoard()
       .unit(P1, "base", CARD, "ah")

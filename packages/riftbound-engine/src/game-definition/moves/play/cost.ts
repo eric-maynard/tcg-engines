@@ -18,6 +18,7 @@ import { type EffectContext, executeEffect } from "../../../abilities/effect-exe
 import { evaluateLegionCondition } from "../../../abilities/legion-conditions";
 import { evaluateWhileLevel } from "../../../abilities/xp-conditions";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { scoreWithinConditionMet } from "../../../operations/score-within";
 import { pointsGainedThisTurn } from "../../../operations/points";
 import {
   type CostReductionContext,
@@ -31,7 +32,7 @@ import {
   decodeCostAmount,
   reducePowerCost,
 } from "../../../operations/static-cost-reduction";
-import { getBattlefieldZoneId } from "../../../zones/zone-configs";
+import { getBattlefieldZoneId, isBattlefieldZone } from "../../../zones/zone-configs";
 
 /**
  * Check whether a card carries a static ability whose effect has the given
@@ -82,6 +83,7 @@ export function staticEnterReadyApplies(
   playerId: string,
   zones?: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
   cards?: EnterReadyCardAccessor,
+  entryZone?: string,
 ): boolean {
   const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
   for (const ability of abilities) {
@@ -109,7 +111,8 @@ export function staticEnterReadyApplies(
     }
     if (
       !condition ||
-      evaluateEnterReadyCondition(condition, state, playerId, cardId, zones, cards) !== false
+      evaluateEnterReadyCondition(condition, state, playerId, cardId, zones, cards, entryZone) !==
+        false
     ) {
       return true;
     }
@@ -143,8 +146,18 @@ function evaluateEnterReadyCondition(
   cardId?: string,
   zones?: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
   cards?: EnterReadyCardAccessor,
+  entryZone?: string,
 ): boolean | undefined {
   switch (condition.type) {
+    // rule 143.4 (rule-id: unl-194-219 Shadow) — "If you play me to a
+    // battlefield, I enter ready": the clause is conditional on where the unit
+    // actually enters; played to the base it enters exhausted like any unit.
+    case "played-to-battlefield": {
+      if (entryZone === undefined) {
+        return undefined;
+      }
+      return isBattlefieldZone(entryZone);
+    }
     // rule 419.1 (rule-id: ven-013-166) — "if you have a card with my name in
     // your trash": evaluated as the unit enters, so a card played OUT of the
     // trash has already left it and never counts itself.
@@ -196,21 +209,16 @@ function evaluateEnterReadyCondition(
         cardId,
         zones,
         cards,
+        entryZone,
       );
       return inner === undefined ? undefined : !inner;
     }
-    case "score-within": {
-      const range = ((condition.points ?? condition.range) as number | undefined) ?? 0;
-      const whose = (condition.whose as string | undefined) ?? "opponent";
-      const pids = Object.keys(state.players).filter((pid) =>
-        whose === "your" ? pid === playerId : whose === "any" ? true : pid !== playerId,
+    case "score-within":
+      return scoreWithinConditionMet(
+        condition as { points?: number; range?: number; whose?: string },
+        state,
+        playerId,
       );
-      return pids.some((pid) => {
-        const player = state.players[pid];
-        const threshold = state.victoryScore + (player?.victoryScoreModifier ?? 0);
-        return threshold - (player?.victoryPoints ?? 0) <= range;
-      });
-    }
     // rule-id: ogn-144-298 — "If an enemy unit has died this turn": read the
     // per-player turn event log (`fireTriggers` records deaths).
     case "this-turn": {
@@ -615,12 +623,13 @@ export function boardEntersReadyGrantApplies(
   cardId: string,
   playerId: string,
   cards?: EnterReadyCardAccessor,
+  entryZone?: string,
 ): boolean {
   // rule 143.4 / 364.3.a (rule-id: sfd-027-221) — the played card's OWN
   // conditional "I enter ready" static ("If you have two or fewer cards in
   // your hand") can only be evaluated with zone access, and this is the
   // enter-ready check that receives it.
-  if (staticEnterReadyApplies(cardId, state, playerId, zones, cards)) {
+  if (staticEnterReadyApplies(cardId, state, playerId, zones, cards, entryZone)) {
     return true;
   }
   const registry = getGlobalCardRegistry();
@@ -723,6 +732,94 @@ function selfGrantsPlayLocationKeyword(cardId: string, keyword: string): boolean
  */
 export function canPlayToEnemyOccupiedBattlefield(cardId: string): boolean {
   return selfGrantsPlayLocationKeyword(cardId, "CanPlayToEnemyBattlefield");
+}
+
+/** A static `can-play-to-occupied` permission, once it is known to apply. */
+export type OccupiedBattlefieldPermission = { readonly requiresLoneEnemy: boolean };
+
+/**
+ * Read a `can-play-to-occupied` static off one card: `forSelf` picks the
+ * "I can be played …" form, otherwise the "Friendly units can be played …" grant.
+ */
+function readOccupiedBattlefieldPermission(
+  hostId: string,
+  forSelf: boolean,
+): OccupiedBattlefieldPermission | undefined {
+  for (const ability of getGlobalCardRegistry().getAbilities(hostId) ?? []) {
+    if (ability?.type !== "static") {
+      continue;
+    }
+    const staticAbility = ability as {
+      condition?: { type?: string };
+      effect?: { target?: { controller?: string; type?: string }; type?: string };
+    };
+    if (staticAbility.effect?.type !== "can-play-to-occupied") {
+      continue;
+    }
+    const target = staticAbility.effect.target;
+    if (forSelf !== (target?.type === "self")) {
+      continue;
+    }
+    if (!forSelf && target?.controller !== "friendly") {
+      continue;
+    }
+    return { requiresLoneEnemy: staticAbility.condition?.type === "enemy-unit-alone" };
+  }
+  return undefined;
+}
+
+/**
+ * rule 355.2 (unl-117-219, Arachnoid Horror) — "I can be played to an occupied
+ * battlefield if an enemy unit is alone there", plus the same permission granted
+ * to every friendly unit. rule 365.1: the grant is a permanent's passive, so only
+ * cards already on this player's board (base or a battlefield) hand it out — a
+ * copy in hand grants nothing. Returns undefined when no permission applies.
+ */
+export function getOccupiedBattlefieldPermission(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  cardId: string,
+  playerId: string,
+): OccupiedBattlefieldPermission | undefined {
+  const own = readOccupiedBattlefieldPermission(cardId, true);
+  if (own) {
+    return own;
+  }
+  const zoneIds = [
+    "base",
+    ...Object.keys(state.battlefields ?? {}).map((bfId) => getBattlefieldZoneId(bfId) as string),
+  ];
+  for (const zoneId of zoneIds) {
+    for (const hostId of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
+      const granted = readOccupiedBattlefieldPermission(hostId as string, false);
+      if (granted) {
+        return granted;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * rule 170.11.a (occupied = a unit is there) + rule 740.2.a (alone = no other
+ * unit at that location): does `bfId` match what the permission asks for?
+ */
+export function battlefieldMatchesOccupiedPermission(
+  zones: { getCardsInZone: (zone: CoreZoneId, player?: CorePlayerId) => readonly CoreCardId[] },
+  getController: (cardId: CoreCardId) => string | undefined,
+  bfId: string,
+  playerId: string,
+  permission: OccupiedBattlefieldPermission,
+): boolean {
+  const occupants = zones.getCardsInZone(getBattlefieldZoneId(bfId) as CoreZoneId);
+  const enemies = occupants.filter((occupant) => {
+    const controller = getController(occupant);
+    return controller !== undefined && controller !== playerId;
+  });
+  if (enemies.length === 0) {
+    return false;
+  }
+  return permission.requiresLoneEnemy ? occupants.length === 1 : true;
 }
 
 /**

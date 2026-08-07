@@ -41,6 +41,8 @@ import {
   canPlayToOpenBattlefield,
   canPlayToOccupiedEnemyBattlefield,
   canPlayToEnemyOccupiedBattlefield,
+  getOccupiedBattlefieldPermission,
+  battlefieldMatchesOccupiedPermission,
   battlefieldHasEnemyUnits,
   canPlayToAttackedBattlefield,
   battlefieldIsAttackedBy,
@@ -78,6 +80,26 @@ type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCar
  * Domain. Returns the per-Domain amounts to spend, or undefined when the pool
  * cannot cover the pips.
  */
+/**
+ * rule 355.2 / 740.2.a (unl-117-219) — may `cardId` be played onto `bfId`
+ * because of a `can-play-to-occupied` permission (its own, or one a friendly
+ * permanent grants) and does that battlefield's occupancy satisfy it?
+ */
+function occupiedPermissionAllowsBattlefield(
+  state: Parameters<typeof getOccupiedBattlefieldPermission>[0],
+  zones: Parameters<typeof getOccupiedBattlefieldPermission>[1],
+  getController: Parameters<typeof battlefieldMatchesOccupiedPermission>[1],
+  cardId: string,
+  playerId: string,
+  bfId: string,
+): boolean {
+  const permission = getOccupiedBattlefieldPermission(state, zones, cardId, playerId);
+  return (
+    permission !== undefined &&
+    battlefieldMatchesOccupiedPermission(zones, getController, bfId, playerId, permission)
+  );
+}
+
 function planAdditionalCostPips(
   pips: readonly string[],
   have: Partial<Record<string, number>>,
@@ -617,6 +639,24 @@ export const playUnit: Defs["playUnit"] = {
       // rule 355.2 (unl-120-219): "I can be played to a battlefield where there
       // are enemy units (even if you don't have units there)" — the enemy units
       // present, not the battlefield's controller, make it a legal destination.
+    } else if (
+      targetIsBattlefield &&
+      Boolean(targetBfId) &&
+      standardTimingOk &&
+      occupiedPermissionAllowsBattlefield(
+        state,
+        context.zones,
+        (id) =>
+          (context.cards.getCardController?.(id) as string | undefined) ??
+          (context.cards.getCardOwner(id) as string | undefined),
+        context.params.cardId as string,
+        context.params.playerId as string,
+        targetBfId as string,
+      )
+    ) {
+      // rule 355.2 / 740.2.a (unl-117-219): "can be played to an occupied
+      // battlefield if an enemy unit is alone there" — printed on the card or
+      // granted to friendly units by a permanent on the board.
     } else if (targetIsBattlefield && !hasAmbush) {
       return false;
     } else if (targetIsBattlefield) {
@@ -1369,6 +1409,36 @@ export const playUnit: Defs["playUnit"] = {
         }
       }
 
+      // rule 355.2 / 740.2.a (unl-117-219): offer occupied battlefields granted
+      // by a `can-play-to-occupied` static — the card's own, or one a friendly
+      // permanent hands to every friendly unit (365.1).
+      if (standardTiming) {
+        for (const bfId of Object.keys(state.battlefields ?? {})) {
+          const bfZoneId = getBattlefieldZoneId(bfId) as string;
+          if (results.some((r) => r.cardId === (cardId as string) && r.location === bfZoneId)) {
+            continue;
+          }
+          if (
+            occupiedPermissionAllowsBattlefield(
+              state,
+              context.zones,
+              (id) =>
+                (context.cards.getCardController?.(id) as string | undefined) ??
+                (context.cards.getCardOwner(id) as string | undefined),
+              cardId as string,
+              context.playerId as string,
+              bfId,
+            )
+          ) {
+            results.push({
+              cardId: cardId as string,
+              location: bfZoneId,
+              playerId: context.playerId as string,
+            });
+          }
+        }
+      }
+
       // Rule 560 / 717: when the unit declares an optional additional
       // play-cost, also enumerate the paid variant so callers can elect
       // to pay it.
@@ -1795,8 +1865,8 @@ export const playUnit: Defs["playUnit"] = {
     // grant "enters ready" to the units its controller plays.
     const entersReady =
       replacedReady ||
-      staticEnterReadyApplies(cardId, draft, playerId, zones, context.cards) ||
-      boardEntersReadyGrantApplies(draft, zones, cardId, playerId, context.cards) ||
+      staticEnterReadyApplies(cardId, draft, playerId, zones, context.cards, entryZone) ||
+      boardEntersReadyGrantApplies(draft, zones, cardId, playerId, context.cards, entryZone) ||
       paidAccelerate;
     if (!entersReady) {
       counters.setFlag(cardId as CoreCardId, "exhausted", true);
