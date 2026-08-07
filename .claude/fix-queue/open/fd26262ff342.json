@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "unl-138-219",
+  "title": "[Exhaust] ability cannot be activated",
+  "expected": "Parser (riftbound-cards/src/parser/impl/effects-might.ts:121-139) emits The List's exhaust effect with target filter { tag: \"named\" } as a literal placeholder. The engine's filter matcher (riftbound-engine/src/abilities/target-resolver.ts:737-739) compares filter.tag literally against the card definition's tags array (`tags?.includes(filter.tag)`), so it looks for a unit whose printed tag is the string \"named\" — never true for Pouty Poro (tag \"Poro\"). There is no engine support for \"As you play this, name a tag\": grep for 'name a tag'/'named' in riftbound-engine/src finds nothing, and labelCard (game-definition/moves/card-actions.ts:88-95) only writes meta.label, which target-resolver never consults for tag filters. Hence no legal target exists, activateAbility is not enumerated, and direct execution fails the target condition.",
+  "observed": "pw moves lists no activateAbility for The List; direct executeMove/REST activateAbility returns CONDITION_FAILED (target filter {tag:'named'} never matches because no tag can be named). Manually labelCard='Poro' did not help either.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/target-resolver.ts:737",
+  "id": "fd26262ff342",
+  "createdAt": "2026-08-07T07:42:18.110Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.110Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

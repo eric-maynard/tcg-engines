@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "unl-138-219",
+  "title": "'As you play this, name a tag' clause not implemented",
+  "expected": "Card def /root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/unl/the-list.ts:4-15 has no `abilities` field, only rulesText. Running parseAbilities() on that rulesText yields exactly one ability — the [Exhaust] activated modify-might with target filter {tag:\"named\"} (parser/impl/effects-might.ts:120-139); the \"As you play this, name a tag\" sentence produces nothing (no parser rule matches \"name a tag\" — the only \"As you play this\" handlers are additional-cost patterns in spells.ts:74/155, replacement.ts:25, effects-conditional.ts:57). Engine side: there is a name-card effect (abilities/effects/name-card.ts, namedCard meta) but no name-tag equivalent; grep for namedTag/name-tag in riftbound-engine/src, server.ts, and public/js/gameplay returns nothing. target-resolver.ts:737-739 treats filter.tag \"named\" as a literal tag string via tags.includes(\"named\"), so no named tag is ever prompted for or stored.",
+  "observed": "playGear resolved straight to base with no pendingChoice, no prompt in UI, and no named-tag stored in card meta; parseAbilities() output for this rulesText contains only the [Exhaust] activated ability — the name-a-tag clause is dropped",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/effects-might.ts:120",
+  "id": "0ecced1004c3",
+  "createdAt": "2026-08-07T07:42:18.109Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.109Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

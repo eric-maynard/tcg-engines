@@ -15,18 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:42:39.657Z",
-      "event": "done(unclaimed)",
-      "note": "same mulligan condition also rejects 3-card requests instead of truncating"
+      "at": "2026-08-07T05:33:00.729Z",
+      "event": "grabbed:w8-i15"
+    },
+    {
+      "at": "2026-08-07T05:33:08.519Z",
+      "event": "done",
+      "note": "stale queue entry: repro already fixed and flipped upstream; verified passing in setup-decks-and-mulligan.test.ts (52 pass / 0 fail)"
     }
   ],
   "status": "done",
+  "claimedBy": "w8-i15",
+  "claimedAt": "2026-08-07T05:33:00.729Z",
   "resolution": {
-    "note": "same mulligan condition also rejects 3-card requests instead of truncating",
+    "note": "stale queue entry: repro already fixed and flipped upstream; verified passing in setup-decks-and-mulligan.test.ts (52 pass / 0 fail)",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/setup.ts",
       "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts"
     ],
-    "at": "2026-08-07T00:42:39.657Z"
+    "at": "2026-08-07T05:33:08.519Z"
   }
 }

@@ -15,36 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:43:57.387Z",
-      "event": "grabbed:w4-i12"
+      "at": "2026-08-07T05:21:48.300Z",
+      "event": "grabbed:w8-i13"
     },
     {
-      "at": "2026-08-06T23:44:42.566Z",
+      "at": "2026-08-07T05:22:59.692Z",
       "event": "done",
-      "note": "flip test.failing→test: move-to-battlefield trigger already fires on Standard Move"
-    },
-    {
-      "at": "2026-08-06T23:46:45.649Z",
-      "event": "reopened:w4-i12 — passes only with another lane in-flight card-def edit"
-    },
-    {
-      "at": "2026-08-06T23:47:00.574Z",
-      "event": "grabbed:w4-i13"
-    },
-    {
-      "at": "2026-08-06T23:49:35.633Z",
-      "event": "done",
-      "note": "already fixed by move-to-battlefield matcher; flipped repro"
+      "note": "already fixed at HEAD; repro test flipped and passing (verified)"
     }
   ],
   "status": "done",
-  "claimedBy": "w4-i13",
-  "claimedAt": "2026-08-06T23:47:00.574Z",
+  "claimedBy": "w8-i13",
+  "claimedAt": "2026-08-07T05:21:48.300Z",
   "resolution": {
-    "note": "already fixed by move-to-battlefield matcher; flipped repro",
+    "note": "already fixed at HEAD; repro test flipped and passing (verified)",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/rulings/irresistible-faefolk-412a145427c43aa6.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/"
     ],
-    "at": "2026-08-06T23:49:35.633Z"
+    "at": "2026-08-07T05:22:59.692Z"
   }
 }

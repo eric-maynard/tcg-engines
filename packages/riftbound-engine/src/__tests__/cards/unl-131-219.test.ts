@@ -41,6 +41,7 @@ describe("Abandon (unl-131-219)", () => {
       .hand(P2, CARD, "abandon")
       .build();
     await game.p1.cast("cleave", { targets: "ally" });
+    await game.p1.passPriority(); // rule 312.1
     await game.p2.cast("abandon");
     expect(game.chain().map((i) => i.cardId)).toEqual(["cleave", "abandon"]);
     await game.settle();
@@ -65,6 +66,7 @@ describe("Abandon (unl-131-219)", () => {
     await game.p1.cast("cleave1");
     await game.p1.passPriority();
     await game.p2.cast("cleave2");
+    await game.p2.passPriority(); // rule 312.1
     expect(game.chain().map((i) => i.cardId)).toEqual(["cleave1", "cleave2"]);
     const offered = game.p1
       .option("cast", "abandon")

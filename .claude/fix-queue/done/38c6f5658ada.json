@@ -9,27 +9,36 @@
   },
   "id": "38c6f5658ada",
   "createdAt": "2026-08-06T17:39:26.577Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T17:39:26.577Z",
       "event": "enqueued:unit-bug"
     },
     {
-      "at": "2026-08-07T01:45:03.894Z",
-      "event": "grabbed:w7-i22"
+      "at": "2026-08-06T21:23:25.147Z",
+      "event": "grabbed:w10-i4"
     },
     {
-      "at": "2026-08-07T02:35:32.104Z",
-      "event": "done",
-      "note": ""
+      "at": "2026-08-06T21:38:25.805Z",
+      "event": "failed",
+      "note": "not fixed by my patch: needs the 'here-battlefield' location work (parser effect-keyword-parser + target-resolver + resolve.ts diedAt) that another lane has in-flight uncommitted; test passes in the shared tree, will land with that lane"
+    },
+    {
+      "at": "2026-08-07T08:14:36.886Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-07T08:18:37.070Z",
+      "event": "done(unclaimed)",
+      "note": "WP3 leaveBoard/LKI (b7d20e7..a181534): death choke point + LKI/damage-store landed; this test is green at HEAD"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i22",
-  "claimedAt": "2026-08-07T01:45:03.894Z",
+  "claimedBy": "w10-i4",
+  "claimedAt": "2026-08-06T21:23:25.147Z",
   "resolution": {
-    "note": "",
-    "at": "2026-08-07T02:35:32.104Z"
+    "note": "WP3 leaveBoard/LKI (b7d20e7..a181534): death choke point + LKI/damage-store landed; this test is green at HEAD",
+    "at": "2026-08-07T08:18:37.070Z"
   }
 }

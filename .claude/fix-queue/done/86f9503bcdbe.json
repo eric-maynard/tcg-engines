@@ -15,23 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T01:40:25.884Z",
-      "event": "grabbed:w11-i14"
+      "at": "2026-08-07T05:24:48.423Z",
+      "event": "grabbed:w3-i10"
     },
     {
-      "at": "2026-08-07T01:46:35.507Z",
+      "at": "2026-08-07T05:25:04.129Z",
       "event": "done",
-      "note": "parser: 'Each player kills one of their X' now emits controller:friendly + upTo:1 so the engine per-player fan-out triggers"
+      "note": "already fixed at HEAD: parser+card emit controller:'friendly' and kill.ts handleEachPlayerKill fans out; ogn-179-298 tests 6/6 pass"
     }
   ],
   "status": "done",
-  "claimedBy": "w11-i14",
-  "claimedAt": "2026-08-07T01:40:25.884Z",
+  "claimedBy": "w3-i10",
+  "claimedAt": "2026-08-07T05:24:48.423Z",
   "resolution": {
-    "note": "parser: 'Each player kills one of their X' now emits controller:friendly + upTo:1 so the engine per-player fan-out triggers",
+    "note": "already fixed at HEAD: parser+card emit controller:'friendly' and kill.ts handleEachPlayerKill fans out; ogn-179-298 tests 6/6 pass",
     "files": [
-      "packages/riftbound-cards/src/parser/impl/effects-damage.ts"
+      "packages/riftbound-engine/src/abilities/effects/kill.ts"
     ],
-    "at": "2026-08-07T01:46:35.507Z"
+    "at": "2026-08-07T05:25:04.129Z"
   }
 }

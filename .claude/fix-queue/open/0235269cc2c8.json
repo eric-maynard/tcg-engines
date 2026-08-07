@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ven-075-166",
+  "title": "[Reaction] [Exhaust]: [Add] ability is placed on the chain and waits for priority passes instead of resolving immediately",
+  "expected": "The parser (riftbound-cards/src/parser/impl/activated.ts:298-315) emits Platewyrm Egg's ability effect as {type:'conditional', condition:{type:'while-empowered'}, then:add-resource, else:add-resource}. The engine's immediate-resolve gate at riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:1399-1400 only checks the TOP-LEVEL effect type (`effectType === \"add-resource\" || effectType === \"add\"`); a 'conditional' wrapper fails that check and falls through to addToChain at line 1429, creating a respondable chain item. Same top-level-only check at line 533 (mid-payment usability). This violates rule 429.2 (activated Add abilities resolve as soon as finalized; priority does not pass).",
+  "observed": "Activating Platewyrm Egg's ability created chain item {type:'conditional', condition:while-empowered, then add-resource 2, else add-resource 1} and required passChainPriority (p1, and p2 when driven) before the energy was added; opponents therefore get a window to respond. Likely the immediate-resolve check doesn't recognise add-resource nested inside a conditional.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:1400",
+  "id": "0235269cc2c8",
+  "createdAt": "2026-08-07T07:42:18.109Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.109Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

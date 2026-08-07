@@ -15,25 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:24:22.734Z",
-      "event": "grabbed:w4-i11"
+      "at": "2026-08-07T05:19:06.810Z",
+      "event": "grabbed:w9-i9"
     },
     {
-      "at": "2026-08-06T23:29:53.721Z",
+      "at": "2026-08-07T05:19:54.775Z",
       "event": "done",
-      "note": "466.3.d No Result: no recall/conquer when cleanup left no defender; restage combat"
+      "note": "already green at HEAD; verified in a clean worktree, no new edits needed"
     }
   ],
   "status": "done",
-  "claimedBy": "w4-i11",
-  "claimedAt": "2026-08-06T23:24:22.734Z",
+  "claimedBy": "w9-i9",
+  "claimedAt": "2026-08-07T05:19:06.810Z",
   "resolution": {
-    "note": "466.3.d No Result: no recall/conquer when cleanup left no defender; restage combat",
+    "note": "already green at HEAD; verified in a clean worktree, no new edits needed",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts",
-      "packages/riftbound-engine/src/types/game-state.ts",
       "packages/riftbound-engine/src/__tests__/cards/rulings/glasc-mixologist-8bb44b90da8bab68.test.ts"
     ],
-    "at": "2026-08-06T23:29:53.721Z"
+    "at": "2026-08-07T05:19:54.775Z"
   }
 }

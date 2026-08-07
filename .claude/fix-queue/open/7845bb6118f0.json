@@ -1,0 +1,18 @@
+{
+  "source": "playtest",
+  "title": "The chain item that resolved this step was Herald of the Arcane's activated ability ('[1], [Exhaust]: Play a 1 Might Recruit unit token'), which the engine offered (step 31 action list) and let player-1 activate (step 32) while a Showdown was in progress at Abandoned Hall; it resolved now, creating a Recruit token in base during the showdown.",
+  "expected": "Trace steps 31-34 confirm: showdown active at player-1-bf-unl-205-219 (focusPlayer player-1, isCombatShowdown false), step 32 activateAbility on player-1-legend-ogn-265-298 put a create-token Recruit ability on the chain, resolved by step 34 with showdown still active. Card def (riftbound-cards/src/cards/ogn/herald-of-the-arcane.ts:16-25) declares the ability with no keyword/timing. Engine: activate-ability.ts:39-50 `abilityTimingClass` returns \"standard\" only for gear hosts and otherwise defaults to \"action\" (line 49: `getCardType(hostCardId) === \"gear\" ? \"standard\" : \"action\"`), so a legend's keyword-less activated ability is treated as Action-timed; isLegalTiming (chain/chain-state.ts:207-208) then permits \"action\" in showdown-open, and the condition at activate-ability.ts:514-530 only additionally checks Focus. Rule 313.1.a text (verified via rule.ts): \"A player with Focus may not play spells or activate abilities that don't have the Action or Reaction keywords.\" So the engine wrongly allows non-Action/Reaction, non-gear activated abilities during a Showdown Open State.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:49",
+  "rule": "313.1.a / 347.1 (Herald of the Arcane ogn-265-298)",
+  "id": "7845bb6118f0",
+  "createdAt": "2026-08-07T07:42:18.112Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.112Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

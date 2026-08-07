@@ -15,23 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:02:44.702Z",
-      "event": "grabbed:w6-i7"
+      "at": "2026-08-07T05:24:08.124Z",
+      "event": "grabbed:w3-i10"
     },
     {
-      "at": "2026-08-07T00:04:30.403Z",
+      "at": "2026-08-07T05:24:45.733Z",
       "event": "done",
-      "note": "Ending-phase heal clears the mirrored damage counter too (317.2.b/124.1)"
+      "note": "already fixed at HEAD: Ending Special Cleanup zeroes damage counters; repro test passes"
     }
   ],
   "status": "done",
-  "claimedBy": "w6-i7",
-  "claimedAt": "2026-08-07T00:02:44.702Z",
+  "claimedBy": "w3-i10",
+  "claimedAt": "2026-08-07T05:24:08.124Z",
   "resolution": {
-    "note": "Ending-phase heal clears the mirrored damage counter too (317.2.b/124.1)",
+    "note": "already fixed at HEAD: Ending Special Cleanup zeroes damage counters; repro test passes",
     "files": [
-      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts"
+      "packages/riftbound-engine/src/__tests__/core-rules/combat-damage-assignment-status-and-healing.test.ts"
     ],
-    "at": "2026-08-07T00:04:30.403Z"
+    "at": "2026-08-07T05:24:45.733Z"
   }
 }

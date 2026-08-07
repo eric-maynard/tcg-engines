@@ -1,0 +1,40 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-076-221",
+  "title": "BUG: parsed abilities should cover all three printed clauses — the conditional self cost-reduction is missing",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-076-221.test.ts",
+    "testName": "BUG: parsed abilities should cover all three printed clauses — the conditional self cost-reduction is missing"
+  },
+  "id": "c7423e781850",
+  "createdAt": "2026-08-07T00:50:42.048Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:50:42.048Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:46:52.507Z",
+      "event": "grabbed:w11-i13"
+    },
+    {
+      "at": "2026-08-07T05:48:19.505Z",
+      "event": "done",
+      "note": "already fixed at HEAD: 'This costs [N] less if COND' static-parser rider emits conditional self cost-reduction; verified on clean HEAD"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i13",
+  "claimedAt": "2026-08-07T05:46:52.507Z",
+  "resolution": {
+    "note": "already fixed at HEAD: 'This costs [N] less if COND' static-parser rider emits conditional self cost-reduction; verified on clean HEAD",
+    "files": [
+      "packages/riftbound-cards/src/parser/parsers/static-parser.ts",
+      "packages/riftbound-cards/src/data/enrich-cards.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-076-221.test.ts"
+    ],
+    "at": "2026-08-07T05:48:19.505Z"
+  }
+}

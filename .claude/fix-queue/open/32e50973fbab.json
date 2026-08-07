@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ven-124-166",
+  "title": "[Empower] — Kill a friendly unit activated ability is not offered/does nothing",
+  "expected": "Verified via getAllCards(): ven-124-166 (Escaped Grayback) resolves to a single ability — the static {condition: while-empowered, effect: modify-might +2}. The \"[Empower] — Kill a friendly unit\" line is dropped. Root cause at /root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/activated.ts:53-55 — the [Empower] keyword-cost regex only accepts :rb_energy_N:/:rb_rune_X:/:rb_exhaust: cost tokens, so a \"Kill a friendly unit\" cost never matches and no activated ability (cost: kill friendly unit, effect: empower self) is emitted. ven.json:3806-3808 has abilities:[null] and there is no hand-written src/cards override for this card, so the engine has no activated ability to enumerate or execute.",
+  "observed": "No activateAbility move enumerated for Grayback at all (moves = endTurn/concede/rune moves only); calling executeMove('activateAbility',{cardId:Grayback,abilityIndex:0}) directly was a no-op (Flame Chompers still alive, no chain item, no empowered flag). Parser output for this rulesText contains only the while-empowered static (+2 might) — the `[Empower] — Kill a friendly unit` line is dropped because the [Empower] keyword-cost regex in riftbound-cards/src/parser/impl/activated.ts only accepts energy/rune/exhaust costs, not a 'Kill a friendly unit' cost.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/activated.ts:54",
+  "id": "32e50973fbab",
+  "createdAt": "2026-08-07T07:42:18.110Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.110Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

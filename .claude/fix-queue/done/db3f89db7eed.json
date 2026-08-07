@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "ven-156-166",
+  "title": "No way to decline the optional pick ('You may choose a card')",
+  "expected": "ven-156-166 is a JSON-set card whose ability comes from the parser. parseLookEffect (packages/riftbound-cards/src/parser/impl/effects-draw.ts:90-139) only special-cases the \"You may banish ... and play it\" tail; \"You may choose a card from among them and draw it. Put the rest into your trash.\" falls through to line 139 `return { amount, from, type: \"look\" }` with no `optional: true` (verified by dumping getAllCards(): effect is exactly {amount:3,from:\"deck\",type:\"look\"}). handle_look (riftbound-engine/src/abilities/effects/look.ts:97) only sets pendingChoice.optional when `visionLike || lookEff.optional`, so the reveal-and-pick choice is non-optional (and onRest defaults to \"recycle\", not trash, line 53). resolvePendingChoice then rejects accept:false unless choice.optional (game-definition/moves/pending-choice.ts:662) and the enumerator only pushes the {accept:false} decline variant when choice.optional (pending-choice.ts:803-804). Hence only the 3 pickedCardId moves are offered and a param-less/decline call fails 'condition not met'.",
+  "observed": "Only three resolvePendingChoice moves (one per revealed card) were offered; UI modal 'Choose a card to draw — Play is paused until you choose' had no skip button; executeMove('resolvePendingChoice',{playerId}) without pickedCardId was rejected ('condition not met').",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/effects-draw.ts:139",
+  "id": "db3f89db7eed",
+  "createdAt": "2026-08-07T03:31:36.293Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.293Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T06:14:39.703Z",
+      "event": "grabbed:w3-i20"
+    },
+    {
+      "at": "2026-08-07T06:19:21.568Z",
+      "event": "done",
+      "note": "parser: 'You may choose a card from among them and draw it' now sets optional:true so the look pick is declinable"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i20",
+  "claimedAt": "2026-08-07T06:14:39.703Z",
+  "resolution": {
+    "note": "parser: 'You may choose a card from among them and draw it' now sets optional:true so the look pick is declinable",
+    "files": [
+      "packages/riftbound-cards/src/parser/impl/effects-draw.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ven-156-166.test.ts"
+    ],
+    "at": "2026-08-07T06:19:21.568Z"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-012-221",
+  "title": "BUG: four cards played → costs exactly 1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-012-221.test.ts",
+    "testName": "BUG: four cards played → costs exactly 1"
+  },
+  "id": "c3243069bbea",
+  "createdAt": "2026-08-07T00:42:07.690Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:42:07.690Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:46:17.645Z",
+      "event": "grabbed:w11-i12"
+    },
+    {
+      "at": "2026-08-07T05:46:42.292Z",
+      "event": "done",
+      "note": "already fixed and landed at HEAD (b69eb63); verified 24/24 pass in clean worktree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i12",
+  "claimedAt": "2026-08-07T05:46:17.645Z",
+  "resolution": {
+    "note": "already fixed and landed at HEAD (b69eb63); verified 24/24 pass in clean worktree",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-094-221.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-012-221.test.ts"
+    ],
+    "at": "2026-08-07T05:46:42.292Z"
+  }
+}

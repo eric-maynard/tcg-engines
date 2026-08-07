@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ven-060-166",
+  "title": "Effect 'Deal 4 to a unit at a battlefield' never happens",
+  "expected": "Sky Cruiser (ven-060-166) has no hand-authored abilities in ven.json; enrichCard re-parses rulesText at runtime into an activated ability with cost `{discard: {amount: 1, cardType: \"gear\"}, energy: 1, exhaust: true}` (verified by dumping getCardRegistry().get(\"ven-060-166\")). The discard cost is an OBJECT, but activate-ability.ts only handles a numeric discard cost: condition (line 715-716) and enumerator (line 1068-1071) do `cost.discard as number; if (discardCost && discardCost > 0)` — `{...} > 0` is false, so no hand check runs and no `discardId` is enumerated/required. The reducer then pays energy (line 1272 deductAbilityCost) and sets exhausted (line 1290-1291) BEFORE reaching line 1324-1327: `if (cost.discard) { if (!discardId) { return; } }` — the object is truthy, discardId is undefined, so the reducer returns early after costs are taken and before addToChain (line 1429). Result: energy -1, host exhausted, no chain item, no pendingChoice, no damage — exactly the observed behavior.",
+  "observed": "After activateAbility {targets:[Phantom]}: energy -1 and Sky Cruiser exhausted (costs taken) but no chain item was created, no pendingChoice, and Phantom meta.damage stayed 0 (twice). Control: Hextech Ray on the same Phantom correctly set damage=3, so damage tracking works — the ability's effect is simply dropped",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:1324",
+  "id": "d35bf7830da4",
+  "createdAt": "2026-08-07T07:42:18.110Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.110Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

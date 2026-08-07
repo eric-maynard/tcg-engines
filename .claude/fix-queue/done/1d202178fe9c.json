@@ -15,26 +15,32 @@
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T22:12:51.142Z",
-      "event": "grabbed:w3-i2"
+      "at": "2026-08-07T01:49:50.701Z",
+      "event": "grabbed:w8-i16"
     },
     {
-      "at": "2026-08-06T22:17:16.546Z",
+      "at": "2026-08-07T02:36:01.401Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T05:09:46.178Z",
+      "event": "grabbed:w6-i5"
+    },
+    {
+      "at": "2026-08-07T05:18:45.943Z",
       "event": "done",
-      "note": "from-Hidden spells lock their target at play time; resolution re-checks target location (359.3.e.5)"
+      "note": "hidden spells lock their target when played (bindToChainItemId prompt in revealHidden), so a response mistargets them"
     }
   ],
   "status": "done",
-  "claimedBy": "w3-i2",
-  "claimedAt": "2026-08-06T22:12:51.142Z",
+  "claimedAt": "2026-08-07T05:09:46.178Z",
+  "claimedBy": "w6-i5",
   "resolution": {
-    "note": "from-Hidden spells lock their target at play time; resolution re-checks target location (359.3.e.5)",
+    "note": "hidden spells lock their target when played (bindToChainItemId prompt in revealHidden), so a response mistargets them",
     "files": [
       "packages/riftbound-engine/src/game-definition/moves/play/hide.ts",
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/game-definition/moves/chain/resolve.ts",
-      "packages/riftbound-engine/src/types/game-state.ts"
+      "packages/riftbound-engine/src/abilities/trigger-target-lock.ts"
     ],
-    "at": "2026-08-06T22:17:16.546Z"
+    "at": "2026-08-07T05:18:45.943Z"
   }
 }

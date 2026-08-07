@@ -1,0 +1,42 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-074-221",
+  "title": "BUG: parsed ability should keep the 'Energy cost no more than [1]' filter on the kill target and gate Gold on 'if you do'",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-074-221.test.ts",
+    "testName": "BUG: parsed ability should keep the 'Energy cost no more than [1]' filter on the kill target and gate Gold on 'if you do'"
+  },
+  "id": "5800e52bb0ad",
+  "createdAt": "2026-08-07T01:14:13.024Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.024Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:54:25.634Z",
+      "event": "grabbed:w1-i16"
+    },
+    {
+      "at": "2026-08-07T05:59:14.395Z",
+      "event": "done",
+      "note": "parser emits did-perform (not paid-additional-cost) for plain 'X. If you do, Y'; engine handles it"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i16",
+  "claimedAt": "2026-08-07T05:54:25.633Z",
+  "resolution": {
+    "note": "parser emits did-perform (not paid-additional-cost) for plain 'X. If you do, Y'; engine handles it",
+    "files": [
+      "packages/riftbound-cards/src/parser/impl/effects-conditional.ts",
+      "packages/riftbound-types/src/abilities/condition-types.ts",
+      "packages/riftbound-engine/src/abilities/effects/_helpers.ts",
+      "packages/riftbound-engine/src/abilities/effects/sequence.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-074-221.test.ts"
+    ],
+    "at": "2026-08-07T05:59:14.395Z"
+  }
+}

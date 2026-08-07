@@ -16,24 +16,23 @@
       "event": "enqueued:unit-bug"
     },
     {
-      "at": "2026-08-06T23:05:12.132Z",
-      "event": "grabbed:w10-i8"
+      "at": "2026-08-07T05:16:32.342Z",
+      "event": "grabbed:w4-i15"
     },
     {
-      "at": "2026-08-06T23:08:28.907Z",
+      "at": "2026-08-07T05:17:07.572Z",
       "event": "done",
-      "note": "trigger-runner: evaluate while-alone (rule 740.2.a) at the death location via die.diedAt"
+      "note": "already fixed+flipped in 2c31408 (conquer doubling + died-alone); tests green"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i8",
-  "claimedAt": "2026-08-06T23:05:12.132Z",
+  "claimedBy": "w4-i15",
+  "claimedAt": "2026-08-07T05:16:32.342Z",
   "resolution": {
-    "note": "trigger-runner: evaluate while-alone (rule 740.2.a) at the death location via die.diedAt",
+    "note": "already fixed+flipped in 2c31408 (conquer doubling + died-alone); tests green",
     "files": [
-      "packages/riftbound-engine/src/abilities/trigger-runner.ts",
-      "packages/riftbound-engine/src/__tests__/cards/sfd-036-221.test.ts"
+      "packages/riftbound-engine/src/abilities/trigger-runner.ts"
     ],
-    "at": "2026-08-06T23:08:28.907Z"
+    "at": "2026-08-07T05:17:07.572Z"
   }
 }

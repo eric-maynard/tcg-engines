@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ven-135-166",
+  "title": "\"While there's a stunned enemy unit here, I have +2 Might\" does not apply",
+  "expected": "Reproduced via getCardRegistry().get(\"ven-135-166\"): parsed abilities are [keyword Hidden, static {modify-might +2, target:{unit, controller:enemy, location:here, filter:stunned}}] — an aura on stunned enemy units, not a conditional self-buff, so Kennen never gains +2 (and the pay-[2]-to-Stun trigger is dropped entirely). Root cause: packages/riftbound-cards/src/parser/impl/normalize.ts:21 stripReminders' /_?\\s*\\([^)]*\\)\\s*_?/ eats the reminder \"(It doesn't deal combat damage this turn.)\" together with the following newline, gluing the lines into \"...to Stun a unit.While there's a stunned enemy unit here, I have +2 :rb_might:.\"; splitOnAbilityBoundaries doesn't split it, triggered parse fails, and packages/riftbound-cards/src/parser/parsers/static-parser.ts:642-648 matches `^(.+?)\\s+have\\s+\\+(\\d+)` with subject \"When you play me ... unit.While there's a stunned enemy unit here, I\" — the guard at :647 only exempts subjects that START with While/If, so parseGrantTarget(subject) yields {enemy, here, stunned}. Parsing the third line alone correctly hits the conditional self-might branch at static-parser.ts:772-795. (Minor: the sub-claim that the 'stunned' filter ignores __flags is not accurate — riftbound-engine/src/abilities/target-resolver.ts:659-664 reads both — but the primary misparse is real.)",
+  "observed": "Enemy Pouty Poro at Altar to Unity had meta.stunned=true/__flags.stunned=true; Kennen at same battlefield stayed might 2 with no staticMightBonus, UI showed no might badge; after buffing Poro to 3 Might and resolveFullCombat, Poro survived and Kennen was recalled to base (i.e. Kennen dealt 2, not 4). Parsed static is {modify-might +2, target:{unit, controller:enemy, location:here, filter:stunned}} — i.e. it targets stunned enemy units instead of being a conditional self-buff (and the 'stunned' filter reads top-level meta rather than __flags).",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/normalize.ts:21",
+  "id": "a30c8d389fd4",
+  "createdAt": "2026-08-07T07:42:18.109Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.109Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

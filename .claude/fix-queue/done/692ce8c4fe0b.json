@@ -16,24 +16,23 @@
       "event": "enqueued:unit-bug"
     },
     {
-      "at": "2026-08-06T22:43:02.141Z",
-      "event": "grabbed:w7-i7"
+      "at": "2026-08-07T05:17:43.470Z",
+      "event": "grabbed:w4-i15"
     },
     {
-      "at": "2026-08-06T22:45:38.544Z",
+      "at": "2026-08-07T05:17:55.765Z",
       "event": "done",
-      "note": "target-resolver: filter type:'spell' candidates by cardType so Annie's trash return fizzles with no spell"
+      "note": "already fixed+flipped upstream; test green, no test.failing remains"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i7",
-  "claimedAt": "2026-08-06T22:43:02.141Z",
+  "claimedBy": "w4-i15",
+  "claimedAt": "2026-08-07T05:17:43.470Z",
   "resolution": {
-    "note": "target-resolver: filter type:'spell' candidates by cardType so Annie's trash return fizzles with no spell",
+    "note": "already fixed+flipped upstream; test green, no test.failing remains",
     "files": [
-      "packages/riftbound-engine/src/abilities/target-resolver.ts",
-      "packages/riftbound-engine/src/__tests__/cards/ogs-010-024.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/"
     ],
-    "at": "2026-08-06T22:45:38.544Z"
+    "at": "2026-08-07T05:17:55.765Z"
   }
 }

@@ -15,23 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:19:08.958Z",
-      "event": "grabbed:w3-i8"
+      "at": "2026-08-07T05:19:03.679Z",
+      "event": "grabbed:w8-i11"
     },
     {
-      "at": "2026-08-06T23:25:33.234Z",
+      "at": "2026-08-07T05:19:17.062Z",
       "event": "done",
-      "note": "already green on HEAD (fixed by an earlier lane); verified vex-cheerless ruling file passes"
+      "note": "already fixed+flipped in commit 8038619 (hidden flip pays cost increases); test file green, no new edits"
     }
   ],
   "status": "done",
-  "claimedBy": "w3-i8",
-  "claimedAt": "2026-08-06T23:19:08.958Z",
+  "claimedBy": "w8-i11",
+  "claimedAt": "2026-08-07T05:19:03.679Z",
   "resolution": {
-    "note": "already green on HEAD (fixed by an earlier lane); verified vex-cheerless ruling file passes",
+    "note": "already fixed+flipped in commit 8038619 (hidden flip pays cost increases); test file green, no new edits",
     "files": [
       "packages/riftbound-engine/src/__tests__/cards/rulings/vex-cheerless-61269cd307cc8ca8.test.ts"
     ],
-    "at": "2026-08-06T23:25:33.234Z"
+    "at": "2026-08-07T05:19:17.062Z"
   }
 }

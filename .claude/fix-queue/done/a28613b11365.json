@@ -15,24 +15,23 @@
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T22:28:16.955Z",
-      "event": "grabbed:w7-i5"
+      "at": "2026-08-07T05:15:04.037Z",
+      "event": "grabbed:w10-i8"
     },
     {
-      "at": "2026-08-06T22:30:17.261Z",
+      "at": "2026-08-07T05:15:27.373Z",
       "event": "done",
-      "note": "performCleanup now assigns attacker/defender to units arriving at a contested battlefield mid-combat (464.2.c.3.a)"
+      "note": "already fixed on HEAD by an earlier lane; test.failing already flipped and passing — verified by running the file"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i5",
-  "claimedAt": "2026-08-06T22:28:16.955Z",
+  "claimedBy": "w10-i8",
+  "claimedAt": "2026-08-07T05:15:04.037Z",
   "resolution": {
-    "note": "performCleanup now assigns attacker/defender to units arriving at a contested battlefield mid-combat (464.2.c.3.a)",
+    "note": "already fixed on HEAD by an earlier lane; test.failing already flipped and passing — verified by running the file",
     "files": [
-      "packages/riftbound-engine/src/cleanup/state-based-checks.ts",
-      "packages/riftbound-engine/src/__tests__/cards/interactions/shen-rengar-reaction-units-mid-combat.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/ogn-250-298.test.ts"
     ],
-    "at": "2026-08-06T22:30:17.261Z"
+    "at": "2026-08-07T05:15:27.373Z"
   }
 }

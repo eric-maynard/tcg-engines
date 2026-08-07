@@ -8,12 +8,31 @@
   },
   "id": "4988aba81ea8",
   "createdAt": "2026-08-06T20:50:12.432Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.432Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T00:46:53.408Z",
+      "event": "grabbed:w4-i17"
+    },
+    {
+      "at": "2026-08-07T01:07:50.387Z",
+      "event": "failed",
+      "note": "engine fix written+verified in clean worktree (turn-queue.ts rebooks firstTurnNumber on extra turns) but another lane keeps reverting my test.failing flip in setup-decks-and-mulligan.test.ts before land-patch rsyncs; 4 land attempts blocked on need_flip"
+    },
+    {
+      "at": "2026-08-07T08:14:36.894Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w4-i17",
+  "claimedAt": "2026-08-07T00:46:53.408Z",
+  "resolution": {
+    "note": "engine fix written+verified in clean worktree (turn-queue.ts rebooks firstTurnNumber on extra turns) but another lane keeps reverting my test.failing flip in setup-decks-and-mulligan.test.ts before land-patch rsyncs; 4 land attempts blocked on need_flip",
+    "at": "2026-08-07T01:07:50.387Z"
+  }
 }

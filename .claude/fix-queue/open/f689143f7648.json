@@ -8,12 +8,31 @@
   },
   "id": "f689143f7648",
   "createdAt": "2026-08-06T20:50:12.433Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.433Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:33:01.394Z",
+      "event": "grabbed:w5-i12"
+    },
+    {
+      "at": "2026-08-07T05:51:30.007Z",
+      "event": "failed",
+      "note": "trigger finalization prompt (383.3.a/402.1) is being implemented concurrently by another lane (applyFinalizationOptIn in trigger-runner.ts + pending-choice.ts, mid-edit in the working tree); touching it would collide"
+    },
+    {
+      "at": "2026-08-07T08:14:36.888Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w5-i12",
+  "claimedAt": "2026-08-07T05:33:01.394Z",
+  "resolution": {
+    "note": "trigger finalization prompt (383.3.a/402.1) is being implemented concurrently by another lane (applyFinalizationOptIn in trigger-runner.ts + pending-choice.ts, mid-edit in the working tree); touching it would collide",
+    "at": "2026-08-07T05:51:30.007Z"
+  }
 }

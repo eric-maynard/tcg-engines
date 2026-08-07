@@ -1,0 +1,38 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling ae63ceaf2b19eed6 — the caster chooses the two units: with 3 units at bf1, Switcheroo on [small(3), middling(4)] → small 4, middling 3, big untouched",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/switcheroo-ae63ceaf2b19eed6.test.ts",
+    "testName": "BUG: ruling ae63ceaf2b19eed6 — the caster chooses the two units: with 3 units at bf1, Switcheroo on [small(3), middling(4)] → small 4, middling 3, big untouched"
+  },
+  "id": "af15a600ba86",
+  "createdAt": "2026-08-06T20:11:47.409Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.409Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:53:05.158Z",
+      "event": "grabbed:w6-i6"
+    },
+    {
+      "at": "2026-08-06T23:56:16.871Z",
+      "event": "failed",
+      "note": "owned by a concurrent lane: swap-might target1/target2 pair enumeration is in-flight in play-spell.ts (already passing + flipped in their working tree); landing it from here would carry their unrelated in-flight edits"
+    },
+    {
+      "at": "2026-08-07T08:14:36.895Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedBy": "w6-i6",
+  "claimedAt": "2026-08-06T23:53:05.158Z",
+  "resolution": {
+    "note": "owned by a concurrent lane: swap-might target1/target2 pair enumeration is in-flight in play-spell.ts (already passing + flipped in their working tree); landing it from here would carry their unrelated in-flight edits",
+    "at": "2026-08-06T23:56:16.871Z"
+  }
+}

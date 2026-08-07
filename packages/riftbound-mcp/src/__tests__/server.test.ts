@@ -153,8 +153,9 @@ describe("scripted goldfish game", () => {
     expect((state.you.base as { id: string }[]).map((c) => c.id)).toContain(cheapest.id);
     expect((state.you.hand as { id: string }[]).map((c) => c.id)).not.toContain(cheapest.id);
 
-    // A "When you play me" trigger may sit on the chain; let it resolve before ending the turn.
-    await ok("settle", { gameId });
+    // The starter decks are random: a "When you play me" trigger (possibly a "you may" prompt)
+    // may sit on the chain — resolve it (answering prompts with their first option) before ending.
+    await ok("settle", { gameId, policy: "firstOption" });
     const ended = await ok("end_turn", { gameId, seat: "p1" });
     expect(ended.executed[0].moveId).toBe("endTurn");
     await ok("settle", { gameId });

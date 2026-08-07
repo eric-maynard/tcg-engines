@@ -1,0 +1,32 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-101-221",
+  "title": "BUG: When you spend a buff — paying Wallop's optional cost with a friendly buff plays one exhausted Gold token",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-101-221.test.ts",
+    "testName": "BUG: When you spend a buff — paying Wallop's optional cost with a friendly buff plays one exhausted Gold token"
+  },
+  "id": "dbfd49923311",
+  "createdAt": "2026-08-07T01:20:34.442Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.442Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:09:34.380Z",
+      "event": "done(unclaimed)",
+      "note": "same fix: spend-buff event fired from the spell optional-cost path"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "same fix: spend-buff event fired from the spell optional-cost path",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts"
+    ],
+    "at": "2026-08-07T05:09:34.380Z"
+  }
+}

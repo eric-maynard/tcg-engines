@@ -15,25 +15,25 @@
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T22:24:09.255Z",
-      "event": "grabbed:w6-i4"
+      "at": "2026-08-07T05:14:36.512Z",
+      "event": "grabbed:w3-i8"
     },
     {
-      "at": "2026-08-06T22:28:27.431Z",
+      "at": "2026-08-07T05:19:51.898Z",
       "event": "done",
-      "note": "pending play offers [Accelerate] opt-in to the player playing it; paying flips it to ready"
+      "note": "effect-instructed plays offer Accelerate to the playing player (owner replay) → unit enters ready"
     }
   ],
   "status": "done",
-  "claimedBy": "w6-i4",
-  "claimedAt": "2026-08-06T22:24:09.255Z",
+  "claimedBy": "w3-i8",
+  "claimedAt": "2026-08-07T05:14:36.512Z",
   "resolution": {
-    "note": "pending play offers [Accelerate] opt-in to the player playing it; paying flips it to ready",
+    "note": "effect-instructed plays offer Accelerate to the playing player (owner replay) → unit enters ready",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/types/game-state.ts",
+      "packages/riftbound-engine/src/abilities/effects/play.ts",
+      "packages/riftbound-engine/src/abilities/effects/enter-ready.ts",
       "packages/riftbound-engine/src/__tests__/cards/interactions/arcane-shift-stolen-unit-owner-replays.test.ts"
     ],
-    "at": "2026-08-06T22:28:27.431Z"
+    "at": "2026-08-07T05:19:51.898Z"
   }
 }

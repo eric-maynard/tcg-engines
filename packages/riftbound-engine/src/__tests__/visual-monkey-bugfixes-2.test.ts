@@ -220,6 +220,35 @@ afterEach(() => {
 // Fix 1: Hold events not emitted during beginning phase (CRITICAL)
 // ============================================================================
 
+
+/**
+ * The Beginning Phase's body lives in ordered steps (beginning step, then the
+ * scoring step — rule 315.2.a/315.2.b), so a one-shot invocation must run the
+ * phase hook and every step hook in `order`.
+ */
+type PhaseHook = (ctx: unknown) => void;
+type PhaseWithSteps = {
+  onBegin?: PhaseHook;
+  steps?: Record<string, { order: number; onBegin?: PhaseHook }>;
+};
+function beginningPhaseDef(): PhaseWithSteps {
+  const flowDef = riftboundFlow as unknown as {
+    gameSegments: Record<string, { turn: { phases: Record<string, PhaseWithSteps> } }>;
+  };
+  return flowDef.gameSegments.mainGame.turn.phases.beginning;
+}
+function runBeginningPhase(phase: PhaseWithSteps, flowContext: unknown): void {
+  const hooks = [
+    phase.onBegin,
+    ...Object.values(phase.steps ?? {})
+      .toSorted((a, b) => a.order - b.order)
+      .map((step) => step.onBegin),
+  ];
+  for (const hook of hooks) {
+    hook?.(flowContext);
+  }
+}
+
 describe("Fix 1: Hold events fire during beginning phase scoring", () => {
   test("fireTriggers matches hold event for card with hold trigger", () => {
     // Register a battlefield card (like Altar to Unity) with "When you hold here" trigger
@@ -277,18 +306,10 @@ describe("Fix 1: Hold events fire during beginning phase scoring", () => {
     const { flowContext } = createMockFlowContext(state, {}, P1);
 
     // Access the beginning phase from the flow definition
-    const flowDef = riftboundFlow as {
-      gameSegments: Record<
-        string,
-        { turn: { phases: Record<string, { onBegin?: (ctx: unknown) => void }> } }
-      >;
-    };
-    const beginningPhase = flowDef.gameSegments.mainGame.turn.phases.beginning;
+    const beginningPhase = beginningPhaseDef();
 
-    // Execute the beginning phase hook
-    beginningPhase.onBegin!(
-      flowContext as unknown as Parameters<NonNullable<typeof beginningPhase.onBegin>>[0],
-    );
+    // Execute the whole beginning phase (phase hook, then its ordered steps)
+    runBeginningPhase(beginningPhase, flowContext);
 
     // VP should be awarded for the controlled battlefield (bf-1)
     expect(state.players[P1].victoryPoints).toBe(1);
@@ -329,17 +350,9 @@ describe("Fix 1: Hold events fire during beginning phase scoring", () => {
       P1,
     );
 
-    const flowDef = riftboundFlow as {
-      gameSegments: Record<
-        string,
-        { turn: { phases: Record<string, { onBegin?: (ctx: unknown) => void }> } }
-      >;
-    };
-    const beginningPhase = flowDef.gameSegments.mainGame.turn.phases.beginning;
+    const beginningPhase = beginningPhaseDef();
 
-    beginningPhase.onBegin!(
-      flowContext as unknown as Parameters<NonNullable<typeof beginningPhase.onBegin>>[0],
-    );
+    runBeginningPhase(beginningPhase, flowContext);
 
     // No VP should be awarded (battlefield is uncontrolled)
     expect(state.players[P1].victoryPoints).toBe(0);

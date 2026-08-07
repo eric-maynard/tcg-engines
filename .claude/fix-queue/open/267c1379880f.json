@@ -1,0 +1,47 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-034-298",
+  "title": "BUG: conquering an EMPTY enemy battlefield is not 'after an attack' (316.8.b.1) — only the conquer point should be scored",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-034-298.test.ts",
+    "testName": "BUG: conquering an EMPTY enemy battlefield is not 'after an attack' (316.8.b.1) — only the conquer point should be scored"
+  },
+  "id": "267c1379880f",
+  "createdAt": "2026-08-06T17:15:21.551Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.551Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T20:14:15.247Z",
+      "event": "grabbed:w3-i3"
+    },
+    {
+      "at": "2026-08-06T20:56:32.491Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-06T20:58:32.828Z",
+      "event": "grabbed:w5-i1"
+    },
+    {
+      "at": "2026-08-06T21:02:06.849Z",
+      "event": "failed",
+      "note": "needs the excess-damage/afterAttack conquer plumbing another worker is mid-edit in resolve-full-combat.ts + game-events.ts (item 5ba3b82b6008); editing concurrently would clobber it"
+    },
+    {
+      "at": "2026-08-07T08:14:36.890Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedAt": "2026-08-06T20:58:32.828Z",
+  "claimedBy": "w5-i1",
+  "resolution": {
+    "note": "needs the excess-damage/afterAttack conquer plumbing another worker is mid-edit in resolve-full-combat.ts + game-events.ts (item 5ba3b82b6008); editing concurrently would clobber it",
+    "at": "2026-08-06T21:02:06.849Z"
+  }
+}

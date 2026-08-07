@@ -8,12 +8,31 @@
   },
   "id": "157e52be9bf3",
   "createdAt": "2026-08-06T20:06:58.324Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:06:58.324Z",
       "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:44:55.022Z",
+      "event": "grabbed:w8-i8"
+    },
+    {
+      "at": "2026-08-06T23:50:36.682Z",
+      "event": "failed",
+      "note": "Equip cost + copy-choice prompt implemented then reverted: harness settle() auto-answers forced single-option picks by design, so the test's stop.reason==='unanswered' with one candidate (skulker) is unsatisfiable; charging the [Equip] keyword cost in equipCard also breaks sfd-002-221 (Armed Assailant) whose setup assumes free equips"
+    },
+    {
+      "at": "2026-08-07T08:14:36.884Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w8-i8",
+  "claimedAt": "2026-08-06T23:44:55.022Z",
+  "resolution": {
+    "note": "Equip cost + copy-choice prompt implemented then reverted: harness settle() auto-answers forced single-option picks by design, so the test's stop.reason==='unanswered' with one candidate (skulker) is unsatisfiable; charging the [Equip] keyword cost in equipCard also breaks sfd-002-221 (Armed Assailant) whose setup assumes free equips",
+    "at": "2026-08-06T23:50:36.682Z"
+  }
 }

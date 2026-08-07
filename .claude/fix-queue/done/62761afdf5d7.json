@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "ven-156-166",
+  "title": "BUG: declining still trashes all three looked-at cards",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ven-156-166.test.ts",
+    "testName": "BUG: declining still trashes all three looked-at cards"
+  },
+  "id": "62761afdf5d7",
+  "createdAt": "2026-08-07T06:39:37.595Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T06:39:37.595Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:39:37.654Z",
+      "event": "grabbed:w3-i21"
+    },
+    {
+      "at": "2026-08-07T06:43:28.332Z",
+      "event": "done",
+      "note": "declined optional look with onRest:trash trashes all revealed"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i21",
+  "claimedAt": "2026-08-07T06:39:37.654Z",
+  "resolution": {
+    "note": "declined optional look with onRest:trash trashes all revealed",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts"
+    ],
+    "at": "2026-08-07T06:43:28.332Z"
+  }
+}

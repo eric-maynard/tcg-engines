@@ -1,0 +1,29 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-070-221",
+  "title": "BUG: the 3 damage is healed at the end of the turn (143.3.b.1) — the engine's damage counter stays at 3",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-070-221.test.ts",
+    "testName": "BUG: the 3 damage is healed at the end of the turn (143.3.b.1) — the engine's damage counter stays at 3"
+  },
+  "id": "b9084237fd3a",
+  "createdAt": "2026-08-07T01:01:45.618Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:01:45.618Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T08:00:20.176Z",
+      "event": "done(unclaimed)",
+      "note": "WP3 single damage store / LKI (8f0d410): Ending-Step heal clears counter+mirror through operations/damage-store.ts; die snapshot reads __flags too; test green at HEAD"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "WP3 single damage store / LKI (8f0d410): Ending-Step heal clears counter+mirror through operations/damage-store.ts; die snapshot reads __flags too; test green at HEAD",
+    "at": "2026-08-07T08:00:20.176Z"
+  }
+}

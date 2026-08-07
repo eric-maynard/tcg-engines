@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "unl-097-219",
+  "title": "Kinkou Initiate's play trigger draws unconditionally; the 'if your other units have total Might 5 or more' condition is not checked.",
+  "expected": "Card def (packages/riftbound-cards/src/cards/unl/kinkou-initiate.ts) has no hand-authored abilities, so enrich-cards.ts:30 parses rulesText. Verified via bun: parser emits a triggered play-self ability with effect {type:\"draw\",amount:1} and ability-level condition {type:\"total-might-at-least\",amount:5,scope:\"other-units\"} (condition-parser.ts:782-791). The engine never evaluates that condition type: `grep -r total-might-at-least` hits only the parser; evaluateTriggerCondition in packages/riftbound-engine/src/abilities/trigger-runner.ts:289-521 has no branch for it and falls through to `return true` at trigger-runner.ts:520 (\"Unknown condition shapes are permissive\"). So the trigger always goes on the chain as a bare draw 1 regardless of other-unit total Might, matching the observed unconditional draw.",
+  "observed": "Trigger went on chain as {\"amount\":1,\"type\":\"draw\"} (no condition) and on resolution drew 1 (hand 5->6 'Void Hatchling', p1 deck 35->34).",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/trigger-runner.ts:520",
+  "id": "42e5cf09df17",
+  "createdAt": "2026-08-07T07:42:18.109Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.109Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

@@ -212,6 +212,19 @@ describe("Petricite Monument (sfd-104-221)", () => {
     expect(game.zoneOf("bolt")).toBe("hand");
   });
 
+  test("no printed [Equip]: the Monument is a plain Gear and can never be attached to a unit (rule 476.1)", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 3, power: { body: 1 } })
+      .gear(P1, CARD, "mon")
+      .unit(P1, "base", { might: 3, name: "Ally" }, "ally")
+      .build();
+    expect(game.p1.legal().filter((o) => o.moveId === "equipCard")).toEqual([]);
+    const r = await game.p1.try((p) => p.do("equipCard", { equipmentId: "mon", unitId: "ally" }));
+    expect(r.ok).toBe(false);
+    expect(game.state("mon").meta.attachedTo).toBeUndefined();
+    expect(game.state("ally").meta.equippedWith ?? []).toEqual([]);
+  });
+
   test("parsed abilities: the Temporary keyword plus a static friendly-unit Deflect grant", async () => {
     const pool = await loadDefaultCardPool();
     const def = pool.get(CARD);

@@ -15,30 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:01:00.667Z",
-      "event": "grabbed:w1-i5"
+      "at": "2026-08-07T05:19:59.099Z",
+      "event": "grabbed:w6-i6"
     },
     {
-      "at": "2026-08-06T23:05:11.716Z",
+      "at": "2026-08-07T05:20:17.040Z",
       "event": "done",
-      "note": "Harrowing target location:trash makes the trash unit caster-chosen; conditional enter-ready name-in-trash honoured on effect-plays"
+      "note": "already fixed and landed at HEAD; repro test.failing flipped in an earlier commit"
     }
   ],
   "status": "done",
-  "claimedBy": "w1-i5",
-  "claimedAt": "2026-08-06T23:01:00.667Z",
+  "claimedBy": "w6-i6",
+  "claimedAt": "2026-08-07T05:19:59.099Z",
   "resolution": {
-    "note": "Harrowing target location:trash makes the trash unit caster-chosen; conditional enter-ready name-in-trash honoured on effect-plays",
+    "note": "already fixed and landed at HEAD; repro test.failing flipped in an earlier commit",
     "files": [
-      "packages/riftbound-cards/src/cards/ogn/the-harrowing.ts",
-      "packages/riftbound-cards/src/parser/parsers/static-parser.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/targeting.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/abilities/effects/play.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/shadow-assassin-67ba38e17c612ad4.test.ts"
     ],
-    "at": "2026-08-06T23:05:11.716Z"
+    "at": "2026-08-07T05:20:17.040Z"
   }
 }

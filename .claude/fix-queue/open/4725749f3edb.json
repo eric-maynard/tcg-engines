@@ -8,12 +8,31 @@
   },
   "id": "4725749f3edb",
   "createdAt": "2026-08-06T20:11:47.411Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:11:47.411Z",
       "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:58:11.662Z",
+      "event": "grabbed:w4-i14"
+    },
+    {
+      "at": "2026-08-07T00:01:51.339Z",
+      "event": "failed",
+      "note": "Guardian Angel (sfd-051-221) card data has only '[Equip] [calm]' — no protective die-replacement in its rules text, and the engine has no equipment-dies-in-place-of-unit mechanism; would require fabricating card text"
+    },
+    {
+      "at": "2026-08-07T08:14:36.891Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w4-i14",
+  "claimedAt": "2026-08-06T23:58:11.662Z",
+  "resolution": {
+    "note": "Guardian Angel (sfd-051-221) card data has only '[Equip] [calm]' — no protective die-replacement in its rules text, and the engine has no equipment-dies-in-place-of-unit mechanism; would require fabricating card text",
+    "at": "2026-08-07T00:01:51.339Z"
+  }
 }

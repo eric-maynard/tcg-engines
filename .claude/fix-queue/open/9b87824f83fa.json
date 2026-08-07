@@ -8,12 +8,31 @@
   },
   "id": "9b87824f83fa",
   "createdAt": "2026-08-06T19:55:38.085Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T19:55:38.085Z",
       "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T05:21:34.303Z",
+      "event": "grabbed:w1-i10"
+    },
+    {
+      "at": "2026-08-07T05:28:05.843Z",
+      "event": "failed",
+      "note": "same: Bone Skewer reveal-hand/play-free/stun already implemented by a concurrent worker's uncommitted patch; passes in-tree, not landable from my file set"
+    },
+    {
+      "at": "2026-08-07T08:14:36.893Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w1-i10",
+  "claimedAt": "2026-08-07T05:21:34.303Z",
+  "resolution": {
+    "note": "same: Bone Skewer reveal-hand/play-free/stun already implemented by a concurrent worker's uncommitted patch; passes in-tree, not landable from my file set",
+    "at": "2026-08-07T05:28:05.843Z"
+  }
 }

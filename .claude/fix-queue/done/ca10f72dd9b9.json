@@ -15,26 +15,23 @@
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T22:19:04.887Z",
-      "event": "grabbed:w10-i6"
+      "at": "2026-08-07T05:09:34.088Z",
+      "event": "grabbed:w4-i14"
     },
     {
-      "at": "2026-08-06T22:22:21.884Z",
+      "at": "2026-08-07T05:12:32.810Z",
       "event": "done",
-      "note": "Ezreal 'optional additional costs cost [1] or [rainbow] less': parse the static, apply pool-aware flexible reduction to Repeat tiers, offer [0]-cost tiers"
+      "note": "already green on current tree (Ezreal optional-cost reduction landed earlier); repro test passes as test()"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i6",
-  "claimedAt": "2026-08-06T22:19:04.887Z",
+  "claimedBy": "w4-i14",
+  "claimedAt": "2026-08-07T05:09:34.088Z",
   "resolution": {
-    "note": "Ezreal 'optional additional costs cost [1] or [rainbow] less': parse the static, apply pool-aware flexible reduction to Repeat tiers, offer [0]-cost tiers",
+    "note": "already green on current tree (Ezreal optional-cost reduction landed earlier); repro test passes as test()",
     "files": [
-      "packages/riftbound-cards/src/parser/parsers/static-parser.ts",
-      "packages/riftbound-engine/src/operations/static-cost-reduction.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts"
+      "packages/riftbound-engine/src/__tests__/cards/interactions/curtain-call-marai-spire-ezreal-repeats.test.ts"
     ],
-    "at": "2026-08-06T22:22:21.884Z"
+    "at": "2026-08-07T05:12:32.810Z"
   }
 }

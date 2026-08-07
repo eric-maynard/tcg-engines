@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-054-221",
+  "title": "BUG: 'everywhere' — an Equipment in HAND has Quick-Draw while Jax is on the board",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-054-221.test.ts",
+    "testName": "BUG: 'everywhere' — an Equipment in HAND has Quick-Draw while Jax is on the board"
+  },
+  "id": "0cb4c4ca8274",
+  "createdAt": "2026-08-07T00:52:39.830Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:52:39.830Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:47:23.808Z",
+      "event": "grabbed:w6-i11"
+    },
+    {
+      "at": "2026-08-07T05:47:43.062Z",
+      "event": "done",
+      "note": "already fixed at HEAD; sfd-054-221 13/13 pass in clean worktree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w6-i11",
+  "claimedAt": "2026-08-07T05:47:23.807Z",
+  "resolution": {
+    "note": "already fixed at HEAD; sfd-054-221 13/13 pass in clean worktree",
+    "at": "2026-08-07T05:47:43.062Z"
+  }
+}

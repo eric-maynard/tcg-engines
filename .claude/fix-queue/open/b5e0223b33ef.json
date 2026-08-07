@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ven-068a-166",
+  "title": "'When you play me ... you may ready something besides me that's exhausted' resolves as a no-op",
+  "expected": "parseAbilities on Jayce's rulesText (invoked at packages/riftbound-cards/src/data/enrich-cards.ts:30) produces a triggered ability (event play-self-or-play-gear, optional:true) whose effect is {type:'raw', text:\"ready something besides me that's exhausted.\"} — the effect clause is unparsed (fallback at packages/riftbound-cards/src/parser/impl/triggers.ts:230). In the engine, executeEffect (packages/riftbound-engine/src/abilities/effect-executor.ts:172-184) does EFFECT_HANDLERS[effect.type]; there is no 'raw' handler anywhere under abilities/, so it hits the '// default: no-op' branch at line 183. Hence opt-in resolves with no target prompt and nothing is readied. No TS card override exists for ven-068a-166 (only ven.json, parseSuccess:false, abilities:[]).",
+  "observed": "Trigger went on chain with effect {type:'raw', text:'ready something besides me that's exhausted.'}; opt-in pendingChoice appeared and was accepted, but no target prompt followed and Pouty Poro stayed exhausted=true. Effect is unparsed/unimplemented (ven.json parseSuccess:false, abilities:[])",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effect-executor.ts:183",
+  "id": "b5e0223b33ef",
+  "createdAt": "2026-08-07T07:42:18.109Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.109Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

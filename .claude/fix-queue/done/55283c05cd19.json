@@ -15,23 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:15:46.563Z",
-      "event": "grabbed:w1-i9"
+      "at": "2026-08-07T05:24:42.023Z",
+      "event": "grabbed:w11-i7"
     },
     {
-      "at": "2026-08-07T00:18:44.650Z",
+      "at": "2026-08-07T05:24:51.963Z",
       "event": "done",
-      "note": "already fixed upstream: trigger-patterns emits play-self-or-discard-or-die; all 6 ogn-182-298 tests pass"
+      "note": "already fixed on HEAD (parser emits play-self-or-discard-or-die); repro tests green"
     }
   ],
   "status": "done",
-  "claimedBy": "w1-i9",
-  "claimedAt": "2026-08-07T00:15:46.563Z",
+  "claimedBy": "w11-i7",
+  "claimedAt": "2026-08-07T05:24:42.023Z",
   "resolution": {
-    "note": "already fixed upstream: trigger-patterns emits play-self-or-discard-or-die; all 6 ogn-182-298 tests pass",
+    "note": "already fixed on HEAD (parser emits play-self-or-discard-or-die); repro tests green",
     "files": [
-      "packages/riftbound-cards/src/parser/impl/trigger-patterns.ts"
+      "packages/riftbound-engine/src/__tests__/cards/ogn-182-298.test.ts"
     ],
-    "at": "2026-08-07T00:18:44.650Z"
+    "at": "2026-08-07T05:24:51.963Z"
   }
 }

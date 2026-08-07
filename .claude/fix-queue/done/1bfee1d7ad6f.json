@@ -15,27 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:05:12.133Z",
-      "event": "grabbed:w10-i8"
+      "at": "2026-08-07T05:18:10.220Z",
+      "event": "grabbed:w4-i15"
     },
     {
-      "at": "2026-08-06T23:08:28.949Z",
+      "at": "2026-08-07T05:18:16.855Z",
       "event": "done",
-      "note": "Abandoned Hall: controlledByActor trigger controller + no opt-in prompt when the optional trigger has zero legal targets"
+      "note": "already fixed+flipped upstream; test green, no test.failing remains"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i8",
-  "claimedAt": "2026-08-06T23:05:12.133Z",
+  "claimedBy": "w4-i15",
+  "claimedAt": "2026-08-07T05:18:10.220Z",
   "resolution": {
-    "note": "Abandoned Hall: controlledByActor trigger controller + no opt-in prompt when the optional trigger has zero legal targets",
+    "note": "already fixed+flipped upstream; test green, no test.failing remains",
     "files": [
-      "packages/riftbound-cards/src/cards/unl/abandoned-hall.ts",
-      "packages/riftbound-types/src/abilities/ability-types.ts",
-      "packages/riftbound-engine/src/abilities/trigger-runner.ts",
-      "packages/riftbound-engine/src/abilities/trigger-matcher.ts",
-      "packages/riftbound-engine/src/game-definition/moves/chain/resolve.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/"
     ],
-    "at": "2026-08-06T23:08:28.949Z"
+    "at": "2026-08-07T05:18:16.855Z"
   }
 }

@@ -8,12 +8,31 @@
   },
   "id": "69ec3aa8d805",
   "createdAt": "2026-08-06T20:50:12.431Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.431Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T00:39:47.742Z",
+      "event": "grabbed:w7-i17"
+    },
+    {
+      "at": "2026-08-07T00:40:59.237Z",
+      "event": "failed",
+      "note": "capability probe: needs permanent-sourced facedown-capacity modifier (107.3.b.1) plus an immediate controller-choice trash-down when it ends; engine only bakes capacity into battlefield setup — out of scope for a single fix"
+    },
+    {
+      "at": "2026-08-07T08:14:36.895Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w7-i17",
+  "claimedAt": "2026-08-07T00:39:47.742Z",
+  "resolution": {
+    "note": "capability probe: needs permanent-sourced facedown-capacity modifier (107.3.b.1) plus an immediate controller-choice trash-down when it ends; engine only bakes capacity into battlefield setup — out of scope for a single fix",
+    "at": "2026-08-07T00:40:59.237Z"
+  }
 }

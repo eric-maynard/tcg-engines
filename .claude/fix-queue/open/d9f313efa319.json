@@ -8,12 +8,31 @@
   },
   "id": "d9f313efa319",
   "createdAt": "2026-08-06T18:35:08.344Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T18:35:08.344Z",
       "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-07T05:14:36.511Z",
+      "event": "grabbed:w3-i8"
+    },
+    {
+      "at": "2026-08-07T05:19:48.257Z",
+      "event": "failed",
+      "note": "needs the in-flight cost.ts/pending-choice.ts accelerate-after-pick work owned by another lane; that subset also regresses runes-rune-deck 429.2 (can cast with tappable runes) — not landable piecemeal"
+    },
+    {
+      "at": "2026-08-07T08:14:36.893Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w3-i8",
+  "claimedAt": "2026-08-07T05:14:36.511Z",
+  "resolution": {
+    "note": "needs the in-flight cost.ts/pending-choice.ts accelerate-after-pick work owned by another lane; that subset also regresses runes-rune-deck 429.2 (can cast with tappable runes) — not landable piecemeal",
+    "at": "2026-08-07T05:19:48.257Z"
+  }
 }

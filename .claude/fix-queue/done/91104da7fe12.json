@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-053-221",
+  "title": "BUG: parsed ability shape — a top-level play-self trigger with sequence [heal friendly here, move ≤1 enemy here → base]",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-053-221.test.ts",
+    "testName": "BUG: parsed ability shape — a top-level play-self trigger with sequence [heal friendly here, move ≤1 enemy here → base]"
+  },
+  "id": "91104da7fe12",
+  "createdAt": "2026-08-07T00:57:36.964Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.964Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:47:44.743Z",
+      "event": "grabbed:w2-i11"
+    },
+    {
+      "at": "2026-08-07T05:49:21.938Z",
+      "event": "done",
+      "note": "already fixed at HEAD (Mech tag on forecaster + parsed play-self trigger); repro tests present, unflipped, and green"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i11",
+  "claimedAt": "2026-08-07T05:47:44.743Z",
+  "resolution": {
+    "note": "already fixed at HEAD (Mech tag on forecaster + parsed play-self trigger); repro tests present, unflipped, and green",
+    "files": [
+      "packages/riftbound-cards/src/cards/sfd/forecaster.ts"
+    ],
+    "at": "2026-08-07T05:49:21.938Z"
+  }
+}

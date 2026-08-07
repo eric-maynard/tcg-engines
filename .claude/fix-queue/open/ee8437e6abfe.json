@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-160-221",
+  "title": "\"When you play me, if you paid the additional cost, kill a gear\" payoff can never fire",
+  "expected": "Card def /root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/sfd/zaun-punk.ts:4-16 has no hand-authored `abilities`, so enrich-cards.ts:29 runs parseAbilities on the rulesText. Verified by running the parser/getAllCards(): the enriched sfd-160-221 carries ONLY `{type:\"triggered\", trigger:{event:\"play-self\"}, condition:{type:\"paid-additional-cost\"}, effect:{type:\"kill\", target:{type:\"gear\"}}}` — the sentence \"You may kill a friendly gear as an additional cost to play me.\" fails to parse (parseAbilities returns success:false for it alone) and yields no additional-cost ability. Consequently getOptionalPlayCost (riftbound-engine/src/game-definition/moves/play/cost.ts:909-1024) returns undefined for this card, playUnit's enumerator never emits a paidAdditionalCost/sacrificeId variant, the reducer fires play-self with paidAdditionalCost=false (play-unit.ts:1110, 1207), and trigger-runner.ts:289-293 gates the payoff on event.paidAdditionalCost===true, so the kill-a-gear trigger can never go on the chain. Engine plumbing works when the cost ability exists (rules-audit/optional-play-cost.test.ts:209 hand-authors `{type:\"static\", cost:{kill:{controller:\"friendly\",type:\"gear\"}}}`), confirming this is a card-layer gap: the payoff is unreachable because the real card lacks the additional-cost ability.",
+  "observed": "No chain item / pendingChoice after play; both gears remained. Unreachable because the additional cost cannot be paid (see bug 1).",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/sfd/zaun-punk.ts:13",
+  "id": "ee8437e6abfe",
+  "createdAt": "2026-08-07T03:31:36.295Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.295Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

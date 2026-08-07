@@ -38,6 +38,7 @@ describe("Brynhir Thundersong (ogn-026-298)", () => {
   test("control: without Brynhir the opponent may answer a spell with a Reaction", async () => {
     const game = await board(1).hand(P1, "ogn-004-298", "cleave").unit(P1, "base", { might: 2 }, "ally").build();
     await game.p1.cast("cleave", { targets: "ally" });
+    await game.p1.passPriority(); // rule 312.1
     expect(game.p2.can("cast", "react")).toBe(true);
   });
 

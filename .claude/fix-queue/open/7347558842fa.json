@@ -9,12 +9,31 @@
   },
   "id": "7347558842fa",
   "createdAt": "2026-08-07T01:14:13.030Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:14:13.030Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:56:04.588Z",
+      "event": "grabbed:w3-i18"
+    },
+    {
+      "at": "2026-08-07T06:07:03.005Z",
+      "event": "failed",
+      "note": "play-spell/play-card triggers fire on resolution by design; moving them to play time contradicts green tests (e.g. sfd-100-221 'a COUNTERED spell was never played' expects no draw) — needs a coordinated chain-ordering change"
+    },
+    {
+      "at": "2026-08-07T08:14:36.887Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w3-i18",
+  "claimedAt": "2026-08-07T05:56:04.588Z",
+  "resolution": {
+    "note": "play-spell/play-card triggers fire on resolution by design; moving them to play time contradicts green tests (e.g. sfd-100-221 'a COUNTERED spell was never played' expects no draw) — needs a coordinated chain-ordering change",
+    "at": "2026-08-07T06:07:03.005Z"
+  }
 }

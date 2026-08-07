@@ -1,0 +1,29 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-032-221",
+  "title": "BUG: killing an attached Equipment must detach it — the holder loses the +1 Might (716 / 143.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-032-221.test.ts",
+    "testName": "BUG: killing an attached Equipment must detach it — the holder loses the +1 Might (716 / 143.1)"
+  },
+  "id": "87f7c156e2b6",
+  "createdAt": "2026-08-07T00:57:36.975Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.975Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T07:11:37.431Z",
+      "event": "done(unclaimed)",
+      "note": "WP3 leaveBoard/LKI (b7d20e7): detachOnLeave severs both sides; test fixture seeds the attachment"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "WP3 leaveBoard/LKI (b7d20e7): detachOnLeave severs both sides; test fixture seeds the attachment",
+    "at": "2026-08-07T07:11:37.431Z"
+  }
+}

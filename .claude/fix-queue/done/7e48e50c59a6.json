@@ -15,23 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:18:16.717Z",
-      "event": "grabbed:w7-i11"
+      "at": "2026-08-07T05:18:10.221Z",
+      "event": "grabbed:w4-i15"
     },
     {
-      "at": "2026-08-06T23:24:49.392Z",
+      "at": "2026-08-07T05:18:16.897Z",
       "event": "done",
-      "note": "323.6 control drop skipped when a Deathknell/die trigger from this cleanup is about to hit the chain"
+      "note": "already fixed+flipped upstream; test green, no test.failing remains"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i11",
-  "claimedAt": "2026-08-06T23:18:16.717Z",
+  "claimedBy": "w4-i15",
+  "claimedAt": "2026-08-07T05:18:10.221Z",
   "resolution": {
-    "note": "323.6 control drop skipped when a Deathknell/die trigger from this cleanup is about to hit the chain",
+    "note": "already fixed+flipped upstream; test green, no test.failing remains",
     "files": [
-      "packages/riftbound-engine/src/cleanup/state-based-checks.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/"
     ],
-    "at": "2026-08-06T23:24:49.392Z"
+    "at": "2026-08-07T05:18:16.897Z"
   }
 }

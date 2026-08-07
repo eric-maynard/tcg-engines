@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-065-221",
+  "title": "BUG: a Mech TOKEN is played too — Assembly Rig's 3-Might Mech token should predict on entering (817.1.b, 'Play a … Mech unit token')",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-065-221.test.ts",
+    "testName": "BUG: a Mech TOKEN is played too — Assembly Rig's 3-Might Mech token should predict on entering (817.1.b, 'Play a … Mech unit token')"
+  },
+  "id": "c1aa2b75320f",
+  "createdAt": "2026-08-07T00:57:36.962Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.962Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:46:11.164Z",
+      "event": "grabbed:w3-i17"
+    },
+    {
+      "at": "2026-08-07T05:55:04.731Z",
+      "event": "done",
+      "note": "already fixed at HEAD: Vision synth trigger covers play-token-unit; test green"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i17",
+  "claimedAt": "2026-08-07T05:46:11.164Z",
+  "resolution": {
+    "note": "already fixed at HEAD: Vision synth trigger covers play-token-unit; test green",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-065-221.test.ts"
+    ],
+    "at": "2026-08-07T05:55:04.731Z"
+  }
+}

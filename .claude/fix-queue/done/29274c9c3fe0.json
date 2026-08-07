@@ -15,26 +15,24 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:40:41.562Z",
-      "event": "grabbed:w2-i10"
+      "at": "2026-08-07T05:30:08.791Z",
+      "event": "grabbed:w6-i9"
     },
     {
-      "at": "2026-08-07T00:42:52.256Z",
+      "at": "2026-08-07T05:30:44.766Z",
       "event": "done",
-      "note": "validateDeck: SIGNATURE_TAG_MISMATCH for signature cards off the legend tag (103.2.d.2)"
+      "note": "already fixed+flipped in HEAD (w3 commits c0081c5/2571d09); verified 52/52 pass"
     }
   ],
   "status": "done",
-  "claimedBy": "w2-i10",
-  "claimedAt": "2026-08-07T00:40:41.562Z",
+  "claimedBy": "w6-i9",
+  "claimedAt": "2026-08-07T05:30:08.791Z",
   "resolution": {
-    "note": "validateDeck: SIGNATURE_TAG_MISMATCH for signature cards off the legend tag (103.2.d.2)",
+    "note": "already fixed+flipped in HEAD (w3 commits c0081c5/2571d09); verified 52/52 pass",
     "files": [
       "packages/riftbound-engine/src/validators/deck-validators.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
-      "packages/riftbound-engine/src/__tests__/deck-validation.test.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/runes-rune-deck-and-rune-pool.test.ts"
+      "packages/riftbound-engine/src/game-definition/moves/setup.ts"
     ],
-    "at": "2026-08-07T00:42:52.256Z"
+    "at": "2026-08-07T05:30:44.766Z"
   }
 }

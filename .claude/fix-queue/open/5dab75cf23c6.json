@@ -9,12 +9,31 @@
   },
   "id": "5dab75cf23c6",
   "createdAt": "2026-08-07T00:48:39.549Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T00:48:39.549Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:46:52.506Z",
+      "event": "grabbed:w11-i13"
+    },
+    {
+      "at": "2026-08-07T05:48:19.545Z",
+      "event": "failed",
+      "note": "383.3.a finalization-time opt-in is an engine-wide restructure: opt-in is deliberately resolution-time (executeResolvedItem in moves/chain/resolve.ts, 'Rule 583' comment) and 68 test files drive it via settle()+yes(); moving the prompt into fireTriggers/addToChain also needs decline-removes-from-chain (383.3.a.2) and leading-vs-later 'you may' discrimination (383.3.a.3). Left test.failing; needs a dedicated lane."
+    },
+    {
+      "at": "2026-08-07T08:14:36.888Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w11-i13",
+  "claimedAt": "2026-08-07T05:46:52.506Z",
+  "resolution": {
+    "note": "383.3.a finalization-time opt-in is an engine-wide restructure: opt-in is deliberately resolution-time (executeResolvedItem in moves/chain/resolve.ts, 'Rule 583' comment) and 68 test files drive it via settle()+yes(); moving the prompt into fireTriggers/addToChain also needs decline-removes-from-chain (383.3.a.2) and leading-vs-later 'you may' discrimination (383.3.a.3). Left test.failing; needs a dedicated lane.",
+    "at": "2026-08-07T05:48:19.545Z"
+  }
 }

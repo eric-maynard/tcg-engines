@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-044-221",
+  "title": "BUG: paying the cost returns the friendly gear to its owner's hand; the Quartermaster lands in base",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-044-221.test.ts",
+    "testName": "BUG: paying the cost returns the friendly gear to its owner's hand; the Quartermaster lands in base"
+  },
+  "id": "fb75eadaa44a",
+  "createdAt": "2026-08-07T01:01:45.604Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:01:45.604Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:49:43.922Z",
+      "event": "grabbed:w8-i16"
+    },
+    {
+      "at": "2026-08-07T05:51:01.458Z",
+      "event": "done",
+      "note": "already fixed at HEAD (w10 gear-cost commit); verified passing on clean tree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i16",
+  "claimedAt": "2026-08-07T05:49:43.922Z",
+  "resolution": {
+    "note": "already fixed at HEAD (w10 gear-cost commit); verified passing on clean tree",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-044-221.test.ts"
+    ],
+    "at": "2026-08-07T05:51:01.458Z"
+  }
+}

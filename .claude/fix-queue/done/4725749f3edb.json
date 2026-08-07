@@ -1,0 +1,37 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 0167a87fe08432da — Guardian Angel applied first dies instead of the unit; unit stays on the board, not banished (engine: GA has no replacement; banished)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/smite-0167a87fe08432da.test.ts",
+    "testName": "BUG: ruling 0167a87fe08432da — Guardian Angel applied first dies instead of the unit; unit stays on the board, not banished (engine: GA has no replacement; banished)"
+  },
+  "id": "4725749f3edb",
+  "createdAt": "2026-08-06T20:11:47.411Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.411Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T05:20:51.591Z",
+      "event": "grabbed:w8-i12"
+    },
+    {
+      "at": "2026-08-07T05:21:32.169Z",
+      "event": "done",
+      "note": "already fixed at HEAD: repro test has no test.failing and passes (verified by running the file)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i12",
+  "claimedAt": "2026-08-07T05:20:51.591Z",
+  "resolution": {
+    "note": "already fixed at HEAD: repro test has no test.failing and passes (verified by running the file)",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/smite-0167a87fe08432da.test.ts"
+    ],
+    "at": "2026-08-07T05:21:32.169Z"
+  }
+}

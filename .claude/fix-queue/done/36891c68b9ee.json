@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-101-221",
+  "title": "BUG: a 'spend a buff to …' instruction (Wildclaw Shaman) is also a spend → one Gold token",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-101-221.test.ts",
+    "testName": "BUG: a 'spend a buff to …' instruction (Wildclaw Shaman) is also a spend → one Gold token"
+  },
+  "id": "36891c68b9ee",
+  "createdAt": "2026-08-07T01:20:34.442Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.442Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:07:04.950Z",
+      "event": "grabbed:w4-i23"
+    },
+    {
+      "at": "2026-08-07T06:16:15.133Z",
+      "event": "done",
+      "note": "already fixed at HEAD: spend-buff handler fires spend-buff event per buff removed; sfd-101-221 suite green"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i23",
+  "claimedAt": "2026-08-07T06:07:04.950Z",
+  "resolution": {
+    "note": "already fixed at HEAD: spend-buff handler fires spend-buff event per buff removed; sfd-101-221 suite green",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/spend-buff.ts"
+    ],
+    "at": "2026-08-07T06:16:15.133Z"
+  }
+}

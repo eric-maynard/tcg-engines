@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-057-221",
+  "title": "BUG: an opponent choosing Irelia fires her 'when YOU choose me' trigger — enemy Void Seeker's exactly-lethal 4 should kill her with no +1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-057-221.test.ts",
+    "testName": "BUG: an opponent choosing Irelia fires her 'when YOU choose me' trigger — enemy Void Seeker's exactly-lethal 4 should kill her with no +1"
+  },
+  "id": "55446256224f",
+  "createdAt": "2026-08-07T01:04:24.758Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:04:24.758Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:50:36.980Z",
+      "event": "grabbed:w12-i15"
+    },
+    {
+      "at": "2026-08-07T05:54:30.701Z",
+      "event": "done",
+      "note": "already fixed on HEAD by an earlier lane; verified green in clean worktree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w12-i15",
+  "claimedAt": "2026-08-07T05:50:36.980Z",
+  "resolution": {
+    "note": "already fixed on HEAD by an earlier lane; verified green in clean worktree",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-057-221.test.ts"
+    ],
+    "at": "2026-08-07T05:54:30.701Z"
+  }
+}

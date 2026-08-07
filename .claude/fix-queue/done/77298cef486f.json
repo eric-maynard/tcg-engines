@@ -15,26 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:06:56.564Z",
-      "event": "grabbed:w10-i10"
+      "at": "2026-08-07T05:29:05.728Z",
+      "event": "grabbed:w9-i12"
     },
     {
-      "at": "2026-08-07T00:10:06.332Z",
+      "at": "2026-08-07T05:30:04.164Z",
       "event": "done",
-      "note": "NoCombatDamage keyword now zeroes a unit's combat damage (CombatUnit.dealsNoCombatDamage) + repro test"
+      "note": "already fixed in HEAD; verified passing (no new edit needed)"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i10",
-  "claimedAt": "2026-08-07T00:06:56.564Z",
+  "claimedBy": "w9-i12",
+  "claimedAt": "2026-08-07T05:29:05.728Z",
   "resolution": {
-    "note": "NoCombatDamage keyword now zeroes a unit's combat damage (CombatUnit.dealsNoCombatDamage) + repro test",
+    "note": "already fixed in HEAD; verified passing (no new edit needed)",
     "files": [
-      "packages/riftbound-engine/src/combat/combat-resolver.ts",
-      "packages/riftbound-engine/src/combat/index.ts",
-      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts",
       "packages/riftbound-engine/src/__tests__/cards/sfd-082-221.test.ts"
     ],
-    "at": "2026-08-07T00:10:06.332Z"
+    "at": "2026-08-07T05:30:04.164Z"
   }
 }

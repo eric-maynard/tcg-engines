@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-078-221",
+  "title": "BUG: 'equal to its cost' includes Power (206) — Premonition's granted Repeat costs [2][mind][mind][mind]; paying it draws 6",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-078-221.test.ts",
+    "testName": "BUG: 'equal to its cost' includes Power (206) — Premonition's granted Repeat costs [2][mind][mind][mind]; paying it draws 6"
+  },
+  "id": "7e2af4488137",
+  "createdAt": "2026-08-07T01:27:56.044Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:27:56.044Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:10:50.706Z",
+      "event": "grabbed:w2-i15"
+    },
+    {
+      "at": "2026-08-07T06:13:55.880Z",
+      "event": "done",
+      "note": "already fixed+flipped at HEAD (c655718 next-spell Repeat grant); verified 12/12 pass in clean worktree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i15",
+  "claimedAt": "2026-08-07T06:10:50.706Z",
+  "resolution": {
+    "note": "already fixed+flipped at HEAD (c655718 next-spell Repeat grant); verified 12/12 pass in clean worktree",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-078-221.test.ts"
+    ],
+    "at": "2026-08-07T06:13:55.880Z"
+  }
+}

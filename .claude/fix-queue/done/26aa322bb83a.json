@@ -15,24 +15,20 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:39:47.741Z",
-      "event": "grabbed:w7-i17"
+      "at": "2026-08-07T05:24:03.877Z",
+      "event": "grabbed:w2-i10"
     },
     {
-      "at": "2026-08-07T01:04:03.429Z",
+      "at": "2026-08-07T05:24:50.771Z",
       "event": "done",
-      "note": "revealHidden now gated by Open-State play permission (Turn Player in Neutral Open, Focus holder in Showdown Open); Reaction only adds Closed States"
+      "note": "already passing on current tree (fixed by a concurrent lane); verified by running the repro file"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i17",
-  "claimedAt": "2026-08-07T00:39:47.741Z",
+  "claimedBy": "w2-i10",
+  "claimedAt": "2026-08-07T05:24:03.877Z",
   "resolution": {
-    "note": "revealHidden now gated by Open-State play permission (Turn Player in Neutral Open, Focus holder in Showdown Open); Reaction only adds Closed States",
-    "files": [
-      "packages/riftbound-engine/src/game-definition/moves/play/hide.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/hidden-and-facedown-zones.test.ts"
-    ],
-    "at": "2026-08-07T01:04:03.429Z"
+    "note": "already passing on current tree (fixed by a concurrent lane); verified by running the repro file",
+    "at": "2026-08-07T05:24:50.771Z"
   }
 }

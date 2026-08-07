@@ -15,24 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T01:08:20.482Z",
-      "event": "grabbed:w4-i18"
+      "at": "2026-08-07T05:33:08.646Z",
+      "event": "grabbed:w8-i15"
     },
     {
-      "at": "2026-08-07T01:13:59.281Z",
+      "at": "2026-08-07T05:49:27.938Z",
       "event": "done",
-      "note": "handle_score skips positive gains while an opposing can't-gain-points static is on board (054.1/055)"
+      "note": "fixed concurrently by w4-19 (conditional point-gain denial + repro rewritten); verified passing at HEAD"
     }
   ],
   "status": "done",
-  "claimedBy": "w4-i18",
-  "claimedAt": "2026-08-07T01:08:20.482Z",
+  "claimedBy": "w8-i15",
+  "claimedAt": "2026-08-07T05:33:08.646Z",
   "resolution": {
-    "note": "handle_score skips positive gains while an opposing can't-gain-points static is on board (054.1/055)",
+    "note": "fixed concurrently by w4-19 (conditional point-gain denial + repro rewritten); verified passing at HEAD",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/score.ts",
       "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts"
     ],
-    "at": "2026-08-07T01:13:59.281Z"
+    "at": "2026-08-07T05:49:27.938Z"
   }
 }

@@ -8,12 +8,31 @@
   "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/unl/jhin-meticulous-killer.ts:36",
   "id": "c6e62d36209e",
   "createdAt": "2026-08-06T23:55:41.370Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T23:55:41.370Z",
       "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T04:21:04.069Z",
+      "event": "grabbed:w8-i6"
+    },
+    {
+      "at": "2026-08-07T04:23:00.469Z",
+      "event": "failed",
+      "note": "needs missing engine capability: no alternative-play-cost path (CostExtras/playUnit enumerator) and no per-turn spell-spend tracking to evaluate 'spent [4] or more on a spell this turn'"
+    },
+    {
+      "at": "2026-08-07T08:14:36.885Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w8-i6",
+  "claimedAt": "2026-08-07T04:21:04.069Z",
+  "resolution": {
+    "note": "needs missing engine capability: no alternative-play-cost path (CostExtras/playUnit enumerator) and no per-turn spell-spend tracking to evaluate 'spent [4] or more on a spell this turn'",
+    "at": "2026-08-07T04:23:00.469Z"
+  }
 }

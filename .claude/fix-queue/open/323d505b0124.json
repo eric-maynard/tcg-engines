@@ -1,0 +1,18 @@
+{
+  "source": "playtest",
+  "title": "Petal Pixie (unl-076-219) sitting alone in player-1's base displays an 'Effective Might' badge of 3 (printed Might 2) in both the BEFORE and AFTER screenshots. No unit with [Temporary] exists anywhere, and Petal Pixie is not at a battlefield, so its Might should be 2. Root cause: the rules-text parser turns 'I have +1 [Might] for each of your units with [Temporary] at my battlefield' into a static",
+  "expected": "Ran parseAbilities on Petal Pixie's rulesText: output is {type:\"modify-might\", amount:1, per:\"of your units with [Temporary] at my battlefield\", target:\"self\"} — static-parser.ts:648-681 falls through to the flat `amount` + opaque `per` branch because parseForEachQualifier (static-parser.ts:36-60) only recognizes two qualifiers. Engine applyStaticEffect (packages/riftbound-engine/src/abilities/static-abilities.ts:566-570, 630-635) treats numeric amount as a flat bonus and never reads `per`; getAllBoardCards (line 58) includes base cards so it applies in base too. Card unl/petal-pixie.ts has no explicit abilities so enrich-cards.ts uses the parser. Screenshot 25.png shows the \"3\" badge on Petal Pixie alone in base.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/parsers/static-parser.ts:669-681",
+  "rule": "Petal Pixie (unl-076-219)",
+  "id": "323d505b0124",
+  "createdAt": "2026-08-07T07:42:18.110Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.110Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

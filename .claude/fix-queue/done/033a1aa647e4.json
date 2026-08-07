@@ -14,23 +14,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:35:40.869Z",
-      "event": "grabbed:w3-i11"
+      "at": "2026-08-07T05:30:06.979Z",
+      "event": "grabbed:w9-i12"
     },
     {
-      "at": "2026-08-07T00:36:44.204Z",
+      "at": "2026-08-07T05:30:48.557Z",
       "event": "done",
-      "note": "battlefield unit cards: height cap + contain-fit art so squeezed .bf-units rows show whole, identifiable cards instead of a clipped sliver"
+      "note": "already fixed in HEAD; verified passing"
     }
   ],
   "status": "done",
-  "claimedBy": "w3-i11",
-  "claimedAt": "2026-08-07T00:35:40.869Z",
+  "claimedBy": "w9-i12",
+  "claimedAt": "2026-08-07T05:30:06.979Z",
   "resolution": {
-    "note": "battlefield unit cards: height cap + contain-fit art so squeezed .bf-units rows show whole, identifiable cards instead of a clipped sliver",
+    "note": "already fixed in HEAD; verified passing",
     "files": [
-      "apps/riftbound-app/public/css/gameplay.css"
+      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts"
     ],
-    "at": "2026-08-07T00:36:44.204Z"
+    "at": "2026-08-07T05:30:48.557Z"
   }
 }

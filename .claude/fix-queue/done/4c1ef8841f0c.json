@@ -15,24 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-06T23:52:18.444Z",
-      "event": "grabbed:w7-i14"
+      "at": "2026-08-07T05:20:30.114Z",
+      "event": "grabbed:w6-i6"
     },
     {
-      "at": "2026-08-07T00:16:15.045Z",
+      "at": "2026-08-07T05:21:33.720Z",
       "event": "done",
-      "note": "parser: 'Spend this Energy only to play spells' now sets add-resource restriction (engine already enforced it)"
+      "note": "already fixed (add-resource restriction:'spell' + cost.ts restrictedEnergy); added a ven-sp6-006 regression test for the alternate wording"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i14",
-  "claimedAt": "2026-08-06T23:52:18.444Z",
+  "claimedBy": "w6-i6",
+  "claimedAt": "2026-08-07T05:20:30.114Z",
   "resolution": {
-    "note": "parser: 'Spend this Energy only to play spells' now sets add-resource restriction (engine already enforced it)",
+    "note": "already fixed (add-resource restriction:'spell' + cost.ts restrictedEnergy); added a ven-sp6-006 regression test for the alternate wording",
     "files": [
-      "packages/riftbound-cards/src/parser/impl/activated.ts",
       "packages/riftbound-engine/src/__tests__/cards/ven-sp6-006.test.ts"
     ],
-    "at": "2026-08-07T00:16:15.045Z"
+    "at": "2026-08-07T05:21:33.720Z"
   }
 }

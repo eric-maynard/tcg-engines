@@ -14,23 +14,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:36:50.651Z",
-      "event": "grabbed:w10-i13"
+      "at": "2026-08-07T05:27:54.886Z",
+      "event": "grabbed:w9-i11"
     },
     {
-      "at": "2026-08-07T00:38:58.677Z",
+      "at": "2026-08-07T05:28:52.888Z",
       "event": "done",
-      "note": "opponent rune pool is an inline flex child, no longer overlays opponentInfo"
+      "note": "already fixed: opponent rune pool is a normal flex child, no longer absolutely positioned over #opponentInfo"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i13",
-  "claimedAt": "2026-08-07T00:36:50.651Z",
+  "claimedBy": "w9-i11",
+  "claimedAt": "2026-08-07T05:27:54.886Z",
   "resolution": {
-    "note": "opponent rune pool is an inline flex child, no longer overlays opponentInfo",
+    "note": "already fixed: opponent rune pool is a normal flex child, no longer absolutely positioned over #opponentInfo",
     "files": [
       "apps/riftbound-app/public/gameplay.html"
     ],
-    "at": "2026-08-07T00:38:58.677Z"
+    "at": "2026-08-07T05:28:52.888Z"
   }
 }

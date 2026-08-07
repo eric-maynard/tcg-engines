@@ -1,0 +1,39 @@
+{
+  "source": "playtest",
+  "cardId": "ven-097-166",
+  "title": "Spiderling's '+1 Might for each other unit you control here with my name' is applied as a flat +1 regardless of how many other Spiderlings share its location",
+  "expected": "Parser emits {type:\"modify-might\", amount:1, per:\"other unit you control here with my name\", target:\"self\"} at packages/riftbound-cards/src/parser/parsers/static-parser.ts:616-634 for \"I have +N [Might] for each QUALIFIER\". The engine's applyStaticEffect (packages/riftbound-engine/src/abilities/static-abilities.ts:515-585) only handles numeric amount, {cardsInTrash}, {count}, and {score}; a numeric amount is used verbatim (line 518-519) and `effect.per` is never read anywhere in riftbound-engine/src (grep for `.per`/\"per\" returns nothing). So Spiderling always gets staticMightBonus = +1 regardless of how many same-named units share its location (should be 0 alone, N-1 with N together).",
+  "observed": "meta.staticMightBonus was 1 in every configuration: a single Spiderling alone in base (others still in hand) had staticMightBonus=1; one at battlefield + one at base (different locations) each had 1; all three together at battlefield-player-1-bf-ogn-276-298 each still had staticMightBonus=1. Parsed ability is {type:static, effect:{type:modify-might, amount:1, target:self, per:\"other unit you control here with my name\"}} — the `per` string is not evaluated, so amount is applied once unconditionally.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/static-abilities.ts:515",
+  "id": "f80e237f270a",
+  "createdAt": "2026-08-06T23:55:41.370Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.370Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T04:30:44.183Z",
+      "event": "grabbed:w10-i5"
+    },
+    {
+      "at": "2026-08-07T04:33:23.909Z",
+      "event": "done",
+      "note": "for-each qualifier -> countable descriptor + {name:self} static filter"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w10-i5",
+  "claimedAt": "2026-08-07T04:30:44.183Z",
+  "resolution": {
+    "note": "for-each qualifier -> countable descriptor + {name:self} static filter",
+    "files": [
+      "packages/riftbound-cards/src/parser/parsers/static-parser.ts",
+      "packages/riftbound-engine/src/abilities/static-abilities.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ven-097-166.test.ts"
+    ],
+    "at": "2026-08-07T04:33:23.909Z"
+  }
+}

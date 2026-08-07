@@ -16,28 +16,23 @@
       "event": "enqueued:unit-bug"
     },
     {
-      "at": "2026-08-06T23:09:27.982Z",
-      "event": "grabbed:w7-i10"
+      "at": "2026-08-07T05:18:08.890Z",
+      "event": "grabbed:w9-i9"
     },
     {
-      "at": "2026-08-06T23:13:18.715Z",
+      "at": "2026-08-07T05:19:03.271Z",
       "event": "done",
-      "note": "Azir: explicit activated ability (swap + optional equipment attach) and engine once-per-turn activation gate"
+      "note": "already green at HEAD (fixed by commit 8a57a43 / afb09db); verified in a clean worktree, no new edits needed"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i10",
-  "claimedAt": "2026-08-06T23:09:27.982Z",
+  "claimedBy": "w9-i9",
+  "claimedAt": "2026-08-07T05:18:08.890Z",
   "resolution": {
-    "note": "Azir: explicit activated ability (swap + optional equipment attach) and engine once-per-turn activation gate",
+    "note": "already green at HEAD (fixed by commit 8a57a43 / afb09db); verified in a clean worktree, no new edits needed",
     "files": [
-      "packages/riftbound-cards/src/cards/sfd/azir-ascendant.ts",
-      "packages/riftbound-engine/src/abilities/effects/move.ts",
-      "packages/riftbound-engine/src/abilities/effects/attach.ts",
-      "packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts",
-      "packages/riftbound-types/src/abilities/effect-types.ts",
       "packages/riftbound-engine/src/__tests__/cards/sfd-050-221.test.ts"
     ],
-    "at": "2026-08-06T23:13:18.715Z"
+    "at": "2026-08-07T05:19:03.271Z"
   }
 }

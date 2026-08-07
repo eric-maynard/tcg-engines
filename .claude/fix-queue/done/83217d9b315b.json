@@ -15,23 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:39:47.742Z",
-      "event": "grabbed:w7-i17"
+      "at": "2026-08-07T05:30:59.248Z",
+      "event": "grabbed:w6-i10"
     },
     {
-      "at": "2026-08-07T01:04:03.470Z",
+      "at": "2026-08-07T05:31:52.488Z",
       "event": "done",
-      "note": "811.1.d no-legal-target gate on revealHidden (hiddenRevealHasNoTarget) verified + landed with this patch"
+      "note": "already fixed on HEAD: revealHidden condition/enumerator gate on hiddenSpellHasLegalTargets; test passes"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i17",
-  "claimedAt": "2026-08-07T00:39:47.742Z",
+  "claimedBy": "w6-i10",
+  "claimedAt": "2026-08-07T05:30:59.248Z",
   "resolution": {
-    "note": "811.1.d no-legal-target gate on revealHidden (hiddenRevealHasNoTarget) verified + landed with this patch",
+    "note": "already fixed on HEAD: revealHidden condition/enumerator gate on hiddenSpellHasLegalTargets; test passes",
     "files": [
       "packages/riftbound-engine/src/game-definition/moves/play/hide.ts"
     ],
-    "at": "2026-08-07T01:04:03.470Z"
+    "at": "2026-08-07T05:31:52.488Z"
   }
 }

@@ -15,23 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:21:31.437Z",
-      "event": "grabbed:w3-i10"
+      "at": "2026-08-07T05:27:31.449Z",
+      "event": "grabbed:w3-i13"
     },
     {
-      "at": "2026-08-07T00:27:25.714Z",
+      "at": "2026-08-07T05:27:44.348Z",
       "event": "done",
-      "note": "card.js: fold Shield(defender)/Assault(attacker) into the displayed effective Might via meta.combatRole"
+      "note": "already fixed at HEAD (3bb4c4e): combatRoleMightBonus in card.js; [rule:ui-bf-unit-not-clipped] min-height/max-height caps in gameplay.css"
     }
   ],
   "status": "done",
-  "claimedBy": "w3-i10",
-  "claimedAt": "2026-08-07T00:21:31.437Z",
+  "claimedBy": "w3-i13",
+  "claimedAt": "2026-08-07T05:27:31.449Z",
   "resolution": {
-    "note": "card.js: fold Shield(defender)/Assault(attacker) into the displayed effective Might via meta.combatRole",
+    "note": "already fixed at HEAD (3bb4c4e): combatRoleMightBonus in card.js; [rule:ui-bf-unit-not-clipped] min-height/max-height caps in gameplay.css",
     "files": [
       "apps/riftbound-app/public/js/gameplay/render/card.js"
     ],
-    "at": "2026-08-07T00:27:25.714Z"
+    "at": "2026-08-07T05:27:44.347Z"
   }
 }

@@ -15,23 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:52:14.113Z",
-      "event": "grabbed:w7-i14"
+      "at": "2026-08-07T05:21:48.301Z",
+      "event": "grabbed:w8-i13"
     },
     {
-      "at": "2026-08-06T23:52:18.398Z",
+      "at": "2026-08-07T05:22:59.733Z",
       "event": "done",
-      "note": "already fixed at HEAD; repro tests pass and are flipped"
+      "note": "already fixed at HEAD; repro test flipped and passing (verified)"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i14",
-  "claimedAt": "2026-08-06T23:52:14.113Z",
+  "claimedBy": "w8-i13",
+  "claimedAt": "2026-08-07T05:21:48.301Z",
   "resolution": {
-    "note": "already fixed at HEAD; repro tests pass and are flipped",
+    "note": "already fixed at HEAD; repro test flipped and passing (verified)",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/rulings/karthus-eternal-e574b44846512539.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/"
     ],
-    "at": "2026-08-06T23:52:18.398Z"
+    "at": "2026-08-07T05:22:59.733Z"
   }
 }

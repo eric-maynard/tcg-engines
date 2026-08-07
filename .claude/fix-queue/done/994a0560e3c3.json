@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "ven-008-166",
+  "title": "Optional additional cost 'you may discard 1' and the 'deal 5 instead' rider are missing",
+  "expected": "Card data at /root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/ven.json:549-568 (ven-008-166 Ruthless Strike) has \"abilities\": [null] despite rulesText declaring \"As an additional cost to play this, you may discard 1 ... If you paid the additional cost, deal 5 to it instead.\" No TS card override exists (grep for ven-008-166/ruthless-strike finds only the JSON). play-spell.ts:262-263 and :1220 gate the paidAdditionalCost variant on getOptionalPlayCost(cardId) (cost.ts:780-896), which reads registry abilities and needs an additional-cost-option ability; ran a harness scenario and got getGlobalCardRegistry().getAbilities(\"ven-008-166\") -> [] and getOptionalPlayCost -> undefined, so no paid variant is enumerated and forcing paidAdditionalCost fails the condition. Discard option and deal-5 rider are indeed missing.",
+  "observed": "Only one playSpell variant enumerated (no paidAdditionalCost); no discard prompt on play; forcing paidAdditionalCost:true (with/without discardIds) via REST returns CONDITION_FAILED. Parsed abilities for ven-008-166 in the card registry contain only {type:'spell', timing:'action', effect:{type:'damage', amount:3, target unit@battlefield}} — no additional-cost-option ability and no if-paid conditional (set JSON has abilities:[null], re-parse from rulesText drops the cost clause).",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/ven.json:566",
+  "id": "994a0560e3c3",
+  "createdAt": "2026-08-06T23:55:41.370Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.370Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:42:42.538Z",
+      "event": "grabbed:w4-i20"
+    },
+    {
+      "at": "2026-08-07T05:46:06.599Z",
+      "event": "done",
+      "note": "ven-008-166: replaced abilities:[null] with the optional discard-1 additional-cost static + paid-additional-cost conditional damage 5/3"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i20",
+  "claimedAt": "2026-08-07T05:42:42.538Z",
+  "resolution": {
+    "note": "ven-008-166: replaced abilities:[null] with the optional discard-1 additional-cost static + paid-additional-cost conditional damage 5/3",
+    "files": [
+      "packages/riftbound-cards/src/data/sets/ven.json",
+      "packages/riftbound-engine/src/__tests__/cards/ven-008-166.test.ts"
+    ],
+    "at": "2026-08-07T05:46:06.599Z"
+  }
+}

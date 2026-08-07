@@ -78,6 +78,7 @@ describe("Ravenbloom Student (ogn-103-298)", () => {
   test("a countered spell was never played — no +1 (rule 359.3.e.10)", async () => {
     const game = await board().hand(P2, WIND_WALL, "wall").build();
     await game.p1.cast("s1");
+    await game.p1.passPriority(); // rule 312.1
     await game.p2.cast("wall");
     await game.settle();
     expect(game.zoneOf("s1")).toBe("trash");

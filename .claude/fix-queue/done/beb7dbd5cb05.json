@@ -15,23 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:20:21.672Z",
-      "event": "grabbed:w7-i16"
+      "at": "2026-08-07T05:27:07.556Z",
+      "event": "grabbed:w3-i13"
     },
     {
-      "at": "2026-08-07T00:23:57.212Z",
+      "at": "2026-08-07T05:27:28.589Z",
       "event": "done",
-      "note": "already fixed at HEAD: lethalThreshold adds Assault for attackers; ogs-007-024 green"
+      "note": "already fixed at HEAD (3bb4c4e); repro tests pass, no test.failing remains"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i16",
-  "claimedAt": "2026-08-07T00:20:21.672Z",
+  "claimedBy": "w3-i13",
+  "claimedAt": "2026-08-07T05:27:07.556Z",
   "resolution": {
-    "note": "already fixed at HEAD: lethalThreshold adds Assault for attackers; ogs-007-024 green",
+    "note": "already fixed at HEAD (3bb4c4e); repro tests pass, no test.failing remains",
     "files": [
-      "packages/riftbound-engine/src/combat/combat-resolver.ts"
+      "packages/riftbound-engine/src/__tests__/cards/ogs-007-024.test.ts"
     ],
-    "at": "2026-08-07T00:23:57.212Z"
+    "at": "2026-08-07T05:27:28.589Z"
   }
 }

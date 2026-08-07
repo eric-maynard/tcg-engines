@@ -1,0 +1,40 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-159-221",
+  "title": "Trusty Ramhound gets +1 Might even when it is the only unit at its location",
+  "expected": "Card def (riftbound-cards/src/cards/sfd/trusty-ramhound.ts) has no explicit abilities, so enrich-cards.ts:30 runs parseAbilities on rulesText. Verified by running the parser: output is {condition:{type:\"custom\",text:\"While you have another unit here\"}, effect:{type:\"modify-might\",amount:1,target:\"self\"}} — produced by static-parser.ts:658-665 (whileConditionMightMatch fallback to type \"custom\" when parseConditionFromText fails). In the engine, static-abilities.ts:749 calls evaluateCondition; the switch at static-abilities.ts:112 has no \"custom\" case, so it hits the default at static-abilities.ts:330-333 which returns true. The +1 Might is therefore applied unconditionally, including when Ramhound is alone.",
+  "observed": "Fresh game, played Ramhound to an empty base: server state meta.staticMightBonus=1 and the board might badge (.card-might) shows 3 with no other unit at base. Same 3 after adding a second unit. Cause: parser emits condition {type:'custom', text:'While you have another unit here'} and static-abilities.ts default branch treats unknown conditions as true, so the bonus is unconditional.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/static-abilities.ts:330",
+  "id": "6ff803d92efa",
+  "createdAt": "2026-08-07T03:31:36.295Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.295Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T06:14:22.309Z",
+      "event": "grabbed:w2-i16"
+    },
+    {
+      "at": "2026-08-07T06:24:36.344Z",
+      "event": "done",
+      "note": "Parser now emits exists-here (excludeSelf/location:here) for 'While you have another unit here'; static evaluateCondition implements exists-here so the +1 Might is conditional"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i16",
+  "claimedAt": "2026-08-07T06:14:22.309Z",
+  "resolution": {
+    "note": "Parser now emits exists-here (excludeSelf/location:here) for 'While you have another unit here'; static evaluateCondition implements exists-here so the +1 Might is conditional",
+    "files": [
+      "packages/riftbound-cards/src/parser/parsers/condition-parser.ts",
+      "packages/riftbound-engine/src/abilities/static-abilities.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-159-221.test.ts",
+      "packages/riftbound-cards/src/parser/__tests__/static/might-modifier.test.ts"
+    ],
+    "at": "2026-08-07T06:24:36.344Z"
+  }
+}

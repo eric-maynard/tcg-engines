@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "ven-038-166",
+  "title": "Static clause \"I can't be chosen by enemy spells and abilities unless I'm in combat\" is not implemented — enemy spells can choose Akali while she is not in combat.",
+  "expected": "Running parseAbilities on Akali's rulesText yields only the move-to-battlefield trigger; the \"I can't be chosen by enemy spells and abilities unless I'm in combat\" clause produces no ability. The parser's only self \"can't be chosen\" pattern (riftbound-cards/src/parser/impl/effects-grant-keyword.ts:198-200) is anchored `...abilities\\s*(this turn)?\\.?$` so the trailing \"unless I'm in combat\" fails to match, and static-parser.ts:1305-1307 only handles the Alpha Wildclaw form. VEN cards are built from ven.json via parseAbilities (data/all-cards.ts:839-840, enrich-cards.ts:30) with no per-card override for ven-038-166. Engine-side, isUntargetable (riftbound-engine/src/abilities/target-resolver.ts:507-536) only honors printed keyword, unconditional static grant-keyword (condition === undefined), or meta.grantedKeywords — none of which exist for Akali — so enemy Hextech Ray can choose her out of combat.",
+  "observed": "GET /moves?player=player-2 listed playSpell Hextech Ray with targets:[Akali]; executing it succeeded, chain item resolved and Akali took 3 damage (meta.damage=3, lastDamageSource=spell). parseAbilities(rulesText) returns only the move trigger — the conditional untargetable clause is dropped entirely (no static/restriction ability), and target-resolver isUntargetable() only checks unconditional Untargetable grants.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/effects-grant-keyword.ts:198",
+  "id": "2b620ebf1a0a",
+  "createdAt": "2026-08-06T23:55:41.368Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.368Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:40:11.025Z",
+      "event": "grabbed:w1-i11"
+    },
+    {
+      "at": "2026-08-07T05:40:41.424Z",
+      "event": "done",
+      "note": "already fixed at HEAD (436328b / 80597ae); verified green on clean checkout"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i11",
+  "claimedAt": "2026-08-07T05:40:11.025Z",
+  "resolution": {
+    "note": "already fixed at HEAD (436328b / 80597ae); verified green on clean checkout",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-014-221.test.ts"
+    ],
+    "at": "2026-08-07T05:40:41.424Z"
+  }
+}

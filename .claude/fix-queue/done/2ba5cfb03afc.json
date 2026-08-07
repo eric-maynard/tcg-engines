@@ -1,0 +1,40 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: cross-check (printed card) Tianna Crownguard 'While I'm at a battlefield, opponents can't gain points' — P1's hold point must be denied (stays 5); engine awards it",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/scoring-hold-and-conquer.test.ts",
+    "testName": "BUG: cross-check (printed card) Tianna Crownguard 'While I'm at a battlefield, opponents can't gain points' — P1's hold point must be denied (stays 5); engine awards it"
+  },
+  "id": "2ba5cfb03afc",
+  "createdAt": "2026-08-06T20:50:12.439Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.439Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:37:42.907Z",
+      "event": "grabbed:w4-i19"
+    },
+    {
+      "at": "2026-08-07T05:42:23.017Z",
+      "event": "done",
+      "note": "scorePoint no longer enumerated (Hold/Conquer only); pointGainDenied honours while-at-battlefield"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i19",
+  "claimedAt": "2026-08-07T05:37:42.907Z",
+  "resolution": {
+    "note": "scorePoint no longer enumerated (Hold/Conquer only); pointGainDenied honours while-at-battlefield",
+    "files": [
+      "packages/riftbound-engine/src/operations/scoring-rules.ts",
+      "packages/riftbound-engine/src/game-definition/moves/combat/score-point.ts",
+      "packages/riftbound-engine/src/__tests__/core-rules/scoring-hold-and-conquer.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-060-221.test.ts"
+    ],
+    "at": "2026-08-07T05:42:23.017Z"
+  }
+}

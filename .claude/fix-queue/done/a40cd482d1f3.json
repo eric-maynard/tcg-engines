@@ -15,23 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:50:36.953Z",
-      "event": "grabbed:w1-i8"
+      "at": "2026-08-07T05:22:59.783Z",
+      "event": "grabbed:w8-i13"
     },
     {
-      "at": "2026-08-06T23:53:42.263Z",
+      "at": "2026-08-07T05:23:06.982Z",
       "event": "done",
-      "note": "already green on HEAD (fixed by an earlier lane); verified test file passes"
+      "note": "already fixed at HEAD; repro tests pass (verified)"
     }
   ],
   "status": "done",
-  "claimedBy": "w1-i8",
-  "claimedAt": "2026-08-06T23:50:36.953Z",
+  "claimedBy": "w8-i13",
+  "claimedAt": "2026-08-07T05:22:59.783Z",
   "resolution": {
-    "note": "already green on HEAD (fixed by an earlier lane); verified test file passes",
+    "note": "already fixed at HEAD; repro tests pass (verified)",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/rulings/shadow-assassin-67ba38e17c612ad4.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/"
     ],
-    "at": "2026-08-06T23:53:42.263Z"
+    "at": "2026-08-07T05:23:06.981Z"
   }
 }

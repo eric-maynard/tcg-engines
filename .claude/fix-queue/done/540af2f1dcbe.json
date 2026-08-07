@@ -1,0 +1,45 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: the Portal's grant applies only to the NEXT spell — a second Sacrifice played the same turn has no Repeat",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/temporal-portal-sacrifice-repeat.test.ts",
+    "testName": "BUG: the Portal's grant applies only to the NEXT spell — a second Sacrifice played the same turn has no Repeat"
+  },
+  "id": "540af2f1dcbe",
+  "createdAt": "2026-08-06T17:51:09.031Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.031Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-07T01:50:25.272Z",
+      "event": "grabbed:w4-i24"
+    },
+    {
+      "at": "2026-08-07T02:36:01.401Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T05:09:17.944Z",
+      "event": "grabbed:w6-i5"
+    },
+    {
+      "at": "2026-08-07T05:09:43.431Z",
+      "event": "done",
+      "note": "stale queue entry: repro already flipped to test() and passing at HEAD; no change needed"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-07T05:09:17.944Z",
+  "claimedBy": "w6-i5",
+  "resolution": {
+    "note": "stale queue entry: repro already flipped to test() and passing at HEAD; no change needed",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-134-298.test.ts"
+    ],
+    "at": "2026-08-07T05:09:43.431Z"
+  }
+}

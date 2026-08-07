@@ -1,0 +1,40 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-194-298",
+  "title": "BUG: looking at Nocturne on top of your deck (Vision) offers 'you may banish me', then 'play me for [rainbow]'",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-194-298.test.ts",
+    "testName": "BUG: looking at Nocturne on top of your deck (Vision) offers 'you may banish me', then 'play me for [rainbow]'"
+  },
+  "id": "3ffdcdbe69de",
+  "createdAt": "2026-08-06T17:51:09.034Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.034Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:09:34.088Z",
+      "event": "grabbed:w4-i14"
+    },
+    {
+      "at": "2026-08-07T05:12:32.767Z",
+      "event": "done",
+      "note": "Nocturne: 'you may play me for [rainbow]' — new optional alternative-cost self-play branch in handle_play"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i14",
+  "claimedAt": "2026-08-07T05:09:34.088Z",
+  "resolution": {
+    "note": "Nocturne: 'you may play me for [rainbow]' — new optional alternative-cost self-play branch in handle_play",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/play.ts",
+      "packages/riftbound-cards/src/cards/ogn/nocturne-horrifying.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-194-298.test.ts"
+    ],
+    "at": "2026-08-07T05:12:32.767Z"
+  }
+}

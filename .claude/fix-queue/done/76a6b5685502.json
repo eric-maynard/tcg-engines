@@ -1,0 +1,43 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-107-221",
+  "title": "BUG: parsed abilities should carry BOTH the might-based damage step and the detach step; only `detach` was produced",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-107-221.test.ts",
+    "testName": "BUG: parsed abilities should carry BOTH the might-based damage step and the detach step; only `detach` was produced"
+  },
+  "id": "76a6b5685502",
+  "createdAt": "2026-08-07T00:57:36.961Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.961Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T04:53:47.009Z",
+      "event": "grabbed:w6-i4"
+    },
+    {
+      "at": "2026-08-07T04:58:56.514Z",
+      "event": "done",
+      "note": "Strike Down card def now carries an explicit sequence [damage(might ref), detach]"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w6-i4",
+  "claimedAt": "2026-08-07T04:53:47.009Z",
+  "resolution": {
+    "note": "Strike Down card def now carries an explicit sequence [damage(might ref), detach]",
+    "files": [
+      "packages/riftbound-cards/src/cards/sfd/strike-down.ts",
+      "packages/riftbound-engine/src/abilities/effects/detach.ts",
+      "packages/riftbound-engine/src/abilities/effects/sequence.ts",
+      "packages/riftbound-engine/src/abilities/effects/_helpers.ts",
+      "packages/riftbound-engine/src/cleanup/state-based-checks.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-107-221.test.ts"
+    ],
+    "at": "2026-08-07T04:58:56.514Z"
+  }
+}

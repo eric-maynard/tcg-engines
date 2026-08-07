@@ -9,12 +9,31 @@
   },
   "id": "b74f461c749a",
   "createdAt": "2026-08-07T01:17:36.535Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:17:36.535Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:00:22.572Z",
+      "event": "grabbed:w1-i17"
+    },
+    {
+      "at": "2026-08-07T06:11:14.771Z",
+      "event": "failed",
+      "note": "Deflect surcharge for a RESOLUTION-time target is uncollected in three places; resolve.ts only taxes non-spell auto-bound single candidates, pending-choice.ts choose-target never charges, and a modal spell's inner effect auto-targets through _helpers.getTargetIds with no charge site at all. Charging in getTargetIds would over-charge quantity:'all' criteria selections; needs a real 'chosen at resolution' hook first."
+    },
+    {
+      "at": "2026-08-07T08:14:36.894Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w1-i17",
+  "claimedAt": "2026-08-07T06:00:22.572Z",
+  "resolution": {
+    "note": "Deflect surcharge for a RESOLUTION-time target is uncollected in three places; resolve.ts only taxes non-spell auto-bound single candidates, pending-choice.ts choose-target never charges, and a modal spell's inner effect auto-targets through _helpers.getTargetIds with no charge site at all. Charging in getTargetIds would over-charge quantity:'all' criteria selections; needs a real 'chosen at resolution' hook first.",
+    "at": "2026-08-07T06:11:14.771Z"
+  }
 }

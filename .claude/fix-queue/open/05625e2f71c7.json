@@ -1,0 +1,18 @@
+{
+  "source": "playtest",
+  "title": "After player-1 clicked Pass, the engine correctly moved chain priority to player-2 (activePlayer=player-2, passedPlayers=[player-1]) and the modal shows 'Goldfish has Priority — waiting...', but the engine's legal `moves` for player-1 still include playSpell (Retreat targeting Petal Pixie) and recycleRune x2, and the UI sidebar still renders 'Play Spell Retreat' and 'Recycle Rune (2 available)' as",
+  "expected": "Trace step 33 confirms chain.activePlayer=player-2, passedPlayers=[player-1], yet player-1's moves include playSpell(Retreat) and recycleRune x2 (passChainPriority correctly dropped). Source: play-spell.ts condition (lines 389-408) and enumerator (lines 716-726) gate only on isLegalTiming (reaction => always true, chain-state.ts:198-201), neutral-open turn-player, and showdown-open focus; there is no closed-state check that interaction.chain.activePlayer === playerId. Contrast play-unit.ts:112-115 holdsChainPriority, and resolve.ts:728/737 which gate passChainPriority on chain.activePlayer. recycleRune (resources.ts:142-196) has no priority/chain gating at all (\"Players can recycle runes at any time\"). Rule 312.1: Priority is the exclusive right to take Discretionary Actions; 338.1.b.1 passing hands it to next player — so enumerating a Reaction spell for player-1 after they passed is illegal.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts:394",
+  "rule": "312.1.b / 338.1.b.1",
+  "id": "05625e2f71c7",
+  "createdAt": "2026-08-07T07:42:18.112Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.112Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

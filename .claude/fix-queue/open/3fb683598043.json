@@ -9,12 +9,31 @@
   },
   "id": "3fb683598043",
   "createdAt": "2026-08-07T01:14:13.015Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:14:13.015Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:54:10.264Z",
+      "event": "grabbed:w6-i12"
+    },
+    {
+      "at": "2026-08-07T06:07:08.223Z",
+      "event": "failed",
+      "note": "Root-caused + verified green, but unlandable this iteration: pending-choice.ts carries two other lanes' uncommitted WIP (spell-modes play-time mode picks; getNotHandSelfEnergyReduction) so land-patch would commit their half-done work. FIX: liftModalTarget() must copy thenIsSequenceRest onto the choose-target prompt it raises, and the choose-target branch must run a carried thenIsSequenceRest continuation with boundTargets STRIPPED (rule 820.2.a — later Repeat executions must not inherit the target just picked; today they re-hit it, so 'kill a gear' twice kills only the first). Full engine suite green with that change."
+    },
+    {
+      "at": "2026-08-07T08:14:36.884Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w6-i12",
+  "claimedAt": "2026-08-07T05:54:10.264Z",
+  "resolution": {
+    "note": "Root-caused + verified green, but unlandable this iteration: pending-choice.ts carries two other lanes' uncommitted WIP (spell-modes play-time mode picks; getNotHandSelfEnergyReduction) so land-patch would commit their half-done work. FIX: liftModalTarget() must copy thenIsSequenceRest onto the choose-target prompt it raises, and the choose-target branch must run a carried thenIsSequenceRest continuation with boundTargets STRIPPED (rule 820.2.a — later Repeat executions must not inherit the target just picked; today they re-hit it, so 'kill a gear' twice kills only the first). Full engine suite green with that change.",
+    "at": "2026-08-07T06:07:08.223Z"
+  }
 }

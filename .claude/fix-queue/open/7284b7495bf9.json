@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-220-298",
+  "title": "Playing Facebreaker via Hidden reveal (revealHidden) gives no target choice; engine auto-picks the friendly and enemy unit.",
+  "expected": "Reproduced and traced. hide.ts:605-720 — revealHidden params are only {playerId, cardId, paidAdditionalCost?} (types/moves.ts:253); enumerator pushes no target variants; reducer (hide.ts:768-785) adds the spell chain item with no `targets`. At resolution, resolve.ts:392-397 lifts a prompt target via findSequenceLeadTarget, but targeting.ts:113-125 returns undefined for Facebreaker's two distinct slots (friendly@battlefield + enemy@same), so the choose-target pendingChoice branch (resolve.ts:517-530) is never reached. The sequence handler then auto-picks: sequence.ts:215-238 picks the lead via `candidates.find(...) ?? candidates[0]` and sequence.ts:198-202 picks the \"same\" unit via `pool.slice(0,1)`. Repro harness test (2 friendly + 2 enemy at bf1, hide→advanceTurn→reveal→both pass): reveal option had fields:[], chain item had no targets, no pick decision surfaced, and h1/a1 were stunned while h2/a2 were not. By contrast playSpell (play-spell.ts:830-856) enumerates per-pair `targets` variants for the same card.",
+  "observed": "revealHidden move only takes {cardId, playerId}; chain item was created with no `targets` and no pendingChoice; on resolution the engine stunned token-recruit-player-1-13 and token-recruit-player-2-15 (first of each) while -14 and -16 stayed unstunned. No prompt at any point.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/play/hide.ts:768",
+  "id": "7284b7495bf9",
+  "createdAt": "2026-08-07T03:31:36.291Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.291Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T06:13:07.824Z",
+      "event": "grabbed:w5-i15"
+    },
+    {
+      "at": "2026-08-07T06:16:15.452Z",
+      "event": "failed",
+      "note": "revealHidden has no targets param: fixing needs play-spell's multi-slot (lead + location:'same') pair enumeration ported into the reveal move + a moves.ts param change; too cross-cutting for this lane, left unfixed"
+    },
+    {
+      "at": "2026-08-07T08:14:36.887Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedBy": "w5-i15",
+  "claimedAt": "2026-08-07T06:13:07.824Z",
+  "resolution": {
+    "note": "revealHidden has no targets param: fixing needs play-spell's multi-slot (lead + location:'same') pair enumeration ported into the reveal move + a moves.ts param change; too cross-cutting for this lane, left unfixed",
+    "at": "2026-08-07T06:16:15.452Z"
+  }
+}

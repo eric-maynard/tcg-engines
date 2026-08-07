@@ -34,6 +34,7 @@ describe("Wind Wall (ogn-064-298)", () => {
       .build();
     expect(game.p2.can("cast", "wall")).toBe(false);
     await game.p1.cast("decree", { targets: "foe" });
+    await game.p1.passPriority(); // rule 312.1 — the caster keeps Priority until they pass
     expect(game.p2.can("cast", "wall")).toBe(true);
   });
 
@@ -59,6 +60,7 @@ describe("Wind Wall (ogn-064-298)", () => {
       .hand(P2, CARD, "wall")
       .build();
     await game.p1.cast("bolt", { targets: "foe" });
+    await game.p1.passPriority(); // rule 312.1
     await game.p2.cast("wall");
     expect(game.chain()).toHaveLength(2);
     // Both players pass once → Wind Wall (top) resolves.

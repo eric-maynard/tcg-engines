@@ -8,12 +8,31 @@
   },
   "id": "3d88b74e42f8",
   "createdAt": "2026-08-06T19:55:38.084Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T19:55:38.084Z",
       "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:36:12.722Z",
+      "event": "grabbed:w5-i7"
+    },
+    {
+      "at": "2026-08-06T23:41:19.662Z",
+      "event": "failed",
+      "note": "Bone Skewer instructed-play is being implemented concurrently by another lane (bone-skewer.ts + reveal-hand.ts + pending-choice.ts already dirty in the tree); left to that lane to avoid conflicting edits"
+    },
+    {
+      "at": "2026-08-07T08:14:36.883Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w5-i7",
+  "claimedAt": "2026-08-06T23:36:12.722Z",
+  "resolution": {
+    "note": "Bone Skewer instructed-play is being implemented concurrently by another lane (bone-skewer.ts + reveal-hand.ts + pending-choice.ts already dirty in the tree); left to that lane to avoid conflicting edits",
+    "at": "2026-08-06T23:41:19.662Z"
+  }
 }

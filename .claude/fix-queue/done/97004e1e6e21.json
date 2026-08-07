@@ -15,25 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T01:04:24.825Z",
-      "event": "grabbed:w7-i18"
+      "at": "2026-08-07T05:33:06.393Z",
+      "event": "grabbed:w4-i18"
     },
     {
-      "at": "2026-08-07T01:05:42.952Z",
+      "at": "2026-08-07T05:34:08.010Z",
       "event": "done",
-      "note": "method-aware score replacements: conquer-only skip no longer eats the Hold point"
+      "note": "already fixed+flipped at HEAD (e7df263); verified 443.2 passes on a clean checkout"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i18",
-  "claimedAt": "2026-08-07T01:04:24.825Z",
+  "claimedBy": "w4-i18",
+  "claimedAt": "2026-08-07T05:33:06.393Z",
   "resolution": {
-    "note": "method-aware score replacements: conquer-only skip no longer eats the Hold point",
+    "note": "already fixed+flipped at HEAD (e7df263); verified 443.2 passes on a clean checkout",
     "files": [
-      "packages/riftbound-engine/src/abilities/replacement-effects.ts",
-      "packages/riftbound-engine/src/operations/scoring-rules.ts",
-      "packages/riftbound-engine/src/game-definition/moves/combat/score-point.ts"
+      "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts"
     ],
-    "at": "2026-08-07T01:05:42.952Z"
+    "at": "2026-08-07T05:34:08.010Z"
   }
 }

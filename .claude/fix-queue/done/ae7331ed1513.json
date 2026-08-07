@@ -15,25 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:43:46.153Z",
-      "event": "grabbed:w12-i9"
+      "at": "2026-08-07T05:32:41.020Z",
+      "event": "grabbed:w3-i15"
     },
     {
-      "at": "2026-08-07T00:45:18.000Z",
+      "at": "2026-08-07T05:33:45.425Z",
       "event": "done",
-      "note": "unselected battlefields go to a new secret setAside zone instead of trash"
+      "note": "already fixed at HEAD: selectBattlefield moves unselected battlefields to the setAside zone, not trash"
     }
   ],
   "status": "done",
-  "claimedBy": "w12-i9",
-  "claimedAt": "2026-08-07T00:43:46.153Z",
+  "claimedBy": "w3-i15",
+  "claimedAt": "2026-08-07T05:32:41.020Z",
   "resolution": {
-    "note": "unselected battlefields go to a new secret setAside zone instead of trash",
+    "note": "already fixed at HEAD: selectBattlefield moves unselected battlefields to the setAside zone, not trash",
     "files": [
-      "packages/riftbound-engine/src/zones/zone-configs.ts",
-      "packages/riftbound-engine/src/game-definition/moves/setup.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts"
+      "packages/riftbound-engine/src/game-definition/moves/setup.ts"
     ],
-    "at": "2026-08-07T00:45:18.000Z"
+    "at": "2026-08-07T05:33:45.425Z"
   }
 }

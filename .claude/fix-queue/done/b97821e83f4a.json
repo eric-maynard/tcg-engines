@@ -14,23 +14,24 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:35:40.868Z",
-      "event": "grabbed:w3-i11"
+      "at": "2026-08-07T05:29:23.145Z",
+      "event": "grabbed:w6-i8"
     },
     {
-      "at": "2026-08-07T00:36:44.121Z",
+      "at": "2026-08-07T05:29:57.748Z",
       "event": "done",
-      "note": "battlefield unit cards: height cap + contain-fit art so squeezed .bf-units rows show whole, identifiable cards instead of a clipped sliver"
+      "note": "duplicate: bf-unit clipping already fixed at HEAD (battlefield-row min-height 240px + .bf-units .card max-height:100% + object-fit:contain, 9fb5a76); monkey-drive bfExhausted selector already includes #battlefieldRow"
     }
   ],
   "status": "done",
-  "claimedBy": "w3-i11",
-  "claimedAt": "2026-08-07T00:35:40.868Z",
+  "claimedBy": "w6-i8",
+  "claimedAt": "2026-08-07T05:29:23.145Z",
   "resolution": {
-    "note": "battlefield unit cards: height cap + contain-fit art so squeezed .bf-units rows show whole, identifiable cards instead of a clipped sliver",
+    "note": "duplicate: bf-unit clipping already fixed at HEAD (battlefield-row min-height 240px + .bf-units .card max-height:100% + object-fit:contain, 9fb5a76); monkey-drive bfExhausted selector already includes #battlefieldRow",
     "files": [
-      "apps/riftbound-app/public/css/gameplay.css"
+      "apps/riftbound-app/public/css/gameplay.css",
+      "packages/riftbound-engine/src/testing/playtest/monkey-drive.ts"
     ],
-    "at": "2026-08-07T00:36:44.121Z"
+    "at": "2026-08-07T05:29:57.748Z"
   }
 }

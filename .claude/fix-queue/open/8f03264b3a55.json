@@ -8,12 +8,31 @@
   },
   "id": "8f03264b3a55",
   "createdAt": "2026-08-06T20:11:47.425Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:11:47.425Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:23:07.114Z",
+      "event": "grabbed:w8-i13"
+    },
+    {
+      "at": "2026-08-07T05:26:41.671Z",
+      "event": "failed",
+      "note": "needs missing engine capability: combat damage assignment is a pure sync pass (combat-resolver.distributeDamage inside resolveFullCombat's reducer) with no way to suspend for a pendingChoice; surfacing a defender distribute/order Decision requires re-architecting resolveFullCombat into a resumable multi-step flow and would change every multi-unit combat test"
+    },
+    {
+      "at": "2026-08-07T08:14:36.885Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w8-i13",
+  "claimedAt": "2026-08-07T05:23:07.114Z",
+  "resolution": {
+    "note": "needs missing engine capability: combat damage assignment is a pure sync pass (combat-resolver.distributeDamage inside resolveFullCombat's reducer) with no way to suspend for a pendingChoice; surfacing a defender distribute/order Decision requires re-architecting resolveFullCombat into a resumable multi-step flow and would change every multi-unit combat test",
+    "at": "2026-08-07T05:26:41.671Z"
+  }
 }

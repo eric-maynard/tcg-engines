@@ -1,0 +1,36 @@
+{
+  "source": "playtest",
+  "title": "After passing priority, Keeper of Masks' play trigger resolved and created two tokens in base, but they appear (in both the snapshot/trace and the AFTER screenshot) as plain 'Reflection' units with 0 Might and definitionId token-def-reflection — not as copies of Keeper of Masks (name Keeper of Masks, 1 Might, cost 2, Hidden, Temporary).",
+  "expected": "Trace step 35 shows both tokens as {def:'token-def-reflection', name:'Reflection', might:0}. Engine create-token.ts:121-150 registers each token *instance id* in the global registry as a copy of the source (Keeper of Masks payload, which is registered per-instance via pregame.ts:74/makeLookupPayload), but the shared definitionId 'token-def-reflection' is registered at create-token.ts:101-109 with the literal 0-Might Reflection stats. server/snapshot.ts:366-368 resolves `def` only via `registry.get(cardInstance.definitionId) ?? getGlobalCardRegistry().get(cardInstance.definitionId)` — never by instance id — so lines 397-398 emit might 0 / name 'Reflection' instead of the copy's Keeper of Masks traits.",
+  "layer": "server",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/server/snapshot.ts:366",
+  "rule": "unl-081-219 Keeper of Masks / rule 477.1.b.1",
+  "id": "d0fe133e991c",
+  "createdAt": "2026-08-06T23:55:41.371Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.371Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T04:33:57.225Z",
+      "event": "grabbed:w9-i6"
+    },
+    {
+      "at": "2026-08-07T04:37:03.032Z",
+      "event": "done",
+      "note": "snapshot: prefer per-instance registry entry for token- ids (Keeper of Masks copies)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i6",
+  "claimedAt": "2026-08-07T04:33:57.225Z",
+  "resolution": {
+    "note": "snapshot: prefer per-instance registry entry for token- ids (Keeper of Masks copies)",
+    "files": [
+      "apps/riftbound-app/server/snapshot.ts"
+    ],
+    "at": "2026-08-07T04:37:03.032Z"
+  }
+}

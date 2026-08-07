@@ -15,25 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:27:40.699Z",
-      "event": "grabbed:w5-i10"
+      "at": "2026-08-07T05:27:00.932Z",
+      "event": "grabbed:w8-i14"
     },
     {
-      "at": "2026-08-07T00:30:30.470Z",
+      "at": "2026-08-07T05:28:37.893Z",
       "event": "done",
-      "note": "Contested attributed to the arriving unit's controller (rule 450), not the chooser"
+      "note": "contestedBy already attributed to arriving unit's controller; tightened Charm regression to assert P2 ends up controlling bf2"
     }
   ],
   "status": "done",
-  "claimedBy": "w5-i10",
-  "claimedAt": "2026-08-07T00:27:40.699Z",
+  "claimedBy": "w8-i14",
+  "claimedAt": "2026-08-07T05:27:00.932Z",
   "resolution": {
-    "note": "Contested attributed to the arriving unit's controller (rule 450), not the chooser",
+    "note": "contestedBy already attributed to arriving unit's controller; tightened Charm regression to assert P2 ends up controlling bf2",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/abilities/effects/move.ts",
       "packages/riftbound-engine/src/__tests__/cards/ogn-043-298.test.ts"
     ],
-    "at": "2026-08-07T00:30:30.470Z"
+    "at": "2026-08-07T05:28:37.893Z"
   }
 }

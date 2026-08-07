@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-034-221",
+  "title": "BUG: [Repeat] may choose a DIFFERENT unit for the extra execution (820.2.a) — +2 to each of two units",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-034-221.test.ts",
+    "testName": "BUG: [Repeat] may choose a DIFFERENT unit for the extra execution (820.2.a) — +2 to each of two units"
+  },
+  "id": "00f3af61ea07",
+  "createdAt": "2026-08-07T00:52:14.241Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:52:14.241Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:42:12.042Z",
+      "event": "grabbed:w3-i16"
+    },
+    {
+      "at": "2026-08-07T05:45:52.367Z",
+      "event": "done",
+      "note": "already fixed at HEAD (4b4048e) by concurrent workers; verified in a clean worktree — 26/26 pass across the 3 card test files, no test.failing remains for these cases"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i16",
+  "claimedAt": "2026-08-07T05:42:12.042Z",
+  "resolution": {
+    "note": "already fixed at HEAD (4b4048e) by concurrent workers; verified in a clean worktree — 26/26 pass across the 3 card test files, no test.failing remains for these cases",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-010-221.test.ts"
+    ],
+    "at": "2026-08-07T05:45:52.367Z"
+  }
+}

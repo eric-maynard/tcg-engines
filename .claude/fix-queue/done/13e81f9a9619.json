@@ -15,26 +15,24 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:06:39.413Z",
-      "event": "grabbed:w5-i9"
+      "at": "2026-08-07T05:23:15.414Z",
+      "event": "grabbed:w11-i6"
     },
     {
-      "at": "2026-08-07T00:11:26.930Z",
+      "at": "2026-08-07T05:24:03.848Z",
       "event": "done",
-      "note": "Sandstone Chimera: channel-limit static + flow channel-count cap"
+      "note": "already fixed: ven.json channel-limit static + operations/channel-limits.ts consumed by flow channel.onBegin"
     }
   ],
   "status": "done",
-  "claimedBy": "w5-i9",
-  "claimedAt": "2026-08-07T00:06:39.413Z",
+  "claimedBy": "w11-i6",
+  "claimedAt": "2026-08-07T05:23:15.414Z",
   "resolution": {
-    "note": "Sandstone Chimera: channel-limit static + flow channel-count cap",
+    "note": "already fixed: ven.json channel-limit static + operations/channel-limits.ts consumed by flow channel.onBegin",
     "files": [
       "packages/riftbound-cards/src/data/sets/ven.json",
-      "packages/riftbound-engine/src/operations/channel-limits.ts",
-      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
-      "packages/riftbound-engine/src/__tests__/cards/ven-036-166.test.ts"
+      "packages/riftbound-engine/src/operations/channel-limits.ts"
     ],
-    "at": "2026-08-07T00:11:26.930Z"
+    "at": "2026-08-07T05:24:03.848Z"
   }
 }

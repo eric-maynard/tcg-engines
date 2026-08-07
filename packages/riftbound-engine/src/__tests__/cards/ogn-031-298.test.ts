@@ -76,7 +76,10 @@ describe("Raging Firebrand (ogn-031-298)", () => {
     await game.advanceTurn();
     await game.advanceTurn();
     expect(game.turnPlayer()).toBe(P1);
-    await game.p1.do("addResources", { energy: 7 }); // pools empty between turns
+    // rule 357.1.a: exhaust the runes this turn channelled — a READY one could
+    // pay the 8th Energy inside the Pay step and hide the missing discount.
+    await game.p1.tapRunes(game.p1.runes({ ready: true }).length);
+    await game.p1.do("addResources", { energy: 7 - game.p1.energy() }); // pools empty between turns
     expect(game.p1.can("cast", "spark")).toBe(false); // 7 < 8: no lingering discount
     await game.p1.do("addResources", { energy: 1 });
     await game.p1.cast("spark", { targets: "foe" });

@@ -15,23 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:17:34.187Z",
-      "event": "grabbed:w2-i6"
+      "at": "2026-08-07T05:18:59.600Z",
+      "event": "grabbed:w6-i6"
     },
     {
-      "at": "2026-08-06T23:21:37.432Z",
+      "at": "2026-08-07T05:19:58.965Z",
       "event": "done",
-      "note": "look.ts: maxMightAboveKilled with no killed unit (null Might) offers no pick and recycles all looked-at cards (359.3.e.12)"
+      "note": "already fixed and landed at HEAD; repro test.failing was flipped in an earlier commit"
     }
   ],
   "status": "done",
-  "claimedBy": "w2-i6",
-  "claimedAt": "2026-08-06T23:17:34.187Z",
+  "claimedBy": "w6-i6",
+  "claimedAt": "2026-08-07T05:18:59.600Z",
   "resolution": {
-    "note": "look.ts: maxMightAboveKilled with no killed unit (null Might) offers no pick and recycles all looked-at cards (359.3.e.12)",
+    "note": "already fixed and landed at HEAD; repro test.failing was flipped in an earlier commit",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/look.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/baited-hook-4c941546639a650b.test.ts"
     ],
-    "at": "2026-08-06T23:21:37.432Z"
+    "at": "2026-08-07T05:19:58.965Z"
   }
 }

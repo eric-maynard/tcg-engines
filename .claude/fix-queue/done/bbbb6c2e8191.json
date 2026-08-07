@@ -15,21 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T22:25:59.258Z",
-      "event": "done(unclaimed)",
-      "note": "Accelerate/optional additional costs: import canPayOptionalPlayCost in pending-choice; apply Ezreal's flex [1]-or-[rainbow] discount to optional play costs"
+      "at": "2026-08-07T05:20:30.112Z",
+      "event": "grabbed:w6-i6"
+    },
+    {
+      "at": "2026-08-07T05:20:55.607Z",
+      "event": "done",
+      "note": "already fixed and landed at HEAD; repro test.failing flipped in an earlier commit"
     }
   ],
   "status": "done",
+  "claimedBy": "w6-i6",
+  "claimedAt": "2026-08-07T05:20:30.112Z",
   "resolution": {
-    "note": "Accelerate/optional additional costs: import canPayOptionalPlayCost in pending-choice; apply Ezreal's flex [1]-or-[rainbow] discount to optional play costs",
+    "note": "already fixed and landed at HEAD; repro test.failing flipped in an earlier commit",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/__tests__/cards/interactions/matron-rearguard-accelerate-ezreal.test.ts",
-      "packages/riftbound-engine/src/__tests__/cards/rulings/ezreal-prodigy-29339d78dfd48122.test.ts"
+      ".claude/fix-queue/README.md"
     ],
-    "at": "2026-08-06T22:25:59.258Z"
+    "at": "2026-08-07T05:20:55.607Z"
   }
 }

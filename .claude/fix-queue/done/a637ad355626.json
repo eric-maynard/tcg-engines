@@ -15,24 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:27:18.229Z",
-      "event": "grabbed:w10-i9"
+      "at": "2026-08-07T05:20:09.096Z",
+      "event": "grabbed:w1-i9"
     },
     {
-      "at": "2026-08-06T23:31:20.679Z",
+      "at": "2026-08-07T05:21:18.760Z",
       "event": "done",
-      "note": "evaluateTriggerCondition: recurse and/or/not, add has-at-least/has-at-most with here-location + [Mighty] (Assault/Shield aware) filter"
+      "note": "already fixed on HEAD: has-at-least/and trigger condition + combat-role Might is implemented in trigger-runner; test passes and is flipped"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i9",
-  "claimedAt": "2026-08-06T23:27:18.229Z",
+  "claimedBy": "w1-i9",
+  "claimedAt": "2026-08-07T05:20:09.096Z",
   "resolution": {
-    "note": "evaluateTriggerCondition: recurse and/or/not, add has-at-least/has-at-most with here-location + [Mighty] (Assault/Shield aware) filter",
+    "note": "already fixed on HEAD: has-at-least/and trigger condition + combat-role Might is implemented in trigger-runner; test passes and is flipped",
     "files": [
-      "packages/riftbound-engine/src/abilities/trigger-runner.ts",
       "packages/riftbound-engine/src/__tests__/cards/rulings/sunken-temple-8bf06d3d8b09e32c.test.ts"
     ],
-    "at": "2026-08-06T23:31:20.679Z"
+    "at": "2026-08-07T05:21:18.760Z"
   }
 }

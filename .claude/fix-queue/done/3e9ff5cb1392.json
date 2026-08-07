@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-081-221",
+  "title": "BUG: 'you MAY' — the controller is asked and can decline, ending with no Gold at all",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-081-221.test.ts",
+    "testName": "BUG: 'you MAY' — the controller is asked and can decline, ending with no Gold at all"
+  },
+  "id": "3e9ff5cb1392",
+  "createdAt": "2026-08-07T01:07:14.860Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:07:14.860Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:09:34.500Z",
+      "event": "done(unclaimed)",
+      "note": "Card Sharp: optional ability + new each-opponent-may effect (per-opponent confirm) + create-token then/ownerId"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "Card Sharp: optional ability + new each-opponent-may effect (per-opponent confirm) + create-token then/ownerId",
+    "files": [
+      "packages/riftbound-cards/src/cards/sfd/card-sharp.ts",
+      "packages/riftbound-engine/src/abilities/effects/each-opponent-may.ts",
+      "packages/riftbound-engine/src/abilities/effects/create-token.ts",
+      "packages/riftbound-engine/src/abilities/effects/index.ts"
+    ],
+    "at": "2026-08-07T05:09:34.500Z"
+  }
+}

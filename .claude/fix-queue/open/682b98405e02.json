@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "unl-009-219",
+  "title": "Repeat cost cannot be paid through the UI for this targeted spell",
+  "expected": "Engine does enumerate Repeat variants for Upstage Comedy (play-spell.ts:1550-1583 pushes {...base, repeatCount:n} per target, plus {repeatCount:1, targets:[first,alt]} pairs), and server/snapshot.ts:19-23 forwards all of them unfiltered. UI: hand click (interactions.js:550 enterHandCardSelected -> beginTargetingIfNeeded) and sidebar 'Play Spell' (render/actions.js:284-311 -> beginTargetingOrPlay at :464) both go straight to awaitTarget mode with no cost prompt. On target click, pickTargetedMove (interactions.js:213-218) returns matches.find(!paidAdditionalCost && targets.length===1) — base variant is enumerated first so it wins over the repeatCount:1 same-target variant; exactTargetVariant (:241-247) explicitly prefers isBaseCostVariant (:228-230, `!repeatCount`). openPlayCostModal (render/modals.js:200-203) only handles playUnit/playFromChampionZone, so no modal path exists for playSpell. Net: the repeatCount:1 single/same-target variant is unreachable from the UI; no Repeat opt-in is ever offered. (Minor nuance: with >=2 distinct legal units, the [first,alt] repeat variant is incidentally reachable via the multi-pick 'pick another/Done' flow, but never labeled as Repeat and never for the same target.)",
+  "observed": "Hand click and sidebar 'Play Spell' both go straight into target mode; clicking a target immediately executes the base variant (energy 15->13, chain item has a single 'ready' effect). interactions.js pickTargetedMove/exactTargetVariant deliberately prefer !repeatCount variants and no play-cost modal is opened for targeted spells, so the repeatCount:1 variants the server enumerates are unreachable from the UI",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/public/js/gameplay/interactions.js:216",
+  "id": "682b98405e02",
+  "createdAt": "2026-08-07T07:42:18.108Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.108Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

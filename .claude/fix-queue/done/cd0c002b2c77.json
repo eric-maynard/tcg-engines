@@ -15,25 +15,24 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:21:57.021Z",
-      "event": "grabbed:w10-i11"
+      "at": "2026-08-07T05:18:10.753Z",
+      "event": "grabbed:w8-i10"
     },
     {
-      "at": "2026-08-07T00:24:05.279Z",
+      "at": "2026-08-07T05:18:46.915Z",
       "event": "done",
-      "note": "throwing move condition no longer escapes executeMove (CONDITION_ERROR); WS message dispatch wrapped in try/catch so a handler throw can't kill the server"
+      "note": "already fixed on HEAD: try/catch in server.ts websocket open/message/close + CONDITION_ERROR guard in rule-engine checkMoveCondition"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i11",
-  "claimedAt": "2026-08-07T00:21:57.021Z",
+  "claimedBy": "w8-i10",
+  "claimedAt": "2026-08-07T05:18:10.753Z",
   "resolution": {
-    "note": "throwing move condition no longer escapes executeMove (CONDITION_ERROR); WS message dispatch wrapped in try/catch so a handler throw can't kill the server",
+    "note": "already fixed on HEAD: try/catch in server.ts websocket open/message/close + CONDITION_ERROR guard in rule-engine checkMoveCondition",
     "files": [
-      "packages/core/src/engine/rule-engine.ts",
       "apps/riftbound-app/server.ts",
-      "packages/core/src/engine/__tests__/rule-engine-moves.test.ts"
+      "packages/core/src/engine/rule-engine.ts"
     ],
-    "at": "2026-08-07T00:24:05.279Z"
+    "at": "2026-08-07T05:18:46.915Z"
   }
 }

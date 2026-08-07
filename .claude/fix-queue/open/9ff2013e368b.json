@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "unl-141-219",
+  "title": "After Evelynn's play-from-hidden trigger moved an enemy Mech from the other battlefield to Evelynn's battlefield (controlled by me, not contested), no Contested status was applied and no combat was staged; the board sat in Neutral Open with opposing units co-located and the engine instead offered me (the controller) a manual 'contestBattlefield'/'startShowdown' move.",
+  "expected": "Evelynn (unl-141-219) uses `{type:\"move\", to:\"here\", target:{controller:\"enemy\",type:\"unit\"}}`. In handle_move the `dest === \"here\"` branch (move.ts:574-597) calls moveCardWithEvent for each target then stageCombatOnArrival(ctx, targetZone) — but never markContestedOnArrival. stageCombatOnArrival (move.ts:53-62) derives attackingPlayer only when `bf.contested === true` and returns early otherwise, so an enemy unit dragged into an uncontested battlefield controlled by Evelynn's player never gets Contested applied and no combat roles/showdown are staged. Contrast the other effect-move branches which do call markContestedOnArrival (move.ts:252/254 swap, :326 chosen-battlefield, :488 BattlefieldLocation) and pending-choice.ts:1379 (choose-destination → contestBattlefieldOnArrival). The state-based-check fallback (cleanup/state-based-checks.ts:882 pushes bfId to combatPending when 2+ owners share an uncontested bf) is never consumed outside tests, so nothing else repairs the state. Result matches observation: contested=false, no combatRole, manual contestBattlefield offered.",
+  "observed": "battlefields[bf].contested=false, controller=player-1, interaction.showdown=null, all unit combatRole=null; Mech(player-2), Phantom, Evelynn all idle at same battlefield; availableMoves = endTurn/standardMove/contestBattlefield.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effects/move.ts:574-597",
+  "id": "9ff2013e368b",
+  "createdAt": "2026-08-07T03:31:36.292Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.292Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

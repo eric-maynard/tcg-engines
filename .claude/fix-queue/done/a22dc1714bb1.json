@@ -1,0 +1,42 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-024-221",
+  "title": "BUG: 'Energy cost no more than [2]' — with Skyfall (3) and Doran's Blade (2) in hand only the Blade may be chosen; Skyfall alone yields nothing",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-024-221.test.ts",
+    "testName": "BUG: 'Energy cost no more than [2]' — with Skyfall (3) and Doran's Blade (2) in hand only the Blade may be chosen; Skyfall alone yields nothing"
+  },
+  "id": "a22dc1714bb1",
+  "createdAt": "2026-08-07T01:14:13.015Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.015Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:50:25.615Z",
+      "event": "grabbed:w2-i12"
+    },
+    {
+      "at": "2026-08-07T05:54:10.037Z",
+      "event": "done",
+      "note": "effect-driven 'play an Equipment from hand ignoring its cost' now resolves: gear enters base, energyCost filter honored, pendingValue binds the played card so 'attach it to me' works; Rell def ignoreCost:true"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i12",
+  "claimedAt": "2026-08-07T05:50:25.615Z",
+  "resolution": {
+    "note": "effect-driven 'play an Equipment from hand ignoring its cost' now resolves: gear enters base, energyCost filter honored, pendingValue binds the played card so 'attach it to me' works; Rell def ignoreCost:true",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/play.ts",
+      "packages/riftbound-engine/src/abilities/effects/sequence.ts",
+      "packages/riftbound-engine/src/abilities/effect-executor.ts",
+      "packages/riftbound-cards/src/cards/sfd/rell-magnetic.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-024-221.test.ts"
+    ],
+    "at": "2026-08-07T05:54:10.036Z"
+  }
+}

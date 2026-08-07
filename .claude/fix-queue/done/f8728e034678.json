@@ -1,0 +1,40 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-045-221",
+  "title": "BUG: priority — right after P1 casts (before passing) P1 still holds priority (337.1.a), so P2 must NOT yet be offered Not So Fast (312.1)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-045-221.test.ts",
+    "testName": "BUG: priority — right after P1 casts (before passing) P1 still holds priority (337.1.a), so P2 must NOT yet be offered Not So Fast (312.1)"
+  },
+  "id": "f8728e034678",
+  "createdAt": "2026-08-07T01:01:45.608Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:01:45.608Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:06:11.343Z",
+      "event": "grabbed:w7-i7"
+    },
+    {
+      "at": "2026-08-07T05:11:16.528Z",
+      "event": "done",
+      "note": "play-spell: gate on chain Priority holder (rule 312.1/337.1.a) via new chain-state hasChainPriority"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i7",
+  "claimedAt": "2026-08-07T05:06:11.343Z",
+  "resolution": {
+    "note": "play-spell: gate on chain Priority holder (rule 312.1/337.1.a) via new chain-state hasChainPriority",
+    "files": [
+      "packages/riftbound-engine/src/chain/chain-state.ts",
+      "packages/riftbound-engine/src/chain/index.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts"
+    ],
+    "at": "2026-08-07T05:11:16.528Z"
+  }
+}

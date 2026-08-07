@@ -15,24 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:10:22.931Z",
-      "event": "grabbed:w9-i11"
+      "at": "2026-08-07T05:29:05.729Z",
+      "event": "grabbed:w9-i12"
     },
     {
-      "at": "2026-08-07T00:13:00.062Z",
+      "at": "2026-08-07T05:30:04.205Z",
       "event": "done",
-      "note": "kill effect wipes damage/buff/keywords/mods when the unit leaves for the trash (rule 124/705)"
+      "note": "already fixed in HEAD; verified passing (no new edit needed)"
     }
   ],
   "status": "done",
-  "claimedBy": "w9-i11",
-  "claimedAt": "2026-08-07T00:10:22.931Z",
+  "claimedBy": "w9-i12",
+  "claimedAt": "2026-08-07T05:29:05.729Z",
   "resolution": {
-    "note": "kill effect wipes damage/buff/keywords/mods when the unit leaves for the trash (rule 124/705)",
+    "note": "already fixed in HEAD; verified passing (no new edit needed)",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/kill.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/tokens-banishment-trash-object-identity.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/sfd-082-221.test.ts"
     ],
-    "at": "2026-08-07T00:13:00.062Z"
+    "at": "2026-08-07T05:30:04.205Z"
   }
 }

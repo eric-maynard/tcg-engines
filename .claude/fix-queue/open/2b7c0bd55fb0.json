@@ -8,12 +8,31 @@
   },
   "id": "2b7c0bd55fb0",
   "createdAt": "2026-08-06T20:50:12.433Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.433Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:29:46.596Z",
+      "event": "grabbed:w4-i17"
+    },
+    {
+      "at": "2026-08-07T05:32:45.510Z",
+      "event": "failed",
+      "note": "rule-correct fix (lock targets for ALL triggers at finalization, not just die-triggers) makes the BUG test pass but breaks ~60 card tests written to the engine's resolution-time convention (Adaptatron, Pickpocket, Card Sharp, Leona, Tideturner, ...); no narrower gate exists since play-self is exactly the broad case. Needs a coordinated migration, reverted."
+    },
+    {
+      "at": "2026-08-07T08:14:36.885Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w4-i17",
+  "claimedAt": "2026-08-07T05:29:46.596Z",
+  "resolution": {
+    "note": "rule-correct fix (lock targets for ALL triggers at finalization, not just die-triggers) makes the BUG test pass but breaks ~60 card tests written to the engine's resolution-time convention (Adaptatron, Pickpocket, Card Sharp, Leona, Tideturner, ...); no narrower gate exists since play-self is exactly the broad case. Needs a coordinated migration, reverted.",
+    "at": "2026-08-07T05:32:45.510Z"
+  }
 }

@@ -15,27 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T01:14:13.081Z",
-      "event": "grabbed:w4-i19"
+      "at": "2026-08-07T05:33:08.646Z",
+      "event": "grabbed:w8-i15"
     },
     {
-      "at": "2026-08-07T01:17:54.687Z",
+      "at": "2026-08-07T05:49:27.981Z",
       "event": "done",
-      "note": "pass the scoring method into applyScoreReplacement at every conquer/hold call site (443.1.a)"
+      "note": "stale queue entry: 443.1.a/469.2 conquer-only skip already fixed upstream; verified passing"
     }
   ],
   "status": "done",
-  "claimedBy": "w4-i19",
-  "claimedAt": "2026-08-07T01:14:13.081Z",
+  "claimedBy": "w8-i15",
+  "claimedAt": "2026-08-07T05:33:08.646Z",
   "resolution": {
-    "note": "pass the scoring method into applyScoreReplacement at every conquer/hold call site (443.1.a)",
+    "note": "stale queue entry: 443.1.a/469.2 conquer-only skip already fixed upstream; verified passing",
     "files": [
-      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
-      "packages/riftbound-engine/src/game-definition/moves/chain/showdown.ts",
-      "packages/riftbound-engine/src/game-definition/moves/combat/conquer-battlefield.ts",
-      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts",
-      "packages/riftbound-engine/src/game-definition/moves/combat/score-point.ts"
+      "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts"
     ],
-    "at": "2026-08-07T01:17:54.687Z"
+    "at": "2026-08-07T05:49:27.981Z"
   }
 }

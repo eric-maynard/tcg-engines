@@ -1,0 +1,41 @@
+{
+ "source": "playtest",
+ "cardId": "ven-156-166",
+ "title": "Unchosen cards from Lightning Rush's look-at-top-3 are recycled to the bottom of the Main Deck instead of put into the trash",
+ "expected": "Parser drops the \"Put the rest into your trash.\" clause: packages/riftbound-cards/src/parser/impl/effects-draw.ts:139 returns bare `{ amount, from, type: \"look\" }` for Lightning Rush (ven.json:4460 abilities is [null], so runtime parse is used). The engine then defaults the rest-destination to recycle: packages/riftbound-engine/src/abilities/effects/look.ts:53 `onRest = lookEff.onRest ?? (visionLike ? undefined : \"recycle\")`, and the only supported onRest value is \"recycle\" (look.ts:40, types/game-state.ts:522). pending-choice.ts:1466-1472/1793 moves the unpicked revealed cards to mainDeck position \"bottom\". No trash destination exists for look-rest, so the 2 unchosen cards go to deck bottom instead of trash, matching the observation.",
+ "observed": "pendingChoice was {type:'reveal-and-pick', onPicked:'draw', onRest:'recycle'}; after picking Gust, trash count stayed at 1 (only Lightning Rush itself), deck went 35->34, and server state showed the two unpicked cards (player-1-main-14-unl-127-219, player-1-main-35-sfd-005-221) at mainDeck indices 68/69 (bottom). Reproduced again on the Flow replay (unpicked cards at mainDeck 65/66 of 67, trash 0). The spell ability loaded for the card is just {type:'look', amount:3, from:'deck'} with no rest->trash destination (ven.json abilities entry is [null]).",
+ "layer": "card",
+ "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/effects-draw.ts:139",
+ "id": "ea2dfc48750f",
+ "createdAt": "2026-08-07T03:31:36.293Z",
+ "attempts": 0,
+ "history": [
+  {
+   "at": "2026-08-07T03:31:36.293Z",
+   "event": "enqueued:playtest"
+  },
+  {
+   "at": "2026-08-07T06:14:39.703Z",
+   "event": "grabbed:w3-i20"
+  },
+  {
+   "at": "2026-08-07T06:19:21.610Z",
+   "event": "done",
+   "note": "parser emits onRest:'trash' for 'Put the rest into your trash'; pending-choice moves unpicked revealed cards to trash"
+  }
+ ],
+ "status": "done",
+ "claimedBy": "w3-i20",
+ "claimedAt": "2026-08-07T06:14:39.703Z",
+ "resolution": {
+  "note": "PARTIAL: parser now emits onRest:'trash' (landed f557cdb). The engine half (pending-choice.ts moves unpicked revealed cards to trash + game-state.ts onRest type) is written in the working tree but could not be landed \u2014 another lane's uncommitted pending-choice.ts/spell-modes.ts WIP blocks that file. Repro left as test.failing in __tests__/cards/ven-156-166.test.ts and will re-enqueue.",
+  "files": [
+   "packages/riftbound-cards/src/parser/impl/effects-draw.ts",
+   "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
+   "packages/riftbound-engine/src/types/game-state.ts",
+   "packages/riftbound-engine/src/abilities/effects/look.ts",
+   "packages/riftbound-types/src/abilities/effect-types.ts"
+  ],
+  "at": "2026-08-07T06:19:21.610Z"
+ }
+}

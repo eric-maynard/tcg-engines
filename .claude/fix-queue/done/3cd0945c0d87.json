@@ -15,23 +15,24 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:27:40.699Z",
-      "event": "grabbed:w5-i10"
+      "at": "2026-08-07T05:27:00.931Z",
+      "event": "grabbed:w8-i14"
     },
     {
-      "at": "2026-08-07T00:30:30.427Z",
+      "at": "2026-08-07T05:28:37.851Z",
       "event": "done",
-      "note": "notChosenThisTurn mode filtering verified; added sfd-049-221 repro test"
+      "note": "notChosenThisTurn already honoured in choice.ts; tests were blocked by unpayable [Equip] fury cost - added fury power to fixtures"
     }
   ],
   "status": "done",
-  "claimedBy": "w5-i10",
-  "claimedAt": "2026-08-07T00:27:40.699Z",
+  "claimedBy": "w8-i14",
+  "claimedAt": "2026-08-07T05:27:00.931Z",
   "resolution": {
-    "note": "notChosenThisTurn mode filtering verified; added sfd-049-221 repro test",
+    "note": "notChosenThisTurn already honoured in choice.ts; tests were blocked by unpayable [Equip] fury cost - added fury power to fixtures",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/sfd-049-221.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/sfd-049-221.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-049-221-modal-targets.test.ts"
     ],
-    "at": "2026-08-07T00:30:30.427Z"
+    "at": "2026-08-07T05:28:37.851Z"
   }
 }

@@ -15,21 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:17:01.985Z",
-      "event": "grabbed:w2-i6"
+      "at": "2026-08-07T05:18:10.752Z",
+      "event": "grabbed:w8-i10"
     },
     {
-      "at": "2026-08-06T23:17:34.098Z",
+      "at": "2026-08-07T05:18:46.874Z",
       "event": "done",
-      "note": "already fixed by an earlier lane; repro tests present and passing (no test.failing remains)"
+      "note": "already fixed on HEAD: Call to Battle destination choice excludes current bf/base; tests green"
     }
   ],
   "status": "done",
-  "claimedBy": "w2-i6",
-  "claimedAt": "2026-08-06T23:17:01.985Z",
+  "claimedBy": "w8-i10",
+  "claimedAt": "2026-08-07T05:18:10.752Z",
   "resolution": {
-    "note": "already fixed by an earlier lane; repro tests present and passing (no test.failing remains)",
-    "files": [],
-    "at": "2026-08-06T23:17:34.098Z"
+    "note": "already fixed on HEAD: Call to Battle destination choice excludes current bf/base; tests green",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/call-to-battle-48502d761b95e448.test.ts"
+    ],
+    "at": "2026-08-07T05:18:46.874Z"
   }
 }

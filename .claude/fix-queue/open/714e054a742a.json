@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-104-221",
+  "title": "Petricite Monument (plain Gear, no [Equip]/Equipment subtype) is offered an `equipCard` move and the engine accepts it, attaching the Monument to a friendly unit for free.",
+  "expected": "equipCard enumerator (equipment.ts:92-96) and condition (equipment.ts:145) gate only on `cardType === \"equipment\" || cardType === \"gear\"` — no Equipment subtype/tag/Equip-keyword check. Petricite Monument (riftbound-cards/src/cards/sfd/petricite-monument.ts) is `cardType: \"gear\"` with no Equip, so it passes both filters; reducer (196-218) then sets attachedTo/equippedWith with no cost charged (comment at line 61 admits Equip cost not charged). Bug reproduced by code inspection.",
+  "observed": "moves list contained equipCard {equipmentId: ...sfd-104-221, unitId: Flame Chompers}; executing it returned success and state showed Monument meta.attachedTo=<unit>, unit meta.equippedWith=[Monument], no cost paid.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/equipment.ts:145",
+  "id": "714e054a742a",
+  "createdAt": "2026-08-07T03:31:36.292Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.292Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:24:32.437Z",
+      "event": "grabbed:w6-i7"
+    },
+    {
+      "at": "2026-08-07T05:29:01.813Z",
+      "event": "failed",
+      "note": "fix written (isAttachable: gear needs printed [Equip]) + regression test in sfd-104-221.test.ts, both green locally, but cannot land: working-tree equipment.ts carries another lane's uncommitted equip-cost patch (imports printedEquipCost/canPayOptInCost, not exported at HEAD) -> 569 module errors on clean HEAD. Left in tree to ride with that patch."
+    },
+    {
+      "at": "2026-08-07T08:14:36.888Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedBy": "w6-i7",
+  "claimedAt": "2026-08-07T05:24:32.437Z",
+  "resolution": {
+    "note": "fix written (isAttachable: gear needs printed [Equip]) + regression test in sfd-104-221.test.ts, both green locally, but cannot land: working-tree equipment.ts carries another lane's uncommitted equip-cost patch (imports printedEquipCost/canPayOptInCost, not exported at HEAD) -> 569 module errors on clean HEAD. Left in tree to ride with that patch.",
+    "at": "2026-08-07T05:29:01.813Z"
+  }
+}

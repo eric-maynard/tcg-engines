@@ -9,12 +9,31 @@
   },
   "id": "3914ec5a6e84",
   "createdAt": "2026-08-07T01:14:13.017Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:14:13.017Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:55:04.197Z",
+      "event": "grabbed:w9-i14"
+    },
+    {
+      "at": "2026-08-07T05:56:35.325Z",
+      "event": "failed",
+      "note": "another lane is concurrently implementing the use-activated-ability event for sfd-075-221 (added the GameEvent union member mid-iteration); backed my duplicate edits out to avoid a conflicting fix"
+    },
+    {
+      "at": "2026-08-07T08:14:36.890Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w9-i14",
+  "claimedAt": "2026-08-07T05:55:04.197Z",
+  "resolution": {
+    "note": "another lane is concurrently implementing the use-activated-ability event for sfd-075-221 (added the GameEvent union member mid-iteration); backed my duplicate edits out to avoid a conflicting fix",
+    "at": "2026-08-07T05:56:35.325Z"
+  }
 }

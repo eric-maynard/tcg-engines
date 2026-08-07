@@ -15,26 +15,23 @@
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T22:19:04.888Z",
-      "event": "grabbed:w10-i6"
+      "at": "2026-08-07T05:12:19.004Z",
+      "event": "grabbed:w12-i13"
     },
     {
-      "at": "2026-08-06T22:22:21.968Z",
+      "at": "2026-08-07T05:17:43.382Z",
       "event": "done",
-      "note": "Ezreal 'optional additional costs cost [1] or [rainbow] less': parse the static, apply pool-aware flexible reduction to Repeat tiers, offer [0]-cost tiers"
+      "note": "already passing at HEAD (Ezreal + opponent Spire repeat cost); verified green"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i6",
-  "claimedAt": "2026-08-06T22:19:04.888Z",
+  "claimedBy": "w12-i13",
+  "claimedAt": "2026-08-07T05:12:19.004Z",
   "resolution": {
-    "note": "Ezreal 'optional additional costs cost [1] or [rainbow] less': parse the static, apply pool-aware flexible reduction to Repeat tiers, offer [0]-cost tiers",
+    "note": "already passing at HEAD (Ezreal + opponent Spire repeat cost); verified green",
     "files": [
-      "packages/riftbound-cards/src/parser/parsers/static-parser.ts",
-      "packages/riftbound-engine/src/operations/static-cost-reduction.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts"
+      "packages/riftbound-engine/src/__tests__/cards/interactions/curtain-call-marai-spire-ezreal-repeats.test.ts"
     ],
-    "at": "2026-08-06T22:22:21.968Z"
+    "at": "2026-08-07T05:17:43.382Z"
   }
 }

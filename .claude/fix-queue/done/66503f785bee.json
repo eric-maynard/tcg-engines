@@ -9,27 +9,36 @@
   },
   "id": "66503f785bee",
   "createdAt": "2026-08-06T17:51:09.032Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T17:51:09.032Z",
       "event": "enqueued:unit-bug"
     },
     {
-      "at": "2026-08-07T01:44:01.595Z",
-      "event": "claimed:w9-i18"
+      "at": "2026-08-06T21:45:49.125Z",
+      "event": "grabbed:w12-i1"
     },
     {
-      "at": "2026-08-07T01:44:13.856Z",
-      "event": "done",
-      "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)"
+      "at": "2026-08-06T21:48:28.229Z",
+      "event": "failed",
+      "note": "superseded mid-edit: another lane added operations/kill-as-cost.ts and rewrote the play-unit sacrifice branch to route through executeEffect kill, which fires die; my equivalent edit was overwritten. Test flipped to test( and passes in the shared tree"
+    },
+    {
+      "at": "2026-08-07T08:14:36.883Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-07T08:18:36.986Z",
+      "event": "done(unclaimed)",
+      "note": "WP3 leaveBoard/LKI (b7d20e7..a181534): death choke point + LKI/damage-store landed; this test is green at HEAD"
     }
   ],
   "status": "done",
-  "claimedBy": "w9-i18",
-  "claimedAt": "2026-08-07T01:44:01.595Z",
+  "claimedBy": "w12-i1",
+  "claimedAt": "2026-08-06T21:45:49.124Z",
   "resolution": {
-    "note": "stale: repro test no longer test.failing and passes at HEAD (fix landed earlier without closing the queue item)",
-    "at": "2026-08-07T01:44:13.856Z"
+    "note": "WP3 leaveBoard/LKI (b7d20e7..a181534): death choke point + LKI/damage-store landed; this test is green at HEAD",
+    "at": "2026-08-07T08:18:36.986Z"
   }
 }

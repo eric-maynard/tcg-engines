@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-046-221",
+  "title": "BUG: pooled [rainbow] power should pay the activated ability's [calm] pip (135.2.e.5.b) — the engine refuses the activation",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-046-221.test.ts",
+    "testName": "BUG: pooled [rainbow] power should pay the activated ability's [calm] pip (135.2.e.5.b) — the engine refuses the activation"
+  },
+  "id": "ac2402dae3a7",
+  "createdAt": "2026-08-07T01:07:14.866Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:07:14.866Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:53:53.773Z",
+      "event": "grabbed:w9-i14"
+    },
+    {
+      "at": "2026-08-07T05:55:04.070Z",
+      "event": "done",
+      "note": "already fixed+landed at HEAD (a6ae19e rainbow pips); verified 046 tests green on clean HEAD"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i14",
+  "claimedAt": "2026-08-07T05:53:53.773Z",
+  "resolution": {
+    "note": "already fixed+landed at HEAD (a6ae19e rainbow pips); verified 046 tests green on clean HEAD",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-046-221.test.ts"
+    ],
+    "at": "2026-08-07T05:55:04.070Z"
+  }
+}

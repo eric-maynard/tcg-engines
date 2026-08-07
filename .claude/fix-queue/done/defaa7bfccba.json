@@ -15,28 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:19:08.960Z",
-      "event": "grabbed:w3-i8"
+      "at": "2026-08-07T05:20:30.112Z",
+      "event": "grabbed:w6-i6"
     },
     {
-      "at": "2026-08-06T23:25:33.316Z",
+      "at": "2026-08-07T05:20:55.566Z",
       "event": "done",
-      "note": "emit a reveal event when a look shows deck cards so 'as you look at or reveal me' triggers fire; look parks its own prompt behind them"
+      "note": "already fixed and landed at HEAD; repro test.failing flipped in an earlier commit"
     }
   ],
   "status": "done",
-  "claimedBy": "w3-i8",
-  "claimedAt": "2026-08-06T23:19:08.960Z",
+  "claimedBy": "w6-i6",
+  "claimedAt": "2026-08-07T05:20:30.112Z",
   "resolution": {
-    "note": "emit a reveal event when a look shows deck cards so 'as you look at or reveal me' triggers fire; look parks its own prompt behind them",
+    "note": "already fixed and landed at HEAD; repro test.failing flipped in an earlier commit",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/look.ts",
-      "packages/riftbound-engine/src/abilities/game-events.ts",
-      "packages/riftbound-engine/src/abilities/trigger-matcher.ts",
-      "packages/riftbound-engine/src/abilities/trigger-runner.ts",
-      "packages/riftbound-engine/src/events/dispatcher.ts",
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts"
+      ".claude/fix-queue/README.md"
     ],
-    "at": "2026-08-06T23:25:33.316Z"
+    "at": "2026-08-07T05:20:55.566Z"
   }
 }

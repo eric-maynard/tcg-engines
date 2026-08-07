@@ -8,12 +8,31 @@
   },
   "id": "879b1ec3caa3",
   "createdAt": "2026-08-06T20:11:47.411Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:11:47.411Z",
       "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:10:21.698Z",
+      "event": "grabbed:w11-i8"
+    },
+    {
+      "at": "2026-08-06T23:11:54.717Z",
+      "event": "failed",
+      "note": "needs missing engine capability: raising a player ordering pendingChoice from the state-based-checks death path (multiple 'die' replacements); too invasive for this pass"
+    },
+    {
+      "at": "2026-08-07T08:14:36.887Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w11-i8",
+  "claimedAt": "2026-08-06T23:10:21.698Z",
+  "resolution": {
+    "note": "needs missing engine capability: raising a player ordering pendingChoice from the state-based-checks death path (multiple 'die' replacements); too invasive for this pass",
+    "at": "2026-08-06T23:11:54.717Z"
+  }
 }

@@ -15,24 +15,24 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T01:39:33.960Z",
-      "event": "grabbed:w2-i14"
+      "at": "2026-08-07T05:23:15.414Z",
+      "event": "grabbed:w11-i6"
     },
     {
-      "at": "2026-08-07T01:39:57.781Z",
+      "at": "2026-08-07T05:24:03.806Z",
       "event": "done",
-      "note": "already fixed at HEAD by commit 2456919 (runes-at-least static condition + explicit abilities on yi-meditative); all 7 Yi tests pass"
+      "note": "already fixed: yi-meditative.ts declares explicit static with condition runes-at-least:8; evaluateCondition handles it"
     }
   ],
   "status": "done",
-  "claimedBy": "w2-i14",
-  "claimedAt": "2026-08-07T01:39:33.960Z",
+  "claimedBy": "w11-i6",
+  "claimedAt": "2026-08-07T05:23:15.414Z",
   "resolution": {
-    "note": "already fixed at HEAD by commit 2456919 (runes-at-least static condition + explicit abilities on yi-meditative); all 7 Yi tests pass",
+    "note": "already fixed: yi-meditative.ts declares explicit static with condition runes-at-least:8; evaluateCondition handles it",
     "files": [
       "packages/riftbound-cards/src/cards/ogs/yi-meditative.ts",
       "packages/riftbound-engine/src/abilities/static-abilities.ts"
     ],
-    "at": "2026-08-07T01:39:57.781Z"
+    "at": "2026-08-07T05:24:03.806Z"
   }
 }

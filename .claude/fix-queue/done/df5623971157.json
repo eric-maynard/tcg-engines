@@ -15,25 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:06:39.413Z",
-      "event": "grabbed:w5-i9"
+      "at": "2026-08-07T05:25:42.613Z",
+      "event": "grabbed:w11-i8"
     },
     {
-      "at": "2026-08-07T00:11:26.971Z",
+      "at": "2026-08-07T05:31:51.585Z",
       "event": "done",
-      "note": "parser: 'My Might is increased by your points.' static (VEN Draven reprint)"
+      "note": "ven-172-166 static already present in ven.json; added mid-game scoring regression test"
     }
   ],
   "status": "done",
-  "claimedBy": "w5-i9",
-  "claimedAt": "2026-08-07T00:06:39.413Z",
+  "claimedBy": "w11-i8",
+  "claimedAt": "2026-08-07T05:25:42.613Z",
   "resolution": {
-    "note": "parser: 'My Might is increased by your points.' static (VEN Draven reprint)",
+    "note": "ven-172-166 static already present in ven.json; added mid-game scoring regression test",
     "files": [
-      "packages/riftbound-cards/src/parser/parsers/static-parser.ts",
-      "packages/riftbound-cards/src/parser/__tests__/static/might-modifier.test.ts",
       "packages/riftbound-engine/src/__tests__/cards/ven-172-166.test.ts"
     ],
-    "at": "2026-08-07T00:11:26.971Z"
+    "at": "2026-08-07T05:31:51.585Z"
   }
 }

@@ -1,0 +1,47 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-029-298",
+  "title": "BUG: second 'Deal 3 to a unit' — two different units can be chosen and each takes 3",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-029-298.test.ts",
+    "testName": "BUG: second 'Deal 3 to a unit' — two different units can be chosen and each takes 3"
+  },
+  "id": "18452bc3f4f9",
+  "createdAt": "2026-08-06T17:15:21.549Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T17:15:21.549Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T19:56:55.701Z",
+      "event": "grabbed:w11-i3"
+    },
+    {
+      "at": "2026-08-06T20:56:32.491Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-06T20:58:23.088Z",
+      "event": "grabbed:w12-i1"
+    },
+    {
+      "at": "2026-08-06T21:02:51.707Z",
+      "event": "failed",
+      "note": "another lane is mid-flight on this exact fix (independentTargets: enrich-cards mergeRepeatedSpellAbilities + sequence.ts indepSlots + play-spell enumerator all appeared during my read); editing would clobber their in-progress work"
+    },
+    {
+      "at": "2026-08-07T08:14:36.885Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedAt": "2026-08-06T20:58:23.088Z",
+  "claimedBy": "w12-i1",
+  "resolution": {
+    "note": "another lane is mid-flight on this exact fix (independentTargets: enrich-cards mergeRepeatedSpellAbilities + sequence.ts indepSlots + play-spell enumerator all appeared during my read); editing would clobber their in-progress work",
+    "at": "2026-08-06T21:02:51.707Z"
+  }
+}

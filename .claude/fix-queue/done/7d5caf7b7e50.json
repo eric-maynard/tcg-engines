@@ -1,0 +1,28 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-072-298",
+  "title": "Sandbox/debug `stunUnit` move does not produce a stun that Solari Shrine's trigger recognizes (only writes meta.__flags.stunned, not top-level meta.stunned that the die-event snapshot reads).",
+  "expected": "game-definition/moves/counters.ts:162-166 stunUnit only calls counters.setFlag(cardId,\"stunned\",true) (writes meta.__flags.stunned). Die-event emitters read top-level meta.stunned: cleanup/state-based-checks.ts:596 `wasStunned: unitMeta?.stunned === true` (damage-death path used by Hextech Ray etc.) and abilities/effects/kill.ts:193 `meta?.stunned === true`. trigger-matcher.ts:420 rejects the 'stunned' filter when event.wasStunned !== true. Real stun effect (abilities/effects/stun.ts:16-24) mirrors to top-level meta.stunned via updateCardMeta, which is why Rune Prison works. Snapshot (apps/riftbound-app/server/snapshot.ts:377) reads __flags.stunned first, so it shows stunned=true despite triggers not seeing it.",
+  "observed": "Enemy Recruit stunned via stunUnit (snapshot meta.stunned=true), Shrine ready, killed by Hextech Ray / Dancing Grenade / Super Mega Death Rocket cast by player-1 -> no chain item, no opt-in prompt, no draw (3 separate attempts, base and battlefield). Same kills on units stunned by a real stun spell (Rune Prison, Facebreaker) triggered correctly. abilities/effects/stun.ts mirrors the flag to meta.stunned; game-definition/moves/counters.ts stunUnit only calls counters.setFlag.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/counters.ts:165",
+  "id": "7d5caf7b7e50",
+  "createdAt": "2026-08-07T03:31:36.292Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.292Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T08:00:20.260Z",
+      "event": "done(unclaimed)",
+      "note": "WP3 single damage store / LKI (8f0d410): Ending-Step heal clears counter+mirror through operations/damage-store.ts; die snapshot reads __flags too; test green at HEAD"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "WP3 single damage store / LKI (8f0d410): Ending-Step heal clears counter+mirror through operations/damage-store.ts; die snapshot reads __flags too; test green at HEAD",
+    "at": "2026-08-07T08:00:20.260Z"
+  }
+}

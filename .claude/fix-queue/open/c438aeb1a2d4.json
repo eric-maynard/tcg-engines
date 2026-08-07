@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-099-298",
+  "title": "Cards recycled to pay the cost are placed on the bottom of the Main Deck in deterministic (trash) order rather than random order.",
+  "expected": "activate-ability.ts:1357-1363 pays the \"Recycle N from your trash\" cost with a plain for-loop that moveCard()s each chosen id to position \"bottom\" of mainDeck in list order (trash order / recycleIds order) with no shuffle or randomization. Rule 416.5 (whose own example is Garbage Grabber) requires the simultaneously recycled cards to be placed on the bottom in a random order.",
+  "observed": "In 3 of 3 activations the 3 recycled cards appeared as the last 3 entries of mainDeck in exactly their trash order (e.g. trash [16,35,9] -> deck bottom [...,16,35,9]; trash [22,3,20,11] -> [...,22,3,20]; trash [11,28,14,19] -> [...,11,28,14]).",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:1357",
+  "id": "c438aeb1a2d4",
+  "createdAt": "2026-08-07T07:42:18.108Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.108Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

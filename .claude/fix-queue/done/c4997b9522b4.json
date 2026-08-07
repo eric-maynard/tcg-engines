@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-107-221",
+  "title": "BUG: the enemy unit may be anywhere — an enemy at a battlefield is a legal second choice and takes the damage there",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-107-221.test.ts",
+    "testName": "BUG: the enemy unit may be anywhere — an enemy at a battlefield is a legal second choice and takes the damage there"
+  },
+  "id": "c4997b9522b4",
+  "createdAt": "2026-08-07T00:57:36.961Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.961Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:47:43.190Z",
+      "event": "grabbed:w6-i11"
+    },
+    {
+      "at": "2026-08-07T05:47:50.631Z",
+      "event": "done",
+      "note": "already fixed at HEAD; sfd-107-221 11/11 pass in clean worktree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w6-i11",
+  "claimedAt": "2026-08-07T05:47:43.190Z",
+  "resolution": {
+    "note": "already fixed at HEAD; sfd-107-221 11/11 pass in clean worktree",
+    "at": "2026-08-07T05:47:50.631Z"
+  }
+}

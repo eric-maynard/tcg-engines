@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-160-221",
+  "title": "Optional additional cost \"kill a friendly gear\" is never offered/payable when playing Zaun Punk",
+  "expected": "zaun-punk.ts:4-16 defines no `abilities`, so enrichCards re-parses rulesText. Running parseAbilities on the card text (verified via bun) yields only the triggered payoff `{type:\"triggered\", trigger:{event:\"play-self\"}, condition:{type:\"paid-additional-cost\"}, effect:{type:\"kill\",target:{type:\"gear\"}}}` — the \"You may kill a friendly gear as an additional cost to play me\" clause is dropped: parser/impl/replacement.ts:38-54 only matches \"You may pay COST\"/\"spend N XP\" variants and parser/impl/spells.ts:135 handles the spell-only mandatory form; no unit \"you may kill a friendly X\" pattern exists. Consequently getOptionalPlayCost (riftbound-engine/src/game-definition/moves/play/cost.ts:909-930) finds no static/additional-cost-option ability with cost.kill and returns undefined (verified: prints `undefined` for sfd-160-221 with real registry), so play-unit.ts enumerator emits no sacrifice variants and the reducer at play-unit.ts:996 (`optional = paidAdditionalCost ? getOptionalPlayCost(cardId) : undefined`) never kills the gear. Engine path itself works when the ability shape is present (rules-audit/optional-play-cost.test.ts:209-257 uses a hand-crafted `{type:\"static\", cost:{kill:{controller:\"friendly\",type:\"gear\"}}}`), confirming this is a card/parser-layer gap.",
+  "observed": "Server /moves and UI listed only the plain playUnit {cardId,location:base,playerId} for Zaun Punk — no sacrifice variants. Forcing executeMove('playUnit',{...,paidAdditionalCost:true,sacrificeId:<Orb of Regret>}) played the unit (energy 15->12, Zaun Punk on base) but the named gear stayed on base and trash stayed 0. Root cause: card's parsed abilities contain only the triggered payoff; the 'You may kill a friendly gear as an additional cost to play me' clause produced no static/additional-cost-option ability with cost.kill, so getOptionalPlayCost() returns undefined.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/sfd/zaun-punk.ts",
+  "id": "66e3f008ba25",
+  "createdAt": "2026-08-07T03:31:36.295Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.295Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

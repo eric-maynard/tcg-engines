@@ -9,12 +9,31 @@
   },
   "id": "59f37a8b9fd2",
   "createdAt": "2026-08-07T01:14:13.012Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:14:13.012Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:52:18.122Z",
+      "event": "grabbed:w8-i17"
+    },
+    {
+      "at": "2026-08-07T05:56:54.999Z",
+      "event": "failed",
+      "note": "same shared mechanism as 469c7d682036: needs the chain-priority gate in play-spell.ts, dirty mid-edit by another lane"
+    },
+    {
+      "at": "2026-08-07T08:14:36.893Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w8-i17",
+  "claimedAt": "2026-08-07T05:52:18.122Z",
+  "resolution": {
+    "note": "same shared mechanism as 469c7d682036: needs the chain-priority gate in play-spell.ts, dirty mid-edit by another lane",
+    "at": "2026-08-07T05:56:54.999Z"
+  }
 }

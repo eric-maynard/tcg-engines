@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-100-221",
+  "title": "BUG: playing the Explorer ITSELF (printed Power cost 0) must not draw",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-100-221.test.ts",
+    "testName": "BUG: playing the Explorer ITSELF (printed Power cost 0) must not draw"
+  },
+  "id": "e48493d1af72",
+  "createdAt": "2026-08-07T01:32:39.994Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:32:39.994Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:11:50.710Z",
+      "event": "grabbed:w9-i16"
+    },
+    {
+      "at": "2026-08-07T06:17:24.561Z",
+      "event": "done",
+      "note": "already fixed at HEAD: played-power-cost trigger condition present, test flipped"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i16",
+  "claimedAt": "2026-08-07T06:11:50.710Z",
+  "resolution": {
+    "note": "already fixed at HEAD: played-power-cost trigger condition present, test flipped",
+    "files": [
+      "packages/riftbound-cards/src/cards/sfd/yordle-explorer.ts"
+    ],
+    "at": "2026-08-07T06:17:24.561Z"
+  }
+}

@@ -15,24 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:27:18.229Z",
-      "event": "grabbed:w10-i9"
+      "at": "2026-08-07T05:19:06.810Z",
+      "event": "grabbed:w9-i9"
     },
     {
-      "at": "2026-08-06T23:31:20.720Z",
+      "at": "2026-08-07T05:19:54.815Z",
       "event": "done",
-      "note": "effects/move.ts stageCombatOnArrival: effect-driven arrival at a contested bf stages combat (attacker = contestedBy), upgrades the open showdown"
+      "note": "already green at HEAD; verified in a clean worktree, no new edits needed"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i9",
-  "claimedAt": "2026-08-06T23:27:18.229Z",
+  "claimedBy": "w9-i9",
+  "claimedAt": "2026-08-07T05:19:06.810Z",
   "resolution": {
-    "note": "effects/move.ts stageCombatOnArrival: effect-driven arrival at a contested bf stages combat (attacker = contestedBy), upgrades the open showdown",
+    "note": "already green at HEAD; verified in a clean worktree, no new edits needed",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/move.ts",
       "packages/riftbound-engine/src/__tests__/cards/rulings/irresistible-faefolk-2a1de5fca1bd9d62.test.ts"
     ],
-    "at": "2026-08-06T23:31:20.720Z"
+    "at": "2026-08-07T05:19:54.815Z"
   }
 }

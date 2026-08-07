@@ -9,12 +9,31 @@
   },
   "id": "cd994a885286",
   "createdAt": "2026-08-07T01:16:42.707Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:16:42.707Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:57:58.059Z",
+      "event": "grabbed:w8-i18"
+    },
+    {
+      "at": "2026-08-07T06:04:21.130Z",
+      "event": "failed",
+      "note": "Mighty cost-reduction scope already implemented+flipped in another lane's uncommitted cost.ts; landing it would ride along their in-flight rune-tap work"
+    },
+    {
+      "at": "2026-08-07T08:14:36.895Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w8-i18",
+  "claimedAt": "2026-08-07T05:57:58.059Z",
+  "resolution": {
+    "note": "Mighty cost-reduction scope already implemented+flipped in another lane's uncommitted cost.ts; landing it would ride along their in-flight rune-tap work",
+    "at": "2026-08-07T06:04:21.130Z"
+  }
 }

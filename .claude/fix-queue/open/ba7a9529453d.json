@@ -8,12 +8,31 @@
   },
   "id": "ba7a9529453d",
   "createdAt": "2026-08-06T19:51:17.546Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T19:51:17.546Z",
       "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:26:23.363Z",
+      "event": "grabbed:w7-i12"
+    },
+    {
+      "at": "2026-08-06T23:31:18.123Z",
+      "event": "failed",
+      "note": "needs missing engine capability: chain items choose their targets at RESOLUTION, not at finalization (rule 337.1/354.3); Deathknell target cannot be picked before the played unit finalizes"
+    },
+    {
+      "at": "2026-08-07T08:14:36.895Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w7-i12",
+  "claimedAt": "2026-08-06T23:26:23.363Z",
+  "resolution": {
+    "note": "needs missing engine capability: chain items choose their targets at RESOLUTION, not at finalization (rule 337.1/354.3); Deathknell target cannot be picked before the played unit finalizes",
+    "at": "2026-08-06T23:31:18.123Z"
+  }
 }

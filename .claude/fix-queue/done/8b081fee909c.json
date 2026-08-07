@@ -15,25 +15,24 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:08:11.628Z",
-      "event": "grabbed:w8-i10"
+      "at": "2026-08-07T05:25:40.801Z",
+      "event": "grabbed:w3-i11"
     },
     {
-      "at": "2026-08-07T00:09:56.901Z",
+      "at": "2026-08-07T05:26:08.634Z",
       "event": "done",
-      "note": "standard-move + moveCardWithEvent honour granted NoMoveToBase (sfd-014-221)"
+      "note": "stale: NoMoveToBase now read by standard-move condition+enumerator and effects/move.ts; sfd-014-221 suite green"
     }
   ],
   "status": "done",
-  "claimedBy": "w8-i10",
-  "claimedAt": "2026-08-07T00:08:11.628Z",
+  "claimedBy": "w3-i11",
+  "claimedAt": "2026-08-07T05:25:40.801Z",
   "resolution": {
-    "note": "standard-move + moveCardWithEvent honour granted NoMoveToBase (sfd-014-221)",
+    "note": "stale: NoMoveToBase now read by standard-move condition+enumerator and effects/move.ts; sfd-014-221 suite green",
     "files": [
       "packages/riftbound-engine/src/game-definition/moves/movement/standard-move.ts",
-      "packages/riftbound-engine/src/abilities/effects/move.ts",
-      "packages/riftbound-engine/src/__tests__/cards/sfd-014-221.test.ts"
+      "packages/riftbound-engine/src/abilities/effects/move.ts"
     ],
-    "at": "2026-08-07T00:09:56.901Z"
+    "at": "2026-08-07T05:26:08.634Z"
   }
 }

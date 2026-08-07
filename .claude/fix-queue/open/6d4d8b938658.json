@@ -9,12 +9,31 @@
   },
   "id": "6d4d8b938658",
   "createdAt": "2026-08-07T01:14:13.030Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:14:13.030Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:56:45.624Z",
+      "event": "grabbed:w4-i22"
+    },
+    {
+      "at": "2026-08-07T06:04:51.498Z",
+      "event": "failed",
+      "note": "priority-exclusivity (312.2) is being reworked concurrently in chain-state/pending-choice/turn-queue by another lane (test already flipped in working tree); touching those files would land their partial work"
+    },
+    {
+      "at": "2026-08-07T08:14:36.889Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w4-i22",
+  "claimedAt": "2026-08-07T05:56:45.624Z",
+  "resolution": {
+    "note": "priority-exclusivity (312.2) is being reworked concurrently in chain-state/pending-choice/turn-queue by another lane (test already flipped in working tree); touching those files would land their partial work",
+    "at": "2026-08-07T06:04:51.498Z"
+  }
 }

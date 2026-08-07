@@ -15,23 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:20:21.671Z",
-      "event": "grabbed:w7-i16"
+      "at": "2026-08-07T05:25:02.098Z",
+      "event": "grabbed:w11-i7"
     },
     {
-      "at": "2026-08-07T00:23:57.173Z",
+      "at": "2026-08-07T05:25:19.236Z",
       "event": "done",
-      "note": "already fixed at HEAD: astral-heron ruling test green (next-card discount applies)"
+      "note": "already fixed on HEAD; repro/ruling tests green"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i16",
-  "claimedAt": "2026-08-07T00:20:21.671Z",
+  "claimedBy": "w11-i7",
+  "claimedAt": "2026-08-07T05:25:02.098Z",
   "resolution": {
-    "note": "already fixed at HEAD: astral-heron ruling test green (next-card discount applies)",
+    "note": "already fixed on HEAD; repro/ruling tests green",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/rulings/astral-heron-8cedb5e8fc134531.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/unl-141-219.test.ts"
     ],
-    "at": "2026-08-07T00:23:57.173Z"
+    "at": "2026-08-07T05:25:19.236Z"
   }
 }

@@ -8,12 +8,31 @@
   },
   "id": "049292235ee5",
   "createdAt": "2026-08-06T20:06:58.323Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:06:58.323Z",
       "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:44:31.182Z",
+      "event": "grabbed:w2-i7"
+    },
+    {
+      "at": "2026-08-06T23:47:47.157Z",
+      "event": "failed",
+      "note": "already resolved by another lane: the repro test is flipped-and-passing in the working tree (uncommitted, not my edit); no work left for me to attribute"
+    },
+    {
+      "at": "2026-08-07T08:14:36.890Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w2-i7",
+  "claimedAt": "2026-08-06T23:44:31.182Z",
+  "resolution": {
+    "note": "already resolved by another lane: the repro test is flipped-and-passing in the working tree (uncommitted, not my edit); no work left for me to attribute",
+    "at": "2026-08-06T23:47:47.157Z"
+  }
 }

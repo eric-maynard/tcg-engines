@@ -15,24 +15,24 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:41:00.748Z",
-      "event": "grabbed:w8-i12"
+      "at": "2026-08-07T05:30:08.791Z",
+      "event": "grabbed:w6-i9"
     },
     {
-      "at": "2026-08-07T00:42:39.576Z",
+      "at": "2026-08-07T05:30:44.807Z",
       "event": "done",
-      "note": "rollForFirst: tie => no winner, rolls cleared, re-roll round (rule 115)"
+      "note": "already fixed+flipped in HEAD (w3 commits c0081c5/2571d09); verified 52/52 pass"
     }
   ],
   "status": "done",
-  "claimedBy": "w8-i12",
-  "claimedAt": "2026-08-07T00:41:00.748Z",
+  "claimedBy": "w6-i9",
+  "claimedAt": "2026-08-07T05:30:08.791Z",
   "resolution": {
-    "note": "rollForFirst: tie => no winner, rolls cleared, re-roll round (rule 115)",
+    "note": "already fixed+flipped in HEAD (w3 commits c0081c5/2571d09); verified 52/52 pass",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/setup.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts"
+      "packages/riftbound-engine/src/validators/deck-validators.ts",
+      "packages/riftbound-engine/src/game-definition/moves/setup.ts"
     ],
-    "at": "2026-08-07T00:42:39.576Z"
+    "at": "2026-08-07T05:30:44.807Z"
   }
 }

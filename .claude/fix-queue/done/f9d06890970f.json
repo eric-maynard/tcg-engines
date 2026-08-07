@@ -15,25 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:26:23.362Z",
-      "event": "grabbed:w7-i12"
+      "at": "2026-08-07T05:20:08.844Z",
+      "event": "grabbed:w9-i10"
     },
     {
-      "at": "2026-08-06T23:31:18.038Z",
+      "at": "2026-08-07T05:21:04.611Z",
       "event": "done",
-      "note": "look onPicked:play now finalizes the play immediately (unit enters board, play trigger goes on chain above earlier triggers)"
+      "note": "already green on HEAD (Sentry/Yordle Hook ordering fixed upstream); verified"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i12",
-  "claimedAt": "2026-08-06T23:26:23.362Z",
+  "claimedBy": "w9-i10",
+  "claimedAt": "2026-08-07T05:20:08.844Z",
   "resolution": {
-    "note": "look onPicked:play now finalizes the play immediately (unit enters board, play trigger goes on chain above earlier triggers)",
+    "note": "already green on HEAD (Sentry/Yordle Hook ordering fixed upstream); verified",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/__tests__/cards/rulings/baited-hook-edfd3defc2005bb9.test.ts",
-      "packages/riftbound-engine/src/__tests__/pending-choice.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/baited-hook-edfd3defc2005bb9.test.ts"
     ],
-    "at": "2026-08-06T23:31:18.038Z"
+    "at": "2026-08-07T05:21:04.611Z"
   }
 }

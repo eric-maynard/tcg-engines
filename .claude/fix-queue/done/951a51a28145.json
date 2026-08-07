@@ -1,0 +1,39 @@
+{
+  "source": "playtest",
+  "cardId": "ven-148-166",
+  "title": "'If you have exactly two units there, they each get +1 Might this turn' clause is not implemented",
+  "expected": "packages/riftbound-cards/src/data/sets/ven.json:4305 defines ven-148-166 (Shadow Dash) with abilities:[null]; runtime enrichment via getAllCards() yields only [{type:'spell', effect:{type:'move', target:{type:'unit',controller:'enemy'}, to:'battlefield'}}, {type:'keyword', keyword:'Flow', cost:{energy:5,power:['rainbow','rainbow']}}]. No conditional '+1 Might if exactly two units' effect exists; parser has no handling for 'exactly two' (grep in src/parser and enrich-cards.ts returns nothing) and no TS override for this card id exists.",
+  "observed": "Enriched card abilities contain only the move effect and the Flow keyword; no conditional might buff exists in the chain item effect. (Could not observe at runtime either since resolution crashes.)",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/ven.json:4305",
+  "id": "951a51a28145",
+  "createdAt": "2026-08-06T23:55:41.369Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.369Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:40:55.155Z",
+      "event": "grabbed:w1-i12"
+    },
+    {
+      "at": "2026-08-07T05:41:41.894Z",
+      "event": "done",
+      "note": "already fixed in 934fe68 (Shadow Dash friendly-units destination + rider, atomic moveCard); verified 5/5 green at HEAD in clean worktree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i12",
+  "claimedAt": "2026-08-07T05:40:55.155Z",
+  "resolution": {
+    "note": "already fixed in 934fe68 (Shadow Dash friendly-units destination + rider, atomic moveCard); verified 5/5 green at HEAD in clean worktree",
+    "files": [
+      "packages/core/src/operations/operations-impl.ts",
+      "packages/riftbound-cards/src/data/all-cards.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ven-148-166.test.ts"
+    ],
+    "at": "2026-08-07T05:41:41.894Z"
+  }
+}

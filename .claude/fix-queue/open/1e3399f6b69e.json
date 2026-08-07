@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ven-099-166",
+  "title": "'When you play me from face down, you may empower something here' resolves as a no-op",
+  "expected": "Ran the parser on Tornado Warrior's rulesText: the second ability parses as triggered/optional with trigger play-from-hidden, but effect = {type:\"raw\", text:\"empower something here. Disempower it at end of turn.\"}. Cause: parseEmpowerEffect regex at packages/riftbound-cards/src/parser/impl/effects-resources.ts:193 accepts \"something\" / \"something else\" but not \"something here\", and there is no handling for the trailing \"Disempower it at end of turn.\" clause, so the effect falls through to raw. Engine executeEffect (packages/riftbound-engine/src/abilities/effect-executor.ts:172-184) has no handler for \"raw\" and hits the no-op branch — no target prompt, no meta.empowered, no delayed disempower.",
+  "observed": "Trigger fired correctly on play-from-hidden (chain item triggerEvent type 'play-from-hidden', optional opt-in pendingChoice shown). Accepting it (resolvePendingChoice accept:true) produced no target prompt and no state change: neither Tornado Warrior nor the Recruit token at that battlefield got meta.empowered; log only says 'resolve pending choice'. Chain effect is {type:'raw', text:'empower something here. Disempower it at end of turn.'} — parser leaves the effect unparsed so the engine has nothing to execute.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/effects-resources.ts:193",
+  "id": "1e3399f6b69e",
+  "createdAt": "2026-08-07T07:42:18.110Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.110Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

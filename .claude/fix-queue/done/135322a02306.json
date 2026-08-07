@@ -15,24 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:41:00.748Z",
-      "event": "grabbed:w8-i12"
+      "at": "2026-08-07T05:31:52.091Z",
+      "event": "grabbed:w8-i15"
     },
     {
-      "at": "2026-08-07T00:42:39.616Z",
+      "at": "2026-08-07T05:32:55.428Z",
       "event": "done",
-      "note": "mulligan condition: reject >2 or cards not in that player's hand (rule 117.1)"
+      "note": "already fixed upstream: mulligan now rejects ids not in the mover's hand; repro test flipped and passing"
     }
   ],
   "status": "done",
-  "claimedBy": "w8-i12",
-  "claimedAt": "2026-08-07T00:41:00.748Z",
+  "claimedBy": "w8-i15",
+  "claimedAt": "2026-08-07T05:31:52.091Z",
   "resolution": {
-    "note": "mulligan condition: reject >2 or cards not in that player's hand (rule 117.1)",
+    "note": "already fixed upstream: mulligan now rejects ids not in the mover's hand; repro test flipped and passing",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/setup.ts",
       "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts"
     ],
-    "at": "2026-08-07T00:42:39.616Z"
+    "at": "2026-08-07T05:32:55.428Z"
   }
 }

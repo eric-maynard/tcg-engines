@@ -1,0 +1,15 @@
+import { chromium } from "playwright";
+const b = await chromium.launch({ executablePath: "/root/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell" });
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+await p.goto("http://localhost:3917/login", { waitUntil: "networkidle" });
+await p.fill("#loginUser", "dev@riftbound.local"); await p.fill("#loginPass", "dev"); await p.click("#loginBtn"); await p.waitForLoadState("networkidle").catch(()=>{});
+await p.waitForTimeout(600);
+console.log("url after login", p.url());
+await p.goto("http://localhost:3917/play?cb=" + Date.now(), { waitUntil: "domcontentloaded" });
+await p.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+await p.goto("http://localhost:3917/play?cb=" + Date.now(), { waitUntil: "networkidle" });
+await p.waitForTimeout(800);
+console.log("url", p.url());
+await p.screenshot({ path: "/tmp/claude-999/-root-src-anthropic/d48e3a2d-1aa8-4d74-b4c6-a677aa8236c2/scratchpad/my_dbg.png" });
+console.log(await p.evaluate(() => ({ vis: [...document.querySelectorAll('.visible')].map(e=>e.id||e.className), sandbox: (document.getElementById('sandboxOption') as any)?.offsetParent?.id })));
+await b.close();

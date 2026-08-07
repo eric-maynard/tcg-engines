@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-262-298",
+  "title": "BUG: the destination is fixed — only 'that enemy unit's battlefield' (bf1), never another battlefield",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-262-298.test.ts",
+    "testName": "BUG: the destination is fixed — only 'that enemy unit's battlefield' (bf1), never another battlefield"
+  },
+  "id": "1bd38308cfc0",
+  "createdAt": "2026-08-06T18:35:08.357Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.357Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:17:07.623Z",
+      "event": "grabbed:w4-i15"
+    },
+    {
+      "at": "2026-08-07T05:17:43.421Z",
+      "event": "done",
+      "note": "fixed-destination prompt already offers only bf1; test asserted arrival after settle, which recalls the losing attacker — assert on arrival"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i15",
+  "claimedAt": "2026-08-07T05:17:07.623Z",
+  "resolution": {
+    "note": "fixed-destination prompt already offers only bf1; test asserted arrival after settle, which recalls the losing attacker — assert on arrival",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-262-298.test.ts"
+    ],
+    "at": "2026-08-07T05:17:43.421Z"
+  }
+}

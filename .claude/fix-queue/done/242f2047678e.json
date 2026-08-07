@@ -14,23 +14,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:21:31.437Z",
-      "event": "grabbed:w3-i10"
+      "at": "2026-08-07T05:27:31.450Z",
+      "event": "grabbed:w3-i13"
     },
     {
-      "at": "2026-08-07T00:27:25.755Z",
+      "at": "2026-08-07T05:27:44.390Z",
       "event": "done",
-      "note": "gameplay.css: cap .bf-units .card at row height, min-height 56px, battlefield-row 180->240 so units are not slivers"
+      "note": "already fixed at HEAD (3bb4c4e): combatRoleMightBonus in card.js; [rule:ui-bf-unit-not-clipped] min-height/max-height caps in gameplay.css"
     }
   ],
   "status": "done",
-  "claimedBy": "w3-i10",
-  "claimedAt": "2026-08-07T00:21:31.437Z",
+  "claimedBy": "w3-i13",
+  "claimedAt": "2026-08-07T05:27:31.450Z",
   "resolution": {
-    "note": "gameplay.css: cap .bf-units .card at row height, min-height 56px, battlefield-row 180->240 so units are not slivers",
+    "note": "already fixed at HEAD (3bb4c4e): combatRoleMightBonus in card.js; [rule:ui-bf-unit-not-clipped] min-height/max-height caps in gameplay.css",
     "files": [
-      "apps/riftbound-app/public/css/gameplay.css"
+      "apps/riftbound-app/public/js/gameplay/render/card.js"
     ],
-    "at": "2026-08-07T00:27:25.755Z"
+    "at": "2026-08-07T05:27:44.390Z"
   }
 }

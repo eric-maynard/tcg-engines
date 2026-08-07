@@ -1,0 +1,37 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 67ba38e17c612ad4 — played from hand with no namesake in the trash → enters EXHAUSTED (engine readies it unconditionally)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/shadow-assassin-67ba38e17c612ad4.test.ts",
+    "testName": "BUG: ruling 67ba38e17c612ad4 — played from hand with no namesake in the trash → enters EXHAUSTED (engine readies it unconditionally)"
+  },
+  "id": "65ab195c0198",
+  "createdAt": "2026-08-06T20:06:58.325Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.325Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T05:17:43.471Z",
+      "event": "grabbed:w4-i15"
+    },
+    {
+      "at": "2026-08-07T05:17:55.805Z",
+      "event": "done",
+      "note": "already fixed+flipped upstream; test green, no test.failing remains"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i15",
+  "claimedAt": "2026-08-07T05:17:43.471Z",
+  "resolution": {
+    "note": "already fixed+flipped upstream; test green, no test.failing remains",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/"
+    ],
+    "at": "2026-08-07T05:17:55.805Z"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-098-221",
+  "title": "BUG: 'buff ME' must do nothing once Sea Monkey has left the board — killed in response, it sits in the trash unbuffed (701: buffs are removed when a unit leaves play)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-098-221.test.ts",
+    "testName": "BUG: 'buff ME' must do nothing once Sea Monkey has left the board — killed in response, it sits in the trash unbuffed (701: buffs are removed when a unit leaves play)"
+  },
+  "id": "f56a61dbb8b9",
+  "createdAt": "2026-08-07T01:14:13.026Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.026Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T08:06:13.624Z",
+      "event": "done(unclaimed)",
+      "note": "WP3 follow-up (675d75f): rule 701/124.1 buff never lands on a card that left the board; sfd-098 BUG test flipped"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "WP3 follow-up (675d75f): rule 701/124.1 buff never lands on a card that left the board; sfd-098 BUG test flipped",
+    "at": "2026-08-07T08:06:13.624Z"
+  }
+}

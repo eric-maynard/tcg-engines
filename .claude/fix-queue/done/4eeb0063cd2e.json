@@ -15,26 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:29:22.202Z",
-      "event": "grabbed:w10-i12"
+      "at": "2026-08-07T05:27:07.556Z",
+      "event": "grabbed:w3-i13"
     },
     {
-      "at": "2026-08-07T00:33:20.907Z",
+      "at": "2026-08-07T05:27:28.669Z",
       "event": "done",
-      "note": "Vex: stun trigger now also grants turn-duration NoMove; movement moves honour it"
+      "note": "already fixed at HEAD (3bb4c4e); repro tests pass, no test.failing remains"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i12",
-  "claimedAt": "2026-08-07T00:29:22.202Z",
+  "claimedBy": "w3-i13",
+  "claimedAt": "2026-08-07T05:27:07.556Z",
   "resolution": {
-    "note": "Vex: stun trigger now also grants turn-duration NoMove; movement moves honour it",
+    "note": "already fixed at HEAD (3bb4c4e); repro tests pass, no test.failing remains",
     "files": [
-      "packages/riftbound-cards/src/cards/unl/vex-apathetic.ts",
-      "packages/riftbound-engine/src/game-definition/moves/movement/standard-move.ts",
-      "packages/riftbound-engine/src/game-definition/moves/movement/ganking-move.ts",
-      "packages/riftbound-engine/src/__tests__/cards/unl-150-219.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/ogs-007-024.test.ts"
     ],
-    "at": "2026-08-07T00:33:20.907Z"
+    "at": "2026-08-07T05:27:28.669Z"
   }
 }

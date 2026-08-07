@@ -1,0 +1,37 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 0167a87fe08432da — Tactical Retreat: P2 is asked to order Retreat's and Smite's replacements (engine: no prompt)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/smite-0167a87fe08432da.test.ts",
+    "testName": "BUG: ruling 0167a87fe08432da — Tactical Retreat: P2 is asked to order Retreat's and Smite's replacements (engine: no prompt)"
+  },
+  "id": "879b1ec3caa3",
+  "createdAt": "2026-08-06T20:11:47.411Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:11:47.411Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T05:20:51.591Z",
+      "event": "grabbed:w8-i12"
+    },
+    {
+      "at": "2026-08-07T05:21:32.128Z",
+      "event": "done",
+      "note": "already fixed at HEAD: repro test has no test.failing and passes (verified by running the file)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i12",
+  "claimedAt": "2026-08-07T05:20:51.591Z",
+  "resolution": {
+    "note": "already fixed at HEAD: repro test has no test.failing and passes (verified by running the file)",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/rulings/smite-0167a87fe08432da.test.ts"
+    ],
+    "at": "2026-08-07T05:21:32.128Z"
+  }
+}

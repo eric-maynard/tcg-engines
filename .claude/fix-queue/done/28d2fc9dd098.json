@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-206-221",
+  "title": "Cannot click the friendly-unit target in the UI while the chain modal is open",
+  "expected": "The chain overlay is `position:fixed; inset:0; align/justify center; z-index:1500` (public/css/gameplay.css:678-688) and while visible its `.chain-box` keeps `pointer-events:auto` (gameplay.css:694). The box is unscaled (~290px tall with one chain item: title/subtitle/72px item/priority/Pass button/hint) and centered on the viewport, whereas the board is a 1920x1080 logical canvas scaled down to fit; the player-base row sits directly beneath the vertically-centred battlefield row, so the lower part of the box (where .chain-pass-btn lives) lands over #player-base units. The only mitigation for board-pick prompts is `.chain-overlay.targeting { justify-content:flex-end }` (gameplay.css:1784-1790), but that class is toggled exclusively on #choiceOverlay in renderPendingChoiceModal (render/modals.js:32,41,179) — never on #chainOverlay. Client-side targeting mode entered from hand/sidebar (interactions.js:357-361 adds body.targeting-mode; banner text at interactions.js:321) has no CSS or JS that hides/moves #chainBox (targeting-mode rules at gameplay.css:1748-1750 only style cards). So with the chain open and Riposte's 'Choose a target' banner up, real clicks on base units under the box hit .chain-pass-btn/.chain-box instead of the .valid-target card.",
+  "observed": "The 'The Chain' modal (#chainBox, z-index 1500) sits directly over the player's base zone; elementFromPoint at the unit's center returns .chain-pass-btn, and a real click on the unit times out. Only a synthetic dispatched click (or executeMove) could complete targeting. Same after using the sidebar 'Play Spell Riposte' button.",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/public/css/gameplay.css:694",
+  "id": "28d2fc9dd098",
+  "createdAt": "2026-08-06T23:55:41.369Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.369Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:30:06.980Z",
+      "event": "grabbed:w9-i12"
+    },
+    {
+      "at": "2026-08-07T05:30:48.599Z",
+      "event": "done",
+      "note": "already fixed in HEAD; verified passing"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i12",
+  "claimedAt": "2026-08-07T05:30:06.980Z",
+  "resolution": {
+    "note": "already fixed in HEAD; verified passing",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts"
+    ],
+    "at": "2026-08-07T05:30:48.599Z"
+  }
+}

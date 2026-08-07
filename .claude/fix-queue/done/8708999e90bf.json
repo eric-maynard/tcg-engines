@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "ven-148-166",
+  "title": "Spell is offered/playable with no legal destination",
+  "expected": "Card ven-148-166 has no hand-authored def; it is parsed at runtime from rulesText via the flexible fallback in /root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/effects-move.ts:239-262, whose regex `(?:\\s+to\\s+(...|a battlefield|...))?(?:\\s+.*)$` swallows \" where you have units...\" and emits `{type:\"move\", target:{type:\"unit\",controller:\"enemy\"}, to:\"battlefield\"}` with no friendly-units destination filter (verified via getAllCards()). Engine-side, chosenMoveDestinations (riftbound-engine/src/game-definition/moves/play/targeting.ts:498-540) returns undefined for a plain-string `to:\"battlefield\"`, so play-spell.ts:427-432 applies no destination restriction. Empirical repro with harness: 2 battlefields, P1 has zero units anywhere, P2 has one unit in base -> game.p1.legal() lists \"cast Shadow Dash [dash]\" and enumerateMoves(playSpell, validOnly) returns {cardId:\"dash\", targets:[\"enemy\"], isValid:true}. (Resolution then also fails with \"Target zone battlefield does not exist\".)",
+  "observed": "playSpell for Shadow Dash targeting the enemy Recruit was enumerated while player-1 had no units at any battlefield (only enemy token in base).",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/effects-move.ts:239",
+  "id": "8708999e90bf",
+  "createdAt": "2026-08-06T23:55:41.369Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.369Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:42:12.041Z",
+      "event": "grabbed:w3-i16"
+    },
+    {
+      "at": "2026-08-07T05:45:52.284Z",
+      "event": "done",
+      "note": "already fixed at HEAD (4b4048e) by concurrent workers; verified in a clean worktree — 26/26 pass across the 3 card test files, no test.failing remains for these cases"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i16",
+  "claimedAt": "2026-08-07T05:42:12.041Z",
+  "resolution": {
+    "note": "already fixed at HEAD (4b4048e) by concurrent workers; verified in a clean worktree — 26/26 pass across the 3 card test files, no test.failing remains for these cases",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-010-221.test.ts"
+    ],
+    "at": "2026-08-07T05:45:52.284Z"
+  }
+}

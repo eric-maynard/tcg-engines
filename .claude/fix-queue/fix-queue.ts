@@ -113,7 +113,11 @@ switch (cmd) {
     // Atomically claim up to N open items, preferring items related to the oldest one
     // (same cardId, same repro test file, same fileHint) so one worker gets a coherent batch.
     const n = parseInt(flag("n", "6")!, 10); const by = flag("by", "worker")!;
-    const open = list("open").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    // EMBARGO: while single-owner work packages run, skip items whose text/repro matches .claude/fix-queue/embargo.regex
+    let embargo: RegExp | null = null;
+    try { const e = readFileSync(join(ROOT, "embargo.regex"), "utf8").trim(); if (e) embargo = new RegExp(e, "i"); } catch {}
+    const emb = (i: Item) => !!embargo && embargo.test(`${i.title} ${i.expected ?? ""} ${i.fileHint ?? ""} ${i.repro?.testFile ?? ""}`);
+    const open = list("open").filter((i) => !emb(i)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const got: Item[] = [];
     const tryClaim = (i: Item) => got.length < n && !got.find((g) => g.id === i.id) &&
       move(i.id, "open", "claimed", (x) => ({ ...x, claimedBy: by, claimedAt: now(), history: [...(x.history ?? []), { at: now(), event: `grabbed:${by}` }] })) && got.push(i);

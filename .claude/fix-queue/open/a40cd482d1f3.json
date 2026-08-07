@@ -8,12 +8,39 @@
   },
   "id": "a40cd482d1f3",
   "createdAt": "2026-08-06T20:06:58.325Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:06:58.325Z",
       "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T03:10:50.324Z",
+      "event": "grabbed:w5-i3"
+    },
+    {
+      "at": "2026-08-07T03:11:26.109Z",
+      "event": "released"
+    },
+    {
+      "at": "2026-08-07T03:11:26.234Z",
+      "event": "grabbed:w5-i3"
+    },
+    {
+      "at": "2026-08-07T03:11:37.338Z",
+      "event": "failed",
+      "note": "already fixed by another lane's in-flight uncommitted patch (the-harrowing.ts target location:trash, enter-ready.ts meta clear, static-parser.ts); tests already flipped and passing locally — not duplicating"
+    },
+    {
+      "at": "2026-08-07T08:14:36.889Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w5-i3",
+  "claimedAt": "2026-08-07T03:11:26.234Z",
+  "resolution": {
+    "note": "already fixed by another lane's in-flight uncommitted patch (the-harrowing.ts target location:trash, enter-ready.ts meta clear, static-parser.ts); tests already flipped and passing locally — not duplicating",
+    "at": "2026-08-07T03:11:37.338Z"
+  }
 }

@@ -15,23 +15,23 @@
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T22:27:04.539Z",
-      "event": "grabbed:w3-i3"
+      "at": "2026-08-07T05:12:19.005Z",
+      "event": "grabbed:w12-i13"
     },
     {
-      "at": "2026-08-06T22:30:24.653Z",
+      "at": "2026-08-07T05:17:43.421Z",
       "event": "done",
-      "note": "already green on this tree (Accelerate offered on Arcane Shift free replay); verified + no change needed"
+      "note": "already passing; flipped the stale sibling test.failing for P2 Accelerate on the owner replay"
     }
   ],
   "status": "done",
-  "claimedBy": "w3-i3",
-  "claimedAt": "2026-08-06T22:27:04.539Z",
+  "claimedBy": "w12-i13",
+  "claimedAt": "2026-08-07T05:12:19.005Z",
   "resolution": {
-    "note": "already green on this tree (Accelerate offered on Arcane Shift free replay); verified + no change needed",
+    "note": "already passing; flipped the stale sibling test.failing for P2 Accelerate on the owner replay",
     "files": [
       "packages/riftbound-engine/src/__tests__/cards/interactions/arcane-shift-stolen-unit-owner-replays.test.ts"
     ],
-    "at": "2026-08-06T22:30:24.653Z"
+    "at": "2026-08-07T05:17:43.421Z"
   }
 }

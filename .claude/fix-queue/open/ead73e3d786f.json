@@ -1,0 +1,18 @@
+{
+  "source": "playtest",
+  "title": "During a Showdown State (showdown active at Abandoned Hall, no chain, player-1 has Focus) the engine offered `activateAbility` for the legend Herald of the Arcane in step 31's legal moves, and in step 32 accepted it: energy 2->1, legend exhausted, and a create-token ability item was placed on the chain.",
+  "expected": "Trace step 31 (showdownStack active, chain null, focusPlayer player-1) lists activateAbility for player-1-legend-ogn-265-298; step 32 shows energy 2->1 and a create-token ability item on the chain. Herald of the Arcane (riftbound-cards/src/cards/ogn/herald-of-the-arcane.ts:16-25) declares the ability with no keyword/timing. In packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:49, abilityTimingClass returns \"action\" for any non-gear activated ability lacking an Action/Reaction keyword (`getCardType(hostCardId) === \"gear\" ? \"standard\" : \"action\"`), and chain/chain-state.ts:208 makes \"action\" legal in showdown-open. So the condition at activate-ability.ts:514-516 passes during a Showdown Open State. Rules 308.1.a (\"Only cards and abilities with the Action or Reaction keywords can be played or activated in a Showdown State\") and 343.1.b (\"Card abilities, by default, cannot be played during a Showdown State\") require default (keywordless) activated abilities to be neutral-open only; the engine's non-gear default of \"action\" violates this.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:49",
+  "rule": "308.1.a / 343.1.b / 347.1 (Herald of the Arcane ogn-265-298)",
+  "id": "ead73e3d786f",
+  "createdAt": "2026-08-07T07:42:18.112Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.112Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

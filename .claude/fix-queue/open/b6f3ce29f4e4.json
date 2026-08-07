@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-062-298",
+  "title": "Look-at-top-5 prompt only displays the eligible units, not all 5 looked-at cards",
+  "expected": "renderPendingChoiceModal (modals.js:93-107) builds the card row solely from availableMoves resolvePendingChoice entries with params.pickedCardId (i.e. only the filter-eligible units) and never reads pending.revealed, so the blocking 'Choose a card to play' modal shows only Flame Chompers/Immortal Phoenix + 'No'. Caveat: the sidebar action list does render pending.revealed thumbnails (render/actions.js:223-232), but while the modal is up they sit beneath the fixed full-viewport 70%-opaque #choiceOverlay (gameplay.css:695-706, z-index 1500; not in 'targeting' mode since deck cards aren't on the board), in a 220px-max scroll panel — so 'never shown' is slightly overstated, but the modal defect is real.",
+  "observed": "Engine pendingChoice.revealed listed all 5 ids, but the 'Choose a card to play' modal rendered only Flame Chompers and Immortal Phoenix plus 'No'; the 3 non-unit cards were never shown to the player",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/public/js/gameplay/render/modals.js:93",
+  "id": "b6f3ce29f4e4",
+  "createdAt": "2026-08-07T07:42:18.109Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.109Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

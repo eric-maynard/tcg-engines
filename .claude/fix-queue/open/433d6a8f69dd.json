@@ -1,0 +1,18 @@
+{
+  "source": "playtest",
+  "title": "During the open Showdown at Abandoned Hall (showdown.active=true, no chain), the legal move list and the action panel offer 'Activate Ability — Herald of the Arcane' ([1], [Exhaust]: Play a Recruit token), an activated ability with no [Action]/[Reaction] tag.",
+  "expected": "abilityTimingClass() (activate-ability.ts:39-50) returns \"standard\" only when the host card is gear; for every other host type (Herald of the Arcane is a legend) an untagged activated ability falls through to `\"action\"` at line 49. The condition at line 514-515 then calls isLegalTiming(\"action\", turnState), which (chain/chain-state.ts:198-208) returns true for \"showdown-open\". So an untagged legend/unit activated ability is offered during a Showdown Open state, contrary to rule 310.1.a / 145.2 / 347.1+338.1.a.2 and the rules text \"Only cards and abilities with the Action or Reaction keywords can be played or activated in a Showdown State\". Trace step 30 confirms: showdown.active=true, chain=null, moves include activateAbility{cardId: player-1-legend-ogn-265-298, abilityIndex:0} and the card def (riftbound-cards/src/cards/ogn/herald-of-the-arcane.ts) has no keyword/timing on the ability.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:49",
+  "rule": "310.1.a / 347.1 — Herald of the Arcane ogn-265-298",
+  "id": "433d6a8f69dd",
+  "createdAt": "2026-08-07T07:42:18.111Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.111Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

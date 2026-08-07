@@ -36,6 +36,7 @@ describe("Decree of Rage (ven-015-166)", () => {
       .hand(P2, WIND_WALL, "wall")
       .build();
     await game.p1.cast("decree", { targets: "foe" });
+    await game.p1.passPriority(); // rule 312.1
     await game.p2.cast("wall");
     expect(game.chain().map((i) => i.cardId)).toEqual(["decree", "wall"]);
     await game.settle();

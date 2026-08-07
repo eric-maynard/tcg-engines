@@ -1,0 +1,44 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-075-221",
+  "title": "BUG: parsed trigger should be scoped to GEAR abilities; the payload has no gear qualifier (would also fire on legend/unit abilities)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-075-221.test.ts",
+    "testName": "BUG: parsed trigger should be scoped to GEAR abilities; the payload has no gear qualifier (would also fire on legend/unit abilities)"
+  },
+  "id": "c80b8856418a",
+  "createdAt": "2026-08-07T01:14:13.016Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.016Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:54:52.637Z",
+      "event": "grabbed:w12-i16"
+    },
+    {
+      "at": "2026-08-07T06:04:08.396Z",
+      "event": "done",
+      "note": "new use-activated-ability event fired at activation (above the ability on the chain) + gear sourceType qualifier threaded parser->matcher"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w12-i16",
+  "claimedAt": "2026-08-07T05:54:52.637Z",
+  "resolution": {
+    "note": "new use-activated-ability event fired at activation (above the ability on the chain) + gear sourceType qualifier threaded parser->matcher",
+    "files": [
+      "packages/riftbound-cards/src/parser/impl/trigger-patterns.ts",
+      "packages/riftbound-cards/src/parser/impl/triggers.ts",
+      "packages/riftbound-engine/src/abilities/game-events.ts",
+      "packages/riftbound-engine/src/abilities/trigger-matcher.ts",
+      "packages/riftbound-engine/src/abilities/trigger-runner.ts",
+      "packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-075-221.test.ts"
+    ],
+    "at": "2026-08-07T06:04:08.396Z"
+  }
+}

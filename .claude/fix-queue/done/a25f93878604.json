@@ -15,27 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:40:22.071Z",
-      "event": "grabbed:w3-i9"
+      "at": "2026-08-07T05:21:48.300Z",
+      "event": "grabbed:w8-i13"
     },
     {
-      "at": "2026-08-06T23:44:33.319Z",
+      "at": "2026-08-07T05:22:59.650Z",
       "event": "done",
-      "note": "Temporal Breach: play toLocation:same replays banished unit to its origin zone; Rockfall Path forbids unit plays"
+      "note": "already fixed at HEAD; repro test flipped and passing (verified)"
     }
   ],
   "status": "done",
-  "claimedBy": "w3-i9",
-  "claimedAt": "2026-08-06T23:40:22.071Z",
+  "claimedBy": "w8-i13",
+  "claimedAt": "2026-08-07T05:21:48.300Z",
   "resolution": {
-    "note": "Temporal Breach: play toLocation:same replays banished unit to its origin zone; Rockfall Path forbids unit plays",
+    "note": "already fixed at HEAD; repro test flipped and passing (verified)",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/play.ts",
-      "packages/riftbound-engine/src/abilities/effects/banish.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
-      "packages/riftbound-engine/src/types/game-state.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/"
     ],
-    "at": "2026-08-06T23:44:33.319Z"
+    "at": "2026-08-07T05:22:59.650Z"
   }
 }

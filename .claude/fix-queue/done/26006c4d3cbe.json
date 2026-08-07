@@ -15,24 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:31:25.504Z",
-      "event": "grabbed:w6-i9"
+      "at": "2026-08-07T05:27:58.095Z",
+      "event": "grabbed:w3-i14"
     },
     {
-      "at": "2026-08-07T00:34:13.199Z",
+      "at": "2026-08-07T05:29:01.733Z",
       "event": "done",
-      "note": "liftModalTarget no longer single-lifts multi-quantity modal targets, so 'Ready 2 runes' readies both"
+      "note": "verified fixed (target-resolver metaFlag reads __flags.exhausted); added rune-ready regression coverage"
     }
   ],
   "status": "done",
-  "claimedBy": "w6-i9",
-  "claimedAt": "2026-08-07T00:31:25.504Z",
+  "claimedBy": "w3-i14",
+  "claimedAt": "2026-08-07T05:27:58.095Z",
   "resolution": {
-    "note": "liftModalTarget no longer single-lifts multi-quantity modal targets, so 'Ready 2 runes' readies both",
+    "note": "verified fixed (target-resolver metaFlag reads __flags.exhausted); added rune-ready regression coverage",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/__tests__/cards/sfd-049-221.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/sfd-049-221-modal-targets.test.ts"
     ],
-    "at": "2026-08-07T00:34:13.199Z"
+    "at": "2026-08-07T05:29:01.733Z"
   }
 }

@@ -1,0 +1,40 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-044-221",
+  "title": "BUG: Equipment is gear — an attached Doran's Shield can pay the cost; it detaches to hand and its unit loses the +1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-044-221.test.ts",
+    "testName": "BUG: Equipment is gear — an attached Doran's Shield can pay the cost; it detaches to hand and its unit loses the +1"
+  },
+  "id": "ccd138a2faa5",
+  "createdAt": "2026-08-07T01:01:45.604Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:01:45.604Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:05:32.212Z",
+      "event": "grabbed:w10-i7"
+    },
+    {
+      "at": "2026-08-07T05:11:46.582Z",
+      "event": "done",
+      "note": "Legion Quartermaster mandatory 'return a friendly gear' cost: enumerate/validate/pay in play-unit; bounce detaches Equipment"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w10-i7",
+  "claimedAt": "2026-08-07T05:05:32.212Z",
+  "resolution": {
+    "note": "Legion Quartermaster mandatory 'return a friendly gear' cost: enumerate/validate/pay in play-unit; bounce detaches Equipment",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
+      "packages/riftbound-engine/src/abilities/effects/return-to-hand.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-044-221.test.ts"
+    ],
+    "at": "2026-08-07T05:11:46.582Z"
+  }
+}

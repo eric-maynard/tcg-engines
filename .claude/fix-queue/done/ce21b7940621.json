@@ -1,0 +1,46 @@
+{
+  "source": "interaction-bug",
+  "title": "BUG: Golds can be cracked in the MIDDLE of Bullet Time's resolution, at the moment the payment is asked for (429.3, 429.3.a, 444.2.c)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/interactions/bullet-time-vex-gold-x-payment.test.ts",
+    "testName": "BUG: Golds can be cracked in the MIDDLE of Bullet Time's resolution, at the moment the payment is asked for (429.3, 429.3.a, 444.2.c)"
+  },
+  "id": "ce21b7940621",
+  "createdAt": "2026-08-06T17:51:09.027Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.027Z",
+      "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-07T01:47:19.951Z",
+      "event": "grabbed:w3-i16"
+    },
+    {
+      "at": "2026-08-07T02:36:01.401Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T05:08:41.072Z",
+      "event": "grabbed:w4-i13"
+    },
+    {
+      "at": "2026-08-07T05:09:17.049Z",
+      "event": "done",
+      "note": "already fixed at HEAD e27f61c; repro tests flipped and green on a clean checkout — stale queue entry"
+    }
+  ],
+  "status": "done",
+  "claimedAt": "2026-08-07T05:08:41.072Z",
+  "claimedBy": "w4-i13",
+  "resolution": {
+    "note": "already fixed at HEAD e27f61c; repro tests flipped and green on a clean checkout — stale queue entry",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/interactions/temporal-portal-sacrifice-repeat.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/interactions/bullet-time-vex-gold-x-payment.test.ts"
+    ],
+    "at": "2026-08-07T05:09:17.049Z"
+  }
+}

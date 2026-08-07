@@ -1,0 +1,37 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 705 / 705.1 — a buffed champion that leaves play loses its buff (engine keeps buffed=true on the trash copy)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/tokens-banishment-trash-object-identity.test.ts",
+    "testName": "BUG: 705 / 705.1 — a buffed champion that leaves play loses its buff (engine keeps buffed=true on the trash copy)"
+  },
+  "id": "758e0cf67b54",
+  "createdAt": "2026-08-06T20:50:12.438Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.438Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:34:37.095Z",
+      "event": "grabbed:w10-i9"
+    },
+    {
+      "at": "2026-08-07T05:36:18.542Z",
+      "event": "done",
+      "note": "already fixed at HEAD (champion leaves play loses buff); test verified green"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w10-i9",
+  "claimedAt": "2026-08-07T05:34:37.095Z",
+  "resolution": {
+    "note": "already fixed at HEAD (champion leaves play loses buff); test verified green",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/core-rules/tokens-banishment-trash-object-identity.test.ts"
+    ],
+    "at": "2026-08-07T05:36:18.542Z"
+  }
+}

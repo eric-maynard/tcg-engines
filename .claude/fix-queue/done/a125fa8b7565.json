@@ -15,24 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:26:08.987Z",
-      "event": "grabbed:w4-i16"
+      "at": "2026-08-07T05:26:25.132Z",
+      "event": "grabbed:w3-i12"
     },
     {
-      "at": "2026-08-07T00:30:24.321Z",
+      "at": "2026-08-07T05:26:57.244Z",
       "event": "done",
-      "note": "handle_play: play-from-hand to a controlled battlefield now picks a hand unit, applies reduceCost and restricts destinations"
+      "note": "already fixed: play.ts controlled-battlefield hand-play path honours from/reduceCost/toLocation; sfd-111-221.test.ts green"
     }
   ],
   "status": "done",
-  "claimedBy": "w4-i16",
-  "claimedAt": "2026-08-07T00:26:08.987Z",
+  "claimedBy": "w3-i12",
+  "claimedAt": "2026-08-07T05:26:25.132Z",
   "resolution": {
-    "note": "handle_play: play-from-hand to a controlled battlefield now picks a hand unit, applies reduceCost and restricts destinations",
+    "note": "already fixed: play.ts controlled-battlefield hand-play path honours from/reduceCost/toLocation; sfd-111-221.test.ts green",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/play.ts",
-      "packages/riftbound-engine/src/__tests__/cards/sfd-111-221.test.ts"
+      "packages/riftbound-engine/src/abilities/effects/play.ts"
     ],
-    "at": "2026-08-07T00:30:24.321Z"
+    "at": "2026-08-07T05:26:57.244Z"
   }
 }

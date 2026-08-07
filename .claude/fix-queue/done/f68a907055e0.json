@@ -1,0 +1,43 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-083-221",
+  "title": "BUG: X = 0 is a legal 'any amount' — the gear exhausts, nothing is paid, nothing is added, Energy stays the NUMBER 1",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-083-221.test.ts",
+    "testName": "BUG: X = 0 is a legal 'any amount' — the gear exhausts, nothing is paid, nothing is added, Energy stays the NUMBER 1"
+  },
+  "id": "f68a907055e0",
+  "createdAt": "2026-08-07T01:20:34.439Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.439Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:03:35.912Z",
+      "event": "grabbed:w2-i14"
+    },
+    {
+      "at": "2026-08-07T06:10:23.557Z",
+      "event": "done",
+      "note": "activated-ability X: cost.x resource power/energy paid+bound as variables.x; add-resource scales"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i14",
+  "claimedAt": "2026-08-07T06:03:35.912Z",
+  "resolution": {
+    "note": "activated-ability X: cost.x resource power/energy paid+bound as variables.x; add-resource scales",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts",
+      "packages/riftbound-engine/src/abilities/effects/add-resource.ts",
+      "packages/riftbound-engine/src/harness/decision.ts",
+      "packages/riftbound-engine/src/harness/game.ts",
+      "packages/riftbound-cards/src/cards/sfd/hextech-anomaly.ts",
+      "packages/riftbound-cards/src/cards/sfd/ancient-henge.ts"
+    ],
+    "at": "2026-08-07T06:10:23.557Z"
+  }
+}

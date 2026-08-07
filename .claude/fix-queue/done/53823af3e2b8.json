@@ -15,27 +15,33 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:37:13.413Z",
-      "event": "grabbed:w7-i13"
+      "at": "2026-08-07T05:18:59.601Z",
+      "event": "grabbed:w6-i6"
     },
     {
-      "at": "2026-08-06T23:40:22.684Z",
+      "at": "2026-08-07T05:19:59.047Z",
+      "event": "released"
+    },
+    {
+      "at": "2026-08-07T05:21:05.205Z",
+      "event": "grabbed:w4-i16"
+    },
+    {
+      "at": "2026-08-07T05:29:27.409Z",
       "event": "done",
-      "note": "reveal+pick now settles through the owner's optional-cost prompt"
+      "note": "Bone Skewer: reveal-hand effect (chooseBattlefield/cardTypes filter/onPicked play, ignore-cost, stun) + explicit card abilities"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i13",
-  "claimedAt": "2026-08-06T23:37:13.413Z",
+  "claimedBy": "w4-i16",
+  "claimedAt": "2026-08-07T05:21:05.205Z",
   "resolution": {
-    "note": "reveal+pick now settles through the owner's optional-cost prompt",
+    "note": "Bone Skewer: reveal-hand effect (chooseBattlefield/cardTypes filter/onPicked play, ignore-cost, stun) + explicit card abilities",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts",
-      "packages/riftbound-engine/src/types/game-state.ts",
-      "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-4559826960eee691.test.ts",
-      "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-e67d700de3299ca6.test.ts"
+      "packages/riftbound-cards/src/cards/unl/bone-skewer.ts",
+      "packages/riftbound-engine/src/abilities/effects/reveal-hand.ts",
+      "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-4559826960eee691.test.ts"
     ],
-    "at": "2026-08-06T23:40:22.684Z"
+    "at": "2026-08-07T05:29:27.409Z"
   }
 }

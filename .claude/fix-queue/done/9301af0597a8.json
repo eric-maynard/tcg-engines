@@ -15,23 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:26:08.987Z",
-      "event": "grabbed:w4-i16"
+      "at": "2026-08-07T05:25:40.802Z",
+      "event": "grabbed:w3-i11"
     },
     {
-      "at": "2026-08-07T00:30:24.360Z",
+      "at": "2026-08-07T05:26:08.716Z",
       "event": "done",
-      "note": "covered by new sfd-111-221 repro: offBoardPlayZone already exempts play/from:hand from board targeting; hand-pick happens at resolution"
+      "note": "stale: play-time targeting exempts play-from-hand (targeting.ts from!=='trash'&&!=='hand'); sfd-111-221 suite green"
     }
   ],
   "status": "done",
-  "claimedBy": "w4-i16",
-  "claimedAt": "2026-08-07T00:26:08.987Z",
+  "claimedBy": "w3-i11",
+  "claimedAt": "2026-08-07T05:25:40.802Z",
   "resolution": {
-    "note": "covered by new sfd-111-221 repro: offBoardPlayZone already exempts play/from:hand from board targeting; hand-pick happens at resolution",
+    "note": "stale: play-time targeting exempts play-from-hand (targeting.ts from!=='trash'&&!=='hand'); sfd-111-221 suite green",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/sfd-111-221.test.ts"
+      "packages/riftbound-engine/src/game-definition/moves/play/targeting.ts"
     ],
-    "at": "2026-08-07T00:30:24.360Z"
+    "at": "2026-08-07T05:26:08.716Z"
   }
 }

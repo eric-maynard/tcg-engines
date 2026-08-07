@@ -14,23 +14,24 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:31:25.506Z",
-      "event": "grabbed:w6-i9"
+      "at": "2026-08-07T05:29:23.144Z",
+      "event": "grabbed:w6-i8"
     },
     {
-      "at": "2026-08-07T00:34:13.281Z",
+      "at": "2026-08-07T05:29:57.705Z",
       "event": "done",
-      "note": "monkey-drive bfExhausted selector now matches #battlefieldRow markup; CSS clipping already fixed upstream"
+      "note": "duplicate: bf-unit clipping already fixed at HEAD (battlefield-row min-height 240px + .bf-units .card max-height:100% + object-fit:contain, 9fb5a76); monkey-drive bfExhausted selector already includes #battlefieldRow"
     }
   ],
   "status": "done",
-  "claimedBy": "w6-i9",
-  "claimedAt": "2026-08-07T00:31:25.506Z",
+  "claimedBy": "w6-i8",
+  "claimedAt": "2026-08-07T05:29:23.144Z",
   "resolution": {
-    "note": "monkey-drive bfExhausted selector now matches #battlefieldRow markup; CSS clipping already fixed upstream",
+    "note": "duplicate: bf-unit clipping already fixed at HEAD (battlefield-row min-height 240px + .bf-units .card max-height:100% + object-fit:contain, 9fb5a76); monkey-drive bfExhausted selector already includes #battlefieldRow",
     "files": [
+      "apps/riftbound-app/public/css/gameplay.css",
       "packages/riftbound-engine/src/testing/playtest/monkey-drive.ts"
     ],
-    "at": "2026-08-07T00:34:13.281Z"
+    "at": "2026-08-07T05:29:57.705Z"
   }
 }

@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-148-221",
+  "title": "'The first time I win a combat each turn, you score 1 point.' never fires",
+  "expected": "parseAbilities on Draven's rulesText yields only [Deflect keyword, {type:'spell', effect:score opponent 1}] — no win-combat trigger; packages/riftbound-cards/src/parser/impl/trigger-patterns.ts:40 only matches /^When I win a combat,/ so 'The first time I win a combat each turn' is unparsed. Additionally, grep shows no non-test emitter of a 'win-combat' GameEvent anywhere in riftbound-engine (only type decls at abilities/game-events.ts:85, trigger-matcher.ts:149, events/dispatcher.ts:97), and __tests__/core-rules/combat-flow-and-resolution.test.ts:216 is a test.failing acknowledging the engine never emits win-combat.",
+  "observed": "player-1 VP went 0->1 (conquer only); no chain item/trigger, log only 'Combat resolved'. Root cause: parseAbilities(rulesText) yields only [Deflect keyword, {type:'spell', effect:{type:'score',player:'opponent',amount:1}}] — no win-combat triggered ability; additionally engine never emits a 'win-combat' event from resolve-full-combat (repo has a test.failing acknowledging this).",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/trigger-patterns.ts:40",
+  "id": "d09a1e6b8cbe",
+  "createdAt": "2026-08-06T23:55:41.369Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.369Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T04:09:59.983Z",
+      "event": "grabbed:w12-i10"
+    },
+    {
+      "at": "2026-08-07T04:14:58.096Z",
+      "event": "done",
+      "note": "parser: 'The first time I win a combat each turn' trigger pattern (first-time-each-turn)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w12-i10",
+  "claimedAt": "2026-08-07T04:09:59.983Z",
+  "resolution": {
+    "note": "parser: 'The first time I win a combat each turn' trigger pattern (first-time-each-turn)",
+    "files": [
+      "packages/riftbound-cards/src/parser/impl/trigger-patterns.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-148-221.test.ts"
+    ],
+    "at": "2026-08-07T04:14:58.096Z"
+  }
+}

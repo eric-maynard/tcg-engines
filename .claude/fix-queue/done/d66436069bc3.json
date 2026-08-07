@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "unl-067-219",
+  "title": "Deathknell trigger target is chosen at resolution instead of when the trigger is finalized onto the chain",
+  "expected": "trigger-target-lock.ts:85-107 deliberately skips early target locking for non-duplicated triggers: it builds a `duplicated` set of same-card/same-effect trigger keys and `if (duplicated.size === 0) return;` (line 105-107), with the comment \"A lone pending trigger is equivalent whether it chooses now or at resolution, and the engine's convention is to prompt at resolution.\" So a single Ruined Rex Deathknell item is left on the chain with no `targets` and no pendingChoice, and the choose-target prompt is only raised by the damage effect at resolution. Rules 337.1/355.5/383.3 require the Pending triggered item to be Finalized (Game Object chosen) before priority passes (340.4), and 383.4.b.2 targeting-effects depend on that timing, so the \"equivalent\" assumption is wrong and the observed behavior is a genuine engine deviation.",
+  "observed": "After Rex died, chain item chain-3 {damage 4, target:{controller:enemy,type:unit}} sat on the chain with no `targets` and pendingChoice=null while passChainPriority was the only move; the choose-target prompt (options = both enemy units) only appeared after priority was passed and the item began resolving",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/trigger-target-lock.ts:105",
+  "id": "d66436069bc3",
+  "createdAt": "2026-08-06T23:55:41.370Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.370Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T04:24:15.846Z",
+      "event": "grabbed:w5-i8"
+    },
+    {
+      "at": "2026-08-07T04:31:57.947Z",
+      "event": "done",
+      "note": "already fixed on HEAD (die triggers lock at finalization); added unl-067-219 regression test"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w5-i8",
+  "claimedAt": "2026-08-07T04:24:15.846Z",
+  "resolution": {
+    "note": "already fixed on HEAD (die triggers lock at finalization); added unl-067-219 regression test",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/unl-067-219.test.ts"
+    ],
+    "at": "2026-08-07T04:31:57.947Z"
+  }
+}

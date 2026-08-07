@@ -15,24 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:06:58.947Z",
-      "event": "grabbed:w12-i6"
+      "at": "2026-08-07T05:19:03.678Z",
+      "event": "grabbed:w8-i11"
     },
     {
-      "at": "2026-08-06T23:09:04.689Z",
+      "at": "2026-08-07T05:19:16.980Z",
       "event": "done",
-      "note": "revealHidden now pays static enemy cost increases (356.1/356.3/356.4)"
+      "note": "already fixed+flipped in commit 8038619 (hidden flip pays cost increases); test file green, no new edits"
     }
   ],
   "status": "done",
-  "claimedBy": "w12-i6",
-  "claimedAt": "2026-08-06T23:06:58.947Z",
+  "claimedBy": "w8-i11",
+  "claimedAt": "2026-08-07T05:19:03.678Z",
   "resolution": {
-    "note": "revealHidden now pays static enemy cost increases (356.1/356.3/356.4)",
+    "note": "already fixed+flipped in commit 8038619 (hidden flip pays cost increases); test file green, no new edits",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/play/hide.ts",
       "packages/riftbound-engine/src/__tests__/cards/rulings/vex-cheerless-61269cd307cc8ca8.test.ts"
     ],
-    "at": "2026-08-06T23:09:04.689Z"
+    "at": "2026-08-07T05:19:16.980Z"
   }
 }

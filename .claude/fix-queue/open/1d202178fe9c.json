@@ -8,7 +8,7 @@
   },
   "id": "1d202178fe9c",
   "createdAt": "2026-08-06T18:35:08.341Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T18:35:08.341Z",
@@ -21,8 +21,26 @@
     {
       "at": "2026-08-07T02:36:01.401Z",
       "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T02:39:18.947Z",
+      "event": "grabbed:w12-i1"
+    },
+    {
+      "at": "2026-08-07T02:46:20.701Z",
+      "event": "failed",
+      "note": "needs play-time target locking for facedown spells PLUS resolution-time legality re-check (359.3.e.5) and linked-effect skip; also conflicts with the sibling green test '(d) P2 may respond...' which passes priority before any target is chosen"
+    },
+    {
+      "at": "2026-08-07T08:14:36.887Z",
+      "event": "requeued"
     }
   ],
   "status": "open",
-  "claimedAt": "2026-08-07T01:49:50.701Z"
+  "claimedAt": "2026-08-07T02:39:18.947Z",
+  "claimedBy": "w12-i1",
+  "resolution": {
+    "note": "needs play-time target locking for facedown spells PLUS resolution-time legality re-check (359.3.e.5) and linked-effect skip; also conflicts with the sibling green test '(d) P2 may respond...' which passes priority before any target is chosen",
+    "at": "2026-08-07T02:46:20.701Z"
+  }
 }

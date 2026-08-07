@@ -15,24 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:26:08.987Z",
-      "event": "grabbed:w4-i16"
+      "at": "2026-08-07T05:26:25.132Z",
+      "event": "grabbed:w3-i12"
     },
     {
-      "at": "2026-08-07T00:30:24.403Z",
+      "at": "2026-08-07T05:26:57.291Z",
       "event": "done",
-      "note": "Monster Harpoon: explicit conditional abilities — 4 damage while you control a facedown card"
+      "note": "already fixed: explicit conditional abilities with count of friendly facedown cards; unl-014-219.test.ts green (2 vs 4, enemy facedown excluded)"
     }
   ],
   "status": "done",
-  "claimedBy": "w4-i16",
-  "claimedAt": "2026-08-07T00:26:08.987Z",
+  "claimedBy": "w3-i12",
+  "claimedAt": "2026-08-07T05:26:25.132Z",
   "resolution": {
-    "note": "Monster Harpoon: explicit conditional abilities — 4 damage while you control a facedown card",
+    "note": "already fixed: explicit conditional abilities with count of friendly facedown cards; unl-014-219.test.ts green (2 vs 4, enemy facedown excluded)",
     "files": [
-      "packages/riftbound-cards/src/cards/unl/monster-harpoon.ts",
-      "packages/riftbound-engine/src/__tests__/cards/unl-014-219.test.ts"
+      "packages/riftbound-cards/src/cards/unl/monster-harpoon.ts"
     ],
-    "at": "2026-08-07T00:30:24.403Z"
+    "at": "2026-08-07T05:26:57.291Z"
   }
 }

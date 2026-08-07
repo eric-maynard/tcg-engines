@@ -1,0 +1,29 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-081-221",
+  "title": "BUG: a cashed-in Gold token must cease to exist (186.1) — it lingers in the trash instead",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-081-221.test.ts",
+    "testName": "BUG: a cashed-in Gold token must cease to exist (186.1) — it lingers in the trash instead"
+  },
+  "id": "2c341fa94443",
+  "createdAt": "2026-08-07T01:08:20.425Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:08:20.425Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T07:42:53.491Z",
+      "event": "done(unclaimed)",
+      "note": "WP3 leaveBoard/LKI: activate-ability kill costs go through removeFromBoard (token ceases after die, 186.1); sfd-081 test already green at HEAD"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "WP3 leaveBoard/LKI: activate-ability kill costs go through removeFromBoard (token ceases after die, 186.1); sfd-081 test already green at HEAD",
+    "at": "2026-08-07T07:42:53.491Z"
+  }
+}

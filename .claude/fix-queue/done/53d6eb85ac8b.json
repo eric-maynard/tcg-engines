@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-114-221",
+  "title": "BUG: parsed friendly side should be a plain friendly unit with no location limit — not a `tag: \\",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-114-221.test.ts",
+    "testName": "BUG: parsed friendly side should be a plain friendly unit with no location limit — not a `tag: \\"
+  },
+  "id": "53d6eb85ac8b",
+  "createdAt": "2026-08-07T01:17:36.535Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:17:36.535Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:00:22.572Z",
+      "event": "grabbed:w1-i17"
+    },
+    {
+      "at": "2026-08-07T06:11:14.690Z",
+      "event": "done",
+      "note": "target-parser: 'unit anywhere' contributes no location limit (landed concurrently); verified passing at HEAD"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i17",
+  "claimedAt": "2026-08-07T06:00:22.572Z",
+  "resolution": {
+    "note": "target-parser: 'unit anywhere' contributes no location limit (landed concurrently); verified passing at HEAD",
+    "files": [
+      "packages/riftbound-cards/src/parser/parsers/target-parser.ts"
+    ],
+    "at": "2026-08-07T06:11:14.690Z"
+  }
+}

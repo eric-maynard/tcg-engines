@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-200-298",
+  "title": "BUG: [mind] on top — the rune is revealed and recycled to the bottom, and P1 draws 1 with no choice to make",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-200-298.test.ts",
+    "testName": "BUG: [mind] on top — the rune is revealed and recycled to the bottom, and P1 draws 1 with no choice to make"
+  },
+  "id": "00b49dac531c",
+  "createdAt": "2026-08-06T17:51:09.036Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.036Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T21:53:38.692Z",
+      "event": "grabbed:w11-i2"
+    },
+    {
+      "at": "2026-08-06T22:10:16.046Z",
+      "event": "failed",
+      "note": "fix is a one-line registration of handle_revealRuneBranch in effects/index.ts (verified: all 6 ogn-200-298 tests pass locally), but reveal-rune-branch.ts + the card def + target-resolver changes it needs are another lane's uncommitted WIP, so it cannot land on a clean HEAD"
+    },
+    {
+      "at": "2026-08-07T08:14:36.889Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedBy": "w11-i2",
+  "claimedAt": "2026-08-06T21:53:38.692Z",
+  "resolution": {
+    "note": "fix is a one-line registration of handle_revealRuneBranch in effects/index.ts (verified: all 6 ogn-200-298 tests pass locally), but reveal-rune-branch.ts + the card def + target-resolver changes it needs are another lane's uncommitted WIP, so it cannot land on a clean HEAD",
+    "at": "2026-08-06T22:10:16.046Z"
+  }
+}

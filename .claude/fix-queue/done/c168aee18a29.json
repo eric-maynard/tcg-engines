@@ -15,26 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:22:14.722Z",
-      "event": "grabbed:w11-i9"
+      "at": "2026-08-07T05:18:59.601Z",
+      "event": "grabbed:w6-i6"
     },
     {
-      "at": "2026-08-06T23:29:05.065Z",
+      "at": "2026-08-07T05:19:59.006Z",
       "event": "done",
-      "note": "carry the triggering move's destination (triggerToZone) across the choose-target prompt so 'move an enemy unit to THAT battlefield' lands at bf1, not base"
+      "note": "already fixed and landed at HEAD; repro test.failing was flipped in an earlier commit"
     }
   ],
   "status": "done",
-  "claimedBy": "w11-i9",
-  "claimedAt": "2026-08-06T23:22:14.722Z",
+  "claimedBy": "w6-i6",
+  "claimedAt": "2026-08-07T05:18:59.601Z",
   "resolution": {
-    "note": "carry the triggering move's destination (triggerToZone) across the choose-target prompt so 'move an enemy unit to THAT battlefield' lands at bf1, not base",
+    "note": "already fixed and landed at HEAD; repro test.failing was flipped in an earlier commit",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/chain/resolve.ts",
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/types/game-state.ts",
       "packages/riftbound-engine/src/__tests__/cards/rulings/irresistible-faefolk-2a1de5fca1bd9d62.test.ts"
     ],
-    "at": "2026-08-06T23:29:05.065Z"
+    "at": "2026-08-07T05:19:59.006Z"
   }
 }

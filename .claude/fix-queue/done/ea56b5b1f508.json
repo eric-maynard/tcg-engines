@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-114-221",
+  "title": "BUG: [Action] in the OPPONENT's showdown — when P2 attacks bf2, P1 (defender) gains Focus after P2 passes and may cast it: Scout (2) and the 2-Might attacker trade before combat",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-114-221.test.ts",
+    "testName": "BUG: [Action] in the OPPONENT's showdown — when P2 attacks bf2, P1 (defender) gains Focus after P2 passes and may cast it: Scout (2) and the 2-Might attacker trade before combat"
+  },
+  "id": "ea56b5b1f508",
+  "createdAt": "2026-08-07T01:17:36.536Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:17:36.536Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:01:53.934Z",
+      "event": "grabbed:w5-i14"
+    },
+    {
+      "at": "2026-08-07T06:06:26.942Z",
+      "event": "done",
+      "note": "run state-based checks after a Showdown closes (rule 323.6) so a battlefield with no units loses its controller"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w5-i14",
+  "claimedAt": "2026-08-07T06:01:53.934Z",
+  "resolution": {
+    "note": "run state-based checks after a Showdown closes (rule 323.6) so a battlefield with no units loses its controller",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/chain/showdown.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-114-221.test.ts"
+    ],
+    "at": "2026-08-07T06:06:26.942Z"
+  }
+}

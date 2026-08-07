@@ -15,23 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:38:59.608Z",
-      "event": "grabbed:w1-i7"
+      "at": "2026-08-07T05:20:09.096Z",
+      "event": "grabbed:w1-i9"
     },
     {
-      "at": "2026-08-06T23:41:24.169Z",
+      "at": "2026-08-07T05:21:18.801Z",
       "event": "done",
-      "note": "already fixed upstream: opponent plays chosen unit free + stunned; test green"
+      "note": "already fixed on HEAD: bone-skewer ruling test file has no test.failing left and all 4 tests pass"
     }
   ],
   "status": "done",
-  "claimedBy": "w1-i7",
-  "claimedAt": "2026-08-06T23:38:59.608Z",
+  "claimedBy": "w1-i9",
+  "claimedAt": "2026-08-07T05:20:09.096Z",
   "resolution": {
-    "note": "already fixed upstream: opponent plays chosen unit free + stunned; test green",
+    "note": "already fixed on HEAD: bone-skewer ruling test file has no test.failing left and all 4 tests pass",
     "files": [
       "packages/riftbound-engine/src/__tests__/cards/rulings/bone-skewer-e67d700de3299ca6.test.ts"
     ],
-    "at": "2026-08-06T23:41:24.169Z"
+    "at": "2026-08-07T05:21:18.801Z"
   }
 }

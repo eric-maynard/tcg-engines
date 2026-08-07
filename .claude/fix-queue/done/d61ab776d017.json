@@ -1,0 +1,38 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 357.1.a — a spell is not offered as playable when the pool is empty even though ready runes could be tapped during the Pay step",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/paying-costs-energy-power.test.ts",
+    "testName": "BUG: 357.1.a — a spell is not offered as playable when the pool is empty even though ready runes could be tapped during the Pay step"
+  },
+  "id": "d61ab776d017",
+  "createdAt": "2026-08-06T20:50:12.438Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.438Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T03:48:34.120Z",
+      "event": "grabbed:w4-i10"
+    },
+    {
+      "at": "2026-08-07T03:54:20.682Z",
+      "event": "done",
+      "note": "getPotentialRuneEnergy counts ready runes again; deductCost taps them at Pay time (357.1.a)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i10",
+  "claimedAt": "2026-08-07T03:48:34.120Z",
+  "resolution": {
+    "note": "getPotentialRuneEnergy counts ready runes again; deductCost taps them at Pay time (357.1.a)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts"
+    ],
+    "at": "2026-08-07T03:54:20.682Z"
+  }
+}

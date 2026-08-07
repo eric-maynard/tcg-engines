@@ -15,17 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:04:30.446Z",
-      "event": "done(unclaimed)",
-      "note": "same fix: ending heal clears __counters.damage"
+      "at": "2026-08-07T05:33:06.392Z",
+      "event": "grabbed:w4-i18"
+    },
+    {
+      "at": "2026-08-07T05:34:07.964Z",
+      "event": "done",
+      "note": "already fixed+flipped at HEAD (e7df263); verified 317.2.b passes on a clean checkout"
     }
   ],
   "status": "done",
+  "claimedBy": "w4-i18",
+  "claimedAt": "2026-08-07T05:33:06.392Z",
   "resolution": {
-    "note": "same fix: ending heal clears __counters.damage",
+    "note": "already fixed+flipped at HEAD (e7df263); verified 317.2.b passes on a clean checkout",
     "files": [
-      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts"
+      "packages/riftbound-engine/src/__tests__/core-rules/turn-structure-phases-and-resources.test.ts"
     ],
-    "at": "2026-08-07T00:04:30.446Z"
+    "at": "2026-08-07T05:34:07.964Z"
   }
 }

@@ -15,30 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:20:21.672Z",
-      "event": "grabbed:w7-i16"
+      "at": "2026-08-07T05:27:07.556Z",
+      "event": "grabbed:w3-i13"
     },
     {
-      "at": "2026-08-07T00:23:57.253Z",
+      "at": "2026-08-07T05:27:28.629Z",
       "event": "done",
-      "note": "emit win-combat for surviving winners + new delayed-trigger effect; Grim Resolve explicit abilities"
+      "note": "already fixed at HEAD (3bb4c4e); repro tests pass, no test.failing remains"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i16",
-  "claimedAt": "2026-08-07T00:20:21.672Z",
+  "claimedBy": "w3-i13",
+  "claimedAt": "2026-08-07T05:27:07.556Z",
   "resolution": {
-    "note": "emit win-combat for surviving winners + new delayed-trigger effect; Grim Resolve explicit abilities",
+    "note": "already fixed at HEAD (3bb4c4e); repro tests pass, no test.failing remains",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/delayed-trigger.ts",
-      "packages/riftbound-engine/src/abilities/effects/index.ts",
-      "packages/riftbound-engine/src/abilities/trigger-runner.ts",
-      "packages/riftbound-engine/src/types/game-state.ts",
-      "packages/riftbound-engine/src/game-definition/moves/combat/resolve-full-combat.ts",
-      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
-      "packages/riftbound-cards/src/cards/unl/grim-resolve.ts",
-      "packages/riftbound-engine/src/__tests__/cards/unl-095-219.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/ogs-007-024.test.ts"
     ],
-    "at": "2026-08-07T00:23:57.253Z"
+    "at": "2026-08-07T05:27:28.629Z"
   }
 }

@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ven-029-166",
+  "title": "Play restriction 'I can't be played on your first, second, or third turns' is not enforced",
+  "expected": "ven.json:1145-1163 defines ven-029-166 (Ol' Poro) with rulesText \"I can't be played on your first, second, or third turns.\" but abilities:[] and parseSuccess:false, so no restriction exists in the card definition. The engine's play gate (riftbound-engine/src/abilities/play-restrictions.ts:69 playIsForbidden) only enforces static restrict-play abilities pulled from the registry; with an empty abilities array nothing forbids the play, and there is no turnsTaken-based self play restriction anywhere in the engine (turnsTaken is only consulted in scoring-rules.ts and a static-abilities condition). playUnit is therefore offered and succeeds on turn 1.",
+  "observed": "On turn 1 main phase `pw moves` listed playUnit for player-1-main-999-ven-029-166 and executing it succeeded: energy 6->4, Ol' Poro (might 4) entered base. Set data ven.json shows parseSuccess:false, abilities:[] for this card, so no restriction exists in the definition.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/data/sets/ven.json:1162",
+  "id": "6d0f7fdf70e5",
+  "createdAt": "2026-08-07T07:42:18.108Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.108Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

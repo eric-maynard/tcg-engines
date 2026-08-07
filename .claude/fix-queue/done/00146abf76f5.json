@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-054-221",
+  "title": "BUG: Quick-Draw ⇒ Reaction (819.1.b): with Jax on the board, P1 may play an Equipment from hand in response on the OPPONENT's turn",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-054-221.test.ts",
+    "testName": "BUG: Quick-Draw ⇒ Reaction (819.1.b): with Jax on the board, P1 may play an Equipment from hand in response on the OPPONENT's turn"
+  },
+  "id": "00146abf76f5",
+  "createdAt": "2026-08-07T00:52:39.830Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:52:39.830Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:34:55.288Z",
+      "event": "grabbed:w7-i8"
+    },
+    {
+      "at": "2026-08-07T05:45:38.494Z",
+      "event": "done",
+      "note": "already fixed at HEAD (play-gear Quick-Draw reaction timing); test green and flipped"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i8",
+  "claimedAt": "2026-08-07T05:34:55.288Z",
+  "resolution": {
+    "note": "already fixed at HEAD (play-gear Quick-Draw reaction timing); test green and flipped",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-054-221.test.ts"
+    ],
+    "at": "2026-08-07T05:45:38.494Z"
+  }
+}

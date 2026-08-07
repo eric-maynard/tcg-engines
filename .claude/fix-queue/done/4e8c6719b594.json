@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-047-221",
+  "title": "BUG: 'When YOU buff me' — an opponent buffing Simian must not ready it (cf. 'when you stun/deal' controller attribution)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-047-221.test.ts",
+    "testName": "BUG: 'When YOU buff me' — an opponent buffing Simian must not ready it (cf. 'when you stun/deal' controller attribution)"
+  },
+  "id": "4e8c6719b594",
+  "createdAt": "2026-08-07T00:57:36.968Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.968Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:47:53.415Z",
+      "event": "grabbed:w6-i11"
+    },
+    {
+      "at": "2026-08-07T05:48:14.026Z",
+      "event": "done",
+      "note": "already fixed at HEAD; card test files pass in clean worktree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w6-i11",
+  "claimedAt": "2026-08-07T05:47:53.415Z",
+  "resolution": {
+    "note": "already fixed at HEAD; card test files pass in clean worktree",
+    "at": "2026-08-07T05:48:14.026Z"
+  }
+}

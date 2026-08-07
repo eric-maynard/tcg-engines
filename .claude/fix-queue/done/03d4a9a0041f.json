@@ -15,24 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:15:46.562Z",
-      "event": "grabbed:w1-i9"
+      "at": "2026-08-07T05:24:32.437Z",
+      "event": "grabbed:w6-i7"
     },
     {
-      "at": "2026-08-07T00:18:44.601Z",
+      "at": "2026-08-07T05:29:01.773Z",
       "event": "done",
-      "note": "equipCard gains an enumerator so [Equip] is a player-facing action (rule 579 honoured)"
+      "note": "already fixed at HEAD: equipCard has an enumerator (player-facing equip action); verified by sfd-068-221 enumerated-move test"
     }
   ],
   "status": "done",
-  "claimedBy": "w1-i9",
-  "claimedAt": "2026-08-07T00:15:46.562Z",
+  "claimedBy": "w6-i7",
+  "claimedAt": "2026-08-07T05:24:32.437Z",
   "resolution": {
-    "note": "equipCard gains an enumerator so [Equip] is a player-facing action (rule 579 honoured)",
+    "note": "already fixed at HEAD: equipCard has an enumerator (player-facing equip action); verified by sfd-068-221 enumerated-move test",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/equipment.ts",
-      "packages/riftbound-engine/src/__tests__/cards/sfd-068-221.test.ts"
+      "packages/riftbound-engine/src/game-definition/moves/equipment.ts"
     ],
-    "at": "2026-08-07T00:18:44.601Z"
+    "at": "2026-08-07T05:29:01.773Z"
   }
 }

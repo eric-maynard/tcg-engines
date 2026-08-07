@@ -15,18 +15,24 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-06T21:54:59.718Z",
-      "event": "done(unclaimed)",
-      "note": "fixed by reveal-rune-branch effect (domain-gated branch + rune recycled to bottom)"
+      "at": "2026-08-07T05:22:49.219Z",
+      "event": "grabbed:w3-i9"
+    },
+    {
+      "at": "2026-08-07T05:23:34.998Z",
+      "event": "done",
+      "note": "already fixed at HEAD: reveal-rune-branch handler reveals+recycles top rune and picks branch by domain; ogn-200-298 tests 6/6 pass"
     }
   ],
   "status": "done",
+  "claimedBy": "w3-i9",
+  "claimedAt": "2026-08-07T05:22:49.219Z",
   "resolution": {
-    "note": "fixed by reveal-rune-branch effect (domain-gated branch + rune recycled to bottom)",
+    "note": "already fixed at HEAD: reveal-rune-branch handler reveals+recycles top rune and picks branch by domain; ogn-200-298 tests 6/6 pass",
     "files": [
       "packages/riftbound-engine/src/abilities/effects/reveal-rune-branch.ts",
       "packages/riftbound-cards/src/cards/ogn/twisted-fate-gambler.ts"
     ],
-    "at": "2026-08-06T21:54:59.718Z"
+    "at": "2026-08-07T05:23:34.998Z"
   }
 }

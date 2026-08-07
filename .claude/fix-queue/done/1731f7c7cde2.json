@@ -1,0 +1,40 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-079-221",
+  "title": "BUG: with a ready legend the optional cost is offered; paying it exhausts the legend on top of 4 energy + [mind] and puts the play trigger on the chain",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-079-221.test.ts",
+    "testName": "BUG: with a ready legend the optional cost is offered; paying it exhausts the legend on top of 4 energy + [mind] and puts the play trigger on the chain"
+  },
+  "id": "1731f7c7cde2",
+  "createdAt": "2026-08-07T01:04:24.773Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:04:24.773Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:50:36.981Z",
+      "event": "grabbed:w12-i15"
+    },
+    {
+      "at": "2026-08-07T05:54:30.662Z",
+      "event": "done",
+      "note": "explicit abilities for Bard + legend-exhaust optional play cost (condition/enumerator/reducer) in play-unit"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w12-i15",
+  "claimedAt": "2026-08-07T05:50:36.981Z",
+  "resolution": {
+    "note": "explicit abilities for Bard + legend-exhaust optional play cost (condition/enumerator/reducer) in play-unit",
+    "files": [
+      "packages/riftbound-cards/src/cards/sfd/bard-mercurial.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-079-221.test.ts"
+    ],
+    "at": "2026-08-07T05:54:30.662Z"
+  }
+}

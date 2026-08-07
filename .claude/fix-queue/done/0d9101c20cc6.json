@@ -1,0 +1,44 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-074-221",
+  "title": "BUG: killing an attached Equipment must also clear it from the unit's attachments (719.2) — a stale link remains",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-074-221.test.ts",
+    "testName": "BUG: killing an attached Equipment must also clear it from the unit's attachments (719.2) — a stale link remains"
+  },
+  "id": "0d9101c20cc6",
+  "createdAt": "2026-08-07T01:14:13.024Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.024Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:55:49.443Z",
+      "event": "grabbed:w11-i15"
+    },
+    {
+      "at": "2026-08-07T06:08:40.399Z",
+      "event": "failed",
+      "note": "concurrent lane already added detachAllOnLeave in abilities/effects/kill.ts (uncommitted); verified their fix passes — not landing another lane's in-flight file"
+    },
+    {
+      "at": "2026-08-07T08:14:36.891Z",
+      "event": "requeued"
+    },
+    {
+      "at": "2026-08-07T08:18:37.029Z",
+      "event": "done(unclaimed)",
+      "note": "WP3 leaveBoard/LKI (b7d20e7..a181534): death choke point + LKI/damage-store landed; this test is green at HEAD"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i15",
+  "claimedAt": "2026-08-07T05:55:49.443Z",
+  "resolution": {
+    "note": "WP3 leaveBoard/LKI (b7d20e7..a181534): death choke point + LKI/damage-store landed; this test is green at HEAD",
+    "at": "2026-08-07T08:18:37.029Z"
+  }
+}

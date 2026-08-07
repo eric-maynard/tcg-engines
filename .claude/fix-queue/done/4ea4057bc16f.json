@@ -1,0 +1,50 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 03861cdfaacd8d59 — Reflection copied into 'Shipyard Skulker' (3 Might) by Shady Spectacles must STILL have Temporary and still die at P1's next Beginning Phase; engine cannot equip the Spectacles",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/shady-spectacles-03861cdfaacd8d59.test.ts",
+    "testName": "BUG: ruling 03861cdfaacd8d59 — Reflection copied into 'Shipyard Skulker' (3 Might) by Shady Spectacles must STILL have Temporary and still die at P1's next Beginning Phase; engine cannot equip the Spectacles"
+  },
+  "id": "4ea4057bc16f",
+  "createdAt": "2026-08-06T20:06:58.324Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:06:58.324Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-07T05:22:49.217Z",
+      "event": "grabbed:w3-i9"
+    },
+    {
+      "at": "2026-08-07T05:23:35.038Z",
+      "event": "released"
+    },
+    {
+      "at": "2026-08-07T05:23:37.649Z",
+      "event": "grabbed:w3-i9"
+    },
+    {
+      "at": "2026-08-07T05:23:55.162Z",
+      "event": "released"
+    },
+    {
+      "at": "2026-08-07T05:24:03.875Z",
+      "event": "grabbed:w2-i10"
+    },
+    {
+      "at": "2026-08-07T05:24:50.730Z",
+      "event": "done",
+      "note": "already passing on current tree (fixed by a concurrent lane); verified by running the repro file"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i10",
+  "claimedAt": "2026-08-07T05:24:03.875Z",
+  "resolution": {
+    "note": "already passing on current tree (fixed by a concurrent lane); verified by running the repro file",
+    "at": "2026-08-07T05:24:50.730Z"
+  }
+}

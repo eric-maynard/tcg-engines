@@ -8,12 +8,31 @@
   "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts:1544",
   "id": "14541fabdd24",
   "createdAt": "2026-08-06T23:55:41.369Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T23:55:41.369Z",
       "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T04:08:23.988Z",
+      "event": "grabbed:w12-i9"
+    },
+    {
+      "at": "2026-08-07T04:09:44.914Z",
+      "event": "failed",
+      "note": "needs engine-wide capability: mode/target selection happens only at resolution (effects/choice.ts choose-mode); moving it to play time (rule 820.2/355 make-relevant-choices) requires a mode param on playSpell plus rework of every modal card's resolution path — too broad for a scoped fix"
+    },
+    {
+      "at": "2026-08-07T08:14:36.883Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w12-i9",
+  "claimedAt": "2026-08-07T04:08:23.988Z",
+  "resolution": {
+    "note": "needs engine-wide capability: mode/target selection happens only at resolution (effects/choice.ts choose-mode); moving it to play time (rule 820.2/355 make-relevant-choices) requires a mode param on playSpell plus rework of every modal card's resolution path — too broad for a scoped fix",
+    "at": "2026-08-07T04:09:44.914Z"
+  }
 }

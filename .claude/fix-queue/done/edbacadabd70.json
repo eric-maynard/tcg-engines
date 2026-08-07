@@ -15,23 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T01:41:30.297Z",
-      "event": "grabbed:w10-i19"
+      "at": "2026-08-07T05:24:52.093Z",
+      "event": "grabbed:w11-i7"
     },
     {
-      "at": "2026-08-07T01:41:44.249Z",
+      "at": "2026-08-07T05:25:02.051Z",
       "event": "done",
-      "note": "already green in tree; verified ogn-248-298 test file passes (6 spell abilities folded)"
+      "note": "already fixed on HEAD; repro tests green (11 pass)"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i19",
-  "claimedAt": "2026-08-07T01:41:30.297Z",
+  "claimedBy": "w11-i7",
+  "claimedAt": "2026-08-07T05:24:52.093Z",
   "resolution": {
-    "note": "already green in tree; verified ogn-248-298 test file passes (6 spell abilities folded)",
+    "note": "already fixed on HEAD; repro tests green (11 pass)",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/ogn-248-298.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/unl-120-219.test.ts"
     ],
-    "at": "2026-08-07T01:41:44.249Z"
+    "at": "2026-08-07T05:25:02.051Z"
   }
 }

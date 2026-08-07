@@ -15,25 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:36:12.722Z",
-      "event": "grabbed:w5-i7"
+      "at": "2026-08-07T05:20:30.113Z",
+      "event": "grabbed:w6-i6"
     },
     {
-      "at": "2026-08-06T23:41:19.621Z",
+      "at": "2026-08-07T05:20:55.690Z",
       "event": "done",
-      "note": "counter 'unless controller pays N': opt-in ransom prompt to the target's controller (rule 158.1), earmarked energy excluded"
+      "note": "already fixed and landed at HEAD; repro test.failing flipped in an earlier commit"
     }
   ],
   "status": "done",
-  "claimedBy": "w5-i7",
-  "claimedAt": "2026-08-06T23:36:12.722Z",
+  "claimedBy": "w6-i6",
+  "claimedAt": "2026-08-07T05:20:30.113Z",
   "resolution": {
-    "note": "counter 'unless controller pays N': opt-in ransom prompt to the target's controller (rule 158.1), earmarked energy excluded",
+    "note": "already fixed and landed at HEAD; repro test.failing flipped in an earlier commit",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/counter.ts",
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/types/game-state.ts"
+      ".claude/fix-queue/README.md"
     ],
-    "at": "2026-08-06T23:41:19.621Z"
+    "at": "2026-08-07T05:20:55.690Z"
   }
 }

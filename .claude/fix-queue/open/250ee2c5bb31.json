@@ -9,12 +9,31 @@
   },
   "id": "250ee2c5bb31",
   "createdAt": "2026-08-07T01:04:24.760Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:04:24.760Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:49:38.388Z",
+      "event": "grabbed:w11-i14"
+    },
+    {
+      "at": "2026-08-07T05:55:29.305Z",
+      "event": "failed",
+      "note": "duplicate: another lane already implemented the same rule-312.2 hasChainPriority gate (chain-state.ts + play-spell.ts) in the working tree and flipped this test; landing my copy would clobber their in-flight play-spell edits"
+    },
+    {
+      "at": "2026-08-07T08:14:36.893Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w11-i14",
+  "claimedAt": "2026-08-07T05:49:38.388Z",
+  "resolution": {
+    "note": "duplicate: another lane already implemented the same rule-312.2 hasChainPriority gate (chain-state.ts + play-spell.ts) in the working tree and flipped this test; landing my copy would clobber their in-flight play-spell edits",
+    "at": "2026-08-07T05:55:29.305Z"
+  }
 }

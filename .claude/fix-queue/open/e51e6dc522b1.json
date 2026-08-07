@@ -8,12 +8,31 @@
   },
   "id": "e51e6dc522b1",
   "createdAt": "2026-08-06T20:11:47.425Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:11:47.425Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:20:09.097Z",
+      "event": "grabbed:w1-i9"
+    },
+    {
+      "at": "2026-08-07T05:21:18.842Z",
+      "event": "failed",
+      "note": "needs a new interactive combat damage-assignment subsystem: resolveFullCombat must suspend into a distribute pendingChoice for the attacker and then the defender, carry combat context across resume, and validate 465.2.c.3 lethal-ordering (reject {A1:1,A2:1}); combat is a single-pass reducer today. Also high blast radius: plain settle() stops at unanswered prompts, so a mandatory assignment prompt would break every existing multi-unit combat test that does not pass a policy."
+    },
+    {
+      "at": "2026-08-07T08:14:36.892Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w1-i9",
+  "claimedAt": "2026-08-07T05:20:09.097Z",
+  "resolution": {
+    "note": "needs a new interactive combat damage-assignment subsystem: resolveFullCombat must suspend into a distribute pendingChoice for the attacker and then the defender, carry combat context across resume, and validate 465.2.c.3 lethal-ordering (reject {A1:1,A2:1}); combat is a single-pass reducer today. Also high blast radius: plain settle() stops at unanswered prompts, so a mandatory assignment prompt would break every existing multi-unit combat test that does not pass a policy.",
+    "at": "2026-08-07T05:21:18.842Z"
+  }
 }

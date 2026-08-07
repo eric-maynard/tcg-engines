@@ -15,23 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:31:25.505Z",
-      "event": "grabbed:w6-i9"
+      "at": "2026-08-07T05:27:58.095Z",
+      "event": "grabbed:w3-i14"
     },
     {
-      "at": "2026-08-07T00:34:13.241Z",
+      "at": "2026-08-07T05:29:01.772Z",
       "event": "done",
-      "note": "verified: choose-mode now raises choose-target for 'Buff a friendly unit'; added regression test"
+      "note": "verified fixed (liftModalTarget prompts for modal buff target); added already-buffed regression"
     }
   ],
   "status": "done",
-  "claimedBy": "w6-i9",
-  "claimedAt": "2026-08-07T00:31:25.505Z",
+  "claimedBy": "w3-i14",
+  "claimedAt": "2026-08-07T05:27:58.095Z",
   "resolution": {
-    "note": "verified: choose-mode now raises choose-target for 'Buff a friendly unit'; added regression test",
+    "note": "verified fixed (liftModalTarget prompts for modal buff target); added already-buffed regression",
     "files": [
-      "packages/riftbound-engine/src/__tests__/cards/sfd-049-221.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/sfd-049-221-modal-targets.test.ts"
     ],
-    "at": "2026-08-07T00:34:13.241Z"
+    "at": "2026-08-07T05:29:01.772Z"
   }
 }

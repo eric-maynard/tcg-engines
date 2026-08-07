@@ -8,12 +8,31 @@
   },
   "id": "1657d6919770",
   "createdAt": "2026-08-06T20:50:12.432Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.432Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:31:52.091Z",
+      "event": "grabbed:w8-i15"
+    },
+    {
+      "at": "2026-08-07T05:32:55.507Z",
+      "event": "failed",
+      "note": "needs an absent engine capability: match-level (Bo3) state machine across games — per-match used-battlefield tracking, game reset, sideboarding. Out of scope for a single-move fix"
+    },
+    {
+      "at": "2026-08-07T08:14:36.890Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w8-i15",
+  "claimedAt": "2026-08-07T05:31:52.091Z",
+  "resolution": {
+    "note": "needs an absent engine capability: match-level (Bo3) state machine across games — per-match used-battlefield tracking, game reset, sideboarding. Out of scope for a single-move fix",
+    "at": "2026-08-07T05:32:55.507Z"
+  }
 }

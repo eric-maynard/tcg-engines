@@ -15,26 +15,24 @@
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T22:20:23.841Z",
-      "event": "grabbed:w9-i4"
+      "at": "2026-08-07T05:12:59.478Z",
+      "event": "grabbed:w5-i11"
     },
     {
-      "at": "2026-08-06T22:23:15.397Z",
+      "at": "2026-08-07T05:16:13.711Z",
       "event": "done",
-      "note": "play-from-trash now offers [Accelerate]; rainbow power pays the Fury pip"
+      "note": "offer [Accelerate] opt-in after an effect plays a unit from the trash (rainbow pip now payable)"
     }
   ],
   "status": "done",
-  "claimedBy": "w9-i4",
-  "claimedAt": "2026-08-06T22:20:23.841Z",
+  "claimedBy": "w5-i11",
+  "claimedAt": "2026-08-07T05:12:59.478Z",
   "resolution": {
-    "note": "play-from-trash now offers [Accelerate]; rainbow power pays the Fury pip",
+    "note": "offer [Accelerate] opt-in after an effect plays a unit from the trash (rainbow pip now payable)",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
       "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/types/game-state.ts",
       "packages/riftbound-engine/src/__tests__/cards/interactions/matron-rearguard-accelerate-ezreal.test.ts"
     ],
-    "at": "2026-08-06T22:23:15.397Z"
+    "at": "2026-08-07T05:16:13.711Z"
   }
 }

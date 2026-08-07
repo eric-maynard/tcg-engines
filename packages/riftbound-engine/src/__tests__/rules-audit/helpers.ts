@@ -773,16 +773,32 @@ export function runPhaseHook(
       string,
       {
         turn?: {
-          phases?: Record<string, { onBegin?: unknown; onEnd?: unknown }>;
+          phases?: Record<
+            string,
+            {
+              onBegin?: unknown;
+              onEnd?: unknown;
+              steps?: Record<string, { order: number; onBegin?: unknown; onEnd?: unknown }>;
+            }
+          >;
         };
       }
     >;
   };
   const phaseDef = flowDef?.gameSegments?.mainGame?.turn?.phases?.[phase];
   if (phaseDef) {
-    const hook = hookName === "onBegin" ? phaseDef.onBegin : phaseDef.onEnd;
-    if (hook) {
-      fmInternal.executeHook(hook);
+    // A phase whose body lives in ordered steps (the Beginning Phase) still runs
+    // as one unit here: the phase hook, then every step hook in `order`.
+    const stepHooks = Object.values(phaseDef.steps ?? {})
+      .toSorted((x, y) => x.order - y.order)
+      .map((step) => (hookName === "onBegin" ? step.onBegin : step.onEnd));
+    for (const hook of [
+      hookName === "onBegin" ? phaseDef.onBegin : phaseDef.onEnd,
+      ...stepHooks,
+    ]) {
+      if (hook) {
+        fmInternal.executeHook(hook);
+      }
     }
   }
   fmInternal.isTransitioning = false;

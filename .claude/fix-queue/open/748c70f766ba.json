@@ -8,12 +8,31 @@
   },
   "id": "748c70f766ba",
   "createdAt": "2026-08-06T20:50:12.432Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.432Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:31:52.091Z",
+      "event": "grabbed:w8-i15"
+    },
+    {
+      "at": "2026-08-07T05:32:55.467Z",
+      "event": "failed",
+      "note": "rule 485.5 (random duel battlefield) directly contradicts 3 passing tests in the same file (1169/1188/1200) that require the named battlefieldId to be honoured exactly; engine has no duel-vs-match mode field to separate 485.5 from 486.5"
+    },
+    {
+      "at": "2026-08-07T08:14:36.885Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w8-i15",
+  "claimedAt": "2026-08-07T05:31:52.090Z",
+  "resolution": {
+    "note": "rule 485.5 (random duel battlefield) directly contradicts 3 passing tests in the same file (1169/1188/1200) that require the named battlefieldId to be honoured exactly; engine has no duel-vs-match mode field to separate 485.5 from 486.5",
+    "at": "2026-08-07T05:32:55.467Z"
+  }
 }

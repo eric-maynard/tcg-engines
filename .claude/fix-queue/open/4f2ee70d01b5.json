@@ -8,12 +8,31 @@
   },
   "id": "4f2ee70d01b5",
   "createdAt": "2026-08-06T20:50:12.434Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.434Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:33:06.393Z",
+      "event": "grabbed:w4-i18"
+    },
+    {
+      "at": "2026-08-07T05:34:08.051Z",
+      "event": "failed",
+      "note": "another lane holds uncommitted in-flight edits to riftbound-flow.ts + this test file (already flipped 316.3 there); fixing it here would force their WIP to ride along in land-patch"
+    },
+    {
+      "at": "2026-08-07T08:14:36.893Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w4-i18",
+  "claimedAt": "2026-08-07T05:33:06.393Z",
+  "resolution": {
+    "note": "another lane holds uncommitted in-flight edits to riftbound-flow.ts + this test file (already flipped 316.3 there); fixing it here would force their WIP to ride along in land-patch",
+    "at": "2026-08-07T05:34:08.051Z"
+  }
 }

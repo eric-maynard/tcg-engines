@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-058-221",
+  "title": "BUG: playing Ornn from the Champion Zone is still 'playing me' (355.10.a.1) — the look trigger must fire",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-058-221.test.ts",
+    "testName": "BUG: playing Ornn from the Champion Zone is still 'playing me' (355.10.a.1) — the look trigger must fire"
+  },
+  "id": "70bff1a052e2",
+  "createdAt": "2026-08-07T01:04:24.770Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:04:24.770Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:50:36.981Z",
+      "event": "grabbed:w12-i15"
+    },
+    {
+      "at": "2026-08-07T05:54:30.741Z",
+      "event": "done",
+      "note": "already fixed on HEAD by an earlier lane; verified green in clean worktree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w12-i15",
+  "claimedAt": "2026-08-07T05:50:36.981Z",
+  "resolution": {
+    "note": "already fixed on HEAD by an earlier lane; verified green in clean worktree",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-058-221.test.ts"
+    ],
+    "at": "2026-08-07T05:54:30.741Z"
+  }
+}

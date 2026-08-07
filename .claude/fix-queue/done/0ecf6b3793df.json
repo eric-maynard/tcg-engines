@@ -15,24 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:58:11.663Z",
-      "event": "grabbed:w4-i14"
+      "at": "2026-08-07T05:17:43.471Z",
+      "event": "grabbed:w4-i15"
     },
     {
-      "at": "2026-08-07T00:01:51.297Z",
+      "at": "2026-08-07T05:17:55.847Z",
       "event": "done",
-      "note": "rule 372: prompt the dying unit's controller to order N runtime die-replacements (Tactical Retreat vs Smite), not just board+bound"
+      "note": "already fixed+flipped upstream; test green, no test.failing remains"
     }
   ],
   "status": "done",
-  "claimedBy": "w4-i14",
-  "claimedAt": "2026-08-06T23:58:11.663Z",
+  "claimedBy": "w4-i15",
+  "claimedAt": "2026-08-07T05:17:43.471Z",
   "resolution": {
-    "note": "rule 372: prompt the dying unit's controller to order N runtime die-replacements (Tactical Retreat vs Smite), not just board+bound",
+    "note": "already fixed+flipped upstream; test green, no test.failing remains",
     "files": [
-      "packages/riftbound-engine/src/cleanup/state-based-checks.ts",
-      "packages/riftbound-engine/src/__tests__/cards/rulings/smite-0167a87fe08432da.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/"
     ],
-    "at": "2026-08-07T00:01:51.297Z"
+    "at": "2026-08-07T05:17:55.847Z"
   }
 }

@@ -15,25 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:17:34.187Z",
-      "event": "grabbed:w2-i6"
+      "at": "2026-08-07T05:18:08.891Z",
+      "event": "grabbed:w9-i9"
     },
     {
-      "at": "2026-08-06T23:21:37.339Z",
+      "at": "2026-08-07T05:19:03.351Z",
       "event": "done",
-      "note": "Call to Battle: explicit move ability with to:{battlefield:'controlled'}; play-spell only offers units that have a destination other than their current zone (355.4.a)"
+      "note": "already green at HEAD (fixed by commit 8a57a43 / afb09db); verified in a clean worktree, no new edits needed"
     }
   ],
   "status": "done",
-  "claimedBy": "w2-i6",
-  "claimedAt": "2026-08-06T23:17:34.187Z",
+  "claimedBy": "w9-i9",
+  "claimedAt": "2026-08-07T05:18:08.891Z",
   "resolution": {
-    "note": "Call to Battle: explicit move ability with to:{battlefield:'controlled'}; play-spell only offers units that have a destination other than their current zone (355.4.a)",
+    "note": "already green at HEAD (fixed by commit 8a57a43 / afb09db); verified in a clean worktree, no new edits needed",
     "files": [
-      "packages/riftbound-cards/src/cards/unl/call-to-battle.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/targeting.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts"
+      "packages/riftbound-engine/src/__tests__/cards/sfd-050-221.test.ts"
     ],
-    "at": "2026-08-06T23:21:37.339Z"
+    "at": "2026-08-07T05:19:03.351Z"
   }
 }

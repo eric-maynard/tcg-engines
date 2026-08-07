@@ -1,0 +1,39 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-189-298",
+  "title": "BUG: moved twice this turn (gank + Ride the Wind) → Kayn doesn't take spell damage",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-189-298.test.ts",
+    "testName": "BUG: moved twice this turn (gank + Ride the Wind) → Kayn doesn't take spell damage"
+  },
+  "id": "ffd00589afe5",
+  "createdAt": "2026-08-06T17:51:09.021Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T17:51:09.021Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-06T21:08:31.619Z",
+      "event": "grabbed:w4-i2"
+    },
+    {
+      "at": "2026-08-06T21:18:13.047Z",
+      "event": "failed",
+      "note": "needs a no-damage restriction check in effects/damage.ts, which another lane is concurrently rewriting (depends on its uncommitted abilities/bonus-damage.ts) — cannot land in isolation"
+    },
+    {
+      "at": "2026-08-07T08:14:36.887Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedBy": "w4-i2",
+  "claimedAt": "2026-08-06T21:08:31.619Z",
+  "resolution": {
+    "note": "needs a no-damage restriction check in effects/damage.ts, which another lane is concurrently rewriting (depends on its uncommitted abilities/bonus-damage.ts) — cannot land in isolation",
+    "at": "2026-08-06T21:18:13.047Z"
+  }
+}

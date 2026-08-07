@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-084-221",
+  "title": "BUG: parsed ability shape — optional play-self trigger: kill friendly gear, THEN a linked 'ignore energy cost ≤7 gear from hand this turn' rider",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-084-221.test.ts",
+    "testName": "BUG: parsed ability shape — optional play-self trigger: kill friendly gear, THEN a linked 'ignore energy cost ≤7 gear from hand this turn' rider"
+  },
+  "id": "943e040c2146",
+  "createdAt": "2026-08-07T01:14:13.016Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:14:13.016Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:04:42.650Z",
+      "event": "done(unclaimed)",
+      "note": "Jayce: explicit abilities install a one-shot play-cost energy-waiver permission; play-gear reads/consumes it and enumerates via canAffordCard"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "Jayce: explicit abilities install a one-shot play-cost energy-waiver permission; play-gear reads/consumes it and enumerates via canAffordCard",
+    "files": [
+      "packages/riftbound-cards/src/cards/sfd/jayce-man-of-progress.ts",
+      "packages/riftbound-engine/src/game-definition/moves/play/play-gear.ts",
+      "packages/riftbound-engine/src/harness/game.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-084-221.test.ts"
+    ],
+    "at": "2026-08-07T06:04:42.650Z"
+  }
+}

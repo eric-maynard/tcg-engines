@@ -8,12 +8,31 @@
   },
   "id": "fbf0adc71237",
   "createdAt": "2026-08-06T18:35:08.344Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T18:35:08.344Z",
       "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-07T05:14:36.512Z",
+      "event": "grabbed:w3-i8"
+    },
+    {
+      "at": "2026-08-07T05:19:48.298Z",
+      "event": "failed",
+      "note": "Ezreal optional-cost discount lives in the same in-flight cost.ts/pending-choice.ts set (another lane); landing that subset regresses a core-rules rune assertion"
+    },
+    {
+      "at": "2026-08-07T08:14:36.895Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w3-i8",
+  "claimedAt": "2026-08-07T05:14:36.512Z",
+  "resolution": {
+    "note": "Ezreal optional-cost discount lives in the same in-flight cost.ts/pending-choice.ts set (another lane); landing that subset regresses a core-rules rune assertion",
+    "at": "2026-08-07T05:19:48.298Z"
+  }
 }

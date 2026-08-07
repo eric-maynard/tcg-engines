@@ -15,25 +15,32 @@
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T21:45:40.595Z",
-      "event": "grabbed:w2-i1"
+      "at": "2026-08-07T01:50:25.272Z",
+      "event": "grabbed:w4-i24"
     },
     {
-      "at": "2026-08-06T21:49:45.450Z",
+      "at": "2026-08-07T02:36:01.401Z",
+      "event": "reaped"
+    },
+    {
+      "at": "2026-08-07T05:08:41.073Z",
+      "event": "grabbed:w4-i13"
+    },
+    {
+      "at": "2026-08-07T05:09:17.133Z",
       "event": "done",
-      "note": "spell mandatory 'kill a friendly X' additional cost: getOptionalPlayCost reads spell-ability additionalCost.kill; playSpell gates/enumerates/pays it via the kill effect"
+      "note": "already fixed at HEAD e27f61c; repro tests flipped and green on a clean checkout — stale queue entry"
     }
   ],
   "status": "done",
-  "claimedBy": "w2-i1",
-  "claimedAt": "2026-08-06T21:45:40.595Z",
+  "claimedAt": "2026-08-07T05:08:41.073Z",
+  "claimedBy": "w4-i13",
   "resolution": {
-    "note": "spell mandatory 'kill a friendly X' additional cost: getOptionalPlayCost reads spell-ability additionalCost.kill; playSpell gates/enumerates/pays it via the kill effect",
+    "note": "already fixed at HEAD e27f61c; repro tests flipped and green on a clean checkout — stale queue entry",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts",
-      "packages/riftbound-engine/src/types/moves.ts"
+      "packages/riftbound-engine/src/__tests__/cards/interactions/temporal-portal-sacrifice-repeat.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/interactions/bullet-time-vex-gold-x-payment.test.ts"
     ],
-    "at": "2026-08-06T21:49:45.450Z"
+    "at": "2026-08-07T05:09:17.133Z"
   }
 }

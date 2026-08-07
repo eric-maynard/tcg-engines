@@ -9,12 +9,31 @@
   },
   "id": "d4710c1747d1",
   "createdAt": "2026-08-07T01:27:56.040Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:27:56.040Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:09:56.293Z",
+      "event": "grabbed:w3-i19"
+    },
+    {
+      "at": "2026-08-07T06:14:23.978Z",
+      "event": "failed",
+      "note": "Needs a new engine capability: no 'reveal' replacement is ever consulted. Requires (a) handle_reveal (effects/reveal.ts) to scan board cards for abilities {type:'replacement',replaces:'reveal'} whose CONTROLLER is the deck's revealer (ctx.playerId, or each opponent for from=='opponent-decks'), (b) a per-invocation 'already looked' marker carried on the re-entered effect object so two Hatchlings prompt twice and one prompts once, (c) a pendingChoice {type:'confirm'} (yes/no; effect=recycle top card to bottom, then=the original reveal effect re-run) so the look is private+optional and the reveal sees the post-recycle top. 5 test.failing cases; too large and too cross-cutting for one lane without breaking Blind Fury / Apprentice Smith / Dazzling Aurora reveal paths."
+    },
+    {
+      "at": "2026-08-07T08:14:36.894Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w3-i19",
+  "claimedAt": "2026-08-07T06:09:56.293Z",
+  "resolution": {
+    "note": "Needs a new engine capability: no 'reveal' replacement is ever consulted. Requires (a) handle_reveal (effects/reveal.ts) to scan board cards for abilities {type:'replacement',replaces:'reveal'} whose CONTROLLER is the deck's revealer (ctx.playerId, or each opponent for from=='opponent-decks'), (b) a per-invocation 'already looked' marker carried on the re-entered effect object so two Hatchlings prompt twice and one prompts once, (c) a pendingChoice {type:'confirm'} (yes/no; effect=recycle top card to bottom, then=the original reveal effect re-run) so the look is private+optional and the reveal sees the post-recycle top. 5 test.failing cases; too large and too cross-cutting for one lane without breaking Blind Fury / Apprentice Smith / Dazzling Aurora reveal paths.",
+    "at": "2026-08-07T06:14:23.978Z"
+  }
 }

@@ -15,23 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:43:46.152Z",
-      "event": "grabbed:w12-i9"
+      "at": "2026-08-07T05:32:41.019Z",
+      "event": "grabbed:w3-i15"
     },
     {
-      "at": "2026-08-07T00:45:18.040Z",
+      "at": "2026-08-07T05:33:45.386Z",
       "event": "done",
-      "note": "already fixed: BATTLEFIELD_COUNT_BY_MODE requires 3 for duel/match; repro test verified passing"
+      "note": "already fixed at HEAD: BATTLEFIELD_COUNT_BY_MODE duel/match=3 so a 2-battlefield deck gets WRONG_BATTLEFIELD_COUNT"
     }
   ],
   "status": "done",
-  "claimedBy": "w12-i9",
-  "claimedAt": "2026-08-07T00:43:46.152Z",
+  "claimedBy": "w3-i15",
+  "claimedAt": "2026-08-07T05:32:41.019Z",
   "resolution": {
-    "note": "already fixed: BATTLEFIELD_COUNT_BY_MODE requires 3 for duel/match; repro test verified passing",
+    "note": "already fixed at HEAD: BATTLEFIELD_COUNT_BY_MODE duel/match=3 so a 2-battlefield deck gets WRONG_BATTLEFIELD_COUNT",
     "files": [
       "packages/riftbound-engine/src/validators/deck-validators.ts"
     ],
-    "at": "2026-08-07T00:45:18.040Z"
+    "at": "2026-08-07T05:33:45.386Z"
   }
 }

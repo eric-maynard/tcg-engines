@@ -8,12 +8,31 @@
   },
   "id": "d61ab776d017",
   "createdAt": "2026-08-06T20:50:12.438Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.438Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:35:02.082Z",
+      "event": "grabbed:w4-i19"
+    },
+    {
+      "at": "2026-08-07T05:37:42.818Z",
+      "event": "failed",
+      "note": "another lane has an in-flight uncommitted fix for this exact test (play-spell.ts/cost.ts ready-rune payability); not duplicating"
+    },
+    {
+      "at": "2026-08-07T08:14:36.890Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w4-i19",
+  "claimedAt": "2026-08-07T05:35:02.082Z",
+  "resolution": {
+    "note": "another lane has an in-flight uncommitted fix for this exact test (play-spell.ts/cost.ts ready-rune payability); not duplicating",
+    "at": "2026-08-07T05:37:42.818Z"
+  }
 }

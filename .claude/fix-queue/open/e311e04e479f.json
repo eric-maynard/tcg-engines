@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "unl-171-219",
+  "title": "Deflect surcharge is not paid when an opponent chooses Galio from a multi-candidate target prompt of a triggered ability.",
+  "expected": "chain/resolve.ts:453-466 filters options by Deflect affordability and at :517-530 sets a choose-target pendingChoice for >=2 options WITHOUT paying; only the single-candidate else-branch at :531-539 calls payAnyDomainPower(getDeflectSurcharge(...)). The comment at resolve.ts:450-452 claims the multi-candidate pick \"still owes its surcharge at pick time (choose-target branch of pending-choice.ts)\", but game-definition/moves/pending-choice.ts:1236-1267 (the plain choose-target resolution) just builds effectCtx with boundTargets=[picked] and calls executeEffect — no getDeflectSurcharge/payAnyDomainPower anywhere in pending-choice.ts (grep confirms zero references). So a prompted triggered-ability pick of Galio applies the effect without deducting power.",
+  "observed": "Player-2 pool before pick {mind:0,fury:1}; resolvePendingChoice pickedCardId=Galio succeeded, effect applied to Galio (mightModifier -2 from Blastcone Fae; Ganking granted by Gem Jammer), pool after pick still {mind:0,fury:1} both times. Affordability gating does work (with 0 power Galio was excluded from Solari Shieldbearer's options), but pending-choice.ts never calls payAnyDomainPower/getDeflectSurcharge — only the auto-bound single-candidate branch in chain/resolve.ts charges.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/pending-choice.ts:1236",
+  "id": "e311e04e479f",
+  "createdAt": "2026-08-07T03:31:36.293Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.293Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T06:14:22.309Z",
+      "event": "grabbed:w2-i16"
+    },
+    {
+      "at": "2026-08-07T06:24:36.386Z",
+      "event": "failed",
+      "note": "Fix requires editing pending-choice.ts, which currently carries ~300 lines of another lane's uncommitted work depending on an untracked play/spell-modes.ts; shipping it would ride along/break HEAD. Edit reverted. Shape is known: carry deflectTax on the choose-target prompt from chain/resolve.ts and pay getDeflectSurcharge at pick time."
+    },
+    {
+      "at": "2026-08-07T08:14:36.885Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedBy": "w2-i16",
+  "claimedAt": "2026-08-07T06:14:22.309Z",
+  "resolution": {
+    "note": "Fix requires editing pending-choice.ts, which currently carries ~300 lines of another lane's uncommitted work depending on an untracked play/spell-modes.ts; shipping it would ride along/break HEAD. Edit reverted. Shape is known: carry deflectTax on the choose-target prompt from chain/resolve.ts and pay getDeflectSurcharge at pick time.",
+    "at": "2026-08-07T06:24:36.386Z"
+  }
+}

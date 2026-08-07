@@ -15,24 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:17:58.076Z",
-      "event": "grabbed:w6-i8"
+      "at": "2026-08-07T05:24:52.092Z",
+      "event": "grabbed:w11-i7"
     },
     {
-      "at": "2026-08-07T00:24:14.108Z",
+      "at": "2026-08-07T05:25:01.968Z",
       "event": "done",
-      "note": "hasKeyword counts unconditional static grant-keyword self"
+      "note": "already fixed on HEAD; repro tests green (11 pass)"
     }
   ],
   "status": "done",
-  "claimedBy": "w6-i8",
-  "claimedAt": "2026-08-07T00:17:58.076Z",
+  "claimedBy": "w11-i7",
+  "claimedAt": "2026-08-07T05:24:52.092Z",
   "resolution": {
-    "note": "hasKeyword counts unconditional static grant-keyword self",
+    "note": "already fixed on HEAD; repro tests green (11 pass)",
     "files": [
-      "packages/riftbound-engine/src/operations/card-lookup.ts",
       "packages/riftbound-engine/src/__tests__/cards/unl-120-219.test.ts"
     ],
-    "at": "2026-08-07T00:24:14.108Z"
+    "at": "2026-08-07T05:25:01.968Z"
   }
 }

@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-070-221",
+  "title": "BUG: registry payload — Hidden + ONE [Action] spell ability whose effect is the sequence [deal 3 to a battlefield unit, Gold token exhausted]",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-070-221.test.ts",
+    "testName": "BUG: registry payload — Hidden + ONE [Action] spell ability whose effect is the sequence [deal 3 to a battlefield unit, Gold token exhausted]"
+  },
+  "id": "cbb9b40ce6f1",
+  "createdAt": "2026-08-07T00:57:36.973Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:57:36.973Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:45:40.386Z",
+      "event": "grabbed:w11-i11"
+    },
+    {
+      "at": "2026-08-07T05:45:56.741Z",
+      "event": "done",
+      "note": "already fixed at HEAD: sfd-070-221 suite 100% green on clean checkout, no test.failing remains"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i11",
+  "claimedAt": "2026-08-07T05:45:40.386Z",
+  "resolution": {
+    "note": "already fixed at HEAD: sfd-070-221 suite 100% green on clean checkout, no test.failing remains",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-070-221.test.ts"
+    ],
+    "at": "2026-08-07T05:45:56.741Z"
+  }
+}

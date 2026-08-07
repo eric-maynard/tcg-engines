@@ -15,23 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:27:40.699Z",
-      "event": "grabbed:w5-i10"
+      "at": "2026-08-07T05:27:00.931Z",
+      "event": "grabbed:w8-i14"
     },
     {
-      "at": "2026-08-07T00:30:30.386Z",
+      "at": "2026-08-07T05:28:37.809Z",
       "event": "done",
-      "note": "each-player kill already fans out per player; locked options to the chooser's own units in the repro test"
+      "note": "already fixed in kill.ts each-player fan-out + explicit card abilities; verified by existing regression test"
     }
   ],
   "status": "done",
-  "claimedBy": "w5-i10",
-  "claimedAt": "2026-08-07T00:27:40.699Z",
+  "claimedBy": "w8-i14",
+  "claimedAt": "2026-08-07T05:27:00.931Z",
   "resolution": {
-    "note": "each-player kill already fans out per player; locked options to the chooser's own units in the repro test",
+    "note": "already fixed in kill.ts each-player fan-out + explicit card abilities; verified by existing regression test",
     "files": [
       "packages/riftbound-engine/src/__tests__/cards/unl-164-219.test.ts"
     ],
-    "at": "2026-08-07T00:30:30.386Z"
+    "at": "2026-08-07T05:28:37.809Z"
   }
 }

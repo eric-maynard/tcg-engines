@@ -9,12 +9,31 @@
   },
   "id": "f8728e034678",
   "createdAt": "2026-08-07T01:01:45.608Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:01:45.608Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:50:12.085Z",
+      "event": "grabbed:w1-i14"
+    },
+    {
+      "at": "2026-08-07T05:51:16.372Z",
+      "event": "failed",
+      "note": "in flight in another lane: working tree already has hasChainPriority() in chain/chain-state.ts + play-spell.ts gate and the test.failing flipped; not duplicating"
+    },
+    {
+      "at": "2026-08-07T08:14:36.894Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w1-i14",
+  "claimedAt": "2026-08-07T05:50:12.085Z",
+  "resolution": {
+    "note": "in flight in another lane: working tree already has hasChainPriority() in chain/chain-state.ts + play-spell.ts gate and the test.failing flipped; not duplicating",
+    "at": "2026-08-07T05:51:16.372Z"
+  }
 }

@@ -1,0 +1,41 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 317.1/317.2.c — 'this turn' effects expire before end-of-turn triggers resolve (buff already gone during the Ending Step)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/turn-structure-phases-and-resources.test.ts",
+    "testName": "BUG: 317.1/317.2.c — 'this turn' effects expire before end-of-turn triggers resolve (buff already gone during the Ending Step)"
+  },
+  "id": "2bdf469b32a5",
+  "createdAt": "2026-08-06T20:50:12.434Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.434Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:33:01.394Z",
+      "event": "grabbed:w5-i12"
+    },
+    {
+      "at": "2026-08-07T05:51:29.967Z",
+      "event": "done",
+      "note": "ending phase: Expiration Step deferred to the phase onEnd so end-of-turn triggers see 'this turn' effects still live (317.1 before 317.2)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w5-i12",
+  "claimedAt": "2026-08-07T05:33:01.394Z",
+  "resolution": {
+    "note": "ending phase: Expiration Step deferred to the phase onEnd so end-of-turn triggers see 'this turn' effects still live (317.1 before 317.2)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
+      "packages/riftbound-engine/src/__tests__/core-rules/turn-structure-phases-and-resources.test.ts",
+      "packages/riftbound-engine/src/__tests__/core-rules/score-denial-and-modification.test.ts",
+      "packages/riftbound-engine/src/__tests__/core-rules/runes-rune-deck-and-rune-pool.test.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-109-221.test.ts"
+    ],
+    "at": "2026-08-07T05:51:29.967Z"
+  }
+}

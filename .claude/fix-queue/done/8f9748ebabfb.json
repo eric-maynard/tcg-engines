@@ -1,0 +1,39 @@
+{
+  "source": "playtest",
+  "cardId": "ven-148-166",
+  "title": "Failed resolution is non-atomic and soft-locks the game",
+  "expected": "ven-148-166 is re-parsed at load (all-cards.ts:808-810) into `{type:\"move\", target:{unit,enemy}, to:\"battlefield\"}` (verified via bun). In riftbound-engine/src/abilities/effects/move.ts:530-541 a plain-string `to` that isn't a special keyword becomes targetZone=\"battlefield\" and is passed straight to ctx.zones.moveCard; no such zone exists (zone-configs.ts only defines base/battlefieldRow/`battlefield-${id}` etc.). core operations-impl.ts:192-226 moveCard splices the card out of its source zone (line 203) BEFORE checking the target and throwing `Target zone battlefield does not exist` (line 225). These zone ops mutate engine.internalState directly (rule-engine.ts:487-490), which is outside the immer produce; the catch at rule-engine.ts:676-706 returns EXECUTION_ERROR without restoring internalStateBefore (snapshot at :565 is only used for undo). Net: unit removed from every zone, game state (chain item/priority) rolled back unchanged, so each subsequent pass/resolve re-throws the same error -> soft-lock; only undo/Rewind restores internalState (:1240-1242).",
+  "observed": "After the failed resolve, the targeted enemy Recruit token disappeared from every zone (base [] and not in trash/banishment/any battlefield — 113 cards, none is the token), while the chain item stayed active with activePlayer=player-2; every subsequent passChainPriority returns the same EXECUTION_ERROR, UI shows 'Goldfish has Priority — waiting...' forever. Only Rewind recovers.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/core/src/operations/operations-impl.ts",
+  "id": "8f9748ebabfb",
+  "createdAt": "2026-08-06T23:55:41.368Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.368Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:40:55.155Z",
+      "event": "grabbed:w1-i12"
+    },
+    {
+      "at": "2026-08-07T05:41:41.812Z",
+      "event": "done",
+      "note": "already fixed in 934fe68 (Shadow Dash friendly-units destination + rider, atomic moveCard); verified 5/5 green at HEAD in clean worktree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i12",
+  "claimedAt": "2026-08-07T05:40:55.155Z",
+  "resolution": {
+    "note": "already fixed in 934fe68 (Shadow Dash friendly-units destination + rider, atomic moveCard); verified 5/5 green at HEAD in clean worktree",
+    "files": [
+      "packages/core/src/operations/operations-impl.ts",
+      "packages/riftbound-cards/src/data/all-cards.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ven-148-166.test.ts"
+    ],
+    "at": "2026-08-07T05:41:41.812Z"
+  }
+}

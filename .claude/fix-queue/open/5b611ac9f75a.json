@@ -8,12 +8,31 @@
   },
   "id": "5b611ac9f75a",
   "createdAt": "2026-08-06T20:50:12.435Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.435Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T03:40:34.177Z",
+      "event": "grabbed:w7-i4"
+    },
+    {
+      "at": "2026-08-07T03:43:58.776Z",
+      "event": "failed",
+      "note": "engine already denies correctly (points stay 3 through conquer+trigger and after the denier dies); the test's final stanza re-moves the same Ascendant after a recall, which is illegal — rule 458.1: a Recall does not change statuses, so the unit is still exhausted from its first standard move. Spec step needs a second unit."
+    },
+    {
+      "at": "2026-08-07T08:14:36.889Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w7-i4",
+  "claimedAt": "2026-08-07T03:40:34.177Z",
+  "resolution": {
+    "note": "engine already denies correctly (points stay 3 through conquer+trigger and after the denier dies); the test's final stanza re-moves the same Ascendant after a recall, which is illegal — rule 458.1: a Recall does not change statuses, so the unit is still exhausted from its first standard move. Spec step needs a second unit.",
+    "at": "2026-08-07T03:43:58.776Z"
+  }
 }

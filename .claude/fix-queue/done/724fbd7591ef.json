@@ -16,24 +16,23 @@
       "event": "enqueued:unit-bug"
     },
     {
-      "at": "2026-08-06T21:40:27.260Z",
-      "event": "grabbed:w3-i6"
+      "at": "2026-08-07T05:09:17.946Z",
+      "event": "grabbed:w6-i5"
     },
     {
-      "at": "2026-08-06T21:44:27.921Z",
+      "at": "2026-08-07T05:09:43.517Z",
       "event": "done",
-      "note": "Mobilize: explicit abilities with channeled-fewer-than fallback draw"
+      "note": "stale queue entry: repro already flipped to test() and passing at HEAD; no change needed"
     }
   ],
   "status": "done",
-  "claimedBy": "w3-i6",
-  "claimedAt": "2026-08-06T21:40:27.260Z",
+  "claimedBy": "w6-i5",
+  "claimedAt": "2026-08-07T05:09:17.946Z",
   "resolution": {
-    "note": "Mobilize: explicit abilities with channeled-fewer-than fallback draw",
+    "note": "stale queue entry: repro already flipped to test() and passing at HEAD; no change needed",
     "files": [
-      "packages/riftbound-cards/src/cards/ogn/mobilize.ts",
       "packages/riftbound-engine/src/__tests__/cards/ogn-134-298.test.ts"
     ],
-    "at": "2026-08-06T21:44:27.921Z"
+    "at": "2026-08-07T05:09:43.517Z"
   }
 }

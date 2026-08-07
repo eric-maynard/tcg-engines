@@ -15,26 +15,24 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:40:41.562Z",
-      "event": "grabbed:w2-i10"
+      "at": "2026-08-07T05:30:08.790Z",
+      "event": "grabbed:w6-i9"
     },
     {
-      "at": "2026-08-07T00:42:52.214Z",
+      "at": "2026-08-07T05:30:44.725Z",
       "event": "done",
-      "note": "duel/match decks provide 3 battlefields (485.4.a/486.4.a)"
+      "note": "already fixed+flipped in HEAD (w3 commits c0081c5/2571d09); verified 52/52 pass"
     }
   ],
   "status": "done",
-  "claimedBy": "w2-i10",
-  "claimedAt": "2026-08-07T00:40:41.562Z",
+  "claimedBy": "w6-i9",
+  "claimedAt": "2026-08-07T05:30:08.790Z",
   "resolution": {
-    "note": "duel/match decks provide 3 battlefields (485.4.a/486.4.a)",
+    "note": "already fixed+flipped in HEAD (w3 commits c0081c5/2571d09); verified 52/52 pass",
     "files": [
       "packages/riftbound-engine/src/validators/deck-validators.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
-      "packages/riftbound-engine/src/__tests__/deck-validation.test.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/runes-rune-deck-and-rune-pool.test.ts"
+      "packages/riftbound-engine/src/game-definition/moves/setup.ts"
     ],
-    "at": "2026-08-07T00:42:52.214Z"
+    "at": "2026-08-07T05:30:44.725Z"
   }
 }

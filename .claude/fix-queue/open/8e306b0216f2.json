@@ -8,12 +8,31 @@
   },
   "id": "8e306b0216f2",
   "createdAt": "2026-08-06T20:50:12.432Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.432Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T00:46:53.408Z",
+      "event": "grabbed:w4-i17"
+    },
+    {
+      "at": "2026-08-07T01:07:50.347Z",
+      "event": "failed",
+      "note": "setup.ts + setup-decks-and-mulligan.test.ts are being rewritten concurrently by another lane (mulligan/battlefield/roll-tie fixes depend on their zone-configs+player-view work); could not land in isolation"
+    },
+    {
+      "at": "2026-08-07T08:14:36.895Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w4-i17",
+  "claimedAt": "2026-08-07T00:46:53.408Z",
+  "resolution": {
+    "note": "setup.ts + setup-decks-and-mulligan.test.ts are being rewritten concurrently by another lane (mulligan/battlefield/roll-tie fixes depend on their zone-configs+player-view work); could not land in isolation",
+    "at": "2026-08-07T01:07:50.347Z"
+  }
 }

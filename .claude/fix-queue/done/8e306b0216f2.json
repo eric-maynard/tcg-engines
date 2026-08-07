@@ -1,0 +1,37 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 117 (once per player) — after a completed 1-card mulligan a SECOND mulligan by the same player must be refused; the engine performs it (no 'London' chaining allowed)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
+    "testName": "BUG: 117 (once per player) — after a completed 1-card mulligan a SECOND mulligan by the same player must be refused; the engine performs it (no 'London' chaining allowed)"
+  },
+  "id": "8e306b0216f2",
+  "createdAt": "2026-08-06T20:50:12.432Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.432Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:33:00.730Z",
+      "event": "grabbed:w8-i15"
+    },
+    {
+      "at": "2026-08-07T05:33:08.601Z",
+      "event": "done",
+      "note": "stale queue entry: repro already fixed and flipped upstream; verified passing in setup-decks-and-mulligan.test.ts (52 pass / 0 fail)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i15",
+  "claimedAt": "2026-08-07T05:33:00.730Z",
+  "resolution": {
+    "note": "stale queue entry: repro already fixed and flipped upstream; verified passing in setup-decks-and-mulligan.test.ts (52 pass / 0 fail)",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts"
+    ],
+    "at": "2026-08-07T05:33:08.601Z"
+  }
+}

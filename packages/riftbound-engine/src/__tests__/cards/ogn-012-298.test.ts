@@ -65,6 +65,9 @@ describe("Noxus Hopeful (ogn-012-298)", () => {
     expect(game.turnPlayer()).toBe(P1);
     expect(game.turnNumber()).toBeGreaterThan(2);
     expect(game.gameState.cardsPlayedThisTurn?.[P1] ?? 0).toBe(0);
+    // rule 357.1.a: a rune left READY by the fresh turn's Channel could pay the
+    // missing Energy inside the Pay step, so exhaust them before pricing.
+    await game.p1.tapRunes(game.p1.runes({ ready: true }).length);
     // Fresh turn: give exactly 3 energy — not enough without Legion.
     await game.p1.do("addResources", { energy: 3 - game.p1.energy() });
     expect(game.p1.energy()).toBe(3);

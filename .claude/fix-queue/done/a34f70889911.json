@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-058-221",
+  "title": "BUG: only GEAR may be revealed — the unit and the spell among the top 4 must not be offered (Snax + Dirk only)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-058-221.test.ts",
+    "testName": "BUG: only GEAR may be revealed — the unit and the spell among the top 4 must not be offered (Snax + Dirk only)"
+  },
+  "id": "a34f70889911",
+  "createdAt": "2026-08-07T01:04:24.769Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:04:24.769Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:50:25.615Z",
+      "event": "grabbed:w2-i12"
+    },
+    {
+      "at": "2026-08-07T05:50:35.357Z",
+      "event": "done",
+      "note": "already fixed and landed at HEAD; no test.failing remains in sfd-058-221"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i12",
+  "claimedAt": "2026-08-07T05:50:25.615Z",
+  "resolution": {
+    "note": "already fixed and landed at HEAD; no test.failing remains in sfd-058-221",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-058-221.test.ts"
+    ],
+    "at": "2026-08-07T05:50:35.357Z"
+  }
+}

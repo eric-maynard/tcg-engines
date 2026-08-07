@@ -8,12 +8,31 @@
   },
   "id": "acbfa7cfccaa",
   "createdAt": "2026-08-06T18:35:08.344Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T18:35:08.344Z",
       "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-06T22:18:43.023Z",
+      "event": "grabbed:w4-i5"
+    },
+    {
+      "at": "2026-08-06T22:21:15.884Z",
+      "event": "failed",
+      "note": "needs two missing engine capabilities: Matron's play-a-unit-from-trash effect never offers/plays, and Ezreal's 'optional additional costs cost [1] or [rainbow] less' static is unimplemented"
+    },
+    {
+      "at": "2026-08-07T08:14:36.886Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w4-i5",
+  "claimedAt": "2026-08-06T22:18:43.023Z",
+  "resolution": {
+    "note": "needs two missing engine capabilities: Matron's play-a-unit-from-trash effect never offers/plays, and Ezreal's 'optional additional costs cost [1] or [rainbow] less' static is unimplemented",
+    "at": "2026-08-06T22:21:15.884Z"
+  }
 }

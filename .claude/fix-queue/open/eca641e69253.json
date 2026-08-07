@@ -8,12 +8,31 @@
   },
   "id": "eca641e69253",
   "createdAt": "2026-08-06T18:35:08.345Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T18:35:08.345Z",
       "event": "enqueued:interaction-bug"
+    },
+    {
+      "at": "2026-08-07T02:39:23.233Z",
+      "event": "grabbed:w11-i1"
+    },
+    {
+      "at": "2026-08-07T03:05:06.928Z",
+      "event": "failed",
+      "note": "enter-ready.ts fix ready (clears legacy meta.exhausted so a paid Accelerate readies the unit) but cannot land: HEAD is red — w10's Ezreal commit turned 4 matron accelerate tests into real failures, and the trash-play Accelerate offer lives in pending-choice.ts, which another lane is mid-rewriting (its working-tree version fails pending-choice.test.ts, promising-future and this very test)"
+    },
+    {
+      "at": "2026-08-07T08:14:36.890Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w11-i1",
+  "claimedAt": "2026-08-07T02:39:23.233Z",
+  "resolution": {
+    "note": "enter-ready.ts fix ready (clears legacy meta.exhausted so a paid Accelerate readies the unit) but cannot land: HEAD is red — w10's Ezreal commit turned 4 matron accelerate tests into real failures, and the trash-play Accelerate offer lives in pending-choice.ts, which another lane is mid-rewriting (its working-tree version fails pending-choice.test.ts, promising-future and this very test)",
+    "at": "2026-08-07T03:05:06.928Z"
+  }
 }

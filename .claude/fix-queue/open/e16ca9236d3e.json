@@ -8,12 +8,31 @@
   },
   "id": "e16ca9236d3e",
   "createdAt": "2026-08-06T20:11:47.426Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:11:47.426Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:24:08.124Z",
+      "event": "grabbed:w3-i10"
+    },
+    {
+      "at": "2026-08-07T05:24:45.774Z",
+      "event": "failed",
+      "note": "needs missing engine capability: no interactive combat damage-assignment prompt exists (harness 'distribute' decision has no producer; resolve-full-combat resolves synchronously with combat-resolver.distributeDamage auto-picking). Adding a mid-combat pendingChoice + resume is a feature, not a targeted fix."
+    },
+    {
+      "at": "2026-08-07T08:14:36.896Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w3-i10",
+  "claimedAt": "2026-08-07T05:24:08.124Z",
+  "resolution": {
+    "note": "needs missing engine capability: no interactive combat damage-assignment prompt exists (harness 'distribute' decision has no producer; resolve-full-combat resolves synchronously with combat-resolver.distributeDamage auto-picking). Adding a mid-combat pendingChoice + resume is a feature, not a targeted fix.",
+    "at": "2026-08-07T05:24:45.774Z"
+  }
 }

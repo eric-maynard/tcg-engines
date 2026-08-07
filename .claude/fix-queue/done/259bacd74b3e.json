@@ -1,0 +1,33 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-120-221",
+  "title": "BUG: 'after an attack' — walking onto an EMPTY enemy battlefield conquers (1 point) but there was no attack and 0 excess: no prompt",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-120-221.test.ts",
+    "testName": "BUG: 'after an attack' — walking onto an EMPTY enemy battlefield conquers (1 point) but there was no attack and 0 excess: no prompt"
+  },
+  "id": "259bacd74b3e",
+  "createdAt": "2026-08-07T01:29:38.135Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:29:38.135Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:13:55.796Z",
+      "event": "done(unclaimed)",
+      "note": "trigger-matcher enforces trigger.afterAttack against the conquer event"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "trigger-matcher enforces trigger.afterAttack against the conquer event",
+    "files": [
+      "packages/riftbound-engine/src/abilities/trigger-matcher.ts",
+      "packages/riftbound-engine/src/abilities/trigger-runner.ts"
+    ],
+    "at": "2026-08-07T06:13:55.796Z"
+  }
+}

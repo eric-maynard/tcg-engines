@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-111-298",
+  "title": "Heimerdinger inherits [Exhaust] abilities from the Chosen Champion still sitting in the Champion Zone (non-board zone).",
+  "expected": "packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:316 — collectFriendlyBoardCards() pushes getCardsInZone(\"championZone\") alongside base/legendZone/battlefields, and the inheritExhaustAbilities loop (lines 250-287) uses that list with only a cardType filter (legend/unit/gear/equipment), so an unplayed Chosen Champion (e.g. Lee Sin ogn-078-298, cardType unit) in the Champion Zone contributes its exhaust-cost activated abilities to Heimerdinger. Champion Zone is a non-board zone (rule 108.3; champion must be played from there per 108.3.d), so the card is not a friendly unit in play and should be excluded.",
+  "observed": "With Lee Sin, Ascetic (ogn-078-298) unplayed in championZone, `moves` listed activateAbility {cardId: Heimerdinger, sourceCardId: 'player-1-champion-ogn-078-298', abilityIndex:1}; activating it exhausted Heimerdinger and put a 'buff self' ability on the chain which resolved. Source: collectFriendlyBoardCards() in packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts explicitly pushes championZone.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:316",
+  "id": "0b386c361fc2",
+  "createdAt": "2026-08-07T03:31:36.293Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.293Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T04:30:44.183Z",
+      "event": "grabbed:w10-i5"
+    },
+    {
+      "at": "2026-08-07T04:33:23.868Z",
+      "event": "done",
+      "note": "champion zone excluded from Heimerdinger inheritable board cards (rule 108.3)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w10-i5",
+  "claimedAt": "2026-08-07T04:30:44.183Z",
+  "resolution": {
+    "note": "champion zone excluded from Heimerdinger inheritable board cards (rule 108.3)",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts",
+      "packages/riftbound-engine/src/__tests__/cards/ogn-111-298.test.ts"
+    ],
+    "at": "2026-08-07T04:33:23.868Z"
+  }
+}

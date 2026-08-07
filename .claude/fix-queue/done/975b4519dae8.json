@@ -15,23 +15,24 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-06T23:02:04.982Z",
-      "event": "grabbed:w11-i7"
+      "at": "2026-08-07T05:25:40.802Z",
+      "event": "grabbed:w3-i11"
     },
     {
-      "at": "2026-08-06T23:04:20.070Z",
+      "at": "2026-08-07T05:26:08.676Z",
       "event": "done",
-      "note": "same fix: parseFightEffect emits onAttacker modify-might instead of dropping the pump clause"
+      "note": "stale: gentlemens-duel.ts now has explicit fight+onAttacker abilities and fight.ts executes onAttacker; ogs-008-024 suite green"
     }
   ],
   "status": "done",
-  "claimedBy": "w11-i7",
-  "claimedAt": "2026-08-06T23:02:04.982Z",
+  "claimedBy": "w3-i11",
+  "claimedAt": "2026-08-07T05:25:40.802Z",
   "resolution": {
-    "note": "same fix: parseFightEffect emits onAttacker modify-might instead of dropping the pump clause",
+    "note": "stale: gentlemens-duel.ts now has explicit fight+onAttacker abilities and fight.ts executes onAttacker; ogs-008-024 suite green",
     "files": [
-      "packages/riftbound-cards/src/parser/impl/effects-damage.ts"
+      "packages/riftbound-cards/src/cards/ogs/gentlemens-duel.ts",
+      "packages/riftbound-engine/src/abilities/effects/fight.ts"
     ],
-    "at": "2026-08-06T23:04:20.069Z"
+    "at": "2026-08-07T05:26:08.676Z"
   }
 }

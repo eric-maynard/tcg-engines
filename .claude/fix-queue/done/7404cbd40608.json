@@ -1,0 +1,35 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-076-221",
+  "title": "BUG: 'This costs [2] less if you control a Mech' — with a friendly Mech on board the spell costs 2 energy + [mind] (356.4)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-076-221.test.ts",
+    "testName": "BUG: 'This costs [2] less if you control a Mech' — with a friendly Mech on board the spell costs 2 energy + [mind] (356.4)"
+  },
+  "id": "7404cbd40608",
+  "createdAt": "2026-08-07T00:50:42.047Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T00:50:42.047Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:46:37.823Z",
+      "event": "grabbed:w6-i11"
+    },
+    {
+      "at": "2026-08-07T05:47:23.759Z",
+      "event": "done",
+      "note": "already fixed at HEAD (8c41ca1 / e3e5573+4418cfa); verified 25/25 pass in clean worktree"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w6-i11",
+  "claimedAt": "2026-08-07T05:46:37.823Z",
+  "resolution": {
+    "note": "already fixed at HEAD (8c41ca1 / e3e5573+4418cfa); verified 25/25 pass in clean worktree",
+    "at": "2026-08-07T05:47:23.759Z"
+  }
+}

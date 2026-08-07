@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-104-221",
+  "title": "History log narrates playGear as an equip.",
+  "expected": "snapshot.ts:67-73 playGear case: with no targetUnitId, it returns `${actor} equipped ${card}.` unconditionally — no branch for non-equipment gear. Petricite Monument (cards/sfd/petricite-monument.ts:6) is cardType \"gear\" (not equipment), so playing it to base logs \"dev equipped Petricite Monument.\" instead of \"played\".",
+  "observed": "Log entry: \"dev equipped Petricite Monument.\" (server/snapshot.ts playGear case always uses 'equipped').",
+  "layer": "server",
+  "fileHint": "/root/src/tcg/tcg-engines/apps/riftbound-app/server/snapshot.ts",
+  "id": "5ac6eb2ff31b",
+  "createdAt": "2026-08-07T03:31:36.292Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.292Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T06:13:58.354Z",
+      "event": "grabbed:w6-i14"
+    },
+    {
+      "at": "2026-08-07T06:20:45.772Z",
+      "event": "done",
+      "note": "playGear log: only Equipment reads 'equipped'; plain gear logs 'played X to base'"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w6-i14",
+  "claimedAt": "2026-08-07T06:13:58.353Z",
+  "resolution": {
+    "note": "playGear log: only Equipment reads 'equipped'; plain gear logs 'played X to base'",
+    "files": [
+      "apps/riftbound-app/server/snapshot.ts"
+    ],
+    "at": "2026-08-07T06:20:45.772Z"
+  }
+}

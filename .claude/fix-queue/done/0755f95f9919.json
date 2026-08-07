@@ -15,25 +15,23 @@
       "event": "enqueued:interaction-bug"
     },
     {
-      "at": "2026-08-06T22:43:02.140Z",
-      "event": "grabbed:w7-i7"
+      "at": "2026-08-07T05:15:29.726Z",
+      "event": "grabbed:w10-i8"
     },
     {
-      "at": "2026-08-06T22:45:38.588Z",
+      "at": "2026-08-07T05:16:09.150Z",
       "event": "done",
-      "note": "event-scoped trigger-double (conquer here) in fireTriggers + explicit Red Brambleback abilities"
+      "note": "already fixed on HEAD by an earlier lane; test already flipped and passing"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i7",
-  "claimedAt": "2026-08-06T22:43:02.140Z",
+  "claimedBy": "w10-i8",
+  "claimedAt": "2026-08-07T05:15:29.726Z",
   "resolution": {
-    "note": "event-scoped trigger-double (conquer here) in fireTriggers + explicit Red Brambleback abilities",
+    "note": "already fixed on HEAD by an earlier lane; test already flipped and passing",
     "files": [
-      "packages/riftbound-engine/src/abilities/trigger-runner.ts",
-      "packages/riftbound-cards/src/cards/unl/red-brambleback.ts",
       "packages/riftbound-engine/src/__tests__/cards/interactions/red-brambleback-kaisa-conquer-here-scope.test.ts"
     ],
-    "at": "2026-08-06T22:45:38.588Z"
+    "at": "2026-08-07T05:16:09.150Z"
   }
 }

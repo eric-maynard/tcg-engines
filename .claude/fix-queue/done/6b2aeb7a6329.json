@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-088-221",
+  "title": "BUG: parsed abilities drop the 'Use my abilities only while I'm at a battlefield' restriction entirely",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-088-221.test.ts",
+    "testName": "BUG: parsed abilities drop the 'Use my abilities only while I'm at a battlefield' restriction entirely"
+  },
+  "id": "6b2aeb7a6329",
+  "createdAt": "2026-08-07T01:01:45.619Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:01:45.619Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:50:25.614Z",
+      "event": "grabbed:w2-i12"
+    },
+    {
+      "at": "2026-08-07T05:50:35.317Z",
+      "event": "done",
+      "note": "already fixed and landed at HEAD; no test.failing remains in sfd-088-221"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w2-i12",
+  "claimedAt": "2026-08-07T05:50:25.614Z",
+  "resolution": {
+    "note": "already fixed and landed at HEAD; no test.failing remains in sfd-088-221",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-088-221.test.ts"
+    ],
+    "at": "2026-08-07T05:50:35.317Z"
+  }
+}

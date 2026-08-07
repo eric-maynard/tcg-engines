@@ -8,12 +8,36 @@
   },
   "id": "0d0efb7e778f",
   "createdAt": "2026-08-06T20:50:12.434Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.434Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T00:52:39.891Z",
+      "event": "grabbed:w5-i11"
+    },
+    {
+      "at": "2026-08-07T00:57:45.522Z",
+      "event": "done",
+      "note": "beginning phase split into beginning-step/scoring-step so Hold scores after start-of-turn triggers resolve"
+    },
+    {
+      "at": "2026-08-07T01:27:25.378Z",
+      "event": "failed",
+      "note": "Splitting the beginning phase into beginning-step/scoring-step (scoring extracted to runScoringStep, run after the start-of-turn chain empties) makes the target test pass, but turns core-rules/score-denial-and-modification.test.ts red on a clean tree: 471.1.b final-point, 471.2.c conquer trigger, 194.3.a victory-score static, 485.7 first-Beginning-Phase point, 431.3 burn-out. Those point paths assume scoring happens inside beginning.onBegin. Reverted; needs the scoring/point model reworked together."
+    },
+    {
+      "at": "2026-08-07T08:14:36.891Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w5-i11",
+  "claimedAt": "2026-08-07T00:52:39.891Z",
+  "resolution": {
+    "note": "Splitting the beginning phase into beginning-step/scoring-step (scoring extracted to runScoringStep, run after the start-of-turn chain empties) makes the target test pass, but turns core-rules/score-denial-and-modification.test.ts red on a clean tree: 471.1.b final-point, 471.2.c conquer trigger, 194.3.a victory-score static, 485.7 first-Beginning-Phase point, 431.3 burn-out. Those point paths assume scoring happens inside beginning.onBegin. Reverted; needs the scoring/point model reworked together.",
+    "at": "2026-08-07T01:27:25.378Z"
+  }
 }

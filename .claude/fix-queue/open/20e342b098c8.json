@@ -9,12 +9,31 @@
   },
   "id": "20e342b098c8",
   "createdAt": "2026-08-07T01:14:13.017Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-07T01:14:13.017Z",
       "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:55:04.197Z",
+      "event": "grabbed:w9-i14"
+    },
+    {
+      "at": "2026-08-07T05:56:35.363Z",
+      "event": "failed",
+      "note": "same card as 3914ec5a6e84: concurrent lane owns sfd-075-221 use-activated-ability work; my parallel edits reverted"
+    },
+    {
+      "at": "2026-08-07T08:14:36.891Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w9-i14",
+  "claimedAt": "2026-08-07T05:55:04.197Z",
+  "resolution": {
+    "note": "same card as 3914ec5a6e84: concurrent lane owns sfd-075-221 use-activated-ability work; my parallel edits reverted",
+    "at": "2026-08-07T05:56:35.363Z"
+  }
 }

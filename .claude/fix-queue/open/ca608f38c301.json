@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "unl-135-219",
+  "title": "The 2 XP payment is neither required nor charged — the 'choose a card from their hand → they discard it' effect happens for free.",
+  "expected": "Card def /root/src/tcg/tcg-engines/packages/riftbound-cards/src/cards/unl/insightful-investigator.ts:24-43 places `{type:\"pay-cost\", cost:{xp:2}}` on the EFFECT's `conditional.condition`, not on the ability's `condition` (the file's own FIXME at lines 18-21 acknowledges the gating is wrong). Engine consequences: (1) trigger-runner.ts:1209 `extractPayCost(match.ability.condition)` returns undefined, so the chain item carries no `optInCost`; the opt-in prompt is offered purely because `optional: true` (trigger-runner.ts:1223) with no payability gate. (2) On accept, pending-choice.ts:948-956 finds no cost so nothing is deducted, then executeResolvedItem runs the `conditional` effect; abilities/effects/conditional.ts:14 calls `evaluateEffectCondition`, which has no `\"pay-cost\"` case (_helpers.ts:343-571) and falls to `default: return true` (_helpers.ts:568-570) — the reveal-hand/discard/draw `then` branch runs for free. (3) Even if optInCost were populated, `canPayOptInCost` (pending-choice.ts:279-308) checks only energy/power/exhaust and `deductAbilityCost` (activate-ability.ts:326+) never touches player.xp. Matches observed: XP=0 can accept and discard; XP=3 stays 3.",
+  "observed": "Game A: player-1 XP=0, played Investigator, opt-in prompt 'Use Insightful Investigator ability? Yes/No' offered accept:true; accepting opened a reveal-and-pick over player-2's 4 cards, picking Cleave sent it to trash. XP stayed 0. Game B: gainXp 3 → played → accepted → picked Doran's Ring → discarded; player-1 XP stayed 3 (not reduced to 1). Engine's canPayOptInCost() only checks energy/power/exhaust, and nothing spends xp for a pay-cost {xp:2} on the opt-in path.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effects/_helpers.ts:568",
+  "id": "ca608f38c301",
+  "createdAt": "2026-08-07T03:31:36.293Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.293Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T06:13:58.354Z",
+      "event": "grabbed:w6-i14"
+    },
+    {
+      "at": "2026-08-07T06:20:45.815Z",
+      "event": "failed",
+      "note": "unl-135-219 card def + pending-choice.ts are being rewritten concurrently by another lane (pickCost-on-reveal design); landed only the generic xp deduction in deductAbilityCost that that design needs, left the card def to that lane"
+    },
+    {
+      "at": "2026-08-07T08:14:36.882Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedBy": "w6-i14",
+  "claimedAt": "2026-08-07T06:13:58.354Z",
+  "resolution": {
+    "note": "unl-135-219 card def + pending-choice.ts are being rewritten concurrently by another lane (pickCost-on-reveal design); landed only the generic xp deduction in deductAbilityCost that that design needs, left the card def to that lane",
+    "at": "2026-08-07T06:20:45.815Z"
+  }
+}

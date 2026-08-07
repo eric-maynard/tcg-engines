@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-099-298",
+  "title": "\"Recycle 3 from your trash\" cost: player is never asked which 3 cards to recycle when the trash holds more than 3.",
+  "expected": "Engine enumerator (activate-ability.ts:1082-1095) only gates on trash count >= N for a recycle cost and never fans out recycleIds variants (result shape at 1177-1216 carries sacrificeId/discardId/targets only). Reducer (activate-ability.ts:1352-1356) uses params.recycleIds if supplied else `eligible.slice(0, recycleSpec.amount)` and moves them immediately with no pendingChoice. UI (interactions.js:459-499, executeInteractionMove on enumerated activateAbility moves) and server never construct recycleIds (grep finds it only in engine + types/moves.ts:440). So with trash > 3 the controller cannot choose which 3 to recycle, contrary to rule 416.5's Garbage Grabber example (\"its controller chooses 3 cards from their trash\").",
+  "observed": "With 4 cards in trash, both the enumerated activateAbility move ({abilityIndex,cardId,playerId} only, no recycleIds) and the UI 'Activate Ability' button immediately paid the cost by auto-recycling the 3 oldest trash cards (ids main-11, main-28, main-14), leaving the newest (main-19) behind; no prompt, pendingChoice stayed null. Engine's activate-ability.ts accepts an optional params.recycleIds and falls back to eligible.slice(0,N), but nothing in the server move enumeration or UI ever supplies it.",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:1352",
+  "id": "cbc421b94485",
+  "createdAt": "2026-08-07T07:42:18.108Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.108Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

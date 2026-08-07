@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "ven-062-166",
+  "title": "[Exhaust] ability targets units instead of \"another gear\".",
+  "expected": "packages/riftbound-cards/src/parser/impl/effects-resources.ts:191-210 (parseEmpowerEffect) matches \"another gear\" but routes it to parseCardTarget (parser/impl/targets.ts:13-27), which hardcodes `{ type: \"unit\" }` and never inspects \"gear\" or \"another\" (no excludeSelf). Running parseAbilities on Hextech Formula's rulesText yields activated effect `{target:{type:\"unit\"}, type:\"empower\"}`, so the engine targets units, rejects gear, and empower.ts sets meta.empowered on the chosen unit. ven.json has abilities:[null], so the runtime parser output is what is used.",
+  "observed": "Enumerated activateAbility (abilityIndex 1) offered only targets:[Gem Jammer] (a unit); forcing targets:[Seal of Discord] was rejected with CONDITION_FAILED. Chain item effect was {type:'empower', target:{type:'unit'}} and on resolution the unit Gem Jammer got meta.empowered=true while the Seal gear was untouched. parseAbilities yields effect.target {type:'unit'} for 'Empower another gear'.",
+  "layer": "card",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/effects-resources.ts:208",
+  "id": "18114374a473",
+  "createdAt": "2026-08-06T23:55:41.368Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.368Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:40:11.025Z",
+      "event": "grabbed:w1-i11"
+    },
+    {
+      "at": "2026-08-07T05:40:41.382Z",
+      "event": "done",
+      "note": "already fixed at HEAD (436328b / 80597ae); verified green on clean checkout"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i11",
+  "claimedAt": "2026-08-07T05:40:11.025Z",
+  "resolution": {
+    "note": "already fixed at HEAD (436328b / 80597ae); verified green on clean checkout",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-014-221.test.ts"
+    ],
+    "at": "2026-08-07T05:40:41.382Z"
+  }
+}

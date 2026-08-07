@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "unl-062-219",
+  "title": "Predict 2 offers no way to reorder the kept cards ('put the rest back in any order')",
+  "expected": "predict.ts:35-45 builds Predict N as an optional reveal-and-pick with onPicked:\"recycle\" and a chained `then: {type:\"predict\", amount: remaining}` only; no reorder step exists. pending-choice.ts:1462-1480 handles the decline (accept===false): it clears draft.pendingChoice and returns without executing choice.then and without moving/reordering the revealed cards, so declining the first prompt ends the Predict with the cards in original order. No reorder move exists anywhere in game-definition/, server.ts, or the gameplay UI (grep for reorder/orderTop finds nothing; keyword-effects.ts:126 only describes \"reorder rest\" in text). Card text (dramatic-visionary.ts:14) says \"put the rest back in any order\".",
+  "observed": "Predict is implemented as sequential optional reveal-and-pick(recycle) prompts; choosing 'No' on the first prompt immediately ends the Predict with pendingChoice=null and the two cards left in their original order (Flame Chompers, Dangerous Duo) — no reorder prompt/move is ever offered. predict.ts comment confirms: 'recycle the pick, leave the rest on top … declining ends the Predict'.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/effects/predict.ts:35",
+  "id": "3f5c7ab6260e",
+  "createdAt": "2026-08-07T03:31:36.293Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.293Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T06:14:22.310Z",
+      "event": "grabbed:w2-i16"
+    },
+    {
+      "at": "2026-08-07T06:18:11.287Z",
+      "event": "failed",
+      "note": "Needs a missing engine capability: no reorder prompt/move exists (no PendingChoice kind, no move, no UI) for 'put the rest back in any order'; Predict is a chain of reveal-and-pick recycles. Requires a new pendingChoice kind + move + app UI, out of scope for a targeted fix."
+    },
+    {
+      "at": "2026-08-07T08:14:36.887Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedBy": "w2-i16",
+  "claimedAt": "2026-08-07T06:14:22.310Z",
+  "resolution": {
+    "note": "Needs a missing engine capability: no reorder prompt/move exists (no PendingChoice kind, no move, no UI) for 'put the rest back in any order'; Predict is a chain of reveal-and-pick recycles. Requires a new pendingChoice kind + move + app UI, out of scope for a targeted fix.",
+    "at": "2026-08-07T06:18:11.287Z"
+  }
+}

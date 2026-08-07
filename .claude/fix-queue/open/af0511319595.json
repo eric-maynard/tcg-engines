@@ -1,0 +1,38 @@
+{
+  "source": "ruling-bug",
+  "title": "BUG: ruling 0aacd2f79d3e8aec — countered by Hard Bargain: the killed unit is NOT returned (stays in trash), nothing is resurrected",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/rulings/heedless-resurrection-0aacd2f79d3e8aec.test.ts",
+    "testName": "BUG: ruling 0aacd2f79d3e8aec — countered by Hard Bargain: the killed unit is NOT returned (stays in trash), nothing is resurrected"
+  },
+  "id": "af0511319595",
+  "createdAt": "2026-08-06T19:56:55.636Z",
+  "attempts": 1,
+  "history": [
+    {
+      "at": "2026-08-06T19:56:55.636Z",
+      "event": "enqueued:ruling-bug"
+    },
+    {
+      "at": "2026-08-06T23:41:58.773Z",
+      "event": "grabbed:w8-i7"
+    },
+    {
+      "at": "2026-08-06T23:44:32.903Z",
+      "event": "failed",
+      "note": "in-flight in another lane: working tree already has the flip + kill-as-additional-cost engine work (edited 2min before grab), but on a clean HEAD checkout the test still fails; not duplicating concurrent work"
+    },
+    {
+      "at": "2026-08-07T08:14:36.893Z",
+      "event": "requeued"
+    }
+  ],
+  "status": "open",
+  "claimedBy": "w8-i7",
+  "claimedAt": "2026-08-06T23:41:58.773Z",
+  "resolution": {
+    "note": "in-flight in another lane: working tree already has the flip + kill-as-additional-cost engine work (edited 2min before grab), but on a clean HEAD checkout the test still fails; not duplicating concurrent work",
+    "at": "2026-08-06T23:44:32.903Z"
+  }
+}

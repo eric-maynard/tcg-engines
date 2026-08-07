@@ -1,0 +1,28 @@
+{
+  "source": "playtest",
+  "cardId": "ogn-075-298",
+  "title": "Deathknell does not fire when Tasty Faefolk dies from lethal damage applied via the sandbox `addDamage` move (Actions > Add Counters path).",
+  "expected": "counters.ts:62-81 — the `addDamage` reducer calls `performCleanup(...)` directly and discards its `CleanupResult`. `performCleanup` (cleanup/state-based-checks.ts:583-617) moves the lethal unit to trash, clears its damage, and only *returns* `deaths`/`killed`; it never dispatches `die` events itself — that is done by the caller in `runStateMaintenance` (events/dispatcher.ts:175-190 → `dispatchUnitDied`). `counterMoves` is not wrapped in `withPostMoveCleanup` (only movement.ts:24 is), and even if a later `cleanupAndFireDeaths` ran it would find nothing (damage already cleared, unit already in trash). Reproduced with the harness: `scenario().unit(P1,\"base\",\"ogn-075-298\",\"fae\")` then `p1.do(\"addDamage\",{cardId:\"fae\",amount:6})` → zone=trash, chain=[], no pendingChoice; the same unit killed by a 6-damage spell puts `{cardId:\"fae\",triggered:true,type:\"ability\"}` on the chain.",
+  "observed": "executeMove('addDamage',{cardId:Faefolk,amount:6}) moved the unit to trash (base [], trash 1) but no chain item / pendingChoice appeared; runePool stayed at 2 runes and hand stayed at 5. The addDamage reducer calls performCleanup() directly (reaps without emitting `die` events), so the withPostMoveCleanup/cleanupAndFireDeaths pass finds nothing left to fire. Killing the same unit with Vengeance (kill effect) DID fire Deathknell correctly, so this is specific to the damage→SBA-death path used by the sandbox move.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/counters.ts:75",
+  "id": "7209cdbf4dce",
+  "createdAt": "2026-08-07T03:31:36.293Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T03:31:36.293Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T07:58:34.271Z",
+      "event": "done(unclaimed)",
+      "note": "WP3 (8f0d410): counterMoves wrapped in post-move maintenance + damage-store; sandbox addDamage lethal → die through leaveBoard, Deathknell fires (leave-board-choke-point.test.ts)"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "WP3 (8f0d410): counterMoves wrapped in post-move maintenance + damage-store; sandbox addDamage lethal → die through leaveBoard, Deathknell fires (leave-board-choke-point.test.ts)",
+    "at": "2026-08-07T07:58:34.271Z"
+  }
+}

@@ -16,23 +16,23 @@
       "event": "enqueued:unit-bug"
     },
     {
-      "at": "2026-08-06T23:01:12.910Z",
-      "event": "grabbed:w8-i5"
+      "at": "2026-08-07T05:17:07.623Z",
+      "event": "grabbed:w4-i15"
     },
     {
-      "at": "2026-08-06T23:07:53.350Z",
+      "at": "2026-08-07T05:17:43.382Z",
       "event": "done",
-      "note": "already fixed upstream (spell-type trash filter); verified all 4 tests green"
+      "note": "already fixed+flipped upstream; trash-spell pick prompt green"
     }
   ],
   "status": "done",
-  "claimedBy": "w8-i5",
-  "claimedAt": "2026-08-06T23:01:12.910Z",
+  "claimedBy": "w4-i15",
+  "claimedAt": "2026-08-07T05:17:07.623Z",
   "resolution": {
-    "note": "already fixed upstream (spell-type trash filter); verified all 4 tests green",
+    "note": "already fixed+flipped upstream; trash-spell pick prompt green",
     "files": [
       "packages/riftbound-engine/src/__tests__/cards/ogs-010-024.test.ts"
     ],
-    "at": "2026-08-06T23:07:53.350Z"
+    "at": "2026-08-07T05:17:43.382Z"
   }
 }

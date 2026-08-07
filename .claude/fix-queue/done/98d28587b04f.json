@@ -15,26 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:40:41.561Z",
-      "event": "grabbed:w2-i10"
+      "at": "2026-08-07T05:30:06.980Z",
+      "event": "grabbed:w9-i12"
     },
     {
-      "at": "2026-08-07T00:42:52.175Z",
+      "at": "2026-08-07T05:30:48.639Z",
       "event": "done",
-      "note": "validateDeck: reject duplicate battlefield names (103.4.c)"
+      "note": "already fixed in HEAD; verified passing"
     }
   ],
   "status": "done",
-  "claimedBy": "w2-i10",
-  "claimedAt": "2026-08-07T00:40:41.561Z",
+  "claimedBy": "w9-i12",
+  "claimedAt": "2026-08-07T05:30:06.980Z",
   "resolution": {
-    "note": "validateDeck: reject duplicate battlefield names (103.4.c)",
+    "note": "already fixed in HEAD; verified passing",
     "files": [
-      "packages/riftbound-engine/src/validators/deck-validators.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts",
-      "packages/riftbound-engine/src/__tests__/deck-validation.test.ts",
-      "packages/riftbound-engine/src/__tests__/core-rules/runes-rune-deck-and-rune-pool.test.ts"
+      "packages/riftbound-engine/src/__tests__/core-rules/setup-decks-and-mulligan.test.ts"
     ],
-    "at": "2026-08-07T00:42:52.175Z"
+    "at": "2026-08-07T05:30:48.639Z"
   }
 }

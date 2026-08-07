@@ -1,0 +1,40 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-018-221",
+  "title": "BUG: two Hatchlings — two separate look/recycle steps before the single reveal (recycle twice digs two cards deep)",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-018-221.test.ts",
+    "testName": "BUG: two Hatchlings — two separate look/recycle steps before the single reveal (recycle twice digs two cards deep)"
+  },
+  "id": "cce08ef1c866",
+  "createdAt": "2026-08-07T01:27:56.040Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:27:56.040Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T06:09:01.457Z",
+      "event": "grabbed:w11-i16"
+    },
+    {
+      "at": "2026-08-07T06:13:29.063Z",
+      "event": "done",
+      "note": "reveal replacement (Void Hatchling): deck reveals now offer each revealer's look/optional-recycle first, deferring the reveal onto the prompt"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i16",
+  "claimedAt": "2026-08-07T06:09:01.457Z",
+  "resolution": {
+    "note": "reveal replacement (Void Hatchling): deck reveals now offer each revealer's look/optional-recycle first, deferring the reveal onto the prompt",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/reveal.ts",
+      "packages/riftbound-engine/src/abilities/replacement-effects.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-018-221.test.ts"
+    ],
+    "at": "2026-08-07T06:13:29.063Z"
+  }
+}

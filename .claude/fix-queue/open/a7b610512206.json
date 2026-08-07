@@ -1,0 +1,19 @@
+{
+  "source": "playtest",
+  "cardId": "unl-040-219",
+  "title": "[Level 6] gate on 'When you play me, draw 1' is ignored",
+  "expected": "Parser (packages/riftbound-cards/src/parser/impl/gated.ts) emits the Wuju Apprentice play-self triggered ability with condition {type:'while-level',threshold:6} (verified by running parseAbilities on the card's rulesText). The triggered-ability gate evaluateTriggerCondition in packages/riftbound-engine/src/abilities/trigger-runner.ts:289-521 handles legion, paid-additional-cost, excess-damage-assigned, played-power-cost, while-empowered, while-at-battlefield, fewer-runes-than-opponent, control, alone-in-combat, while-alone, exists-here, and, has-at-least — there is no 'while-level' branch, so it falls through to `return true` at trigger-runner.ts:520. grep confirms 'while-level' is only evaluated in static-abilities.ts:357, play/cost.ts:202, and activate-ability.ts:542/929. Hence at XP 0 the [Level 6] play trigger is put on the chain unconditionally and draws 1.",
+  "observed": "At xp=0 the play-self trigger was put on the chain with effect {draw 1} and no condition, and on resolution hand went 5->6 (drew Tideturner). Parser emits condition {type:'while-level',threshold:6} on the triggered ability, but trigger-runner's triggered-ability condition evaluator has no 'while-level' case and falls through to permissive true (while-level is only handled for static/activated abilities and play cost).",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/abilities/trigger-runner.ts:520",
+  "id": "a7b610512206",
+  "createdAt": "2026-08-07T07:42:18.110Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.110Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

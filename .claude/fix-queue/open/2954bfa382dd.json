@@ -1,0 +1,18 @@
+{
+  "source": "playtest",
+  "title": "With a non-combat Showdown open at Abandoned Hall (player-1 has Focus, no chain), the engine still offers activateAbility for the legend Herald of the Arcane ('[1], [Exhaust]: Play a 1 Might Recruit unit token') and the UI shows the 'Activate Ability — Herald of the Arcane' button.",
+  "expected": "Trace step 29: showdown active (isCombatShowdown:false, focusPlayer player-1, chain null) and `moves` includes activateAbility for player-1-legend-ogn-265-298; DOM actionButtons includes 'Activate Ability Herald of the Arcane'. Source: activate-ability.ts:39-50 `abilityTimingClass` returns \"action\" for any untagged activated ability whose host is not gear (line 49: `getCardType(hostCardId) === \"gear\" ? \"standard\" : \"action\"`), and chain-state.ts:207-208 `isLegalTiming(\"action\")` returns true for \"showdown-open\". Both the move condition (line 514-515) and the enumerator (858-862) use this helper. Herald's ability (herald-of-the-arcane.ts:16-25) has no keyword/timing, so it is classified \"action\" and offered during Showdown. Rules contradict this: 310.1.a (abilities activated by default only in Neutral Open), 313.1.a example (\"A player with Focus may not ... activate abilities that don't have the Action or Reaction keywords\"), 806.1.c.2 (Action is what grants showdown activation). Only gear got the \"standard\" fix; legends/units still default to action timing.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/chain/activate-ability.ts:49",
+  "rule": "347.1 / 806.1 — Herald of the Arcane ogn-265-298",
+  "id": "2954bfa382dd",
+  "createdAt": "2026-08-07T07:42:18.111Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T07:42:18.111Z",
+      "event": "enqueued:playtest"
+    }
+  ],
+  "status": "open"
+}

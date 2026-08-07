@@ -16,26 +16,23 @@
       "event": "enqueued:unit-bug"
     },
     {
-      "at": "2026-08-06T22:49:41.250Z",
-      "event": "grabbed:w9-i6"
+      "at": "2026-08-07T05:15:04.037Z",
+      "event": "grabbed:w10-i8"
     },
     {
-      "at": "2026-08-06T22:54:01.864Z",
+      "at": "2026-08-07T05:15:27.415Z",
       "event": "done",
-      "note": "Stormbringer: explicit abilities; enumerate [mightRef, battlefield] pairs; boundBattlefieldZone tolerates ref id"
+      "note": "already fixed on HEAD by an earlier lane; test.failing already flipped and passing — verified by running the file"
     }
   ],
   "status": "done",
-  "claimedBy": "w9-i6",
-  "claimedAt": "2026-08-06T22:49:41.250Z",
+  "claimedBy": "w10-i8",
+  "claimedAt": "2026-08-07T05:15:04.037Z",
   "resolution": {
-    "note": "Stormbringer: explicit abilities; enumerate [mightRef, battlefield] pairs; boundBattlefieldZone tolerates ref id",
+    "note": "already fixed on HEAD by an earlier lane; test.failing already flipped and passing — verified by running the file",
     "files": [
-      "packages/riftbound-cards/src/cards/ogn/stormbringer.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts",
-      "packages/riftbound-engine/src/abilities/target-resolver.ts",
-      "packages/riftbound-engine/src/game-definition/moves/chain/resolve.ts"
+      "packages/riftbound-engine/src/__tests__/cards/ogn-250-298.test.ts"
     ],
-    "at": "2026-08-06T22:54:01.864Z"
+    "at": "2026-08-07T05:15:27.415Z"
   }
 }

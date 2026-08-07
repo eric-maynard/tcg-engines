@@ -15,24 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:17:58.075Z",
-      "event": "grabbed:w6-i8"
+      "at": "2026-08-07T05:24:50.860Z",
+      "event": "grabbed:w2-i10"
     },
     {
-      "at": "2026-08-07T00:24:14.027Z",
+      "at": "2026-08-07T05:31:53.582Z",
       "event": "done",
-      "note": "evaluateEnterReadyCondition now handles while-level via evaluateWhileLevel"
+      "note": "already fixed on current tree: cost.ts evaluateEnterReadyCondition has a while-level case; unl-151-219 test covers 0-XP exhausted"
     }
   ],
   "status": "done",
-  "claimedBy": "w6-i8",
-  "claimedAt": "2026-08-07T00:17:58.075Z",
+  "claimedBy": "w2-i10",
+  "claimedAt": "2026-08-07T05:24:50.860Z",
   "resolution": {
-    "note": "evaluateEnterReadyCondition now handles while-level via evaluateWhileLevel",
+    "note": "already fixed on current tree: cost.ts evaluateEnterReadyCondition has a while-level case; unl-151-219 test covers 0-XP exhausted",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
-      "packages/riftbound-engine/src/__tests__/cards/unl-151-219.test.ts"
+      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts"
     ],
-    "at": "2026-08-07T00:24:14.027Z"
+    "at": "2026-08-07T05:31:53.582Z"
   }
 }

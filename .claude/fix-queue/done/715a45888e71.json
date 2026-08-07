@@ -15,25 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-06T23:52:18.444Z",
-      "event": "grabbed:w7-i14"
+      "at": "2026-08-07T05:27:54.885Z",
+      "event": "grabbed:w9-i11"
     },
     {
-      "at": "2026-08-07T00:16:15.087Z",
+      "at": "2026-08-07T05:28:52.845Z",
       "event": "done",
-      "note": "parser: accept 'Disempower this/it' leading cost; stop splitting an ability at its cost colon"
+      "note": "already fixed: parser accepts 'Disempower this/it' leading cost; ven-087-166 activated ability #1 parses + activates"
     }
   ],
   "status": "done",
-  "claimedBy": "w7-i14",
-  "claimedAt": "2026-08-06T23:52:18.444Z",
+  "claimedBy": "w9-i11",
+  "claimedAt": "2026-08-07T05:27:54.885Z",
   "resolution": {
-    "note": "parser: accept 'Disempower this/it' leading cost; stop splitting an ability at its cost colon",
+    "note": "already fixed: parser accepts 'Disempower this/it' leading cost; ven-087-166 activated ability #1 parses + activates",
     "files": [
-      "packages/riftbound-cards/src/parser/impl/activated.ts",
-      "packages/riftbound-cards/src/parser/impl/split.ts",
-      "packages/riftbound-engine/src/__tests__/cards/ven-087-166.test.ts"
+      "packages/riftbound-cards/src/parser/impl/activated.ts"
     ],
-    "at": "2026-08-07T00:16:15.087Z"
+    "at": "2026-08-07T05:28:52.845Z"
   }
 }

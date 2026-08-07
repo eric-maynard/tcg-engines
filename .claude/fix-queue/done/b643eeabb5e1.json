@@ -1,0 +1,40 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-112-221",
+  "title": "BUG: 'give … my keywords' — the recipient gains Deflect (Kato's printed keyword) this turn, not a '$self-keywords' placeholder",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-112-221.test.ts",
+    "testName": "BUG: 'give … my keywords' — the recipient gains Deflect (Kato's printed keyword) this turn, not a '$self-keywords' placeholder"
+  },
+  "id": "b643eeabb5e1",
+  "createdAt": "2026-08-07T01:36:10.440Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:36:10.440Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:52:18.123Z",
+      "event": "grabbed:w8-i17"
+    },
+    {
+      "at": "2026-08-07T05:56:54.915Z",
+      "event": "done",
+      "note": "grant-keywords: expand $self-keywords placeholder to the source's current printed+granted keywords (Kato copies Deflect)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i17",
+  "claimedAt": "2026-08-07T05:52:18.123Z",
+  "resolution": {
+    "note": "grant-keywords: expand $self-keywords placeholder to the source's current printed+granted keywords (Kato copies Deflect)",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/grant-keywords.ts",
+      "packages/riftbound-cards/src/cards/sfd/kato-the-arm.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-112-221.test.ts"
+    ],
+    "at": "2026-08-07T05:56:54.915Z"
+  }
+}

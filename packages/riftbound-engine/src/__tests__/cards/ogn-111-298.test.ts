@@ -22,6 +22,7 @@ const BLIND_MONK = "ogn-257-298";
 const ARENA_KINGPIN = "unl-001-219";
 const FORGE = "ogn-212-298";
 const ENERGY_CONDUIT = "ogn-098-298";
+const LEE_SIN = "ogn-078-298";
 
 function board(heimerExhausted = false) {
   return scenario()
@@ -100,5 +101,19 @@ describe("Heimerdinger, Inventor (ogn-111-298)", () => {
     expect(r.ok).toBe(false);
     // The originals are still usable by their own permanents.
     expect(game.p1.can("activate", "seal")).toBe(true);
+  });
+
+  // rule 108.3 — the champion zone is not the board; an unplayed Chosen
+  // Champion is not a friendly unit in play, so Heimerdinger inherits nothing
+  // from it.
+  test("an unplayed Chosen Champion in the champion zone contributes no abilities", async () => {
+    const game = await scenario()
+      .resources(P1, { energy: 2 })
+      .unit(P1, "base", CARD, "heimer")
+      .champion(P1, LEE_SIN, "lee")
+      .build();
+    expect(heimerSources(game)).not.toContain("lee");
+    const r = await game.p1.try((p) => p.activate("heimer", 0, { source: "lee" }));
+    expect(r.ok).toBe(false);
   });
 });

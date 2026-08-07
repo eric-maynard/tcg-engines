@@ -8,12 +8,31 @@
   },
   "id": "49823c3bc58c",
   "createdAt": "2026-08-06T20:50:12.437Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:50:12.437Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:34:55.287Z",
+      "event": "grabbed:w7-i8"
+    },
+    {
+      "at": "2026-08-07T05:46:23.580Z",
+      "event": "failed",
+      "note": "Engine fix ready (effects/recycle.ts rune branch parks an owner-ordered reveal-and-pick; test passes locally) but cannot land: the repro's test file also carries another lane's unlanded flip of the 316.3 pool-emptying test, whose riftbound-flow.ts fix is mid-edit and red (35 failures). Landing the file alone blocks. Retry once that lane lands."
+    },
+    {
+      "at": "2026-08-07T08:14:36.893Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w7-i8",
+  "claimedAt": "2026-08-07T05:34:55.287Z",
+  "resolution": {
+    "note": "Engine fix ready (effects/recycle.ts rune branch parks an owner-ordered reveal-and-pick; test passes locally) but cannot land: the repro's test file also carries another lane's unlanded flip of the 316.3 pool-emptying test, whose riftbound-flow.ts fix is mid-edit and red (35 failures). Landing the file alone blocks. Retry once that lane lands.",
+    "at": "2026-08-07T05:46:23.580Z"
+  }
 }

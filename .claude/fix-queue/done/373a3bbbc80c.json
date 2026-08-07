@@ -1,0 +1,38 @@
+{
+  "source": "playtest",
+  "cardId": "sfd-196-221",
+  "title": "Defiant Dance applies both the +2 and the -2 to the same unit instead of two different units",
+  "expected": "Parser (packages/riftbound-cards/src/parser/impl/effects-might.ts:143-186) matches the compound \"Give X +N ... and another Y -M\" pattern but swallows \"another\" in a non-capturing group, emitting sequence[modify-might +2 target{type:unit}, modify-might -2 target{type:unit}] with identical descriptors and no excludeBound (verified by running parseAbilities on the card text). In the engine, collectSequenceTargetSlots (game-definition/moves/play/targeting.ts:147-171) merges identical descriptors via isRestatementOf into ONE slot, so findSequenceLeadTarget yields a single play-time target prompt. handle_sequence (abilities/effects/sequence.ts:69-80) only routes per-slot when slots.length >= 2, so ctx.boundTargets=[A] is threaded to both steps and getTargetIds (_helpers.ts:49-50) returns the bound id for each -> +2 and -2 both land on A; with targets [A,B] both steps receive both ids. No card-level override exists for sfd-196-221.",
+  "observed": "Played via UI (click card -> one target prompt -> Pouty Poro/Overzealous Fan): spell went on chain with targets=[one id]; after resolution the target had meta.mightModifier=0 and might stayed 2 (i.e. +2 and -2 both landed on it), the other friendly unit had no modifier at all, and no pendingChoice/second prompt ever appeared. Forcing two targets via executeMove(playSpell,{targets:[A,B]}) resolved with BOTH units at mightModifier 0 (each sub-effect applied to every target) instead of A=+2/B=-2. Parsed effect is sequence[modify-might +2 target{type:unit}, modify-might -2 target{type:unit}] with no per-effect target binding / excludeSelf.",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-cards/src/parser/impl/effects-might.ts:143",
+  "id": "373a3bbbc80c",
+  "createdAt": "2026-08-06T23:55:41.369Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.369Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:38:32.142Z",
+      "event": "grabbed:w9-i13"
+    },
+    {
+      "at": "2026-08-07T05:53:21.801Z",
+      "event": "done",
+      "note": "parser emits distinctTargets/independentTargets for 'and another' compound might; engine routes per-slot — verified green"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w9-i13",
+  "claimedAt": "2026-08-07T05:38:32.142Z",
+  "resolution": {
+    "note": "parser emits distinctTargets/independentTargets for 'and another' compound might; engine routes per-slot — verified green",
+    "files": [
+      "packages/riftbound-cards/src/parser/impl/effects-might.ts",
+      "packages/riftbound-engine/src/__tests__/cards/sfd-196-221.test.ts"
+    ],
+    "at": "2026-08-07T05:53:21.801Z"
+  }
+}

@@ -15,28 +15,23 @@
       "event": "enqueued:ruling-bug"
     },
     {
-      "at": "2026-08-06T23:56:10.957Z",
-      "event": "grabbed:w8-i9"
+      "at": "2026-08-07T05:22:59.784Z",
+      "event": "grabbed:w8-i13"
     },
     {
-      "at": "2026-08-06T23:59:24.837Z",
+      "at": "2026-08-07T05:23:07.064Z",
       "event": "done",
-      "note": "new play-banished-pass/-card effects; rule 355.8 gate leaves an untargetable counterspell banished"
+      "note": "already fixed at HEAD; repro tests pass (verified)"
     }
   ],
   "status": "done",
-  "claimedBy": "w8-i9",
-  "claimedAt": "2026-08-06T23:56:10.957Z",
+  "claimedBy": "w8-i13",
+  "claimedAt": "2026-08-07T05:22:59.784Z",
   "resolution": {
-    "note": "new play-banished-pass/-card effects; rule 355.8 gate leaves an untargetable counterspell banished",
+    "note": "already fixed at HEAD; repro tests pass (verified)",
     "files": [
-      "packages/riftbound-cards/src/cards/ogn/promising-future.ts",
-      "packages/riftbound-engine/src/abilities/effects/play-banished-pass.ts",
-      "packages/riftbound-engine/src/abilities/effects/play.ts",
-      "packages/riftbound-engine/src/abilities/effects/index.ts",
-      "packages/riftbound-engine/src/game-definition/moves/pending-choice.ts",
-      "packages/riftbound-engine/src/__tests__/cards/rulings/promising-future-23c9277d071cd1f7.test.ts"
+      "packages/riftbound-engine/src/__tests__/cards/rulings/"
     ],
-    "at": "2026-08-06T23:59:24.837Z"
+    "at": "2026-08-07T05:23:07.064Z"
   }
 }

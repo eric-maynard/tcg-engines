@@ -1,0 +1,52 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 316.3 — only the Turn Player's pool is emptied when the Main Phase starts; the opponent keeps energy floated during the Beginning Phase",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/turn-structure-phases-and-resources.test.ts",
+    "testName": "BUG: 316.3 — only the Turn Player's pool is emptied when the Main Phase starts; the opponent keeps energy floated during the Beginning Phase"
+  },
+  "id": "4f2ee70d01b5",
+  "createdAt": "2026-08-06T20:50:12.434Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.434Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T03:40:34.176Z",
+      "event": "grabbed:w7-i4"
+    },
+    {
+      "at": "2026-08-07T03:43:58.612Z",
+      "event": "done",
+      "note": "draw.onEnd empties EVERY player's rune pool at Main start (316.3)"
+    },
+    {
+      "at": "2026-08-07T03:52:17.237485Z",
+      "event": "reopened",
+      "note": "w7-i4: fix verified locally but unlandable — concurrent flow.ts Beginning-Phase-steps refactor + that lane's already-flipped tests fail on clean HEAD"
+    },
+    {
+      "at": "2026-08-07T03:52:40.564Z",
+      "event": "grabbed:w7-i5"
+    },
+    {
+      "at": "2026-08-07T03:54:38.699Z",
+      "event": "done",
+      "note": "empty EVERY player's rune pool at draw.onEnd (rule 316.3), not just the turn player's"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w7-i5",
+  "claimedAt": "2026-08-07T03:52:40.564Z",
+  "resolution": {
+    "note": "empty EVERY player's rune pool at draw.onEnd (rule 316.3), not just the turn player's",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/flow/riftbound-flow.ts",
+      "packages/riftbound-engine/src/__tests__/core-rules/turn-structure-phases-and-resources.test.ts"
+    ],
+    "at": "2026-08-07T03:54:38.699Z"
+  }
+}

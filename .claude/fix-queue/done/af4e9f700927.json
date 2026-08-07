@@ -1,0 +1,37 @@
+{
+  "source": "playtest",
+  "cardId": "unl-131-219",
+  "title": "Abandon does not let the player choose which spell to counter when multiple spells are on the chain",
+  "expected": "Abandon's rulesText is parsed at load (enrich-cards.ts) into a `sequence` effect: [{type:'counter',destination:'hand'},{type:'predict',amount:1}] (verified by running parseAbilities). The play-spell enumerator only emits per-chain-item target variants when the TOP-LEVEL effect is a counter: play-spell.ts:1186 `else if (spellEffect?.type === \"counter\") { ...baseVariants.push({targets:[key]}) }`; a sequence falls through to the `else` at ~1207 which pushes a variant with no targets. Likewise isCounterSpell at play-spell.ts:390 checks only top-level type. With no boundTargets, handle_counter (abilities/effects/counter.ts, loop `for (let i = items.length-1; i>=0; i--)`) picks the topmost legal spell, so Premonition is auto-countered and Mobilize can never be chosen. Bare \"Counter a spell\" cards (e.g. ogn-064) work because their effect is a top-level counter; Abandon's trailing [Predict] wraps it in a sequence and bypasses the targeting branch.",
+  "observed": "playSpell for Abandon was offered with no targets param and no pendingChoice appeared; chain item had no target recorded ({type:'counter',destination:'hand'}). On resolution it auto-countered the topmost spell (Premonition, returned to hand) — no way to counter Mobilize instead",
+  "layer": "engine",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts:1186",
+  "id": "af4e9f700927",
+  "createdAt": "2026-08-06T23:55:41.370Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.370Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:42:55.744Z",
+      "event": "grabbed:w11-i10"
+    },
+    {
+      "at": "2026-08-07T05:43:52.875Z",
+      "event": "done",
+      "note": "already fixed at HEAD (d220335): play-spell finds a nested counter spec inside sequence effects and enumerates per-chain-item targets; unl-131-219 pick-which-spell test green"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i10",
+  "claimedAt": "2026-08-07T05:42:55.744Z",
+  "resolution": {
+    "note": "already fixed at HEAD (d220335): play-spell finds a nested counter spec inside sequence effects and enumerates per-chain-item targets; unl-131-219 pick-which-spell test green",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/play-spell.ts"
+    ],
+    "at": "2026-08-07T05:43:52.875Z"
+  }
+}

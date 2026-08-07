@@ -1,0 +1,32 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-101-221",
+  "title": "BUG: each buff spent is its own trigger — Kraken Hunter spending two buffs plays TWO Gold tokens",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-101-221.test.ts",
+    "testName": "BUG: each buff spent is its own trigger — Kraken Hunter spending two buffs plays TWO Gold tokens"
+  },
+  "id": "baeb890a1087",
+  "createdAt": "2026-08-07T01:20:34.442Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:20:34.442Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:09:34.420Z",
+      "event": "done(unclaimed)",
+      "note": "play-unit now fires spend-buff once per buff spent"
+    }
+  ],
+  "status": "done",
+  "resolution": {
+    "note": "play-unit now fires spend-buff once per buff spent",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts"
+    ],
+    "at": "2026-08-07T05:09:34.420Z"
+  }
+}

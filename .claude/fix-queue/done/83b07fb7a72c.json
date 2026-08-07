@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "ogn-250-298",
+  "title": "BUG: 'Choose a friendly unit in your base' — the cast asks for one of YOUR BASE units (big | small), not a unit afield",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/ogn-250-298.test.ts",
+    "testName": "BUG: 'Choose a friendly unit in your base' — the cast asks for one of YOUR BASE units (big | small), not a unit afield"
+  },
+  "id": "83b07fb7a72c",
+  "createdAt": "2026-08-06T18:35:08.351Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T18:35:08.351Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:17:07.622Z",
+      "event": "grabbed:w4-i15"
+    },
+    {
+      "at": "2026-08-07T05:17:43.341Z",
+      "event": "done",
+      "note": "already fixed+flipped upstream; base-unit target list green"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w4-i15",
+  "claimedAt": "2026-08-07T05:17:07.622Z",
+  "resolution": {
+    "note": "already fixed+flipped upstream; base-unit target list green",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/ogn-250-298.test.ts"
+    ],
+    "at": "2026-08-07T05:17:43.341Z"
+  }
+}

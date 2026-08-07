@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-058-221",
+  "title": "BUG: no gear among the top 4 → nothing can be drawn; all 4 are recycled and the hand stays empty",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-058-221.test.ts",
+    "testName": "BUG: no gear among the top 4 → nothing can be drawn; all 4 are recycled and the hand stays empty"
+  },
+  "id": "bb19eca1746c",
+  "createdAt": "2026-08-07T01:04:24.770Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:04:24.770Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:51:38.531Z",
+      "event": "grabbed:w1-i15"
+    },
+    {
+      "at": "2026-08-07T05:53:57.774Z",
+      "event": "done",
+      "note": "already green at HEAD (2f998de): look filter cardTypes + optional decline landed by an earlier lane; verified in a clean worktree, 12/12 pass"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w1-i15",
+  "claimedAt": "2026-08-07T05:51:38.531Z",
+  "resolution": {
+    "note": "already green at HEAD (2f998de): look filter cardTypes + optional decline landed by an earlier lane; verified in a clean worktree, 12/12 pass",
+    "files": [
+      "packages/riftbound-engine/src/__tests__/cards/sfd-058-221.test.ts"
+    ],
+    "at": "2026-08-07T05:53:57.774Z"
+  }
+}

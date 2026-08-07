@@ -15,24 +15,23 @@
       "event": "enqueued:core-rule-bug"
     },
     {
-      "at": "2026-08-07T00:36:50.653Z",
-      "event": "grabbed:w10-i13"
+      "at": "2026-08-07T05:27:54.886Z",
+      "event": "grabbed:w9-i11"
     },
     {
-      "at": "2026-08-07T00:38:58.635Z",
+      "at": "2026-08-07T05:28:52.928Z",
       "event": "done",
-      "note": "recycle effect: rune targets go under owner's rune deck, no power (416.1.b/.c)"
+      "note": "already fixed: effect-driven rune recycle moves rune under owner's rune deck, no power granted; test flipped in HEAD"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i13",
-  "claimedAt": "2026-08-07T00:36:50.653Z",
+  "claimedBy": "w9-i11",
+  "claimedAt": "2026-08-07T05:27:54.886Z",
   "resolution": {
-    "note": "recycle effect: rune targets go under owner's rune deck, no power (416.1.b/.c)",
+    "note": "already fixed: effect-driven rune recycle moves rune under owner's rune deck, no power granted; test flipped in HEAD",
     "files": [
-      "packages/riftbound-engine/src/abilities/effects/recycle.ts",
       "packages/riftbound-engine/src/__tests__/core-rules/runes-rune-deck-and-rune-pool.test.ts"
     ],
-    "at": "2026-08-07T00:38:58.635Z"
+    "at": "2026-08-07T05:28:52.928Z"
   }
 }

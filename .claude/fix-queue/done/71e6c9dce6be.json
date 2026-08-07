@@ -15,25 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:15:46.562Z",
-      "event": "grabbed:w1-i9"
+      "at": "2026-08-07T05:24:32.436Z",
+      "event": "grabbed:w6-i7"
     },
     {
-      "at": "2026-08-07T00:18:44.559Z",
+      "at": "2026-08-07T05:29:01.732Z",
       "event": "done",
-      "note": "attach-equipment now dispatched via dispatchEvent + added to EVENT_TYPES_NEEDING_RECALC so statics recalc on attach"
+      "note": "already fixed at HEAD: equipCard reducer dispatches attach-equipment via dispatchEvent so statics recalc; verified by sfd-068-221 tests"
     }
   ],
   "status": "done",
-  "claimedBy": "w1-i9",
-  "claimedAt": "2026-08-07T00:15:46.562Z",
+  "claimedBy": "w6-i7",
+  "claimedAt": "2026-08-07T05:24:32.436Z",
   "resolution": {
-    "note": "attach-equipment now dispatched via dispatchEvent + added to EVENT_TYPES_NEEDING_RECALC so statics recalc on attach",
+    "note": "already fixed at HEAD: equipCard reducer dispatches attach-equipment via dispatchEvent so statics recalc; verified by sfd-068-221 tests",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/equipment.ts",
-      "packages/riftbound-engine/src/events/dispatcher.ts",
-      "packages/riftbound-engine/src/__tests__/cards/sfd-068-221.test.ts"
+      "packages/riftbound-engine/src/game-definition/moves/equipment.ts"
     ],
-    "at": "2026-08-07T00:18:44.559Z"
+    "at": "2026-08-07T05:29:01.732Z"
   }
 }

@@ -1,0 +1,38 @@
+{
+  "source": "unit-bug",
+  "cardId": "sfd-100-221",
+  "title": "BUG: a ONE-pip card (Dauntless Vanguard, 4 + [body]) is below the threshold — no trigger, no draw",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/cards/sfd-100-221.test.ts",
+    "testName": "BUG: a ONE-pip card (Dauntless Vanguard, 4 + [body]) is below the threshold — no trigger, no draw"
+  },
+  "id": "e74a17af6999",
+  "createdAt": "2026-08-07T01:27:56.030Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-07T01:27:56.030Z",
+      "event": "enqueued:unit-bug"
+    },
+    {
+      "at": "2026-08-07T05:56:04.588Z",
+      "event": "grabbed:w3-i18"
+    },
+    {
+      "at": "2026-08-07T06:07:03.047Z",
+      "event": "done",
+      "note": "Yordle Explorer: explicit play-card trigger gated by played-power-cost>=2 (rule 206.1 printed pips)"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w3-i18",
+  "claimedAt": "2026-08-07T05:56:04.588Z",
+  "resolution": {
+    "note": "Yordle Explorer: explicit play-card trigger gated by played-power-cost>=2 (rule 206.1 printed pips)",
+    "files": [
+      "packages/riftbound-cards/src/cards/sfd/yordle-explorer.ts"
+    ],
+    "at": "2026-08-07T06:07:03.047Z"
+  }
+}

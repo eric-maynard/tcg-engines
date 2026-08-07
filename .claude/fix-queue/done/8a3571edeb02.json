@@ -15,25 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:08:11.628Z",
-      "event": "grabbed:w8-i10"
+      "at": "2026-08-07T05:24:52.092Z",
+      "event": "grabbed:w11-i7"
     },
     {
-      "at": "2026-08-07T00:09:56.943Z",
+      "at": "2026-08-07T05:25:02.011Z",
       "event": "done",
-      "note": "play-unit honours CanPlayToEnemyBattlefield grant (unl-120-219) in condition + enumerator"
+      "note": "already fixed on HEAD; repro tests green (11 pass)"
     }
   ],
   "status": "done",
-  "claimedBy": "w8-i10",
-  "claimedAt": "2026-08-07T00:08:11.628Z",
+  "claimedBy": "w11-i7",
+  "claimedAt": "2026-08-07T05:24:52.092Z",
   "resolution": {
-    "note": "play-unit honours CanPlayToEnemyBattlefield grant (unl-120-219) in condition + enumerator",
+    "note": "already fixed on HEAD; repro tests green (11 pass)",
     "files": [
-      "packages/riftbound-engine/src/game-definition/moves/play/cost.ts",
-      "packages/riftbound-engine/src/game-definition/moves/play/play-unit.ts",
       "packages/riftbound-engine/src/__tests__/cards/unl-120-219.test.ts"
     ],
-    "at": "2026-08-07T00:09:56.943Z"
+    "at": "2026-08-07T05:25:02.011Z"
   }
 }

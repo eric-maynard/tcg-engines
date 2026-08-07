@@ -8,12 +8,31 @@
   },
   "id": "e4ea2d8e33ed",
   "createdAt": "2026-08-06T20:11:47.426Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:11:47.426Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T00:06:39.412Z",
+      "event": "grabbed:w5-i9"
+    },
+    {
+      "at": "2026-08-07T00:11:27.014Z",
+      "event": "failed",
+      "note": "Chain-priority gate in play-spell is rules-correct (312/337.4) but breaks ~12 existing card tests (Wind Wall, Riposte, Abandon, Brynhir, Ravenborn Tome...) that cast a Reaction from the non-priority seat without passing priority; needs a coordinated harness change (auto-pass priority in cast) — reverted"
+    },
+    {
+      "at": "2026-08-07T08:14:36.891Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w5-i9",
+  "claimedAt": "2026-08-07T00:06:39.412Z",
+  "resolution": {
+    "note": "Chain-priority gate in play-spell is rules-correct (312/337.4) but breaks ~12 existing card tests (Wind Wall, Riposte, Abandon, Brynhir, Ravenborn Tome...) that cast a Reaction from the non-priority seat without passing priority; needs a coordinated harness change (auto-pass priority in cast) — reverted",
+    "at": "2026-08-07T00:11:27.014Z"
+  }
 }

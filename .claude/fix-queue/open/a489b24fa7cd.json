@@ -8,12 +8,31 @@
   },
   "id": "a489b24fa7cd",
   "createdAt": "2026-08-06T20:11:47.426Z",
-  "attempts": 0,
+  "attempts": 1,
   "history": [
     {
       "at": "2026-08-06T20:11:47.426Z",
       "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T05:23:07.114Z",
+      "event": "grabbed:w8-i13"
+    },
+    {
+      "at": "2026-08-07T05:26:41.713Z",
+      "event": "failed",
+      "note": "same missing capability as the defender-side item (465.2.c): distributeDamage auto-assigns inside a sync reducer; an attacker-side assignment Decision needs resolveFullCombat to become resumable"
+    },
+    {
+      "at": "2026-08-07T08:14:36.890Z",
+      "event": "requeued"
     }
   ],
-  "status": "open"
+  "status": "open",
+  "claimedBy": "w8-i13",
+  "claimedAt": "2026-08-07T05:23:07.114Z",
+  "resolution": {
+    "note": "same missing capability as the defender-side item (465.2.c): distributeDamage auto-assigns inside a sync reducer; an attacker-side assignment Decision needs resolveFullCombat to become resumable",
+    "at": "2026-08-07T05:26:41.713Z"
+  }
 }

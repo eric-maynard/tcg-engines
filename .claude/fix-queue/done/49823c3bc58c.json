@@ -1,0 +1,37 @@
+{
+  "source": "core-rule-bug",
+  "title": "BUG: 416.5.a — effect recycling 3 runes should surface an owner's-ORDER decision and place them under the deck in that order; engine does not recycle them at all",
+  "layer": "engine",
+  "repro": {
+    "testFile": "packages/riftbound-engine/src/__tests__/core-rules/runes-rune-deck-and-rune-pool.test.ts",
+    "testName": "BUG: 416.5.a — effect recycling 3 runes should surface an owner's-ORDER decision and place them under the deck in that order; engine does not recycle them at all"
+  },
+  "id": "49823c3bc58c",
+  "createdAt": "2026-08-06T20:50:12.437Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T20:50:12.437Z",
+      "event": "enqueued:core-rule-bug"
+    },
+    {
+      "at": "2026-08-07T03:50:44.324Z",
+      "event": "grabbed:w8-i5"
+    },
+    {
+      "at": "2026-08-07T03:55:50.592Z",
+      "event": "done",
+      "note": "recycle effect: 'recycle N of your runes' pools the rune pool and prompts the owner for order, runes go under the rune deck"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w8-i5",
+  "claimedAt": "2026-08-07T03:50:44.324Z",
+  "resolution": {
+    "note": "recycle effect: 'recycle N of your runes' pools the rune pool and prompts the owner for order, runes go under the rune deck",
+    "files": [
+      "packages/riftbound-engine/src/abilities/effects/recycle.ts"
+    ],
+    "at": "2026-08-07T03:55:50.592Z"
+  }
+}

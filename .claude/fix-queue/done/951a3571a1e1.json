@@ -15,27 +15,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:29:22.203Z",
-      "event": "grabbed:w10-i12"
+      "at": "2026-08-07T05:27:58.095Z",
+      "event": "grabbed:w3-i14"
     },
     {
-      "at": "2026-08-07T00:33:20.948Z",
+      "at": "2026-08-07T05:29:01.811Z",
       "event": "done",
-      "note": "Mech tag: printed Mech units tagged; sandbox tokens register tags from name"
+      "note": "verified fixed (Mech tags on card defs + token registration); added token/duplicate regressions"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i12",
-  "claimedAt": "2026-08-07T00:29:22.203Z",
+  "claimedBy": "w3-i14",
+  "claimedAt": "2026-08-07T05:27:58.095Z",
   "resolution": {
-    "note": "Mech tag: printed Mech units tagged; sandbox tokens register tags from name",
+    "note": "verified fixed (Mech tags on card defs + token registration); added token/duplicate regressions",
     "files": [
-      "packages/riftbound-cards/src/cards/sfd/bubble-bot.ts",
-      "packages/riftbound-cards/src/cards/sfd/breakneck-mech.ts",
-      "packages/riftbound-cards/src/cards/ogn/mega-mech.ts",
-      "packages/riftbound-engine/src/game-definition/moves/token.ts",
       "packages/riftbound-engine/src/__tests__/cards/sfd-062-221.test.ts"
     ],
-    "at": "2026-08-07T00:33:20.948Z"
+    "at": "2026-08-07T05:29:01.811Z"
   }
 }

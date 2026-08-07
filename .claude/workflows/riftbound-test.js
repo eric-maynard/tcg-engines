@@ -23,6 +23,7 @@ const CARDLIST = { type:'object', properties:{cardIds:{type:'array',items:{type:
 
 // ───────────────────────── Headless tracer ─────────────────────────
 phase('Headless')
+await agent(`Run: touch /tmp/rb-browser-pass.lock && echo locked`, {label:'browser-pass lock', phase:'Headless', model:'claude-opus-5-fast[1m]', effort:'low'})
 const headless = await agent(
 `Run the headless tracer + coverage check on the devbox (dangerouslyDisableSandbox for ssh):
 
@@ -153,6 +154,7 @@ for (const c of [...(cardTest.confirmed||[]), ...monkeyConfirmed]) {
   byLayer[c.layer||'?'] = (byLayer[c.layer||'?']||0)+1
 }
 
+await agent(`Run: rm -f /tmp/rb-browser-pass.lock && echo unlocked`, {label:'browser-pass unlock', phase:'Enqueue', model:'claude-opus-5-fast[1m]', effort:'low'})
 return {
   headless: headless?.summary ?? { ok:false, notes: headless?.notes },
   monkey: {

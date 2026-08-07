@@ -1,0 +1,36 @@
+{
+  "source": "playtest",
+  "title": "In the AFTER screenshot (opponent's Turn 6 Beginning Phase, Loose Cannon trigger on the chain, banner 'Goldfish has Priority — waiting...'), the player's action panel still offers 'Exhaust Rune (4 available)' and 'Recycle Rune (4 available)' as available actions.",
+  "expected": "Screenshot 38.png verified: Turn 6 BEGINNING, chain shows Loose Cannon (Goldfish ability), banner 'Goldfish has Priority — waiting...', and player's Rune Actions panel lists 'Exhaust Rune (4 available)' / 'Recycle Rune (4 available)'. Source cause: engine move `exhaustRune.condition`/`enumerator` (resources.ts:71-117) and `recycleRune.condition`/`enumerator` (resources.ts:141-195) only check pendingChoice, status==='playing', zone===runePool, ownership, and exhausted flag — no check of turn/priority/chain state. Line 79 comment explicitly states 'Players can exhaust runes at any time' (same at line 149). The UI (apps/riftbound-app/public/js/gameplay/render/actions.js:344-415) renders whatever the engine enumerates with no priority gating. Rules: 164.2.a/b make rune abilities [Reaction] Add abilities; 312.1.a/b say only the player with Priority may take discretionary actions/activate abilities; 429.3 carves out only the pay-costs window. Player-1 has neither here, so offering these moves is a rules deviation rooted in the engine condition.",
+  "layer": "ui",
+  "fileHint": "/root/src/tcg/tcg-engines/packages/riftbound-engine/src/game-definition/moves/resources.ts:79",
+  "rule": "429.3 / 512 (priority required to activate abilities)",
+  "id": "ab121f927b03",
+  "createdAt": "2026-08-06T23:55:41.371Z",
+  "attempts": 0,
+  "history": [
+    {
+      "at": "2026-08-06T23:55:41.371Z",
+      "event": "enqueued:playtest"
+    },
+    {
+      "at": "2026-08-07T05:42:55.744Z",
+      "event": "grabbed:w11-i10"
+    },
+    {
+      "at": "2026-08-07T05:43:52.918Z",
+      "event": "done",
+      "note": "already fixed at HEAD (e3e5573): holdsRunePriority gates exhaustRune/recycleRune condition+enumerator while a chain is open; core-rules/rune-abilities-require-priority test green"
+    }
+  ],
+  "status": "done",
+  "claimedBy": "w11-i10",
+  "claimedAt": "2026-08-07T05:42:55.744Z",
+  "resolution": {
+    "note": "already fixed at HEAD (e3e5573): holdsRunePriority gates exhaustRune/recycleRune condition+enumerator while a chain is open; core-rules/rune-abilities-require-priority test green",
+    "files": [
+      "packages/riftbound-engine/src/game-definition/moves/resources.ts"
+    ],
+    "at": "2026-08-07T05:43:52.918Z"
+  }
+}

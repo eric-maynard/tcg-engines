@@ -14,25 +14,23 @@
       "event": "enqueued:playtest"
     },
     {
-      "at": "2026-08-07T00:29:22.202Z",
-      "event": "grabbed:w10-i12"
+      "at": "2026-08-07T05:29:46.595Z",
+      "event": "grabbed:w4-i17"
     },
     {
-      "at": "2026-08-07T00:33:20.988Z",
+      "at": "2026-08-07T05:32:45.429Z",
       "event": "done",
-      "note": "setSandboxGame() re-renders the Actions panel on every sandbox-mode flip"
+      "note": "already fixed: state.js setSandboxGame() re-renders the Actions panel; lobby.js uses it everywhere"
     }
   ],
   "status": "done",
-  "claimedBy": "w10-i12",
-  "claimedAt": "2026-08-07T00:29:22.202Z",
+  "claimedBy": "w4-i17",
+  "claimedAt": "2026-08-07T05:29:46.595Z",
   "resolution": {
-    "note": "setSandboxGame() re-renders the Actions panel on every sandbox-mode flip",
+    "note": "already fixed: state.js setSandboxGame() re-renders the Actions panel; lobby.js uses it everywhere",
     "files": [
-      "apps/riftbound-app/public/js/gameplay/state.js",
-      "apps/riftbound-app/public/js/gameplay/lobby.js",
-      "apps/riftbound-app/public/js/gameplay/init.js"
+      "apps/riftbound-app/public/js/gameplay/state.js"
     ],
-    "at": "2026-08-07T00:33:20.988Z"
+    "at": "2026-08-07T05:32:45.429Z"
   }
 }
