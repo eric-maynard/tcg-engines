@@ -14,6 +14,7 @@ import { addToChain, createInteractionState } from "../chain/chain-state";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { getLKI, getLeavingBatch } from "../operations/leave-board";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
+import type { DelayedTrigger } from "../types/game-state";
 import type { EffectContext, ExecutableEffect } from "./effect-executor";
 import { executeEffect } from "./effect-executor";
 import type { GameEvent } from "./game-events";
@@ -64,7 +65,14 @@ const KEYWORD_SELF_TRIGGER_EVENTS: Readonly<Record<string, string>> = {
  * player. Opted into per-ability via `trigger.controllerFromEvent`.
  */
 function triggerControllerFor(match: MatchedTrigger): string {
-  const trigger = (match.ability as { trigger?: { controllerFromEvent?: boolean } }).trigger;
+  const trigger = (
+    match.ability as { trigger?: { controllerFromEvent?: boolean; controllerId?: string } }
+  ).trigger;
+  // rule 392 — a delayed ability installed by one player on another player's
+  // permanent still belongs to its installer.
+  if (typeof trigger?.controllerId === "string" && trigger.controllerId !== "") {
+    return trigger.controllerId;
+  }
   if (trigger?.controllerFromEvent !== true) {
     return match.cardOwner;
   }
@@ -87,14 +95,22 @@ function triggerControllerFor(match: MatchedTrigger): string {
 function delayedTriggerAbilities(
   meta: Partial<RiftboundCardMeta> | undefined,
 ): TriggerableAbility[] {
+  return delayedTriggerAbilitiesFrom(meta?.delayedTriggers);
+}
+
+function delayedTriggerAbilitiesFrom(
+  entries: readonly DelayedTrigger[] | undefined,
+): TriggerableAbility[] {
   const out: TriggerableAbility[] = [];
-  for (const dt of meta?.delayedTriggers ?? []) {
+  for (const dt of entries ?? []) {
     out.push({
       effect: dt.effect as never,
       // rule 355.13 (sfd-184-221) — a granted "you may …" trigger still asks.
       ...(dt.optional === true ? { optional: true } : {}),
       trigger: {
         ...(dt.trigger.afterAttack === true ? { afterAttack: true } : {}),
+        // rule 392 — resolves for whoever installed it, not the host's controller.
+        ...(dt.controllerId !== undefined ? { controllerId: dt.controllerId } : {}),
         event: dt.trigger.event,
         on: dt.trigger.on ?? "self",
       },
@@ -554,8 +570,19 @@ export function evaluateTriggerCondition(
       ) {
         return false;
       }
+      if (
+        (sub as { type?: string } | undefined)?.type === "has-exactly" &&
+        !evaluateHasExactlyCondition(sub as { type?: string }, ctx, controllerId)
+      ) {
+        return false;
+      }
     }
     return true;
+  }
+  if (c.type === "has-exactly" && ctx) {
+    // rule 383.2.a.1 (rule-id: unl-088-219) — "if you have exactly N …" sits in
+    // the trigger condition: with the wrong count nothing goes on the chain.
+    return evaluateHasExactlyCondition(c, ctx, controllerId);
   }
   if (c.type === "has-at-least" && ctx) {
     // rule-id: sfd-218-221 (Sunken Temple) — "with one or more [Mighty] units"
@@ -693,6 +720,81 @@ function evaluateHasAtLeastCondition(
     }
   }
   return false;
+}
+
+/**
+ * rule 383.2.a.1 — "if you have EXACTLY N <things>": count the matching cards
+ * and require the count to hit `N` on the nose. Locations understood: `hand`
+ * (and the other private zones), `battlefield` (units you control summed over
+ * every battlefield — base never counts) and `base`. An unrecognised shape
+ * stays permissive, like every other condition kind here.
+ */
+function evaluateHasExactlyCondition(
+  condition: { type?: string },
+  ctx: TriggerRunnerContext,
+  controllerId: string,
+): boolean {
+  const c = condition as {
+    count?: number;
+    target?: { type?: string; controller?: string; location?: string };
+  };
+  const target = c.target;
+  if (!target || typeof target !== "object" || typeof target.location !== "string") {
+    return true;
+  }
+  const needed = c.count ?? 0;
+  const players = Object.keys(ctx.draft.players ?? {});
+  const subjects =
+    target.controller === "enemy" ? players.filter((p) => p !== controllerId) : [controllerId];
+
+  const privateZone =
+    target.location === "hand"
+      ? "hand"
+      : target.location === "trash"
+        ? "trash"
+        : target.location === "deck"
+          ? "mainDeck"
+          : undefined;
+  if (privateZone !== undefined) {
+    let count = 0;
+    for (const pid of subjects) {
+      count += ctx.zones.getCardsInZone(privateZone as CoreZoneId, pid as CorePlayerId).length;
+    }
+    return count === needed;
+  }
+
+  if (target.location !== "battlefield" && target.location !== "base") {
+    return true;
+  }
+  const registry = getGlobalCardRegistry();
+  const controllerOf = (id: string): string =>
+    (ctx.cards.getCardController?.(id as CoreCardId) ??
+      (ctx.cards.getCardOwner(id as CoreCardId) as string | undefined)) ??
+    "";
+  let count = 0;
+  const tally = (ids: readonly unknown[]): void => {
+    for (const rawId of ids) {
+      const id = rawId as string;
+      const def = registry.get(id) as { cardType?: string } | undefined;
+      if (target.type === "unit" && def?.cardType !== "unit") {
+        continue;
+      }
+      if (!subjects.includes(controllerOf(id))) {
+        continue;
+      }
+      count++;
+    }
+  };
+  if (target.location === "base") {
+    for (const pid of subjects) {
+      tally(ctx.zones.getCardsInZone("base" as CoreZoneId, pid as CorePlayerId));
+    }
+  } else {
+    for (const bfId of Object.keys(ctx.draft.battlefields ?? {})) {
+      tally(ctx.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId));
+    }
+  }
+  return count === needed;
 }
 
 /**
@@ -1195,7 +1297,13 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
   if (event.type === "die" && !boardCards.some((c) => c.id === event.cardId)) {
     const lki = getLKI(ctx.draft, event.cardId);
     boardCards.push({
-      abilities: toTriggerableAbilities(event.cardId),
+      // rule 390.2 — a delayed "when it dies this turn" ability installed on
+      // the unit is wiped from its meta as it leaves the board, so read it
+      // back from the last-known information snapshot.
+      abilities: [
+        ...toTriggerableAbilities(event.cardId),
+        ...delayedTriggerAbilitiesFrom(lki?.delayedTriggers),
+      ],
       id: event.cardId,
       owner: (event as { controller?: string }).controller ?? lki?.controller ?? event.owner,
       zone: ctx.zones.getCardZone?.(event.cardId as CoreCardId) ?? "trash",

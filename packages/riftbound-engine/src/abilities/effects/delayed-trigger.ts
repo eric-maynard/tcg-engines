@@ -63,6 +63,9 @@ export function handle_delayedTrigger(
         delayedTriggers: [
           ...existing,
           {
+            // rule 392 — the installer controls the delayed ability, so it
+            // resolves for them even while it hangs on an enemy permanent.
+            controllerId: ctx.playerId,
             duration,
             effect: stored,
             ...(dt.optional === true ? { optional: true } : {}),

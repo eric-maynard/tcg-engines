@@ -266,6 +266,12 @@ export interface DelayedTrigger {
   duration: "turn" | "permanent";
   /** rule 355.13 (sfd-184-221) — granted "you may …" triggers prompt on firing. */
   optional?: boolean;
+  /**
+   * rule 392 — the player who installed the delayed ability controls it, even
+   * when it hangs on a card someone else controls ("Deal 3 to an enemy unit.
+   * When it dies this turn, play a Gold gear token exhausted.").
+   */
+  controllerId?: string;
 }
 
 /**
@@ -1106,6 +1112,13 @@ export interface RiftboundGameState {
 
   /** @see lastKilledUnitId */
   lastKilledUnitController?: string;
+
+  /**
+   * rule 422 (unl-080-219 Hwei) — instance ids discarded by the most recent
+   * discard instruction, per discarding player. Read by the
+   * `discarded-card-type` condition ("based on the discarded card's type").
+   */
+  lastDiscardedCardIds?: Record<string, string[]>;
 
   /**
    * Number of units each player has moved this turn.

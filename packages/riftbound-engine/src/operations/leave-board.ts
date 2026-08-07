@@ -30,6 +30,7 @@ import { executeEffect } from "../abilities/effect-executor";
 import type { GameEvent } from "../abilities/game-events";
 import { checkReplacement, markReplacementConsumed } from "../abilities/replacement-effects";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
+import type { DelayedTrigger } from "../types/game-state";
 import { getGlobalCardRegistry } from "./card-lookup";
 import { clearDamage, getDamage } from "./damage-store";
 
@@ -90,6 +91,11 @@ export interface LKISnapshot {
   readonly lastDamageSource?: "spell" | "ability" | "combat";
   /** rule 383.3.d: this card carried a "your [X] effects trigger an additional time" static. */
   readonly triggerDoubler: boolean;
+  /**
+   * rule 390.2 — delayed abilities installed on it ("When it dies this turn,
+   * …"). `resetObjectState` clears them from meta, so they only survive here.
+   */
+  readonly delayedTriggers?: readonly DelayedTrigger[];
 }
 
 export interface LeaveResult {
@@ -326,6 +332,9 @@ export function snapshotLKI(ctx: LeaveBoardContext, cardId: string): LKISnapshot
     might,
     owner,
     stunned: meta.stunned === true || flags.stunned === true,
+    ...(meta.delayedTriggers && meta.delayedTriggers.length > 0
+      ? { delayedTriggers: [...meta.delayedTriggers] }
+      : {}),
     triggerDoubler: hasTriggerDouble(cardId),
     unitsHere,
     wasAlone: !unitsHere.some((u) => u.controller === controller),

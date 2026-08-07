@@ -172,6 +172,13 @@ const EFFECT_HELPERS: EffectHelpers = {
  * Execute a single effect.
  */
 export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): void {
+  // rule 316.3 / 316.4 (rule-id: unl-087-219 Blue Sentinel) — an effect
+  // printed "at the start of your next Main Phase" must not happen now: every
+  // Rune Pool empties as that phase begins, so anything added earlier is lost.
+  if ((effect as { delayUntil?: string }).delayUntil === "next-main-phase") {
+    installNextMainPhaseEffect(effect, ctx);
+    return;
+  }
   // rule-id: unl-095-219 — "delayed-trigger" installs a triggered ability on a
   // card for a duration; kept out of EFFECT_HANDLERS so the map stays the
   // parser-facing catalogue of printable effects.
@@ -188,6 +195,33 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
   } else {
     // default: no-op
   }
+}
+
+/**
+ * Park an effect on its controller until the start of their next Main Phase
+ * (rule 316.4), reusing the player-scoped delayed-trigger channel. Each
+ * install is its own entry, so a doubled trigger delays two copies.
+ */
+function installNextMainPhaseEffect(effect: ExecutableEffect, ctx: EffectContext): void {
+  const { delayUntil: _delayUntil, ...rest } = effect as unknown as Record<string, unknown>;
+  const draft = ctx.draft as unknown as {
+    playerDelayedTriggers?: {
+      playerId: string;
+      sourceCardId: string;
+      trigger: { event: string; on?: string };
+      effect: unknown;
+      duration: "turn" | "permanent";
+    }[];
+  };
+  draft.playerDelayedTriggers ??= [];
+  draft.playerDelayedTriggers.push({
+    duration: "turn",
+    // The effect arrives as an immer draft node; snapshot it as plain data.
+    effect: JSON.parse(JSON.stringify(rest)) as unknown,
+    playerId: ctx.playerId,
+    sourceCardId: ctx.sourceCardId,
+    trigger: { event: "main-phase", on: "controller" },
+  });
 }
 
 /**

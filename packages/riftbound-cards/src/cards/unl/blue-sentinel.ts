@@ -9,22 +9,26 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  * Your hold effects for holding here trigger an additional time.
  * When I hold, [Add] [rainbow] at the start of your next Main Phase.
  *
- * The "trigger an additional time" rider is captured as a helper
- * keyword HoldRepeatHere; engine support is pending. The [Add] is
- * simplified to an immediate add-resource at hold time.
+ * rule 383.3.d / 383.4.d — the rider is the hold-side twin of Red
+ * Brambleback's conquer doubler, so it uses the same `trigger-double`
+ * shape (the engine reads it in `trigger-runner.ts`).
+ *
+ * rule 316.3 / 316.4 — the [Add] is DELAYED to the start of the next Main
+ * Phase: every Rune Pool empties as that phase begins, so adding at hold
+ * time (Beginning Phase) would lose the power.
  */
 const abilities: Ability[] = [
   { keyword: "Shield", type: "keyword", value: 2 },
   {
     effect: {
-      keyword: "HoldRepeatHere",
-      target: "self",
-      type: "grant-keyword",
-    },
+      event: "hold",
+      location: "here",
+      type: "trigger-double",
+    } as unknown as Ability["effect"],
     type: "static",
-  },
+  } as Ability,
   {
-    effect: { power: ["rainbow"], type: "add-resource" },
+    effect: { delayUntil: "next-main-phase", power: ["rainbow"], type: "add-resource" },
     trigger: { event: "hold", on: "self" },
     type: "triggered",
   },
