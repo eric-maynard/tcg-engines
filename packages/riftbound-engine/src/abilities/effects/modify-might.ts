@@ -1,8 +1,8 @@
 // Effect handler: "modify-might"
 import type { CardId as CoreCardId } from "@tcg/core";
-import type { RiftboundCardMeta } from "../../types";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount, checkBecomesMighty } from "./_helpers";
+import { type EffectHelpers, getTargetIds, getEffectiveMight, resolveAmount } from "./_helpers";
+import { applyMightModifierDelta } from "./might-modifier";
 
 /**
  * rule-id: sfd-001-221 — "+N Might for each enemy unit THERE": the tally is
@@ -61,16 +61,9 @@ export function handle_modifyMight(effect: ExecutableEffect, ctx: EffectContext,
     if (typeof minimum === "number" && amount < 0) {
       amount = Math.max(amount, Math.min(0, minimum - mightBefore));
     }
-    const meta = ctx.cards.getCardMeta?.(targetId as CoreCardId) as
-      | Partial<RiftboundCardMeta>
-      | undefined;
-    const currentMod = meta?.mightModifier ?? 0;
-    ctx.cards.updateCardMeta?.(
-      targetId as CoreCardId,
-      {
-        mightModifier: currentMod + amount,
-      } as unknown as Record<string, unknown>,
-    );
-    checkBecomesMighty(targetId, mightBefore, ctx);
+    // rules 366-372 (ven-181-166 Gangplank, Naval) — a Might DECREASE handed
+    // out by a spell or ability can be replaced; the shared write path is the
+    // only one that consults "might-decrease" replacements.
+    applyMightModifierDelta(targetId, amount, ctx);
   }
 }

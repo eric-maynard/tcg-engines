@@ -800,6 +800,38 @@ export function getRawCards(): Card[] {
  * these from rules text, and VEN has no hand-authored .ts file to carry them.
  */
 const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
+  // rule 419.4 / 187.2 — Jayce, Brilliant Inventor: "When you play me or the
+  // first time you play a non-token gear each turn, you may ready something
+  // besides me that's exhausted." The generator emits `abilities: []`, and the
+  // rules-text parser leaves the effect clause as a `raw` no-op. Two triggers:
+  // the play-self half is unrestricted, the gear half is once per turn and
+  // ignores tokens.
+  "ven-068a-166": {
+    abilities: [
+      {
+        effect: {
+          target: { excludeSelf: true, filter: "exhausted", type: "permanent" },
+          type: "ready",
+        },
+        optional: true,
+        trigger: { event: "play-self", on: "self" },
+        type: "triggered",
+      },
+      {
+        effect: {
+          target: { excludeSelf: true, filter: "exhausted", type: "permanent" },
+          type: "ready",
+        },
+        optional: true,
+        trigger: {
+          event: "play-gear",
+          on: { cardType: "gear", controller: "friendly" },
+          restrictions: [{ type: "first-time-each-turn" }, { type: "non-token" }],
+        },
+        type: "triggered",
+      },
+    ],
+  },
   // rule 477.1.b — "The equipped unit becomes a copy of that unit for as long
   // as this is attached to it." (Shady Spectacles)
   "ven-137-166": { copyChosenUnitToHolder: true },
@@ -887,12 +919,103 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+  // rule 355.9 — Siphoning Strike: "Deal 4 to a unit at a battlefield. If you
+  // control 7 or more runes, deal 7 to it instead. When it dies this turn,
+  // channel 1 rune exhausted." The generator emits `abilities: [null]`, and the
+  // rules-text parser folds the three sentences into one flat comma chain,
+  // dropping both the "if" gate and the "when it dies" window — so all of
+  // 4 + 7 damage plus the channel happen unconditionally. All three steps read
+  // the SAME chosen unit, so one target descriptor is shared.
+  "ven-146-166": {
+    abilities: [
+      {
+        effect: {
+          effects: [
+            {
+              // "instead" — exactly one of the two damage amounts is dealt.
+              condition: { comparison: { gte: 7 }, target: { type: "rune" }, type: "count" },
+              else: { amount: 4, target: { location: "battlefield", type: "unit" }, type: "damage" },
+              target: { location: "battlefield", type: "unit" },
+              then: { amount: 7, target: { location: "battlefield", type: "unit" }, type: "damage" },
+              type: "conditional",
+            },
+            {
+              // rule 364.3 — a turn-scoped triggered ability installed on the
+              // chosen unit; it pays off only if that unit actually dies.
+              duration: "turn",
+              effect: { amount: 1, exhausted: true, type: "channel" },
+              target: { location: "battlefield", type: "unit" },
+              trigger: { event: "die", on: "self" },
+              type: "delayed-trigger",
+            },
+          ],
+          type: "sequence",
+        },
+        type: "spell",
+      },
+    ],
+  },
+  // rule 350.1 / 455 — Zed, Without a Sound: "[1][chaos]: Move me and a Shadow
+  // Clone you control to each other's locations." The generator emits
+  // `abilities: [null]` and the rules-text parser has no "each other's
+  // locations" grammar, so the activated ability reached the engine as an
+  // unparsed `raw` effect (a silent no-op that still charged the cost). The
+  // trade of locations is the same `{type:"move", swap:true}` shape Tideturner
+  // and Azir use, with the partner pool restricted to Shadow Clone tokens.
+  "ven-112a-166": {
+    abilities: [
+      {
+        effect: {
+          location: "base",
+          token: { might: 0, name: "Shadow Clone", type: "unit" },
+          type: "create-token",
+        },
+        trigger: { event: "conquer", on: "self" },
+        type: "triggered",
+      },
+      {
+        cost: { energy: 1, power: ["chaos"] },
+        effect: {
+          partner: { controller: "friendly", filter: { name: "Shadow Clone" }, type: "unit" },
+          swap: true,
+          type: "move",
+        },
+        timing: "action",
+        type: "activated",
+      },
+    ],
+  },
   "ven-181-166": {
     abilities: [
-      { keyword: "Empower", type: "keyword", value: 2 },
+      // rule 151.2 — "[Empower] [body][body]" is an ACTIVATED ability, not a
+      // printed keyword: activate-ability.ts only enumerates `type:"activated"`
+      // abilities, so a `{type:"keyword", keyword:"Empower"}` entry is never
+      // offered. Mirrors what parseAbilities() produces for the rules text.
+      {
+        cost: { power: ["body", "body"] },
+        effect: { target: "self", type: "empower" },
+        restrictions: [{ type: "not-empowered" }],
+        type: "activated",
+      },
       {
         condition: { type: "while-empowered" },
         replaces: "might-decrease",
+        replacement: { amount: 3, target: "self", type: "modify-might" },
+        target: { self: true },
+        type: "replacement",
+      },
+      // rule 366-372 — the same "…give me +3 [Might] instead" replacement covers
+      // all three replaced actions; each `replaces` string is matched separately.
+      {
+        condition: { type: "while-empowered" },
+        replaces: "stun",
+        replacement: { amount: 3, target: "self", type: "modify-might" },
+        target: { self: true },
+        type: "replacement",
+      },
+      {
+        condition: { type: "while-empowered" },
+        replaces: "return-to-hand",
         replacement: { amount: 3, target: "self", type: "modify-might" },
         target: { self: true },
         type: "replacement",

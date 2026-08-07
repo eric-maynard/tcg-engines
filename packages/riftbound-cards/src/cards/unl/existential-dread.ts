@@ -1,7 +1,30 @@
+import type { Ability } from "@tcg/riftbound-types";
 import type { SpellCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
+// rule 423.1.a.1 — a stunned unit can be chosen again but is not "stunned
+// again"; this card turns that case into a bounce. The parser has no form for
+// "<effect> X. If it's already stunned, <other effect> instead", so the
+// conditional is authored here. Both branches read the same chosen target.
+const ATTACKING_ENEMY_UNIT = { controller: "enemy", filter: "attacking", type: "unit" } as const;
+
+const stunOrBounce: Ability[] = [
+  {
+    effect: {
+      condition: { type: "target-stunned" },
+      else: { target: ATTACKING_ENEMY_UNIT, type: "stun" },
+      target: ATTACKING_ENEMY_UNIT,
+      then: { target: ATTACKING_ENEMY_UNIT, type: "return-to-hand" },
+      type: "conditional",
+    },
+    repeat: { energy: 2 },
+    timing: "action",
+    type: "spell",
+  },
+] as unknown as Ability[];
+
 export const existentialDread: SpellCard = {
+  abilities: stunOrBounce,
   cardNumber: 134,
   cardType: "spell",
   domain: "chaos",
