@@ -120,6 +120,22 @@ describe("Hostile Takeover × Peak Guardian × Rebuke / Possession — temporary
     expect(game.p1.points()).toBe(1);
   });
 
+  test("(a) that control-change conquer is a Score like any other (471.2.a): P1's 'When you conquer, draw 1' gear triggers and A is marked scored", async () => {
+    const CONQUER_DRAW_GEAR = {
+      abilities: [{ effect: { amount: 1, type: "draw" }, trigger: { event: "conquer", on: "controller" }, type: "triggered" }],
+      cardType: "gear",
+      name: "Filler War Ledger",
+    };
+    const game = await board().gear(P1, CONQUER_DRAW_GEAR, "ledger").build();
+    const hand0 = game.p1.hand().length; // includes takeover
+    await game.p1.cast("takeover", { targets: "peak" });
+    await game.settle();
+    expect(game.gameState.battlefields.bfA?.controller).toBe(P1);
+    expect(game.gameState.scoredThisTurn[P1]).toEqual(["bfA"]);
+    expect(game.p1.points()).toBe(1);
+    expect(game.p1.hand()).toHaveLength(hand0 - 1 + 1); // −takeover, +1 drawn by the conquer trigger
+  });
+
   // ---- (b) end of turn, nothing else happens ----------------------------------------------------
 
   test("(b) at end of P1's turn P1 loses control and it is recalled to P2's base — still buffed, healed; A is left empty so P1 does not hold it (317.1, 455, 458.1, 323.7, 190.4.c)", async () => {

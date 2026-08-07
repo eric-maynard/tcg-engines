@@ -32,6 +32,7 @@ import {
   markReplacementConsumed,
 } from "../abilities/replacement-effects";
 import { recalculateStaticEffects } from "../abilities/static-abilities";
+import { fireTriggers, type TriggerRunnerContext } from "../abilities/trigger-runner";
 import { canAffordPower } from "../game-definition/moves/chain/effect-context";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { clearDamage as clearDamageStore, getDamage } from "../operations/damage-store";
@@ -43,7 +44,7 @@ import {
   leaveBoard,
   snapshotBatch,
 } from "../operations/leave-board";
-import { checkVictory, type PointsIO, scoreBattlefield } from "../operations/points";
+import { checkVictory, scoreBattlefield, scoreEvents } from "../operations/points";
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState } from "../types";
 
 // The die choke point owns replacement application; kept importable from here.
@@ -861,18 +862,42 @@ function conquerByPresence(ctx: CleanupContext, bfId: string, playerId: string):
   bf.controller = playerId;
   bf.contested = false;
   bf.contestedBy = undefined;
-  const zonesAny = ctx.zones as unknown as Partial<PointsIO["zones"]>;
-  scoreBattlefield(
+  const zonesAny = ctx.zones as unknown as Partial<TriggerRunnerContext["zones"]>;
+  const countersAny = ctx.counters as unknown as Partial<TriggerRunnerContext["counters"]>;
+  const noop = () => {};
+  const zones = {
+    drawCards: zonesAny.drawCards ?? noop,
+    getCardZone: zonesAny.getCardZone,
+    getCardsInZone: ctx.zones.getCardsInZone,
+    moveCard: ctx.zones.moveCard,
+  };
+  const { isScore } = scoreBattlefield(
     draft,
     playerId as PlayerId,
     bfId,
     "conquer",
-    {
-      cards: ctx.cards,
-      zones: { drawCards: zonesAny.drawCards ?? (() => {}), getCardsInZone: ctx.zones.getCardsInZone },
-    },
+    { cards: ctx.cards, zones },
     { previousController },
   );
+  // rule 471.2.a — it is a Conquer like any other, so its Conquer / "when an
+  // opponent scores" abilities trigger (real contexts carry the counter ops;
+  // stripped test stubs fall back to no-ops).
+  if (isScore) {
+    const triggerCtx: TriggerRunnerContext = {
+      cards: ctx.cards,
+      counters: {
+        addCounter: countersAny.addCounter ?? noop,
+        clearCounter: ctx.counters.clearCounter,
+        removeCounter: countersAny.removeCounter,
+        setFlag: ctx.counters.setFlag,
+      },
+      draft,
+      zones,
+    };
+    for (const event of scoreEvents(playerId as PlayerId, bfId, "conquer", { previousController })) {
+      fireTriggers(event, triggerCtx);
+    }
+  }
 }
 
 /**
