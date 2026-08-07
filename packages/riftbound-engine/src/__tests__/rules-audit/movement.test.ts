@@ -652,13 +652,20 @@ describe("Rule 612 / 355.8 (unl-107-219): choose friendly unit + battlefield, mo
     return engine;
   }
 
-  it("enumerates one play per friendly reference unit (caster-chosen at play time)", () => {
+  // rule 355.8 / 355.10: BOTH the reference unit and the battlefield are named
+  // as the spell is played, so every (unit × battlefield) pair is a distinct play.
+  it("enumerates one play per friendly reference unit AND battlefield (both caster-chosen at play time)", () => {
     const engine = setup();
     const plays = enumerateLegalMoves(engine, P1).filter(
       (m) => m.moveId === "playSpell" && m.params?.cardId === "stare-down",
     );
-    const refs = plays.map((m) => (m.params?.targets as string[] | undefined)?.[0]).sort();
-    expect(refs).toEqual(["ref-big", "ref-small"]);
+    const picks = plays.map((m) => (m.params?.targets as string[] | undefined)?.join("+")).sort();
+    expect(picks).toEqual([
+      "ref-big+bf-1",
+      "ref-big+bf-2",
+      "ref-small+bf-1",
+      "ref-small+bf-2",
+    ]);
   });
 
   it("moves only enemy units at the chosen battlefield with Might < reference; gains 1 XP", () => {

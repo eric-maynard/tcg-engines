@@ -26,6 +26,8 @@ export type SpellEffectTargetShape = {
   amount?: { might?: SpellEffectTargetDescriptor | string };
   /** rule-id: unl-107-219 — caster-chosen Might-reference unit for a criteria move. */
   reference?: SpellEffectTargetDescriptor;
+  /** rule-id: unl-107-219 — `"chosen-battlefield"` marks a play-time battlefield choice. */
+  from?: string;
   player?: string;
   options?: { effect?: SpellEffectTargetShape }[];
   effects?: SpellEffectTargetShape[];
@@ -66,6 +68,13 @@ export function findAllAtOneBattlefieldTarget(
 ): SpellEffectTargetDescriptor | undefined {
   if (!effect) return undefined;
   if (isAllAtOneBattlefield(effect.target)) return effect.target;
+  // rule-id: unl-107-219 (rule 355.8 / 355.10) — "Choose a friendly unit and a
+  // battlefield": a criteria move reading `from: "chosen-battlefield"` names the
+  // battlefield as a play-time choice too, so it must lock on the chain item
+  // (before anyone responds) rather than being prompted at resolution.
+  if (effect.from === "chosen-battlefield" && effect.target && typeof effect.target !== "string") {
+    return effect.target;
+  }
   if (Array.isArray(effect.effects)) {
     for (const sub of effect.effects) {
       const found = findAllAtOneBattlefieldTarget(sub);
@@ -740,9 +749,12 @@ export function chosenMoveDestinations(
   // it +2": the move is one STEP of a sequence that shares the caster's single
   // unit choice, so the destination restriction has to be read through the
   // sequence, not only off a bare `move` effect.
-  if (effect?.type === "sequence" && Array.isArray(effect.effects)) {
+  if (
+    effect?.type === "sequence" &&
+    Array.isArray((effect as { effects?: SpellEffectTargetShape[] }).effects)
+  ) {
     const lead = effect.target;
-    for (const sub of effect.effects) {
+    for (const sub of (effect as { effects: SpellEffectTargetShape[] }).effects) {
       // rule 355.13 — a "you may move" step can always be declined, so it never
       // narrows which units may be chosen.
       if ((sub as { optional?: boolean } | undefined)?.optional === true) {

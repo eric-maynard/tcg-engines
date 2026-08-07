@@ -116,10 +116,7 @@ describe("Sandshifter (sfd-158-221)", () => {
     expect(game.chain()).toEqual([]);
   });
 
-  test.failing("BUG: '3 [Might] or less' is EFFECTIVE Might (718.4) — an enemy printed-2 wearing B.F. Sword (+3 → 5) must not be a legal target", async () => {
-    // Expected: only "bare" (3) is offered; "knight" reads 5 with the Sword and is refused. Actual: the
-    // target filter ignores the Equipment Might bonus (this-turn modifiers ARE honoured — see the
-    // Defiant Dance test) and offers the 5-Might knight as well.
+  test("'3 [Might] or less' is EFFECTIVE Might (718.4) — an enemy printed-2 wearing B.F. Sword (+3 → 5) must not be a legal target", async () => {
     const game = await scenario()
       .resources(P1, COST)
       .unit(P2, "base", { might: 2, name: "Knight" }, "knight", { equippedWith: ["sword"] })
@@ -129,12 +126,10 @@ describe("Sandshifter (sfd-158-221)", () => {
       .build();
     expect(game.state("knight").might).toBe(5);
     await game.p1.play("ss");
+    // "bare" is the ONLY unit at 3 or less once the Sword is counted, so the kill is
+    // forced without a prompt (same convention as the Watchful Sentry case below).
     await game.settle();
-    const d = game.decision();
-    expect(d?.kind === "pick" ? d.options.map((o) => o.card) : []).toEqual(["bare"]);
-    expect((await game.p1.try((p) => p.pick("knight"))).ok).toBe(false);
-    await game.p1.pick("bare");
-    await game.settle();
+    expect(game.decision()?.kind).not.toBe("pick");
     expect(game.zoneOf("bare")).toBe("trash");
     expect(game.zoneOf("knight")).toBe("base");
   });
