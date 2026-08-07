@@ -1078,6 +1078,13 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
     for (const pid of Object.keys(draft.players ?? {})) {
       (draft.turnEvents[pid] ??= []).push(pid === event.owner ? "friendly-died" : "enemy-died");
     }
+    // rule-id: unl-037-219 — "if a friendly unit died during YOUR Beginning
+    // Phase this turn": only deaths in the owner's own Beginning Phase count,
+    // so stamp a narrower key alongside the generic one.
+    const turn = (ctx.draft as { turn?: { phase?: string; activePlayer?: string } }).turn;
+    if (turn?.phase === "beginning" && turn.activePlayer === event.owner) {
+      (draft.turnEvents[event.owner] ??= []).push("friendly-died-in-beginning");
+    }
   }
   // rule-id: ogn-100-298 — static keyword grants are otherwise only refreshed
   // in post-move cleanup, so a unit entering play under "Other friendly units

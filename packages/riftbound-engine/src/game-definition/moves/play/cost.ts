@@ -277,6 +277,21 @@ function evaluateEnterReadyCondition(
       }
       return false;
     }
+    // rule 143.4 (rule-id: unl-037-219) — the parser leaves gates it cannot
+    // model as `{type:"custom", text}`. A gate that cannot be shown to HOLD
+    // must not grant ready: units enter exhausted by default.
+    case "custom": {
+      const text = String(condition.text ?? "").toLowerCase();
+      const events = state.turnEvents?.[playerId] ?? [];
+      if (/friendly unit died during your beginning phase/.test(text)) {
+        return events.includes("friendly-died-in-beginning");
+      }
+      // rule-id: unl-008-219 — "if a unit died this turn" (either side).
+      if (/^if a unit died this turn$/.test(text)) {
+        return events.includes("friendly-died") || events.includes("enemy-died");
+      }
+      return false;
+    }
     default: {
       return undefined;
     }
