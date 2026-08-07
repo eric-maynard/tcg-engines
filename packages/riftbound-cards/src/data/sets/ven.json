@@ -3253,6 +3253,7 @@
             "type": "sequence",
             "effects": [
               {
+                "costStep": true,
                 "type": "banish",
                 "target": {
                   "type": "self"
