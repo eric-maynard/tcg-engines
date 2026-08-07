@@ -16,13 +16,18 @@ const abilities: Ability[] = [
   {
     effect: {
       target: "self",
-      to: "here",
+      // rule 359.3.f.3 — "that battlefield" is the battlefield named by the
+      // firing stun event, not Vex's own location.
+      to: "there",
       type: "move",
     },
     optional: true,
     trigger: {
       event: "stun",
       on: {
+        // rule 383.4.b — "when YOU stun": the stun must be performed by Vex's
+        // controller, so an opponent's stun (even on their own unit) is silent.
+        actor: "controller",
         cardType: "unit",
         controller: "enemy",
         location: "battlefield",

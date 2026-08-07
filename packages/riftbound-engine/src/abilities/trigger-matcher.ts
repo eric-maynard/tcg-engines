@@ -586,7 +586,11 @@ function triggerMatchesEvent(
       const actorId =
         "movedBy" in event
           ? event.movedBy
-          : "chooserId" in event
+          : // rule-id: unl-055-219 — "When YOU [Stun] …" is attributed to the
+            // player whose effect applied the stun.
+            "stunnedBy" in event
+            ? event.stunnedBy
+            : "chooserId" in event
             ? event.chooserId
             : "killedBy" in event
               ? event.killedBy // rule 428.5: "When YOU kill …"
@@ -645,7 +649,15 @@ function triggerMatchesEvent(
     // the destination must be a battlefield (bases don't count) and, for
     // `other-battlefield`, must not be the battlefield this card occupies.
     if (desc.location === "other-battlefield" || desc.location === "battlefield") {
-      const to = "to" in event ? String(event.to) : undefined;
+      // rule-id: unl-055-219 — non-move events (stun, …) name their location
+      // with `battlefieldId` rather than a move destination; both forms mean
+      // "the subject is at a battlefield".
+      const to =
+        "to" in event
+          ? String(event.to)
+          : "battlefieldId" in event && typeof event.battlefieldId === "string"
+            ? `battlefield-${event.battlefieldId}`
+            : undefined;
       if (to === undefined || !to.startsWith("battlefield-")) {
         return false;
       }
