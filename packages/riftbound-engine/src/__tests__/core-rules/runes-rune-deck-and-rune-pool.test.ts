@@ -176,7 +176,7 @@ describe("164.2.b — Recycle this: Add [C] (one Power of the rune's own domain,
   // Expected (416.1.b/.c, 429.4.a, 168): an effect that recycles a rune moves it to the bottom of its
   // OWNER's Rune Deck and adds NO power to anyone (only the rune's own "Recycle this: Add [C]" adds).
   // Actual: the generic `recycle` effect handler is a no-op for board runes — the rune stays in play.
-  test.failing("BUG: 416.1.b/.c — an EFFECT that recycles P1's rune (cast by P2) puts it under P1's rune deck and adds no power to either player; engine leaves the rune on the board", async () => {
+  test("416.1.b/.c — an EFFECT that recycles P1's rune (cast by P2) puts it under P1's rune deck and adds no power to either player; engine leaves the rune on the board", async () => {
     const game = await scenario()
       .active(P2)
       .fillDecks({ main: 10, runes: 0 })

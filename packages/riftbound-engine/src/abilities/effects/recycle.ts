@@ -174,6 +174,24 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
     rawTarget === "self" ||
     (typeof rawTarget === "object" && rawTarget !== null && (rawTarget as { type?: string }).type === "self");
   const targetType = typeof rawTarget === "object" && rawTarget !== null ? (rawTarget as { type?: string }).type : undefined;
+  // rule 416.1.b / rule 416.1.c: a rune recycled by an EFFECT goes under its
+  // OWNER's Rune Deck (not the Main Deck) and adds power to nobody — only the
+  // rune's own "Recycle this: Add [C]" ability produces power (164.2.b).
+  if (targetType === "rune") {
+    for (const id of getTargetIds(effect, ctx)) {
+      const zone = ctx.zones.getCardZone(id as CoreCardId) as string | undefined;
+      if (zone === undefined || zone === "runeDeck" || zone === "banishment") {
+        continue;
+      }
+      ctx.zones.moveCard({
+        cardId: id as CoreCardId,
+        position: "bottom",
+        targetZoneId: "runeDeck" as CoreZoneId,
+      });
+      ctx.counters.setFlag(id as CoreCardId, "exhausted", false);
+    }
+    return;
+  }
   if (!isSelf && targetType !== "unit" && targetType !== "gear") {
     return;
   }

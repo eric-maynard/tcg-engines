@@ -768,7 +768,7 @@
       "isChampion": false,
       "rulesText": "[Accelerate] (You may pay [1][fury] as an additional cost to have me enter ready.)\nWhen I move, if you control 4 or fewer runes, draw 1.",
       "abilities": [
-        { "keyword": "Accelerate", "type": "keyword" },
+        { "cost": { "energy": 1, "power": ["fury"] }, "keyword": "Accelerate", "type": "keyword" },
         {
           "effect": {
             "condition": {
