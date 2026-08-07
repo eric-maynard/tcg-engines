@@ -335,6 +335,13 @@ export interface BattlefieldState {
   combatNoDefendersAtCleanup?: boolean;
 
   /**
+   * rule 465.2.c.3 — the attacking player's chosen assignment of its combat
+   * damage onto the defenders here, recorded by the `combat-damage` prompt and
+   * consumed by the next `resolveFullCombat` pass.
+   */
+  combatDamageAllocation?: Record<string, number>;
+
+  /**
    * Bonus to the number of cards a player may hide at this battlefield.
    *
    * Default hidden-capacity is 1 per player. Battlefields like Bandle Tree
@@ -768,6 +775,12 @@ export interface OptInChoice {
   /** The resolved chain item to execute if the player accepts. */
   readonly resolved: unknown;
   /**
+   * rule 383.3.a.2 / 402.1.a: set when the prompt is the FINALIZATION question
+   * for a "you may" trigger — the id of its chain item. Accepting clears the
+   * item's `optional` flag; declining removes it from the chain entirely.
+   */
+  readonly finalizationChainItemId?: string;
+  /**
    * rule 372 (ogn-023-298): an optional "you may pay … instead" death
    * replacement is awaiting its controller's answer for this unit; state-based
    * checks leave its lethal damage in place until the prompt resolves
@@ -844,7 +857,30 @@ export interface WeaponmasterEquipChoice {
   readonly options: readonly CardId[];
 }
 
+/**
+ * rule 465.2.c.3 / 465.2.c.7 — the player dealing combat damage chooses which
+ * opposing unit receives lethal damage first whenever more than one legal
+ * assignment exists. The prompt is raised by `resolveFullCombat` and answered
+ * with one `allocation` covering every point of that side's damage.
+ */
+export interface CombatDamageChoice {
+  readonly type: "combat-damage";
+  /** The assigning player (today: the attacker distributing onto defenders). */
+  readonly playerId: PlayerId;
+  readonly battlefieldId: string;
+  /** Assignable target ids, in Tank → plain → Backline priority order. */
+  readonly options: readonly CardId[];
+  readonly total: number;
+  /** Damage each option still needs to be lethal (465.2.c.4). */
+  readonly lethalNeed: Readonly<Record<string, number>>;
+  /** 0 = Tank (815.1.b), 1 = plain, 2 = Backline (826.4.b). */
+  readonly tier: Readonly<Record<string, number>>;
+  /** The forced/greedy assignment — a legal answer, used when settling. */
+  readonly defaultAllocation: Readonly<Record<string, number>>;
+}
+
 export type PendingChoice =
+  | CombatDamageChoice
   | RevealAndPickChoice
   | NameCardChoice
   | ChooseTargetChoice
@@ -904,6 +940,14 @@ export interface RiftboundGameState {
   readonly cardsPlayedThisTurn?: Record<string, number>;
 
   /**
+   * rule-id: unl-089-219 — the largest Energy amount this player has spent to
+   * play a single spell this turn. Written when a spell's cost is paid
+   * (`deductCost`) and reset at the start of each turn; read by alternate
+   * play costs ("If you've spent [4] or more to play a spell this turn …").
+   */
+  readonly spellEnergySpentThisTurn?: Record<string, number>;
+
+  /**
    * rule 430.3 — runes actually channeled per player by the most recent
    * `channel` effect. Read by the `channeled-fewer-than` condition
    * ("If you couldn't channel 2 runes this way, draw 1").
@@ -955,6 +999,13 @@ export interface RiftboundGameState {
 
   /** Turn number of each player's first turn (for first-turn-process rules) */
   readonly firstTurnNumber?: Record<string, number>;
+
+  /**
+   * rule 738 — how many Additional Turns have already been taken. Turn Order is
+   * unaffected by them, so every player's first turn number (485.7) is shifted
+   * by this offset.
+   */
+  additionalTurnsTaken?: number;
 
   /**
    * rule 487.7 / 644.7 — the player who channels the extra rune on their first

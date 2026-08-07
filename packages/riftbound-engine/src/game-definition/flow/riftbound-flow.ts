@@ -515,6 +515,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
           (context.state as { turnEvents?: Record<string, string[]> }).turnEvents = {};
           // rule-id: ogn-118-298 — "the first time … each turn" tallies reset every turn.
           context.state.turnEventCounts = {};
+          // rule-id: unl-089-219 — "spent [4] or more to play a spell this turn"
+          // is per turn for every player.
+          (context.state as { spellEnergySpentThisTurn?: Record<string, number> })
+            .spellEnergySpentThisTurn = {};
           if (context.state.cardsPlayedThisTurn) {
             // Rule 724 (Legion): reset main-deck cards-played counter at
             // The start of the turn player's turn so Legion conditions
@@ -540,6 +544,10 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
             // turn it displaces is remembered and resumes once the run of
             // additional turns finishes.
             beginAdditionalTurn(context.state, context.getCurrentPlayer());
+            // rule 738: turn numbers past an additional turn are shifted by one
+            // while Turn Order is unchanged — first-turn bookkeeping (485.7)
+            // reads this offset.
+            context.state.additionalTurnsTaken = (context.state.additionalTurnsTaken ?? 0) + 1;
             context.setCurrentPlayer(extra);
           } else {
             const queued = resumeQueuedTurn(context.state);
@@ -778,8 +786,14 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 context.getCurrentPlayer()) as CorePlayerId;
               let baseChannelCount = 2;
 
+              // rule 485.7 / 738: the bonus belongs to the player's OWN first
+              // turn. Additional Turns are inserted into the queue without
+              // changing Turn Order, so every later turn number is shifted by
+              // the number of additional turns already taken.
               const isFirstTurn =
-                context.state.firstTurnNumber?.[playerId] === context.getTurnNumber();
+                context.state.firstTurnNumber?.[playerId] !== undefined &&
+                context.state.firstTurnNumber[playerId] + (context.state.additionalTurnsTaken ?? 0) ===
+                  context.getTurnNumber();
               // rule 487.7: only the LAST player in Turn Order gets the extra
               // rune; middle players in a multiplayer game channel the normal 2.
               const isExtraRunePlayer =

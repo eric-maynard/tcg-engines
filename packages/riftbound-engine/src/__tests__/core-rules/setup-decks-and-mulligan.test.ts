@@ -1115,7 +1115,7 @@ describe("Additional turns do not change Turn Order: the +1 rune belongs to the 
     expect(game.turnNumber()).toBe(5);
   });
 
-  test.failing("BUG: 485.7 — after P1's additional turn, game turn 3 is P2's FIRST turn and P2 must channel 3; the engine keys the bonus to absolute turn number 2 (firstTurnNumber[P2] === 2) and P2 only channels 2", async () => {
+  test("485.7 — after P1's additional turn, game turn 3 is P2's FIRST turn and P2 must channel 3; the engine keys the bonus to absolute turn number 2 (firstTurnNumber[P2] === 2) and P2 only channels 2", async () => {
     // Expected: P2 runes 3 / rune deck 9 on its first Channel Phase (game turn 3), then 2 per turn (5 / 7 on turn 5).
     // Actual: the flow compares firstTurnNumber[P2] (2) with the current turn number (3) → no bonus, ever.
     const { game, pg } = fullPregame({ seed: "extra-turn-bonus" });
