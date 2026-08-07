@@ -17,6 +17,7 @@ import {
   startShowdown as startShowdownState,
 } from "../../../chain";
 import { fireTriggers } from "../../../abilities/trigger-runner";
+import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { hasPlayerWon } from "../../win-conditions/victory";
 import {
@@ -289,6 +290,12 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
         draft,
         context as unknown as Parameters<typeof openPendingContestedShowdown>[1],
       );
+      // rule 323.6 / 323.13 — the Cleanup that follows a closed Showdown runs
+      // the state-based checks: a battlefield whose controller no longer has a
+      // unit there (both sides traded before combat damage) becomes
+      // Uncontrolled. Chain moves are not wrapped by withPostMoveCleanup, so
+      // without this the stale controller survives into the open state.
+      cleanupAndFireDeaths(draft, context as unknown as Parameters<typeof cleanupAndFireDeaths>[1]);
     }
   },
 };

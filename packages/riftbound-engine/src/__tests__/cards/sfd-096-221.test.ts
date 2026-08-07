@@ -81,7 +81,7 @@ describe("Laurent Bladekeeper (sfd-096-221)", () => {
     expect(game.p1.points()).toBe(0);
   });
 
-  test.failing("BUG: ganking away with your LAST unit there forfeits control of the origin battlefield at the next cleanup (323.6) — the engine keeps it controlled", async () => {
+  test("ganking away with your LAST unit there forfeits control of the origin battlefield at the next cleanup (323.6) — the engine keeps it controlled", async () => {
     // Expected: bf1 (now empty of P1 units, Open state after the bf2 conquer) becomes uncontrolled.
     // Actual: bf1.controller stays "player-1" (control is only stripped when the last unit DIES there).
     const game = await scenario()

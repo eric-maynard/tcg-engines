@@ -187,7 +187,7 @@ describe("Marching Orders (sfd-114-221)", () => {
     expect(t.ok).toBe(false);
   });
 
-  test.failing("BUG: [Action] in the OPPONENT's showdown — when P2 attacks bf2, P1 (defender) gains Focus after P2 passes and may cast it: Scout (2) and the 2-Might attacker trade before combat", async () => {
+  test("[Action] in the OPPONENT's showdown — when P2 attacks bf2, P1 (defender) gains Focus after P2 passes and may cast it: Scout (2) and the 2-Might attacker trade before combat", async () => {
     const game = await scenario()
       .active(P2)
       .resources(P1, { energy: 3 })
