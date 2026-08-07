@@ -279,7 +279,10 @@ export const playSpell: Defs["playSpell"] = {
       return false;
     }
     // rule-id: unl-190-219 — "its controller can't play spells this turn".
-    if (state.cannotPlaySpellsThisTurn?.[context.params.playerId as string]) {
+    if (
+      state.cannotPlaySpellsThisTurn?.[context.params.playerId as string] ===
+      state.turn.number
+    ) {
       return false;
     }
     // rule 419.1 — a board static may forbid PLAYING this card (ven-132-166).

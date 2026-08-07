@@ -709,6 +709,15 @@ export const revealHidden: Defs["revealHidden"] = {
     if (state.cannotPlayCardsThisTurn?.[context.params.playerId as string]) {
       return false;
     }
+    // rule 811.1.b (unl-190-219) — revealing a hidden card PLAYS it, so a
+    // "can't play spells this turn" restriction blocks a hidden SPELL too.
+    if (
+      state.cannotPlaySpellsThisTurn?.[context.params.playerId as string] ===
+        state.turn.number &&
+      getGlobalCardRegistry().getCardType(context.params.cardId as string) === "spell"
+    ) {
+      return false;
+    }
     const meta = context.cards.getCardMeta(context.params.cardId as CoreCardId) as
       | Partial<RiftboundCardMeta>
       | undefined;
