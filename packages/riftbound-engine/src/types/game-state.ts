@@ -1089,6 +1089,15 @@ export interface RiftboundGameState {
   readonly cardsPlayedThisTurn?: Record<string, number>;
 
   /**
+   * rule 419.4.a (rule-id: ven-044-166) — a spell's play is tallied when it
+   * goes on the chain, but its `play-card` trigger only fires when it RESOLVES.
+   * Keyed by card id, this records which card of its controller's turn each
+   * pending spell was, so "when you play your first card each turn" reads the
+   * ordinal the spell had at play time. Cleared at end of turn.
+   */
+  readonly spellPlayOrdinals?: Record<string, number>;
+
+  /**
    * rule-id: unl-089-219 — the largest Energy amount this player has spent to
    * play a single spell this turn. Written when a spell's cost is paid
    * (`deductCost`) and reset at the start of each turn; read by alternate

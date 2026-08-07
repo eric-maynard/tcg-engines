@@ -23,6 +23,8 @@ export interface TriggerRestriction {
  */
 export interface TriggerMatcherState {
   readonly cardsPlayedThisTurn?: Record<string, number>;
+  /** rule 419.4.a — ordinal a pending spell had when it was played (ven-044-166). */
+  readonly spellPlayOrdinals?: Record<string, number>;
   readonly turn?: { readonly activePlayer?: string; readonly phase?: string };
   readonly turnEventCounts?: Record<string, number>;
   /** Same keys as `turnEventCounts`, but never reset — game-long tallies. */
@@ -227,6 +229,13 @@ function restrictionSatisfied(
     case "nth-time-each-turn": {
       const n = restriction.count ?? 1;
       if (trigger.event === "play-card") {
+        // rule 419.4.a — a spell's play-card fires on RESOLUTION, long after
+        // its play was tallied, so use the ordinal recorded when it was played.
+        const recorded =
+          event.type === "play-card" ? state?.spellPlayOrdinals?.[event.cardId] : undefined;
+        if (recorded !== undefined) {
+          return recorded === n;
+        }
         // Reducers fire play-card BEFORE incrementing cardsPlayedThisTurn, so
         // the current play is the (prior + 1)th card this turn.
         const playerId = "playerId" in event ? event.playerId : card.owner;

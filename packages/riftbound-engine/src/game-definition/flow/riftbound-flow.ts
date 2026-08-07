@@ -461,13 +461,29 @@ function runExpirationStep(context: FlowStepContext): void {
         if (context.state.nextSpellRepeat) {
           context.state.nextSpellRepeat = undefined;
         }
+        // rule 419.4.a (rule-id: ven-044-166) — per-turn play ordinals of
+        // pending spells do not outlive the turn that recorded them.
+        if ((context.state as { spellPlayOrdinals?: unknown }).spellPlayOrdinals) {
+          (context.state as { spellPlayOrdinals?: unknown }).spellPlayOrdinals = undefined;
+        }
         // rule-id: unl-007-219 — expire "this turn" runtime replacements
         // (rule 517.2) so an unspent die→banish rider doesn't leak into
         // later turns.
         if (context.state.activeReplacements) {
           context.state.activeReplacements = (
             context.state.activeReplacements as { duration?: string }[]
-          ).filter((e) => e?.duration !== "turn" && e?.duration !== "next");
+          ).filter((e) => {
+            if (e?.duration !== "turn" && e?.duration !== "next") {
+              return true;
+            }
+            // rule 391 / 392 (rule-id: ven-044-166) — an untargeted "your next
+            // card costs … less" discount prints no "this turn", so it is a
+            // delayed one-shot that waits for the next card its owner plays
+            // even across the turn boundary. Targeted "next … this turn"
+            // permissions (Jayce, Raging Firebrand) still lapse here (517.2).
+            const entry = e as { replaces?: string; target?: unknown };
+            return e.duration === "next" && entry.replaces === "play-cost" && entry.target === undefined;
+          });
         }
         // rule 517.2.b (ogn-053-298) — "this turn" continuous effects expire;
         // the next static pass drops their Might/keyword contributions.
