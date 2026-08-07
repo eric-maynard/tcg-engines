@@ -124,7 +124,7 @@ describe("Punch First (sfd-097-221)", () => {
     expect(game.state("ally").might).toBe(2);
   });
 
-  test.failing("BUG: end-of-turn heal (317.2.b) leaves the __counters.damage store stale, so the healed unit still reads 5 damage", async () => {
+  test("end-of-turn heal (317.2.b) clears the __counters.damage store too, so the healed unit reads 0", async () => {
     // Expected: after the Ending Step the unit carries 0 damage in every store the engine keeps.
     // Actual: the flow clears meta.damage only; the counter bag written by the damage effect keeps 5.
     const game = await board(2, 2).hand(P1, BOLT5, "bolt").build();

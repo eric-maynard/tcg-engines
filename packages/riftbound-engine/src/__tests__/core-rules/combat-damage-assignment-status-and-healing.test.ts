@@ -558,9 +558,7 @@ describe("Non-combat damage persists through ordinary Cleanups and heals only in
     expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
   });
 
-  test.failing("BUG: 317.2.b — the Ending Special Cleanup heals all units: by P2's turn D reads 0 damage (engine zeroes meta.damage but leaves its damage counter at 2, so the unit still reports 2)", async () => {
-    // Expected: D.damage === 0 once P1's Ending Phase has run. Actual: the observed damage stays 2
-    // across the turn boundary because the engine's `damage` counter is never cleared by the heal.
+  test("317.2.b — the Ending Special Cleanup heals all units: by P2's turn D reads 0 damage", async () => {
     const game = await pinged().build();
     await game.p1.cast("ping", { targets: "D" });
     await game.settle();

@@ -111,7 +111,7 @@ describe("Rocket Barrage (sfd-077-221)", () => {
     expect(game.zoneOf("five")).toBe("base");
   });
 
-  test.failing("BUG: the surviving unit's 4 damage is healed in the Expiration Step (317.2.b) — the engine leaves the damage counter at 4", async () => {
+  test("the surviving unit's 4 damage is healed in the Expiration Step (317.2.b)", async () => {
     const game = await board().build();
     await game.p1.cast("rb");
     await resolve(game, [DAMAGE, "five"]);

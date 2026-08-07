@@ -784,9 +784,16 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                   continue;
                 }
 
-                // Clear all damage from units (rule 517.2.a)
-                if (meta.damage && meta.damage > 0) {
-                  context.cards.updateCardMeta(cardId, { damage: 0 });
+                // Clear all damage from units (rule 517.2.a / 317.2.b) — marked
+                // damage lives in BOTH meta.damage and the reserved __counters
+                // bag (effects/damage.ts and assignDamage write both), so the
+                // heal must zero both or readers taking the max still see it.
+                const damageCounters = (meta as { __counters?: Record<string, number> }).__counters;
+                if ((meta.damage ?? 0) > 0 || (damageCounters?.damage ?? 0) > 0) {
+                  context.cards.updateCardMeta(cardId, {
+                    __counters: { ...(damageCounters ?? {}), damage: 0 },
+                    damage: 0,
+                  } as Partial<RiftboundCardMeta>);
                 }
 
                 // Clear stun at Ending Step (rule 423.1.a.2) — the stun effect writes

@@ -85,7 +85,7 @@ describe("Wages of Pain (sfd-070-221)", () => {
     expect(game.state("four").might).toBe(4); // damage does not reduce Might
   });
 
-  test.failing("BUG: the 3 damage is healed at the end of the turn (143.3.b.1) — the engine's damage counter stays at 3", async () => {
+  test("the 3 damage is healed at the end of the turn (143.3.b.1)", async () => {
     // Expected: after the Ending Step the surviving unit reads 0 damage. Actual: the end-of-turn heal
     // clears meta.damage only and the counter store written by the damage effect still reports 3.
     const game = await board().build();

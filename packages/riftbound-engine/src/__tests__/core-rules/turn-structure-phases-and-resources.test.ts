@@ -637,7 +637,7 @@ describe("Expiration Step: 'this turn' effects and stun expire at the end of the
   // Expected (317.2.b "Heal all Units"): every damage store reads 0 after the Expiration Step. Actual: the
   // engine zeroes meta.damage but leaves the parallel `__counters.damage` store at 4, so the observable
   // CardState.damage (max of both) still reports 4 on the next turn.
-  test.failing("BUG: 317.2.b — end-of-turn heal clears meta.damage but not the damage counter store, so the unit still reads 4 damage next turn", async () => {
+  test("317.2.b — end-of-turn heal clears the unit's damage in both stores, so it reads 0 next turn", async () => {
     const game = await scenario()
       .battlefield("bfA", { controller: P1 })
       .unit(P1, "bfA", { might: 3 }, "u")

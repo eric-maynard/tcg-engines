@@ -158,7 +158,7 @@ describe("Feral Strength (sfd-034-221)", () => {
     expect(game.state("holder").might).toBe(3);
   });
 
-  test.failing("BUG: after the Expiration Step the surviving unit should read damage 0 (317.2.b) — the engine leaves its damage counter at 3", async () => {
+  test("after the Expiration Step the surviving unit reads damage 0 (317.2.b)", async () => {
     // Expected: heal-all at end of turn clears every damage record, so next turn Holder is an
     // undamaged 3-Might unit. Actual: meta.damage is reset but the mirrored __counters.damage
     // stays 3, so the unit still reports 3 damage (and would accumulate on the next hit).
