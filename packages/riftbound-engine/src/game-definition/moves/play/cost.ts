@@ -81,6 +81,7 @@ export function staticEnterReadyApplies(
   state: RiftboundGameState,
   playerId: string,
   zones?: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  cards?: EnterReadyCardAccessor,
 ): boolean {
   const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
   for (const ability of abilities) {
@@ -91,15 +92,49 @@ export function staticEnterReadyApplies(
       effect?: { type?: string };
       condition?: Record<string, unknown>;
     };
-    if (!flattenStaticEffects(effect).some((e) => e.type === "enter-ready")) {
+    // rule 369.3 (rule-id: unl-035-219) — the entering unit's own "I enter
+    // ready" may be authored as `enter-ready` or as a SELF grant of the
+    // virtual `EntersReady` keyword. A static on a card still in hand is never
+    // recalculated, so the play path must read both shapes here.
+    if (
+      !flattenStaticEffects(effect).some(
+        (e) =>
+          e.type === "enter-ready" ||
+          (e.type === "grant-keyword" &&
+            (e as { keyword?: string }).keyword === "EntersReady" &&
+            (e as { target?: unknown }).target === "self"),
+      )
+    ) {
       continue;
     }
-    if (!condition || evaluateEnterReadyCondition(condition, state, playerId, cardId, zones) !== false) {
+    if (
+      !condition ||
+      evaluateEnterReadyCondition(condition, state, playerId, cardId, zones, cards) !== false
+    ) {
       return true;
     }
   }
   return false;
 }
+
+/** Card-meta reader for play-time gates that read board statuses. */
+type EnterReadyCardAccessor = {
+  getCardMeta: (cardId: CoreCardId) => Partial<RiftboundCardMeta> | undefined;
+};
+
+/**
+ * rule 423.1 — board statuses a play-time gate can decide from card meta
+ * alone. A filter not listed here leaves the gate "unknown".
+ */
+const STATUS_META_FILTERS: Record<
+  string,
+  ((meta: Record<string, unknown> | undefined) => boolean) | undefined
+> = {
+  damaged: (meta) => ((meta?.damage as number | undefined) ?? 0) > 0,
+  exhausted: (meta) => meta?.exhausted === true,
+  ready: (meta) => meta?.exhausted !== true,
+  stunned: (meta) => meta?.stunned === true,
+};
 
 function evaluateEnterReadyCondition(
   condition: Record<string, unknown>,
@@ -107,6 +142,7 @@ function evaluateEnterReadyCondition(
   playerId: string,
   cardId?: string,
   zones?: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  cards?: EnterReadyCardAccessor,
 ): boolean | undefined {
   switch (condition.type) {
     // rule 419.1 (rule-id: ven-013-166) — "if you have a card with my name in
@@ -159,6 +195,7 @@ function evaluateEnterReadyCondition(
         playerId,
         cardId,
         zones,
+        cards,
       );
       return inner === undefined ? undefined : !inner;
     }
@@ -194,6 +231,49 @@ function evaluateEnterReadyCondition(
         return Object.values(state.battlefields ?? {}).some(
           (bf) => typeof bf?.controller === "string" && bf.controller !== playerId,
         );
+      }
+      // rule 108.2 / 364.3.a (rule-id: unl-035-219) — "if an opponent controls
+      // a stunned unit": scan every OPPONENT's board (base + battlefields) for
+      // a permanent matching the subject's type and status filters. Your own
+      // stunned units are never an opponent's, and where the enemy's stands
+      // does not matter.
+      if (target.type === "unit" || target.type === "card") {
+        if (!zones) {
+          return undefined;
+        }
+        const filters = (
+          target.filter === undefined
+            ? []
+            : Array.isArray(target.filter)
+              ? target.filter
+              : [target.filter]
+        ).filter((f): f is string => typeof f === "string");
+        // Status filters read card meta; without it the gate is unknown rather
+        // than a false negative.
+        if (filters.length > 0 && (!cards || filters.some((f) => !STATUS_META_FILTERS[f]))) {
+          return undefined;
+        }
+        const registry = getGlobalCardRegistry();
+        const boardZones = [
+          "base",
+          ...Object.keys(state.battlefields ?? {}).map((bfId) => getBattlefieldZoneId(bfId)),
+        ];
+        for (const pid of Object.keys(state.players).filter((p) => p !== playerId)) {
+          for (const zone of boardZones) {
+            for (const id of zones.getCardsInZone(zone as CoreZoneId, pid as CorePlayerId)) {
+              if (target.type === "unit" && registry.getCardType(id as string) !== "unit") {
+                continue;
+              }
+              const meta = cards?.getCardMeta(id as CoreCardId) as
+                | Record<string, unknown>
+                | undefined;
+              if (filters.every((f) => STATUS_META_FILTERS[f]?.(meta) === true)) {
+                return true;
+              }
+            }
+          }
+        }
+        return false;
       }
       return undefined;
     }
@@ -298,6 +378,7 @@ function getSelfConditionalEnergyReduction(
   extras?: CostExtras,
 ): number {
   let total = 0;
+  let instead = 0;
   for (const ability of getGlobalCardRegistry().getAbilities(cardId) ?? []) {
     if (ability?.type !== "static") {
       continue;
@@ -315,13 +396,21 @@ function getSelfConditionalEnergyReduction(
     // rule 356.4 (rule-id: sfd-076-221) — board-reading gates such as "if you
     // control a Mech" need zone access; without it they cannot hold.
     if (
-      evaluateEnterReadyCondition(condition, state, playerId, cardId, extras?.board?.zones) !== true
+      evaluateEnterReadyCondition(condition, state, playerId, cardId, extras?.board?.zones, extras?.board?.cards) !== true
     ) {
       continue;
     }
-    total += Math.max(0, decodeCostAmount(effect.reduction ?? effect.amount).energy);
+    const energy = Math.max(0, decodeCostAmount(effect.reduction ?? effect.amount).energy);
+    // rule 824 (rule-id: unl-091-219) — a tier worded "… less INSTEAD"
+    // replaces the lower tiers' discount rather than stacking with it, so only
+    // the largest active "instead" tier applies.
+    if ((effect as { instead?: unknown }).instead === true) {
+      instead = Math.max(instead, energy);
+    } else {
+      total += energy;
+    }
   }
-  return total;
+  return instead > 0 ? instead : total;
 }
 
 /**
@@ -525,12 +614,13 @@ export function boardEntersReadyGrantApplies(
   zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
   cardId: string,
   playerId: string,
+  cards?: EnterReadyCardAccessor,
 ): boolean {
   // rule 143.4 / 364.3.a (rule-id: sfd-027-221) — the played card's OWN
   // conditional "I enter ready" static ("If you have two or fewer cards in
   // your hand") can only be evaluated with zone access, and this is the
   // enter-ready check that receives it.
-  if (staticEnterReadyApplies(cardId, state, playerId, zones)) {
+  if (staticEnterReadyApplies(cardId, state, playerId, zones, cards)) {
     return true;
   }
   const registry = getGlobalCardRegistry();

@@ -10,16 +10,85 @@ import type {
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { createInteractionState, getTurnState } from "../../../chain";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import {
+  canAffordCard,
   staticEnterReadyApplies,
   consumeEntersReadyReplacement,
   createMetaAccessor,
+  getOptionalPlayCost,
   getPotentialRuneEnergy,
   deductCost,
 } from "./cost";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
+
+/**
+ * rule 356.2 with rule 355.10.a.1 (rule-id: unl-052-219) — an optional
+ * additional cost printed on a champion is offered on EVERY play of that card,
+ * including the play from the Champion Zone. Only the rune-paid shapes
+ * (`accelerate` / `pay`) are payable on this path.
+ */
+function championOptionalRuneCost(
+  cardId: string,
+): { kind: "accelerate" | "pay"; energy: number; power: readonly string[] } | undefined {
+  const optional = getOptionalPlayCost(cardId);
+  if (optional?.kind !== "accelerate" && optional?.kind !== "pay") {
+    return undefined;
+  }
+  if ((optional.cost?.xp ?? 0) > 0) {
+    return undefined;
+  }
+  return {
+    energy: optional.cost?.energy ?? 0,
+    kind: optional.kind,
+    power: optional.cost?.power ?? [],
+  };
+}
+
+/**
+ * rule 135.2.e.5.a / 135.2.e.5.b — an additional cost's pips obey the printed
+ * cost's Power rules: a named-Domain pip prefers its own Domain and falls back
+ * to pooled [rainbow], a [rainbow] pip is payable from any Domain. Returns the
+ * per-Domain amounts to spend, or undefined when the pool cannot cover them.
+ */
+function planPips(
+  pips: readonly string[],
+  have: Partial<Record<string, number>>,
+): Record<string, number> | undefined {
+  const left: Record<string, number> = {};
+  for (const [domain, count] of Object.entries(have)) {
+    left[domain] = count ?? 0;
+  }
+  const spend: Record<string, number> = {};
+  const take = (domain: string) => {
+    left[domain] = (left[domain] ?? 0) - 1;
+    spend[domain] = (spend[domain] ?? 0) + 1;
+  };
+  let wild = 0;
+  for (const pip of pips) {
+    if (pip === "rainbow") {
+      wild++;
+      continue;
+    }
+    if ((left[pip] ?? 0) > 0) {
+      take(pip);
+    } else if ((left.rainbow ?? 0) > 0) {
+      take("rainbow");
+    } else {
+      return undefined;
+    }
+  }
+  for (let i = 0; i < wild; i++) {
+    const domain = Object.keys(left)
+      .filter((d) => (left[d] ?? 0) > 0)
+      .sort((a, b) => (left[b] ?? 0) - (left[a] ?? 0))[0];
+    if (domain === undefined) {
+      return undefined;
+    }
+    take(domain);
+  }
+  return spend;
+}
 
 /**
  * Play Chosen Champion from Champion Zone (rule 107.2.c)
@@ -58,6 +127,32 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
       return false;
     }
 
+    // rule 356.2 (rule-id: unl-052-219) — an optional additional cost may only
+    // be declared paid when the card has one and the pool can cover it.
+    if (context.params.paidAdditionalCost === true) {
+      const championId = championZoneCards[0];
+      const optional =
+        championId === undefined ? undefined : championOptionalRuneCost(championId as string);
+      if (!optional) {
+        return false;
+      }
+      if (
+        !canAffordCard(
+          state,
+          context.params.playerId as string,
+          championId as string,
+          {
+            additionalCost: { energy: optional.energy, power: optional.power },
+            board: { cards: context.cards, zones: context.zones },
+          },
+          createMetaAccessor(context.cards),
+          getPotentialRuneEnergy(context.zones, context.counters, context.params.playerId as string),
+        )
+      ) {
+        return false;
+      }
+    }
+
     return true;
   },
   enumerator: (state, context) => {
@@ -91,21 +186,58 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
         context.counters,
         context.playerId as string,
       );
-    // Rule 419.1.a: use the global card registry (context.registry has no .get()).
-    const registry = getGlobalCardRegistry();
-    const results: { playerId: PlayerId; location: string }[] = [];
+    const results: {
+      playerId: PlayerId;
+      location: string;
+      paidAdditionalCost?: boolean;
+    }[] = [];
     for (const cardId of championZoneCards) {
-      const def = registry.get(cardId as string);
-      const cost = def?.energyCost ?? 0;
-      if (cost > energy) {
+      // rule 824 (rule-id: unl-059-219) — a Champion-Zone play is still
+      // "playing me", so the champion's own (possibly [Level]-gated) cost
+      // reductions price it: ask the shared cost path instead of comparing the
+      // printed Energy, which also gets the Power pips checked.
+      if (
+        !canAffordCard(
+          state,
+          context.playerId as string,
+          cardId as string,
+          { board: { cards: context.cards, zones: context.zones } },
+          createMetaAccessor(context.cards),
+          energy - (state.runePools?.[context.playerId]?.energy ?? 0),
+        )
+      ) {
         continue;
       }
       results.push({ location: "base", playerId: context.playerId as PlayerId });
+      // rule 356.2 / 355.10.a.1 (rule-id: unl-052-219) — offer the champion's
+      // own optional additional cost here too; it is only a variant when the
+      // pool can actually cover the base cost plus the extra.
+      const optional = championOptionalRuneCost(cardId as string);
+      if (
+        optional &&
+        canAffordCard(
+          state,
+          context.playerId as string,
+          cardId as string,
+          {
+            additionalCost: { energy: optional.energy, power: optional.power },
+            board: { cards: context.cards, zones: context.zones },
+          },
+          createMetaAccessor(context.cards),
+          energy - (state.runePools?.[context.playerId]?.energy ?? 0),
+        )
+      ) {
+        results.push({
+          location: "base",
+          paidAdditionalCost: true,
+          playerId: context.playerId as PlayerId,
+        });
+      }
     }
     return results;
   },
   reducer: (draft, context) => {
-    const { playerId, location } = context.params;
+    const { playerId, location, paidAdditionalCost } = context.params;
     const { zones, counters } = context;
 
     const championZoneCards = zones.getCardsInZone(
@@ -122,6 +254,28 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
           zones: context.zones,
         });
 
+        // rule 356.2 / 355.10.a.1 (rule-id: unl-052-219) — pay the champion's
+        // optional additional cost while playing it, so "if you paid the
+        // additional cost" riders on the play trigger see it as paid.
+        let paidOptional = false;
+        let paidAccelerate = false;
+        const optional = paidAdditionalCost
+          ? championOptionalRuneCost(championId as string)
+          : undefined;
+        const pool = draft.runePools[playerId];
+        if (optional && pool) {
+          const spend = planPips(optional.power, pool.power);
+          if (spend !== undefined && pool.energy >= optional.energy) {
+            pool.energy -= optional.energy;
+            for (const [domain, count] of Object.entries(spend)) {
+              const key = domain as keyof typeof pool.power;
+              pool.power[key] = (pool.power[key] ?? 0) - count;
+            }
+            paidOptional = true;
+            paidAccelerate = optional.kind === "accelerate";
+          }
+        }
+
         zones.moveCard({
           cardId: championId,
           targetZoneId: location as CoreZoneId,
@@ -135,6 +289,8 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
         });
         const entersReady =
           replacedReady ||
+          // rule 717: a paid Accelerate enters the champion ready.
+          paidAccelerate ||
           // rule 143.4 (rule-id: sfd-176-221): a conditional "I enter ready" is
           // evaluated as the champion enters — an unmet "if" leaves him exhausted.
           staticEnterReadyApplies(championId as string, draft, playerId, zones);
@@ -146,7 +302,7 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
         // "playing" it — "when you play me" triggers must fire exactly as they
         // do for a play from hand.
         fireTriggers(
-          { cardId: championId, playerId, type: "play-self" },
+          { cardId: championId, paidAdditionalCost: paidOptional, playerId, type: "play-self" },
           { cards: context.cards, counters, draft, zones },
         );
         fireTriggers(
