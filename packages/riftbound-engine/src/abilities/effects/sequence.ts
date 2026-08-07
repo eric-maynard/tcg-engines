@@ -730,7 +730,15 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
             (indepSlots !== undefined ||
               (seqSlots !== undefined &&
                 stepSlotIdx >= 0 &&
-                seqSlots.bound.slice(stepSlotIdx + 1).some((id) => id !== undefined))))) &&
+                seqSlots.bound.slice(stepSlotIdx + 1).some((id) => id !== undefined)))) ||
+          // rule 355.14.e-h (unl-192-219 Alpha Strike) — a RESOLUTION-time
+          // split prompt (dropping targets / assigning surplus damage) is part
+          // of the damage step itself: the damage has not been dealt yet, so
+          // "Then for each unit this kills…" must wait for the answer instead
+          // of running against a board nothing has happened to.
+          (parked?.type === "choose-target" &&
+            ((parked as { assign?: boolean }).assign === true ||
+              (parked as { boundTargets?: readonly string[] }).boundTargets !== undefined))) &&
         parked.then === undefined
       ) {
         const rest = seq.effects.slice(i + 1);

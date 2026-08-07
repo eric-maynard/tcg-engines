@@ -913,6 +913,11 @@ export interface ConfirmChoice {
   readonly boundTargets?: readonly CardId[];
   /** Rest of the suspended sequence; runs after either answer. */
   readonly then?: unknown;
+  /**
+   * rule 571 / 355.13 (unl-086-219) — a declined optional REPLACEMENT still has
+   * to perform the original, unreplaced instruction: `else` runs on a no.
+   */
+  readonly else?: unknown;
   /** Human-readable prompt text. */
   readonly prompt?: string;
 }
@@ -1335,6 +1340,15 @@ export interface RiftboundGameState {
    * of `checkReplacement` may consult this alongside board-card abilities.
    */
   activeReplacements?: unknown[];
+
+  /**
+   * rule 359.3.f.2 (unl-192-219 Alpha Strike) — units a still-resolving
+   * spell/ability has dealt LETHAL damage to, keyed by that source card id.
+   * A reflexive "for each unit this kills" clause runs after the killed units
+   * have already left the board, so the kills are recorded as they happen and
+   * consumed by the clause that counts them.
+   */
+  effectKills?: Record<string, string[]>;
 
   /**
    * rule 364.3 (ogn-053-298): spell/ability-created continuous effects that

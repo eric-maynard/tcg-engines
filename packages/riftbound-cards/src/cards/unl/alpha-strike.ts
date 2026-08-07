@@ -14,13 +14,11 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *     dealt split (`split: true`) across enemy units at battlefields.
  *     The engine lets the active player distribute the damage amongst
  *     legal targets.
- *  2. `for-each` over enemy units killed this turn at battlefields,
- *     granting 1 XP per killed unit.
- *
- * FIXME: there is no first-class "units this damage killed" target; the
- * `for-each { filter: "damaged" }` scope is the closest approximation and
- * over-counts units that were already damaged. A true implementation
- * would require a per-effect kill counter threaded through `EffectContext`.
+ *  2. `for-each` over the units THIS spell's damage killed, granting 1 XP
+ *     each. rule 359.3.f.2: those units have already left the board when the
+ *     reflexive clause resolves, so the scope is `filter: "killed-by-this"` —
+ *     the kill ledger the damage handler records as it deals lethal damage —
+ *     not a board query for still-damaged units.
  */
 const abilities: Ability[] = [
   {
@@ -42,9 +40,7 @@ const abilities: Ability[] = [
         {
           effect: { amount: 1, type: "gain-xp" },
           target: {
-            controller: "enemy",
-            filter: "damaged",
-            location: "battlefield",
+            filter: "killed-by-this",
             type: "unit",
           },
           type: "for-each",

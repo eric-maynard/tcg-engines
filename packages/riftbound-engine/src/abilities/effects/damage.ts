@@ -28,6 +28,28 @@ function doubleIfMarked(amount: number, targetId: string, ctx: EffectContext): n
   return doubled ? amount * 2 : amount;
 }
 
+/**
+ * rule 359.3.f.2 / 428.5 (unl-192-219 Alpha Strike) — "Then for each unit this
+ * kills, do this": the units killed by this damage are gone from the board by
+ * the time the reflexive clause resolves, so a lethal instance is recorded on
+ * the resolving source as it is dealt. Only the instance that CROSSES the
+ * lethal line counts, so a unit already marked lethal isn't credited twice.
+ */
+function noteLethalDamage(ctx: EffectContext, targetId: string, total: number, dealt: number): void {
+  if (dealt <= 0) {
+    return;
+  }
+  const might = getEffectiveMight(targetId, ctx);
+  if (might <= 0 || total < might || total - dealt >= might) {
+    return;
+  }
+  const ledger = (ctx.draft.effectKills ??= {});
+  const list = (ledger[ctx.sourceCardId] ??= []);
+  if (!list.includes(targetId)) {
+    list.push(targetId);
+  }
+}
+
 export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
   const executeEffect = h.executeEffect;
   // rule-id: ogn-145-298 — a global "Prevent all spell and ability damage"
@@ -237,7 +259,8 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
       }
       const dmg = doubleIfMarked(assigned[targetId] + surplus + bonusDamage, targetId, ctx);
       surplus = 0;
-      addDamage(ctx, targetId, dmg, damageAttribution as Record<string, unknown>);
+      const total = addDamage(ctx, targetId, dmg, damageAttribution as Record<string, unknown>);
+      noteLethalDamage(ctx, targetId, total, dmg);
       if (dmg > 0) reactAnyUnitDamaged(targetId);
     }
     return;
@@ -375,7 +398,8 @@ export function handle_damage(effect: ExecutableEffect, ctx: EffectContext, h: E
     }
     // rule 520 / 124.1 — one damage store: the counter and its meta mirror
     // are written together so death checks, the end-of-turn clear and the UI agree.
-    addDamage(ctx, targetId, dealt, damageAttribution as Record<string, unknown>);
+    const total = addDamage(ctx, targetId, dealt, damageAttribution as Record<string, unknown>);
+    noteLethalDamage(ctx, targetId, total, dealt);
     if (dealt > 0) reactAnyUnitDamaged(targetId);
   }
 }

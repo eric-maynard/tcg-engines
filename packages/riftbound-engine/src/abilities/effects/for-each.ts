@@ -9,6 +9,21 @@ export function handle_forEach(effect: ExecutableEffect, ctx: EffectContext, h: 
   // Repeat effect for each matching target
   const forEachTarget = (effect as unknown as { target?: TargetDescriptor }).target;
   const forEachEffect = (effect as unknown as { effect?: ExecutableEffect }).effect;
+  // rule 359.3.f.2 (unl-192-219 Alpha Strike) — "for each unit this kills":
+  // the referent is the set of units this source's damage has already killed,
+  // which no board query can find (they are in the trash). Read and consume
+  // the kill ledger the damage handler writes instead of resolving a target.
+  if (forEachEffect && (forEachTarget as { filter?: string } | undefined)?.filter === "killed-by-this") {
+    const ledger = ctx.draft.effectKills;
+    const killed = ledger?.[ctx.sourceCardId] ?? [];
+    if (ledger) {
+      delete ledger[ctx.sourceCardId];
+    }
+    for (const targetId of killed) {
+      executeEffect({ ...forEachEffect, target: { type: "self" } }, { ...ctx, sourceCardId: targetId });
+    }
+    return;
+  }
   if (forEachTarget && forEachEffect) {
     // rule-id: sfd-198-221 — "for each Equipment you control" counts EVERY
     // match, so the descriptor is resolved as an exhaustive pool; the default
