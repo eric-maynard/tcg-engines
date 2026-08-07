@@ -42,7 +42,8 @@ git add -A -- "${FILES[@]}" 2>/dev/null
 if git diff --cached --quiet -- "${FILES[@]}"; then out committed false; out reason nothing_staged; exit 0; fi
 git commit -q -m "$MSG" -- "${FILES[@]}" && out committed true && out sha "$(git rev-parse --short HEAD)"
 GIT_TERMINAL_PROMPT=0 git push origin HEAD 2>&1 | tail -1 | sed 's/^/push=/'
-# sync + bounce (best effort; app tree = main tree which may include others' WIP — acceptable for the dev box)
-rsync -a --delete packages/ emaynard-tcg:/root/tcg/tcg-engines/packages/ --exclude node_modules >/dev/null 2>&1 && rsync -a apps/riftbound-app/ emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/ --exclude data --exclude node_modules --exclude downloads >/dev/null 2>&1 && out synced true
+# sync + bounce from the VERIFIED worktree at the new HEAD (never the dirty main tree → no mixed snapshots on the devbox)
+NEW_SHA=$(git rev-parse HEAD); git -C "$WT" reset -q --hard "$NEW_SHA" >/dev/null 2>&1
+rsync -a --delete "$WT/packages/" emaynard-tcg:/root/tcg/tcg-engines/packages/ --exclude node_modules >/dev/null 2>&1 && rsync -a "$WT/apps/riftbound-app/" emaynard-tcg:/root/tcg/tcg-engines/apps/riftbound-app/ --exclude data --exclude node_modules --exclude downloads >/dev/null 2>&1 && out synced "$NEW_SHA"
 out app "$(ssh -o ConnectTimeout=10 emaynard-tcg 'kill $(cat /tmp/app.pid) 2>/dev/null; sleep 3; curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/play' 2>/dev/null)"
 bun "$REPO/.claude/fix-queue/fix-queue.ts" metrics 2>/dev/null | sed 's/^/metrics=/' || true
