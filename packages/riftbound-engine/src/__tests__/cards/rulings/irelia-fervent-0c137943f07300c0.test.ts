@@ -71,6 +71,10 @@ async function settleAcceptingBladeDancer(game: Game): Promise<number> {
       await game.seat(d.seat).pick(d.options[0]?.key as string);
       continue;
     }
+    if (d.kind === "order" && d.defaultable) {
+      await game.acceptTriggerOrder(); // 383.3.d: listed order is fine here
+      continue;
+    }
     break;
   }
   return offers;

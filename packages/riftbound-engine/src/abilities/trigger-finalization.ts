@@ -35,6 +35,7 @@ import {
   findSequenceLeadTarget,
   type SpellEffectTargetShape,
 } from "../game-definition/moves/play/targeting";
+import { getGlobalCardRegistry } from "../operations/card-lookup";
 import type { RiftboundGameState } from "../types";
 import type { TargetDescriptor } from "./target-resolver";
 import { resolveTarget } from "./target-resolver";
@@ -374,6 +375,72 @@ function finalizeMultiTargetSlots(
 }
 
 /**
+ * rule 383.3.d — "if more than one Triggered Ability is Triggered
+ * simultaneously, the player that controls them selects the order to place them
+ * on the Chain". Once a batch is finalized, the triggered items it added that
+ * one player controls (≥2) are offered to that player as a SOFT `order` prompt
+ * on `draft.pendingTriggerOrder`: answering `resolvePendingChoice
+ * { orderedKeys }` (first key = appended first, last key = top of the Chain,
+ * resolves first) rearranges them; any other move keeps the listed scan order,
+ * so nobody is forced to answer. Cross-controller placement stays in turn order
+ * (383.3.d.1, `orderTriggers` / `orderBatchTriggersByTurnOrder`); when several
+ * players qualify the earliest in turn order is offered the choice.
+ */
+function offerTriggerOrder(draft: RiftboundGameState, ctx: FinalizationContext): void {
+  const items = chainItems(draft) ?? [];
+  const d = draft as RiftboundGameState & { triggerBatchSeen?: string[] };
+  const seen = new Set(d.triggerBatchSeen ?? []);
+  const fresh = items.filter(
+    (it) => it.triggered === true && it.status === "finalized" && it.countered !== true && !seen.has(it.id),
+  );
+  d.triggerBatchSeen = items.map((it) => it.id);
+  if (fresh.length < 2) {
+    return;
+  }
+  const turnOrder = Object.keys(draft.players ?? {});
+  const start = Math.max(0, turnOrder.indexOf(draft.turn?.activePlayer ?? ""));
+  const rank = (pid: string): number => {
+    const i = turnOrder.indexOf(pid);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : (i - start + turnOrder.length) % turnOrder.length;
+  };
+  const byController = new Map<string, ChainItem[]>();
+  for (const it of fresh) {
+    byController.set(it.controller, [...(byController.get(it.controller) ?? []), it]);
+  }
+  const chooser = [...byController.keys()]
+    .filter((pid) => (byController.get(pid)?.length ?? 0) >= 2)
+    .sort((a, b) => rank(a) - rank(b))[0];
+  if (chooser === undefined) {
+    return;
+  }
+  const mine = byController.get(chooser) as ChainItem[];
+  // Interchangeable items leave nothing to order: copies of one trigger (rule
+  // 808.2 — Karthus doubling a [Deathknell]) or the same source-independent
+  // effect from two cards (two Watchful Sentries' "Draw 1"). An effect that
+  // reads its source ("me", "here", the triggering object) stays distinct.
+  const signature = (it: ChainItem): string => {
+    const json = JSON.stringify(it.effect ?? null);
+    const sourceBound = /"self"|"trigger-source"|"here"|"source"|"same"/.test(json);
+    return `${sourceBound ? it.cardId : ""}|${json}`;
+  };
+  if (new Set(mine.map(signature)).size < 2) {
+    return;
+  }
+  const nameOf = (cardId: string): string =>
+    (ctx.cards.getCardName?.(cardId as CoreCardId) as string | undefined) ??
+    (getGlobalCardRegistry().get(cardId) as { name?: string } | undefined)?.name ??
+    cardId;
+  draft.pendingTriggerOrder = {
+    defaultable: true,
+    items: mine.map((it) => ({ cardId: it.cardId, key: it.id, label: `${nameOf(it.cardId)} trigger` })),
+    playerId: chooser,
+    prompt: "Order your simultaneous triggers on the Chain (first = bottom, last = top → resolves first)",
+    resume: { itemIds: mine.map((it) => it.id), kind: "trigger-batch" },
+    type: "order",
+  };
+}
+
+/**
  * Finalize Pending trigger items oldest-first (rule 337.1.b) until one of them
  * needs an answer or none is left. Safe to call whenever no prompt is open.
  */
@@ -395,6 +462,9 @@ export function finalizePendingItems(draftLike: unknown, ctx: FinalizationContex
     const items = chainItems(draft);
     const item = items?.find((it) => it.status === "pending");
     if (!items || !item) {
+      // rule 383.3.d — everything is finalized: offer the same-controller
+      // ordering of the items this batch added (soft prompt, default = as listed).
+      offerTriggerOrder(draft, ctx);
       return;
     }
     // rule 337.1.b / 354.2 — an effect-instructed play appended before this
@@ -517,6 +587,12 @@ export function withTriggerFinalization<
       ...move,
       // biome-ignore lint/suspicious/noExplicitAny: structural pass-through wrapper
       reducer: (draft: any, context: any) => {
+        // rule 383.3.d — taking any other action accepts the listed order of a
+        // pending same-controller trigger batch (only `resolvePendingChoice
+        // { orderedKeys }` rearranges it).
+        if (name !== "resolvePendingChoice" && draft?.pendingTriggerOrder !== undefined) {
+          draft.pendingTriggerOrder = undefined;
+        }
         moveDepth += 1;
         try {
           originalReducer(draft, context);

@@ -25,13 +25,11 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
-import type { EffectContext, ExecutableEffect } from "../abilities/effect-executor";
-import { executeEffect } from "../abilities/effect-executor";
+import { isDieReplacementRunning, runDieBatch } from "../abilities/die-replacement-batch";
+import type { EffectContext } from "../abilities/effect-executor";
 import type { GameEvent } from "../abilities/game-events";
 import type { ChainItem } from "../chain";
 import * as replacementEffects from "../abilities/replacement-effects";
-import { checkReplacement, markReplacementConsumed } from "../abilities/replacement-effects";
-import { canAffordPower } from "../game-definition/moves/chain/effect-context";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { DelayedTrigger } from "../types/game-state";
 import { getGlobalCardRegistry } from "./card-lookup";
@@ -537,13 +535,6 @@ export function detachOnLeave(ctx: LeaveBoardContext, cardId: string): void {
 // ---------------------------------------------------------------------------
 
 /**
- * rule 370.2 — a replacement applies once to an event and to whatever replaces
- * it; the kill it performs itself ("kill this instead") is not replaced again
- * by the same source while it runs.
- */
-const RUNNING_DIE_REPLACEMENTS = new Set<string>();
-
-/**
  * Adapt a leave/cleanup context into an EffectContext for running a
  * replacement's own effect, with the would-be-dying card exposed as
  * `trigger-source` ("it").
@@ -579,198 +570,36 @@ export function buildReplacementEffectContext(
 }
 
 /**
- * Apply a board `die` replacement (Zhonya's Hourglass ogn-077-298, Soraka,
- * Guardian Angel …) to a card about to be killed. Returns true when the death
- * was replaced — the caller must then leave the card where it is and fire no
- * `die` (rule 370.1.a.1 / 808.1.d.1).
+ * Apply the `die` replacements (Zhonya's Hourglass ogn-077-298, Soraka,
+ * Guardian Angel, runtime "next time it would die" shields …) to ONE card about
+ * to be killed by an instruction, a cost or [Temporary]. Returns true when the
+ * death does not happen now — it was replaced, or a rule 371.2 / 372 question
+ * is open and `continueKillBatch` finishes the kill on the answer. The caller
+ * must then leave the card where it is and fire no `die` (370.1.a.1 / 808.1.d.1).
+ * Simultaneous kills should go through `runDieBatch` with the whole batch
+ * instead (rule 373 — `effects/kill.ts killUnits` does).
  */
-interface BoundDieReplacement {
-  readonly replaces?: string;
-  readonly targetCardIds?: readonly string[];
-  readonly sourceCardId?: string;
-  readonly owner?: string;
-  readonly condition?: { type?: string };
-  readonly replacement?: ExecutableEffect | "prevent";
-}
-
-/**
- * rule 370.1.a.1 (unl-175-219 Tactical Retreat) — a runtime `die` replacement a
- * resolved spell bound to this unit ("the next time it would die this turn …")
- * replaces EVERY death, not just lethal damage found by a cleanup pass: a plain
- * Kill instruction is a death too. Costed ("you may pay … instead") shields need
- * a prompt, which only the cleanup pass can raise, so they are left alone here.
- */
-function consumeBoundDieReplacement(
-  draft: RiftboundGameState,
-  cardId: string,
-): BoundDieReplacement | undefined {
-  const active = (draft as { activeReplacements?: BoundDieReplacement[] }).activeReplacements;
-  if (!active || active.length === 0) {
-    return undefined;
-  }
-  const idx = active.findIndex(
-    (e) =>
-      e?.replaces === "die" &&
-      e.targetCardIds?.includes(cardId) === true &&
-      e.condition?.type !== "pay-cost",
-  );
-  if (idx < 0) {
-    return undefined;
-  }
-  return active.splice(idx, 1)[0];
-}
-
-/** rule 372 (ogn-023-298): can `playerId` pay an optional shield's `{energy, power[]}` cost now? */
-function canPayShieldCost(
-  draft: RiftboundGameState,
-  playerId: string,
-  cost: { energy?: number; power?: readonly string[] },
-): boolean {
-  const pool = draft.runePools[playerId];
-  if (!pool || pool.energy < (cost.energy ?? 0)) {
-    return false;
-  }
-  const needed: Record<string, number> = {};
-  for (const d of cost.power ?? []) {
-    needed[d] = (needed[d] ?? 0) + 1;
-  }
-  return canAffordPower(pool.power, needed);
-}
-
-/**
- * rule 371.2 / 372 (ogn-023-298 Unlicensed Armory) — an OPTIONAL, costed
- * "the next time it would die, you may pay [C] to … instead" shield. The event
- * is a death however it was caused, so a Kill instruction (or a kill paid as an
- * additional cost — rule 428.1.a.1 / 357.2.a) must consult it too, not just the
- * lethal-damage cleanup pass. The controller has to be ASKED, so the death is
- * suspended on an `opt-in` prompt: accepting runs the replacement, declining
- * kills the unit for real (`suspendedKill`). Unpayable ⇒ the shield is spent
- * ("the next time" has passed) and the death proceeds.
- */
-function raiseCostedDieReplacementPrompt(
-  ctx: LeaveBoardContext,
-  cardId: string,
-  cause: LeaveCause | undefined,
-): boolean {
-  if (ctx.draft.pendingChoice) {
-    return false;
-  }
-  const active = (ctx.draft as { activeReplacements?: BoundDieReplacement[] }).activeReplacements;
-  if (!active || active.length === 0) {
-    return false;
-  }
-  const idx = active.findIndex(
-    (e) =>
-      e?.replaces === "die" &&
-      e.targetCardIds?.includes(cardId) === true &&
-      e.condition?.type === "pay-cost",
-  );
-  if (idx < 0) {
-    return false;
-  }
-  const entry = active[idx] as BoundDieReplacement & {
-    condition?: { cost?: { energy?: number; power?: readonly string[] } };
-  };
-  const cost = entry.condition?.cost;
-  const repl = entry.replacement;
-  const payer = entry.owner ?? controllerOf(ctx, cardId);
-  if (!cost || !repl || repl === "prevent" || typeof repl !== "object") {
-    return false;
-  }
-  active.splice(idx, 1);
-  if (!canPayShieldCost(ctx.draft, payer, cost)) {
-    return false;
-  }
-  const sourceCardId = entry.sourceCardId ?? cardId;
-  (ctx.draft as { pendingChoice?: unknown }).pendingChoice = {
-    playerId: payer,
-    resolved: {
-      cardId: sourceCardId,
-      controller: payer,
-      effect: repl,
-      id: `die-replacement-${cardId}`,
-      optInCost: cost,
-      targets: [cardId],
-      triggerEvent: { cardId, type: "die" },
-      triggered: true,
-      type: "ability",
-    },
-    sourceCardId,
-    suspendedDeathCardId: cardId,
-    // rule 371.2.b — declined ⇒ the replacement is not applied and the original
-    // kill happens after all (its shield is already spent, so no loop).
-    suspendedKill: {
-      by: cause?.by ?? payer,
-      source: cause?.source ?? sourceCardId,
-    },
-    type: "opt-in",
-  };
-  return true;
-}
-
 export function applyDieReplacement(
   ctx: LeaveBoardContext,
   cardId: string,
   cause?: LeaveCause,
+  to: LeaveDestination = "trash",
 ): boolean {
-  if (RUNNING_DIE_REPLACEMENTS.has(cardId)) {
+  if (isDieReplacementRunning(cardId)) {
     return false;
   }
-  if (raiseCostedDieReplacementPrompt(ctx, cardId, cause)) {
-    return true;
-  }
-  const bound = consumeBoundDieReplacement(ctx.draft, cardId);
-  if (bound) {
-    const boundRepl = bound.replacement;
-    if (boundRepl && boundRepl !== "prevent" && typeof boundRepl === "object" && boundRepl.type === "banish") {
-      // "banish it instead": a new object in banishment (124.1), not a death.
-      leaveBoard(ctx, cardId, "banishment", { kind: "replaced" });
-      return true;
-    }
-    clearDamage(ctx, cardId);
-    if (boundRepl && boundRepl !== "prevent" && typeof boundRepl === "object" && boundRepl.type) {
-      const owner = ownerOf(ctx, cardId) ?? "";
-      executeEffect(boundRepl, {
-        ...buildReplacementEffectContext(
-          ctx,
-          { sourceCardId: bound.sourceCardId ?? cardId, sourceOwner: bound.owner ?? owner },
-          cardId,
-        ),
-        boundTargets: [cardId],
-      });
-    }
-    return true;
-  }
-  if (!ctx.zones.getCardsInZone) {
-    return false;
-  }
-  const owner = ownerOf(ctx, cardId) ?? "";
-  const match = checkReplacement(
-    { cardId, owner, type: "die" },
-    {
-      cards: {
-        getCardMeta: (id: CoreCardId) => metaOf(ctx, id as string),
-        getCardOwner: (id: CoreCardId) => ownerOf(ctx, id as string),
-      },
-      draft: ctx.draft,
-      zones: ctx.zones as { getCardsInZone: NonNullable<LeaveBoardContext["zones"]["getCardsInZone"]> },
+  const getCardsInZone = ctx.zones.getCardsInZone ?? (() => []);
+  const batchCtx = { ...ctx, zones: { ...ctx.zones, getCardsInZone, moveCard: ctx.zones.moveCard } };
+  const result = runDieBatch(batchCtx, [cardId], {
+    canPrompt: true,
+    kill: {
+      cause: cause ?? { kind: "kill" },
+      playerId: cause?.by ?? controllerOf(ctx, cardId),
+      sourceCardId: cause?.source ?? cardId,
+      to,
     },
-  );
-  if (!match || RUNNING_DIE_REPLACEMENTS.has(match.sourceCardId)) {
-    return false;
-  }
-  markReplacementConsumed(ctx.draft, match);
-  clearDamage(ctx, cardId);
-  const repl = match.replacement as ExecutableEffect | "prevent" | undefined;
-  if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
-    RUNNING_DIE_REPLACEMENTS.add(match.sourceCardId);
-    try {
-      executeEffect(repl, buildReplacementEffectContext(ctx, match, cardId));
-    } finally {
-      RUNNING_DIE_REPLACEMENTS.delete(match.sourceCardId);
-    }
-  }
-  return true;
+  });
+  return result.suspended || result.replaced.includes(cardId);
 }
 
 // ---------------------------------------------------------------------------
@@ -821,7 +650,7 @@ export function leaveBoard(
   if (killing && opts.replacements !== "skip" && isBoardZone(lki.zone)) {
     // rule 370.1.a.1 — the death never happens; the card stays (wherever the
     // replacement put it) and keeps no pending Deathknell.
-    if (applyDieReplacement(ctx, cardId, cause)) {
+    if (applyDieReplacement(ctx, cardId, cause, to)) {
       clearLKI(ctx.draft, [cardId]);
       return { cardId, cause, left: false, lki, replacedBy: "replacement" };
     }

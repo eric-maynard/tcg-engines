@@ -24,26 +24,19 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
-import type { ExecutableEffect } from "../abilities/effect-executor";
-import { executeEffect } from "../abilities/effect-executor";
-import {
-  buildConsumedKey,
-  checkReplacement,
-  markReplacementConsumed,
-} from "../abilities/replacement-effects";
+import { runDieBatch } from "../abilities/die-replacement-batch";
 import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { fireTriggers, type TriggerRunnerContext } from "../abilities/trigger-runner";
-import { canAffordPower } from "../game-definition/moves/chain/effect-context";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
-import { clearDamage as clearDamageStore, getDamage } from "../operations/damage-store";
+import { getDamage } from "../operations/damage-store";
 import { collectAnyDamageLethalPlayers } from "../operations/lethal-damage";
 import { hiddenCapacityAt } from "../operations/hidden-capacity";
 import {
   type LeaveResult,
-  buildReplacementEffectContext,
   clearLKI,
   leaveBoard,
   snapshotBatch,
+  snapshotLKI,
 } from "../operations/leave-board";
 import { checkVictory, scoreBattlefield, scoreEvents } from "../operations/points";
 import type { PlayerId, RiftboundCardMeta, RiftboundGameState } from "../types";
@@ -109,11 +102,6 @@ function sweepOffBoardTokens(ctx: CleanupContext): boolean {
   return removed;
 }
 
-/** rule 124.1 — single damage store: clear the counter and its meta mirror together. */
-function clearDamage(ctx: CleanupContext, cardId: string): void {
-  clearDamageStore(ctx, cardId);
-}
-
 /**
  * rule 428.5.c: a lethal-damage kill — the `leaveBoard` result whose LKI
  * snapshot (taken before the meta wipe) feeds the `die` event.
@@ -131,108 +119,6 @@ export interface CleanupResult {
   readonly combatPending: string[];
   /** Whether any state changes occurred (may need to re-run) */
   readonly stateChanged: boolean;
-}
-
-interface ActiveDieReplacementEntry {
-  replaces?: string;
-  replacement?: unknown;
-  targetCardIds?: readonly string[];
-  /** rule 372 (ogn-023-298): "you may pay [C] to … instead" — optional, costed. */
-  condition?: { type?: string; cost?: { energy?: number; power?: readonly string[] } };
-  owner?: string;
-  sourceCardId?: string;
-}
-
-/** rule 372: can `playerId` pay an optional replacement's `{energy, power[]}` cost right now? */
-function canPayReplacementCost(
-  draft: RiftboundGameState,
-  playerId: string,
-  cost: { energy?: number; power?: readonly string[] },
-): boolean {
-  const pool = draft.runePools[playerId];
-  if (!pool) {
-    return false;
-  }
-  if (pool.energy < (cost.energy ?? 0)) {
-    return false;
-  }
-  const needed: Record<string, number> = {};
-  for (const d of cost.power ?? []) {
-    needed[d] = (needed[d] ?? 0) + 1;
-  }
-  return canAffordPower(pool.power, needed);
-}
-
-function payReplacementCost(
-  draft: RiftboundGameState,
-  playerId: string,
-  cost: { energy?: number; power?: readonly string[] },
-): void {
-  const pool = draft.runePools[playerId];
-  if (!pool) {
-    return;
-  }
-  pool.energy = Math.max(0, pool.energy - (cost.energy ?? 0));
-  for (const domain of cost.power ?? []) {
-    const key =
-      domain === "rainbow"
-        ? (Object.entries(pool.power).sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0]?.[0] as
-            | keyof typeof pool.power
-            | undefined)
-        : (domain as keyof typeof pool.power);
-    if (key !== undefined) {
-      pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
-    }
-  }
-}
-
-/**
- * rule-id: unl-007-219 — find and remove a runtime `die` replacement in
- * `draft.activeReplacements` bound to `cardId`. These are installed by the
- * effect executor when a spell resolves a targeted replacement rider; once
- * the bound unit would die the replacement applies and is spent.
- */
-function consumeActiveDieReplacement(
-  draft: RiftboundGameState,
-  cardId: string,
-  peek = false,
-  preferredSource?: string,
-): ActiveDieReplacementEntry | undefined {
-  const active = draft.activeReplacements as ActiveDieReplacementEntry[] | undefined;
-  if (!active || active.length === 0) {
-    return undefined;
-  }
-  for (let i = 0; i < active.length; i++) {
-    const entry = active[i];
-    if (entry?.replaces !== "die" || !entry.targetCardIds?.includes(cardId)) {
-      continue;
-    }
-    // rule 372: the dying unit's controller may have named which shield applies.
-    if (preferredSource !== undefined && (entry.sourceCardId ?? cardId) !== preferredSource) {
-      continue;
-    }
-    if (!peek) {
-      active.splice(i, 1);
-    }
-    return entry;
-  }
-  return undefined;
-}
-
-/**
- * rule 372 (unl-007-219 × unl-175-219) — every runtime `die` replacement bound
- * to `cardId`. Two spells can both install one on the same unit ("banish it
- * instead" and "heal/recall it instead"), and its controller orders them.
- */
-function peekActiveDieReplacements(
-  draft: RiftboundGameState,
-  cardId: string,
-): ActiveDieReplacementEntry[] {
-  const active = draft.activeReplacements as ActiveDieReplacementEntry[] | undefined;
-  if (!active || active.length === 0) {
-    return [];
-  }
-  return active.filter((e) => e?.replaces === "die" && e.targetCardIds?.includes(cardId));
 }
 
 /**
@@ -291,29 +177,6 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
   }
 
-  // rule 370.4: deaths found in one cleanup pass are simultaneous, and a board
-  // replacement applies to events simultaneous with its source leaving the
-  // board (Soraka saves an ally dying alongside her) — so match board die
-  // replacements for every damaged unit BEFORE any of them is trashed.
-  const preDieReplacements = new Map<string, ReturnType<typeof checkReplacement>>();
-  const damagedIds: string[] = [];
-  for (const { cardId } of boardCards) {
-    if (getDamage(ctx, cardId as string) > 0) {
-      damagedIds.push(cardId as string);
-      const owner = ctx.cards.getCardOwner(cardId) ?? "";
-      preDieReplacements.set(
-        cardId as string,
-        checkReplacement(
-          { cardId: cardId as string, owner, type: "die" },
-          { cards: ctx.cards, draft: ctx.draft, zones: ctx.zones },
-        ),
-      );
-    }
-  }
-  // rule 428.1.a.1.b / 740.2.a — last-known information for every candidate,
-  // taken while the whole simultaneous batch is still on the board.
-  const preLKI = snapshotBatch(ctx, damagedIds);
-
   // rule 142.4.c — a board static may lower the lethal-damage value of the
   // units it describes for damage dealt by its controller (Elder Dragon:
   // "Any amount of your damage is enough to kill enemy units"). Collect the
@@ -321,6 +184,10 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
   // the board (rule 364), which is why this is rebuilt every cleanup pass.
   const anyDamageLethalPlayers = collectAnyDamageLethalPlayers(ctx);
 
+  // rule 370.1.a.2 / 370.4: deaths found in one cleanup pass are simultaneous —
+  // collect every lethally damaged unit BEFORE any replacement or kill runs.
+  const damagedIds: string[] = [];
+  const lethalIds: string[] = [];
   for (const { cardId } of boardCards) {
     const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
     const damage = getDamage(ctx, cardId as string);
@@ -328,14 +195,7 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     if (damage <= 0) {
       continue;
     }
-    // rule 372 (ogn-023-298): this unit's death is suspended on an open
-    // "you may pay … instead" prompt — leave it until the controller answers.
-    const pending = ctx.draft.pendingChoice as
-      | { type?: string; suspendedDeathCardId?: string }
-      | undefined;
-    if (pending?.type === "opt-in" && pending.suspendedDeathCardId === (cardId as string)) {
-      continue;
-    }
+    damagedIds.push(cardId as string);
 
     // Look up base might from card definition
     const def = registry.get(cardId as string);
@@ -380,202 +240,59 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     // rule 142.4.b: lethal damage is NON-ZERO damage at least equal to Might —
     // an undamaged 0-Might unit is alive.
     if ((damage > 0 && damage >= effectiveMight) || anyDamageIsLethal) {
-      // rule-id: unl-007-219 — runtime die-replacements bound to this unit
-      // (installed by a resolved spell: "If it would die this turn, banish it
-      // instead") take precedence over the normal kill (rule 571-573).
-      // rule 372: when two replacement effects both apply to this death, the
-      // controller of the dying object chooses which one applies (the other
-      // never sees the event — rule 370.2). Ask once, then honour the answer.
-      let boardPeek = preDieReplacements.get(cardId as string) ?? null;
-      if (
-        boardPeek?.duration === "next" &&
-        ctx.draft.consumedNextReplacements?.[
-          buildConsumedKey(boardPeek.sourceCardId, boardPeek.abilityIndex)
-        ]
-      ) {
-        boardPeek = null;
-      }
-      // rule 372: an optional "you may pay … instead" shield carries its own
-      // prompt, so it never joins the ordering choice.
-      const boundPeek = consumeActiveDieReplacement(ctx.draft, cardId as string, true);
-      const boundPeeks = peekActiveDieReplacements(ctx.draft, cardId as string).filter(
-        (e) => e.condition?.type !== "pay-cost",
-      );
-      // rule 372 (unl-007-219 × unl-175-219): Smite's "banish it instead" and
-      // Tactical Retreat's shield are BOTH runtime-bound — two replacements for
-      // one death with no board ability involved, so they need the same
-      // ordering choice the board-vs-bound pair already gets.
-      const orderOptions =
-        boundPeek && boardPeek && boundPeek.condition?.type !== "pay-cost"
-          ? [boardPeek.sourceCardId, boundPeek.sourceCardId ?? (cardId as string)]
-          : !boardPeek && boundPeeks.length > 1
-            ? boundPeeks.map((e) => e.sourceCardId ?? (cardId as string))
-            : [];
-      let preferBound = true;
-      let pickedBoundSource: string | undefined;
-      if (orderOptions.length > 1) {
-        const orders = (ctx.draft as { replacementOrderChoices?: Record<string, string> })
-          .replacementOrderChoices;
-        const picked = orders?.[cardId as string];
-        if (picked === undefined) {
-          if (ctx.draft.pendingChoice) {
-            continue;
-          }
-          ctx.draft.pendingChoice = {
-            effect: { type: "noop" },
-            options: orderOptions,
-            playerId: ctx.cards.getCardController?.(cardId) ?? ctx.cards.getCardOwner(cardId) ?? "",
-            remaining: 1,
-            replacementOrderFor: cardId as string,
-            sourceCardId: cardId as string,
-            type: "choose-target",
-          } as RiftboundGameState["pendingChoice"];
-          stateChanged = true;
-          continue;
-        }
-        preferBound = !boardPeek || picked !== boardPeek.sourceCardId;
-        if (preferBound) {
-          pickedBoundSource = picked;
-        }
-        if (orders) {
-          delete orders[cardId as string];
-        }
-      }
-      const activeDie = preferBound
-        ? consumeActiveDieReplacement(ctx.draft, cardId as string, false, pickedBoundSource)
-        : undefined;
-      // rule 372 (ogn-023-298): "you may pay [C] to … instead" — an optional,
-      // costed replacement. Unpayable ⇒ the death proceeds normally (the
-      // single-fire entry is still spent: "the next time" has passed).
-      // Payable ⇒ suspend the death and ask the controller; on accept the
-      // opt-in reducer charges the cost and runs the replacement effect with
-      // this unit as "it", on decline the next cleanup pass kills it.
-      const payCost =
-        activeDie?.condition?.type === "pay-cost" ? activeDie.condition.cost : undefined;
-      let autoPaid = false;
-      if (activeDie && payCost) {
-        const payer =
-          activeDie.owner ??
-          ctx.cards.getCardController?.(cardId) ??
-          ctx.cards.getCardOwner(cardId) ??
-          "";
-        const replEffect = activeDie.replacement as ExecutableEffect | undefined;
-        const affordable =
-          !!replEffect && typeof replEffect === "object" && canPayReplacementCost(ctx.draft, payer, payCost);
-        if (affordable && !ctx.draft.pendingChoice) {
-          const sourceCardId = activeDie.sourceCardId ?? (cardId as string);
-          ctx.draft.pendingChoice = {
-            playerId: payer,
-            resolved: {
-              cardId: sourceCardId,
-              controller: payer,
-              effect: replEffect,
-              id: `die-replacement-${cardId as string}`,
-              optInCost: payCost,
-              targets: [cardId as string],
-              triggerEvent: { cardId: cardId as string, type: "die" },
-              triggered: true,
-              type: "ability",
-            },
-            sourceCardId,
-            suspendedDeathCardId: cardId as string,
-            type: "opt-in",
-          } as RiftboundGameState["pendingChoice"];
-          stateChanged = true;
-          continue;
-        }
-        if (affordable) {
-          // Another prompt is already open — can't ask; honour the shield by paying for it.
-          payReplacementCost(ctx.draft, payer, payCost);
-          autoPaid = true;
-        }
-      }
-      if (activeDie && (!payCost || autoPaid)) {
-        const repl = activeDie.replacement as ExecutableEffect | "prevent" | undefined;
-        if (repl && repl !== "prevent" && repl.type === "banish") {
-          // "banish it instead": the unit leaves for banishment as a new
-          // object (124.1) with its Equipment detached (457.1) — not a death.
-          leaveBoard(ctx, cardId as string, "banishment", { kind: "replaced" });
-        } else {
-          clearDamage(ctx, cardId as string);
-          // rule 370.1.a.1 (ogn-023-298): run the replacement's own effect
-          // ("heal it, exhaust it, and recall it") with this unit as "it".
-          if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
-            const owner = ctx.cards.getCardOwner(cardId) ?? "";
-            executeEffect(repl, {
-              ...buildReplacementEffectContext(
-                ctx,
-                {
-                  sourceCardId: activeDie.sourceCardId ?? (cardId as string),
-                  sourceOwner: activeDie.owner ?? owner,
-                },
-                cardId as string,
-              ),
-              boundTargets: [cardId as string],
-            });
-          }
-        }
-        stateChanged = true;
-        continue;
-      }
+      lethalIds.push(cardId as string);
+    }
+  }
+  // rule 428.1.a.1.b / 740.2.a — last-known information for every candidate,
+  // taken while the whole simultaneous batch is still on the board.
+  const preLKI = snapshotBatch(ctx, lethalIds);
 
-      // Check for replacement effects ("instead of dying...") (rule 571-575)
-      const owner = ctx.cards.getCardOwner(cardId) ?? "";
-      let replacementMatch = preDieReplacements.get(cardId as string) ?? null;
-      if (
-        replacementMatch?.duration === "next" &&
-        ctx.draft.consumedNextReplacements?.[
-          buildConsumedKey(replacementMatch.sourceCardId, replacementMatch.abilityIndex)
-        ]
-      ) {
-        // A single-fire replacement already spent on a simultaneous death — re-scan live.
-        replacementMatch = checkReplacement(
-          { cardId: cardId as string, owner, type: "die" },
-          { cards: ctx.cards, draft: ctx.draft, zones: ctx.zones },
-        );
-      }
-      if (replacementMatch) {
-        // rule 572 / 370.1.a.1: the death never happens; the replacement's own
-        // effect (e.g. "kill this instead. Heal that unit, exhaust it, and
-        // recall it") runs in its place, with the would-be-dying unit as "it".
-        // Consume single-fire "next"-duration death replacements so they
-        // Don't re-trigger on subsequent deaths this turn.
-        markReplacementConsumed(ctx.draft, replacementMatch);
-        stateChanged = true;
-        // Clear damage so it doesn't re-trigger next cleanup pass
-        clearDamage(ctx, cardId as string);
-        const repl = replacementMatch.replacement as ExecutableEffect | "prevent" | undefined;
-        if (repl && repl !== "prevent" && typeof repl === "object" && repl.type) {
-          executeEffect(repl, buildReplacementEffectContext(ctx, replacementMatch, cardId as string));
-        }
-        continue;
-      }
-
-      // rule 428.1.a.2 — Passive Kill: one choke point snapshots the LKI
-      // (428.1.a.1.b diedAt / attribution / buffs), detaches Equipment
-      // (457.1), trashes the unit and resets it as a new object (124.1).
-      // Replacements were matched/prompted above, so leaveBoard skips them;
-      // the `die` events for this pass's batch are published by the caller.
-      const death = leaveBoard(
-        ctx,
-        cardId as string,
-        "trash",
-        { kind: "sba" },
-        { lki: preLKI.get(cardId as string), replacements: "skip" },
-      );
-      if (!death.left) {
-        continue;
-      }
-      deaths.push(death);
-      killed.push(cardId as string);
+  // rules 370–373 — die replacements for the whole batch: optional shields
+  // asked (371.2), several replacements on one death ordered by its controller
+  // (372), a self-spending replacement matching several deaths assigned by ITS
+  // controller (373); replaced deaths never happen (370.1.a.1 / 808.1.d.1).
+  // While one of those questions — or a suspended costed shield — is open the
+  // batch waits: nothing dies yet (370.1.c / 373.1.a).
+  const openPrompt = ctx.draft.pendingChoice as
+    | { type?: string; suspendedDeathCardId?: string; resume?: { kind?: string } }
+    | undefined;
+  const batchWaiting =
+    openPrompt !== undefined &&
+    ((openPrompt.type === "opt-in" && openPrompt.suspendedDeathCardId !== undefined) ||
+      openPrompt.resume?.kind === "die-order" ||
+      openPrompt.resume?.kind === "die-assign");
+  if (lethalIds.length > 0 && !batchWaiting) {
+    const outcome = runDieBatch(ctx, lethalIds, { canPrompt: true });
+    if (outcome.suspended || outcome.replaced.length > 0) {
       stateChanged = true;
+    }
+    if (!outcome.suspended) {
+      // rule 428.1.a.2 / 373.1.a — Passive Kill of every unreplaced unit, as ONE
+      // simultaneous batch: the choke point detaches Equipment (457.1), trashes
+      // the unit and resets it as a new object (124.1); the `die` events for
+      // this pass's batch are published by the caller.
+      for (const cardId of outcome.dying) {
+        const death = leaveBoard(
+          ctx,
+          cardId,
+          "trash",
+          { kind: "sba" },
+          { lki: preLKI.get(cardId) ?? snapshotLKI(ctx, cardId), replacements: "skip" },
+        );
+        if (!death.left) {
+          continue;
+        }
+        deaths.push(death);
+        killed.push(cardId);
+        stateChanged = true;
+      }
     }
   }
   // Survivors of this pass keep no LKI entry; the batch's own entries stay
   // until its `die` events have been published by the caller.
   clearLKI(
     ctx.draft,
-    damagedIds.filter((id) => !killed.includes(id)),
+    [...damagedIds, ...lethalIds].filter((id) => !killed.includes(id)),
   );
 
   // Step 2: Remove stale combat roles (rule 521)

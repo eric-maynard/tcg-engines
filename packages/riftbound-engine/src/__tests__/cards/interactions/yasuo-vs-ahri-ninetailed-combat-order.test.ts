@@ -132,7 +132,7 @@ describe("Yasuo, Remorseful attacks into Ahri, Inquisitive + Nine-Tailed Fox —
   // Expected: Ahri's defend trigger and Nine-Tailed Fox trigger simultaneously under P2's control →
   // P2 picks which goes on the chain first (383.3.d). P1 has a single trigger → nothing to order.
   // Actual: the engine appends P2's two in a fixed order without asking.
-  test.failing("BUG: P2 (two simultaneous triggers) gets an ordering decision, P1 (one trigger) does not (383.3.d)", async () => {
+  test("BUG: P2 (two simultaneous triggers) gets an ordering decision, P1 (one trigger) does not (383.3.d)", async () => {
     const game = await board("full").build();
     await game.p1.move("yasuo", "bf1");
     const orderSeats = await stepChain(game, (g) => g.chain().length < 3 && !isPrompt(g.decision()));

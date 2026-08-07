@@ -18,6 +18,7 @@ import type {
 } from "@tcg/core";
 import { enumerateDamageAssignments, isLegalDamageAssignment } from "../../combat";
 import type { DamageAssignmentPlan } from "../../combat";
+import { continueKillBatch, recordDieBatchAnswer } from "../../abilities/die-replacement-batch";
 import { executeEffect } from "../../abilities/effect-executor";
 import type { EffectContext, ExecutableEffect } from "../../abilities/effect-executor";
 import { markContestedOnArrival } from "../../abilities/effects/move";
@@ -34,7 +35,9 @@ import type { PostMoveCleanupContext } from "../../cleanup/post-move-cleanup";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { leaveBoard } from "../../operations/leave-board";
 import type {
+  OrderChoice,
   PendingChoice,
+  PickManyChoice,
   RiftboundCardMeta,
   RiftboundGameState,
   RiftboundMoves,
@@ -715,6 +718,161 @@ function permutationsOf(items: readonly string[]): string[][] {
   return out;
 }
 
+
+// ---------------------------------------------------------------------------
+// Generic `order` / `pick-many` prompts (rule 372 / 373 / 383.3.d / 355.11.b)
+// ---------------------------------------------------------------------------
+
+/**
+ * A legal `orderedKeys` answer: a permutation of the prompt's item keys — or,
+ * for a `defaultable` prompt, absent / empty (keep the listed order).
+ */
+export function isValidOrderAnswer(choice: OrderChoice, orderedKeys: unknown): boolean {
+  if (orderedKeys === undefined || (Array.isArray(orderedKeys) && orderedKeys.length === 0)) {
+    return choice.defaultable === true;
+  }
+  if (!Array.isArray(orderedKeys)) {
+    return false;
+  }
+  const keys = choice.items.map((i) => i.key);
+  return (
+    orderedKeys.length === keys.length &&
+    new Set(orderedKeys).size === orderedKeys.length &&
+    orderedKeys.every((k) => typeof k === "string" && keys.includes(k))
+  );
+}
+
+/** A legal `pickedKeys` answer: `min ≤ n ≤ max` distinct option keys meeting the prompt's constraint. */
+export function isValidPickManyAnswer(
+  choice: PickManyChoice,
+  pickedKeys: unknown,
+  mightOf?: (cardId: string) => number,
+): boolean {
+  const picked = pickedKeys === undefined ? [] : pickedKeys;
+  if (!Array.isArray(picked)) {
+    return false;
+  }
+  const keys = choice.options.map((o) => o.key);
+  if (
+    picked.length < choice.min ||
+    picked.length > choice.max ||
+    new Set(picked).size !== picked.length ||
+    !picked.every((k) => typeof k === "string" && keys.includes(k))
+  ) {
+    return false;
+  }
+  // rule 355.11.b — the subset must itself fulfil the aggregate requirement.
+  const cap = choice.constraint?.totalMightAtMost;
+  if (cap !== undefined && mightOf) {
+    const total = (picked as string[]).reduce((sum, key) => {
+      const cardId = choice.options.find((o) => o.key === key)?.cardId ?? key;
+      return sum + mightOf(cardId);
+    }, 0);
+    if (total > cap) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** All subsets of `keys` (bounded producer lists only). */
+function subsetsOf(keys: readonly string[]): string[][] {
+  let out: string[][] = [[]];
+  for (const k of keys) {
+    out = [...out, ...out.map((s) => [...s, k])];
+  }
+  return out;
+}
+
+/**
+ * rule 383.3.d — rearrange the listed trigger items on the Chain: `orderedKeys`
+ * lists chain item ids first-appended first (so the LAST key ends on top and
+ * resolves first). Only the slots those items already occupy are permuted.
+ */
+function reorderChainItems(draft: RiftboundGameState, itemIds: readonly string[], orderedKeys: readonly string[]): void {
+  const chain = draft.interaction?.chain;
+  if (!chain) {
+    return;
+  }
+  const items = [...chain.items];
+  const slots = items
+    .map((it, idx) => ({ idx, it }))
+    .filter((e) => itemIds.includes(e.it.id));
+  const byId = new Map(slots.map((e) => [e.it.id, e.it]));
+  const wanted = orderedKeys.filter((k) => byId.has(k));
+  if (wanted.length !== slots.length) {
+    return;
+  }
+  wanted.forEach((id, i) => {
+    items[(slots[i] as { idx: number }).idx] = byId.get(id) as (typeof items)[number];
+  });
+  (draft as { interaction?: RiftboundGameState["interaction"] }).interaction = {
+    ...(draft.interaction as NonNullable<RiftboundGameState["interaction"]>),
+    chain: { ...chain, items },
+  };
+}
+
+/**
+ * Continue whatever raised a generic prompt, from its pure-data `resume` tag.
+ * (No effect-VM: each producer re-detects or re-executes from the recorded
+ * answer.)
+ */
+function resumePending(
+  draft: RiftboundGameState,
+  choice: OrderChoice | PickManyChoice,
+  answer: { orderedKeys?: readonly string[]; pickedKeys?: readonly string[] },
+  // biome-ignore lint/suspicious/noExplicitAny: engine move context is framework-typed
+  context: any,
+): void {
+  const resume = choice.resume;
+  switch (resume.kind) {
+    case "die-order":
+    case "die-assign": {
+      recordDieBatchAnswer(draft, resume, {
+        ...answer,
+        defaultOrder: choice.type === "order" ? choice.items.map((i) => i.key) : undefined,
+      });
+      // A Kill instruction / cost / [Temporary] batch is finished here; a
+      // lethal-damage batch re-detects itself in the cleanup below.
+      continueKillBatch(
+        { cards: context.cards, counters: context.counters, draft, zones: context.zones },
+        (event) => fireTriggers(event, { cards: context.cards, counters: context.counters, draft, zones: context.zones }),
+      );
+      if (!draft.pendingChoice) {
+        postChoiceCleanup(draft, context);
+      }
+      return;
+    }
+    case "trigger-batch": {
+      const order = answer.orderedKeys && answer.orderedKeys.length > 0 ? answer.orderedKeys : resume.itemIds;
+      reorderChainItems(draft, resume.itemIds, order);
+      return;
+    }
+    case "subset-repick": {
+      const picked = (answer.pickedKeys ?? []).map(
+        (k) => (choice.type === "pick-many" ? choice.options.find((o) => o.key === k)?.cardId : undefined) ?? k,
+      );
+      if (picked.length > 0) {
+        executeEffect(resume.effect as ExecutableEffect, {
+          ...buildEffectContext(draft, resume.playerId, resume.sourceCardId, context),
+          boundTargets: picked,
+        });
+      }
+      if (!draft.pendingChoice) {
+        postChoiceCleanup(draft, context);
+      }
+      return;
+    }
+    case "none": {
+      (draft as { lastPendingAnswer?: unknown }).lastPendingAnswer = { ...answer, tag: resume.tag };
+      return;
+    }
+    default: {
+      return;
+    }
+  }
+}
+
 /**
  * Returns true when the given card ID is a valid pick for the pending
  * choice (i.e., is in the revealed snapshot and passes the filter).
@@ -791,7 +949,7 @@ export function pickDefaultForChoice(choice: PendingChoice): string | number | u
   if (choice.type === "choose-player") {
     return choice.options[0];
   }
-  if (choice.type === "order-cards") {
+  if (choice.type === "order-cards" || choice.type === "order" || choice.type === "pick-many") {
     return undefined;
   }
   if (choice.type === "opt-in") {
@@ -939,9 +1097,27 @@ export const pendingChoiceMoves: Partial<
 > = {
   resolvePendingChoice: {
     condition: (state, context) => {
-      const choice = state.pendingChoice;
+      // rule 383.3.d — the soft trigger-order offer is answerable while no real
+      // prompt is open (any other move simply accepts the listed order).
+      const choice = state.pendingChoice ?? state.pendingTriggerOrder;
       if (!choice) {
         return false;
+      }
+      // rule 372 / 383.3.d / 416.5.a — generic ordering prompt.
+      if (choice.type === "order") {
+        return (
+          choice.playerId === context.params.playerId &&
+          isValidOrderAnswer(choice, context.params.orderedKeys)
+        );
+      }
+      // rule 355.13 / 373 / 355.11.b — generic min..max multi-pick.
+      if (choice.type === "pick-many") {
+        return (
+          choice.playerId === context.params.playerId &&
+          isValidPickManyAnswer(choice, context.params.pickedKeys, (id) =>
+            getCardEffectiveMight(id, (m) => context.cards.getCardMeta(m as CoreCardId)),
+          )
+        );
       }
       // rule 465.2.c.3 / 465.2.c.7 — the assigning player answers with one
       // allocation of this side's whole combat damage.
@@ -1130,9 +1306,34 @@ export const pendingChoiceMoves: Partial<
       return isValidPendingPick(choice, context.params.pickedCardId as string);
     },
     enumerator: (state, context) => {
-      const choice = state.pendingChoice;
+      const choice = state.pendingChoice ?? state.pendingTriggerOrder;
       if (!choice) {
         return [];
+      }
+      // rule 372 / 383.3.d — one move per arrangement for short lists; longer
+      // lists offer the listed order (+ reverse) and accept any permutation.
+      if (choice.type === "order") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        const keys = choice.items.map((i) => i.key);
+        const perms = keys.length <= 4 ? permutationsOf(keys) : [[...keys], [...keys].reverse()];
+        return perms.map((orderedKeys) => ({ orderedKeys, playerId: context.playerId as string }));
+      }
+      // rule 355.13 / 373 / 355.11.b — singles (and every subset for short
+      // lists); any other legal `pickedKeys` list is accepted too.
+      if (choice.type === "pick-many") {
+        if (choice.playerId !== (context.playerId as string)) {
+          return [];
+        }
+        const keys = choice.options.map((o) => o.key);
+        const candidates =
+          keys.length <= 4 ? subsetsOf(keys) : [[], ...keys.map((k) => [k]), [...keys]];
+        const mightOf = (id: string): number =>
+          getCardEffectiveMight(id, (m) => context.cards.getCardMeta(m as CoreCardId));
+        return candidates
+          .filter((pickedKeys) => isValidPickManyAnswer(choice, pickedKeys, mightOf))
+          .map((pickedKeys) => ({ pickedKeys, playerId: context.playerId as string }));
       }
       if (choice.type === "combat-damage") {
         if (choice.playerId !== (context.playerId as string)) {
@@ -1289,8 +1490,41 @@ export const pendingChoiceMoves: Partial<
       return results;
     },
     reducer: (draft, context) => {
+      // rule 383.3.d — the soft trigger-order offer (no real prompt open).
+      if (!draft.pendingChoice && draft.pendingTriggerOrder) {
+        const soft = draft.pendingTriggerOrder;
+        if (!isValidOrderAnswer(soft, context.params.orderedKeys)) {
+          return;
+        }
+        draft.pendingTriggerOrder = undefined;
+        resumePending(draft, soft, { orderedKeys: context.params.orderedKeys as string[] | undefined }, context);
+        return;
+      }
       const choice = draft.pendingChoice;
       if (!choice) {
+        return;
+      }
+
+      if (choice.type === "order") {
+        const orderedKeys = context.params.orderedKeys as string[] | undefined;
+        if (!isValidOrderAnswer(choice, orderedKeys)) {
+          return;
+        }
+        draft.pendingChoice = undefined;
+        resumePending(draft, choice, { orderedKeys }, context);
+        return;
+      }
+      if (choice.type === "pick-many") {
+        const pickedKeys = (context.params.pickedKeys as string[] | undefined) ?? [];
+        if (
+          !isValidPickManyAnswer(choice, pickedKeys, (id) =>
+            getCardEffectiveMight(id, (m) => context.cards.getCardMeta(m as CoreCardId)),
+          )
+        ) {
+          return;
+        }
+        draft.pendingChoice = undefined;
+        resumePending(draft, choice, { pickedKeys }, context);
         return;
       }
 

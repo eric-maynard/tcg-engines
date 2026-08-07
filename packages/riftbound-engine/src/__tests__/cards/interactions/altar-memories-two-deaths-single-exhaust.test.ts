@@ -166,6 +166,7 @@ describe("Altar of Memories × two Watchful Sentries dying to one Flurry of Blad
     }
     const handBefore = game.p1.hand().length;
     await game.p1.yes();
+    await game.acceptTriggerOrder(); // 383.3.d offer for the remaining P1 items — keep the listed order
     expect(game.p1.hand()).toHaveLength(handBefore);
     expect(game.decision()?.kind).toBe("action");
     expect(game.chain().some((c) => c.cardId === "altar")).toBe(true);

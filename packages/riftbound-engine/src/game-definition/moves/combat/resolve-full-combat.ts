@@ -409,9 +409,23 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // the Combat Cleanup, not at the Resolution Step; carry that fact across
     // the deferral in 466.2.
     let noDefendersAtCleanup = battlefield.combatNoDefendersAtCleanup === true;
+    // rules 371.2 / 372 / 373 — the Combat Cleanup waited on a die-replacement
+    // question; it has finished now, so read "no defender left" off the board.
+    if (damageAlreadyDone && battlefield.combatCleanupSuspended === true) {
+      noDefendersAtCleanup =
+        zones
+          .getCardsInZone(battlefieldZoneId)
+          .filter(
+            (id) =>
+              sideOf(id) !== attackingPlayer &&
+              (registry.getCardType(id as string) === "unit" ||
+                (registry.get(id as string)?.might ?? 0) > 0),
+          ).length === 0;
+    }
     battlefield.combatDamageDone = undefined;
     battlefield.combatExcessDamage = undefined;
     battlefield.combatNoDefendersAtCleanup = undefined;
+    battlefield.combatCleanupSuspended = undefined;
     if (!damageAlreadyDone && attackerUnits.length > 0 && defenderUnits.length > 0) {
     // rule 465.2.c.3 / 465.2.c.7 — each side's player chooses which opposing
     // unit is made lethal first whenever more than one legal assignment
@@ -591,6 +605,17 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     }
 
     cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
+
+    // rules 371.2 / 372 / 373 — the Combat Cleanup is waiting on a
+    // die-replacement question (which shield, which death, pay?): nothing has
+    // died yet, so the result cannot be read. Defer exactly like rule 466.2 —
+    // this move re-runs once the answer's cleanup has finished.
+    if (draft.pendingChoice) {
+      battlefield.combatDamageDone = true;
+      battlefield.combatExcessDamage = excessDamage;
+      battlefield.combatCleanupSuspended = true;
+      return;
+    }
 
     // rule 466.1.a.2: with no defending unit left here when the Combat Cleanup
     // finished, the surviving attackers stay — nothing recalls them.

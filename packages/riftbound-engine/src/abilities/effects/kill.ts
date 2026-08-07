@@ -1,7 +1,9 @@
 // Effect handler: "kill"
 import type { CardId as CoreCardId } from "@tcg/core";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { runDieBatch } from "../die-replacement-batch";
 import {
+  type LKISnapshot,
   type LeaveCause,
   type LeaveResult,
   emitLeaveEvents,
@@ -352,7 +354,59 @@ export function handle_kill(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     handleReferenceKill(effect, ctx, h);
     return;
   }
+  if (raiseGroupSubsetRepick(effect, ctx, h)) {
+    return;
+  }
   killUnits(getTargetIds(effect, ctx), ctx, h);
+}
+
+/**
+ * rule 355.11.b (rule-id: ogn-256-298 Fox-Fire) — a group chosen under an
+ * aggregate requirement ("units … with total Might 4 or less") that no longer
+ * meets it as the effect resolves: its controller picks a SUBSET of the
+ * ORIGINAL targets that does (never a unit that was not chosen), and only that
+ * subset is affected. Raises a `pick-many {semantics:"subset"}` prompt whose
+ * answer re-enters this handler with the subset bound. Returns true when the
+ * prompt was parked.
+ */
+function raiseGroupSubsetRepick(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  h: EffectHelpers,
+): boolean {
+  const cap = (effect.target as { totalMight?: { lte?: number; lt?: number } } | undefined)?.totalMight;
+  const limit = cap?.lte ?? (cap?.lt !== undefined ? cap.lt - 1 : undefined);
+  const bound = ctx.boundTargets;
+  if (limit === undefined || !bound || bound.length === 0 || ctx.draft.pendingChoice) {
+    return false;
+  }
+  if ((effect as { _subsetChecked?: boolean })._subsetChecked === true) {
+    return false;
+  }
+  const mightOf = (id: string): number => h.getEffectiveMight(id, ctx);
+  const total = bound.reduce((sum, id) => sum + mightOf(id), 0);
+  if (total <= limit) {
+    return false;
+  }
+  ctx.draft.pendingChoice = {
+    constraint: { totalMightAtMost: limit },
+    max: bound.length,
+    min: 0,
+    // A unit that alone breaks the cap can be in no legal subset.
+    options: bound.filter((id) => mightOf(id) <= limit).map((id) => ({ cardId: id, key: id })),
+    playerId: ctx.playerId,
+    prompt: `Choose original targets with total Might ${limit} or less to affect`,
+    resume: {
+      effect: { ...effect, _subsetChecked: true },
+      kind: "subset-repick",
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+    },
+    semantics: "subset",
+    sourceCardId: ctx.sourceCardId,
+    type: "pick-many",
+  };
+  return true;
 }
 
 /**
@@ -382,13 +436,37 @@ export function killUnits(
   ctx.draft.lastKilledUnitMight = undefined;
   ctx.draft.lastKilledUnitId = undefined;
   ctx.draft.lastKilledUnitController = undefined;
+  // rules 370–373 — die replacements for the whole simultaneous batch (one
+  // Zhonya's Hourglass saves ONE of several units killed together; several
+  // shields on one unit are ordered by its controller). A replaced death never
+  // happens (370.1.a.1 / 369.1) — no Deathknell. If a question had to be asked
+  // the batch finishes on the answer (`continueKillBatch`).
+  const onBoard = targets.filter((id) => {
+    const zone = snaps.get(id)?.zone;
+    return zone === "base" || (typeof zone === "string" && zone.startsWith("battlefield-"));
+  });
+  const plan =
+    onBoard.length > 0
+      ? runDieBatch(ctx, onBoard, {
+          canPrompt: true,
+          kill: { cause, playerId: ctx.playerId, sourceCardId: ctx.sourceCardId, to: "trash" },
+        })
+      : { dying: [] as string[], replaced: [] as string[], suspended: false };
+  if (plan.suspended) {
+    return results;
+  }
   for (const targetId of targets) {
     // rule-id: unl-186-219 — "if it had N [Might] or less" reads the unit's
     // Might as it last existed on the board (last-known information).
     const killedMight = snaps.get(targetId)?.might ?? h.getEffectiveMight(targetId, ctx);
-    // rule 370.1.a.1 / 369.1 — board `die` replacements (Zhonya's Hourglass)
-    // apply inside leaveBoard: the death never happens, no Deathknell.
-    const result = leaveBoard(ctx, targetId, "trash", cause, { lki: snaps.get(targetId) });
+    if (plan.replaced.includes(targetId) || (onBoard.includes(targetId) && !plan.dying.includes(targetId))) {
+      results.push({ cardId: targetId, cause, left: false, lki: snaps.get(targetId) as LKISnapshot, replacedBy: "replacement" });
+      continue;
+    }
+    const result = leaveBoard(ctx, targetId, "trash", cause, {
+      lki: snaps.get(targetId),
+      replacements: "skip",
+    });
     // rule 359.3.e.14.b (sfd-163-221) — a REPLACED (or impossible) death is not
     // a kill: a linked "If you do" must see no killed unit and no killed Might.
     if (result.left) {

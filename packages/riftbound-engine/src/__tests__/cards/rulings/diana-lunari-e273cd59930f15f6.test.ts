@@ -31,6 +31,7 @@ const GUARD = {
 
 /** Pass priority once for whoever holds it. */
 async function passOnce(game: Game): Promise<void> {
+  await game.acceptTriggerOrder(); // 383.3.d: keep the listed order of same-controller triggers
   const d = game.decision();
   expect(d?.kind).toBe("action");
   await game.seat(d!.seat).pass();

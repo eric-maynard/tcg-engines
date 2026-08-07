@@ -269,7 +269,13 @@ export type PickSemantics =
   | "mode"
   | "from-revealed"
   | "equip"
-  | "follow-up";
+  | "follow-up"
+  /** rule 372 — which of several replacement effects applies to one event first. */
+  | "replacement-order"
+  /** rule 373 — which death a single-use replacement effect is applied to. */
+  | "replacement-assign"
+  /** rule 355.11.b — a subset of an effect's ORIGINAL targets. */
+  | "subset";
 
 export interface PickDecision extends DecisionBase {
   readonly kind: "pick";
@@ -328,6 +334,13 @@ export interface DistributeDecision extends DecisionBase {
 export interface OrderDecision extends DecisionBase {
   readonly kind: "order";
   readonly items: readonly PickOption[];
+  /**
+   * rule 383.3.d — a soft offer: the seat MAY `order([...])`, but every other
+   * verb / settle() accepts the listed order (answered with no keys).
+   */
+  readonly defaultable?: boolean;
+  /** The seat's ordinary action menu, still available beside a `defaultable` offer. */
+  readonly actions?: readonly ActionOption[];
 }
 
 export interface DeckArrangeDecision extends DecisionBase {

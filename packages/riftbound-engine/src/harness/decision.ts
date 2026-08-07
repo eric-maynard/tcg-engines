@@ -456,9 +456,94 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
     ...(chainItemId !== undefined ? { chainItemId } : {}),
     pendingChoiceType: pc.type,
   };
-  const base = { seat, source, timing: chainItemId !== undefined ? ("FIN" as const) : ("RES" as const) };
+  // rule 372/373 replacement questions are "RPL"; the 383.3.d trigger-batch
+  // ordering is part of finalization ("FIN"); everything else resolves ("RES").
+  const resumeKind = (pc as { resume?: { kind?: string } }).resume?.kind;
+  const genericTiming =
+    resumeKind === "die-order" || resumeKind === "die-assign"
+      ? ("RPL" as const)
+      : resumeKind === "trigger-batch"
+        ? ("FIN" as const)
+        : undefined;
+  const base = {
+    seat,
+    source,
+    timing: genericTiming ?? (chainItemId !== undefined ? ("FIN" as const) : ("RES" as const)),
+  };
 
   switch (pc.type) {
+    // rule 372 / 383.3.d / 416.5.a — generic ordering prompt (index 0 = first).
+    case "order": {
+      // rule 372 — "which replacement applies first" reads best as a pick
+      // (1..n keys = the front of the order; the rest keep the listed order).
+      // `seat.order([...])` is accepted for it as well.
+      if (resumeKind === "die-order") {
+        const d: PickDecision = {
+          ...base,
+          allowDecline: false,
+          id: decisionId(ctx.seq, seat, "pick"),
+          kind: "pick",
+          max: pc.items.length,
+          min: 1,
+          options: pc.items.map((i) => ({
+            ...(i.cardId ? { card: i.cardId } : {}),
+            key: i.key,
+            label: i.label ?? (i.cardId ? ctx.label(i.cardId) : i.key),
+          })),
+          prompt: pc.prompt ?? "Choose which replacement effect applies first",
+          semantics: "replacement-order",
+        };
+        return d;
+      }
+      // rule 383.3.d — a defaultable (soft) offer leaves the seat's own action
+      // menu usable; taking any of those actions accepts the listed order.
+      const orderActions = pc.defaultable
+        ? groupActions(
+            ctx,
+            ctx.legal(seat).filter((m) => m.moveId !== "resolvePendingChoice"),
+          ).options
+        : [];
+      const d: OrderDecision = {
+        ...base,
+        ...(pc.defaultable ? { defaultable: true } : {}),
+        ...(orderActions.length > 0 ? { actions: orderActions } : {}),
+        id: decisionId(ctx.seq, seat, "order"),
+        items: pc.items.map((i) => ({
+          ...(i.cardId ? { card: i.cardId } : {}),
+          key: i.key,
+          label: i.label ?? (i.cardId ? ctx.label(i.cardId) : i.key),
+        })),
+        kind: "order",
+        prompt: pc.prompt ?? "Choose an order",
+      };
+      return d;
+    }
+    // rule 355.13 / 373 / 355.11.b — generic min..max multi-pick in ONE answer.
+    case "pick-many": {
+      const d: PickDecision = {
+        ...base,
+        allowDecline: pc.min === 0,
+        id: decisionId(ctx.seq, seat, "pick"),
+        kind: "pick",
+        max: pc.max,
+        min: pc.min,
+        options: pc.options.map((o) => ({
+          ...(o.cardId ? { card: o.cardId } : {}),
+          key: o.key,
+          label: o.label ?? (o.cardId ? ctx.label(o.cardId) : o.key),
+        })),
+        prompt: pc.prompt ?? `Choose ${pc.min === pc.max ? pc.min : `${pc.min}–${pc.max}`}`,
+        semantics:
+          pc.semantics === "replacement-assign"
+            ? "replacement-assign"
+            : pc.semantics === "subset"
+              ? "subset"
+              : pc.semantics === "drop"
+                ? "drop-target"
+                : "target",
+      };
+      return d;
+    }
     case "reveal-and-pick": {
       const allowDecline = flat.some((m) => m.params.accept === false);
       const options: PickOption[] = flat
@@ -752,6 +837,11 @@ export function deriveDecision(ctx: DecisionContext): Decision | null {
   if (state.pendingChoice) {
     return deriveFromPendingChoice(ctx, state.pendingChoice);
   }
+  // rule 383.3.d — the soft trigger-order offer: shown as the cursor decision
+  // so the seat MAY order([...]); any other verb accepts the listed order.
+  if (state.pendingTriggerOrder) {
+    return deriveFromPendingChoice(ctx, state.pendingTriggerOrder);
+  }
   const seat = getActingSeat(state);
   if (!seat) {
     return null;
@@ -772,13 +862,62 @@ function err(code: HarnessErrorInfo["code"], message: string, detail?: Record<st
 }
 
 export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, answer: Answer): ResolveOutcome {
-  const pc = ctx.state.pendingChoice;
+  const pc = ctx.state.pendingChoice ?? ctx.state.pendingTriggerOrder;
   if (!pc) {
     return err("STALE_DECISION", "No pending choice");
   }
   const seat = decision.seat;
   const flat = ctx.legal(seat, ["resolvePendingChoice"]);
   const params: Record<string, unknown> = { playerId: seat };
+
+  // Generic kinds validate in the engine condition and accept answers beyond
+  // the enumerated sample (any permutation / any legal key list).
+  if (pc.type === "order") {
+    let keys: string[];
+    if (answer.kind === "order" || answer.kind === "pick") {
+      // Card ids are accepted for keys; a PARTIAL list names what goes first
+      // and keeps the listed order for the rest ("pick zh" = "zh first").
+      keys = answer.keys.map((k) => pc.items.find((i) => i.key === k)?.key ?? pc.items.find((i) => i.cardId === k)?.key ?? k);
+      if (keys.length < pc.items.length) {
+        keys = [...keys, ...pc.items.map((i) => i.key).filter((k) => !keys.includes(k))];
+      }
+    } else if (answer.kind === "decline" && pc.defaultable) {
+      keys = [];
+    } else {
+      return err("WRONG_ANSWER_KIND", "order needs an order answer");
+    }
+    if (keys.length > 0) {
+      params.orderedKeys = keys;
+    }
+    if (ctx.canExecute && !ctx.canExecute(seat, "resolvePendingChoice", params)) {
+      return err("ILLEGAL_ARGS", "Not a permutation of the offered items", {
+        items: pc.items.map((i) => i.key),
+        keys,
+      });
+    }
+    return { move: { moveId: "resolvePendingChoice", params, playerId: seat }, type: "move" };
+  }
+  if (pc.type === "pick-many") {
+    let keys: string[];
+    if (answer.kind === "pick") {
+      keys = [...answer.keys];
+    } else if (answer.kind === "decline") {
+      keys = [];
+    } else if (answer.kind === "order") {
+      keys = [...answer.keys];
+    } else {
+      return err("WRONG_ANSWER_KIND", "pick-many needs a pick answer");
+    }
+    // Card ids are accepted for keys.
+    params.pickedKeys = keys.map((k) => pc.options.find((o) => o.key === k || o.cardId === k)?.key ?? k);
+    if (ctx.canExecute && !ctx.canExecute(seat, "resolvePendingChoice", params)) {
+      return err("ILLEGAL_ARGS", `Pick ${pc.min}..${pc.max} of the offered options${pc.constraint ? " meeting the requirement" : ""}`, {
+        keys,
+        options: pc.options.map((o) => o.key),
+      });
+    }
+    return { move: { moveId: "resolvePendingChoice", params, playerId: seat }, type: "move" };
+  }
 
   const pickKey = (): string | undefined | ResolveOutcome => {
     if (answer.kind === "decline") {
@@ -1395,6 +1534,12 @@ export function coerceAnswer(decision: Decision, value: AnswerShorthand): Answer
     case "order": {
       if (Array.isArray(value)) {
         return { keys: value.map(String), kind: "order" };
+      }
+      if (typeof value === "string" && value !== "pass" && value !== "decline") {
+        return { keys: [value], kind: "order" };
+      }
+      if ((value === "pass" || value === "decline") && decision.defaultable) {
+        return { keys: [], kind: "order" };
       }
       return bad();
     }

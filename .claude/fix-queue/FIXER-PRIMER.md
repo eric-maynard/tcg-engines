@@ -91,10 +91,20 @@ Recipe — add a filter (non-token, in-base, at-a-battlefield, other, stunned…
 - `effects/choice.ts` — ≥2 `options` ⇒ `choose-mode` pendingChoice (`player:"opponent"` ⇒ opponent picks, `controllerId` resolves).
 - PendingChoice kinds (`E/types/game-state.ts PendingChoice`): `reveal-and-pick` (discard.ts, look.ts, reveal-hand.ts,
   recycle.ts, predict.ts; carries `then`), `choose-target` (resolve.ts, damage.ts split), `choose-destination` (move.ts,
-  create-token.ts), `choose-mode` (choice.ts), `opt-in` (resolve.ts), `name-card`, `weaponmaster-equip` (play-unit.ts).
+  create-token.ts), `choose-mode` (choice.ts), `opt-in` (resolve.ts), `name-card`, `weaponmaster-equip` (play-unit.ts),
+  and two GENERIC kinds any producer may raise: `order {playerId, items:[{key,label?,cardId?}], defaultable?, resume}`
+  (answer `orderedKeys` = permutation; empty/absent allowed when `defaultable`) and `pick-many {playerId, options, min, max,
+  semantics:"target"|"drop"|"replacement-assign"|"subset", constraint?:{totalMightAtMost}, resume}` (answer `pickedKeys`,
+  distinct, min≤n≤max, constraint re-validated). `resume` is pure data (`PendingResume`: `die-order`, `die-assign`,
+  `trigger-batch`, `subset-repick`, `none`) dispatched by `pending-choice.ts resumePending` — add a `kind` there for a new
+  producer instead of a closure. Validators `isValidOrderAnswer` / `isValidPickManyAnswer`; enumerator emits every
+  permutation/subset for ≤4 entries, else a sample (the condition accepts any legal list; the harness sends it directly).
   All answered by move `resolvePendingChoice` in `E/game-definition/moves/pending-choice.ts` (`isValidPendingPick`,
   `pickDefaultForChoice`, one reducer branch per `choice.type`, then `postChoiceCleanup`; `choice.then` executed at the tail).
   While `draft.pendingChoice` is set every other move's `condition` returns false.
+- 355.11.b group re-pick (Fox-Fire "total Might N or less"): `effects/kill.ts raiseGroupSubsetRepick` — bound group over the
+  cap at resolution ⇒ `pick-many{semantics:"subset", min 0}` over the ORIGINAL targets only, resume `subset-repick`
+  re-executes the effect with the chosen subset (`_subsetChecked`). Copy that shape for other aggregate-constrained effects.
 - Damage → death: `effects/damage.ts` writes `meta.damage` (+ `lastDamagedBy/lastDamageSource`), consults replacements;
   the kill happens in `E/cleanup/state-based-checks.ts performCleanup` (damage ≥ effective Might) and `die` is emitted by
   `E/events/dispatcher.ts dispatchUnitDied`. `effects/kill.ts` trashes + fires `die` itself (with `killedBy/killSource/wasStunned`).
@@ -136,6 +146,17 @@ effect and thread it through `reveal-and-pick.then`. If B needs A's object use `
   unknown ⇒ true) → `orderTriggers` (turn player first) → `addToChain({triggered:true, optional, optInCost, triggerEvent})`.
   `add-resource` effects and `ctx.resolveInline` run immediately. `optional:true` ⇒ `opt-in` prompt at FINALIZATION (see §2 note).
   `GRANTED_KEYWORD_TRIGGERS` synthesises Vision for granted keywords. `play-self` also triggers a static recalc here.
+- rule 383.3.d SAME-CONTROLLER ORDER: after a batch is finalized, `trigger-finalization.ts offerTriggerOrder` offers the
+  ≥2 non-interchangeable triggered items one player controls as a SOFT prompt on `draft.pendingTriggerOrder` (type
+  `order`, `defaultable`, resume `trigger-batch`) — NOT `draft.pendingChoice`: every other move stays legal and taking one
+  (wrapper in `withTriggerFinalization`) accepts the listed scan order; `resolvePendingChoice{orderedKeys}` (first = bottom,
+  last = top/resolves first) permutes those items in place (`reorderChainItems`). Cross-controller stays turn order
+  (`orderTriggers`, `leave-board.ts orderBatchTriggersByTurnOrder`). Identical copies (Karthus) / source-independent equal
+  effects (two Sentries' "Draw 1") are never offered.
+  HARNESS: `game.decision()` shows it as `{kind:"order", defaultable:true, timing:"FIN", actions:[…seat menu]}` for the
+  chooser; `seat.order([...keys])` answers it; `passPriority()/cast()/…`, `settle()` (passive policy) and
+  `game.acceptTriggerOrder()` keep the listed order. A hand-rolled drive loop that switches on `game.decision().kind` must
+  tolerate it: `if (d.kind === "order" && d.defaultable) { await game.acceptTriggerOrder(); continue; }`.
 - Parser: `C/parser/impl/trigger-patterns.ts TRIGGER_PATTERNS` (regex → `{event, on, restrictions}`), `impl/triggers.ts
   parseTriggeredAbility` (leading/trailing "if" → `condition` via `parsers/condition-parser.ts`), `impl/keywords.ts
   KEYWORD_TRIGGER_EVENTS` (Deathknell→`die`, Vision→`play-self`) + `expandHuntKeywords`.
@@ -278,15 +299,31 @@ Recipe — stun: `effects/stun.ts` sets flag + `stun` event; zero its combat dam
   `orderReplacementsByOwnerChoice`, `markReplacementConsumed` / `clearConsumedReplacements` (`draft.consumedNextReplacements`).
 - Runtime-installed: `effects/replacement.ts handle_replacement` appends `{...effect, owner, sourceCardId, targetCardIds?}`
   to `draft.activeReplacements` (bound to targets for `die` / next `take-damage`); purged in flow `ending.onBegin`.
-- Call sites: deaths — `state-based-checks.ts performCleanup` (`consumeActiveDieReplacement`, then `checkReplacement
-  ({type:"die"})` → runs the replacement effect through `buildReplacementEffectContext` with the dying unit as
-  `trigger-source`, clears damage); damage — `effects/damage.ts` (global prevent-all, bound entries, `checkReplacement
+- DEATHS go through ONE planner: `E/abilities/die-replacement-batch.ts runDieBatch(ctx, dyingIds, {canPrompt, kill?})`
+  (rules 370–373), called by `state-based-checks.ts performCleanup` (whole lethal batch; unreplaced ones are then killed
+  together via `leaveBoard(…, {replacements:"skip"})`), `effects/kill.ts killUnits` (whole target batch) and
+  `leave-board.ts applyDieReplacement` (single card: costs, [Temporary]). Per dying card it collects every candidate
+  (`collectDieCandidates`: bound `activeReplacements` entries first, then board `findAllReplacements`), then:
+  371.2 optional costed bound shield ⇒ legacy `opt-in` prompt (`suspendedDeathCardId`; batch waits; kill batches carry
+  `suspendedKill`); 372 ≥2 candidates ⇒ `order` prompt to the dying card's controller (harness shows it as a `pick`
+  "which applies first", semantics `replacement-order`, timing RPL; `seat.pick(src)` or `seat.order([...])`); 373 a
+  `singleUse` candidate (bound entry, `duration:"next"`, or an effect that kills/banishes `self` — Zhonya's, GA) that also
+  matches a LATER death of the batch ⇒ `pick-many{1,1, semantics:"replacement-assign"}` to ITS controller naming the dying
+  cards (picked one is processed first); candidates apply in order, each re-checked live (source still on board / entry
+  still active / event still a death) so a replaced death consumes nothing else (370.2). State across prompts:
+  `draft.dieBatch` (queue/orders/assigned/replaced/dying/kill); answers land in `recordDieBatchAnswer`, kill batches finish
+  in `continueKillBatch` (pending-choice.ts `resumePending`). While a die prompt is open `performCleanup` leaves lethal
+  units in place and `resolveFullCombat` defers its result (`bf.combatCleanupSuspended`, like 466.2).
+  Guardian Angel's appended text is modelled on the card (`C/cards/sfd/guardian-angel.ts`: kill self + heal/exhaust/recall
+  trigger-source, 373.2).
+- Other call sites: damage — `effects/damage.ts` (global prevent-all, bound entries, `checkReplacement
   ({type:"take-damage"})`) and combat `resolve-full-combat.ts killOnDamageIdx`; score — `scoring-rules.ts
   applyScoreReplacement` (called only from `points.ts awardPoints`, method-scoped); tokens — `create-token.ts applyPlayTokenReplacement`; enters-ready — `cost.ts consumeEntersReadyReplacement`.
 - Parser: `C/parser/impl/replacement.ts parseReplacementAbility` ("If … would …, … instead"), "next time" spells → effect `replacement`.
 Recipe — "if X would die / be dealt damage, instead …": 1) ability `type:"replacement"` whose `replaces` equals the string
-the call site checks; 2) no call site for that event kind → add `checkReplacement` where it happens; 3) optional
-("you may pay …") replacements need a prompt — reuse the `opt-in` pattern from `resolve.ts`; 4) `duration:"next"` ⇒
+the call site checks; 2) no call site for that event kind → add `checkReplacement` where it happens (deaths: nothing to
+add — the batch planner sees every board/bound `die` replacement); 3) optional ("you may pay …") replacements need a
+prompt — reuse the `opt-in` pattern (`die-replacement-batch.ts offerOptionalShield`); 4) `duration:"next"` ⇒
 `markReplacementConsumed`; 5) effect referring to "it" ⇒ target `{type:"trigger-source"}`.
 
 ## 10. Zones / tokens / hidden
@@ -340,7 +377,11 @@ the call site checks; 2) no call site for that event kind → add `checkReplacem
 - Act (async, throw when illegal): `p1.cast("c",{targets:"foe"|["a","b"], x, repeat, payOptional})`,
   `play("u",{to:"bf1", accelerate:true, sacrifice:"ally"})`, `activate("gear",0,{answers:["x"]})`, `move("u","bf1")`,
   `endTurn()`, `game.advanceTurn()`; `await game.settle()` passes priority/focus, runs combat, consumes scripts and stops at
-  an unanswered prompt → `p1.pick("x") / yes() / no() / decline() / chooseMode(1)`; inspect `game.decision()`, `game.actingSeat()`.
+  an unanswered prompt → `p1.pick("x") / yes() / no() / decline() / chooseMode(1) / order([...]) / pick("a","b")` (multi);
+  inspect `game.decision()`, `game.actingSeat()`. Replacement prompts have `timing:"RPL"` (372: pick which source applies
+  first; 373: pick which dying card a single-use shield saves); a `{kind:"order", defaultable:true}` decision is the
+  383.3.d soft trigger-order offer — answer with `seat.order([...])` or ignore it (any verb / `settle()` /
+  `game.acceptTriggerOrder()` keeps the listed order); a 355.11.b subset re-pick is a `pick` with `semantics:"subset"`, min 0.
 - Legality: `p1.can("cast","c")`, `p1.legal()`, `p1.option("cast","c")?.fields.find(f=>f.name==="targets")?.options`
   (the `targetsOffered` helper), `await p1.try(p=>p.cast(…))` → `{ok:false,error}`.
 - Read: `game.state(id)` → `might, baseMight, damage, isExhausted, isStunned, isBuffed, isToken, keywords, grantedKeywords,

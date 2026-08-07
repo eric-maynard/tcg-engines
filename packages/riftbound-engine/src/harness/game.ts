@@ -68,6 +68,11 @@ export const passivePolicy: Policy = (d) => {
   if (d.kind === "pick" && d.options.length === 1 && d.min === 1) {
     return { keys: [d.options[0]?.key as string], kind: "pick" };
   }
+  // rule 383.3.d — a soft trigger-order offer nobody answered keeps the
+  // listed (scan) order.
+  if (d.kind === "order" && d.defaultable) {
+    return { keys: [], kind: "order" };
+  }
   if (d.kind === "pick" && d.options.length === 0 && d.allowDecline) {
     return { kind: "decline" };
   }
@@ -600,6 +605,23 @@ export class Game {
     return { next: this.turnPlayer(), turn: this.turnNumber() };
   }
 
+  /**
+   * rule 383.3.d — accept the LISTED order of a pending soft trigger-order
+   * offer (`decision().kind === "order" && defaultable`). Any other verb does
+   * this implicitly; call it when a test inspects `decision()` right after a
+   * batch of same-controller triggers and wants the priority window. Returns
+   * whether an offer was pending.
+   */
+  async acceptTriggerOrder(): Promise<boolean> {
+    const d = this.decision();
+    if (d?.kind !== "order" || d.defaultable !== true) {
+      return false;
+    }
+    const r = await this.act(d.seat, { keys: [], kind: "order" });
+    this.expectOk(r);
+    return true;
+  }
+
   /** Advance turns until it is `seat`'s open main phase (bounded). */
   async advanceToTurnOf(seat: Seat, opts: SettleOptions = {}): Promise<void> {
     for (let i = 0; i < 8; i++) {
@@ -813,8 +835,9 @@ export class SeatHandle {
       return d.options;
     }
     // rule 429.3 / 429.3.a + 444.2.c: a pay-X prompt — and an opt-in "you may
-    // pay …" — still offers the [Add] activations.
-    return d && (d.kind === "integer" || d.kind === "yes-no") ? (d.actions ?? []) : [];
+    // pay …" — still offers the [Add] activations. rule 383.3.d: so does the
+    // soft trigger-order offer (acting instead accepts the listed order).
+    return d && (d.kind === "integer" || d.kind === "yes-no" || d.kind === "order") ? (d.actions ?? []) : [];
   }
 
   /** Find an option by verb/moveId (+ card). */

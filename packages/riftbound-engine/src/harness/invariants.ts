@@ -138,9 +138,16 @@ export const singleDecisionCursor: Invariant = {
       return [];
     }
     const holders: string[] = [];
+    // rule 383.3.d — the soft trigger-order offer keeps `resolvePendingChoice`
+    // legal for its chooser beside the real cursor; it is not a second cursor.
+    const softOrderOnly = !cur.state.pendingChoice && cur.state.pendingTriggerOrder !== undefined;
     for (const pid of Object.keys(cur.state.players)) {
       const legal = engine.enumerateMoves(pid as PlayerId, { validOnly: true });
-      if (legal.some((m) => PRIORITY_CLASS.has(m.moveId))) {
+      if (
+        legal.some(
+          (m) => PRIORITY_CLASS.has(m.moveId) && !(softOrderOnly && m.moveId === "resolvePendingChoice"),
+        )
+      ) {
         holders.push(pid);
       }
     }

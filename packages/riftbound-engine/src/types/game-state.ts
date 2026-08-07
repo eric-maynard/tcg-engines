@@ -371,6 +371,8 @@ export interface BattlefieldState {
    * afterwards makes the combat a No Result (466.3.d), not a defender win.
    */
   combatNoDefendersAtCleanup?: boolean;
+  /** rules 371.2/372/373 — the Combat Cleanup parked a die-replacement prompt; the result step re-reads the board on re-run. */
+  combatCleanupSuspended?: boolean;
 
   /**
    * rule 465.2.c.3 — the attacking player's chosen assignment of its combat
@@ -1434,6 +1436,9 @@ export interface RiftboundGameState {
    * `resolvePendingChoice { orderedKeys }` rearranges the items on the Chain.
    */
   pendingTriggerOrder?: OrderChoice;
+
+  /** rule 383.3.d — chain item ids already offered for ordering (pruned to the live Chain). */
+  triggerBatchSeen?: string[];
 
   /**
    * Replacement effects installed at runtime by an activated/triggered ability
