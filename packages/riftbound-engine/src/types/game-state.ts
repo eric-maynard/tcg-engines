@@ -814,6 +814,16 @@ export interface ChooseTargetChoice {
    * `pending-choice.ts`, not when the prompt was raised).
    */
   readonly deflectTax?: true;
+  /**
+   * rule 355.9 (ogn-080-298 Mystic Reversal) — "You may make new choices for
+   * it": the pick RE-TARGETS this chain item instead of executing anything.
+   */
+  readonly retargetChainItemId?: string;
+  /**
+   * rule 355.13 — the prompt may be declined (`accept:false`), leaving the
+   * effect's existing choices untouched. Set for "you MAY make new choices".
+   */
+  readonly optional?: true;
 }
 
 /**
@@ -913,11 +923,6 @@ export interface ConfirmChoice {
   readonly boundTargets?: readonly CardId[];
   /** Rest of the suspended sequence; runs after either answer. */
   readonly then?: unknown;
-  /**
-   * rule 571 / 355.13 (unl-086-219) — a declined optional REPLACEMENT still has
-   * to perform the original, unreplaced instruction: `else` runs on a no.
-   */
-  readonly else?: unknown;
   /** Human-readable prompt text. */
   readonly prompt?: string;
 }
@@ -1060,6 +1065,72 @@ export interface CombatDamageChoice {
   readonly defaultAllocation: Readonly<Record<string, number>>;
 }
 
+/**
+ * What to do once a generic `order` / `pick-many` prompt is answered. Pure
+ * data (no closures) so the state stays serializable; dispatched by
+ * `resumePending` in `moves/pending-choice.ts`.
+ */
+export type PendingResume =
+  /** rule 372 — the answer orders the die replacements applying to this card's death. */
+  | { readonly kind: "die-order"; readonly dyingCardId: CardId }
+  /** rule 373 — the answer names the death a single-use replacement is applied to first. */
+  | { readonly kind: "die-assign"; readonly replacementId: string }
+  /** rule 383.3.d — the answer orders these (already appended) trigger items on the Chain. */
+  | { readonly kind: "trigger-batch"; readonly itemIds: readonly string[] }
+  /**
+   * rule 355.11.b — the answer is the subset of the ORIGINAL targets the
+   * effect affects; `effect` re-executes with them bound.
+   */
+  | {
+      readonly kind: "subset-repick";
+      readonly effect: unknown;
+      readonly playerId: PlayerId;
+      readonly sourceCardId: CardId;
+    }
+  /** No follow-up (tests / producers that read the answer off `lastPendingAnswer`). */
+  | { readonly kind: "none"; readonly tag?: string };
+
+/** One entry of an `order` / `pick-many` prompt. */
+export interface PendingItem {
+  readonly key: string;
+  readonly label?: string;
+  readonly cardId?: CardId;
+}
+
+/**
+ * rule 372 / 383.3.d / 416.5.a — "put these in an order of your choosing".
+ * Answered with `orderedKeys` (a permutation of `items[].key`; index 0 =
+ * first applied / first appended to the Chain). An absent or empty answer
+ * keeps the listed order when `defaultable`.
+ */
+export interface OrderChoice {
+  readonly type: "order";
+  readonly playerId: PlayerId;
+  readonly sourceCardId?: CardId;
+  readonly items: readonly PendingItem[];
+  readonly prompt?: string;
+  readonly defaultable?: boolean;
+  readonly resume: PendingResume;
+}
+
+/**
+ * rule 355.13 / 373 / 355.11.b — choose between `min` and `max` distinct
+ * options in one answer (`pickedKeys`). `semantics` tells consumers what the
+ * keys mean; `constraint` is re-validated on the answer (355.11.b subsets).
+ */
+export interface PickManyChoice {
+  readonly type: "pick-many";
+  readonly playerId: PlayerId;
+  readonly sourceCardId?: CardId;
+  readonly options: readonly PendingItem[];
+  readonly min: number;
+  readonly max: number;
+  readonly semantics: "target" | "drop" | "replacement-assign" | "subset";
+  readonly prompt?: string;
+  readonly constraint?: { readonly totalMightAtMost?: number };
+  readonly resume: PendingResume;
+}
+
 export type PendingChoice =
   | CombatDamageChoice
   | RevealAndPickChoice
@@ -1071,6 +1142,8 @@ export type PendingChoice =
   | ChoosePlayerChoice
   | ConfirmChoice
   | OptInChoice
+  | OrderChoice
+  | PickManyChoice
   | WeaponmasterEquipChoice;
 
 /**
@@ -1333,6 +1406,34 @@ export interface RiftboundGameState {
    * Consumed (and cleared) by the next state-based check for that card.
    */
   readonly replacementOrderChoices?: Record<string, string>;
+
+  /**
+   * rules 372 / 373 — decisions taken so far for the batch of simultaneous
+   * deaths being processed (`abilities/replacement-effects.ts runDieBatch`).
+   * Survives across the prompts it raises; cleared once the batch completes.
+   */
+  dieBatch?: {
+    /** Dying card ids still to process, front first (373: reordered by "apply to which first"). */
+    queue: string[];
+    /** rule 372 — dying id → replacement ids in the order their controller chose. */
+    orders: Record<string, string[]>;
+    /** rule 373 — single-use replacement ids whose "which event first" was settled. */
+    assigned: string[];
+    /** Processed ids whose death was replaced (they never die). */
+    replaced: string[];
+    /** Processed ids whose death stands (killed together at the end, 373.1.a). */
+    dying: string[];
+    /** A Kill instruction / cost / Temporary batch to finish on resume (SBA batches re-detect themselves). */
+    kill?: { to: string; cause: unknown; playerId: string; sourceCardId: string };
+  };
+
+  /**
+   * rule 383.3.d — simultaneous triggered items one player controls, offered
+   * to that player for ordering. NOT a `pendingChoice`: every other move stays
+   * legal and taking one accepts the listed (scan) order; only
+   * `resolvePendingChoice { orderedKeys }` rearranges the items on the Chain.
+   */
+  pendingTriggerOrder?: OrderChoice;
 
   /**
    * Replacement effects installed at runtime by an activated/triggered ability

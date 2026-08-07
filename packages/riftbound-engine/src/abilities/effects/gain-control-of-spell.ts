@@ -1,6 +1,10 @@
 // Effect handler: "gain-control-of-spell"
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
+import {
+  findSequenceLeadTarget,
+  type SpellEffectTargetShape,
+} from "../../game-definition/moves/play/targeting";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers } from "./_helpers";
 
@@ -33,13 +37,25 @@ export function handle_gainControlOfSpell(
   if (!stolen) {
     return;
   }
+  // rule 359.3.e.2 / 359.3.e.4 — remember who chose the existing targets so
+  // resolution re-checks relative descriptors ("an enemy unit") against the
+  // new controller instead of the original caster.
+  const prevController = stolen.controller;
+  if (prevController !== ctx.playerId) {
+    (stolen as { originalController?: string }).originalController ??= prevController;
+  }
   (stolen as { controller: string }).controller = ctx.playerId;
 
   if (!(effect as { newChoices?: boolean }).newChoices || ctx.draft.pendingChoice) {
     return;
   }
   const stolenEffect = stolen.effect as { target?: TargetDescriptor } | undefined;
-  const tgt = stolenEffect?.target;
+  // rule-id: unl-073-219 — "Deal 3 to an enemy unit. When it dies this turn …"
+  // is one sequence sharing a single caster-chosen slot; the re-choice offer
+  // must find that slot as well as a plain top-level target.
+  const tgt =
+    stolenEffect?.target ??
+    (findSequenceLeadTarget(stolen.effect as SpellEffectTargetShape) as TargetDescriptor | undefined);
   if (!tgt || typeof tgt !== "object") {
     return;
   }
@@ -58,6 +74,8 @@ export function handle_gainControlOfSpell(
   }
   ctx.draft.pendingChoice = {
     effect: stolen.effect,
+    // "You MAY make new choices" — declining keeps the original targets.
+    optional: true,
     options,
     playerId: ctx.playerId,
     retargetChainItemId: stolen.id,

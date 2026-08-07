@@ -44,6 +44,14 @@ export interface ChainItem {
   /** Whether this is a triggered ability (auto-added, not player-initiated) */
   readonly triggered?: boolean;
   /**
+   * rule 359.3.e.2 / 359.3.e.4 (ogn-080-298 Mystic Reversal) — the player who
+   * controlled this item when its targets were chosen. Set only when control
+   * of the item changed afterwards: a relative descriptor ("an ENEMY unit") is
+   * re-checked against the CURRENT controller at resolution, so a stolen spell
+   * mistargets unless new choices were made.
+   */
+  readonly originalController?: string;
+  /**
    * rule 337.1 / 402–404: a triggered item is appended as a Pending Item and
    * only becomes a Finalized Chain Item once its controller has decided a
    * leading "you may" (402.1), chosen its targets/modes (402.2) and paid any

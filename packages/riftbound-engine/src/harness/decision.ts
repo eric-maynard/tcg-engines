@@ -538,11 +538,11 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
         : 1;
       const d: PickDecision = {
         ...base,
-        allowDecline: pc.anyNumber === true,
+        allowDecline: pc.anyNumber === true || pc.optional === true,
         id: decisionId(ctx.seq, seat, "pick"),
         kind: "pick",
         max: capacity,
-        min: 1,
+        min: pc.optional === true && pc.anyNumber !== true ? 0 : 1,
         options: pc.options.map((id) => ({ card: id, key: id, label: ctx.label(id) })),
         prompt: pc.boundTargets ? "Choose a target to drop" : `Choose a target for ${source.cardId ? ctx.label(source.cardId) : "the effect"}`,
         semantics: pc.boundTargets ? "drop-target" : "target",
