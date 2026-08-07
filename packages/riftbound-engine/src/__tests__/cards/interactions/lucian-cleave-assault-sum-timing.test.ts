@@ -145,7 +145,7 @@ describe("Lucian, Gunslinger × Cleave — Assault summing and attack-trigger ti
     expect(game.state("wall").damage).toBe(1);
   });
 
-  test.failing("BUG: (b) after the triggered combat chain empties, Focus stays with the ATTACKER, who may now cast Cleave (346.1, 347.1)", async () => {
+  test("(b) after the triggered combat chain empties, Focus stays with the ATTACKER, who may now cast Cleave (346.1, 347.1)", async () => {
     // Expected: the combat chain opened from a triggered ability, so Focus does not pass when it
     // empties — P1 (attacker) acts first in the open showdown and Cleave is legal for P1 now.
     // Actual: the engine hands Focus to P2 first.

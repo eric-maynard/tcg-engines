@@ -813,7 +813,7 @@ describe("323.4-5 / 319.5 / 330.2 / 340.3-4: a death trigger raised by a resolvi
     expect(game.state("Y").damage).toBe(0);
   });
 
-  test.failing("BUG: 337.4 / 340.4 — once K's trigger is finalized its controller (P2, controller of the newest item) receives Priority first; engine hands Priority to P1", async () => {
+  test("337.4 / 340.4 — once K's trigger is finalized its controller (P2, controller of the newest item) receives Priority first; engine hands Priority to P1", async () => {
     // Expected: priorityOf === P2 and P2 is the acting seat right after the trigger is appended.
     // Actual: the chain's activePlayer is reset to P1 (the turn player / S0's controller).
     const { game } = await kDiesUnderS0();
@@ -919,7 +919,7 @@ describe("464.2 / 383.4.e.2 / 346.1 / 465.2: moving into a defended battlefield 
     expect(game.zoneOf("Dv")).toBe("battlefield-bf1");
   });
 
-  test.failing("BUG: 346.1 / 340.2.a — the Combat Chain was initiated by a triggered ability, so when it empties Focus stays with the Attacker (P1) who again holds Priority in Showdown Open; engine rotates Focus to P2", async () => {
+  test("346.1 / 340.2.a — the Combat Chain was initiated by a triggered ability, so when it empties Focus stays with the Attacker (P1) who again holds Priority in Showdown Open; engine rotates Focus to P2", async () => {
     // Expected: focusOf === P1 and P1 is the acting seat after the attack-trigger chain resolves.
     // Actual: the engine treats every emptied chain during a showdown as a played chain and passes
     // Focus to P2.

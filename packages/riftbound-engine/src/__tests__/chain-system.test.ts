@@ -440,7 +440,10 @@ describe("Triggered Abilities on Chain (rule 541)", () => {
 });
 
 describe("Regression: chain/showdown priority ordering", () => {
-  test("Rule 541.2: triggered ability added to existing chain does NOT change activePlayer", () => {
+  // rule 337.4 / 340.4: Priority goes to the controller of the NEWEST item on
+  // the Chain, so a trigger queued on top of another player's spell hands
+  // Priority to the trigger's controller.
+  test("Rule 340.4: a triggered ability added to an existing chain gives its controller priority", () => {
     let state = createInteractionState();
     state = addToChain(state, { cardId: "s1", controller: P2, type: "spell" }, TURN_ORDER);
     expect(state.chain!.activePlayer).toBe(P2);
@@ -449,8 +452,7 @@ describe("Regression: chain/showdown priority ordering", () => {
       { cardId: "trig", controller: P1, triggered: true, type: "ability" },
       TURN_ORDER,
     );
-    // P1's trigger queued but P2 (chain creator) keeps priority.
-    expect(state.chain!.activePlayer).toBe(P2);
+    expect(state.chain!.activePlayer).toBe(P1);
   });
 
   test("Rule 553.4.a: acting during a showdown resets its passedPlayers", () => {

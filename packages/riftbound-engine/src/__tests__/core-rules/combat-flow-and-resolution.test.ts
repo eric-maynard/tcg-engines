@@ -530,7 +530,7 @@ describe("Attack trigger creates a Combat Chain: state closes; damage waits; Foc
     expect(game.p1.hand().length).toBe(h + 1);
   });
 
-  test.failing("BUG: 346.1 — after a chain opened by a TRIGGERED ability empties during a showdown, Focus must stay with P1 (engine passes Focus to P2)", async () => {
+  test("346.1 — after a chain opened by a TRIGGERED ability empties during a showdown, Focus must stay with P1 (engine passes Focus to P2)", async () => {
     // Expected: Focus and priority remain with the attacker P1 (346.1, contrast 347.1.b).
     // Actual: focusPlayer becomes P2 once the trigger chain resolves.
     const game = await scenario()

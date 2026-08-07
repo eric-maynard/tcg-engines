@@ -91,6 +91,13 @@ export interface ChainState {
 
   /** Turn order (for cycling priority) */
   readonly turnOrder: string[];
+
+  /**
+   * rule 346.1: Focus does NOT pass when a chain that opened from a triggered
+   * (or Add) ability empties — the Combat Chain is the canonical case. True
+   * when the item that created this chain was not a discretionary play.
+   */
+  readonly openedByTrigger?: boolean;
 }
 
 /**
@@ -269,15 +276,11 @@ export function addToChain(
     ];
   }
 
-  // Rule 337.4 / 340.4 (Vendetta): after all pending Chain Items are
-  // finalized, the controller of the newest (topmost) item on the Chain gains
-  // Priority. When a triggered item is queued the newest item is that trigger,
-  // so its controller gets Priority — unless a non-triggered item already
-  // opened the chain (a player played a spell/ability), in which case that
-  // player keeps Priority per rule 337.4 until they pass.
-  const chainOpenedByPlay = state.chain?.items.some((i) => !i.triggered) ?? false;
-  const activePlayer =
-    item.triggered && chainOpenedByPlay ? state.chain!.activePlayer : item.controller;
+  // rule 337.4 / 340.4 (Vendetta): once there are no more Pending Items, the
+  // controller of the NEWEST item on the Chain gains Priority. The item just
+  // added is that newest item, so its controller acts first — including a
+  // triggered item queued on top of a chain another player opened.
+  const activePlayer = item.controller;
 
   return {
     ...state,
@@ -288,6 +291,10 @@ export function addToChain(
       activePlayer,
       passedPlayers: [], // Reset passes when new item added
       turnOrder,
+      // rule 346.1: a chain that OPENED from a triggered (or Add) ability —
+      // the Combat Chain is the canonical case — does not pass Focus when it
+      // empties. Latched from the item that created the chain.
+      openedByTrigger: state.chain ? state.chain.openedByTrigger : !!item.triggered,
     },
     nextChainItemId: state.nextChainItemId + 1,
     showdownStack,
@@ -402,7 +409,9 @@ function afterItemsLeft(state: TurnInteractionState, items: ChainItem[]): TurnIn
     // resolves during a Showdown, Focus passes to the next Relevant Player.
     let showdownStack = state.showdownStack;
     const sd = getActiveShowdown(state);
-    if (sd) {
+    // rule 346.1 / 340.2.a: Focus does NOT pass when the emptied chain was
+    // opened by a triggered (or Add) ability rather than a played item.
+    if (sd && !state.chain.openedByTrigger) {
       const idx = sd.relevantPlayers.indexOf(sd.focusPlayer);
       const nextFocus = sd.relevantPlayers[(idx + 1) % sd.relevantPlayers.length];
       const top = showdownStack.length - 1;
