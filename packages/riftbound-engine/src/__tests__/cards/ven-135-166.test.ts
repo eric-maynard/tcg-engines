@@ -26,6 +26,43 @@ describe("Kennen, Keeper of Balance (ven-135-166)", () => {
     expect(game.state("kennen").might).toBe(4);
   });
 
+  test("playing me offers the optional pay-[2] Stun trigger", async () => {
+    const game = await scenario()
+      .active(P1)
+      .resources(P1, { energy: 8, power: { order: 3 } })
+      .battlefield("bf1", { controller: P2 })
+      .unit(P2, "bf1", { might: 3 }, "foe")
+      .hand(P1, KENNEN, "kennen")
+      .build();
+    await game.p1.play("kennen");
+    await game.settle();
+    if (game.decision()) {
+      await game.p1.yes();
+      await game.settle();
+    }
+    if (game.decision()) {
+      await game.p1.pick("foe");
+      await game.settle();
+    }
+    expect(game.state("foe").isStunned).toBe(true);
+  });
+
+  test("attacking also offers the Stun trigger", async () => {
+    const game = await scenario()
+      .active(P1)
+      .resources(P1, { energy: 8, power: { order: 3 } })
+      .battlefield("bf1", { controller: P2 })
+      .unit(P2, "bf1", { might: 5 }, "foe")
+      .unit(P1, "base", KENNEN, "kennen")
+      .build();
+    await game.p1.move("kennen", "bf1");
+    await game.settle();
+    await game.p1.yes();
+    await game.settle();
+    await game.p1.pick("foe");
+    expect(game.state("foe").isStunned).toBe(true);
+  });
+
   test("no bonus while the stunned enemy is elsewhere", async () => {
     const game = await scenario()
       .active(P1)
