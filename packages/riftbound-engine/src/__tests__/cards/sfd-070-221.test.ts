@@ -41,7 +41,7 @@ function board() {
 }
 
 describe("Wages of Pain (sfd-070-221)", () => {
-  test.failing("BUG: registry payload — Hidden + ONE [Action] spell ability whose effect is the sequence [deal 3 to a battlefield unit, Gold token exhausted]", async () => {
+  test("registry payload — Hidden + ONE [Action] spell ability whose effect is the sequence [deal 3 to a battlefield unit, Gold token exhausted]", async () => {
     // Expected: a single spell ability (the engine resolves exactly one per card) carrying both
     // instructions. Actual: the parser split the text into two separate `spell` abilities.
     const game = await scenario().hand(P1, CARD, "wop").build();
@@ -108,7 +108,7 @@ describe("Wages of Pain (sfd-070-221)", () => {
     expect(none.p1.can("cast", "wop")).toBe(false);
   });
 
-  test.failing("BUG: clause 2 — the CASTER also gets a Gold gear token in base, exhausted (even when the target was an enemy)", async () => {
+  test("clause 2 — the CASTER also gets a Gold gear token in base, exhausted (even when the target was an enemy)", async () => {
     // Expected: after resolution P1's base holds one exhausted Gold token and P2 has none.
     // Actual: only the first parsed spell ability (the damage) resolves; no token is created.
     const game = await board().build();
@@ -122,7 +122,7 @@ describe("Wages of Pain (sfd-070-221)", () => {
     expect(game.p1.can("activate", mine[0]!)).toBe(false); // exhausted: no [rainbow] this turn
   });
 
-  test.failing("BUG: target made illegal in response (Flash moves it home) — no damage, but the Gold token is still played (359.3.e.5)", async () => {
+  test("target made illegal in response (Flash moves it home) — no damage, but the Gold token is still played (359.3.e.5)", async () => {
     // Expected: Four reaches base undamaged; P1 still gets an exhausted Gold. Actual: no Gold token.
     const game = await board().resources(P2, { energy: 2 }).hand(P2, FLASH, "flash").build();
     await game.p1.cast("wop", { targets: "four" });
@@ -257,7 +257,7 @@ describe("Wages of Pain (sfd-070-221)", () => {
     expect(game.p1.can("reveal", "wop")).toBe(false);
   });
 
-  test.failing("BUG: played from facedown it still plays the exhausted Gold token for the caster (811.2)", async () => {
+  test("played from facedown it still plays the exhausted Gold token for the caster (811.2)", async () => {
     // Expected: one exhausted Gold in P1's base after the hidden play resolves. Actual: no token.
     const game = await scenario()
       .resources(P1, { power: { rainbow: 1 } })

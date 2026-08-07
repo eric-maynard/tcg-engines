@@ -57,31 +57,66 @@ export function contestBattlefieldOnArrival(args: {
   const playerIds = Object.keys(draft.players);
   const defender = bf.controller ?? playerIds.find((p) => p !== playerId) ?? playerId;
   const interaction = draft.interaction ?? createInteractionState();
-  const started = startShowdownState(
-    interaction,
-    battlefieldId,
-    playerId,
-    hasOpponentUnit ? [...new Set([playerId, defender])] : playerIds,
-    hasOpponentUnit,
-    playerId,
-    defender,
+  // rule 344.1 — one battlefield holds at most one showdown: a unit arriving
+  // while a showdown is already in progress here JOINS it (rule 464.2.c.3.a)
+  // instead of opening a second, duplicate one.
+  const existing = interaction.showdownStack.find(
+    (sd) => sd.active && sd.battlefieldId === battlefieldId,
   );
-  draft.interaction = autoBegun
-    ? {
-        ...started,
-        showdownStack: started.showdownStack.map((sd, i) =>
-          i === started.showdownStack.length - 1 ? { ...sd, autoBegun: true } : sd,
+  let started = interaction;
+  let showdownBegan = !existing;
+  if (existing) {
+    if (hasOpponentUnit && !existing.isCombatShowdown) {
+      // The arrival turned a non-combat showdown into a combat one (344.3):
+      // re-seat the players and reopen the Focus round rather than stacking.
+      showdownBegan = true;
+      started = {
+        ...interaction,
+        showdownStack: interaction.showdownStack.map((sd) =>
+          sd === existing
+            ? {
+                ...sd,
+                attackingPlayer: playerId,
+                defendingPlayer: defender,
+                focusPlayer: playerId,
+                isCombatShowdown: true,
+                passedPlayers: [],
+                relevantPlayers: [...new Set([playerId, defender])],
+              }
+            : sd,
         ),
-      }
-    : started;
+      };
+    }
+  } else {
+    started = startShowdownState(
+      interaction,
+      battlefieldId,
+      playerId,
+      hasOpponentUnit ? [...new Set([playerId, defender])] : playerIds,
+      hasOpponentUnit,
+      playerId,
+      defender,
+    );
+  }
+  draft.interaction =
+    autoBegun && !existing
+      ? {
+          ...started,
+          showdownStack: started.showdownStack.map((sd, i) =>
+            i === started.showdownStack.length - 1 ? { ...sd, autoBegun: true } : sd,
+          ),
+        }
+      : started;
 
   const triggerCtx = { cards, counters, draft, zones } as TriggerCtx;
   // rule 340 / 548.2: "When a showdown begins here" fires for combat and
   // non-combat showdowns alike.
-  fireTriggers(
-    { battlefieldId, isCombat: hasOpponentUnit, playerId, type: "showdown-begin" },
-    triggerCtx,
-  );
+  if (showdownBegan) {
+    fireTriggers(
+      { battlefieldId, isCombat: hasOpponentUnit, playerId, type: "showdown-begin" },
+      triggerCtx,
+    );
+  }
 
   if (!hasOpponentUnit) {
     return;

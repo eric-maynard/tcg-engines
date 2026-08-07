@@ -158,7 +158,7 @@ describe("Rengar, Pouncing (sfd-025-221)", () => {
     expect(game.gameState.battlefields.mine?.controller).toBe(P2);
   });
 
-  test.failing("BUG: [Reaction] is not permission to play in the opponent's Neutral Open state (316.5.b, 813.1.c.1) — the engine offers the unit play anyway", async () => {
+  test("[Reaction] is not permission to play in the opponent's Neutral Open state (316.5.b, 813.1.c.1) — the engine offers the unit play anyway", async () => {
     // Expected: on P2's turn with no chain/showdown only P2 may play cards, so Rengar is not legal
     // for P1. Actual: playUnit is offered to (and accepted from) P1 in P2's open main phase.
     const game = await scenario().active(P2).resources(P1, { energy: 3, power: { fury: 1 } }).hand(P1, CARD, "rengar").build();

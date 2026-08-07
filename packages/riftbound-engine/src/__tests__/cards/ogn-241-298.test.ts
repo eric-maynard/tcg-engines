@@ -58,14 +58,15 @@ describe("Shen, Kinkou (ogn-241-298)", () => {
     expect(game.locationOf("shen")).toBe("bf1");
   });
 
-  test("[Reaction] — playable on the opponent's turn (to base)", async () => {
-    // Expected: with P2 as turn player and nothing happening, P1 may still play Shen.
-    // Actual: the Reaction keyword is not parsed for this unit; play is refused off-turn.
+  test("[Reaction] is timing, not priority: in the opponent's Neutral Open State he stays in hand (316.5.b, 813.1.c.1)", async () => {
+    // rule 316.5.b: only the Turn Player may play cards in a Neutral Open State.
+    // rule 813.1.c.1: Reaction is short for "can be played during CLOSED states on any
+    // player's turn" — it opens no window while the opponent's turn sits open.
     const game = await defence(3).build();
-    expect(game.p1.can("play", "shen")).toBe(true);
-    await game.p1.play("shen", { to: "base" });
-    await game.settle();
-    expect(game.zoneOf("shen")).toBe("base");
+    expect(game.p1.can("play", "shen")).toBe(false);
+    const r = await game.p1.try((p) => p.play("shen", { to: "base" }));
+    expect(r.ok).toBe(false);
+    expect(game.zoneOf("shen")).toBe("hand");
     expect(game.turnPlayer()).toBe(P2);
   });
 

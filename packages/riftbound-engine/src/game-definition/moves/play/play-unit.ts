@@ -119,8 +119,8 @@ function holdsChainPriority(state: RiftboundGameState, playerId: string): boolea
  * controller may play it whenever they may act at all:
  *  - a Closed state (chain on the stack) → only the priority holder;
  *  - a Showdown Open state → only the Focus holder (rule 347);
- *  - a Neutral Open state → either player, on anyone's turn (the turn-player
- *    gate is a standard-timing restriction the Reaction permission lifts).
+ *  - a Neutral Open state → only the turn player (rule 316.5.b: nobody else
+ *    holds priority there, so [Reaction] opens no window).
  */
 function reactionWindowOpen(state: RiftboundGameState, playerId: string): boolean {
   if (holdsChainPriority(state, playerId)) {
@@ -131,6 +131,12 @@ function reactionWindowOpen(state: RiftboundGameState, playerId: string): boolea
   if (turnState === "neutral-closed" || turnState === "showdown-closed") {
     // A chain exists and this player does not hold priority.
     return false;
+  }
+  if (turnState === "neutral-open") {
+    // rule 316.5.b: in a Neutral Open State only the turn player may take a
+    // Discretionary Action. [Reaction] lifts the timing class (813.1.c.1), not
+    // the priority rule — it is no permission to act on the opponent's turn.
+    return state.turn.activePlayer === playerId;
   }
   return hasShowdownPermission(interaction, playerId);
 }
@@ -1068,6 +1074,8 @@ export const playUnit: Defs["playUnit"] = {
         ...(waivePower ? { waivePower } : {}),
       },
       createMetaAccessor(context.cards),
+      // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.
+      { counters: context.counters, zones: context.zones },
     );
 
     // rule 702.2.b: spending a buff removes it; Might readers look at

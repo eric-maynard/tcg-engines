@@ -69,19 +69,26 @@ describe("Janna, Savior (sfd-053-221)", () => {
     expect(lowEnergy.p1.can("play", "janna")).toBe(false);
   });
 
-  test("[Reaction]: playable in the opponent's neutral open state, while a standard-timing unit in the same hand is not", async () => {
+  test("[Reaction]: no window in the opponent's Neutral Open State (316.5.b), but one once they open a showdown", async () => {
+    // rule 813.1.c.1 — Reaction is short for "can be played during CLOSED states on any
+    // player's turn"; in a Neutral Open State only the turn player may act at all.
     const game = await defence().hand(P1, FILLER, "slow").resources(P1, { energy: 6, power: { calm: 1 } }).build();
     expect(game.turnPlayer()).toBe(P2);
-    expect(game.p1.can("play", "janna")).toBe(true);
+    expect(game.p1.can("play", "janna")).toBe(false);
     expect(game.p1.can("play", "slow")).toBe(false);
+    await game.p2.move(["a1", "a2"], "bf1");
+    await game.p2.passFocus();
+    expect(game.p1.can("play", "janna")).toBe(true); // Focus in a showdown: Reaction applies
+    expect(game.p1.can("play", "slow")).toBe(false); // standard timing still shut out
     await game.p1.play("janna", { to: "base" });
-    await game.settle();
     expect(game.zoneOf("janna")).toBe("base");
     expect(game.turnPlayer()).toBe(P2);
   });
 
   test("destinations: base or a battlefield you CONTROL — the enemy-held bf2 and the uncontrolled bf3 are not offered", async () => {
     const game = await defence().build();
+    await game.p2.move(["a1", "a2"], "bf1");
+    await game.p2.passFocus(); // P1 holds Focus, so the Reaction play is offered
     const to = game.p1.option("play", "janna")?.fields.find((f) => f.arg === "to")?.options;
     expect(new Set(to as string[])).toEqual(new Set(["base", "battlefield-bf1"]));
     const r = await game.p1.try((p) => p.play("janna", { to: "bf2" }));
