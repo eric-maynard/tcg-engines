@@ -669,6 +669,14 @@ function metaFlag(meta: Partial<RiftboundCardMeta> | undefined, key: "exhausted"
  * filters degrade to the previous "match any" behaviour rather than silently
  * emptying the target set.
  */
+function isTokenCard(cardId: string, def: unknown): boolean {
+  return (
+    cardId.startsWith("token-") ||
+    (def as { isToken?: boolean; id?: string } | undefined)?.isToken === true ||
+    ((def as { id?: string } | undefined)?.id ?? "").startsWith("token-def-")
+  );
+}
+
 function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolverContext): boolean {
   const registry = getGlobalCardRegistry();
   const def = registry.get(cardId);
@@ -711,6 +719,12 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
         return meta?.attachedTo === undefined;
       case "facedown":
         return meta?.hidden === true;
+      // rule 109.2: a token is a card-like object created by an effect; it is
+      // never a printed card. Instances are minted with a `token-` id prefix.
+      case "token":
+        return isTokenCard(cardId, def);
+      case "non-token":
+        return !isTokenCard(cardId, def);
       default:
         return true;
     }

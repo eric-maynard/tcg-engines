@@ -63,6 +63,22 @@ import {
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
 /**
+ * rule 357.1.a — runes still ready in a player's rune pool. Sampled either side
+ * of the Pay step so Energy added by tapping runes there is not mistaken for
+ * Energy the player had banked (see `spellEnergySpentByCard`).
+ */
+function countReadyRunes(
+  context: {
+    counters: { getFlag: (cardId: never, flag: string) => boolean | undefined };
+    zones: { getCardsInZone: (zoneId: never, playerId?: never) => readonly unknown[] };
+  },
+  playerId: string,
+): number {
+  const runes = context.zones.getCardsInZone("runePool" as never, playerId as never);
+  return runes.filter((id) => !context.counters.getFlag(id as never, "exhausted")).length;
+}
+
+/**
  * rule 356.2 — ogn-048-298: legal choices for a spell's optional "you may
  * exhaust a friendly X" additional cost: matching permanents that are ready
  * (an exhausted permanent cannot pay an exhaust cost). The chosen one rides
@@ -1889,6 +1905,13 @@ export const playSpell: Defs["playSpell"] = {
     draft.additionalCostsPaid[cardId] = spellAdditionalCost !== undefined || exhaustCostPaid;
 
     const repeatN = Math.max(0, repeatCount ?? 0);
+    // rule 135.2 (rule-id: unl-005-219) — "When you play a spell, if you spent
+    // [N] or more" reads the Energy paid for THIS spell (a paid [Repeat] counts,
+    // rule 820.1.d), not a turn-wide tally, so snapshot the pool across the Pay
+    // step. Runes tapped for Energy inside the step (rule 357.1.a) add to the
+    // pool, so credit them back.
+    const energyBeforePay = draft.runePools[playerId]?.energy ?? 0;
+    const readyRunesBeforePay = countReadyRunes(context, playerId);
     deductCost(
       draft,
       playerId,
@@ -1910,6 +1933,18 @@ export const playSpell: Defs["playSpell"] = {
       // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.
       { counters: context.counters, zones: context.zones },
     );
+
+    const energyPaid = Math.max(
+      0,
+      energyBeforePay +
+        (readyRunesBeforePay - countReadyRunes(context, playerId)) -
+        (draft.runePools[playerId]?.energy ?? 0),
+    );
+    const paidByCard = (draft as { spellEnergySpentByCard?: Record<string, number> })
+      .spellEnergySpentByCard ?? {};
+    paidByCard[cardId] = energyPaid;
+    (draft as { spellEnergySpentByCard?: Record<string, number> }).spellEnergySpentByCard =
+      paidByCard;
 
     // rule 357 (rule-id: unl-004-219) — costs are paid as the spell is played,
     // so statics gated on what was spent this turn ("If you've spent [4] or more
