@@ -186,6 +186,32 @@ export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): voi
     installNextMainPhaseEffect(effect, ctx);
     return;
   }
+  // rule 411.4 (ven-002-166, unl-121-219) — "Choose a player. They …": the
+  // effect's controller names ANY player, themself included. The named seat
+  // arrives back as `ownerId` (set by the `choose-player` prompt answer) and
+  // the effect then runs as if printed "you" for that seat.
+  const chosen = effect as { player?: string; ownerId?: string };
+  if (chosen.player === "choose") {
+    if (chosen.ownerId === undefined) {
+      if (!ctx.draft.pendingChoice) {
+        ctx.draft.pendingChoice = {
+          effect,
+          options: Object.keys(ctx.draft.players),
+          playerId: ctx.playerId,
+          prompt: "Choose a player",
+          sourceCardId: ctx.sourceCardId,
+          type: "choose-player",
+        } as typeof ctx.draft.pendingChoice;
+      }
+      return;
+    }
+    const { ownerId, ...rest } = effect as unknown as Record<string, unknown>;
+    executeEffect({ ...rest, player: "self" } as ExecutableEffect, {
+      ...ctx,
+      playerId: ownerId as string,
+    });
+    return;
+  }
   // rule-id: unl-095-219 — "delayed-trigger" installs a triggered ability on a
   // card for a duration; kept out of EFFECT_HANDLERS so the map stays the
   // parser-facing catalogue of printable effects.

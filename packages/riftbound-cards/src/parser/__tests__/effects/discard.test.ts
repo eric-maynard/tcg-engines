@@ -323,9 +323,10 @@ describe("Effect: Discard", () => {
       expect(result.abilities).toHaveLength(1);
       expect(result.abilities?.[0]).toEqual(
         expect.objectContaining({
+          // rule 411.4: "choose a player" may name the controller themself.
           effect: expect.objectContaining({
             amount: 1,
-            player: "opponent",
+            player: "choose",
             type: "discard",
           }),
           trigger: expect.objectContaining({

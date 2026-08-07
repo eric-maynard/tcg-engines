@@ -31,6 +31,17 @@ export function parseEffects(text: string): Effect | undefined {
     return undefined;
   }
 
+  // rule 411.4 (ven-002-166, unl-121-219) — "Choose a player. They X": the
+  // controller names ANY player (themself included), so "they" is not the
+  // opponent. `player: "choose"` makes the engine prompt for the seat.
+  const choosePlayer = cleaned.match(/^Choose a player\.\s*(?:They|That player)\s+(.+)$/is);
+  if (choosePlayer) {
+    const body = parseEffects(`They ${choosePlayer[1]}`);
+    if (body && (body as { type?: string }).type !== "raw") {
+      return { ...(body as object), player: "choose" } as Effect;
+    }
+  }
+
   // Try "X. If you do, Y" pattern BEFORE any other splitting.
   // This must run before splitOnThen because "If you do" is a conditional,
   // Not a sequence.
