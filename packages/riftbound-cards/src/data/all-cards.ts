@@ -852,6 +852,31 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+  // rule 442.1 — Rage Amplifier: "Your units have +1 [Might]. If I'm
+  // [Empowered], they have +2 [Might] instead." One continuous static over the
+  // controller's units whose amount is REPLACED (not stacked) while the
+  // Amplifier itself is Empowered, so the tier rides on the effect as
+  // `empoweredAmount` (read in static-abilities.ts applyStaticEffect) rather
+  // than as two mutually exclusive statics. The parser drops the whole line.
+  "ven-018-166": {
+    abilities: [
+      {
+        cost: { energy: 6, power: ["fury"] },
+        effect: { target: "self", type: "empower" },
+        restrictions: [{ type: "not-empowered" }],
+        type: "activated",
+      },
+      {
+        effect: {
+          amount: 1,
+          empoweredAmount: 2,
+          target: { controller: "friendly", type: "unit" },
+          type: "modify-might",
+        },
+        type: "static",
+      },
+    ],
+  },
   // rule 356.3 — Helm of Suppression: "Opponents' spells cost [1] more. If this
   // is [Empowered], they cost [1][rainbow] more instead." The parser has no
   // "instead" cost-increase shape, so both tiers are declared here as mutually
@@ -1176,6 +1201,22 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
           type: "trash-to-banish",
         },
         replaces: "to-trash",
+        type: "replacement",
+      },
+    ],
+  },
+  // Esteemed Hierophant — "While you control 7 or more runes, prevent all damage
+  // that enemy spells and abilities would deal to me." rule 437.4: fully
+  // prevented damage is never dealt, so even an over-lethal spell leaves it on 0.
+  // Not indestructibility — a "Kill a unit" effect still kills it.
+  "ven-025-166": {
+    abilities: [
+      {
+        condition: { amount: 7, type: "runes-at-least" },
+        replaces: "take-damage",
+        replacement: "prevent",
+        sourceController: "enemy",
+        target: { self: true },
         type: "replacement",
       },
     ],

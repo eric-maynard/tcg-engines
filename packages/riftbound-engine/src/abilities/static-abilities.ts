@@ -783,7 +783,19 @@ function applyStaticEffect(
   if (effectType === "modify-might") {
     let amount = 0;
     const rawAmount = effect.amount;
-    if (typeof rawAmount === "number") {
+    // rule 442.1 (rule-id: ven-018-166) — "…they have +N [Might] instead" while
+    // the source is [Empowered]: the higher tier REPLACES the printed amount.
+    const empoweredAmount = effect.empoweredAmount;
+    let empoweredTierApplies = false;
+    if (typeof empoweredAmount === "number" && source) {
+      const srcMeta = ctx.cards.getCardMeta(source.id as CoreCardId) as
+        | Partial<RiftboundCardMeta>
+        | undefined;
+      empoweredTierApplies = srcMeta?.empowered === true;
+    }
+    if (empoweredTierApplies) {
+      amount = empoweredAmount as number;
+    } else if (typeof rawAmount === "number") {
       amount = rawAmount;
     } else if (rawAmount && typeof rawAmount === "object" && "cardsInTrash" in rawAmount) {
       // rule-id: ogn-109-298 — dynamic static Might equal to cards in a player's trash.
