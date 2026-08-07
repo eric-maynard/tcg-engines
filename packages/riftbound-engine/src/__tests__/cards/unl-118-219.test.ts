@@ -154,7 +154,7 @@ describe("Elder Dragon (unl-118-219)", () => {
     expect(game.p1.points()).toBe(0);
   });
 
-  test.failing("BUG: combat assignment with lethal = 1 — the Dragon (10) attacking into 4 + 8 Might kills BOTH defenders and conquers (465.2.c.3)", async () => {
+  test("combat assignment with lethal = 1 — the Dragon (10) attacking into 4 + 8 Might kills BOTH defenders and conquers (465.2.c.3)", async () => {
     // Expected: 1 to each defender is already lethal, so 10 damage kills both; the Dragon takes 12
     // and… dies as well (12 ≥ 10) — so nobody conquers, but both defenders are gone. Actual: only
     // the 4-Might defender dies; the 8-Might one survives on 6.
@@ -169,7 +169,8 @@ describe("Elder Dragon (unl-118-219)", () => {
     expect(game.zoneOf("small")).toBe("trash");
     expect(game.zoneOf("big")).toBe("trash");
     expect(game.zoneOf("dragon")).toBe("trash"); // 4 + 8 = 12 ≥ 10
-    expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
+    // rule 466.5.b: no units remain here, so bf1 becomes Uncontrolled — nobody conquers.
+    expect(game.gameState.battlefields.bf1?.controller ?? null).toBeNull();
   });
 
   test("the Dragon alone into a single 8-Might defender: 10 ≥ 8 kills it, 8 < 10 lets the Dragon live and conquer (plain combat, no passive needed)", async () => {
