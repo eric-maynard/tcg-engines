@@ -736,6 +736,13 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
   }
   if ("tag" in filter && typeof filter.tag === "string") {
     const tags = (def as { tags?: string[] } | undefined)?.tags;
+    // rule 762 (unl-138-219 The List): "the named tag" is a placeholder that
+    // resolves to the tag the source's controller named as it was played.
+    if (filter.tag === "named") {
+      const named = ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId)?.namedTag;
+      if (typeof named !== "string" || named === "") return false;
+      return (tags ?? []).some((t) => t.toLowerCase() === named.toLowerCase());
+    }
     return tags?.includes(filter.tag) ?? false;
   }
   // rule 355.8 (rule-id: unl-167-219) — "a Bird, Cat, Dog, or Poro" is one
@@ -824,7 +831,19 @@ function effectiveMight(
 ): number {
   const base = def?.might ?? 0;
   const buff = (meta?.buffed ? 1 : 0) + (meta?.extraBuffs ?? 0);
-  return Math.max(0, base + buff + (meta?.mightModifier ?? 0) + (meta?.staticMightBonus ?? 0));
+  // rule 718.4: a Might comparison reads the CURRENT value, which includes the
+  // bonus from every attached Equipment — not just buffs and this-turn modifiers.
+  let equipBonus = 0;
+  if (meta?.equippedWith?.length) {
+    const registry = getGlobalCardRegistry();
+    for (const equipId of meta.equippedWith) {
+      equipBonus += registry.getMightBonus(equipId as string);
+    }
+  }
+  return Math.max(
+    0,
+    base + buff + (meta?.mightModifier ?? 0) + (meta?.staticMightBonus ?? 0) + equipBonus,
+  );
 }
 
 /**
