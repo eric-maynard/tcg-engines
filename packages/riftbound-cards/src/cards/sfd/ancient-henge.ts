@@ -10,8 +10,11 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  */
 const abilities: Ability[] = [
   {
-    cost: { exhaust: true, x: { resource: "rainbow-energy" } },
+    // rule 429.1: X is paid in Energy and "that much [rainbow]" is added, so
+    // the single rainbow pip repeats X times.
+    cost: { exhaust: true, x: { resource: "energy" } },
     effect: {
+      amount: { variable: "x" },
       power: ["rainbow"],
       type: "add-resource",
     },

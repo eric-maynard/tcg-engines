@@ -77,7 +77,7 @@ describe("Hextech Anomaly (sfd-083-221)", () => {
     expect(game.p1.can("activate", "anom")).toBe(false); // already exhausted
   });
 
-  test.failing("BUG: pay X [rainbow] = X POWER of any domain → Add exactly X Energy (X=2 of fury+fury: energy 0→2, fury 2→0)", async () => {
+  test("pay X [rainbow] = X POWER of any domain → Add exactly X Energy (X=2 of fury+fury: energy 0→2, fury 2→0)", async () => {
     // Expected: choosing X=2 spends both fury power and adds 2 Energy. Actual: no X is ever asked or
     // charged and the add-resource handler adds the raw `{variable:"x"}` object to the energy number.
     const game = await scenario().resources(P1, { energy: 0, power: { fury: 2 } }).gear(P1, CARD, "anom").build();
@@ -87,7 +87,7 @@ describe("Hextech Anomaly (sfd-083-221)", () => {
     expect(game.chain()).toHaveLength(0);
   });
 
-  test.failing("BUG: mixed domains and stored rainbow all count as [rainbow]: mind 1 + calm 1 + rainbow 1 pays X=3 → +3 Energy", async () => {
+  test("mixed domains and stored rainbow all count as [rainbow]: mind 1 + calm 1 + rainbow 1 pays X=3 → +3 Energy", async () => {
     // Expected: 1 energy + 3 = 4 energy, every power bucket emptied. Actual: see above (no X, energy corrupted).
     const game = await scenario().resources(P1, { energy: 1, power: { calm: 1, mind: 1, rainbow: 1 } }).gear(P1, CARD, "anom").build();
     await activateX(game.p1, "anom", 3);
@@ -95,7 +95,7 @@ describe("Hextech Anomaly (sfd-083-221)", () => {
     expect(game.p1.power()).toBe(0);
   });
 
-  test.failing("BUG: X = 0 is a legal 'any amount' — the gear exhausts, nothing is paid, nothing is added, Energy stays the NUMBER 1", async () => {
+  test("X = 0 is a legal 'any amount' — the gear exhausts, nothing is paid, nothing is added, Energy stays the NUMBER 1", async () => {
     // Expected: {energy: 1, power: {fury: 2}} untouched. Actual: energy becomes the string "1[object Object]".
     const game = await scenario().resources(P1, { energy: 1, power: { fury: 2 } }).gear(P1, CARD, "anom").build();
     await activateX(game.p1, "anom", 0);
@@ -103,7 +103,7 @@ describe("Hextech Anomaly (sfd-083-221)", () => {
     expect(game.p1.resources()).toEqual({ energy: 1, power: { fury: 2 } });
   });
 
-  test.failing("BUG: X may not exceed the Power held — with 1 power, X=2 is rejected and nothing changes", async () => {
+  test("X may not exceed the Power held — with 1 power, X=2 is rejected and nothing changes", async () => {
     // Expected: an illegal X leaves the gear ready and the pool intact. Actual: any activation goes
     // through unpriced (no X exists), so the attempt 'succeeds'.
     const game = await scenario().resources(P1, { energy: 0, power: { mind: 1 } }).gear(P1, CARD, "anom").build();
@@ -149,7 +149,7 @@ describe("Hextech Anomaly (sfd-083-221)", () => {
     expect(game.p1.can("activate", "anom")).toBe(true);
   });
 
-  test.failing("BUG: the added Energy is real and immediate — X=2 from two calm power funds a 2-cost Feral Strength in the same turn", async () => {
+  test("the added Energy is real and immediate — X=2 from two calm power funds a 2-cost Feral Strength in the same turn", async () => {
     // Expected: 0 energy + Add 2 → cast Feral Strength (2) on ally → +2 Might, pool empty.
     // Actual: no Energy is produced (see the X bugs), so the spell is uncastable.
     const game = await scenario()
@@ -167,7 +167,7 @@ describe("Hextech Anomaly (sfd-083-221)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: { calm: 0 } });
   });
 
-  test.failing("BUG: unspent added Energy is lost in the Expiration Step (317.2.d): X=2 this turn → 0 energy next turn", async () => {
+  test("unspent added Energy is lost in the Expiration Step (317.2.d): X=2 this turn → 0 energy next turn", async () => {
     // Expected: energy 2 right after the Add, then an empty pool once the turn has passed.
     // Actual: the Add never yields a numeric 2.
     const game = await scenario().resources(P1, { power: { mind: 2 } }).gear(P1, CARD, "anom").build();
@@ -188,7 +188,7 @@ describe("Hextech Anomaly (sfd-083-221)", () => {
     expect(game.p1.can("activate", "anom")).toBe(true);
   });
 
-  test.failing("BUG: partner round trip with Ancient Henge — 3 Energy → Henge X=3 → 3 [rainbow] → Anomaly X=3 → 3 Energy again", async () => {
+  test("partner round trip with Ancient Henge — 3 Energy → Henge X=3 → 3 [rainbow] → Anomaly X=3 → 3 Energy again", async () => {
     // Expected: {3,{}} → {0,{rainbow:3}} → {3,{rainbow:0}}, both gear exhausted. Actual: neither
     // ability prices or scales with X (Henge adds a flat 1 rainbow for free; Anomaly corrupts energy).
     const game = await scenario().resources(P1, { energy: 3 }).gear(P1, HENGE, "henge").gear(P1, CARD, "anom").build();

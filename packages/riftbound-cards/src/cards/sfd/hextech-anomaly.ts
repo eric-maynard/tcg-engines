@@ -10,7 +10,8 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  */
 const abilities: Ability[] = [
   {
-    cost: { exhaust: true, x: { resource: "rainbow-energy" } },
+    // rule 135.2.e.5.a: [rainbow] as a cost is Power of ANY domain, never Energy.
+    cost: { exhaust: true, x: { resource: "power" } },
     effect: {
       energy: { variable: "x" } as unknown as number,
       type: "add-resource",

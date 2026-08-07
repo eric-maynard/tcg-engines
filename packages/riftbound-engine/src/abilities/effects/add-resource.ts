@@ -1,12 +1,18 @@
 // Effect handler: "add-resource"
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { type EffectHelpers } from "./_helpers";
+import { type EffectHelpers, resolveAmount } from "./_helpers";
 
 export function handle_addResource(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   const pool = ctx.draft.runePools[ctx.playerId];
   if (pool) {
-    if (effect.energy) {
-      pool.energy += effect.energy;
+    // rule 429.1 (sfd-083-221 Hextech Anomaly): "[Add] that much" scales with
+    // the X paid, so the amount may be an expression, not a literal number.
+    const energyAmount = resolveAmount(
+      effect.energy as number | Record<string, unknown> | undefined,
+      ctx,
+    );
+    if (energyAmount > 0) {
+      pool.energy += energyAmount;
       // rule 429.4 (ogs-014-024): "Use only to play spells" earmarks the added
       // Energy — `cost.ts` hides it from plays of any other card type.
       const restriction = (effect as { restriction?: string }).restriction;
@@ -16,13 +22,19 @@ export function handle_addResource(effect: ExecutableEffect, ctx: EffectContext,
         };
         draft.restrictedEnergy ??= {};
         const forPlayer = (draft.restrictedEnergy[ctx.playerId] ??= {});
-        forPlayer[restriction] = (forPlayer[restriction] ?? 0) + effect.energy;
+        forPlayer[restriction] = (forPlayer[restriction] ?? 0) + energyAmount;
       }
     }
     if (effect.power) {
-      for (const domain of effect.power) {
-        const key = domain as keyof typeof pool.power;
-        pool.power[key] = (pool.power[key] ?? 0) + 1;
+      // rule 429.1 (sfd-117-221 Ancient Henge): "[Add] that much [rainbow]"
+      // repeats each listed pip X times when the effect carries an amount.
+      const rawCount = (effect as { amount?: unknown }).amount;
+      const repeats = rawCount === undefined ? 1 : resolveAmount(rawCount as number, ctx);
+      for (let i = 0; i < repeats; i++) {
+        for (const domain of effect.power) {
+          const key = domain as keyof typeof pool.power;
+          pool.power[key] = (pool.power[key] ?? 0) + 1;
+        }
       }
     }
   }

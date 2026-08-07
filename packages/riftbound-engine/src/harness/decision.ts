@@ -302,6 +302,21 @@ function buildFields(ctx: DecisionContext, moveId: string, variants: FlatMove[],
       required: presentInAll,
     });
   }
+  // rule 429.1 (sfd-083-221): an activated "Pay any amount of …" ability
+  // offers X the same way a spell does — as an integer field on the option.
+  if (moveId === "activateAbility" && variants.length > 0) {
+    const v0 = variants[0] as FlatMove;
+    const lookupId = (v0.params.sourceCardId ?? v0.params.cardId) as string | undefined;
+    const idx = (v0.params.abilityIndex as number | undefined) ?? 0;
+    const ability = lookupId
+      ? (getGlobalCardRegistry().getAbilities(lookupId) ?? [])[idx]
+      : undefined;
+    if ((ability as { cost?: { x?: unknown } } | undefined)?.cost?.x !== undefined) {
+      // rule 444.2: "any amount" includes none, so X is optional — an
+      // activation that names no X pays 0 rather than parking on a prompt.
+      fields.push({ arg: "x", kind: "int", max: probeMaxX(ctx, v0), min: 0, name: "xAmount", required: false });
+    }
+  }
   if (moveId === "playSpell" && variants.length > 0) {
     const cardId = variants[0]?.params.cardId as string | undefined;
     if (cardId && spellSupportsX(cardId)) {
@@ -1076,6 +1091,13 @@ export function narrowVariants(ctx: DecisionContext, option: ActionOption, args:
   const xField = option.fields.find((f) => f.name === "xAmount");
   if (xField) {
     if (args.x === undefined) {
+      // rule 444.2: X on an "any amount" activated cost is optional — an
+      // activation that names none pays the smallest amount it can afford
+      // (1, or 0 when the pool is empty) instead of parking on a prompt.
+      if (xField.required === false) {
+        const fallback = (xField.max ?? 0) >= 1 ? 1 : 0;
+        return { move: { ...variant, params: { ...variant.params, xAmount: fallback } }, type: "one" };
+      }
       return { max: xField.max ?? 0, min: xField.min ?? 0, type: "needX", variant };
     }
     if (args.x < (xField.min ?? 0) || args.x > (xField.max ?? 0)) {

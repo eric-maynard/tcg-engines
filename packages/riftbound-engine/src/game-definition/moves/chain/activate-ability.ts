@@ -337,6 +337,25 @@ export function collectFriendlyBoardCards(
 }
 
 /**
+ * rule 135.2.e.5.a / 429.1 (sfd-083-221, sfd-117-221) — "Pay any amount of
+ * [rainbow]/Energy to [Add] that much …": the chosen X rides on the move as
+ * `xAmount` (absent ⇒ 0, which is always a legal "any amount") and the cost
+ * spec names which pool pays it ([rainbow] ⇒ Power of any Domain).
+ */
+export function abilityXPayment(
+  cost: Record<string, unknown> | undefined,
+  params: Record<string, unknown>,
+): { amount: number; resource: "energy" | "power" } | undefined {
+  const spec = cost?.x as { resource?: string } | undefined;
+  if (!spec) {
+    return undefined;
+  }
+  const raw = params.xAmount;
+  const amount = typeof raw === "number" && Number.isInteger(raw) && raw > 0 ? raw : 0;
+  return { amount, resource: spec.resource === "energy" ? "energy" : "power" };
+}
+
+/**
  * Deduct an activated ability's cost from the player's rune pool.
  */
 export function deductAbilityCost(
@@ -573,6 +592,26 @@ export const activateAbility: Defs["activateAbility"] = {
         }
         if (!canAffordPower(pool.power, needed)) {
           return false;
+        }
+      }
+
+      // rule 444.2 / 135.2.e.5.a: X may never exceed what the paying pool
+      // holds; [rainbow] X is payable out of Power of ANY Domain.
+      const xPay = abilityXPayment(cost, context.params as Record<string, unknown>);
+      if (xPay) {
+        const rawX = (context.params as { xAmount?: unknown }).xAmount;
+        if (rawX !== undefined && (typeof rawX !== "number" || !Number.isInteger(rawX) || rawX < 0)) {
+          return false;
+        }
+        if (xPay.resource === "energy") {
+          if (pool.energy + potentialEnergy < energyCost + xPay.amount) {
+            return false;
+          }
+        } else {
+          const totalPower = Object.values(pool.power).reduce<number>((a, b) => a + (b ?? 0), 0);
+          if (totalPower < xPay.amount + (powerCost?.length ?? 0)) {
+            return false;
+          }
         }
       }
 
@@ -1139,10 +1178,29 @@ export const activateAbility: Defs["activateAbility"] = {
       counts.turnEventCounts[key] = (counts.turnEventCounts[key] ?? 0) + 1;
     }
 
+    const xPay = abilityXPayment(
+      ability.cost as Record<string, unknown> | undefined,
+      context.params as Record<string, unknown>,
+    );
+
     // Pay cost
     if (ability.cost) {
       const cost = ability.cost as Record<string, unknown>;
       deductAbilityCost(draft, playerId, cost, context.zones, context.counters);
+
+      // rule 135.2.e.5.a: the chosen X leaves the pool as part of paying the
+      // cost — [rainbow] out of Power of any Domain, otherwise out of Energy.
+      if (xPay && xPay.amount > 0) {
+        deductAbilityCost(
+          draft,
+          playerId,
+          xPay.resource === "energy"
+            ? { energy: xPay.amount }
+            : { power: Array.from({ length: xPay.amount }, () => "rainbow") },
+          context.zones,
+          context.counters,
+        );
+      }
 
       // Handle exhaust cost — always exhaust the host card, never the
       // Source (Heimerdinger exhausts himself for an inherited ability).
@@ -1257,7 +1315,9 @@ export const activateAbility: Defs["activateAbility"] = {
     // and cannot be reacted to — do not open a chain for them.
     const effectType = (ability.effect as { type?: string } | undefined)?.type;
     if (effectType === "add-resource" || effectType === "add") {
-      const effectCtx = buildEffectContext(draft, playerId, cardId, context);
+      const base = buildEffectContext(draft, playerId, cardId, context);
+      // rule 429.1: "[Add] that much" reads the X that was just paid.
+      const effectCtx = xPay ? { ...base, variables: { ...base.variables, x: xPay.amount } } : base;
       executeEffect(ability.effect as ExecutableEffect, effectCtx);
       // rule-id: sfd-075-221 — rule 429.2: an [Add] ability resolving
       // immediately is still an activated ability being USED, so "when you use
@@ -1288,7 +1348,10 @@ export const activateAbility: Defs["activateAbility"] = {
       {
         cardId,
         controller: playerId,
-        effect: ability.effect,
+        // rule 429.1: carry the paid X to resolution for `{variable:"x"}`.
+        effect: xPay
+          ? { ...(ability.effect as object), _variables: { x: xPay.amount } }
+          : ability.effect,
         ...(targets && targets.length > 0 ? { targets } : {}),
         type: "ability",
       },

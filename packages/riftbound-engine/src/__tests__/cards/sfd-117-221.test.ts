@@ -71,7 +71,7 @@ describe("Ancient Henge (sfd-117-221)", () => {
     expect(game.p1.can("activate", "henge")).toBe(false);
   });
 
-  test.failing("BUG: pay X Energy → Add exactly X [rainbow] (X=3 of 3: energy 3→0, rainbow 0→3)", async () => {
+  test("pay X Energy → Add exactly X [rainbow] (X=3 of 3: energy 3→0, rainbow 0→3)", async () => {
     // Expected: X is chosen, that much Energy is deducted and that much rainbow Power appears.
     // Actual: no X is asked or charged; the effect adds a flat 1 rainbow for free (energy stays 3).
     const game = await scenario().resources(P1, { energy: 3 }).gear(P1, CARD, "henge").build();
@@ -80,14 +80,14 @@ describe("Ancient Henge (sfd-117-221)", () => {
     expect(game.state("henge").isExhausted).toBe(true);
   });
 
-  test.failing("BUG: partial X — with 5 Energy, X=2 leaves 3 Energy and gives 2 [rainbow]", async () => {
+  test("partial X — with 5 Energy, X=2 leaves 3 Energy and gives 2 [rainbow]", async () => {
     // Expected: {3, {rainbow: 2}}. Actual: {5, {rainbow: 1}}.
     const game = await scenario().resources(P1, { energy: 5 }).gear(P1, CARD, "henge").build();
     await activateX(game.p1, "henge", 2);
     expect(game.p1.resources()).toEqual({ energy: 3, power: { rainbow: 2 } });
   });
 
-  test.failing("BUG: X = 0 is legal and inert — exhausts, pays nothing, adds NOTHING", async () => {
+  test("X = 0 is legal and inert — exhausts, pays nothing, adds NOTHING", async () => {
     // Expected: pool exactly as before ({2, {}}). Actual: a free rainbow appears ({2, {rainbow: 1}}).
     const game = await scenario().resources(P1, { energy: 2 }).gear(P1, CARD, "henge").build();
     await activateX(game.p1, "henge", 0);
@@ -96,7 +96,7 @@ describe("Ancient Henge (sfd-117-221)", () => {
     expect(game.p1.power("rainbow")).toBe(0);
   });
 
-  test.failing("BUG: X may not exceed the Energy held — with 1 Energy, X=3 is rejected and the Henge stays ready", async () => {
+  test("X may not exceed the Energy held — with 1 Energy, X=3 is rejected and the Henge stays ready", async () => {
     // Expected: illegal → nothing happens. Actual: activation always 'succeeds' unpriced.
     const game = await scenario().resources(P1, { energy: 1 }).gear(P1, CARD, "henge").build();
     const r = await game.p1.try((p) => activateX(p, "henge", 3));
@@ -105,7 +105,7 @@ describe("Ancient Henge (sfd-117-221)", () => {
     expect(game.p1.resources()).toEqual({ energy: 1, power: {} });
   });
 
-  test.failing("BUG: the added [rainbow] pays a domain pip (135.2.e.5.b): 5 Energy → X=1 → play Dauntless Vanguard (4 + [body]) → pool empty", async () => {
+  test("the added [rainbow] pays a domain pip (135.2.e.5.b): 5 Energy → X=1 → play Dauntless Vanguard (4 + [body]) → pool empty", async () => {
     // Expected: after X=1 the pool is {4, {rainbow: 1}}, Vanguard becomes playable and playing it
     // empties the pool. Actual: the Energy is never charged, so 1 Energy is left over.
     const game = await scenario().resources(P1, { energy: 5 }).gear(P1, CARD, "henge").hand(P1, DAUNTLESS_VANGUARD, "dv").build();
@@ -187,7 +187,7 @@ describe("Ancient Henge (sfd-117-221)", () => {
     expect(game.p1.can("activate", "henge")).toBe(true);
   });
 
-  test.failing("BUG: partner round trip — Henge X=2 (2 Energy → 2 rainbow) then Hextech Anomaly X=2 (2 rainbow → 2 Energy)", async () => {
+  test("partner round trip — Henge X=2 (2 Energy → 2 rainbow) then Hextech Anomaly X=2 (2 rainbow → 2 Energy)", async () => {
     // Expected: {2,{}} → {0,{rainbow:2}} → {2,{rainbow:0}}. Actual: neither ability scales with X.
     const game = await scenario().resources(P1, { energy: 2 }).gear(P1, CARD, "henge").gear(P1, ANOMALY, "anom").build();
     await activateX(game.p1, "henge", 2);
@@ -211,7 +211,7 @@ describe("Ancient Henge (sfd-117-221)", () => {
     expect(ability.effect?.energy).toBeUndefined(); // adds Power, not Energy
   });
 
-  test.failing("BUG: registry payload — the Add amount must scale with X ('that much [rainbow]'), not be a flat single rainbow", async () => {
+  test("registry payload — the Add amount must scale with X ('that much [rainbow]'), not be a flat single rainbow", async () => {
     // Expected: the effect encodes a variable amount tied to X (e.g. amount/count {variable:"x"}).
     // Actual: `power: ["rainbow"]` — exactly one rainbow regardless of what was paid.
     const pool = await loadDefaultCardPool();
