@@ -440,6 +440,29 @@ function parseStaticAbilityInner(
     };
   }
 
+  // rule 355.2 (unl-120-219 / ven-179-166 Rengar, Trophy Hunter) — "I can be
+  // played to a battlefield where there are enemy units" is a play-LOCATION
+  // permission, not Reaction timing. Modelled as the self grant-keyword the
+  // engine's `canPlayToEnemyOccupiedBattlefield` hook already reads.
+  if (
+    /^I can be played to a battlefield where there (?:are|is) (?:an? )?enemy units?\.?$/i.test(
+      cleanText,
+    )
+  ) {
+    return {
+      ability: {
+        effect: {
+          keyword: "CanPlayToEnemyBattlefield",
+          target: { type: "self" } as AnyTarget,
+          type: "grant-keyword",
+        } as unknown as Effect,
+        type: "static",
+      } as StaticAbility,
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // "X can be played to an occupied battlefield[, if Y]" — a permission
   // Granting static used by UNL Ambush/Hunt units like Arachnoid Horror.
   // Emits a `can-play-to-occupied` effect that the engine can reference.
