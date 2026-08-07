@@ -157,7 +157,7 @@ describe("Bird (unl-t02)", () => {
     expect(game.zoneOf("retreat")).toBe("trash");
   });
 
-  test.failing("BUG: Retreat on the Bird — 'its owner channels 1 rune exhausted' still happens for the vanished token's owner (183 / 186.1)", async () => {
+  test("Retreat on the Bird — 'its owner channels 1 rune exhausted' still happens for the vanished token's owner (183 / 186.1)", async () => {
     const control = await scenario().resources(P1, { energy: 1 }).unit(P1, "base", { might: 1, name: "Plain" }, "plain").hand(P1, RETREAT, "retreat").build();
     await control.p1.cast("retreat", { targets: "plain" });
     await control.settle();

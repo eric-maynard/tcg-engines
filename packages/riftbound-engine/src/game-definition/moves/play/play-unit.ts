@@ -69,6 +69,52 @@ import type { CostExtras } from "./cost";
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
 /**
+ * rule 135.2.e.5.a / 135.2.e.5.b — plan how an optional additional cost's Power
+ * pips are paid from the pool: a named-Domain pip prefers its own Domain and
+ * falls back to pooled [rainbow] Power, a [rainbow] pip is payable from any
+ * Domain. Returns the per-Domain amounts to spend, or undefined when the pool
+ * cannot cover the pips.
+ */
+function planAdditionalCostPips(
+  pips: readonly string[],
+  have: Partial<Record<string, number>>,
+): Record<string, number> | undefined {
+  const left: Record<string, number> = {};
+  for (const [domain, count] of Object.entries(have)) {
+    left[domain] = count ?? 0;
+  }
+  const spend: Record<string, number> = {};
+  const take = (domain: string) => {
+    left[domain] = (left[domain] ?? 0) - 1;
+    spend[domain] = (spend[domain] ?? 0) + 1;
+  };
+  let wild = 0;
+  for (const pip of pips) {
+    if (pip === "rainbow") {
+      wild++;
+      continue;
+    }
+    if ((left[pip] ?? 0) > 0) {
+      take(pip);
+    } else if ((left.rainbow ?? 0) > 0) {
+      take("rainbow");
+    } else {
+      return undefined;
+    }
+  }
+  for (let i = 0; i < wild; i++) {
+    const domain = Object.keys(left)
+      .filter((d) => (left[d] ?? 0) > 0)
+      .sort((a, b) => (left[b] ?? 0) - (left[a] ?? 0))[0];
+    if (domain === undefined) {
+      return undefined;
+    }
+    take(domain);
+  }
+  return spend;
+}
+
+/**
  * rule-id: unl-178-219 (rule 560) — resolve a unit's payable optional cost
  * (Accelerate / "you may pay" / "you may spend N XP") into the net rune-cost
  * delta and XP to spend. Returns undefined when the card has no such cost or
@@ -1490,15 +1536,16 @@ export const playUnit: Defs["playUnit"] = {
         // rule 356.4.f / 356.4.f.1 — a discount that overflowed the printed
         // Energy cost also pays this one, and paying 0 still counts as paying.
         const needEnergy = Math.max(0, (need.energy ?? 0) - discountOverflow);
-        const canPay =
-          xpOk &&
-          pool.energy >= needEnergy &&
-          (need.power ?? []).every((d: string) => (pool.power[d as keyof typeof pool.power] ?? 0) >= 1);
-        if (canPay) {
+        // rule 135.2.e.5.a/b — an additional cost's pips obey the same Power
+        // rules as a printed cost: pooled [rainbow] Power pays a named-Domain
+        // pip, and a [rainbow] pip is payable from any Domain.
+        const spend = planAdditionalCostPips(need.power ?? [], pool.power);
+        const canPay = xpOk && pool.energy >= needEnergy && spend !== undefined;
+        if (canPay && spend) {
           pool.energy -= needEnergy;
-          for (const domain of need.power ?? []) {
+          for (const [domain, count] of Object.entries(spend)) {
             const key = domain as keyof typeof pool.power;
-            pool.power[key] = (pool.power[key] ?? 0) - 1;
+            pool.power[key] = (pool.power[key] ?? 0) - count;
           }
           // rule 364.3.a — an additional cost's pips are power spent this turn too.
           recordPowerSpent(draft, playerId, (need.power ?? []).length);

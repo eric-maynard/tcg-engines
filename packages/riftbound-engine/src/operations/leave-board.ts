@@ -152,6 +152,8 @@ interface LkiDraft {
   lki?: Record<string, LKISnapshot>;
   /** Cards whose leave events are being published right now (rule 370.1.a.2 simultaneity). */
   leavingBatch?: string[];
+  /** rule 183 — owners of cards that have ceased to exist (tokens) or left the game. */
+  departedOwners?: Record<string, string>;
 }
 
 const KILL_FAMILY: ReadonlySet<LeaveCauseKind> = new Set(["kill", "sba", "temporary", "cost"]);
@@ -359,6 +361,26 @@ export function getLKI(draft: RiftboundGameState, cardId: string): LKISnapshot |
 export function getLeavingBatch(draft: RiftboundGameState): readonly LKISnapshot[] {
   const d = draft as LkiDraft;
   return (d.leavingBatch ?? []).map((id) => d.lki?.[id]).filter((s): s is LKISnapshot => s !== undefined);
+}
+
+/**
+ * rule 183 / 186.1 — ownership is inherent and survives the object: a token
+ * that ceased to exist still has an owner for a later clause of the same
+ * effect ("Return a friendly unit to its owner's hand. Its owner channels 1
+ * rune exhausted."). LKI is batch-scoped and gone by then, so the owner of
+ * every card removed from the game is kept here.
+ */
+export function recordDepartedOwner(draft: RiftboundGameState, cardId: string, owner: string | undefined): void {
+  if (!owner) {
+    return;
+  }
+  const d = draft as LkiDraft;
+  d.departedOwners = { ...(d.departedOwners ?? {}), [cardId]: owner };
+}
+
+/** rule 183 — owner of a card that is no longer a game object (see `recordDepartedOwner`). */
+export function getDepartedOwner(draft: RiftboundGameState, cardId: string): string | undefined {
+  return (draft as LkiDraft).departedOwners?.[cardId];
 }
 
 /** Drop LKI entries — end of a cleanup pass / end of turn housekeeping. */
@@ -616,6 +638,7 @@ export function leaveBoard(
     if (killing || cause.kind === "discard") {
       result.tokenPending = true;
     } else {
+      recordDepartedOwner(ctx.draft, cardId, lki.owner);
       ctx.zones.removeCardFromGame?.({ cardId: cardId as CoreCardId });
       clearLKI(ctx.draft, [cardId]);
     }
@@ -709,6 +732,7 @@ export function emitLeaveEvents(
     draft.leavingBatch = outerBatch;
     for (const r of gone) {
       if (r.tokenPending) {
+        recordDepartedOwner(ctx.draft, r.cardId, r.lki.owner);
         ctx.zones.removeCardFromGame?.({ cardId: r.cardId as CoreCardId });
         r.tokenPending = false;
       }

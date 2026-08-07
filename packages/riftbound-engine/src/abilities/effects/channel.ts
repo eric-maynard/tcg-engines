@@ -4,6 +4,7 @@ import type {
   PlayerId as CorePlayerId,
   ZoneId as CoreZoneId,
 } from "@tcg/core";
+import { getDepartedOwner } from "../../operations/leave-board";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
 import { type EffectHelpers, resolveAmount } from "./_helpers";
 
@@ -25,8 +26,11 @@ export function handle_channel(effect: ExecutableEffect, ctx: EffectContext, _h:
   // still reads correctly after the card has left the board.
   if (effect.player === "target-owner") {
     const targetId = ctx.boundTargets?.[0];
+    // rule 183 — ownership outlives the object: a token that has already
+    // ceased to exist (186.1) still names its owner for this clause.
     const ownerId = targetId
-      ? ctx.cards.getCardOwner(targetId as CoreCardId)
+      ? ctx.cards.getCardOwner(targetId as CoreCardId) ??
+        getDepartedOwner(ctx.draft, targetId as string)
       : undefined;
     if (!ownerId) {
       return;
