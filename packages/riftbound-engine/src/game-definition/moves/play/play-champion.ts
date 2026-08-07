@@ -10,6 +10,16 @@ import type {
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { createInteractionState, getTurnState } from "../../../chain";
 import { fireTriggers } from "../../../abilities/trigger-runner";
+import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { canPlayViaAmbush } from "../../../keywords/keyword-effects";
+import { contestBattlefieldOnArrival } from "../movement/contest-arrival";
+import { cleanupAndFireDeaths, type PostMoveCleanupContext } from "../../../cleanup/post-move-cleanup";
+import {
+  extractBattlefieldId,
+  getBattlefieldZoneId,
+  isBattlefieldZone,
+} from "../../../zones/zone-configs";
+import { reactionWindowOpen } from "./reaction-window";
 import {
   canAffordCard,
   staticEnterReadyApplies,
@@ -91,6 +101,36 @@ function planPips(
 }
 
 /**
+ * rule 419.1.a with rule 822.1.b — cards are played from hand OR the Champion
+ * Zone, so [Ambush]'s permission ("play me as a [Reaction] to a battlefield
+ * where you have units") covers the Champion-Zone play too.
+ */
+function ambushDestinationOk(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly string[] },
+  playerId: string,
+  championId: string,
+  location: string | undefined,
+): boolean {
+  if (location === undefined || !isBattlefieldZone(location)) {
+    return false;
+  }
+  if (!getGlobalCardRegistry().hasKeyword(championId, "Ambush")) {
+    return false;
+  }
+  const bfId = extractBattlefieldId(location);
+  if (!bfId) {
+    return false;
+  }
+  const friendly = zones.getCardsInZone(
+    getBattlefieldZoneId(bfId) as CoreZoneId,
+    playerId as CorePlayerId,
+  );
+  // rule 813.1.c.1 / 310.1.a — Reaction TIMING, not a permission to act.
+  return canPlayViaAmbush(true, friendly.length > 0, reactionWindowOpen(state, playerId));
+}
+
+/**
  * Play Chosen Champion from Champion Zone (rule 107.2.c)
  */
 export const playFromChampionZone: Defs["playFromChampionZone"] = {
@@ -105,26 +145,40 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
     if (state.cannotPlayCardsThisTurn?.[context.params.playerId as string]) {
       return false;
     }
-    if (state.turn.phase !== "main") {
-      return false;
-    }
-    if (state.turn.activePlayer !== context.params.playerId) {
-      return false;
-    }
-
-    // Rule 309.1.a: Closed State (chain open) admits only Reaction plays;
-    // champion units are non-Reaction, so require neutral-open.
-    const interaction = state.interaction ?? createInteractionState();
-    if (getTurnState(interaction) !== "neutral-open") {
-      return false;
-    }
-
     const championZoneCards = context.zones.getCardsInZone(
       "championZone" as CoreZoneId,
       context.params.playerId as CorePlayerId,
     );
     if (championZoneCards.length === 0) {
       return false;
+    }
+
+    // rule 419.1.a / 822.1.b — an [Ambush] champion may be played from the
+    // Champion Zone in any Reaction window, to a battlefield where its
+    // controller has units; every other Champion-Zone play is a Discretionary
+    // Action in the controller's own Neutral Open main phase.
+    const ambushPlay = ambushDestinationOk(
+      state,
+      context.zones,
+      context.params.playerId as string,
+      championZoneCards[0] as string,
+      context.params.location as string | undefined,
+    );
+
+    if (!ambushPlay) {
+      if (state.turn.phase !== "main") {
+        return false;
+      }
+      if (state.turn.activePlayer !== context.params.playerId) {
+        return false;
+      }
+
+      // Rule 309.1.a: Closed State (chain open) admits only Reaction plays;
+      // champion units are non-Reaction, so require neutral-open.
+      const interaction = state.interaction ?? createInteractionState();
+      if (getTurnState(interaction) !== "neutral-open") {
+        return false;
+      }
     }
 
     // rule 356.2 (rule-id: unl-052-219) — an optional additional cost may only
@@ -156,16 +210,19 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
     return true;
   },
   enumerator: (state, context) => {
-    if (state.status !== "playing" || state.turn.phase !== "main") {
-      return [];
-    }
-    if (state.turn.activePlayer !== context.playerId) {
+    if (state.status !== "playing") {
       return [];
     }
 
-    // Rule 309.1.a: no champion-zone plays while a chain exists.
+    // Rule 309.1.a: no champion-zone plays while a chain exists — except the
+    // [Ambush] path below, which is a Reaction (rule 822.1.b / 419.1.a).
     const interaction = state.interaction ?? createInteractionState();
-    if (getTurnState(interaction) !== "neutral-open") {
+    const standardTiming =
+      state.turn.phase === "main" &&
+      state.turn.activePlayer === context.playerId &&
+      getTurnState(interaction) === "neutral-open";
+    const reactionWindow = reactionWindowOpen(state, context.playerId as string);
+    if (!standardTiming && !reactionWindow) {
       return [];
     }
 
@@ -206,6 +263,23 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
           energy - (state.runePools?.[context.playerId]?.energy ?? 0),
         )
       ) {
+        continue;
+      }
+      // rule 419.1.a / 822.1.b — [Ambush] offers every battlefield where this
+      // player already has units, in any window they may act in.
+      if (getGlobalCardRegistry().hasKeyword(cardId as string, "Ambush")) {
+        for (const bfId of Object.keys(state.battlefields ?? {})) {
+          const bfZoneId = getBattlefieldZoneId(bfId);
+          const friendly = context.zones.getCardsInZone(
+            bfZoneId as CoreZoneId,
+            context.playerId as CorePlayerId,
+          );
+          if (friendly.length > 0) {
+            results.push({ location: bfZoneId, playerId: context.playerId as PlayerId });
+          }
+        }
+      }
+      if (!standardTiming) {
         continue;
       }
       results.push({ location: "base", playerId: context.playerId as PlayerId });
@@ -312,6 +386,25 @@ export const playFromChampionZone: Defs["playFromChampionZone"] = {
 
         if (draft.cardsPlayedThisTurn) {
           draft.cardsPlayedThisTurn[playerId] = (draft.cardsPlayedThisTurn[playerId] ?? 0) + 1;
+        }
+
+        // rule 190.3.a.1 / 464.2.c.3.a — a champion played straight to a
+        // battlefield (Ambush) contests it and picks up its combat
+        // designation exactly like a unit played there does.
+        if (isBattlefieldZone(location as string)) {
+          const arrivedAt = extractBattlefieldId(location as string);
+          if (arrivedAt) {
+            contestBattlefieldOnArrival({
+              arrivingUnitIds: [championId as string],
+              battlefieldId: arrivedAt,
+              cards: context.cards,
+              counters,
+              draft,
+              playerId,
+              zones,
+            });
+          }
+          cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
         }
       }
     }
