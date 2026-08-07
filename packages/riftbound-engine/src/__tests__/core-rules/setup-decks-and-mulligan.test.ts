@@ -1222,7 +1222,7 @@ describe("Battlefield selection: Duel = random 1 of 3, Match = chosen 1 of 3; th
     expect(moveIds.some((m) => /match|nextGame|newGame|sideboard|presentBattlefield/i.test(m))).toBe(true);
   });
 
-  test.failing("BUG: 485.4.a / 485.5 ('only 1 will be used') — a second selectBattlefield by the same player must be refused; the engine accepts it and P1 ends up with TWO battlefields in the row", async () => {
+  test("485.4.a / 485.5 ('only 1 will be used') — a second selectBattlefield by the same player is refused", async () => {
     // Expected: again.success === false and P1's row stays [B2]. Actual: no condition on selectBattlefield → row [B2, B1].
     const pg = throughChampions("double-select");
     const [b1, b2, b3] = pg.kit[P1]?.bfs as [string, string, string];

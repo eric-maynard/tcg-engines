@@ -16,6 +16,52 @@ import { applyBattlefieldPermanentEffects } from "../../operations/battlefield-s
 import { GAME_MODES } from "../../modes/game-modes";
 
 /**
+ * Put a setup card into a deck zone AND record its owner (rule 100.4: every
+ * card in the game belongs to the player whose deck it started in).
+ *
+ * `zones.moveCard` alone leaves an unregistered card id with no `owner`, and
+ * every owner-scoped read — deck size, `drawCards`, the Draw Phase's Burn Out
+ * check (431.1) — then sees an empty deck for that player.
+ */
+function seedDeckCard(
+  zones: unknown,
+  cardId: string,
+  zoneId: string,
+  playerId: string | undefined,
+): void {
+  const ops = zones as {
+    moveCard: (p: { cardId: CoreCardId; position?: "top" | "bottom"; targetZoneId: CoreZoneId }) => void;
+    getCardZone?: (cardId: CoreCardId) => string | undefined;
+    createCardInZone?: (p: {
+      cardId: CoreCardId;
+      definitionId: string;
+      zoneId: CoreZoneId;
+      ownerId: CorePlayerId;
+      controllerId?: CorePlayerId;
+      position?: "top" | "bottom" | number;
+    }) => void;
+  };
+  const known = ops.getCardZone?.(cardId as CoreCardId) !== undefined;
+  if (!known && playerId && typeof ops.createCardInZone === "function") {
+    ops.createCardInZone({
+      cardId: cardId as CoreCardId,
+      controllerId: playerId as CorePlayerId,
+      definitionId: cardId,
+      ownerId: playerId as CorePlayerId,
+      position: "bottom",
+      zoneId: zoneId as CoreZoneId,
+    });
+    return;
+  }
+  ops.moveCard({
+    cardId: cardId as CoreCardId,
+    position: "bottom",
+    targetZoneId: zoneId as CoreZoneId,
+  });
+}
+
+
+/**
  * Setup move definitions
  */
 export const setupMoves: Partial<
@@ -249,16 +295,12 @@ export const setupMoves: Partial<
    */
   initializeMainDeck: {
     reducer: (_draft, context) => {
-      const { cardIds } = context.params;
+      const { cardIds, playerId } = context.params;
       const { zones } = context;
 
-      // Add each card to the main deck
+      // Add each card to the main deck, owned by this player.
       for (const cardId of cardIds) {
-        zones.moveCard({
-          cardId: cardId as CoreCardId,
-          position: "bottom",
-          targetZoneId: "mainDeck" as CoreZoneId,
-        });
+        seedDeckCard(zones, cardId as string, "mainDeck", playerId as string | undefined);
       }
     },
   },
@@ -270,16 +312,12 @@ export const setupMoves: Partial<
    */
   initializeRuneDeck: {
     reducer: (_draft, context) => {
-      const { runeIds } = context.params;
+      const { runeIds, playerId } = context.params;
       const { zones } = context;
 
-      // Add each rune to the rune deck
+      // Add each rune to the rune deck, owned by this player.
       for (const runeId of runeIds) {
-        zones.moveCard({
-          cardId: runeId as CoreCardId,
-          position: "bottom",
-          targetZoneId: "runeDeck" as CoreZoneId,
-        });
+        seedDeckCard(zones, runeId as string, "runeDeck", playerId as string | undefined);
       }
     },
   },
