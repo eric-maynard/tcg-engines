@@ -36,6 +36,7 @@ import { fireTriggers, type TriggerRunnerContext } from "../abilities/trigger-ru
 import { canAffordPower } from "../game-definition/moves/chain/effect-context";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { clearDamage as clearDamageStore, getDamage } from "../operations/damage-store";
+import { collectAnyDamageLethalPlayers } from "../operations/lethal-damage";
 import { hiddenCapacityAt } from "../operations/hidden-capacity";
 import {
   type LeaveResult,
@@ -313,6 +314,13 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
   // taken while the whole simultaneous batch is still on the board.
   const preLKI = snapshotBatch(ctx, damagedIds);
 
+  // rule 142.4.c — a board static may lower the lethal-damage value of the
+  // units it describes for damage dealt by its controller (Elder Dragon:
+  // "Any amount of your damage is enough to kill enemy units"). Collect the
+  // players whose damage is lethal at any amount; the source must still be on
+  // the board (rule 364), which is why this is rebuilt every cleanup pass.
+  const anyDamageLethalPlayers = collectAnyDamageLethalPlayers(ctx);
+
   for (const { cardId } of boardCards) {
     const meta = ctx.cards.getCardMeta(cardId) as Partial<RiftboundCardMeta> | undefined;
     const damage = getDamage(ctx, cardId as string);
@@ -355,7 +363,17 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
         equipBonus,
     );
 
-    if (damage >= effectiveMight) {
+    // rule 142.4.c — the modifier only applies to damage its controller dealt,
+    // and only to units that are enemies of that controller.
+    const damager = meta?.lastDamagedBy as string | undefined;
+    const victimController = (ctx.cards.getCardController?.(cardId) ??
+      ctx.cards.getCardOwner(cardId)) as string | undefined;
+    const anyDamageIsLethal =
+      damager !== undefined &&
+      damager !== victimController &&
+      anyDamageLethalPlayers.has(damager);
+
+    if (damage >= effectiveMight || anyDamageIsLethal) {
       // rule-id: unl-007-219 — runtime die-replacements bound to this unit
       // (installed by a resolved spell: "If it would die this turn, banish it
       // instead") take precedence over the normal kill (rule 571-573).

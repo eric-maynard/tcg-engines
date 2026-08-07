@@ -853,6 +853,26 @@ export interface UnlimitedBuffsEffect {
   readonly type: "unlimited-buffs";
 }
 
+/**
+ * Lower the lethal-damage value of the described units for damage dealt by
+ * this card's controller.
+ *
+ * rule 142.4.b/142.4.c: lethal damage is normally non-zero damage at least
+ * equal to a unit's Might; a static ability may set a smaller value. With
+ * `value: 1` any amount of the controller's damage kills the units matched by
+ * `target` (Elder Dragon, unl-118-219 — the rules' own example).
+ *
+ * @example "Any amount of your damage is enough to kill enemy units."
+ * { type: "lethal-damage-modifier", value: 1, target: { type: "unit", controller: "enemy" } }
+ */
+export interface LethalDamageModifierEffect {
+  readonly type: "lethal-damage-modifier";
+  /** Lethal-damage value applied instead of the unit's Might. */
+  readonly value: number;
+  /** Which units this applies to (relative to the source's controller). */
+  readonly target?: Target;
+}
+
 // ============================================================================
 // XP / Progression Effects (Unleashed set)
 // ============================================================================
@@ -1005,6 +1025,7 @@ export type Effect =
   | IncreaseHiddenCapacityEffect
   | PreventScoreEffect
   | UnlimitedBuffsEffect
+  | LethalDamageModifierEffect
 
   // XP / progression (UNL set)
   | GainXpEffect
@@ -1022,7 +1043,8 @@ export type StaticEffect =
   | IncreaseHiddenCapacityEffect
   | PreventScoreEffect
   | RestrictPlayEffect
-  | UnlimitedBuffsEffect;
+  | UnlimitedBuffsEffect
+  | LethalDamageModifierEffect;
 
 // ============================================================================
 // Type Guards
