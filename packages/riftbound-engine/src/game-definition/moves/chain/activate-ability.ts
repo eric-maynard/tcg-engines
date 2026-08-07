@@ -374,6 +374,12 @@ export function deductAbilityCost(
               | keyof typeof pool.power
               | undefined)
           : (domain as keyof typeof pool.power);
+      // rule 135.2.e.5.b: universal ([rainbow]) Power pays a pip of any Domain,
+      // so a named-domain pip falls back to it when that Domain is empty.
+      if (key !== undefined && (pool.power[key] ?? 0) === 0 && (pool.power.rainbow ?? 0) > 0) {
+        pool.power.rainbow = (pool.power.rainbow ?? 0) - 1;
+        continue;
+      }
       if (key !== undefined) {
         pool.power[key] = Math.max(0, (pool.power[key] ?? 0) - 1);
       }
@@ -508,14 +514,19 @@ export const activateAbility: Defs["activateAbility"] = {
     if (!isLegalTiming(timing, turnState)) {
       return false;
     }
-    // rule 316.5.b: in a Neutral Open State only the Turn Player may
-    // activate abilities ([Reaction] adds Closed States, not this one).
-    if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
-      return false;
-    }
-    // rule 313.1 / 347: in a Showdown Open State only the Focus holder acts.
-    if (turnState === "showdown-open" && !hasShowdownPermission(interaction, playerId)) {
-      return false;
+    // rule 429.3 / 429.3.a: a payment being asked for is its own window — the
+    // paying player may crack Reaction [Add] abilities there regardless of who
+    // holds Focus or the turn.
+    if (!payXPrompt) {
+      // rule 316.5.b: in a Neutral Open State only the Turn Player may
+      // activate abilities ([Reaction] adds Closed States, not this one).
+      if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
+        return false;
+      }
+      // rule 313.1 / 347: in a Showdown Open State only the Focus holder acts.
+      if (turnState === "showdown-open" && !hasShowdownPermission(interaction, playerId)) {
+        return false;
+      }
     }
 
     // Check if player can afford the cost
@@ -850,13 +861,17 @@ export const activateAbility: Defs["activateAbility"] = {
         if (!isLegalTiming(timing, turnState)) {
           continue;
         }
-        // rule 316.5.b: Neutral Open State → only the Turn Player activates.
-        if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
-          continue;
-        }
-        // rule 313.1 / 347: Showdown Open State → only the Focus holder acts.
-        if (turnState === "showdown-open" && !hasShowdownPermission(interaction, playerId)) {
-          continue;
+        // rule 429.3 / 429.3.a: mid-payment the paying player acts regardless
+        // of Focus / turn ownership.
+        if (!payXPrompt) {
+          // rule 316.5.b: Neutral Open State → only the Turn Player activates.
+          if (turnState === "neutral-open" && state.turn.activePlayer !== playerId) {
+            continue;
+          }
+          // rule 313.1 / 347: Showdown Open State → only the Focus holder acts.
+          if (turnState === "showdown-open" && !hasShowdownPermission(interaction, playerId)) {
+            continue;
+          }
         }
 
         // Check cost affordability

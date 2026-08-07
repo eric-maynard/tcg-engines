@@ -557,11 +557,21 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
     }
     case "pay-x": {
       // rule 204.3.b / 444.2 (ogn-268-298): name X now; 0 is always legal.
+      // rule 444.2.c: the ceiling is what the pool holds AT THE MOMENT of
+      // payment — Reaction [Add] abilities cracked during the prompt raise it.
+      const payPool = ctx.state.runePools[pc.playerId]?.power ?? {};
+      const payMax = Object.values(payPool).reduce<number>((a, b) => a + (b ?? 0), 0);
+      // rule 429.3.a: Reaction [Add] abilities may still be activated here.
+      const payActions = groupActions(
+        ctx,
+        ctx.legal(seat).filter((m) => m.moveId !== "resolvePendingChoice"),
+      ).options;
       const d: IntegerDecision = {
         ...base,
+        ...(payActions.length > 0 ? { actions: payActions } : {}),
         id: decisionId(ctx.seq, seat, "integer"),
         kind: "integer",
-        max: pc.max,
+        max: Math.max(pc.max, payMax),
         min: 0,
         prompt: `Pay any amount of [rainbow] for ${ctx.label(pc.sourceCardId)}`,
         unit: "rainbow",

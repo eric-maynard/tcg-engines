@@ -294,6 +294,11 @@ export interface IntegerDecision extends DecisionBase {
   readonly min: number;
   readonly max: number;
   readonly unit: string;
+  /**
+   * rule 429.3 / 429.3.a: actions that stay legal while this payment is being
+   * asked for (Reaction [Add] abilities), offered alongside the number.
+   */
+  readonly actions?: readonly ActionOption[];
 }
 
 export interface DistributeBucket {

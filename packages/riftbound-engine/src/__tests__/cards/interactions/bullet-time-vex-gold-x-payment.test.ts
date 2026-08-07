@@ -154,7 +154,7 @@ describe("Bullet Time × Vex, Cheerless × Gold — what is a play cost and what
     expect(game.zoneOf("bt")).toBe("trash");
   });
 
-  test.failing("BUG: Golds can be cracked in the MIDDLE of Bullet Time's resolution, at the moment the payment is asked for (429.3, 429.3.a, 444.2.c)", async () => {
+  test("Golds can be cracked in the MIDDLE of Bullet Time's resolution, at the moment the payment is asked for (429.3, 429.3.a, 444.2.c)", async () => {
     // Expected: with an empty Power pool when Bullet Time starts resolving, the pay-X prompt still
     // allows activating Reaction [Add] abilities; each Gold resolves immediately and the fresh
     // [rainbow] can be paid right there. Actual: there is no resolution-time payment step at all.

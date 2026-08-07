@@ -744,7 +744,11 @@ export class SeatHandle {
   /** This seat's action menu (empty when it has none / a non-action prompt is pending). */
   legal(): readonly ActionOption[] {
     const d = this.decision();
-    return d && d.kind === "action" ? d.options : [];
+    if (d && d.kind === "action") {
+      return d.options;
+    }
+    // rule 429.3 / 429.3.a: a pay-X prompt still offers the [Add] activations.
+    return d && d.kind === "integer" ? (d.actions ?? []) : [];
   }
 
   /** Find an option by verb/moveId (+ card). */

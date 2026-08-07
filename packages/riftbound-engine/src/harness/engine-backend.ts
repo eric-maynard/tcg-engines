@@ -267,6 +267,16 @@ export class EngineBackend implements GameBackend {
       }
     }
 
+    // rule 429.3 / 429.3.a: a payment prompt does not swallow the actions that
+    // remain legal during it — route an action answer to the seat's action menu
+    // even while that seat's own non-action prompt is open.
+    if (target.kind !== "action" && answer.kind === "action" && target.seat === seat) {
+      const acting = deriveActionDecision(this.ctx(), seat, false);
+      if (acting) {
+        target = acting;
+      }
+    }
+
     if (target.kind === "action") {
       if (answer.kind !== "action") {
         return fail({
