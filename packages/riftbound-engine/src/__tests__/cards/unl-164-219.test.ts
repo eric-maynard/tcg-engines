@@ -31,6 +31,9 @@ describe("Safety Inspector (unl-164-219)", () => {
     await game.settle();
     // rule 355.16 — the controller chooses among the units THEY control.
     expect(game.decision()).toMatchObject({ kind: "pick", seat: P1 });
+    const d = game.decision();
+    // only the chooser's OWN units — never the opponent's.
+    expect(d?.kind === "pick" ? d.options.map((o) => o.key).sort() : []).toEqual(["insp", "mine"]);
     await game.p1.pick("mine");
     await game.settle();
     expect(game.zoneOf("mine")).toBe("trash");

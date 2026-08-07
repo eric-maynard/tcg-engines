@@ -30,6 +30,18 @@ export function markContestedOnArrival(
 }
 
 /**
+ * rule 450: Contested is attributed to the CONTROLLER of the unit that arrived,
+ * never to the player who chose the move (ogn-043-298 Charm moves an ENEMY unit).
+ */
+function arrivingController(ctx: EffectContext, cardId: string): string {
+  return (
+    ctx.cards.getCardController?.(cardId as CoreCardId) ??
+    ctx.cards.getCardOwner(cardId as CoreCardId) ??
+    ctx.playerId
+  );
+}
+
+/**
  * rule-id: unl-112-219 (Irresistible Faefolk) — rules 319.8 / 323.9 / 464.2.c:
  * cleanup after an effect-driven move stages combat when opposing units now
  * share a contested battlefield. The attacker is the player whose unit applied
@@ -212,9 +224,9 @@ function handleSwapLocations(effect: ExecutableEffect, ctx: EffectContext): void
     return;
   }
   moveCardWithEvent(ctx, selfId, partnerZone);
-  markContestedOnArrival(ctx.draft, partnerZone, ctx.playerId);
+  markContestedOnArrival(ctx.draft, partnerZone, arrivingController(ctx, selfId));
   moveCardWithEvent(ctx, partner, selfZone);
-  markContestedOnArrival(ctx.draft, selfZone, ctx.playerId);
+  markContestedOnArrival(ctx.draft, selfZone, arrivingController(ctx, partner));
 
   // rule-id: sfd-050-221 (rule 716) — "If it's equipped, you may attach one of
   // its Equipment to me": only the swap knows which unit was chosen, so the
@@ -286,7 +298,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
     }
     const destZone = `battlefield-${bfKey}`;
     moveCardWithEvent(ctx, unitId, destZone);
-    markContestedOnArrival(ctx.draft, destZone, ctx.playerId);
+    markContestedOnArrival(ctx.draft, destZone, arrivingController(ctx, unitId));
     stageCombatOnArrival(ctx, destZone);
     return;
   }
@@ -448,7 +460,7 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
         moveCardWithEvent(ctx, cardId, options[0] as string);
         // rule-id: unl-144-219 — Rule 450: arriving at a non-controlled
         // battlefield applies Contested so combat is staged.
-        markContestedOnArrival(ctx.draft, options[0] as string, ctx.playerId);
+        markContestedOnArrival(ctx.draft, options[0] as string, arrivingController(ctx, cardId));
         continue;
       }
       ctx.draft.pendingChoice = {
