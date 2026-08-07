@@ -469,18 +469,25 @@ export const playSpell: Defs["playSpell"] = {
     if (isCounterSpell && context.params.targets?.length) {
       const chainItems = (state.interaction ?? createInteractionState()).chain?.items ?? [];
       const t = context.params.targets;
-      if (
-        t.length !== 1 ||
-        !chainItems.some(
+      // rule 820.2.a (sfd-136-221) — a repeated counter makes its own choice
+      // per execution, so the caster may name one chain item per execution
+      // (1 + repeatCount ids, each legal, no id used twice).
+      const isLegalChainTarget = (id: string): boolean =>
+        chainItems.some(
           (item) =>
-            (item.cardId === t[0] || item.id === t[0]) &&
+            (item.cardId === id || item.id === id) &&
             isLegalCounterTarget(counterSpec, item, undefined, {
-              controllerOf: (id) =>
-                context.cards.getCardController?.(id as CoreCardId) ??
-                context.cards.getCardOwner(id as CoreCardId),
+              controllerOf: (cid) =>
+                context.cards.getCardController?.(cid as CoreCardId) ??
+                context.cards.getCardOwner(cid as CoreCardId),
               playerId: context.playerId as string,
             }),
-        )
+        );
+      if (
+        t.length < 1 ||
+        t.length > 1 + reqRepeatCount ||
+        new Set(t).size !== t.length ||
+        !t.every((id) => isLegalChainTarget(id as string))
       ) {
         return false;
       }
@@ -532,12 +539,21 @@ export const playSpell: Defs["playSpell"] = {
         conditionResolverCtx,
       ) as string[];
       const supplied = context.params.targets as string[];
+      // rule 820.2.a (sfd-151-221) — with [Repeat] paid, each execution names
+      // its own group of that many units, so the supplied list may hold one
+      // group per execution; distinctness is judged WITHIN a group.
+      const perExecution = spellTgt.quantity;
       if (
-        supplied.length > spellTgt.quantity ||
-        new Set(supplied).size !== supplied.length ||
+        supplied.length > perExecution * (1 + reqRepeatCount) ||
         !supplied.every((id) => pool.includes(id))
       ) {
         return false;
+      }
+      for (let i = 0; i < supplied.length; i += perExecution) {
+        const group = supplied.slice(i, i + perExecution);
+        if (new Set(group).size !== group.length) {
+          return false;
+        }
       }
     }
     // rule-id: ogn-220-298 (rule 355.8) — "…at the same battlefield": when a
@@ -1591,7 +1607,10 @@ export const playSpell: Defs["playSpell"] = {
             // caster may name a different target for each execution. Offer one
             // variant per distinct ordered target list of length n+1 (the first
             // slot stays this base variant's target).
-            if (isCardTarget && base.targets?.length === 1 && n === 1) {
+            // rule 820.2.a (sfd-136-221) — a counter's target is a chain item,
+            // not a board card, but the repeated execution picks its own just
+            // the same, so offer the two-item variants here too.
+            if ((isCardTarget || counterSpec !== undefined) && base.targets?.length === 1 && n === 1) {
               const first = base.targets[0] as string;
               for (const other of baseVariants) {
                 const alt = other.targets?.[0];
@@ -1599,6 +1618,25 @@ export const playSpell: Defs["playSpell"] = {
                   continue;
                 }
                 results.push({ ...base, repeatCount: n, targets: [first, alt] });
+              }
+            }
+            // rule 820.2.a (sfd-151-221) — an instruction that names SEVERAL
+            // units per execution ("Give two friendly units each +1 [Might]")
+            // also chooses afresh for the repeat: offer every ordered pair of
+            // distinct target GROUPS, the base variant's group going first.
+            const perExecution =
+              isCardTarget && typeof tgt === "object" && typeof tgt.quantity === "number"
+                ? tgt.quantity
+                : 0;
+            if (perExecution >= 2 && base.targets?.length === perExecution && n === 1) {
+              const firstGroup = base.targets;
+              const key = (ids: readonly string[]) => [...ids].sort().join("+");
+              for (const other of baseVariants) {
+                const alt = other.targets;
+                if (alt?.length !== perExecution || key(alt) === key(firstGroup)) {
+                  continue;
+                }
+                results.push({ ...base, repeatCount: n, targets: [...firstGroup, ...alt] });
               }
             }
           }
@@ -1867,7 +1905,25 @@ export const playSpell: Defs["playSpell"] = {
     const xValue = Math.max(0, xAmount ?? 0);
     let effectToStore: unknown = spellEffect;
     if (spellEffect && repeatN > 0) {
-      const repeatedEffects = Array.from({ length: 1 + repeatN }, () => spellEffect);
+      // rule 820.2.a (sfd-151-221) — when the caster named one GROUP of
+      // targets per execution ("Give two friendly units each +1"), each copy
+      // gets its own slice so execution i affects only its own group.
+      const perExecution = (spellEffect as { target?: { quantity?: unknown } }).target?.quantity;
+      const groupSize =
+        typeof perExecution === "number" &&
+        perExecution >= 2 &&
+        targets?.length === perExecution * (1 + repeatN)
+          ? perExecution
+          : 0;
+      const repeatedEffects = Array.from({ length: 1 + repeatN }, (_unused, i) =>
+        groupSize > 0
+          ? {
+              boundTargetsOverride: (targets as string[]).slice(i * groupSize, (i + 1) * groupSize),
+              effects: [spellEffect],
+              type: "sequence",
+            }
+          : spellEffect,
+      );
       effectToStore = {
         effects: repeatedEffects,
         type: "sequence",
@@ -1942,7 +1998,19 @@ export const playSpell: Defs["playSpell"] = {
       // `targets` list already enumerates every targeting event (see
       // `independentTargets` above); only a target list SHARED by all
       // executions is repeated here.
-      const chooseExecutions = targets.length === 1 + repeatN ? 1 : 1 + repeatN;
+      // rule 820.2.a (sfd-151-221) — one group per execution likewise
+      // enumerates every targeting event exactly once.
+      const perExecutionQty = (
+        registry.getAbilities(cardId)?.find((a) => a.type === "spell")?.effect as
+          | { target?: { quantity?: unknown } }
+          | undefined
+      )?.target?.quantity;
+      const oneGroupPerExecution =
+        typeof perExecutionQty === "number" &&
+        perExecutionQty >= 2 &&
+        targets.length === perExecutionQty * (1 + repeatN);
+      const chooseExecutions =
+        targets.length === 1 + repeatN || oneGroupPerExecution ? 1 : 1 + repeatN;
       for (let execution = 0; execution < chooseExecutions; execution++) {
         for (const targetId of targets) {
           fireTriggers(
