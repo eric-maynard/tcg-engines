@@ -1299,6 +1299,29 @@ function parseStaticAbilityInner(
     };
   }
 
+  // rule-id: ven-038-166 (Akali, Silent) — "I can't be chosen by enemy spells
+  // and abilities unless I'm in combat." The protection is a conditional
+  // static: the virtual Untargetable keyword applies only while the source is
+  // NOT attacking or defending.
+  const cantBeChosenUnlessInCombat = cleanText.match(
+    /^I can(?:'|’)?t be chosen by enemy spells and abilities unless I(?:'|’)?m in combat\.?$/i,
+  );
+  if (cantBeChosenUnlessInCombat) {
+    return {
+      ability: {
+        condition: { condition: { type: "in-combat" }, type: "not" } as unknown as Condition,
+        effect: {
+          keyword: "Untargetable",
+          target: "self",
+          type: "grant-keyword",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
   // "Your units here with less Might than me can't be chosen by enemy spells and abilities." (Alpha Wildclaw)
   const protectMatch = cleanText.match(
     /^Your units here with less Might than me can't be chosen by enemy spells and abilities\.?$/i,

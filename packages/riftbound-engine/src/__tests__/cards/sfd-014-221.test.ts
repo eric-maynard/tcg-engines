@@ -98,7 +98,7 @@ describe("Minotaur Reckoner (sfd-014-221)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P2);
   });
 
-  test.failing("BUG: once Reckoner leaves play the restriction ends", async () => {
+  test("once Reckoner leaves play the restriction ends", async () => {
     const game = await board().build();
     expect((await game.p1.try((p) => p.move("mine", "base"))).ok).toBe(false);
     await game.p1.do("killUnit", { cardId: "reckoner" });

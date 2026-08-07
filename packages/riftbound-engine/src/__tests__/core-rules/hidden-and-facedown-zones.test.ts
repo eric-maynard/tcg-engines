@@ -594,7 +594,7 @@ describe("811.1.d / 811.1.d.2 / 811.3: a spell played from facedown may only cho
     expect(game.p1.facedown("bf1")).toEqual([]);
   });
 
-  test.failing("BUG: 811.1.d — (b) with NO units at bf1 the hidden spell has no legal target under the restriction, so 'play from hidden' is not offered and S stays facedown; engine offers revealHidden regardless", async () => {
+  test("811.1.d — (b) with NO units at bf1 the hidden spell has no legal target under the restriction, so 'play from hidden' is not offered and S stays facedown; engine offers revealHidden regardless", async () => {
     // Expected: can("reveal") false, attempt rejected, S still facedown. Actual: reveal is legal.
     const game = await scenario()
       .turn(3)

@@ -11,15 +11,20 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import { fireTriggers } from "../../abilities/trigger-runner";
+import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
 import { hasPlayerWon } from "../win-conditions/victory";
 
 /**
- * Discard/trash move definitions
+ * Discard/trash move definitions.
+ *
+ * rule 522: removing a permanent from the board ends its continuous effects —
+ * so every removal runs the post-move cleanup (static recalc + state-based
+ * checks) before the next action.
  */
 export const discardMoves: Partial<
   GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>
-> = {
+> = withPostMoveCleanup({
   banishCard: {
     reducer: (_draft, context) => {
       const { cardId } = context.params;
@@ -180,4 +185,4 @@ export const discardMoves: Partial<
       }
     },
   },
-};
+});

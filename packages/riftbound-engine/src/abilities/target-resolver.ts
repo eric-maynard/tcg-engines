@@ -82,6 +82,12 @@ export interface TargetResolverContext {
    * battlefield"). When set, only cards in that one zone match.
    */
   readonly battlefieldZone?: string;
+  /**
+   * rule 811.1.d / 811.1.d.2 — a card played from a Facedown Zone may only
+   * choose targets at the battlefield it was facedown at. When set, board
+   * candidates outside `battlefield-<bfId>` are never legal choices.
+   */
+  readonly hiddenZone?: string;
   readonly draft: RiftboundGameState;
   readonly zones: {
     getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
@@ -340,6 +346,13 @@ export function resolveTarget(
     });
   }
 
+  // rule 811.1.d / 811.1.d.2 — played from Hidden: every board candidate must
+  // sit at the battlefield the card was facedown at. Off-board pools
+  // ("a unit from your trash") name their own zone and are untouched.
+  if (ctx.hiddenZone !== undefined && zoneLocation === undefined) {
+    filtered = filtered.filter((id) => ctx.zones.getCardZone(id as CoreCardId) === ctx.hiddenZone);
+  }
+
   // Rule 355.8: apply descriptor filters (state / might / keyword / tag).
   if (target.filter !== undefined) {
     const filters = Array.isArray(target.filter) ? target.filter : [target.filter];
@@ -494,6 +507,39 @@ function getRunePoolCardIds(ctx: TargetResolverContext): string[] {
 const MIGHTY_THRESHOLD = 5;
 
 /**
+ * rule-id: ven-038-166 (Akali, Silent) — "…unless I'm in combat" makes the
+ * self-protection conditional, so the printed static must be evaluated live
+ * (the target resolver can't wait for the next static recalculation). Only the
+ * combat-state condition shapes a self-protection can carry are understood; an
+ * unrecognised condition leaves the protection off, as before.
+ */
+function selfProtectionConditionHolds(
+  condition: unknown,
+  meta: Partial<RiftboundCardMeta> | undefined,
+): boolean {
+  if (condition === undefined) {
+    return true;
+  }
+  const c = condition as { type?: string; condition?: unknown; conditions?: unknown[] };
+  switch (c.type) {
+    case "in-combat":
+      return meta?.combatRole === "attacker" || meta?.combatRole === "defender";
+    case "attacking":
+      return meta?.combatRole === "attacker";
+    case "defending":
+      return meta?.combatRole === "defender";
+    case "not":
+      return !selfProtectionConditionHolds(c.condition, meta);
+    case "and":
+      return (c.conditions ?? []).every((sub) => selfProtectionConditionHolds(sub, meta));
+    case "or":
+      return (c.conditions ?? []).some((sub) => selfProtectionConditionHolds(sub, meta));
+    default:
+      return false;
+  }
+}
+
+/**
  * rule-id: ven-031-166 / sfd-105-221 — a card "can't be chosen by enemy spells
  * and abilities" when it carries the (virtual) Untargetable keyword, either
  * printed/static or granted for a duration via `grant-keyword`.
@@ -511,21 +557,21 @@ export function isUntargetable(cardId: string, ctx: Pick<TargetResolverContext, 
     condition?: unknown;
     effect?: { type?: string; keyword?: string; target?: unknown };
   }[];
+  const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
+    | Partial<RiftboundCardMeta>
+    | undefined;
   if (
     abilities.some(
       (a) =>
         a.type === "static" &&
-        a.condition === undefined &&
         a.effect?.type === "grant-keyword" &&
         a.effect.keyword === "Untargetable" &&
-        (a.effect.target === undefined || a.effect.target === "self"),
+        (a.effect.target === undefined || a.effect.target === "self") &&
+        selfProtectionConditionHolds(a.condition, meta),
     )
   ) {
     return true;
   }
-  const meta = ctx.cards.getCardMeta?.(cardId as CoreCardId) as
-    | Partial<RiftboundCardMeta>
-    | undefined;
   return meta?.grantedKeywords?.some((gk) => gk.keyword === "Untargetable") ?? false;
 }
 

@@ -205,7 +205,17 @@ export function parseEmpowerEffect(text: string): Effect | undefined {
   } else if (targetStr.startsWith("something")) {
     target = { excludeSelf: targetStr.includes("else"), type: "permanent" } as unknown as AnyTarget;
   } else {
-    target = parseCardTarget(targetStr) as AnyTarget;
+    // rule-id: ven-062-166 — "Empower another gear": `parseCardTarget` only
+    // ever yields `{type:"unit"}`, so the gear noun and the "another"
+    // self-exclusion have to be re-applied here.
+    const parsed = parseCardTarget(targetStr) as Record<string, unknown>;
+    if (/\bgear\b/.test(targetStr)) {
+      parsed.type = "gear";
+    }
+    if (/^another\b/.test(targetStr)) {
+      parsed.excludeSelf = true;
+    }
+    target = parsed as AnyTarget;
   }
   return { target, type: dis ? "disempower" : "empower" } as unknown as Effect;
 }
