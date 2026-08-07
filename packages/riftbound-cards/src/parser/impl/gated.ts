@@ -38,6 +38,51 @@ export function attachLevelCondition(ability: Ability, threshold: number): Abili
 }
 
 /**
+ * rule 824.1.b.1 — a Level rider phrased "… instead" REPLACES the ungated
+ * instruction rather than stacking with it. `instead: true` is the marker the
+ * resolvers read (spell resolution, self cost reduction).
+ */
+function markInstead(ability: Ability): Ability {
+  const effect = (ability as unknown as { effect?: Record<string, unknown> }).effect;
+  if (!effect || typeof effect !== "object") {
+    return ability;
+  }
+  return { ...(ability as object), effect: { ...effect, instead: true } } as Ability;
+}
+
+/**
+ * rule 359.3.f — a pronoun in a rider ("Give IT +3 [Might] instead") names the
+ * object the earlier instruction chose, so the rider inherits that
+ * instruction's target descriptor. Without this the rider parses as `self`,
+ * which on a spell means the spell card itself (a no-op).
+ */
+function inheritPronounTarget(
+  ability: Ability,
+  chunkText: string,
+  earlier: readonly Ability[],
+): Ability {
+  if (!/\b(it|them)\b/i.test(chunkText)) {
+    return ability;
+  }
+  const effect = (ability as unknown as { effect?: Record<string, unknown> }).effect;
+  const target = effect?.target;
+  const isSelf =
+    target === undefined ||
+    target === "self" ||
+    (typeof target === "object" && target !== null && (target as { type?: string }).type === "self");
+  if (!effect || typeof effect !== "object" || !isSelf) {
+    return ability;
+  }
+  for (let i = earlier.length - 1; i >= 0; i--) {
+    const prior = (earlier[i] as unknown as { effect?: Record<string, unknown> }).effect?.target;
+    if (typeof prior === "object" && prior !== null) {
+      return { ...(ability as object), effect: { ...effect, target: prior } } as Ability;
+    }
+  }
+  return ability;
+}
+
+/**
  * Parse text that contains one or more `[Level N][>] <effect>` blocks.
  *
  * Splits on `[Level N]` boundaries and:
@@ -98,8 +143,14 @@ export function parseLevelGatedAbilities(
     }
     const chunkResult = parseInner(chunkText);
     if (chunkResult.success && chunkResult.abilities) {
+      const replaces = /\binstead\b/i.test(chunkText);
       for (const ab of chunkResult.abilities) {
-        allAbilities.push(attachLevelCondition(ab, matches[i].threshold));
+        let gatedAbility = attachLevelCondition(ab, matches[i].threshold);
+        gatedAbility = inheritPronounTarget(gatedAbility, chunkText, allAbilities);
+        if (replaces) {
+          gatedAbility = markInstead(gatedAbility);
+        }
+        allAbilities.push(gatedAbility);
       }
     }
   }

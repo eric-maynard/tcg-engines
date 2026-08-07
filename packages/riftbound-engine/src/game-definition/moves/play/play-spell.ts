@@ -2095,16 +2095,34 @@ export const playSpell: Defs["playSpell"] = {
     // order, each gated by its own condition — resolving only the first would
     // silently drop the rider.
     const spellAbilities = abilities.filter((a) => a.type === "spell");
-    const combinedSpellEffect: unknown =
-      spellAbilities.length > 1
-        ? {
-            effects: spellAbilities.map((a) => {
-              const gate = (a as { condition?: unknown }).condition;
-              return gate ? { condition: gate, then: a.effect, type: "conditional" } : a.effect;
-            }),
-            type: "sequence",
-          }
-        : spellEffect;
+    // rule 824.1.b.1 (rule-id: unl-031-219 Combat Experience) — a rider phrased
+    // "… instead" REPLACES the instruction(s) it follows instead of stacking:
+    // fold the gated riders (highest printed level first) into a
+    // conditional/else chain whose fallback is the ungated text.
+    const isInstead = (a: (typeof spellAbilities)[number]): boolean =>
+      (a.effect as { instead?: unknown } | undefined)?.instead === true &&
+      (a as { condition?: unknown }).condition !== undefined;
+    const gatedEffect = (a: (typeof spellAbilities)[number]): unknown => {
+      const gate = (a as { condition?: unknown }).condition;
+      return gate ? { condition: gate, then: a.effect, type: "conditional" } : a.effect;
+    };
+    let combinedSpellEffect: unknown = spellEffect;
+    if (spellAbilities.length > 1) {
+      const base = spellAbilities.filter((a) => !isInstead(a));
+      const riders = spellAbilities.filter(isInstead);
+      combinedSpellEffect =
+        base.length === 1 && riders.length > 0
+          ? base[0]?.effect
+          : { effects: base.map(gatedEffect), type: "sequence" };
+      for (const rider of [...riders].reverse()) {
+        combinedSpellEffect = {
+          condition: (rider as { condition?: unknown }).condition,
+          else: combinedSpellEffect,
+          then: rider.effect,
+          type: "conditional",
+        };
+      }
+    }
 
     const xValue = Math.max(0, xAmount ?? 0);
     let effectToStore: unknown = combinedSpellEffect;
