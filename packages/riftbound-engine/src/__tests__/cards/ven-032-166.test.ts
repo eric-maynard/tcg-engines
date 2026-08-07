@@ -141,7 +141,11 @@ describe("Frostcoat Mother (ven-032-166)", () => {
     const game = await scenario().resources(P1, { energy: 3, power: { calm: 1 } }).unit(P1, "base", CARD, "mom").hand(P1, SANCTION, "sanc").build();
     await game.p1.cast("sanc");
     await game.settle();
-    await game.p1.chooseMode(0);
+    // rule 355.3 / 355.8 (rule-id: ven-035-166) — with no [Empowered] unit on the board
+    // Sanction's second mode is unselectable, so the one-mode menu may already be settled.
+    if (game.decision()?.kind === "pick") {
+      await game.p1.chooseMode(0);
+    }
     if (game.decision()?.kind === "pick") {
       await game.p1.pick("mom");
     }
@@ -151,7 +155,7 @@ describe("Frostcoat Mother (ven-032-166)", () => {
     expect(game.state("mom")).toMatchObject({ isEmpowered: false, might: 3 });
   });
 
-  test.failing("BUG: counter — Lacerate on an Empowered (6-Might) Mother: disempowering drops the +3 at once (828.1.c), so 'then kill it if it has 3 Might or less' kills her", async () => {
+  test("counter — Lacerate on an Empowered (6-Might) Mother: disempowering drops the +3 at once (828.1.c), so 'then kill it if it has 3 Might or less' kills her", async () => {
     // Actual: she is disempowered (reads 3 Might afterwards) but survives — the ≤3 check saw a stale 6.
     const game = await scenario()
       .active(P2)

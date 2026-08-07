@@ -808,6 +808,34 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
   "ven-004-166": {
     abilities: [{ effect: { keyword: "Tank", type: "ignore-keyword" }, type: "static" }],
   },
+  // rule 356.3 — Helm of Suppression: "Opponents' spells cost [1] more. If this
+  // is [Empowered], they cost [1][rainbow] more instead." The parser has no
+  // "instead" cost-increase shape, so both tiers are declared here as mutually
+  // exclusive statics (each Helm is its own static, so copies stack).
+  "ven-045-166": {
+    abilities: [
+      {
+        cost: { energy: 4, power: ["calm"] },
+        effect: { target: "self", type: "empower" },
+        restrictions: [{ type: "not-empowered" }],
+        type: "activated",
+      },
+      {
+        condition: { condition: { type: "while-empowered" }, type: "not" },
+        effect: { by: 1, target: { controller: "enemy", type: "spell" }, type: "cost-increase" },
+        type: "static",
+      },
+      {
+        condition: { type: "while-empowered" },
+        effect: {
+          by: ":rb_energy_1::rb_rune_rainbow:",
+          target: { controller: "enemy", type: "spell" },
+          type: "cost-increase",
+        },
+        type: "static",
+      },
+    ],
+  },
   // rule 419.4 / 187.2 — Jayce, Brilliant Inventor: "When you play me or the
   // first time you play a non-token gear each turn, you may ready something
   // besides me that's exhausted." The generator emits `abilities: []`, and the
@@ -1043,6 +1071,48 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
         },
         timing: "action",
         type: "activated",
+      },
+    ],
+  },
+  // Endless Riches — the four printed sentences run together in one paragraph,
+  // so the generic splitter keeps them as a single `raw` ability. Only the
+  // play trigger is modelled here; the remaining clauses stay as raw statics so
+  // the text-matching grants that read them (play-from-trash) keep working.
+  "ven-022-166": {
+    abilities: [
+      // rule 440.1 — banish hand and trash FIRST, then [Burn 7]: the burned
+      // cards come from the Main Deck, so the "would go to your trash" clause
+      // never replaces them and they stay in the trash.
+      {
+        effect: {
+          effects: [
+            {
+              target: { controller: "friendly", location: "hand", quantity: "all", type: "card" },
+              type: "banish",
+            },
+            {
+              target: { controller: "friendly", location: "trash", quantity: "all", type: "card" },
+              type: "banish",
+            },
+            { amount: 7, player: "self", type: "burn" },
+          ],
+          type: "sequence",
+        },
+        trigger: { event: "play-self" },
+        type: "triggered",
+      },
+      { effect: { text: "Skip your Draw Phase.", type: "raw" }, type: "static" },
+      { effect: { text: "You may play cards from your trash.", type: "raw" }, type: "static" },
+      // rule 571 — a blanket zone-change replacement: the engine reads it off
+      // the board via `hasTrashToBanishReplacement` (effect type
+      // `trash-to-banish`), so it is not a per-event `replaces` match.
+      {
+        effect: {
+          text: "If a card would go to your trash from anywhere other than your Main Deck, banish it instead.",
+          type: "trash-to-banish",
+        },
+        replaces: "to-trash",
+        type: "replacement",
       },
     ],
   },
