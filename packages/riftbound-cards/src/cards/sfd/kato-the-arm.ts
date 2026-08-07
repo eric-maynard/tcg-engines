@@ -14,8 +14,9 @@ import { createCardId } from "@tcg/riftbound-types/cards";
  *  2. Triggered on move-to-battlefield: grant self's keywords and might
  *     to another friendly unit for the turn
  *
- * FIXME: "Give my keywords" is approximated as a grant-keywords effect
- * with a `$self` placeholder the engine should interpret at runtime.
+ * "Give my keywords" is encoded as the `$self-keywords` placeholder; the
+ * grant-keywords effect handler expands it, on resolution, to every keyword
+ * the source currently has (printed + granted).
  */
 const abilities: Ability[] = [
   { keyword: "Deflect", type: "keyword", value: 1 },

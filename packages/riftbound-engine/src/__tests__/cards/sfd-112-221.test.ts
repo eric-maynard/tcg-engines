@@ -106,7 +106,7 @@ describe("Kato the Arm (sfd-112-221)", () => {
     expect(game.state("buddy").keywords).toEqual([]);
   });
 
-  test.failing("BUG: 'give … my keywords' — the recipient gains Deflect (Kato's printed keyword) this turn, not a '$self-keywords' placeholder", async () => {
+  test("'give … my keywords' — the recipient gains Deflect (Kato's printed keyword) this turn, not a '$self-keywords' placeholder", async () => {
     // Expected: buddy.keywords contains "Deflect" (granted, duration turn). Actual: the literal
     // string "$self-keywords" is granted and Deflect is never copied.
     const game = await board().build();
@@ -117,7 +117,7 @@ describe("Kato the Arm (sfd-112-221)", () => {
     expect(game.state("buddy").grantedKeywords).toContainEqual(expect.objectContaining({ duration: "turn", keyword: "Deflect" }));
   });
 
-  test.failing("BUG: the copied Deflect is functional — this turn an opponent must pay an extra power to target the buddy (809)", async () => {
+  test("the copied Deflect is functional — this turn an opponent must pay an extra power to target the buddy (809)", async () => {
     // Expected: this turn P2 (exactly 1 energy, no power) cannot Bolt the buddy — Deflect surcharge unpaid.
     // Actual: no Deflect is copied, so the Bolt is legal.
     const live = await board().resources(P2, { energy: 1 }).hand(P2, REACTION_BOLT, "bolt").hand(P1, BOLT, "spark").resources(P1, { energy: 1 }).build();
