@@ -9,6 +9,7 @@ import type {
 } from "@tcg/riftbound-types/abilities/effect-types";
 import type { AnyTarget, Location } from "@tcg/riftbound-types/targeting";
 import { parseTarget } from "../parsers/target-parser";
+import { parseCardTarget } from "./targets";
 import { wordToNumber } from "./tokens";
 
 /**
@@ -127,6 +128,27 @@ export function parseReturnToHandEffect(text: string): ReturnToHandEffect | unde
       target.type = "permanent";
     } else if (what.startsWith("gear")) {
       target.type = "gear";
+    }
+    return { target: target as unknown as AnyTarget, type: "return-to-hand" };
+  }
+
+  // rule-id: ven-107-166 (rule 355.11) — "Return any number of enemy Order units
+  // with total Might 5 or less to their owners' hands": the caster picks 0..n
+  // targets whose SUMMED Might is capped. No location clause, so units in bases
+  // and at different battlefields may be mixed in one choice.
+  const anyNumberMatch = text.match(
+    /^Return (any number of\s+[^.]*?)(?:\s+with\s+total\s+(?::rb_might:|\[?Might\]?)\s+(\d+)\s+or\s+less)?\s+to\s+their\s+owners'?\s+hands?\.?$/i,
+  );
+  if (anyNumberMatch) {
+    const target = parseCardTarget(anyNumberMatch[1]) as Record<string, unknown>;
+    target.quantity = "any";
+    if (anyNumberMatch[2]) {
+      const cap = Number.parseInt(anyNumberMatch[2], 10);
+      target.totalMight = { lte: cap };
+      // A single unit above the cap can never fit under the aggregate total.
+      const mightFilter = { might: { lte: cap } };
+      target.filter =
+        target.filter === undefined ? mightFilter : [target.filter, mightFilter].flat();
     }
     return { target: target as unknown as AnyTarget, type: "return-to-hand" };
   }
