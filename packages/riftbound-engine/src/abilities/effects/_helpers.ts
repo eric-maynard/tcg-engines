@@ -9,6 +9,7 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta } from "../../types";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
+import { effectiveTags } from "../card-tags";
 import { scoreWithinConditionMet } from "../../operations/score-within";
 import type { TargetDescriptor } from "../target-resolver";
 import { boundBattlefieldZone, resolveTarget } from "../target-resolver";
@@ -255,7 +256,13 @@ export function resolveAmount(
     const registry = getGlobalCardRegistry();
     const present = new Set<string>();
     for (const id of ids) {
-      const tags = (registry.get(id) as { tags?: readonly string[] } | undefined)?.tags ?? [];
+      // rule 135.2.b.3 — a tag gained as the unit was played counts here too.
+      const tags = effectiveTags(
+        (registry.get(id) as { tags?: readonly string[] } | undefined)?.tags,
+        ctx.cards.getCardMeta?.(id as CoreCardId) as
+          | { namedTag?: string; grantedTags?: readonly string[] }
+          | undefined,
+      );
       for (const t of tags) {
         const key = t.toLowerCase();
         if (wanted.has(key)) present.add(key);

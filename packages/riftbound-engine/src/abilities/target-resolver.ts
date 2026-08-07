@@ -21,6 +21,7 @@ import type {
 } from "@tcg/core";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { areAllies } from "../operations/teams";
+import { hasEffectiveTag } from "./card-tags";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 
 /**
@@ -786,6 +787,15 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
   if ("energyCost" in filter || "powerCost" in filter) {
     return matchesPrintedCostFilter(cardId, filter);
   }
+  // rule 355.10 — "a friendly unit without [Temporary]": printed OR granted
+  // copies of the keyword both disqualify a candidate.
+  if ("excludeKeyword" in filter && typeof filter.excludeKeyword === "string") {
+    const kw = filter.excludeKeyword;
+    if (registry.hasKeyword(cardId, kw)) {
+      return false;
+    }
+    return !(meta?.grantedKeywords?.some((gk) => gk.keyword === kw) ?? false);
+  }
   if ("keyword" in filter && typeof filter.keyword === "string") {
     if (registry.hasKeyword(cardId, filter.keyword)) {
       return true;
@@ -799,21 +809,21 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
     if (filter.tag === "named") {
       const named = ctx.cards.getCardMeta?.(ctx.sourceCardId as CoreCardId)?.namedTag;
       if (typeof named !== "string" || named === "") return false;
-      return (tags ?? []).some((t) => t.toLowerCase() === named.toLowerCase());
+      return hasEffectiveTag(tags, meta, named);
     }
-    return tags?.includes(filter.tag) ?? false;
+    // rule 135.2.b.3 — a tag gained as the card was played counts as printed.
+    return hasEffectiveTag(tags, meta, filter.tag);
   }
   // rule 355.8 (rule-id: unl-167-219) — "a Bird, Cat, Dog, or Poro" is one
   // filter holding a tag DISJUNCTION; carrying all of them is not required.
   if ("tag" in filter && Array.isArray(filter.tag)) {
-    const tags = (def as { tags?: string[] } | undefined)?.tags ?? [];
-    return (filter.tag as readonly string[]).some((t) => tags.includes(t));
+    const tags = (def as { tags?: string[] } | undefined)?.tags;
+    return (filter.tag as readonly string[]).some((t) => hasEffectiveTag(tags, meta, t));
   }
   // rule-id: ven-115-166 — "non-Dragon unit" excludes cards carrying the tag
   if ("excludeTag" in filter && typeof filter.excludeTag === "string") {
     const tags = (def as { tags?: string[] } | undefined)?.tags;
-    const ex = filter.excludeTag.toLowerCase();
-    return !(tags ?? []).some((t) => t.toLowerCase() === ex);
+    return !hasEffectiveTag(tags, meta, filter.excludeTag);
   }
   if ("name" in filter && typeof filter.name === "string") {
     return def?.name === filter.name;
