@@ -40,6 +40,29 @@ export function handle_discard(effect: ExecutableEffect, ctx: EffectContext, h: 
   // out per player, discard the whole hand (no choice needed), then run the
   // `then` effect for that same player even if their hand was empty.
   const wholeHand = (effect.amount as unknown) === "hand";
+  // rule 422.1.a (ven-111-166): "Each player discards N" — every player chooses
+  // their own card, so the prompts run one seat at a time; the remaining seats
+  // ride on the pending choice's `then`.
+  if (effect.player === "each" && !wholeHand && (effect as { then?: unknown }).then === undefined) {
+    const rest = [
+      ...((effect as { playerQueue?: string[] }).playerQueue ?? Object.keys(ctx.draft.players)),
+    ];
+    while (rest.length > 0) {
+      const pid = rest.shift() as string;
+      handle_discard({ ...effect, player: undefined } as ExecutableEffect, { ...ctx, playerId: pid }, h);
+      const pending = ctx.draft.pendingChoice as { then?: unknown } | undefined;
+      if (pending) {
+        if (pending.then === undefined && rest.length > 0) {
+          ctx.draft.pendingChoice = {
+            ...(pending as object),
+            then: { ...effect, playerQueue: [...rest] },
+          } as typeof ctx.draft.pendingChoice;
+        }
+        return;
+      }
+    }
+    return;
+  }
   if (effect.player === "each" || wholeHand) {
     const playerIds = effect.player === "each" ? Object.keys(ctx.draft.players) : [ctx.playerId];
     const rawThen = (effect as { then?: ExecutableEffect }).then;

@@ -204,6 +204,14 @@ export function parseDiscardEffect(text: string): Effect | undefined {
     } as Effect;
   }
 
+  // Handle "Each player discards N" (symmetric, rule 419 — each player picks their own)
+  const eachDiscardMatch = text.match(/^Each player discards? (\d+|a card)\.?$/i);
+  if (eachDiscardMatch) {
+    const amountStr = eachDiscardMatch[1].toLowerCase();
+    const amount = amountStr === "a card" ? 1 : Number.parseInt(amountStr, 10);
+    return { amount, player: "each", type: "discard" } as Effect;
+  }
+
   // Handle "They discard N" / "that player discards N" (opponent-targeted)
   const theyDiscardMatch = text.match(/^(?:They|that player) discards? (\d+|a card|it)\.?$/i);
   if (theyDiscardMatch) {
