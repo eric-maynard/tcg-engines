@@ -847,7 +847,24 @@ export function takeNextPlayDiscount(
  */
 export interface OptionalPlayCost {
   /** `"accelerate"` (rule 717) enters the unit ready when paid. */
-  readonly kind: "accelerate" | "kill" | "pay" | "exhaust" | "discard" | "spend-buff";
+  readonly kind:
+    | "accelerate"
+    | "kill"
+    | "pay"
+    | "exhaust"
+    | "discard"
+    | "spend-buff"
+    | "return-to-hand";
+  /**
+   * rule 356.2.a.1 — the additional cost is printed without "you may", so the
+   * card cannot be played at all unless it is paid.
+   */
+  readonly mandatory?: boolean;
+  /**
+   * rule-id: sfd-044-221 (rule 356.2.a.1) — descriptor for "return a friendly
+   * gear to its owner's hand" as an additional cost to play me.
+   */
+  readonly returnToHand?: { readonly type?: string; readonly controller?: string };
   /**
    * rule 356.5 (ogn-146-298 Wallop) — "If you do, ignore this spell's cost":
    * paying the optional additional cost waives the base cost entirely.
@@ -986,6 +1003,20 @@ export function getOptionalPlayCost(cardId: string): OptionalPlayCost | undefine
         // additional cost; the unit is chosen and exhausted at pay time.
         if (obj.exhaust) {
           return { exhaust: obj.exhaust, kind: "exhaust" };
+        }
+        // rule 356.2.a.1 (sfd-044-221) — "As an additional cost to play me,
+        // return a friendly gear to its owner's hand": no "may", so the play
+        // is illegal without a friendly gear on the board.
+        const bounce = (obj as { returnToHand?: { type?: string; controller?: string } })
+          .returnToHand;
+        if (bounce) {
+          return {
+            kind: "return-to-hand",
+            returnToHand: bounce,
+            ...((effect as { optional?: boolean }).optional === false
+              ? { mandatory: true }
+              : {}),
+          };
         }
         // rule 356.2.a.1 (ogn-208-298) — "As an additional cost to play me,
         // kill a friendly unit": no "may", so the kill is MANDATORY and the

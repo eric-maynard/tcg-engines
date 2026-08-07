@@ -16,6 +16,22 @@ import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
 
 /**
+ * rule 164.2.a/b + 312.1.a/b — a rune's "[Exhaust]: Add" / "Recycle this: Add"
+ * are [Reaction] Add abilities, so only a player who currently holds Priority
+ * may use them. While a chain is open Priority sits with `chain.activePlayer`
+ * (rule 429.3's pay-costs window only ever opens for the player taking the
+ * action, who holds Priority by definition). Outside a chain the rune abilities
+ * stay freely usable so a player can bank resources for a Reaction.
+ */
+function holdsRunePriority(state: RiftboundGameState, playerId: string): boolean {
+  const chain = state.interaction?.chain;
+  if (!chain?.active) {
+    return true;
+  }
+  return chain.activePlayer === playerId;
+}
+
+/**
  * Resource move definitions
  */
 const resourceMoveDefs: Partial<
@@ -77,7 +93,11 @@ const resourceMoveDefs: Partial<
         return false;
       }
 
-      // Players can exhaust runes at any time (needed to pay for reaction spells on opponent's turn)
+      // Players can exhaust runes to bank resources for a Reaction, but only
+      // while they hold Priority (see holdsRunePriority).
+      if (!holdsRunePriority(state, context.params.playerId as string)) {
+        return false;
+      }
       const zone = context.zones.getCardZone(context.params.runeId as CoreCardId);
       if (zone !== "runePool") {
         return false;
@@ -99,6 +119,9 @@ const resourceMoveDefs: Partial<
         return [];
       }
       if (state.status !== "playing") {
+        return [];
+      }
+      if (!holdsRunePriority(state, context.playerId as string)) {
         return [];
       }
 
@@ -147,7 +170,10 @@ const resourceMoveDefs: Partial<
         return false;
       }
 
-      // Players can recycle runes at any time (needed to pay for reaction spells on opponent's turn)
+      // Same Priority gate as exhaustRune (rule 164.2.b / 312.1.b).
+      if (!holdsRunePriority(state, context.params.playerId as string)) {
+        return false;
+      }
       const zone = context.zones.getCardZone(context.params.runeId as CoreCardId);
       if (zone !== "runePool") {
         return false;
@@ -168,6 +194,9 @@ const resourceMoveDefs: Partial<
         return [];
       }
       if (state.status !== "playing") {
+        return [];
+      }
+      if (!holdsRunePriority(state, context.playerId as string)) {
         return [];
       }
 

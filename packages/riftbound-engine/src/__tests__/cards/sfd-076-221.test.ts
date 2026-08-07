@@ -80,7 +80,7 @@ describe("Production Surge (sfd-076-221)", () => {
     expect(game.p2.hand()).toEqual([]);
   });
 
-  test.failing("BUG: 'This costs [2] less if you control a Mech' — with a friendly Mech on board the spell costs 2 energy + [mind] (356.4)", async () => {
+  test("'This costs [2] less if you control a Mech' — with a friendly Mech on board the spell costs 2 energy + [mind] (356.4)", async () => {
     // Expected: castable with 2 energy + mind, leaving 0/0. Actual: the parser dropped the discount
     // clause entirely (no cost-reduction static in the abilities), so the printed 4 is demanded.
     const game = await board(2, 1).unit(P1, "base", BUBBLE_BOT, "bot").build();
@@ -90,7 +90,7 @@ describe("Production Surge (sfd-076-221)", () => {
     expect(game.zoneOf("surge")).toBe("chain");
   });
 
-  test.failing("BUG: with a friendly Mech and 4 energy only 2 are spent (discount applies even when the full price is affordable)", async () => {
+  test("with a friendly Mech and 4 energy only 2 are spent (discount applies even when the full price is affordable)", async () => {
     // Expected: 4 → 2 remaining. Actual: 0 remaining (no discount).
     const game = await board(4, 1).unit(P1, "bf1", BUBBLE_BOT, "bot").build();
     await game.p1.cast("surge");
@@ -112,7 +112,7 @@ describe("Production Surge (sfd-076-221)", () => {
     expect(inHand.zoneOf("surge")).toBe("hand");
   });
 
-  test.failing("BUG: the Mech token from a first Surge is a Mech you control — a second Surge then costs only 2 + [mind]", async () => {
+  test("the Mech token from a first Surge is a Mech you control — a second Surge then costs only 2 + [mind]", async () => {
     // Expected: 8 energy / 2 mind → first Surge 4+mind (no Mech yet) → token → second Surge 2+mind → 2 energy left.
     // Actual: second Surge also charges 4 → 0 left.
     const game = await scenario()
@@ -167,7 +167,7 @@ describe("Production Surge (sfd-076-221)", () => {
     expect(game.state(tok!).might).toBe(4);
   });
 
-  test.failing("BUG: parsed abilities should cover all three printed clauses — the conditional self cost-reduction is missing", async () => {
+  test("parsed abilities should cover all three printed clauses — the conditional self cost-reduction is missing", async () => {
     // Expected (cf. Find Your Center ogn-047-298): a `static` self `cost-reduction` of [2] gated on
     // controlling a Mech, plus the token + draw instructions. Actual: only the two spell effects.
     const pool = await loadDefaultCardPool();

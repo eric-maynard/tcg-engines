@@ -153,7 +153,7 @@ describe("Void Drone (sfd-010-221)", () => {
 
   // BUG — expected `{ by: 2, whenPlayedFrom: "not-hand" }` (Drag Under's hand-authored shape, the only
   // one cost.ts reads). Actual: `{ reduction: ":rb_energy_2:", scope: "to play from anywhere other than your hand" }`.
-  test.failing("BUG: parser emits a free-text scope for 'from anywhere other than your hand' instead of the whenPlayedFrom:'not-hand' gate the engine honours", async () => {
+  test("parser emits the whenPlayedFrom:'not-hand' gate for 'from anywhere other than your hand'", async () => {
     const pool = await loadDefaultCardPool();
     const abilities = (pool.get(CARD)?.abilities ?? []) as { type: string; effect?: Record<string, unknown> }[];
     expect(abilities).toHaveLength(1);

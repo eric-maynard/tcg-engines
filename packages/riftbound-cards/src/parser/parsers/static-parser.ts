@@ -28,6 +28,38 @@ export interface StaticAbilityParseResult {
 const REMINDER_TEXT_PATTERN = /\([^)]*\)/g;
 
 /**
+ * "I have +N [Might] for each QUALIFIER": translate the qualifier into a board
+ * descriptor the engine can count each recalculation. Returns undefined for
+ * qualifiers that do not count permanents (e.g. "time I'm [Empowered]"), which
+ * keep the descriptive `per` string.
+ */
+function parseForEachQualifier(qualifier: string): Target | undefined {
+  const q = qualifier.trim().replace(/\.$/, "").toLowerCase();
+
+  // rule-id: ven-097-166 — "other unit you control here with my name".
+  if (/^other units? (?:you control|friendly)? ?here with my name$/.test(q) || /^other units? here with my name (?:you control)?$/.test(q)) {
+    return {
+      controller: "friendly",
+      excludeSelf: true,
+      filter: { name: "self" },
+      location: "here",
+      type: "unit",
+    } as unknown as Target;
+  }
+
+  // rule-id: ven-182-166 — "token unit you control".
+  if (/^token units? you control$/.test(q)) {
+    return {
+      controller: "friendly",
+      filter: "token",
+      type: "unit",
+    } as unknown as Target;
+  }
+
+  return undefined;
+}
+
+/**
  * Pattern for "TARGET have [KEYWORD]" - grants keyword to others
  * Examples:
  * - "Other friendly units here have [Assault]"
@@ -618,6 +650,21 @@ function parseStaticAbilityInner(
   );
   if (selfMightMatch) {
     const amount = Number.parseInt(selfMightMatch[1], 10);
+    const counted = parseForEachQualifier(selfMightMatch[2]);
+    if (counted) {
+      return {
+        ability: {
+          effect: {
+            amount: { count: counted, multiplier: amount },
+            target: "self" as AnyTarget,
+            type: "modify-might",
+          } as unknown as Effect,
+          type: "static",
+        },
+        endIndex: text.length,
+        startIndex: 0,
+      };
+    }
 
     return {
       ability: {
@@ -862,6 +909,26 @@ function parseStaticAbilityInner(
   // Inside [Level N] gated static abilities.
   const selfCostScopeMatch = cleanText.match(/^I cost\s+(.+?)\s+less\s+(.+?)\.?$/i);
   if (selfCostScopeMatch) {
+    // rule 356.4 — "to play from anywhere other than your hand" is an origin-zone
+    // gate the engine reads as `whenPlayedFrom:"not-hand"` (see Drag Under
+    // sfd-164-221); a free-text scope would be silently ignored at pay time.
+    if (/^to play from anywhere other than your hand$/i.test(selfCostScopeMatch[2].trim())) {
+      const raw = selfCostScopeMatch[1];
+      const energy = /^:rb_energy_(\d+):$/.exec(raw.trim());
+      return {
+        ability: {
+          effect: {
+            by: energy ? Number(energy[1]) : raw,
+            target: "self" as AnyTarget,
+            type: "cost-reduction",
+            whenPlayedFrom: "not-hand",
+          } as unknown as Effect,
+          type: "static",
+        },
+        endIndex: text.length,
+        startIndex: 0,
+      };
+    }
     return {
       ability: {
         effect: {
@@ -1013,6 +1080,29 @@ function parseStaticAbilityInner(
         ...(condition ? { condition } : {}),
         effect: {
           reduction: ifCostMatch[2],
+          target: "self" as AnyTarget,
+          type: "cost-reduction",
+        } as unknown as Effect,
+        type: "static",
+      },
+      endIndex: text.length,
+      startIndex: 0,
+    };
+  }
+
+  // rule 356.4 (rule-id: sfd-076-221) — "This costs COST less if CONDITION."
+  // Trailing-condition twin of the "If CONDITION, this costs COST less." rider
+  // above; both emit the same conditional self cost-reduction static.
+  const costLessIfMatch = cleanText.match(/^This costs?\s+(.+?)\s+less\s+if\s+(.+?)\.?$/i);
+  if (costLessIfMatch) {
+    const conditionResult = parseConditionFromText("If " + costLessIfMatch[2] + ",");
+    const condition = conditionResult?.condition;
+
+    return {
+      ability: {
+        ...(condition ? { condition } : {}),
+        effect: {
+          reduction: costLessIfMatch[1],
           target: "self" as AnyTarget,
           type: "cost-reduction",
         } as unknown as Effect,

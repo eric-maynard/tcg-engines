@@ -228,7 +228,7 @@ describe("Forecaster (sfd-065-221)", () => {
     expect(game.p1.deck()[0]).toBe("second");
   });
 
-  test.failing("BUG: 'when you play US' — Forecaster is templated as a Mech itself and should predict on its own play (card data lacks the Mech tag)", async () => {
+  test("'when you play US' — Forecaster is templated as a Mech itself and should predict on its own play (card data lacks the Mech tag)", async () => {
     // Expected: playing Forecaster puts its own Vision trigger on the chain and offers the top card.
     // Actual: no Mech tag on sfd-065-221 → no self-grant, no trigger.
     const game = await scenario().resources(P1, { energy: 2 }).hand(P1, CARD, "fc").deck(P1, [FILLER, FILLER], ["top", "second"]).build();
