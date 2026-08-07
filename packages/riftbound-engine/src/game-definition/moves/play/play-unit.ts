@@ -225,6 +225,35 @@ function friendlyKillableUnits(
 }
 
 /**
+ * rule-id: sfd-079-221 (rule 356.2.b) — does this unit print "you may exhaust
+ * your legend as an additional cost to play me"?
+ */
+function hasLegendExhaustCost(cardId: string): boolean {
+  const optional = getOptionalPlayCost(cardId);
+  return (
+    optional?.kind === "exhaust" &&
+    (optional.exhaust as { type?: string } | undefined)?.type === "legend"
+  );
+}
+
+/**
+ * rule 414.4 (sfd-079-221) — the legend can only be exhausted to pay a cost
+ * while it is ready; an already-exhausted legend means the option is off.
+ */
+function readyLegendId(
+  zones: BoardZones,
+  counters: { getFlag: (cardId: CoreCardId, flag: string) => boolean | undefined },
+  playerId: string,
+): string | undefined {
+  for (const id of zones.getCardsInZone("legendZone" as CoreZoneId, playerId as CorePlayerId)) {
+    if (counters.getFlag(id as CoreCardId, "exhausted") !== true) {
+      return id as string;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Friendly gear (including attached Equipment) on the board — rule 356.2.a.1
  * payment pool. "Friendly" is CONTROL, not ownership, so scan every seat's
  * board zones and filter by controller.
@@ -509,6 +538,17 @@ export const playUnit: Defs["playUnit"] = {
     // rule-id: ven-096-166 — board/trash access so self-scaled and friendly
     // static cost reductions (rule 466) apply to unit plays.
     const board = { cards: context.cards, zones: context.zones };
+
+    // rule 356.2.b / 414.4 (sfd-079-221) — "you may exhaust your legend as an
+    // additional cost": declaring the payment needs a READY legend.
+    if (
+      context.params.paidAdditionalCost === true &&
+      hasLegendExhaustCost(context.params.cardId as string) &&
+      readyLegendId(context.zones, context.counters, context.params.playerId as string) ===
+        undefined
+    ) {
+      return false;
+    }
 
     // rule 356.2.a.1 / 357.2 (ogn-208-298) — "As an additional cost to play me,
     // kill a friendly unit": mandatory, so a play naming no victim is not a
@@ -874,6 +914,21 @@ export const playUnit: Defs["playUnit"] = {
         location: "base",
         playerId: context.playerId as string,
       });
+
+      // rule 356.2.b / 414.4 (sfd-079-221) — "you may exhaust your legend as an
+      // additional cost": offer the paid variant only while a legend is ready.
+      if (
+        standardTiming &&
+        hasLegendExhaustCost(cardId as string) &&
+        readyLegendId(context.zones, context.counters, context.playerId as string) !== undefined
+      ) {
+        results.push({
+          cardId: cardId as string,
+          location: "base",
+          paidAdditionalCost: true,
+          playerId: context.playerId as string,
+        });
+      }
 
       // Rule 355.2.a: a Battlefield the controller controls is a default
       // valid play location.
@@ -1265,6 +1320,21 @@ export const playUnit: Defs["playUnit"] = {
               sourceCardId: cardId as string,
               zones,
             },
+          );
+          paidAdditionalCostActual = true;
+        }
+      } else if (
+        optional?.kind === "exhaust" &&
+        (optional.exhaust as { type?: string } | undefined)?.type === "legend"
+      ) {
+        // rule 356.2.b / 414.4 (sfd-079-221) — exhaust the ready legend as the
+        // additional cost; re-derived from the board, never client-supplied.
+        const legendId = readyLegendId(zones, counters, playerId);
+        if (legendId !== undefined) {
+          counters.setFlag(legendId as CoreCardId, "exhausted", true);
+          context.cards.updateCardMeta?.(
+            legendId as CoreCardId,
+            { exhausted: true } as Partial<RiftboundCardMeta>,
           );
           paidAdditionalCostActual = true;
         }

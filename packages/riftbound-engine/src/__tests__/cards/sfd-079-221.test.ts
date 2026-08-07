@@ -57,7 +57,7 @@ async function answerTrigger(game: Game, units: string[], dest: string): Promise
 }
 
 describe("Bard, Mercurial (sfd-079-221)", () => {
-  test.failing("BUG: parsed abilities should be [optional additional cost: exhaust your legend] + [play trigger, if paid: move any number of friendly units to an OPEN battlefield]", async () => {
+  test("parsed abilities should be [optional additional cost: exhaust your legend] + [play trigger, if paid: move any number of friendly units to an OPEN battlefield]", async () => {
     // Actual parse: [0] = { type: "spell", effect: exhaust a unit }, [1].effect.to = "base".
     const abilities = (await import("../../../../riftbound-cards/src/data/all-cards")).getAllCards().find((c) => c.id === CARD)?.abilities as unknown as { type: string; effect?: Record<string, unknown> }[];
     expect(abilities).toHaveLength(2);
@@ -112,7 +112,7 @@ describe("Bard, Mercurial (sfd-079-221)", () => {
     expect(game.locationOf("a")).toBe("base");
   });
 
-  test.failing("BUG: with a ready legend the optional cost is offered; paying it exhausts the legend on top of 4 energy + [mind] and puts the play trigger on the chain", async () => {
+  test("with a ready legend the optional cost is offered; paying it exhausts the legend on top of 4 energy + [mind] and puts the play trigger on the chain", async () => {
     // Expected: a payOptional variant; after playing with it the legend is exhausted, pool empty,
     // and Bard's triggered ability is the sole chain item. Actual: no such variant exists.
     const game = await board().build();
