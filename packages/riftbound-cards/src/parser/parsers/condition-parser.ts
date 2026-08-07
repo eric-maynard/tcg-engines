@@ -377,6 +377,12 @@ const IF_DISCARDED_THIS_TURN_PATTERN = /^If you've discarded a card this turn,?\
 const IF_SPENT_POWER_PATTERN = /^If you(?:'ve|'ve) spent at least .+? this turn,?\s*/i;
 
 /**
+ * Pattern for "If you've spent [N] or more to play a spell this turn" condition
+ */
+const IF_SPENT_SPELL_ENERGY_PATTERN =
+  /^If you(?:'ve|'ve|’ve)?\s*spent\s+:rb_energy_(\d+):\s+or more to play a spell this turn,?\s*/i;
+
+/**
  * Pattern for "If an enemy unit has died this turn" condition
  */
 const IF_ENEMY_DIED_PATTERN = /^If an enemy unit has died this turn,?\s*/i;
@@ -610,6 +616,22 @@ export function parseConditionFromText(text: string): ConditionParseResult | und
     };
   }
 
+  // rule 135.2 / 357 — "If you've spent [N] or more to play a spell this turn":
+  // the ENERGY actually paid in the Pay Costs step (including additional costs
+  // such as a paid Repeat, 820.1.d); power pips never count. Must be tried
+  // before the generic "spent at least … this turn" power pattern.
+  const ifSpentSpellEnergyMatch = IF_SPENT_SPELL_ENERGY_PATTERN.exec(text);
+  if (ifSpentSpellEnergyMatch) {
+    return {
+      condition: {
+        amount: Number.parseInt(ifSpentSpellEnergyMatch[1], 10),
+        type: "spell-energy-spent-this-turn",
+      } as unknown as Condition,
+      remainingText: text.slice(ifSpentSpellEnergyMatch[0].length),
+      startIndex: 0,
+    };
+  }
+
   // Try "If you've spent at least RUNES this turn"
   const ifSpentPowerMatch = IF_SPENT_POWER_PATTERN.exec(text);
   if (ifSpentPowerMatch) {
@@ -783,13 +805,16 @@ export function parseLeadingIfCondition(
       effectText: rest,
     };
   }
-  // "if you spent :rb_energy_N: or more [to play a spell this turn]"
+  // rule 135.2 (rule-id: unl-005-219) — "when you play a spell, if you spent
+  // :rb_energy_N: or more": the ENERGY paid for THAT spell, not power spent
+  // this turn. (The turn-wide "…to play a spell this turn" wording is a
+  // different condition, handled earlier as `spell-energy-spent-this-turn`.)
   const spentEnergyMatch = clause.match(/^you(?:'ve|'ve)?\s*spent\s+:rb_energy_(\d+):\s+or more/i);
   if (spentEnergyMatch) {
     return {
       condition: {
         amount: Number.parseInt(spentEnergyMatch[1], 10),
-        type: "spent-power",
+        type: "spell-energy-spent",
       } as unknown as Condition,
       effectText: rest,
     };

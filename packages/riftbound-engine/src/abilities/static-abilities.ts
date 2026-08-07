@@ -415,6 +415,17 @@ export function evaluateCondition(
       return spent >= ((condition.amount as number) ?? 1);
     }
 
+    // rule 135.2 / 357 (rule-id: unl-004-219) — "If you've spent [N] or more to
+    // play a spell this turn": the ENERGY this card's controller actually paid
+    // while playing spells this turn (additional costs included, 820.1.d).
+    // Power pips never count, and the ledger resets each turn.
+    case "spell-energy-spent-this-turn": {
+      const spent =
+        (ctx.draft as { spellEnergySpentThisTurn?: Record<string, number> })
+          .spellEnergySpentThisTurn?.[source.owner] ?? 0;
+      return spent >= ((condition.amount as number) ?? 1);
+    }
+
     case "xp-gained-this-turn": {
       const gained = ctx.draft.xpGainedThisTurn?.[source.owner] ?? 0;
       return gained > 0;
@@ -529,6 +540,23 @@ function resolveStaticTargets(
  * the board so the grant lands on the described units rather than the source.
  * Returns undefined when the target is not a group descriptor (self / bare).
  */
+/**
+ * rule 105.2 / 187.7 — a battlefield card sits in `battlefieldRow`, but "here"
+ * on its own aura means the units AT that battlefield. Map the row source onto
+ * its `battlefield-<id>` zone; every other source keeps its own zone.
+ */
+function staticSourceZone(source: BoardCard, ctx: StaticAbilityContext): string {
+  if (source.zone !== "battlefieldRow") {
+    return source.zone;
+  }
+  for (const [bfId, bf] of Object.entries(ctx.draft.battlefields)) {
+    if (bfId === source.id || (bf as { id?: string }).id === source.id) {
+      return `battlefield-${bfId}`;
+    }
+  }
+  return source.zone;
+}
+
 function resolveStaticTargetsFromDescriptor(
   target: unknown,
   source: BoardCard,
@@ -572,7 +600,8 @@ function resolveStaticTargetsFromDescriptor(
   }
   // rule 105.2 — a base is not a battlefield: "at my battlefield" addresses
   // nobody while the source sits anywhere other than a battlefield.
-  if (t.location === "battlefield" && !source.zone.startsWith("battlefield-")) {
+  const sourceZone = staticSourceZone(source, ctx);
+  if (t.location === "battlefield" && !sourceZone.startsWith("battlefield-")) {
     return [];
   }
   const registry = getGlobalCardRegistry();
@@ -614,13 +643,13 @@ function resolveStaticTargetsFromDescriptor(
       if (t.excludeSelf && c.id === source.id) {
         return false;
       }
-      if ((t.location === "here" || t.location === "battlefield") && c.zone !== source.zone) {
+      if ((t.location === "here" || t.location === "battlefield") && c.zone !== sourceZone) {
         return false;
       }
       // rule 355.1 (unl-076-219): "at my battlefield" is the battlefield the
       // source is at — a base is not a battlefield, so nothing qualifies there.
       if (t.location === "here-battlefield") {
-        if (!source.zone?.startsWith("battlefield") || c.zone !== source.zone) {
+        if (!sourceZone.startsWith("battlefield-") || c.zone !== sourceZone) {
           return false;
         }
       }
@@ -642,9 +671,15 @@ function resolveStaticTargetsFromDescriptor(
             }
           }
         } else if (typeof t.filter === "object" && t.filter !== null) {
-          const tag = (t.filter as { tag?: string }).tag;
-          if (tag && !(def?.tags ?? []).includes(tag)) {
-            return false;
+          // A tag list is read as "any of" (unl-t03 Brush: "Bird, Cat, Dog,
+          // Poro, and Ivern units here have +1 [Might]").
+          const tag = (t.filter as { tag?: string | readonly string[] }).tag;
+          if (tag !== undefined) {
+            const tags = def?.tags ?? [];
+            const wanted = Array.isArray(tag) ? (tag as readonly string[]) : [tag as string];
+            if (!wanted.some((w) => tags.includes(w))) {
+              return false;
+            }
           }
           // rule-id: ven-097-166 — "with my name": `"self"` means the source's
           // own printed name (Spiderling counting other Spiderlings).
