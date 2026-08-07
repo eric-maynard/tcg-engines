@@ -188,8 +188,9 @@ export const hideCard: Defs["hideCard"] = {
       return false;
     }
 
+    // rule 811.1.b / 421.2.a: Hide is legal from the hand OR the Champion Zone.
     const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
-    if (zone !== "hand") {
+    if (zone !== "hand" && zone !== "championZone") {
       return false;
     }
 
@@ -248,7 +249,14 @@ export const hideCard: Defs["hideCard"] = {
       "hand" as CoreZoneId,
       context.playerId as CorePlayerId,
     );
-    const hiddenCards = hand.filter((id) => registry.hasKeyword(id as string, "Hidden"));
+    // rule 811.1.b / 421.2.a: Champion Zone cards may be hidden too.
+    const championZone = context.zones.getCardsInZone(
+      "championZone" as CoreZoneId,
+      context.playerId as CorePlayerId,
+    );
+    const hiddenCards = [...hand, ...championZone].filter((id) =>
+      registry.hasKeyword(id as string, "Hidden"),
+    );
     if (hiddenCards.length === 0) {
       return [];
     }

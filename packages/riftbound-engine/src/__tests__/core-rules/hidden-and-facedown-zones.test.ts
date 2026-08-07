@@ -433,7 +433,7 @@ describe("107.3.a / 107.3.b / 811.1.b: each battlefield's Facedown Zone holds ex
 // ===========================================================================
 
 describe("811.1.b / 421.2.a / 108.3: Hide is legal from hand OR Champion Zone — and from nowhere else", () => {
-  test.failing("BUG: 811.1.b — a Hidden champion in P1's Champion Zone can be hidden at bf1 (zone empties, card facedown, power −1, no chain); engine only allows Hide from hand", async () => {
+  test("811.1.b — a Hidden champion in P1's Champion Zone can be hidden at bf1 (zone empties, card facedown, power −1, no chain); engine only allows Hide from hand", async () => {
     // Expected: hide(champ → bf1) is legal and succeeds. Actual: hideCard requires zone === "hand",
     // so the champion is never offered and the attempt is rejected.
     const game = await scenario()
