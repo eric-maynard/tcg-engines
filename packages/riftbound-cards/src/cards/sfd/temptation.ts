@@ -2,24 +2,30 @@ import type { Ability } from "@tcg/riftbound-types";
 import type { SpellCard } from "@tcg/riftbound-types/cards";
 import { createCardId } from "@tcg/riftbound-types/cards";
 
-export const temptation: SpellCard = {
-  // rule 449.1 — "to a location where there's a unit with the same controller"
-  // is part of the instruction: the destination menu is limited to the base /
-  // battlefields where the MOVED unit's controller already has another unit.
-  // The parser only produces an unrestricted `to: "choose"`, so it is spelled
-  // out here.
-  abilities: [
-    {
-      effect: {
-        target: { controller: "enemy", type: "unit" },
-        to: "location-with-same-controller-unit",
-        type: "move",
-      },
-      repeat: { energy: 2 },
-      timing: "standard",
-      type: "spell",
+/**
+ * Temptation — sfd-129-221
+ *
+ * "Move an enemy unit to a location where there's a unit with the same
+ * controller." rule 449.1 — the destination clause restricts where the unit may
+ * go: a place its OWN controller already occupies. The generic `to: "choose"`
+ * the parser produces would offer every location, so the restriction is named
+ * explicitly here (`effects/move.ts` reads it).
+ */
+const abilities: Ability[] = [
+  {
+    effect: {
+      target: { controller: "enemy", type: "unit" },
+      to: "same-controller-unit",
+      type: "move",
     },
-  ] as Ability[],
+    repeat: { energy: 2 },
+    timing: "standard",
+    type: "spell",
+  },
+];
+
+export const temptation: SpellCard = {
+  abilities,
   cardNumber: 129,
   cardType: "spell",
   domain: "chaos",

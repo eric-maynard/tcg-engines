@@ -84,7 +84,16 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       (e) => e.type === "counter" && (e as { target?: unknown }).target === undefined,
     );
     let counterBoundId: string | undefined;
-    if (counterStepIdx >= 0 && ctx.boundTargets && ctx.boundTargets.length > 1) {
+    // rule 820.2.a (sfd-136-221) — repeated counters own one locked chain item
+    // EACH (positional, below); that list must not be split as a lead pick.
+    const repeatedCounterTargets =
+      (seq as { independentTargets?: boolean }).independentTargets === true &&
+      seq.effects.every(
+        (e) => e.type === "counter" && (e as { target?: unknown }).target === undefined,
+      ) &&
+      ctx.boundTargets !== undefined &&
+      ctx.boundTargets.length === seq.effects.length;
+    if (!repeatedCounterTargets && counterStepIdx >= 0 && ctx.boundTargets && ctx.boundTargets.length > 1) {
       const chainItems = ctx.draft.interaction?.chain?.items ?? [];
       const at = ctx.boundTargets.findIndex((id) =>
         chainItems.some((it) => it !== undefined && it.cardId === id),
@@ -200,6 +209,14 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       if (counterBoundId !== undefined && i === counterStepIdx) {
         const { boundTargets: _drop, ...rest } = ctx;
         subCtx = { ...rest, boundTargets: [counterBoundId] };
+      }
+      // rule 820.2.a (sfd-136-221) — a bare `counter` carries no target
+      // descriptor, so it owns no descriptor slot: route the caster's i-th
+      // locked chain item to the i-th execution.
+      if (repeatedCounterTargets) {
+        const id = ctx.boundTargets?.[i];
+        const { boundTargets: _drop, ...rest } = ctx;
+        subCtx = id !== undefined ? { ...rest, boundTargets: [id] } : rest;
       }
       if (indepSlots) {
         const k = indepSlots.findIndex((s) => s.index === i);
@@ -451,8 +468,34 @@ export function handle_sequence(effect: ExecutableEffect, ctx: EffectContext, h:
       // not run (and silently auto-pick modes) while the choice is pending.
       // They resume from the prompt's `then` once the mode is picked.
       const parked = ctx.draft.pendingChoice as
-        | { type?: string; then?: unknown }
+        | { counterRansom?: unknown; type?: string; then?: unknown }
         | undefined;
+      // rule 158.1 / 820.1.d.1 (sfd-136-221) — "Counter a spell unless its
+      // controller pays [N]" parks the ransom question; a later Repeat
+      // execution must not run (and demand a second ransom) before it is
+      // answered. It resumes from the prompt's `then`.
+      if (parked?.counterRansom !== undefined && parked.then === undefined) {
+        const rest = seq.effects.slice(i + 1);
+        if (rest.length > 0) {
+          const carry = repeatedCounterTargets
+            ? ctx.boundTargets?.slice(i + 1)
+            : (subCtx.boundTargets as readonly string[] | undefined);
+          ctx.draft.pendingChoice = {
+            ...(parked as object),
+            then:
+              carry !== undefined && carry.length > 0
+                ? {
+                    boundTargetsOverride: carry,
+                    effects: rest,
+                    ...(repeatedCounterTargets ? { independentTargets: true } : {}),
+                    type: "sequence",
+                  }
+                : { effects: rest, independentExecution: true, type: "sequence" },
+            thenIsSequenceRest: true,
+          } as typeof ctx.draft.pendingChoice;
+        }
+        return;
+      }
       // rule 355.13 (ogn-153-298) — a `confirm` prompt suspends the rest too:
       // the later steps resume from the prompt's `then` after the answer.
       // rule 422.4 / 359.3.e (ogn-178-298) — so does a `reveal-and-pick`:

@@ -587,51 +587,6 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
     return;
   }
 
-  // rule-id: sfd-129-221 (Temptation) — rule 449.1: "move an enemy unit to a
-  // location where there's a unit with the same controller". The destination
-  // restriction is stated by the effect, so only the base / battlefields where
-  // the MOVED unit's controller already has ANOTHER unit are offered; its
-  // current location never counts, and a unit that is its controller's only
-  // unit has no legal destination (the instruction does nothing).
-  if (dest === "location-with-same-controller-unit") {
-    const cardId = moveTargets[0];
-    if (cardId === undefined) {
-      return;
-    }
-    const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
-    const movedController = arrivingController(ctx, cardId);
-    const sameSide = movedController === ctx.playerId ? "friendly" : "enemy";
-    const occupied = new Set(
-      resolveTarget({ controller: sameSide, quantity: "all", type: "unit" } as TargetDescriptor, {
-        cards: ctx.cards,
-        draft: ctx.draft,
-        playerId: ctx.playerId,
-        sourceCardId: ctx.sourceCardId,
-        sourceZone: ctx.sourceZone,
-        zones: ctx.zones,
-      })
-        .filter((id) => id !== cardId)
-        .map((id) => ctx.zones.getCardZone(id as CoreCardId) as string | undefined)
-        .filter((z): z is string => z !== undefined),
-    );
-    const options = [
-      "base",
-      ...Object.keys(ctx.draft.battlefields ?? {}).map((bfId) => `battlefield-${bfId}`),
-    ].filter((z) => z !== currentZone && occupied.has(z));
-    if (options.length === 0) {
-      return;
-    }
-    ctx.draft.pendingChoice = {
-      cardId,
-      options,
-      playerId: ctx.playerId,
-      sourceCardId: ctx.sourceCardId,
-      then: (effect as unknown as { then?: ExecutableEffect }).then,
-      type: "choose-destination",
-    } as RiftboundGameState["pendingChoice"];
-    return;
-  }
-
   if (dest === "choose") {
     // Rule 355.4 — no stated destination: the controller chooses base or
     // any battlefield other than the unit's current zone. Options must be
@@ -664,6 +619,61 @@ export function handle_move(effect: ExecutableEffect, ctx: EffectContext, h: Eff
       playerId: ctx.playerId,
       sourceCardId: ctx.sourceCardId,
       then: thenAtDestination,
+      type: "choose-destination",
+    } as RiftboundGameState["pendingChoice"];
+    return;
+  }
+
+  // rule-id: sfd-129-221 (rule 449.1) — "Move an enemy unit to a location where
+  // there's a unit with the same controller": the legal destinations are the
+  // places that unit's OWN controller already occupies (their base, or a
+  // battlefield holding one of their units), never its current location and
+  // never a place only the caster holds. With none, nothing moves (425.1.c).
+  if (dest === "same-controller-unit") {
+    // rule 820.2.a — a deferred second execution names its own unit here (the
+    // chain item's bound list still holds both units).
+    const deferred = (effect as unknown as { deferredMoverId?: string }).deferredMoverId;
+    const cardId = deferred ?? moveTargets[0];
+    if (cardId === undefined) {
+      return;
+    }
+    // rule 820.2.a (sfd-129-221) — a [Repeat] runs the instruction twice in one
+    // resolution: the second execution must wait for the first destination to
+    // be answered instead of overwriting its prompt, so it rides on that
+    // prompt's `then` with its own unit already bound.
+    const openPrompt = ctx.draft.pendingChoice as { type?: string; then?: unknown } | undefined;
+    if (openPrompt?.type === "choose-destination" && openPrompt.then === undefined) {
+      (ctx.draft.pendingChoice as { then?: unknown }).then = {
+        ...(effect as object),
+        deferredMoverId: cardId,
+      };
+      return;
+    }
+    const mover = arrivingController(ctx, cardId);
+    const currentZone = ctx.zones.getCardZone(cardId as CoreCardId);
+    const occupiedBy = (zoneId: string): boolean =>
+      ctx.zones
+        .getCardsInZone(zoneId as CoreZoneId)
+        .some((id) => id !== cardId && arrivingController(ctx, id as string) === mover);
+    const baseHasAlly = (
+      ctx.zones.getCardsInZone("base" as CoreZoneId, mover as never) as string[]
+    ).some((id) => id !== cardId && arrivingController(ctx, id) === mover);
+    const options = [
+      ...(baseHasAlly ? ["base"] : []),
+      ...Object.keys(ctx.draft.battlefields ?? {})
+        .map((bfId) => `battlefield-${bfId}`)
+        .filter((z) => occupiedBy(z)),
+    ].filter((z) => z !== currentZone);
+    if (options.length === 0) {
+      return;
+    }
+    const thenAtDest = (effect as unknown as { then?: ExecutableEffect }).then;
+    ctx.draft.pendingChoice = {
+      cardId,
+      options,
+      playerId: ctx.playerId,
+      sourceCardId: ctx.sourceCardId,
+      ...(thenAtDest !== undefined ? { then: thenAtDest } : {}),
       type: "choose-destination",
     } as RiftboundGameState["pendingChoice"];
     return;

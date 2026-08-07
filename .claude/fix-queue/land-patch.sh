@@ -11,7 +11,7 @@ FILES=(); for f in "$@"; do f="${f#$REPO/}"; case "$f" in *do_not_commit*|apps/r
 out files "${#FILES[@]}"
 exec 9>"$REPO/.claude/fix-queue/.land.lock"
 flock -w 1800 9 || { out committed false; out reason lock_timeout; exit 0; }
-HEAD_SHA=$(git rev-parse HEAD); WT="/tmp/rb-land-wt"
+HEAD_SHA=$(git rev-parse HEAD); WT="/tmp/rb-land-wt-LOCKED-do-not-touch"
 # fresh side worktree at HEAD (reused dir; always reset)
 if [ -d "$WT/.git" ] || [ -f "$WT/.git" ]; then git -C "$WT" reset -q --hard "$HEAD_SHA" && git -C "$WT" clean -qfdx -e node_modules -e '**/node_modules' >/dev/null 2>&1 || { git worktree remove --force "$WT" 2>/dev/null; rm -rf "$WT"; }; fi
 if [ ! -e "$WT/.git" ]; then git worktree prune; git worktree add --detach -f "$WT" "$HEAD_SHA" >/dev/null 2>&1 || { out committed false; out reason worktree_add_failed; exit 0; }; fi
