@@ -29,7 +29,8 @@ export function addVictoryPoints(
   return produce(state, (draft) => {
     const player = draft.players[playerId];
     if (player) {
-      player.victoryPoints += points;
+      // rule 194.4: players cannot have fewer than 0 points.
+      player.victoryPoints = Math.max(0, player.victoryPoints + points);
     }
   });
 }

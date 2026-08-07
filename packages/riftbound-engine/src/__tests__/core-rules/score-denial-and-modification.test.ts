@@ -241,7 +241,7 @@ describe("443.1.a / 443.2 — 'skip the next point they would gain from CONQUERI
   // Expected (443.2, 383.4.c.2.c, 470): the combat conquer of B is replaced with nothing → +0, but the
   // conquer trigger still draws 1 and B is marked scored.
   // Actual: the skip was already (wrongly) spent on the Hold, so the conquer pays out +1.
-  test("443.2 — the skipped conquer gains 0, but the trigger still fires and B is still scored", async () => {
+  test("443.2 — the skipped conquer gains 0 (trigger still fires, B still scored)", async () => {
     const game = await skipBoard();
     await game.p2.endTurn();
     await game.settle();
@@ -655,7 +655,17 @@ describe("194.1.c / 471.1.a.1 / 383.4.c.2.c — a 'When I conquer, you gain 1 po
       .battlefield("B", { controller: P2 })
       .unit(P2, "B", { might: 2, name: "Filler Squatter" }, "sq")
       .unit(P1, "base", { abilities: [CONQUER_POINT, RETURN_TO_BASE], might: 3, name: "Filler Ascendant" }, "asc");
-    return (withDenier ? b.unit(P2, "base", denier(1), "denier").hand(P1, BOLT3, "bolt") : b).build();
+    // rule 144.2: exhausting the unit is the COST of a Standard Move, so "asc"
+    // cannot move a second time this turn — the post-denier conquer needs a
+    // fresh body carrying the same "When I conquer, you gain 1 point".
+    return (
+      withDenier
+        ? b
+            .unit(P2, "base", denier(1), "denier")
+            .unit(P1, "base", { abilities: [CONQUER_POINT], might: 3, name: "Filler Ascendant II" }, "asc2")
+            .hand(P1, BOLT3, "bolt")
+        : b
+    ).build();
   }
 
   test("run (b) from 6: the conquer point (7) is granted at the conquer; the trigger then sits on the chain with NO winner yet; only after it resolves (8) does the following cleanup declare P1 the winner (319.5 → 323.1)", async () => {
@@ -696,7 +706,7 @@ describe("194.1.c / 471.1.a.1 / 383.4.c.2.c — a 'When I conquer, you gain 1 po
   // Expected (054.1, 055): under the denier the conquer pays 0 and the trigger resolves doing nothing → 3; killing the
   // denier later adds nothing back; a fresh conquer of B afterwards pays conquer +1 and trigger +1 → 5.
   // Actual: no denial → 5 already after the first conquer.
-  test.failing("BUG: 054.1 / 055 — run (c) under a denier: conquer 0 + trigger 0 (impossible instruction) = 3; after the denier dies, conquering B pays 1+1 → 5; engine never denies", async () => {
+  test("054.1 / 055 — run (c) under a denier: conquer 0 + trigger 0 (impossible instruction) = 3; after the denier dies, conquering B pays 1+1 → 5; engine never denies", async () => {
     const game = await ascendantBoard(3, true);
     await game.p1.move("asc", "A");
     await game.settle();
@@ -709,9 +719,7 @@ describe("194.1.c / 471.1.a.1 / 383.4.c.2.c — a 'When I conquer, you gain 1 po
     expect(game.zoneOf("denier")).toBe("trash");
     expect(game.p1.points()).toBe(3); // nothing retroactive
 
-    await game.p1.activate("asc", 1); // back to base
-    await game.settle();
-    await game.p1.move("asc", "B"); // 3 into 2: kills the squatter, conquers B
+    await game.p1.move("asc2", "B"); // 3 into 2: kills the squatter, conquers B
     await game.settle();
     expect(game.gameState.battlefields.B?.controller).toBe(P1);
     expect(game.p1.points()).toBe(5);
@@ -828,7 +836,7 @@ describe("194.4 — players cannot have fewer than 0 points", () => {
 
   // Expected (194.4.a): losing a point at 0 does nothing — total stays 0.
   // Actual: victoryPoints is not floored; the total becomes −1.
-  test.failing("BUG: 194.4.a — run (a): 'you lose 1 point' at 0 leaves the total at 0; engine goes negative", async () => {
+  test("194.4.a — run (a): 'you lose 1 point' at 0 leaves the total at 0", async () => {
     const game = await scenario().points(P1, 0).hand(P1, loseSelf(1), "tithe").build();
     await game.p1.cast("tithe");
     await game.settle();
@@ -837,7 +845,7 @@ describe("194.4 — players cannot have fewer than 0 points", () => {
 
   // Expected (194.4 "cannot have less than 0"): losing 2 at 1 clamps to 0.
   // Actual: −1.
-  test.failing("BUG: 194.4 — run (c): 'you lose 2 points' at 1 clamps to 0; engine goes to −1", async () => {
+  test("194.4 — run (c): 'you lose 2 points' at 1 clamps to 0", async () => {
     const game = await scenario().points(P1, 1).hand(P1, loseSelf(2), "tithe2").build();
     await game.p1.cast("tithe2");
     await game.settle();

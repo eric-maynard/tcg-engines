@@ -44,7 +44,9 @@ export function handle_score(effect: ExecutableEffect, ctx: EffectContext, _h: E
     if (amount > 0 && pointGainDenied(ctx.draft, playerId, ctx)) {
       continue;
     }
-    player.victoryPoints += amount;
+    // rule 194.4: a player can never have fewer than 0 points — a loss that
+    // would go below zero only removes what is there (194.4.a: at 0 it does nothing).
+    player.victoryPoints = Math.max(0, player.victoryPoints + amount);
   }
   // rule 320 / 321: no Cleanup — hence no victory check (rule 323.1) — while a
   // Chain Item is resolving. The chain's post-resolution Cleanup runs it once
