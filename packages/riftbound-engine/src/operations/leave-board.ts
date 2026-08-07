@@ -28,8 +28,10 @@ import type {
 import type { EffectContext, ExecutableEffect } from "../abilities/effect-executor";
 import { executeEffect } from "../abilities/effect-executor";
 import type { GameEvent } from "../abilities/game-events";
+import type { ChainItem } from "../chain";
 import * as replacementEffects from "../abilities/replacement-effects";
 import { checkReplacement, markReplacementConsumed } from "../abilities/replacement-effects";
+import { canAffordPower } from "../game-definition/moves/chain/effect-context";
 import type { RiftboundCardMeta, RiftboundGameState } from "../types";
 import type { DelayedTrigger } from "../types/game-state";
 import { getGlobalCardRegistry } from "./card-lookup";
@@ -163,6 +165,42 @@ interface LkiDraft {
   leavingBatch?: string[];
   /** rule 183 — owners of cards that have ceased to exist (tokens) or left the game. */
   departedOwners?: Record<string, string>;
+  /**
+   * rule 359.3.e.2 / 359.3.e.4 — per chain item id, the targets it chose that
+   * have since left the board and are therefore NEW objects (even if they came
+   * back to the very spot they were chosen at).
+   */
+  newObjectTargets?: Record<string, string[]>;
+}
+
+/**
+ * rule 124.1 / 359.3.e.2 / 359.3.e.4 — a card leaving the board for a non-board
+ * zone becomes a NEW object, so it is no longer the object any chain item
+ * already chose. Record it against every item currently holding it as a target;
+ * returning to the board (even to the same battlefield) does not restore that
+ * identity, unlike a mere on-board move-and-return (359.3.e.3).
+ */
+function markNewObjectForChainTargets(draft: RiftboundGameState, cardId: string): void {
+  const items = draft.interaction?.chain?.items ?? [];
+  if (items.length === 0) {
+    return;
+  }
+  const d = draft as RiftboundGameState & LkiDraft;
+  const store = (d.newObjectTargets ??= {});
+  for (const item of items) {
+    if (item.targets?.includes(cardId) !== true) {
+      continue;
+    }
+    const list = (store[item.id] ??= []);
+    if (!list.includes(cardId)) {
+      list.push(cardId);
+    }
+  }
+}
+
+/** rule 359.3.e.2 — targets of `chainItemId` that became new objects since it was placed. */
+export function newObjectTargetsFor(draft: RiftboundGameState, chainItemId: string): string[] {
+  return (draft as RiftboundGameState & LkiDraft).newObjectTargets?.[chainItemId] ?? [];
 }
 
 const KILL_FAMILY: ReadonlySet<LeaveCauseKind> = new Set(["kill", "sba", "temporary", "cost"]);
@@ -582,9 +620,104 @@ function consumeBoundDieReplacement(
   return active.splice(idx, 1)[0];
 }
 
-export function applyDieReplacement(ctx: LeaveBoardContext, cardId: string): boolean {
+/** rule 372 (ogn-023-298): can `playerId` pay an optional shield's `{energy, power[]}` cost now? */
+function canPayShieldCost(
+  draft: RiftboundGameState,
+  playerId: string,
+  cost: { energy?: number; power?: readonly string[] },
+): boolean {
+  const pool = draft.runePools[playerId];
+  if (!pool || pool.energy < (cost.energy ?? 0)) {
+    return false;
+  }
+  const needed: Record<string, number> = {};
+  for (const d of cost.power ?? []) {
+    needed[d] = (needed[d] ?? 0) + 1;
+  }
+  return canAffordPower(pool.power, needed);
+}
+
+/**
+ * rule 371.2 / 372 (ogn-023-298 Unlicensed Armory) — an OPTIONAL, costed
+ * "the next time it would die, you may pay [C] to … instead" shield. The event
+ * is a death however it was caused, so a Kill instruction (or a kill paid as an
+ * additional cost — rule 428.1.a.1 / 357.2.a) must consult it too, not just the
+ * lethal-damage cleanup pass. The controller has to be ASKED, so the death is
+ * suspended on an `opt-in` prompt: accepting runs the replacement, declining
+ * kills the unit for real (`suspendedKill`). Unpayable ⇒ the shield is spent
+ * ("the next time" has passed) and the death proceeds.
+ */
+function raiseCostedDieReplacementPrompt(
+  ctx: LeaveBoardContext,
+  cardId: string,
+  cause: LeaveCause | undefined,
+): boolean {
+  if (ctx.draft.pendingChoice) {
+    return false;
+  }
+  const active = (ctx.draft as { activeReplacements?: BoundDieReplacement[] }).activeReplacements;
+  if (!active || active.length === 0) {
+    return false;
+  }
+  const idx = active.findIndex(
+    (e) =>
+      e?.replaces === "die" &&
+      e.targetCardIds?.includes(cardId) === true &&
+      e.condition?.type === "pay-cost",
+  );
+  if (idx < 0) {
+    return false;
+  }
+  const entry = active[idx] as BoundDieReplacement & {
+    condition?: { cost?: { energy?: number; power?: readonly string[] } };
+  };
+  const cost = entry.condition?.cost;
+  const repl = entry.replacement;
+  const payer = entry.owner ?? controllerOf(ctx, cardId);
+  if (!cost || !repl || repl === "prevent" || typeof repl !== "object") {
+    return false;
+  }
+  active.splice(idx, 1);
+  if (!canPayShieldCost(ctx.draft, payer, cost)) {
+    return false;
+  }
+  const sourceCardId = entry.sourceCardId ?? cardId;
+  (ctx.draft as { pendingChoice?: unknown }).pendingChoice = {
+    playerId: payer,
+    resolved: {
+      cardId: sourceCardId,
+      controller: payer,
+      effect: repl,
+      id: `die-replacement-${cardId}`,
+      optInCost: cost,
+      targets: [cardId],
+      triggerEvent: { cardId, type: "die" },
+      triggered: true,
+      type: "ability",
+    },
+    sourceCardId,
+    suspendedDeathCardId: cardId,
+    // rule 371.2.b — declined ⇒ the replacement is not applied and the original
+    // kill happens after all (its shield is already spent, so no loop).
+    suspendedKill: {
+      by: cause?.by ?? payer,
+      source: cause?.source ?? sourceCardId,
+    },
+    type: "opt-in",
+  };
+  return true;
+}
+
+export function applyDieReplacement(
+  ctx: LeaveBoardContext,
+  cardId: string,
+  cause?: LeaveCause,
+): boolean {
   if (RUNNING_DIE_REPLACEMENTS.has(cardId)) {
     return false;
+  }
+  if (raiseCostedDieReplacementPrompt(ctx, cardId, cause)) {
+    return true;
   }
   const bound = consumeBoundDieReplacement(ctx.draft, cardId);
   if (bound) {
@@ -688,7 +821,7 @@ export function leaveBoard(
   if (killing && opts.replacements !== "skip" && isBoardZone(lki.zone)) {
     // rule 370.1.a.1 — the death never happens; the card stays (wherever the
     // replacement put it) and keeps no pending Deathknell.
-    if (applyDieReplacement(ctx, cardId)) {
+    if (applyDieReplacement(ctx, cardId, cause)) {
       clearLKI(ctx.draft, [cardId]);
       return { cardId, cause, left: false, lki, replacedBy: "replacement" };
     }
@@ -720,6 +853,9 @@ export function leaveBoard(
 
   // rule 124.1 — the card in its new zone is a new object.
   resetObjectState(ctx, cardId);
+  if (isBoardZone(lki.zone)) {
+    markNewObjectForChainTargets(ctx.draft, cardId);
+  }
 
   const result: LeaveResult = { cardId, cause, left: true, lki, to: finalTo };
 
@@ -799,6 +935,40 @@ export function buildLeaveEvent(result: LeaveResult, batchIndex?: number): GameE
  *   bound to a runner context, or the dispatcher).
  * @returns total listeners fired (when the sink reports it).
  */
+/**
+ * rule 383.3.d.1 — every card of a simultaneous batch leaves at once, so the
+ * triggers they cause are simultaneous even though the events are published one
+ * card at a time. The turn player appends theirs to the Chain first, then each
+ * other player in turn order; within one player the scan order stands (585.1).
+ * Only the items this batch added are reordered.
+ */
+function orderBatchTriggersByTurnOrder(draft: RiftboundGameState, chainLenBefore: number): void {
+  const chain = draft.interaction?.chain;
+  const items = chain?.items;
+  if (!chain || !items || items.length - chainLenBefore < 2) {
+    return;
+  }
+  const turnOrder = Object.keys(draft.players ?? {});
+  const turnPlayer = draft.turn?.activePlayer ?? turnOrder[0] ?? "";
+  const startIdx = Math.max(0, turnOrder.indexOf(turnPlayer));
+  const rankOf = (pid: string): number => {
+    const i = turnOrder.indexOf(pid);
+    return i < 0
+      ? Number.MAX_SAFE_INTEGER
+      : (i - startIdx + turnOrder.length) % turnOrder.length;
+  };
+  const head = items.slice(0, chainLenBefore);
+  const tail = items
+    .slice(chainLenBefore)
+    .map((item, i) => ({ i, item }))
+    .toSorted((a, b) => {
+      const d = rankOf(a.item.controller) - rankOf(b.item.controller);
+      return d !== 0 ? d : a.i - b.i;
+    })
+    .map((e) => e.item);
+  (chain as { items: ChainItem[] }).items = [...head, ...tail];
+}
+
 export function emitLeaveEvents(
   ctx: LeaveBoardContext,
   results: readonly LeaveResult[],
@@ -812,6 +982,7 @@ export function emitLeaveEvents(
   const outerBatch = draft.leavingBatch;
   draft.leavingBatch = gone.map((r) => r.cardId);
   let total = 0;
+  const chainLenBefore = ctx.draft.interaction?.chain?.items.length ?? 0;
   try {
     let discardIndex = 0;
     for (const r of gone) {
@@ -821,6 +992,7 @@ export function emitLeaveEvents(
         total += typeof n === "number" ? n : 0;
       }
     }
+    orderBatchTriggersByTurnOrder(ctx.draft, chainLenBefore);
   } finally {
     draft.leavingBatch = outerBatch;
     for (const r of gone) {

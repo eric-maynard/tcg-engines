@@ -156,7 +156,7 @@ describe("Altar of Memories × two Watchful Sentries dying to one Flurry of Blad
   // Expected: after opting in (cost paid) the Altar item merely sits finalized on the chain; its
   // "draw 1, then put a card back" runs when it RESOLVES, i.e. only after both players pass.
   // Actual: the draw and the put-back prompt happen immediately at finalization.
-  test.failing("BUG: the Altar's draw waits for RESOLUTION — right after opting in P1 has not drawn yet and P2 still gets priority (383.3, 337)", async () => {
+  test("the Altar's draw waits for RESOLUTION — right after opting in P1 has not drawn yet and P2 still gets priority (383.3, 337)", async () => {
     const game = await flurry();
     await game.settle();
     if (game.decision()?.kind === "order") {

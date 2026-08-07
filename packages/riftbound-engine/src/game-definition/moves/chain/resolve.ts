@@ -28,6 +28,7 @@ import {
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { withChainItemResolution } from "../../../chain/resolution-guard";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
+import { newObjectTargetsFor } from "../../../operations/leave-board";
 import { checkVictory } from "../../../operations/points";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
@@ -218,6 +219,21 @@ export function optInIsPerformable(
         resolved.controller as CorePlayerId,
       );
       if (hand.length < optDiscard) {
+        return false;
+      }
+    }
+    // rule 383.3.b.1 / 404.2 (rule-id: sfd-169-221 Altar of Memories) — "you
+    // may exhaust me to …" cannot be finalized while the source is already
+    // exhausted, so the item leaves the Chain without a prompt (383.3.a.2). Two
+    // copies triggering at once therefore yield exactly ONE usable item.
+    if ((resolved.optInCost as { exhaust?: unknown } | undefined)?.exhaust === true) {
+      const meta = context.cards.getCardMeta(resolved.cardId as CoreCardId) as
+        | { exhausted?: boolean }
+        | undefined;
+      const flag = (
+        context.counters as { getFlag?: (cardId: CoreCardId, flag: string) => boolean | undefined }
+      ).getFlag?.(resolved.cardId as CoreCardId, "exhausted");
+      if (meta?.exhausted === true || flag === true) {
         return false;
       }
     }
@@ -591,11 +607,19 @@ export function executeResolvedItem(
     // ("an enemy unit here" after the source or the target moved, "with less
     // Might than me" after a pump). Illegal ones are dropped, never replaced.
     const finalizedTrigger = resolved.triggered === true && resolved.status === "finalized";
+    // rule 359.3.e.2 / 359.3.e.4 / 359.3.f.4 (ogn-080-298 × unl-073-219) — an
+    // item whose CONTROL changed after its targets were chosen re-reads its
+    // relative descriptor from the new controller's seat: "an enemy unit" the
+    // original caster picked is friendly to the thief, so a stolen spell
+    // mistargets unless new choices were made.
+    const controlStolen =
+      typeof resolved.originalController === "string" &&
+      resolved.originalController !== resolved.controller;
     const fightDefenderDesc =
       effect.type === "fight" && typeof (effect as { attacker?: unknown }).attacker === "string"
         ? ((effect as { defender?: unknown }).defender as TargetDescriptor | undefined)
         : undefined;
-    const slotDescriptors: TargetDescriptor[] = !finalizedTrigger || reachesPrivateZones
+    const slotDescriptors: TargetDescriptor[] = (!finalizedTrigger && !controlStolen) || reachesPrivateZones
       ? []
       : typeof (effect.target ?? fightDefenderDesc) === "object"
         ? [(effect.target ?? fightDefenderDesc) as TargetDescriptor]
@@ -620,8 +644,16 @@ export function executeResolvedItem(
       slotPools.length === 0 ||
       draft.battlefields?.[id] !== undefined ||
       slotPools.some((pool) => pool.includes(id));
+    // rule 359.3.e.2 / 359.3.e.4 (ogn-024-298 × unl-184-219) — a chosen target
+    // that left the board and came back is a NEW object, so it is no longer
+    // this item's target even when it stands exactly where it was chosen. A
+    // move-and-return that never left the board is fine (359.3.e.3).
+    const rebornTargets = newObjectTargetsFor(draft, resolved.id);
+    const stillSameObject = (id: string): boolean =>
+      reachesPrivateZones || !rebornTargets.includes(id);
     const legal = boundTargets.filter(
       (id) =>
+        stillSameObject(id) &&
         stillOnBoard(id) &&
         locationStillMatches(id) &&
         mightStillMatches(id) &&
