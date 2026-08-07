@@ -270,7 +270,72 @@ function handleReferenceKill(
   killUnits([victimId], ctx, h);
 }
 
+/**
+ * rule 108.2 / 370.1.a.2 (rule-id: ven-090-166) — "Each player chooses a unit
+ * they control. Kill the rest.": every player, starting with the source's
+ * controller, names one KEEPER among the units THEY CONTROL (control, not
+ * ownership — 108.2). A player with no units chooses nothing; one with exactly
+ * one unit keeps it without a prompt; otherwise the choice is mandatory. Once
+ * every choice is in, every other unit on the board dies as one batch, so
+ * units created by those deaths (Deathknell tokens) are never part of "the rest".
+ */
+function handleEachPlayerKeepsOne(
+  effect: ExecutableEffect,
+  ctx: EffectContext,
+  h: EffectHelpers,
+): void {
+  const pending = effect as {
+    eachKept?: readonly string[];
+    eachRemaining?: readonly string[];
+  };
+  const caster = controllerOf(ctx.sourceCardId, ctx) || ctx.playerId;
+  const kept = [...(pending.eachKept ?? [])];
+  let queue: string[];
+  if (pending.eachRemaining === undefined) {
+    const order = Object.keys(ctx.draft.players);
+    const at = order.indexOf(caster);
+    queue = at < 0 ? [...order] : [...order.slice(at), ...order.slice(0, at)];
+  } else {
+    const picked = (ctx.boundTargets ?? [])[0];
+    if (picked !== undefined) {
+      kept.push(picked);
+    }
+    queue = [...pending.eachRemaining];
+  }
+  while (queue.length > 0) {
+    const pid = queue.shift() as string;
+    const options = candidatesFor(effect, ctx, pid);
+    if (options.length === 0) {
+      continue;
+    }
+    if (options.length === 1) {
+      kept.push(options[0] as string);
+      continue;
+    }
+    if (ctx.draft.pendingChoice) {
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      effect: { ...effect, eachKept: kept, eachRemaining: queue },
+      options: options as never,
+      playerId: pid as never,
+      remaining: 1,
+      sourceCardId: ctx.sourceCardId as never,
+      type: "choose-target",
+    };
+    return;
+  }
+  const victims = Object.keys(ctx.draft.players)
+    .flatMap((pid) => candidatesFor(effect, ctx, pid))
+    .filter((id) => !kept.includes(id));
+  killUnits(victims, { ...ctx, playerId: caster }, h);
+}
+
 export function handle_kill(effect: ExecutableEffect, ctx: EffectContext, h: EffectHelpers): void {
+  if ((effect as { keep?: unknown }).keep === "one") {
+    handleEachPlayerKeepsOne(effect, ctx, h);
+    return;
+  }
   if ((effect as { chooser?: string }).chooser === "each-other-player") {
     handleEachOtherChoosesKill(effect, ctx, h);
     return;
