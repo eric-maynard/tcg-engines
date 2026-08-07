@@ -83,7 +83,7 @@ describe("Battering Ram (sfd-012-221)", () => {
     expect(game.zoneOf("ram")).toBe("hand");
   });
 
-  test.failing("BUG: after playing 1 card this turn Battering Ram costs 4 (rule 356.4 self static reduction is not applied)", async () => {
+  test("after playing 1 card this turn Battering Ram costs 4 (rule 356.4 self static reduction is not applied)", async () => {
     // Expected: 5 energy − 1 (Cheap) = 4 left, ram costs 5−1 = 4 → legal, ends at 0.
     // Actual: the "for each card you've played this turn" scope is not counted; ram still costs 5.
     const game = await board(5, 1).build();
@@ -97,7 +97,7 @@ describe("Battering Ram (sfd-012-221)", () => {
     expect(game.zoneOf("ram")).toBe("base");
   });
 
-  test.failing("BUG: every card TYPE you played counts — unit + gear + spell → costs 2", async () => {
+  test("every card TYPE you played counts — unit + gear + spell → costs 2", async () => {
     // Expected: 3 cards finalized by P1 (unit, gear, spell) → 5−3 = 2. Actual: charged 5.
     const game = await scenario()
       .resources(P1, { energy: 5 })
@@ -120,7 +120,7 @@ describe("Battering Ram (sfd-012-221)", () => {
     expect(game.p1.energy()).toBe(0);
   });
 
-  test.failing("BUG: four cards played → costs exactly 1", async () => {
+  test("four cards played → costs exactly 1", async () => {
     const game = await board(5, 4).build();
     await playCheap(game, 4);
     expect(game.p1.energy()).toBe(1);
@@ -131,7 +131,7 @@ describe("Battering Ram (sfd-012-221)", () => {
     expect(game.zoneOf("ram")).toBe("base");
   });
 
-  test.failing("BUG: minimum of [1] — with five or more cards played it still costs 1, never 0 (rule 356.4.e)", async () => {
+  test("minimum of [1] — with five or more cards played it still costs 1, never 0 (rule 356.4.e)", async () => {
     // 7 energy: 6 Cheap Recruits (6 energy) leaves 1 → ram (floor 1) is exactly affordable and charges 1.
     const game = await board(7, 6).build();
     await playCheap(game, 6);
@@ -188,7 +188,7 @@ describe("Battering Ram (sfd-012-221)", () => {
     expect(game.p1.can("play", "ram")).toBe(false);
   });
 
-  test.failing("BUG: a token 'played' by an effect is not a card (350.2) — Bushwhack + its Gold token = ONE card → ram costs 4, not 3", async () => {
+  test("a token 'played' by an effect is not a card (350.2) — Bushwhack + its Gold token = ONE card → ram costs 4, not 3", async () => {
     // Expected: after Bushwhack (2+[fury]) resolves and plays a Gold token, exactly one CARD was played:
     // ram costs 4. With 7 energy: 7−2 = 5 left, ram 4 → 1 left. Actual today: ram costs 5 → 0 left
     // (and if tokens were wrongly counted it would cost 3 → 2 left).
@@ -213,6 +213,9 @@ describe("Battering Ram (sfd-012-221)", () => {
     await game.advanceTurn(); // → P1 again (channels 2 runes, draws 1)
     expect(game.turnPlayer()).toBe(P1);
     expect(game.gameState.cardsPlayedThisTurn?.[P1] ?? 0).toBe(0);
+    // rule 357.1.a: a READY channelled rune could pay the 5th Energy during the
+    // Pay step, so exhaust them before checking the (undiscounted) price.
+    await game.p1.tapRunes(game.p1.runes({ ready: true }).length);
     await game.p1.do("addResources", { energy: 4 - game.p1.energy() });
     expect(game.p1.energy()).toBe(4);
     expect(game.p1.can("play", "ram")).toBe(false); // full 5 again

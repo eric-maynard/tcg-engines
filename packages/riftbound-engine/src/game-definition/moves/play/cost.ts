@@ -1634,6 +1634,24 @@ function getSelfScaledEnergyReduction(
     }
     const scope = effect.scope.toLowerCase();
     let count = 0;
+    // rule 356.4.e / 419.1 (rule-id: sfd-012-221) — "I cost [1] less for each
+    // card you've played this turn, to a minimum of [1]": only CARDS you
+    // finalized this turn count (tokens are not cards — rule 350.2 — and hiding
+    // is not playing), and this card never counts itself because its cost is
+    // determined before it is finalized. The printed minimum floors THIS
+    // discount alone, so clamp it here rather than at the summed cost.
+    if (scope.startsWith("for each card you've played this turn")) {
+      const played = state.cardsPlayedThisTurn?.[playerId] ?? 0;
+      const perCard = Math.max(
+        0,
+        decodeCostAmount(effect.reduction ?? effect.amount ?? effect.by).energy,
+      );
+      const floorText = /to a minimum of\s+(.+)$/.exec(scope);
+      const floor = floorText ? decodeCostAmount(floorText[1]).energy : 0;
+      const printed = registry.getEnergyCost(cardId) ?? 0;
+      total += Math.max(0, Math.min(perCard * played, Math.max(0, printed - floor)));
+      continue;
+    }
     // rule 419.1 (rule-id: ven-096-166) — playing a card puts it on the chain
     // BEFORE its cost is determined, so a card played out of the trash never
     // counts itself; only the other copies still there reduce the cost.
