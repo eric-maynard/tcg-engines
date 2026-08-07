@@ -1028,7 +1028,9 @@ export const pendingChoiceMoves: Partial<
         }
         // rule-id: ogn-256-298 (rule 355.13) — "any number of": declining
         // further picks is always legal.
-        if (choice.anyNumber && context.params.accept === false) {
+        // rule-id: ogn-080-298 — "You MAY make new choices for it": declining
+        // keeps the choices the item's previous controller made.
+        if ((choice.anyNumber || choice.optional) && context.params.accept === false) {
           return true;
         }
         // rule 355.13 (ogn-141-298): "up to N" / "any number of" targets may
@@ -1226,7 +1228,9 @@ export const pendingChoiceMoves: Partial<
             playerId: context.playerId as string,
           }));
         // rule-id: ogn-256-298 (rule 355.13) — "any number of": offer "done".
-        if (choice.anyNumber) {
+        // rule-id: ogn-080-298 — "You MAY make new choices for it": declining
+        // keeps the choices the item's previous controller made.
+        if (choice.anyNumber || choice.optional) {
           picks.push({ accept: false, playerId: context.playerId as string });
         }
         return picks;
@@ -1941,6 +1945,12 @@ export const pendingChoiceMoves: Partial<
         // control of; rewrite that item's locked targets instead of executing
         // anything now (the stolen spell resolves later, on its own).
         if (choice.retargetChainItemId !== undefined) {
+          // Declining leaves the item's existing targets in place.
+          if (context.params.accept === false) {
+            draft.pendingChoice = undefined;
+            postChoiceCleanup(draft, context);
+            return;
+          }
           if (!choice.options.includes(picked)) {
             return;
           }
