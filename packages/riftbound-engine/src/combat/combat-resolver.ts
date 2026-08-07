@@ -198,6 +198,7 @@ export function distributeDamage(
   units: CombatUnit[],
   totalDamage: number,
   role?: "attacker" | "defender",
+  opts?: AssignmentKeywordOptions,
 ): Record<string, number> {
   const assignment: Record<string, number> = {};
   let remaining = totalDamage;
@@ -207,10 +208,11 @@ export function distributeDamage(
   const assignable = units.filter((u) => u.immuneToDamage !== true);
 
   // Sort by damage assignment priority: Tank first, then normal, then Backline last
+  // rule 766 — an effect may make [Tank] INACTIVE for this one assignment.
   const withFlags = assignable.map((u) => ({
     ...u,
     hasBackline: hasKeyword(u, "Backline"),
-    hasTank: hasKeyword(u, "Tank"),
+    hasTank: opts?.ignoreTank === true ? false : hasKeyword(u, "Tank"),
   }));
   const sorted = sortByBacklinePriority(sortByTankPriority(withFlags));
 
@@ -261,6 +263,16 @@ export function distributeDamage(
  */
 export const FLEXIBLE_TIER = -1;
 
+/**
+ * rule 766 / 767 — keyword-ignoring riders that apply to ONE player's combat
+ * damage assignment (ven-004-166 Dune Surfer: "You ignore [Tank] while
+ * assigning combat damage here"). Making the keyword inactive collapses its
+ * priority tier, so splits 815.1.c.2 would otherwise refuse become legal.
+ */
+export interface AssignmentKeywordOptions {
+  readonly ignoreTank?: boolean;
+}
+
 export interface DamageAssignmentPlan {
   /** Assignable target ids, in damage-assignment priority order. */
   readonly order: string[];
@@ -284,12 +296,16 @@ export function planDamageAssignment(
   units: CombatUnit[],
   totalDamage: number,
   role?: "attacker" | "defender",
+  opts?: AssignmentKeywordOptions,
 ): DamageAssignmentPlan {
+  const ignoreTank = opts?.ignoreTank === true;
+  // rule 766 — [Tank] made inactive for this assignment carries no tier at all.
+  const isTank = (u: CombatUnit): boolean => !ignoreTank && hasKeyword(u, "Tank");
   const assignable = units.filter((u) => u.immuneToDamage !== true);
   const withFlags = assignable.map((u) => ({
     ...u,
     hasBackline: hasKeyword(u, "Backline"),
-    hasTank: hasKeyword(u, "Tank"),
+    hasTank: isTank(u),
   }));
   const sorted = sortByBacklinePriority(sortByTankPriority(withFlags));
 
@@ -303,9 +319,9 @@ export function planDamageAssignment(
     // rule 465.2.c.8 — Tank AND Backline on the same unit: the assigning
     // player chooses which one to honour, so neither tier is imposed on it.
     tier[unit.id] =
-      hasKeyword(unit, "Tank") && hasKeyword(unit, "Backline")
+      isTank(unit) && hasKeyword(unit, "Backline")
         ? FLEXIBLE_TIER
-        : hasKeyword(unit, "Tank")
+        : isTank(unit)
           ? 0
           : hasKeyword(unit, "Backline")
             ? 2
@@ -344,7 +360,7 @@ export function planDamageAssignment(
   }
 
   return {
-    defaultAllocation: distributeDamage(units, totalDamage, role),
+    defaultAllocation: distributeDamage(units, totalDamage, role, opts),
     hasChoice,
     need,
     order,
@@ -480,12 +496,22 @@ export function isLegalDamageAssignment(
 export function planCombatDamageAssignments(
   attackersIn: CombatUnit[],
   defendersIn: CombatUnit[],
+  opts?: {
+    /** rule 766/767 — the ATTACKING player ignores [Tank] for its assignment. */
+    readonly attackerIgnoresTank?: boolean;
+    /** rule 766/767 — the DEFENDING player ignores [Tank] for its assignment. */
+    readonly defenderIgnoresTank?: boolean;
+  },
 ): { attacker: DamageAssignmentPlan; defender: DamageAssignmentPlan } {
   const attackers = applyCombatDamagePrevention(attackersIn, true, defendersIn);
   const defenders = applyCombatDamagePrevention(defendersIn, false, attackersIn);
   return {
-    attacker: planDamageAssignment(defenders, calculateSideMight(attackers, true), "defender"),
-    defender: planDamageAssignment(attackers, calculateSideMight(defenders, false), "attacker"),
+    attacker: planDamageAssignment(defenders, calculateSideMight(attackers, true), "defender", {
+      ignoreTank: opts?.attackerIgnoresTank === true,
+    }),
+    defender: planDamageAssignment(attackers, calculateSideMight(defenders, false), "attacker", {
+      ignoreTank: opts?.defenderIgnoresTank === true,
+    }),
   };
 }
 
@@ -513,6 +539,10 @@ export function resolveCombat(
      * onto the attackers. Omitted ⇒ the forced/greedy assignment is used.
      */
     readonly defenderAssignment?: Record<string, number>;
+    /** rule 766/767 — the ATTACKING player ignores [Tank] for its assignment. */
+    readonly attackerIgnoresTank?: boolean;
+    /** rule 766/767 — the DEFENDING player ignores [Tank] for its assignment. */
+    readonly defenderIgnoresTank?: boolean;
   },
 ): CombatResult {
   // rule-id: unl-060-219 — weaker enemies of a Vilemaw-style unit deal no combat damage.
@@ -527,7 +557,10 @@ export function resolveCombat(
 
   // Step 2: Attackers deal their total Might to defenders (rule 626.1.b)
   const attackerDamageToDefenders =
-    opts?.attackerAssignment ?? distributeDamage(defenders, attackerTotal, "defender");
+    opts?.attackerAssignment ??
+    distributeDamage(defenders, attackerTotal, "defender", {
+      ignoreTank: opts?.attackerIgnoresTank === true,
+    });
   Object.assign(damageAssignment, attackerDamageToDefenders);
   // rule-id: ogn-034-298 — excess = assigned beyond each defender's lethal need.
   let attackerExcessDamage = 0;
@@ -538,7 +571,10 @@ export function resolveCombat(
 
   // Step 3: Defenders deal their total Might to attackers (rule 626.1.c)
   const defenderDamageToAttackers =
-    opts?.defenderAssignment ?? distributeDamage(attackers, defenderTotal, "attacker");
+    opts?.defenderAssignment ??
+    distributeDamage(attackers, defenderTotal, "attacker", {
+      ignoreTank: opts?.defenderIgnoresTank === true,
+    });
   for (const [id, dmg] of Object.entries(defenderDamageToAttackers)) {
     damageAssignment[id] = (damageAssignment[id] ?? 0) + dmg;
   }
