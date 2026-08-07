@@ -18,7 +18,12 @@ import {
 import { normalizeTokens, stripReminders } from "./impl/normalize";
 import { parseOtherSegmentMulti } from "./impl/other-segment";
 import { splitAbilityText } from "./impl/segments";
-import { mergeSpellWithRepeat, parseSpellAbilities, parseSpellWithRepeat } from "./impl/spells";
+import {
+  mergeSpellWithRepeat,
+  parseSpellAbilities,
+  parseSpellWithRepeat,
+  spellTimingFromText,
+} from "./impl/spells";
 import { parseTriggeredAbility } from "./impl/triggers";
 import type { ParseAbilitiesResult, ParserOptions } from "./impl/types";
 
@@ -44,9 +49,30 @@ export function parseAbilities(text: string, options?: ParserOptions): ParseAbil
   // Post-process: expand [Hunt N] keywords into the triggered gain-xp
   // Abilities they imply on conquer and hold.
   if (result.success && result.abilities) {
-    return { ...result, abilities: expandHuntKeywords(result.abilities) };
+    return {
+      ...result,
+      abilities: applyPrintedSpellTiming(expandHuntKeywords(result.abilities), text),
+    };
   }
   return result;
+}
+
+/**
+ * rule 155 / 159.2.a.1 — ability-level spell timing comes ONLY from a printed
+ * [Action]/[Reaction] on the card. Segment splitting can strip the keyword before
+ * the body is parsed, so re-apply it from the full printed text; a body with no
+ * such keyword keeps NO timing (the card definition's "standard" governs).
+ */
+function applyPrintedSpellTiming(abilities: Ability[], printedText: string): Ability[] {
+  const printed = spellTimingFromText(printedText);
+  if (!printed.timing) {
+    return abilities;
+  }
+  return abilities.map((a) =>
+    a.type === "spell" && (a as SpellAbility).timing === undefined
+      ? ({ ...a, timing: printed.timing } as Ability)
+      : a,
+  );
 }
 
 function parseAbilitiesInner(text: string, _options?: ParserOptions): ParseAbilitiesResult {
@@ -326,11 +352,13 @@ function parseSingleAbility(text: string): ParseAbilitiesResult {
     return { abilities: [staticResult.ability], success: true };
   }
 
-  // Try standalone effect (treat as spell with action timing)
+  // Try standalone effect (treat as a spell body). rule 155 / 159.2.a.1: with no
+  // printed [Action]/[Reaction] the ability carries NO timing — the card's own
+  // timing ("standard") governs when it may be played.
   const effect = parseEffects(text);
   if (effect) {
     return {
-      abilities: [{ effect, timing: "action", type: "spell" } as SpellAbility],
+      abilities: [{ effect, ...spellTimingFromText(text), type: "spell" } as SpellAbility],
       success: true,
     };
   }

@@ -8,7 +8,7 @@ import { parseActivatedAbility } from "./activated";
 import { parseEffects } from "./effects";
 import { stripReminders } from "./normalize";
 import { parseAdditionalCostAbility, parseReplacementAbility } from "./replacement";
-import { parseSpellAbility } from "./spells";
+import { parseSpellAbility, spellTimingFromText } from "./spells";
 import { splitOnAbilityBoundaries } from "./split";
 import { parseTriggeredAbility } from "./triggers";
 
@@ -65,10 +65,11 @@ export function parseOtherSegment(text: string): Ability | undefined {
     return applyIncludeSelfQualifier(staticResult.ability, text);
   }
 
-  // Try standalone effect (treat as spell with action timing)
+  // Try standalone effect (spell body). rule 155 / 159.2.a.1: no printed
+  // [Action]/[Reaction] → no ability-level timing; the card's timing governs.
   const effect = parseEffects(cleaned);
   if (effect) {
-    return { effect, timing: "action", type: "spell" } as SpellAbility;
+    return { effect, ...spellTimingFromText(text), type: "spell" } as SpellAbility;
   }
 
   return undefined;

@@ -8,6 +8,7 @@ import type { AnyTarget } from "@tcg/riftbound-types/targeting";
 import { parseCost } from "../parsers/cost-parser";
 import { parseStaticAbility } from "../parsers/static-parser";
 import { parseTarget } from "../parsers/target-parser";
+import { bindChosenTarget, CHOOSE_PREAMBLE_RE } from "./choose-preamble";
 import { parseEffects } from "./effects";
 import { stripReminders } from "./normalize";
 import { parseAdditionalCostAbility, parseReplacementAbility } from "./replacement";
@@ -15,37 +16,9 @@ import type { TextSegment } from "./segments";
 import { parseTriggeredAbility } from "./triggers";
 
 // rule-id: ven-040-166 — "Choose X. <Verb> it …" spells: the preamble names the
-// caster-chosen target and the effect sentence refers back with "it". Capture
-// the head noun phrase (qualifier tails like "that's in combat with …" are
-// accepted so the preamble is still recognised) and bind it into the parsed
-// effect's pronoun slot; otherwise "Give it +N" parses as target 'self' and
-// the spell resolves against itself with no targeting prompt.
-const CHOOSE_PREAMBLE_RE =
-  /^Choose ((?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there))?)(\s+and (?:a|an) (?:friendly |enemy )?(?:unit|gear|spell)(?:\s+(?:at a battlefield|here|there))?|,?\s+(?:that|with|in|from|being)\b[^.]*)?\.\s*/i;
-
-function isPronounTarget(t: unknown): boolean {
-  if (t === "self") {
-    return true;
-  }
-  return (
-    typeof t === "object" &&
-    t !== null &&
-    (t as { type?: string }).type === "unit" &&
-    Object.keys(t).length === 1
-  );
-}
-
-function bindChosenTarget(effect: Effect, chosen: AnyTarget): Effect {
-  const e = effect as unknown as { type: string; target?: unknown; effects?: Effect[] };
-  if (e.type === "sequence" && Array.isArray(e.effects) && e.effects.length > 0) {
-    const [first, ...rest] = e.effects;
-    return { ...e, effects: [bindChosenTarget(first, chosen), ...rest] } as unknown as Effect;
-  }
-  if ("target" in e && isPronounTarget(e.target)) {
-    return { ...e, target: chosen } as unknown as Effect;
-  }
-  return effect;
-}
+// caster-chosen target and the effect sentence refers back with "it"; otherwise
+// "Give it +N" parses as target 'self' and the spell resolves against itself
+// with no targeting prompt. Shared with the triggered-ability parser.
 
 // ============================================================================
 // Spell Ability Parser
@@ -55,6 +28,22 @@ function bindChosenTarget(effect: Effect, chosen: AnyTarget): Effect {
  * Pattern for spell abilities: [Action] or [Reaction] followed by effect text
  */
 export const SPELL_PATTERN = /^\[(Action|Reaction)\]\s*(?:_?\s*\([^)]*\)\s*_?\s*)?(.+)$/s;
+
+/**
+ * rule 155 / 159.2.a.1 — ability-level spell timing exists ONLY when the printed
+ * text carries [Action]/[Reaction]. Untagged bodies get no `timing` field at all;
+ * the card definition's own timing ("standard") governs when it may be played.
+ * Returns a spreadable partial so callers stay `{...spellTimingFromText(text)}`.
+ */
+export function spellTimingFromText(text: string): { timing?: "action" | "reaction" } {
+  if (/\[Reaction\]/i.test(text)) {
+    return { timing: "reaction" };
+  }
+  if (/\[Action\]/i.test(text)) {
+    return { timing: "action" };
+  }
+  return {};
+}
 
 // rule 466 / rule 356.4: cost-modifying sentences printed on a spell
 // ("If …, this costs [2] less.", "This spell's Energy cost is reduced by …")

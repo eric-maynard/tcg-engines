@@ -339,8 +339,12 @@ export interface StaticAbility {
 export interface SpellAbility {
   readonly type: "spell";
 
-  /** When can it be played */
-  readonly timing: "action" | "reaction";
+  /**
+   * When can it be played — set ONLY from a printed [Action]/[Reaction] keyword.
+   * rule 155 / 159.2.a.1: an untagged spell has no ability-level timing; its play
+   * timing comes from the card definition (`normalizeSpellTiming` → "standard").
+   */
+  readonly timing?: "action" | "reaction";
 
   /** What happens when the spell resolves */
   readonly effect: Effect;
