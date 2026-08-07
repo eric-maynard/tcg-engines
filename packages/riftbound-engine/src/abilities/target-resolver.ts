@@ -802,11 +802,14 @@ function matchesFilter(cardId: string, filter: TargetFilter, ctx: TargetResolver
     if (srcId === undefined) {
       return true;
     }
-    const srcMight = effectiveMight(
-      registry.get(srcId),
-      ctx.cards.getCardMeta?.(srcId as CoreCardId) as Partial<RiftboundCardMeta> | undefined,
-    );
-    return effectiveMight(def, meta) < srcMight;
+    const srcMeta = ctx.cards.getCardMeta?.(srcId as CoreCardId) as
+      | Partial<RiftboundCardMeta>
+      | undefined;
+    // rule 719 — Assault/Shield are part of the CURRENT Might for this
+    // comparison, so an Empowered Ambessa attacking reads 7, not 5.
+    const srcMight =
+      effectiveMight(registry.get(srcId), srcMeta) + combatRoleMightBonus(srcId, srcMeta);
+    return effectiveMight(def, meta) + combatRoleMightBonus(cardId, meta) < srcMight;
   }
   // rule 206 (ven-080-166 Noxian Demolitionist) — "with Energy cost no more
   // than my Might": the ceiling is the SOURCE's Might as it reads when the
@@ -955,6 +958,38 @@ function hasDomain(def: unknown, want: string): boolean {
   const domains = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
   const w = want.toLowerCase();
   return domains.some((d) => d.toLowerCase() === w);
+}
+
+/**
+ * rule 719 — Assault N counts only while the unit is an attacker and Shield N
+ * only while it defends. Mirrors `getCardEffectiveMight`'s role layer without
+ * importing the moves layer.
+ */
+function combatRoleMightBonus(
+  cardId: string,
+  meta: Partial<RiftboundCardMeta> | undefined,
+): number {
+  const role = (meta as { combatRole?: string } | undefined)?.combatRole;
+  if (role !== "attacker" && role !== "defender") {
+    return 0;
+  }
+  const keyword = role === "attacker" ? "Assault" : "Shield";
+  const def = getGlobalCardRegistry().get(cardId);
+  let bonus = 0;
+  for (const ability of def?.abilities ?? []) {
+    if (ability.type === "keyword" && ability.keyword === keyword) {
+      bonus += (ability as { value?: number }).value ?? 1;
+    }
+  }
+  if (bonus === 0) {
+    bonus += (def?.keywords ?? []).filter((k) => k === keyword).length;
+  }
+  for (const granted of meta?.grantedKeywords ?? []) {
+    if (granted.keyword === keyword) {
+      bonus += granted.value ?? 1;
+    }
+  }
+  return bonus;
 }
 
 function effectiveMight(
