@@ -33,15 +33,15 @@ import { buildEffectContext, canAffordPower } from "./effect-context";
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
 /**
- * rule 145.2 (Units) / rule 151.2 (Gear): their activated abilities may be used
- * only during their controller's Main Phase in an Open State, never during a
- * Showdown — unless the ability itself is printed [Action]/[Reaction].
- * Classifying it as "standard" timing gives exactly that through
- * `isLegalTiming` (neutral-open only).
+ * rule 343.1.b / 308.1.a: card abilities by DEFAULT cannot be activated during
+ * a Showdown State — only those printed [Action]/[Reaction] can (313.1.a). This
+ * holds for every host type: units (145.2), gear (151.2) and legends
+ * (174.8/381) alike, so an untagged ability is "standard" timing, which
+ * `isLegalTiming` permits in neutral-open only.
  */
 function abilityTimingClass(
   ability: { keyword?: string; timing?: string },
-  hostCardId: string,
+  _hostCardId: string,
 ): "standard" | "action" | "reaction" {
   if (ability.keyword === "Reaction" || ability.timing === "reaction") {
     return "reaction";
@@ -49,8 +49,7 @@ function abilityTimingClass(
   if (ability.keyword === "Action" || ability.timing === "action") {
     return "action";
   }
-  const hostType = getGlobalCardRegistry().getCardType(hostCardId);
-  return hostType === "gear" || hostType === "unit" ? "standard" : "action";
+  return "standard";
 }
 
 /**
@@ -107,6 +106,57 @@ function normalizeRecycleCost(raw: unknown): { amount: number; cardType?: string
     return amount > 0 ? { amount, cardType: spec.cardType } : undefined;
   }
   return undefined;
+}
+
+/**
+ * rule 357.2 / 422.3 — a "Discard N" activation cost is either a bare number
+ * or a descriptor ("Discard a gear" -> `{amount, cardType}`, ven-060-166).
+ * Normalizing both shapes keeps condition / enumerator / reducer honest; an
+ * object cost used to fail the `> 0` numeric test and silently eat the other
+ * costs without ever creating the chain item.
+ */
+function normalizeDiscardCost(raw: unknown): { amount: number; cardType?: string } | undefined {
+  if (typeof raw === "number") {
+    return raw > 0 ? { amount: raw } : undefined;
+  }
+  if (raw && typeof raw === "object") {
+    const spec = raw as { amount?: number; cardType?: string };
+    const amount = spec.amount ?? 1;
+    return amount > 0 ? { amount, cardType: spec.cardType } : undefined;
+  }
+  return undefined;
+}
+
+/** rule 357.2 — the hand cards that can actually pay a discard cost. */
+function eligibleDiscardCards(hand: readonly unknown[], spec: { cardType?: string }): string[] {
+  const ids = hand as readonly string[];
+  if (!spec.cardType) {
+    return [...ids];
+  }
+  const registry = getGlobalCardRegistry();
+  return ids.filter((id) => registry.getCardType(id) === spec.cardType);
+}
+
+/**
+ * rule 429.2 / 605.2 — an activated ability that only [Add]s resources resolves
+ * as soon as it is finalized and never becomes a respondable chain item. A
+ * conditional wrapper ("[Add] 1. If this is [Empowered], [Add] 2 instead.",
+ * ven-075-166) is still only an Add, so unwrap it: every branch present must
+ * itself be an immediate Add.
+ */
+function isImmediateAddEffect(effect: unknown): boolean {
+  const type = (effect as { type?: string } | undefined)?.type;
+  if (type === "add-resource" || type === "add") {
+    return true;
+  }
+  if (type === "conditional") {
+    const branch = effect as { then?: unknown; else?: unknown };
+    if (!branch.then || !isImmediateAddEffect(branch.then)) {
+      return false;
+    }
+    return branch.else === undefined || isImmediateAddEffect(branch.else);
+  }
+  return false;
 }
 
 /**
@@ -531,8 +581,7 @@ export const activateAbility: Defs["activateAbility"] = {
     // rule 605.2 / 429.3.a: only resource-Adding abilities resolve immediately,
     // so only those may be used mid-payment.
     if (payXPrompt) {
-      const effectType = (ability.effect as { type?: string } | undefined)?.type;
-      if (effectType !== "add-resource" && effectType !== "add") {
+      if (!isImmediateAddEffect(ability.effect)) {
         return false;
       }
     }
@@ -719,17 +768,19 @@ export const activateAbility: Defs["activateAbility"] = {
 
       // Rule 357.2 / 422.3: a "Discard N" cost requires ≥N cards in hand
       // at activation time; the caller names which card via `discardId`.
-      const discardCost = cost.discard as number | undefined;
-      if (discardCost && discardCost > 0) {
+      const discardSpec = normalizeDiscardCost(cost.discard);
+      if (discardSpec) {
         const hand = context.zones.getCardsInZone(
           "hand" as CoreZoneId,
           playerId as CorePlayerId,
         );
-        if (hand.length < discardCost) {
+        // "Discard a gear" (ven-060-166) only counts cards of that type.
+        const eligible = eligibleDiscardCards(hand, discardSpec);
+        if (eligible.length < discardSpec.amount) {
           return false;
         }
         const discardId = context.params.discardId as string | undefined;
-        if (discardId && !hand.includes(discardId as CoreCardId)) {
+        if (discardId && !eligible.includes(discardId)) {
           return false;
         }
       }
@@ -922,8 +973,7 @@ export const activateAbility: Defs["activateAbility"] = {
         // rule 605.2 / 429.3.a: mid-payment only resource-Adding abilities
         // (which resolve immediately, off the chain) may be used.
         if (payXPrompt) {
-          const effectType = (ability.effect as { type?: string } | undefined)?.type;
-          if (effectType !== "add-resource" && effectType !== "add") {
+          if (!isImmediateAddEffect(ability.effect)) {
             continue;
           }
         }
@@ -1076,18 +1126,19 @@ export const activateAbility: Defs["activateAbility"] = {
         // per hand card so the caller can pick which card to discard. Fewer
         // than N cards in hand → the ability is not activatable.
         let discardOptions: string[] | undefined;
-        const discardCost = (ability.cost as Record<string, unknown> | undefined)?.discard as
-          | number
-          | undefined;
-        if (discardCost && discardCost > 0) {
+        const discardSpec = normalizeDiscardCost(
+          (ability.cost as Record<string, unknown> | undefined)?.discard,
+        );
+        if (discardSpec) {
           const hand = context.zones.getCardsInZone(
             "hand" as CoreZoneId,
             playerId as CorePlayerId,
           );
-          if (hand.length < discardCost) {
+          const eligible = eligibleDiscardCards(hand, discardSpec);
+          if (eligible.length < discardSpec.amount) {
             continue;
           }
-          discardOptions = [...hand] as string[];
+          discardOptions = eligible;
         }
 
         // rule-id: ogn-036-298 (rule 577.2) — a "Recycle N from your trash"
@@ -1419,8 +1470,7 @@ export const activateAbility: Defs["activateAbility"] = {
 
     // Rule 605.2: activated abilities that Add resources resolve immediately
     // and cannot be reacted to — do not open a chain for them.
-    const effectType = (ability.effect as { type?: string } | undefined)?.type;
-    if (effectType === "add-resource" || effectType === "add") {
+    if (isImmediateAddEffect(ability.effect)) {
       const base = buildEffectContext(draft, playerId, cardId, context);
       // rule 429.1: "[Add] that much" reads the X that was just paid.
       const effectCtx = xPay ? { ...base, variables: { ...base.variables, x: xPay.amount } } : base;
