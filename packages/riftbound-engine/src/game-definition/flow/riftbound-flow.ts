@@ -417,12 +417,30 @@ function runExpirationStep(context: FlowStepContext): void {
         context.state.conqueredThisTurn[currentPlayer] = [];
         context.state.scoredThisTurn[currentPlayer] = [];
         clearPointsGainedThisTurn(context.state);
+        // rule 517.2.b / 364.3.a (unl-108-219 Wily Newtfish) — "you've gained XP
+        // this turn" is turn-scoped tracking and resets with the turn, though the
+        // XP itself persists. getCurrentPlayer() may already be rotated here, and
+        // the turn is over for everyone, so clear the whole ledger.
+        if (context.state.xpGainedThisTurn) {
+          const xpLedger = context.state.xpGainedThisTurn as Record<string, number>;
+          for (const playerId of Object.keys(xpLedger)) {
+            xpLedger[playerId] = 0;
+          }
+        }
 
         // Clear consumed-next replacement markers so turn-scoped
         // Single-fire replacements (Tactical Retreat, Highlander, etc.)
         // Start fresh next turn.
         if (context.state.consumedNextReplacements) {
           context.state.consumedNextReplacements = {};
+        }
+        // rule 127 (unl-053-219) — "you can look at their facedown cards THIS
+        // TURN": turn-scoped information grants expire with the turn.
+        if (context.state.visibilityGrants) {
+          const lasting = context.state.visibilityGrants.filter(
+            (g) => g.duration === "permanent",
+          );
+          context.state.visibilityGrants = lasting.length > 0 ? lasting : undefined;
         }
         // rule-id: ogn-026-298 — "can't play cards this turn" expires.
         if (context.state.cannotPlayCardsThisTurn) {
