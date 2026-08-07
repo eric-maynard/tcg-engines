@@ -2029,6 +2029,12 @@ export const pendingChoiceMoves: Partial<
           draft.pendingChoice = undefined;
           // rule-id: ogn-235-298 — the owner recycled a card to their Main Deck.
           fireRecycleEvent(draft, context, choice.playerId, [choice.cardId as string]);
+          // rule 190.4.c (unl-204-219) — the deferred owner choice is the tail of
+          // the resolution: the Cleanup that follows it is what drops control of a
+          // battlefield the recycled unit was the last occupant of.
+          if (!draft.pendingChoice) {
+            postChoiceCleanup(draft, context);
+          }
           return;
         }
         // Rule 323.6 / 355.2 / 355.4 (rule-id: unl-184-219-choose-destination-zone-id,

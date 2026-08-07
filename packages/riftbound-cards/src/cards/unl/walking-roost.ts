@@ -14,6 +14,9 @@ const abilities: Ability[] = [
   {
     effect: {
       location: "base",
+      // rule 182–185: "choose an opponent. THEY play …" — the chosen opponent
+      // performs the play, so the token is owned/controlled by that opponent.
+      player: "opponent",
       token: {
         keywords: ["Deflect"],
         might: 1,

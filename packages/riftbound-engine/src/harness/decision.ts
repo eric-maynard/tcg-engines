@@ -586,6 +586,21 @@ export function deriveFromPendingChoice(ctx: DecisionContext, pc: PendingChoice)
       };
       return d;
     }
+    // rule-id: unl-130-219 (rules 182–185) — "choose an opponent": each option
+    // IS a seat, so its key is the seat id.
+    case "choose-player": {
+      const d: PickDecision = {
+        ...base,
+        allowDecline: false,
+        id: decisionId(ctx.seq, seat, "pick"),
+        kind: "pick",
+        max: 1,
+        min: 1,
+        options: pc.options.map((p) => ({ key: p, label: p, seatRef: p })),
+        prompt: pc.prompt ?? "Choose a player",
+      };
+      return d;
+    }
     case "pay-x": {
       // rule 204.3.b / 444.2 (ogn-268-298): name X now; 0 is always legal.
       // rule 444.2.c: the ceiling is what the pool holds AT THE MOMENT of
@@ -863,6 +878,18 @@ export function resolvePendingAnswer(ctx: DecisionContext, decision: Decision, a
       } else {
         params.pickedZoneId = toZone(k);
       }
+      break;
+    }
+    // rule-id: unl-130-219 — the picked key is the seat id itself.
+    case "choose-player": {
+      const k = pickKey();
+      if (typeof k === "object") {
+        return k;
+      }
+      if (k === undefined) {
+        return err("ILLEGAL_ARGS", "A player must be chosen");
+      }
+      params.pickedPlayerId = k;
       break;
     }
     case "choose-mode": {

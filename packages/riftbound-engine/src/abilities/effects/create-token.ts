@@ -87,6 +87,23 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   if (!tokenDef) {
     return;
   }
+  // rule-id: unl-130-219 (rules 182–185, 411.4) — "choose an opponent. THEY
+  // play a … token" is a real choice whenever more than one opponent exists;
+  // the named seat is threaded back as `ownerId`.
+  if (effect.player === "opponent" && (effect as { ownerId?: string }).ownerId === undefined) {
+    const opponents = Object.keys(ctx.draft.players).filter((p) => p !== ctx.playerId);
+    if (opponents.length > 1 && !ctx.draft.pendingChoice) {
+      ctx.draft.pendingChoice = {
+        effect,
+        options: opponents,
+        playerId: ctx.playerId,
+        prompt: "Choose an opponent",
+        sourceCardId: ctx.sourceCardId,
+        type: "choose-player",
+      } as typeof ctx.draft.pendingChoice;
+      return;
+    }
+  }
   let count = resolveAmount(effect.amount ?? 1, ctx);
   // Rule unl-086-219: a play-token replacement adds one additional copy.
   if (count > 0 && tokenDef.type !== "gear") {
@@ -113,7 +130,16 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
 
   // rule-id: sfd-081-221 — a token an effect plays "for" another player (the
   // source's controller while an opponent's prompt resolves) names its owner.
-  const ownerId = ((effect as { ownerId?: string }).ownerId ?? ctx.playerId) as typeof ctx.playerId;
+  // rule-id: unl-130-219 (rules 182–185, 411.4) — "choose an opponent. THEY
+  // play a … token": `player: "opponent"` makes the chosen opponent play it,
+  // so the token enters under that opponent's control in their base.
+  const opponentOwner =
+    effect.player === "opponent"
+      ? Object.keys(ctx.draft.players).find((p) => p !== ctx.playerId)
+      : undefined;
+  const ownerId = ((effect as { ownerId?: string }).ownerId ??
+    opponentOwner ??
+    ctx.playerId) as typeof ctx.playerId;
   const registry = getGlobalCardRegistry();
   // Rule unl-160-219: chain-moves stamps ability-minted tokens with
   // definitionId `token-def-<slug>`; the snapshot builder resolves that
@@ -153,9 +179,13 @@ export function handle_createToken(effect: ExecutableEffect, ctx: EffectContext,
   // … it becomes a copy of that unit": the caster-chosen unit (bound to the
   // effect's own `target` descriptor) is the copy source. With no such
   // descriptor the marker means "copies of me" (Keeper of Masks).
-  const copyTargetId =
-    (effect as { target?: unknown }).target !== undefined ? ctx.boundTargets?.[0] : undefined;
-  const copySourceId = copyTargetId ?? ctx.sourceCardId;
+  // rule 359.3.e.5 / 359.3.e.12 (unl-200-219) — when the effect names its own
+  // copy source and that unit is gone on resolution, only the "becomes a copy"
+  // instruction is skipped: the token is still played, as its bare printed
+  // self. Never fall back to the source card there (that would copy the spell).
+  const declaresCopySource = (effect as { target?: unknown }).target !== undefined;
+  const copyTargetId = declaresCopySource ? ctx.boundTargets?.[0] : undefined;
+  const copySourceId = declaresCopySource ? copyTargetId : ctx.sourceCardId;
   const copySource =
     tokenDef.keywords?.includes("CopyOnPlay") && copySourceId
       ? registry.get(copySourceId)

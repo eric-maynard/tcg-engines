@@ -516,6 +516,11 @@ export interface RiftboundMoves {
     pickedName?: string;
     pickedZoneId?: string;
     pickedMode?: number;
+    /**
+     * rule-id: unl-130-219 (rules 182–185) — "choose an opponent. THEY play …":
+     * the seat the chooser named for a `choose-player` prompt.
+     */
+    pickedPlayerId?: PlayerId;
     /** Rule 583 (unl-021-219): accept/decline an optional "you may" trigger. */
     accept?: boolean;
     /**
