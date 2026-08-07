@@ -34,6 +34,12 @@ export function handle_predict(effect: ExecutableEffect, ctx: EffectContext, _h:
   }
   const remaining = topN.length - 1;
   ctx.draft.pendingChoice = {
+    // rule 386.2 (unl-062-219): "…and put the rest back in any order" — the
+    // looked-at cards that were NOT recycled go back on top in an order their
+    // controller picks. Declining the recycle ends the Predict, so the
+    // arrangement has to be raised from the decline path too; `order-top`
+    // no-ops when fewer than two cards are left to arrange.
+    onDecline: { amount: topN.length, type: "order-top" },
     onPicked: "recycle",
     optional: true,
     prompter: ctx.playerId,
