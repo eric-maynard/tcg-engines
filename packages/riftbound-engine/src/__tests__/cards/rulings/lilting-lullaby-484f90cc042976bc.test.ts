@@ -113,7 +113,7 @@ describe("Ruling 484f90cc042976bc — countering your own spell out from under L
   // Expected: with Ray actually countered, the linked "Its controller can't play spells this turn" applies
   // to P1 — a second Ray is not a legal play for the rest of the turn (but is again next turn).
   // Actual: Lullaby is parsed as a bare "counter"; the play restriction is never imposed, so P1 can cast.
-  test.failing("BUG: ruling 484f90cc042976bc (contrast) — after Lullaby counters Ray, P1 can't play spells this turn; engine still allows it", async () => {
+  test("ruling 484f90cc042976bc (contrast) — after Lullaby counters Ray, P1 can't play spells this turn; engine still allows it", async () => {
     const game = await board().build();
     await rayThenLullaby(game);
     await game.settle();

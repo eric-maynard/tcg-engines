@@ -111,6 +111,10 @@ export interface EffectContext {
     }) => void;
     getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => CoreCardId[];
     getCardZone: (cardId: CoreCardId) => string | undefined;
+    // rule 186.1: tokens cease to exist the instant they leave the board, so
+    // effects that move one off-board must be able to delete it right away
+    // instead of waiting for the state-based token sweep.
+    removeCardFromGame?: (params: { cardId: CoreCardId }) => void;
   };
   readonly cards: {
     getCardOwner: (cardId: CoreCardId) => string | undefined;
@@ -156,8 +160,52 @@ const EFFECT_HELPERS: EffectHelpers = {
 export function executeEffect(effect: ExecutableEffect, ctx: EffectContext): void {
   const fn = EFFECT_HANDLERS[effect.type];
   if (fn) {
+    if (effect.type === "counter" && !ctx.draft.pendingChoice) {
+      // "That spell" always means the one THIS counter hits — a counter that
+      // finds nothing must not read back an earlier counter's target.
+      (ctx.draft as { lastCounterTargetId?: string }).lastCounterTargetId = undefined;
+    }
     fn(effect, ctx, EFFECT_HELPERS);
+    applyLinkedSpellPlayRestriction(effect, ctx);
   } else {
     // default: no-op
   }
+}
+
+/**
+ * rule 359.3.e.14.a (unl-190-219 Lilting Lullaby) — "Counter a spell. Its
+ * controller can't play spells this turn." The restriction is LINKED to the
+ * counter: it applies only to the controller of a spell that was actually
+ * countered, so a mistargeted counter imposes nothing. `lastCounterTargetId`
+ * is the spell the counter just hit (undefined when it hit nothing).
+ */
+function applyLinkedSpellPlayRestriction(effect: ExecutableEffect, ctx: EffectContext): void {
+  if (effect.type !== "counter") {
+    return;
+  }
+  if (!(effect as { restrictsSpellPlays?: boolean }).restrictsSpellPlays) {
+    return;
+  }
+  const draft = ctx.draft as unknown as {
+    cannotPlaySpellsThisTurn?: Record<string, number>;
+    lastCounterTargetId?: string;
+    turn: { number: number };
+  };
+  // A pending ransom prompt means the counter has not happened yet; the
+  // handler re-enters after the answer and the restriction lands then.
+  if (ctx.draft.pendingChoice) {
+    return;
+  }
+  const counteredId = draft.lastCounterTargetId;
+  if (!counteredId) {
+    return;
+  }
+  const victim =
+    ctx.cards.getCardController?.(counteredId as CoreCardId) ??
+    ctx.cards.getCardOwner(counteredId as CoreCardId);
+  if (!victim) {
+    return;
+  }
+  draft.cannotPlaySpellsThisTurn ??= {};
+  draft.cannotPlaySpellsThisTurn[victim] = draft.turn.number;
 }
