@@ -19,7 +19,7 @@ import { executeEffect } from "./effect-executor";
 import type { GameEvent } from "./game-events";
 import { evaluateLegionCondition } from "./legion-conditions";
 import { recalculateStaticEffects } from "./static-abilities";
-import { lockTriggerTargets } from "./trigger-target-lock";
+import { lockTriggerTargets, triggerTargetsSatisfiable } from "./trigger-target-lock";
 import type {
   CardWithAbilities,
   MatchedTrigger,
@@ -334,6 +334,19 @@ export function evaluateTriggerCondition(
     }
     return getGlobalCardRegistry().getPowerCost(playedId).length >= needed;
   }
+  if (c.type === "while-mighty" && ctx && sourceCardId) {
+    // rule 708/710 (rule-id: sfd-167-221, Unsung Hero) — "If I was [Mighty]"
+    // gates the trigger on effective Might >= 5. rule 808.1.d.3: for a death
+    // trigger the attributes are noted as the unit leaves, so read the LKI
+    // snapshot (the card in the trash is a new object with printed Might).
+    if (event.type === "die" && (event as { cardId?: string }).cardId === sourceCardId) {
+      const lki = getLKI(ctx.draft, sourceCardId);
+      if (lki !== undefined) {
+        return lki.might >= MIGHTY_MIGHT;
+      }
+    }
+    return currentMightForTriggers(sourceCardId, ctx) >= MIGHTY_MIGHT;
+  }
   if (c.type === "while-empowered") {
     // Rule 827 (rule-id: ven-136-166): `[Empowered][>]` triggers fire only
     // while the source is Empowered.
@@ -341,6 +354,24 @@ export function evaluateTriggerCondition(
       return false;
     }
     return ctx.cards.getCardMeta(sourceCardId as CoreCardId)?.empowered === true;
+  }
+  if (c.type === "while-mighty" && (c as { target?: unknown }).target === undefined) {
+    // rule 708/710 — "if I was [Mighty]" reads the source's own effective
+    // Might. rule 808.1.d.3: for a Deathknell the attributes are noted as the
+    // unit dies, so prefer the stamped LKI over the reset object in the trash.
+    if (!sourceCardId) {
+      return true;
+    }
+    if (event.type === "die" && (event as { cardId?: string }).cardId === sourceCardId) {
+      const stamped = (event as { wasMighty?: boolean }).wasMighty;
+      if (typeof stamped === "boolean") {
+        return stamped;
+      }
+    }
+    if (!ctx) {
+      return true;
+    }
+    return currentMightForTriggers(sourceCardId, ctx) >= MIGHTY_MIGHT;
   }
   if (c.type === "while-at-battlefield") {
     // rule-id: ogn-067-298 (Blitzcrank, Impassive) — "When you play me to a
@@ -1253,6 +1284,13 @@ export function fireTriggers(rawEvent: GameEvent, ctx: TriggerRunnerContext): nu
         continue;
       }
       const effect = match.ability.effect as unknown;
+      // rule 402.4 — a multi-slot trigger whose choices cannot ALL be made
+      // legally is removed instead of going on the Chain (no partial half).
+      if (
+        !triggerTargetsSatisfiable(effect, ctx.draft, { cards: ctx.cards, zones: ctx.zones }, match.cardId, triggerControllerFor(match))
+      ) {
+        continue;
+      }
       const optInCost = extractPayCost(match.ability.condition);
       (ctx.draft as RiftboundGameState & {
         interaction: NonNullable<RiftboundGameState["interaction"]>;
