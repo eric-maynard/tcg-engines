@@ -95,8 +95,10 @@ describe("Fox-Fire (ogn-256-298)", () => {
       .build();
     await game.p1.hide("ff", "bf1");
     expect(game.p1.can("reveal", "ff")).toBe(false); // not on the turn it was hidden
-    await game.advanceTurn(); // P2's turn: it has gained Reaction and may already be played (811.6)
-    expect(game.p1.can("reveal", "ff")).toBe(true);
+    await game.advanceTurn(); // P2's turn
+    // rule 316.5.b: Reaction (811.6) only adds Closed States — in P2's Neutral
+    // Open State P1 holds no Priority and still may not play it.
+    expect(game.p1.can("reveal", "ff")).toBe(false);
     await game.advanceTurn(); // back to P1
     expect(game.turnPlayer()).toBe(P1);
     expect(game.p1.energy()).toBe(0);

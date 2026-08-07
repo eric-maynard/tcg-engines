@@ -136,6 +136,25 @@ export function parseLookEffect(text: string): LookEffect | undefined {
       type: "look",
     } as LookEffect;
   }
+  // rule 383.3.a.3 (sfd-058-221 Ornn, unl-070-219 Rift Herald, unl-142-219
+  // Double Trouble, …) — "You may reveal a <type> from among them and draw
+  // it": the pick is declinable AND restricted to that card type; everything
+  // not picked is recycled.
+  const revealDraw = rest.match(
+    /^(?:Then\s+)?You may reveal an? (unit|gear|spell)\b[^.]*?from among them,?\s*(?:and|then)\s+draw it/i,
+  );
+  if (revealDraw) {
+    const kind = revealDraw[1].toLowerCase();
+    // Equipment is gear (rule 150.4).
+    const cardTypes = kind === "gear" ? ["gear", "equipment"] : [kind];
+    return {
+      amount,
+      filter: { cardTypes },
+      from,
+      optional: true,
+      type: "look",
+    } as LookEffect;
+  }
   return { amount, from, type: "look" };
 }
 

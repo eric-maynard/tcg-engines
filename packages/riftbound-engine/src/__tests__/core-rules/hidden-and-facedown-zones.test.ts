@@ -529,7 +529,7 @@ describe("811.1.b / 811.6 / 811.1.c.3 / 811.1.d.1: a card hidden on turn N canno
     expect(game.zoneOf("p2spell")).not.toBe("trash");
   });
 
-  test.failing("BUG: 811.6 / 335 / 338.1 — on P2's turn in NEUTRAL OPEN (P2 acting, no chain) P1 holds no Priority, so 'play from hidden' must not be available to P1; engine offers and executes revealHidden anyway", async () => {
+  test("811.6 / 335 / 338.1 — on P2's turn in NEUTRAL OPEN (P2 acting, no chain) P1 holds no Priority, so 'play from hidden' must not be available to P1; engine offers and executes revealHidden anyway", async () => {
     // Expected: can("reveal") false while P2 is the acting seat in Neutral Open; attempt rejected.
     // Actual: revealHidden has no timing/priority gate at all once the hide turn has passed.
     const game = await scenario()

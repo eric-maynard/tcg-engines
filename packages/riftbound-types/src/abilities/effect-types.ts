@@ -110,6 +110,8 @@ export interface LookEffect {
   /** Restricts which looked-at card may be picked (e.g. "a unit from among them"). */
   readonly filter?: {
     readonly excludeCardTypes?: readonly string[];
+    /** Card types that ARE valid picks ("reveal a gear from among them"). */
+    readonly cardTypes?: readonly string[];
   };
   /** "You may …" — the pick is declinable. */
   readonly optional?: boolean;

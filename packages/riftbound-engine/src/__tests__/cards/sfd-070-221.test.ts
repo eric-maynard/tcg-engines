@@ -224,10 +224,7 @@ describe("Wages of Pain (sfd-070-221)", () => {
     expect(game.zoneOf("wop")).toBe("trash");
   });
 
-  test.failing("BUG: facedown ⇒ Reaction, not 'free action' — during the opponent's Neutral Open state P1 holds no priority (312.2) and may not play it from facedown", async () => {
-    // Expected: on P2's open main phase (no chain, no showdown) P1 has no priority-class option at all;
-    // the reveal only becomes legal once P2 opens a chain/showdown and priority or Focus reaches P1.
-    // Actual: revealHidden is offered to P1 throughout P2's open turn (harness flags singleDecisionCursor).
+  test("facedown ⇒ Reaction, not 'free action' — during the opponent's Neutral Open state P1 holds no priority (312.2) and may not play it from facedown", async () => {
     const game = await scenario()
       .resources(P1, { power: { rainbow: 1 } })
       .battlefield("bf1", { controller: P1 })

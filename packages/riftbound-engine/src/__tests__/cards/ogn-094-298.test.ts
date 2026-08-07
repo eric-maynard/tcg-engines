@@ -93,13 +93,19 @@ describe("Sprite Call (ogn-094-298)", () => {
     expect(game.p1.can("reveal", "sc")).toBe(false);
   });
 
-  test("Hidden: on a later turn it plays from facedown for 0 energy, even on the opponent's turn (gains Reaction)", async () => {
+  test("Hidden: on a later turn it plays from facedown for 0 energy", async () => {
     const game = await hidden().build();
     await game.p1.hide("sc", "bf1");
     await game.advanceTurn();
+    // rule 316.5.b: Reaction (811.6) only adds Closed States, so in P2's
+    // Neutral Open State P1 still holds no Priority.
     expect(game.turnPlayer()).toBe(P2);
+    expect(game.p1.can("reveal", "sc")).toBe(false);
+    await game.advanceTurn();
+    expect(game.turnPlayer()).toBe(P1);
+    const energyBefore = game.p1.resources().energy;
     await game.p1.reveal("sc");
-    expect(game.p1.resources().energy).toBe(0);
+    expect(game.p1.resources().energy).toBe(energyBefore);
     expect(game.chain()).toEqual([expect.objectContaining({ cardId: "sc", controller: P1 })]);
     await game.settle();
     if (game.decision()?.kind === "pick") {
@@ -114,6 +120,7 @@ describe("Sprite Call (ogn-094-298)", () => {
     const game = await hidden().build();
     await game.p1.hide("sc", "bf1");
     await game.advanceTurn();
+    await game.advanceTurn(); // back to P1: only the Turn Player has Priority in a Neutral Open State (316.5.b)
     await game.p1.reveal("sc");
     await game.settle();
     const d = game.decision();

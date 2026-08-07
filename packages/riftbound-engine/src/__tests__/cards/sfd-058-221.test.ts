@@ -84,7 +84,7 @@ describe("Ornn, Blacksmith (sfd-058-221)", () => {
     expect(game.decision()).toMatchObject({ context: "main", kind: "action", seat: P1 });
   });
 
-  test.failing("BUG: only GEAR may be revealed — the unit and the spell among the top 4 must not be offered (Snax + Dirk only)", async () => {
+  test("only GEAR may be revealed — the unit and the spell among the top 4 must not be offered (Snax + Dirk only)", async () => {
     // Expected options: snax, dirk. Actual: all four looked-at cards (u1, snax, dirk, spell) are pickable.
     const game = await inHand().build();
     await game.p1.play("ornn");
@@ -95,7 +95,7 @@ describe("Ornn, Blacksmith (sfd-058-221)", () => {
     expect(offered).toEqual(["dirk", "snax"]);
   });
 
-  test.failing("BUG: 'you MAY reveal' — the pick is declinable; declining recycles all 4 and draws nothing (383.3.a.3)", async () => {
+  test("'you MAY reveal' — the pick is declinable; declining recycles all 4 and draws nothing (383.3.a.3)", async () => {
     // Expected: allowDecline true; after decline hand is empty, fifth on top, 4 cards on the bottom.
     // Actual: a mandatory min-1 pick.
     const game = await inHand().build();
@@ -109,7 +109,7 @@ describe("Ornn, Blacksmith (sfd-058-221)", () => {
     expect([...game.p1.deck().slice(-4)].sort()).toEqual(["dirk", "snax", "spell", "u1"]);
   });
 
-  test.failing("BUG: no gear among the top 4 → nothing can be drawn; all 4 are recycled and the hand stays empty", async () => {
+  test("no gear among the top 4 → nothing can be drawn; all 4 are recycled and the hand stays empty", async () => {
     // Expected: either no prompt or a decline-only prompt; end state: hand [], top = g5, bottom 4 = the units.
     // Actual: a mandatory pick forces a NON-gear card into hand.
     const game = await scenario()

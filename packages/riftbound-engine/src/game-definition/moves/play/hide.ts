@@ -10,8 +10,14 @@ import type {
 } from "@tcg/core";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { fireTriggers } from "../../../abilities/trigger-runner";
-import { addToChain, createInteractionState, getTurnState } from "../../../chain";
+import {
+  addToChain,
+  createInteractionState,
+  getTurnState,
+  hasShowdownPermission,
+} from "../../../chain";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
+import { hiddenCapacityAt } from "../../../operations/hidden-capacity";
 import { computeStaticCostIncrease } from "../../../operations/static-cost-reduction";
 import type { CostReductionContext } from "../../../operations/static-cost-reduction";
 import { getBattlefieldZoneId, getFacedownZoneId } from "../../../zones/zone-configs";
@@ -124,55 +130,6 @@ function revealIsPrevented(
     }
   }
   return false;
-}
-
-/**
- * rule 107.3.b / 107.3.b.1 — a Facedown Zone holds one card per player by
- * default. Battlefield text ("You may hide an additional card here.") is baked
- * into `hiddenCapacityBonus` at setup; a permanent's static
- * `increase-hidden-capacity` raises it live for every battlefield its
- * controller controls, for as long as that permanent is on the board.
- */
-function hiddenCapacityAt(
-  state: RiftboundGameState,
-  playerId: string,
-  bfId: string,
-  ctx: {
-    cards: {
-      getCardController?: (id: CoreCardId) => string | undefined;
-      getCardOwner: (id: CoreCardId) => string | undefined;
-    };
-    zones: {
-      getCardsInZone: (zoneId: CoreZoneId, playerId?: CorePlayerId) => readonly CoreCardId[];
-    };
-  },
-): number {
-  const bf = state.battlefields[bfId];
-  let capacity = 1 + (bf?.hiddenCapacityBonus ?? 0);
-  const registry = getGlobalCardRegistry();
-  const controllerOf = (id: CoreCardId) =>
-    ctx.cards.getCardController?.(id) ?? ctx.cards.getCardOwner(id);
-  const candidates: CoreCardId[] = [
-    ...ctx.zones.getCardsInZone("base" as CoreZoneId, playerId as CorePlayerId),
-  ];
-  for (const otherBfId of Object.keys(state.battlefields)) {
-    candidates.push(...ctx.zones.getCardsInZone(getBattlefieldZoneId(otherBfId) as CoreZoneId));
-  }
-  for (const id of candidates) {
-    if (controllerOf(id) !== playerId) {
-      continue;
-    }
-    for (const ability of registry.getAbilities(id as string) ?? []) {
-      if (ability.type !== "static") {
-        continue;
-      }
-      const effect = ability.effect as { type?: string; amount?: number } | undefined;
-      if (effect?.type === "increase-hidden-capacity") {
-        capacity += effect.amount ?? 1;
-      }
-    }
-  }
-  return capacity;
 }
 
 /**
@@ -585,6 +542,9 @@ function hiddenSpellHasLegalTargets(
     },
     choosing: true,
     draft: state,
+    // rule 811.1.d — restrict EVERY descriptor (even a locationless
+    // "a unit") to the facedown battlefield, as resolution does.
+    hiddenZone: bfZone,
     playerId,
     sourceCardId: cardId,
     sourceZone: bfZone,
@@ -635,6 +595,25 @@ export const revealHidden: Defs["revealHidden"] = {
     // battlefield blocks the reveal outright.
     if (revealIsPrevented(meta.hiddenAt, context.params.playerId as string, context)) {
       return false;
+    }
+    // rule 811.6 / 335 / 338.1 — playing a card from a facedown zone still
+    // needs Priority: [Reaction] timing adds Closed States, it does not let a
+    // non-Turn-Player act in a Neutral Open State, nor a non-Focus holder act
+    // in a Showdown Open State.
+    {
+      const turnState = getTurnState(state.interaction ?? createInteractionState());
+      if (turnState === "neutral-open" && state.turn.activePlayer !== context.params.playerId) {
+        return false;
+      }
+      if (
+        turnState === "showdown-open" &&
+        !hasShowdownPermission(
+          state.interaction ?? createInteractionState(),
+          context.params.playerId as string,
+        )
+      ) {
+        return false;
+      }
     }
     // rule 811.1.d — no legal target at the facedown battlefield ⇒ can't be played.
     if (

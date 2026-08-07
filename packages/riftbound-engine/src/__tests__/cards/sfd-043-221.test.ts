@@ -232,7 +232,9 @@ describe("Emperor's Divide (sfd-043-221)", () => {
     const game = await hiddenAtBf1().build();
     await game.p1.hide("ed", "bf1");
     await game.advanceTurn();
-    expect(game.p1.can("reveal", "ed")).toBe(true); // already a Reaction on the opponent's turn (811.6)
+    // rule 316.5.b: Reaction (811.6) only adds Closed States — in P2's Neutral
+    // Open State P1 holds no Priority and still may not play it.
+    expect(game.p1.can("reveal", "ed")).toBe(false);
     await game.advanceTurn();
     expect(game.turnPlayer()).toBe(P1);
     expect(game.p1.energy()).toBe(0);
