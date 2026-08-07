@@ -275,11 +275,13 @@ export const TRIGGER_PATTERNS: {
   },
   // "When you discard one or more cards, ..."
   { event: "discard", on: "controller", pattern: /^When you discard one or more cards,\s*/i },
-  // "When I'm played and when I conquer, ..."
+  // "When I'm played and when I conquer, ..." / "When you play me or when I conquer, ..."
+  // rule 383.4.a/383.4.c — the OGN and VEN printings of Sett, Brawler word the same
+  // compound trigger differently; both halves name THIS card, so `on: "self"`.
   {
     event: "play-self-or-conquer",
     on: "self",
-    pattern: /^When I'm played and when I conquer,\s*/i,
+    pattern: /^When (?:I'm played and when I conquer|you play (?:me|this) or when I conquer),\s*/i,
   },
   // "When you play your second card in a turn, ..."
   {
