@@ -570,6 +570,42 @@ export function hasPlayFromTrashGrant(
 }
 
 /**
+ * rule 315.4 (rule-id: ven-022-166) — "Skip your Draw Phase": a permanent this
+ * player controls removes their whole Draw Phase (no draw, and therefore no
+ * Burn Out from an empty deck). It is one-sided: an opponent's Draw Phase is
+ * untouched, and the Awaken/Beginning/Channel Phases still happen. Recognised
+ * either as an explicit `{type:"skip-phase", phase:"draw"}` static effect or
+ * from the printed clause while the card's text is still unparsed (`raw`).
+ */
+export function hasSkipDrawPhaseGrant(
+  state: RiftboundGameState,
+  zones: { getCardsInZone: (zone: CoreZoneId, player: CorePlayerId) => readonly CoreCardId[] },
+  playerId: string,
+): boolean {
+  const registry = getGlobalCardRegistry();
+  const zoneIds = [
+    "base",
+    ...Object.keys(state.battlefields ?? {}).map((bfId) => getBattlefieldZoneId(bfId) as string),
+  ];
+  for (const zoneId of zoneIds) {
+    for (const cardId of zones.getCardsInZone(zoneId as CoreZoneId, playerId as CorePlayerId)) {
+      for (const ability of registry.getAbilities(cardId as string) ?? []) {
+        const effect = (
+          ability as { effect?: { type?: string; phase?: string; text?: string } }
+        )?.effect;
+        if (effect?.type === "skip-phase" && effect.phase === "draw") {
+          return true;
+        }
+        if (typeof effect?.text === "string" && /skip your draw phase/i.test(effect.text)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Rule ogn-193-298: a friendly unit on the board with static "Friendly units
  * may be played to open battlefields" (play-restriction with
  * `appliesTo: "friendly-units"`) extends the open-battlefield permission to

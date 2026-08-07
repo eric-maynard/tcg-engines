@@ -21,6 +21,7 @@ import {
   getPotentialRuneEnergy,
   canAffordCard,
   deductCost,
+  hasPlayFromTrashGrant,
 } from "./cost";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
@@ -112,7 +113,15 @@ export const playGear: Defs["playGear"] = {
     }
 
     const zone = context.zones.getCardZone(context.params.cardId as CoreCardId);
-    if (zone !== "hand") {
+    if (
+      zone !== "hand" &&
+      // rule 419.1 (rule-id: ven-022-166) — "You may play cards from your
+      // trash" covers every card type (rule 101), gear included.
+      !(
+        zone === "trash" &&
+        hasPlayFromTrashGrant(state, context.zones, context.params.playerId as string)
+      )
+    ) {
       return false;
     }
 
@@ -177,8 +186,17 @@ export const playGear: Defs["playGear"] = {
       context.playerId as CorePlayerId,
     );
 
+    // rule 419.1 (rule-id: ven-022-166) — with "You may play cards from your
+    // trash" on board, gear in the trash is offered alongside the hand.
+    const playableCards = hasPlayFromTrashGrant(state, context.zones, context.playerId as string)
+      ? [
+          ...handCards,
+          ...context.zones.getCardsInZone("trash" as CoreZoneId, context.playerId as CorePlayerId),
+        ]
+      : handCards;
+
     const results: { playerId: string; cardId: string }[] = [];
-    for (const cardId of handCards) {
+    for (const cardId of playableCards) {
       const def = registry.get(cardId as string);
       if (!def || (def.cardType !== "gear" && def.cardType !== "equipment")) {
         continue;

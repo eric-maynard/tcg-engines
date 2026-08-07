@@ -29,6 +29,7 @@ import { fireTriggers } from "../../abilities/trigger-runner";
 import type { TriggerRunnerContext } from "../../abilities/trigger-runner";
 import { getGlobalCardRegistry } from "../../operations/card-lookup";
 import { getChannelCountLimit } from "../../operations/channel-limits";
+import { hasSkipDrawPhaseGrant } from "../moves/play/cost";
 import { clearDamage, getDamage } from "../../operations/damage-store";
 import { type LeaveBoardContext, removeFromBoard } from "../../operations/leave-board";
 import {
@@ -307,6 +308,15 @@ function runExpirationStep(context: FlowStepContext): void {
             context.cards.updateCardMeta(cardId, {
               empowered: false,
               empoweredUntilEndOfTurn: false,
+            } as unknown as Partial<RiftboundCardMeta>);
+          }
+
+          // rule-id: ven-035-166 — the mirror "Empower it at end of turn" after
+          // a Disempower (rule 517.2.b); the status returns with no duration.
+          if ((meta as { disempoweredUntilEndOfTurn?: boolean }).disempoweredUntilEndOfTurn) {
+            context.cards.updateCardMeta(cardId, {
+              disempoweredUntilEndOfTurn: false,
+              empowered: true,
             } as unknown as Partial<RiftboundCardMeta>);
           }
 
@@ -941,6 +951,13 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               // skips their first Draw Phase — no draw, so no Burn Out either.
               if (context.state.skipFirstDrawFor === (playerId as unknown as string)) {
                 context.state.skipFirstDrawFor = undefined;
+                return;
+              }
+
+              // rule 315.4 (rule-id: ven-022-166) — "Skip your Draw Phase"
+              // removes the phase for its controller only: no draw, and so no
+              // Burn Out from an empty deck either.
+              if (hasSkipDrawPhaseGrant(context.state, context.zones, playerId as string)) {
                 return;
               }
 
