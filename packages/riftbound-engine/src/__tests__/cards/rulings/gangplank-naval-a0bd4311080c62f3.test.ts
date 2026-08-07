@@ -83,7 +83,7 @@ describe("Ruling a0bd4311080c62f3 — Switcheroo vs an Empowered Gangplank, Nava
   // Expected: the -5 modifier that Switcheroo (a spell that chose him) would apply to Empowered Gangplank is
   // REPLACED by +3 → Gangplank 9 (6 + 3); the difference is not recalculated, Sentry still 6.
   // Actual: the engine applies the raw -5 to Gangplank (ends at 1); his Empowered replacement is not modelled.
-  test.failing("BUG: ruling a0bd4311080c62f3 — engine gives Empowered Gangplank -5 (→1); expected the decrease to be replaced by +3 (→9) while Sentry still ends at 6", async () => {
+  test("ruling a0bd4311080c62f3 — engine gives Empowered Gangplank -5 (→1); expected the decrease to be replaced by +3 (→9) while Sentry still ends at 6", async () => {
     const game = await board(true).build();
     await switcheroo(game);
     expect(game.state("sentry").might).toBe(6);

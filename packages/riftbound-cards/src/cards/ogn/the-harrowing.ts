@@ -12,7 +12,9 @@ const abilities: Ability[] = [
     effect: {
       from: "trash",
       ignoreCost: "energy",
-      target: { controller: "friendly", type: "unit" },
+      // rule 355.8 / 355.10.a — the unit is chosen as this spell is PLAYED, so
+      // the descriptor must name the trash for play-time enumeration to offer it.
+      target: { controller: "friendly", location: "trash", type: "unit" },
       type: "play",
     },
     timing: "action",

@@ -795,6 +795,32 @@ export function getRawCards(): Card[] {
  * used by the typed .ts definitions. Lets sets without hand-authored .ts files
  * (currently VEN) flow into getAllCards() and the engine's card registry.
  */
+/**
+ * Engine-primitive markers for set-JSON cards. The generator cannot infer
+ * these from rules text, and VEN has no hand-authored .ts file to carry them.
+ */
+const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
+  // rule 477.1.b — "The equipped unit becomes a copy of that unit for as long
+  // as this is attached to it." (Shady Spectacles)
+  "ven-137-166": { copyChosenUnitToHolder: true },
+  // rule 366-372 / 433.1.b — Gangplank, Naval: "[Empowered] If a spell or
+  // ability that chooses me would stun me, give me -[Might], or return me to
+  // hand, give me +3 [Might] instead." Only the -Might half is modelled today;
+  // the stun / return-to-hand halves need their own replacement events.
+  "ven-181-166": {
+    abilities: [
+      { keyword: "Empower", type: "keyword", value: 2 },
+      {
+        condition: { type: "while-empowered" },
+        replaces: "might-decrease",
+        replacement: { amount: 3, target: "self", type: "modify-might" },
+        target: { self: true },
+        type: "replacement",
+      },
+    ],
+  },
+};
+
 function adaptJsonCard(c: Record<string, unknown>): Card {
   const domains = c.domains as string[] | undefined;
   // Rule 355.8: a set-JSON `abilities: [null]` is a generator parse miss, not a
@@ -821,6 +847,7 @@ function adaptJsonCard(c: Record<string, unknown>): Card {
     setId: c.set,
     tags: c.tags,
     timing: c.timing,
+    ...JSON_CARD_ENGINE_FLAGS[c.id as string],
   } as unknown as Card;
 }
 

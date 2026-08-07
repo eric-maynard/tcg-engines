@@ -66,7 +66,7 @@ describe("Ruling 67ba38e17c612ad4 — Shadow Assassin played from the trash does
 
   // Expected: with NO card named Shadow Assassin in the trash the condition is false → it enters exhausted
   // like any played unit (143.4). Actual: the engine's enter-ready static is unconditional — it enters ready.
-  test.failing("BUG: ruling 67ba38e17c612ad4 — played from hand with no namesake in the trash → enters EXHAUSTED (engine readies it unconditionally)", async () => {
+  test("ruling 67ba38e17c612ad4 — played from hand with no namesake in the trash → enters EXHAUSTED (engine readies it unconditionally)", async () => {
     const game = await scenario().resources(P1, { energy: 5 }).trash(P1, { might: 2, name: "Somebody Else" }, "other").hand(P1, SHADOW_ASSASSIN, "sa").build();
     await game.p1.play("sa");
     await game.settle();
@@ -78,7 +78,7 @@ describe("Ruling 67ba38e17c612ad4 — Shadow Assassin played from the trash does
   // so at the moment it enters the trash holds no card with its name → it enters EXHAUSTED (354, 419.1).
   // Actual: The Harrowing's play-from-trash effect is not functional (it enumerates board units as
   // "targets" and resolves doing nothing) — Shadow Assassin never leaves the trash.
-  test.failing("BUG: ruling 67ba38e17c612ad4 — reanimated by The Harrowing as the only copy: it does NOT count itself → enters EXHAUSTED", async () => {
+  test("ruling 67ba38e17c612ad4 — reanimated by The Harrowing as the only copy: it does NOT count itself → enters EXHAUSTED", async () => {
     const game = await harrowingBoard(false).build();
     const offered = game.p1.option("cast", "harrowing")?.fields.find((f) => f.name === "targets")?.options ?? [];
     expect(offered.flat()).toContain("sa"); // a unit in P1's TRASH is what The Harrowing chooses
@@ -91,7 +91,7 @@ describe("Ruling 67ba38e17c612ad4 — Shadow Assassin played from the trash does
 
   // Expected: with a SECOND Shadow Assassin left behind in the trash, the reanimated one does see "a card
   // with my name in your trash" when it enters → READY. Actual: not played at all (see above).
-  test.failing("BUG: ruling 67ba38e17c612ad4 — reanimated by The Harrowing while a different Shadow Assassin stays in the trash → enters READY", async () => {
+  test("ruling 67ba38e17c612ad4 — reanimated by The Harrowing while a different Shadow Assassin stays in the trash → enters READY", async () => {
     const game = await harrowingBoard(true).build();
     await harrowSa(game);
     expect(game.zoneOf("sa")).toBe("base");

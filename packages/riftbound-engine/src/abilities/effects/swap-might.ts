@@ -1,10 +1,10 @@
 // Effect handler: "swap-might"
 import type { CardId as CoreCardId } from "@tcg/core";
-import type { RiftboundCardMeta } from "../../types";
 import type { TargetDescriptor } from "../target-resolver";
 import { resolveTarget } from "../target-resolver";
 import type { EffectContext, ExecutableEffect } from "../effect-executor";
-import { type EffectHelpers, getEffectiveMight, checkBecomesMighty } from "./_helpers";
+import { type EffectHelpers, getEffectiveMight } from "./_helpers";
+import { applyMightModifierDelta } from "./might-modifier";
 
 export function handle_swapMight(effect: ExecutableEffect, ctx: EffectContext, _h: EffectHelpers): void {
   const swap = effect as unknown as {
@@ -37,26 +37,8 @@ export function handle_swapMight(effect: ExecutableEffect, ctx: EffectContext, _
   if (!a || !b) return;
   const aBefore = getEffectiveMight(a, ctx);
   const bBefore = getEffectiveMight(b, ctx);
-  const aMeta = ctx.cards.getCardMeta?.(a as CoreCardId) as
-    | Partial<RiftboundCardMeta>
-    | undefined;
-  const bMeta = ctx.cards.getCardMeta?.(b as CoreCardId) as
-    | Partial<RiftboundCardMeta>
-    | undefined;
-  ctx.cards.updateCardMeta?.(
-    a as CoreCardId,
-    { mightModifier: (aMeta?.mightModifier ?? 0) + (bBefore - aBefore) } as unknown as Record<
-      string,
-      unknown
-    >,
-  );
-  ctx.cards.updateCardMeta?.(
-    b as CoreCardId,
-    { mightModifier: (bMeta?.mightModifier ?? 0) + (aBefore - bBefore) } as unknown as Record<
-      string,
-      unknown
-    >,
-  );
-  checkBecomesMighty(a, aBefore, ctx);
-  checkBecomesMighty(b, bBefore, ctx);
+  // rule 433.1.a/433.1.b — a swap is ONE difference turned into TWO independent
+  // modifiers; replacing one side never recalculates the other.
+  applyMightModifierDelta(a, bBefore - aBefore, ctx);
+  applyMightModifierDelta(b, aBefore - bBefore, ctx);
 }

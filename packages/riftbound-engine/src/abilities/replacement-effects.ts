@@ -38,6 +38,9 @@ export interface ReplacementEvent {
     | "score"
     | "enters-ready"
     | "deals-bonus-damage"
+    // rule 433.1.b / 366-372 — a spell or ability would give a unit a negative
+    // Might modifier (ven-181-166 Gangplank, Naval).
+    | "might-decrease"
     | "play-token"
     // rule 740.3.a — a combat that ends with units of both players still at
     // the battlefield (ogn-227-298 "recall ALL units instead").
@@ -150,10 +153,30 @@ function replacementApplies(
   ctx: ReplacementContext,
 ): boolean {
   const { target, condition, method } = ability as {
-    target?: { controller?: string; excludeSelf?: boolean; location?: string; type?: string };
+    target?: {
+      attachedToSource?: boolean;
+      controller?: string;
+      excludeSelf?: boolean;
+      location?: string;
+      self?: boolean;
+      type?: string;
+    };
     condition?: { type?: string };
     method?: string;
   };
+  // rule 369.2 — "if … would … ME": a self-scoped replacement only ever sees
+  // events affecting its own source (ven-181-166 Gangplank, Naval).
+  if (target?.self === true && event.cardId !== card.id) {
+    return false;
+  }
+  // rule 369.2 — "if the EQUIPPED unit would die" (sfd-051-221 Guardian Angel):
+  // the replacement only sees the death of the unit its source is attached to.
+  if (target?.attachedToSource === true) {
+    const attachedTo = ctx.cards.getCardMeta(card.id as CoreCardId)?.attachedTo;
+    if (attachedTo === undefined || attachedTo !== event.cardId) {
+      return false;
+    }
+  }
   // rule 443.1.a — a method-scoped skip ("skip the next point they would gain
   // from CONQUERING") is not a generic score replacement: it never applies to a
   // point gained by a different method (a Hold), and so is not consumed by one.

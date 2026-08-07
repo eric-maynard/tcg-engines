@@ -1023,6 +1023,12 @@ function parseStaticAbilityInner(
           type: "control",
         } as unknown as Condition;
       }
+      // rule 419.1 (rule-id: ven-013-166) — "if you have a card with my name
+      // in your trash": the entering card has already left the trash, so it
+      // never counts itself (the engine's `name-in-trash` check excludes it).
+      if (/^you have a card with my name in your trash$/i.test(conditionText)) {
+        condition = { type: "name-in-trash" } as unknown as Condition;
+      }
       // Parse "if you have N or more other units in your base"
       const baseUnitsMatch = conditionText.match(
         /^you have (\w+) or more other units in your base$/i,
