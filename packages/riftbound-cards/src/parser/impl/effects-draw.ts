@@ -143,6 +143,10 @@ export function parseLookEffect(text: string): LookEffect | undefined {
   const revealDraw = rest.match(
     /^(?:Then\s+)?You may reveal an? (unit|gear|spell)\b[^.]*?from among them,?\s*(?:and|then)\s+draw it/i,
   );
+  // rule 416.1 (ven-156-166 Lightning Rush) — "Put the rest into your trash"
+  // overrides the default recycle-to-bottom destination for the unpicked
+  // looked-at cards.
+  const restToTrash = /Put the rest (?:in)?to your trash/i.test(rest);
   if (revealDraw) {
     const kind = revealDraw[1].toLowerCase();
     // Equipment is gear (rule 150.4).
@@ -152,10 +156,26 @@ export function parseLookEffect(text: string): LookEffect | undefined {
       filter: { cardTypes },
       from,
       optional: true,
+      ...(restToTrash ? { onRest: "trash" as const } : {}),
       type: "look",
     } as LookEffect;
   }
-  return { amount, from, type: "look" };
+  // rule 383.3.a.3 (ven-156-166 Lightning Rush) — "You may choose a card from
+  // among them and draw it": an unrestricted but DECLINABLE pick, unlike the
+  // bare "Look at the top N" default where the draw is mandatory.
+  const chooseDraw = rest.match(
+    /^(?:Then\s+)?You may choose a card from among them,?\s*(?:and|then)\s+draw it/i,
+  );
+  if (chooseDraw) {
+    return {
+      amount,
+      from,
+      optional: true,
+      ...(restToTrash ? { onRest: "trash" as const } : {}),
+      type: "look",
+    } as LookEffect;
+  }
+  return { amount, from, ...(restToTrash ? { onRest: "trash" as const } : {}), type: "look" };
 }
 
 /**

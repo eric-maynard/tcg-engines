@@ -94,7 +94,7 @@ export function handle_look(effect: ExecutableEffect, ctx: EffectContext, _h: Ef
   // (no `then`) is the Stacked-Deck shape: draw the pick, recycle the rest.
   const lookEff = effect as {
     onPicked?: "recycle" | "banish" | "discard" | "draw" | "play";
-    onRest?: "recycle" | "draw";
+    onRest?: "recycle" | "draw" | "trash";
     then?: { recycle?: unknown };
     filter?: { excludeCardTypes?: readonly string[]; cardTypes?: readonly string[] };
     optional?: boolean;

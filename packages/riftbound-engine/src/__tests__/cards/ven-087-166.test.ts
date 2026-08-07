@@ -44,5 +44,8 @@ describe("Hextech Disc (ven-087-166)", () => {
     expect(added).toHaveLength(1);
     const token = added[0];
     expect(game.state(token)).toMatchObject({ isToken: true, might: 3 });
+    // rule 476.1 — the Disc is a plain Gear with no printed [Equip]; it can
+    // never be attached to a unit, not even the Mech it just made.
+    expect(game.p1.can("equip", "disc")).toBe(false);
   });
 });
