@@ -683,8 +683,13 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               const tempRegistry = getGlobalCardRegistry();
               const temporaryIds: string[] = [];
               for (const cardId of tempKillCards) {
-                const owner = context.cards.getCardOwner?.(cardId);
-                if (owner !== turnPlayerId) {
+                // rule 816.1.b/c — [Temporary] kills at the start of the
+                // permanent's CONTROLLER's Beginning Phase, not its owner's: a
+                // stolen Temporary unit dies on the thief's turn.
+                const controller =
+                  context.cards.getCardController?.(cardId) ??
+                  context.cards.getCardOwner?.(cardId);
+                if (controller !== turnPlayerId) {
                   continue;
                 }
 

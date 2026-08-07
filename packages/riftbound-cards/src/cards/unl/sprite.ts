@@ -11,4 +11,6 @@ export const sprite: UnitCard = {
   rarity: "common",
   rulesText: "[Temporary] (Kill me at the start of your Beginning Phase, before scoring.)",
   setId: "UNL",
+  // rule 187.2 — the Sprite token is a Fae unit token.
+  tags: ["Fae"],
 };

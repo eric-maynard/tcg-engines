@@ -10,7 +10,7 @@ import type {
   SequenceEffect,
 } from "@tcg/riftbound-types/abilities/effect-types";
 import type { AnyTarget, Location } from "@tcg/riftbound-types/targeting";
-import { parseTarget } from "../parsers/target-parser";
+import { parseTarget, singularizeTag } from "../parsers/target-parser";
 import { parseEffect } from "./effect";
 import { wordToNumber } from "./tokens";
 
@@ -244,7 +244,8 @@ export function parseModifyMightEffect(text: string): ModifyMightEffect | Sequen
     target = {
       controller: "friendly",
       ...(excludesSelf ? { excludeSelf: true } : {}),
-      filter: { tag: tribeName },
+      // rule 105.2 — the printed tag is singular ("Mech"), the text plural ("Mechs").
+      filter: { tag: singularizeTag(tribeName) },
       quantity: "all",
       type: "unit",
     } as AnyTarget;

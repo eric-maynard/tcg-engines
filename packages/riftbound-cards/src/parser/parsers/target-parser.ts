@@ -158,6 +158,27 @@ type CardTypeStr =
   | "permanent";
 
 /**
+ * rule 105.2: tribal rules text names the tag in the plural ("your Mechs", "Sand
+ * Soldiers you play") but the tag printed on a card/token is singular ("Mech"),
+ * so a filter built from that text must be singularized to match anything.
+ */
+export function singularizeTag(tag: string): string {
+  if (/(?:ss|us|is)$/i.test(tag)) {
+    return tag;
+  }
+  if (/ies$/i.test(tag)) {
+    return tag.replace(/ies$/i, "y");
+  }
+  if (/(?:ch|sh|x|z)es$/i.test(tag)) {
+    return tag.replace(/es$/i, "");
+  }
+  if (/s$/i.test(tag)) {
+    return tag.replace(/s$/i, "");
+  }
+  return tag;
+}
+
+/**
  * Capitalize a tag string (e.g., "mech" -> "Mech", "sand soldier" -> "Sand Soldier")
  */
 function capitalizeTag(tag: string): string {
