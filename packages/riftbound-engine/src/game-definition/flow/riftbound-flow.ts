@@ -47,6 +47,13 @@ import {
 } from "../../operations/points";
 
 /**
+ * Marker keyword granted by cards whose text reads "Your [Temporary] effects at
+ * my battlefield don't trigger" (rule 816.1) — checked in the Beginning-Phase
+ * Temporary kill step.
+ */
+const SUPPRESS_TEMPORARY_KEYWORD = "SuppressTemporaryHere";
+
+/**
  * Build a TriggerRunnerContext from a flow phase context.
  *
  * Flow hooks receive FlowContext (state, zones, cards) but NOT counters.
@@ -739,6 +746,33 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
               const vacatedBattlefields = new Set<string>();
 
               const tempRegistry = getGlobalCardRegistry();
+
+              // rule 816.1 — "Your [Temporary] effects at my battlefield don't
+              // trigger" (LeBlanc, Everywhere at Once): the kill simply never
+              // happens for that player's permanents at that battlefield.
+              const suppressedBattlefields = new Set<string>();
+              for (const [cardId, bfId] of battlefieldOfCard) {
+                const suppressorController =
+                  context.cards.getCardController?.(cardId as CoreCardId) ??
+                  context.cards.getCardOwner?.(cardId as CoreCardId);
+                if (suppressorController !== turnPlayerId) {
+                  continue;
+                }
+                const suppressorMeta = context.cards.getCardMeta(cardId as CoreCardId);
+                const granted = (suppressorMeta?.grantedKeywords ?? []).some(
+                  (gk: { keyword: string }) => gk.keyword === SUPPRESS_TEMPORARY_KEYWORD,
+                );
+                const printed = (tempRegistry.getAbilities(cardId) ?? []).some(
+                  (a: { type?: string; effect?: { type?: string; keyword?: string } }) =>
+                    a.type === "static" &&
+                    a.effect?.type === "grant-keyword" &&
+                    a.effect?.keyword === SUPPRESS_TEMPORARY_KEYWORD,
+                );
+                if (granted || printed) {
+                  suppressedBattlefields.add(bfId);
+                }
+              }
+
               const temporaryIds: string[] = [];
               for (const cardId of tempKillCards) {
                 // rule 816.1.b/c — [Temporary] kills at the start of the
@@ -758,6 +792,9 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 );
                 if (hasTemp || grantedTemp) {
                   const fromBattlefield = battlefieldOfCard.get(cardId as string);
+                  if (fromBattlefield && suppressedBattlefields.has(fromBattlefield)) {
+                    continue;
+                  }
                   if (fromBattlefield) {
                     vacatedBattlefields.add(fromBattlefield);
                   }

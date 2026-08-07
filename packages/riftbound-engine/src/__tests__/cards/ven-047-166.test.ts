@@ -149,7 +149,12 @@ describe("Apprentice Mage (ven-047-166)", () => {
       .build();
     await game.p1.cast("sanc");
     await game.settle();
-    await game.p1.chooseMode(0);
+    // rule 355.3 / 355.8 (rule-id: ven-035-166) — with no [Empowered] unit on the board
+    // Sanction's second mode is unselectable, so the forced one-mode menu may already be settled.
+    const modeD = game.decision();
+    if (modeD?.kind === "pick" && (modeD as PickDecision).options.some((o) => o.mode !== undefined)) {
+      await game.p1.chooseMode(0);
+    }
     if (game.decision()?.kind === "pick" && (game.decision() as PickDecision).options.some((o) => o.card === "mage" || o.key === "mage")) {
       await game.p1.pick("mage");
     }
@@ -169,8 +174,14 @@ describe("Apprentice Mage (ven-047-166)", () => {
       .build();
     await game.p1.cast("sanc");
     await game.settle();
-    await game.p1.chooseMode(0);
-    if (game.decision()?.kind === "pick") {
+    // rule 355.3 / 355.8 (rule-id: ven-035-166) — with no [Empowered] unit on the board
+    // Sanction's second mode is unselectable, so the forced one-mode menu may already be settled.
+    const modeD = game.decision();
+    if (modeD?.kind === "pick" && (modeD as PickDecision).options.some((o) => o.mode !== undefined)) {
+      await game.p1.chooseMode(0);
+    }
+    const tgtD = game.decision();
+    if (tgtD?.kind === "pick" && (tgtD as PickDecision).options.some((o) => o.card === "mage" || o.key === "mage")) {
       await game.p1.pick("mage");
     }
     await game.settle();
@@ -212,8 +223,14 @@ describe("Apprentice Mage (ven-047-166)", () => {
     const game = await scenario().resources(P1, { energy: 3, power: { calm: 1 } }).unit(P1, "base", CARD, "mage").hand(P1, SANCTION, "sanc").build();
     await game.p1.cast("sanc");
     await game.settle();
-    await game.p1.chooseMode(0);
-    if (game.decision()?.kind === "pick") {
+    // rule 355.3 / 355.8 (rule-id: ven-035-166) — with no [Empowered] unit on the board
+    // Sanction's second mode is unselectable, so the forced one-mode menu may already be settled.
+    const modeD = game.decision();
+    if (modeD?.kind === "pick" && (modeD as PickDecision).options.some((o) => o.mode !== undefined)) {
+      await game.p1.chooseMode(0);
+    }
+    const tgtD = game.decision();
+    if (tgtD?.kind === "pick" && (tgtD as PickDecision).options.some((o) => o.card === "mage" || o.key === "mage")) {
       await game.p1.pick("mage");
     }
     await game.settle({ policy: "first" });

@@ -181,6 +181,9 @@ export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: E
   const targetable = availableIndices.filter((i) =>
     modeHasLegalTarget(options[i] as { effect?: ExecutableEffect }, ctx),
   );
+  // rule-id: ven-035-166 — whether an unchoosable mode was dropped here; the
+  // survivor's own target is then still declared through the modal prompt.
+  const prunedAMode = targetable.length > 0 && targetable.length < availableIndices.length;
   if (targetable.length > 0) {
     availableIndices = targetable;
   }
@@ -188,7 +191,10 @@ export function handle_choice(effect: ExecutableEffect, ctx: EffectContext, h: E
   // picks which mode resolves. With ≥2 modes and no other prompt in flight,
   // pause via a `choose-mode` pending choice; `resolvePendingChoice` runs the
   // picked option. A single mode (or a nested prompt) resolves inline.
-  if (availableIndices.length >= 2 && !ctx.draft.pendingChoice) {
+  // rule-id: ven-035-166 — a menu that pruning narrowed to one mode is still
+  // offered as a menu: the controller sees WHICH modes are legal, and the
+  // survivor's own target is then declared through the normal modal prompt.
+  if ((availableIndices.length >= 2 || prunedAMode) && !ctx.draft.pendingChoice) {
     // rule 355.10.e (ogn-071-298): "each other player chooses" — the opponent
     // picks the mode as the spell resolves, but it still resolves for "you".
     // rule-id: ogn-033-298 (rule 355.10.e) — "Deal 6 to it unless its

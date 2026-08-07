@@ -197,9 +197,18 @@ export function parseEmpowerEffect(text: string): Effect | undefined {
   if (tail) {
     untilEndOfTurn = true;
     body = body.slice(0, tail.index).trim();
+  } else {
+    // rule 517.2.b (rule-id: ven-035-166) — the mirror tail "… Empower it at
+    // end of turn." after a Disempower is likewise that disempower's duration.
+    // `(?<![a-z])` keeps it from matching inside the word "disempower".
+    const reTail = body.match(/[.,]?\s*(?<![a-z])empower it at (?:the )?end of turn\.?$/i);
+    if (reTail) {
+      untilEndOfTurn = true;
+      body = body.slice(0, reTail.index).trim();
+    }
   }
   const match = body.match(
-    /^(dis)?empower (me|it|this|(?:a|an|another)\s+(?:friendly |enemy )?(?:unit|gear)(?:\s+(?:here|at a battlefield))?|something(?: else)?(?:\s+here)?)\.?$/i,
+    /^(dis)?empower (me|it|this|(?:a|an|another)\s+(?:friendly |enemy )?(?:unit|gear)(?:\s+(?:here|at a battlefield))?(?:\s+that's \[empowered\])?|something(?: else)?(?:\s+here)?)\.?$/i,
   );
   if (!match) {
     return undefined;

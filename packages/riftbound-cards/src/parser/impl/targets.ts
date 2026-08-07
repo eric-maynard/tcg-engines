@@ -84,6 +84,10 @@ export function parseCardTarget(targetText: string): {
     target.filter = "stunned";
   } else if (lower.includes("[mighty]")) {
     target.filter = "mighty";
+  } else if (lower.includes("[empowered]")) {
+    // rule 442.1.a (rule-id: ven-035-166) — "a unit that's [Empowered]" may
+    // only choose a unit that currently has the Empowered status.
+    target.filter = "empowered";
   }
 
   // rule 740.2.c: "units in combat" — only units with a combat designation at
