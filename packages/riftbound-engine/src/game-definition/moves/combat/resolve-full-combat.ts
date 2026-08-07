@@ -9,7 +9,12 @@ import type {
   GameMoveDefinitions,
 } from "@tcg/core";
 import type { CombatUnit } from "../../../combat";
-import { NO_COMBAT_DAMAGE, PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE, resolveCombat } from "../../../combat";
+import {
+  NO_COMBAT_DAMAGE,
+  PREVENT_WEAKER_ENEMY_COMBAT_DAMAGE,
+  planCombatDamageAssignments,
+  resolveCombat,
+} from "../../../combat";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { findAllReplacements } from "../../../abilities/replacement-effects";
 import { createInteractionState, getTurnState } from "../../../chain";
@@ -378,8 +383,54 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     battlefield.combatExcessDamage = undefined;
     battlefield.combatNoDefendersAtCleanup = undefined;
     if (!damageAlreadyDone && attackerUnits.length > 0 && defenderUnits.length > 0) {
+    // rule 465.2.c.3 / 465.2.c.7 — each side's player chooses which opposing
+    // unit is made lethal first whenever more than one legal assignment
+    // exists. Ask before any damage is written; the answer is stored on the
+    // battlefield and this move re-runs (its condition is blocked while a
+    // pendingChoice exists) with both allocations in hand.
+    const plans = planCombatDamageAssignments(attackerUnits, defenderUnits);
+    const defendingPlayer = defenderUnits[0]?.owner;
+    const raiseAssignment = (
+      side: "attacker" | "defender",
+      playerId: string,
+      plan: (typeof plans)["attacker"],
+    ): void => {
+      draft.pendingChoice = {
+        battlefieldId,
+        defaultAllocation: { ...plan.defaultAllocation },
+        lethalNeed: { ...plan.need },
+        options: [...plan.order] as CoreCardId[],
+        playerId: playerId as CorePlayerId,
+        side,
+        tier: { ...plan.tier },
+        total: plan.total,
+        type: "combat-damage",
+      };
+      // The deferral bookkeeping cleared above must survive the round trip.
+      battlefield.combatExcessDamage = excessDamage > 0 ? excessDamage : undefined;
+      battlefield.combatNoDefendersAtCleanup = noDefendersAtCleanup ? true : undefined;
+    };
+    if (battlefield.combatDamageAllocation === undefined && plans.attacker.hasChoice) {
+      raiseAssignment("attacker", attackingPlayer, plans.attacker);
+      return;
+    }
+    if (
+      battlefield.combatDefenderDamageAllocation === undefined &&
+      plans.defender.hasChoice &&
+      defendingPlayer
+    ) {
+      raiseAssignment("defender", defendingPlayer, plans.defender);
+      return;
+    }
+    const chosenAttackerAssignment = battlefield.combatDamageAllocation;
+    const chosenDefenderAssignment = battlefield.combatDefenderDamageAllocation;
+    battlefield.combatDamageAllocation = undefined;
+    battlefield.combatDefenderDamageAllocation = undefined;
     // Run the combat resolver
-    const result = resolveCombat(attackerUnits, defenderUnits);
+    const result = resolveCombat(attackerUnits, defenderUnits, {
+      ...(chosenAttackerAssignment ? { attackerAssignment: { ...chosenAttackerAssignment } } : {}),
+      ...(chosenDefenderAssignment ? { defenderAssignment: { ...chosenDefenderAssignment } } : {}),
+    });
     excessDamage = result.attackerExcessDamage;
 
     // Apply damage to each unit from damageAssignment

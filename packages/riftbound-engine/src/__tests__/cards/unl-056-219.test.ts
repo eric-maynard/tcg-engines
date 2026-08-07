@@ -174,7 +174,7 @@ describe("Yuumi, Magical Cat (unl-056-219)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: 465.2.c.8 — pumping Enthusiastic Promoter gives it Tank AND Backline; the attacker must be offered BOTH readings ({promo:3} 'first' or {yuumi:1, promo:2} 'last'); the engine forces one line without asking", async () => {
+  test("465.2.c.8 — pumping Enthusiastic Promoter gives it Tank AND Backline; the attacker must be offered BOTH readings ({promo:3} 'first' or {yuumi:1, promo:2} 'last')", async () => {
     // Expected: a distribute decision for P2 in which both allocations are accepted. The combat
     // resolver now models 465.2.c.8 (both readings are legal and a real choice), but the harness
     // still has no `distribute` decision for the `combat-damage` prompt, so the pick never surfaces.

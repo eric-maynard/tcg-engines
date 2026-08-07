@@ -458,6 +458,23 @@ export function isLegalDamageAssignment(
 }
 
 /**
+ * rule 465.2.c.3 — both sides' assignment plans for one combat, computed on the
+ * same prevention-adjusted units `resolveCombat` will use, so a prompt raised
+ * from a plan and the damage finally dealt can never disagree.
+ */
+export function planCombatDamageAssignments(
+  attackersIn: CombatUnit[],
+  defendersIn: CombatUnit[],
+): { attacker: DamageAssignmentPlan; defender: DamageAssignmentPlan } {
+  const attackers = applyCombatDamagePrevention(attackersIn, true, defendersIn);
+  const defenders = applyCombatDamagePrevention(defendersIn, false, attackersIn);
+  return {
+    attacker: planDamageAssignment(defenders, calculateSideMight(attackers, true), "defender"),
+    defender: planDamageAssignment(attackers, calculateSideMight(defenders, false), "attacker"),
+  };
+}
+
+/**
  * Resolve combat between attackers and defenders.
  *
  * Uses MUTUAL SIMULTANEOUS DAMAGE (rule 626):
@@ -476,6 +493,11 @@ export function resolveCombat(
      * onto the defenders. Omitted ⇒ the forced/greedy assignment is used.
      */
     readonly attackerAssignment?: Record<string, number>;
+    /**
+     * rule 465.2.c.3 — the defending player's chosen assignment of its damage
+     * onto the attackers. Omitted ⇒ the forced/greedy assignment is used.
+     */
+    readonly defenderAssignment?: Record<string, number>;
   },
 ): CombatResult {
   // rule-id: unl-060-219 — weaker enemies of a Vilemaw-style unit deal no combat damage.
@@ -500,7 +522,8 @@ export function resolveCombat(
   }
 
   // Step 3: Defenders deal their total Might to attackers (rule 626.1.c)
-  const defenderDamageToAttackers = distributeDamage(attackers, defenderTotal, "attacker");
+  const defenderDamageToAttackers =
+    opts?.defenderAssignment ?? distributeDamage(attackers, defenderTotal, "attacker");
   for (const [id, dmg] of Object.entries(defenderDamageToAttackers)) {
     damageAssignment[id] = (damageAssignment[id] ?? 0) + dmg;
   }

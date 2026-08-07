@@ -110,7 +110,7 @@ describe("Vex, Mocking (unl-055-219)", () => {
     expect(game.gameState.battlefields.bf1?.controller).toBe(P1);
   });
 
-  test.failing("BUG: [Tank] assignment legality (815.1.c): a 7-Might raider into Pal + Pal2 + Vex must give Vex her lethal 6 first — {pal:1, pal2:1, vex:5} and {pal:2, pal2:5} refused; {vex:6, pal2:1} legal → Vex dies, both Pals hold", async () => {
+  test("[Tank] assignment legality (815.1.c): a 7-Might raider into Pal + Pal2 + Vex must give Vex her lethal 6 first — {pal:1, pal2:1, vex:5} and {pal:2, pal2:5} refused; {vex:6, pal2:1} legal → Vex dies, both Pals hold", async () => {
     const game = await scenario()
       .active(P2)
       .autoProcedures(false)

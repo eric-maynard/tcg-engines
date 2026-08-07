@@ -179,7 +179,10 @@ describe("action decisions: grouping and the play bundle", () => {
     const s = await game.settle();
     expect(s.reason).toBe("open");
     const last = game.transcript().steps.at(-1);
-    expect(last?.executed.map((e) => e.moveId)).toEqual(["passShowdownFocus", "resolveFullCombat"]);
+    // rule 465.2.c.3 — the lone defender's 4 damage can be assigned two ways
+    // over the two attackers, so settling answers that prompt (with the
+    // forced/greedy default) before the combat procedure runs.
+    expect(last?.executed.map((e) => e.moveId)).toEqual(["resolvePendingChoice", "resolveFullCombat"]);
     expect(last?.executed[1]?.auto).toBe(true);
     // 5 might vs 4: e1 dies, P1 conquers and scores.
     expect(game.zoneOf("e1")).toBe("trash");

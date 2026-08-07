@@ -8,6 +8,7 @@ export {
   distributeDamage,
   enumerateDamageAssignments,
   isLegalDamageAssignment,
+  planCombatDamageAssignments,
   planDamageAssignment,
   resolveCombat,
 } from "./combat-resolver";

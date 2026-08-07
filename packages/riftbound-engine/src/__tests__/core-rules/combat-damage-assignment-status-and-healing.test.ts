@@ -281,7 +281,7 @@ describe("Lethal must be completed on one unit before the next; no overkill whil
     expect(game.p2.points()).toBe(0);
   });
 
-  test.failing("BUG: 465.2.c.3 — the ATTACKER chooses which defender receives lethal first; engine auto-assigns without surfacing a decision to P1", async () => {
+  test("465.2.c.3 — the ATTACKER chooses which defender receives lethal first", async () => {
     // Expected: after both players pass, P1 is prompted to distribute 5 damage among D1/D2;
     // {D1:5}, {D1:4,D2:1} (overkill while D2 lacks lethal, 465.2.c.4) and any total ≠ 5 are
     // rejected; {D1:3,D2:2} / {D1:2,D2:3} are accepted. Actual: combat resolves instantly.
@@ -443,7 +443,7 @@ describe("Tank first, plain next, Backline last — on either side of the combat
     expect(game.p1.points()).toBe(0);
   });
 
-  test.failing("BUG: 465.2.c.7 — with two Tanks the attacker chooses which Tank takes lethal first; engine auto-picks without offering P1 the choice", async () => {
+  test("465.2.c.7 — with two Tanks the attacker chooses which Tank takes lethal first", async () => {
     // Expected: P1 is prompted and may elect {T2:3} (killing the 3-Might Tank) instead of {T1:2,T2:1};
     // {N:1,...} is rejected while a Tank lacks lethal (815.1.c.2). Actual: no prompt, T1 always dies.
     const game = await scenario()

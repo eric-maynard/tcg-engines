@@ -372,7 +372,7 @@ describe("Two attackers vs one defender: exactly one attacker dies, the survivor
     expect(game.p2.points()).toBe(0);
   });
 
-  test.failing("BUG: 465.2.c — the DEFENDER chooses the order among attackers: a distribute/pick Decision for P2 should surface and Option Y (4→A2 lethal, 1→A1) must be accepted (engine auto-assigns, no decision)", async () => {
+  test("465.2.c — the DEFENDER chooses the order among attackers: a distribute/pick Decision for P2 should surface and Option Y (4→A2 lethal, 1→A1) must be accepted", async () => {
     // Expected: after the showdown closes P1 (single target) then P2 are asked to assign; P2 may pick
     // {A2:4, A1:1}; {A1:3, A2:2} and {A1:5} would be rejected (465.2.c.3 / 465.2.c.4).
     // Actual: resolveFullCombat distributes automatically (A1 lethal first) — no Decision for P2.
@@ -450,7 +450,7 @@ describe("Any surviving defender recalls ALL attackers (damaged or not); attacke
     expect(game.p1.units("bf1")).toEqual([]);
   });
 
-  test.failing("BUG: 465.2.c / 465.2.c.3 — the ATTACKER should be asked which defender takes lethal first (script: 2→D1 then 4→D2) and P2's split {A1:1,A2:1} must be rejected (engine auto-assigns, no decision)", async () => {
+  test("465.2.c / 465.2.c.3 — the ATTACKER should be asked which defender takes lethal first (script: 2→D1 then 4→D2) and P2's split {A1:1,A2:1} must be rejected", async () => {
     // Expected: a P1 assignment Decision (choice (i) D1 lethal then rest to D2), then a P2 Decision that
     // rejects a 1/1 split. Actual: no assignment Decision is ever surfaced.
     const game = await scenario()

@@ -204,18 +204,35 @@ function executeResolveFullCombat(
   battlefieldId: string,
   cards: Record<string, { owner: string; zone: string; meta?: Partial<RiftboundCardMeta> }>,
 ) {
-  const mock = createMockMoveContext(draft, cards);
-  mock.context.params = { battlefieldId };
-
-  // Call the reducer directly
   const moveDefinition = combatMoves.resolveFullCombat;
   if (!moveDefinition) {
     throw new Error("resolveFullCombat move not found");
   }
-  moveDefinition.reducer(
-    draft as unknown as import("immer").Draft<RiftboundGameState>,
-    mock.context as unknown as Parameters<typeof moveDefinition.reducer>[1],
-  );
+  // rule 465.2.c.3 — the move may stop to ask a side how it assigns its combat
+  // damage. These reducer-level tests exercise the forced/greedy line, so take
+  // the prompt's own default allocation and re-enter, as `settle()` does.
+  let mock = createMockMoveContext(draft, cards);
+  for (let pass = 0; pass < 3; pass++) {
+    mock = createMockMoveContext(draft, cards);
+    mock.context.params = { battlefieldId };
+    moveDefinition.reducer(
+      draft as unknown as import("immer").Draft<RiftboundGameState>,
+      mock.context as unknown as Parameters<typeof moveDefinition.reducer>[1],
+    );
+    const pc = draft.pendingChoice;
+    if (pc?.type !== "combat-damage") {
+      break;
+    }
+    const bf = draft.battlefields[pc.battlefieldId];
+    if (bf) {
+      if (pc.side === "defender") {
+        bf.combatDefenderDamageAllocation = { ...pc.defaultAllocation };
+      } else {
+        bf.combatDamageAllocation = { ...pc.defaultAllocation };
+      }
+    }
+    draft.pendingChoice = undefined;
+  }
 
   return mock;
 }

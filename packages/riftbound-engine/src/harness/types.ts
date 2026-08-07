@@ -313,6 +313,11 @@ export interface DistributeDecision extends DecisionBase {
   readonly kind: "distribute";
   readonly total: number;
   readonly buckets: readonly DistributeBucket[];
+  /**
+   * rule 465.2.c.3 — a always-legal forced/greedy allocation, offered so
+   * `settle()` can take a combat-damage assignment instead of stalling.
+   */
+  readonly defaultAllocation?: Readonly<Record<OptionKey, number>>;
 }
 
 export interface OrderDecision extends DecisionBase {
