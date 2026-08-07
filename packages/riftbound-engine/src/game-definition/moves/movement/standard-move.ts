@@ -75,6 +75,18 @@ export const standardMove: Defs["standardMove"] = {
         if (!zone?.startsWith("battlefield-")) {
           return false;
         }
+        // rule 144.4.b / sfd-014-221 (Minotaur Reckoner): "Units can't move to
+        // base" is modelled as a granted `NoMoveToBase` keyword — a unit
+        // carrying it (printed or granted) may not take the base leg.
+        if (
+          hasKeyword(
+            unitId,
+            "NoMoveToBase",
+            (id: CoreCardId) => context.cards.getCardMeta(id) as Partial<RiftboundCardMeta> | undefined,
+          )
+        ) {
+          return false;
+        }
       } else if (zone !== "base") {
         // rule 144.3.a/b + 810.1.b — one Standard Move may gather units from
         // DIFFERENT Origins as long as they share a Destination; a
@@ -237,6 +249,10 @@ export const standardMove: Defs["standardMove"] = {
           continue;
         }
         if (context.counters.getFlag(cardId, "exhausted")) {
+          continue;
+        }
+        // sfd-014-221: units carrying NoMoveToBase are never offered a base leg.
+        if (hasKeyword(cardId as string, "NoMoveToBase", metaAccessor)) {
           continue;
         }
         readyBfUnits.push(cardId as string);

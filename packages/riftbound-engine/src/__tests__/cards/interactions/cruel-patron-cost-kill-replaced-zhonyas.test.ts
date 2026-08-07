@@ -46,7 +46,7 @@ describe("Cruel Patron × Zhonya's Hourglass × LeBlanc — replaced cost-kill i
   // friendly unit to kill Cruel Patron cannot be played at all. Actual: the engine's additional-cost
   // reader only recognises optional `cost.kill` / energy-power-xp shapes; Cruel Patron's
   // `{additionalCost:{kill}, optional:false}` is ignored and it plays for 4 energy with no kill.
-  test.failing("BUG: Cruel Patron is unplayable when its controller has no other friendly unit to kill (mandatory additional cost)", async () => {
+  test("Cruel Patron is unplayable when its controller has no other friendly unit to kill (mandatory additional cost)", async () => {
     const game = await scenario().resources(P1, { energy: 4 }).unit(P2, "base", { might: 2 }, "foe").hand(P1, CRUEL_PATRON, "patron").build();
     expect(game.p1.can("play", "patron")).toBe(false);
     const r = await game.p1.try((p) => p.play("patron"));

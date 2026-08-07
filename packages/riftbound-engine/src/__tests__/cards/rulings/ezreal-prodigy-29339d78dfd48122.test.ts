@@ -91,7 +91,7 @@ describe("Ruling 29339d78dfd48122 — what Ezreal, Prodigy's discount does and d
   // does not waive or reduce it: with Ezreal as the only friendly unit, playing Patron must kill Ezreal
   // (the play offers/requires a friendly `sacrifice`, and Ezreal ends in the trash). Actual: the engine
   // does not model Cruel Patron's kill cost at all — Patron is played for 4 with nothing killed.
-  test.failing("BUG: ruling 29339d78dfd48122 — Ezreal does not reduce Cruel Patron's mandatory kill: Patron still has to kill a friendly unit (here Ezreal himself)", async () => {
+  test("ruling 29339d78dfd48122 — Ezreal does not reduce Cruel Patron's mandatory kill: Patron still has to kill a friendly unit (here Ezreal himself)", async () => {
     const game = await scenario().resources(P1, { energy: 4 }).unit(P1, "base", EZREAL, "ezreal").hand(P1, CRUEL_PATRON, "patron").build();
     const sac = game.p1.option("play", "patron")?.fields.find((f) => f.arg === "sacrifice");
     expect(sac?.options ?? []).toEqual(["ezreal"]);

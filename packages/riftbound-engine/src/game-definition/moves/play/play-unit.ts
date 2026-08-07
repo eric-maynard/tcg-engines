@@ -32,6 +32,8 @@ import {
   boardEntersReadyGrantApplies,
   canPlayToOpenBattlefield,
   canPlayToOccupiedEnemyBattlefield,
+  canPlayToEnemyOccupiedBattlefield,
+  battlefieldHasEnemyUnits,
   canPlayToAttackedBattlefield,
   battlefieldIsAttackedBy,
   battlefieldIsOccupiedEnemy,
@@ -344,6 +346,23 @@ export const playUnit: Defs["playUnit"] = {
     ) {
       // rule 355.2.b (ogn-161-298): "You may play me to an occupied enemy
       // battlefield" — the arrival contests it and stages combat (323.13).
+    } else if (
+      targetIsBattlefield &&
+      Boolean(targetBfId) &&
+      (standardTimingOk || reactionTimingOk) &&
+      canPlayToEnemyOccupiedBattlefield(context.params.cardId as string) &&
+      battlefieldHasEnemyUnits(
+        context.zones,
+        (id) =>
+          (context.cards.getCardController?.(id) as string | undefined) ??
+          (context.cards.getCardOwner(id) as string | undefined),
+        targetBfId as string,
+        context.params.playerId as string,
+      )
+    ) {
+      // rule 355.2 (unl-120-219): "I can be played to a battlefield where there
+      // are enemy units (even if you don't have units there)" — the enemy units
+      // present, not the battlefield's controller, make it a legal destination.
     } else if (targetIsBattlefield && !hasAmbush) {
       return false;
     } else if (targetIsBattlefield) {
@@ -426,6 +445,18 @@ export const playUnit: Defs["playUnit"] = {
     // rule-id: ven-096-166 — board/trash access so self-scaled and friendly
     // static cost reductions (rule 466) apply to unit plays.
     const board = { cards: context.cards, zones: context.zones };
+
+    // rule 356.2.a.1 / 357.2 (ogn-208-298) — "As an additional cost to play me,
+    // kill a friendly unit": mandatory, so a play naming no victim is not a
+    // legal play at all.
+    const mandatoryCost = getOptionalPlayCost(context.params.cardId as string);
+    if (
+      mandatoryCost?.kind === "kill" &&
+      mandatoryCost.mandatory === true &&
+      context.params.sacrificeId === undefined
+    ) {
+      return false;
+    }
 
     // rule 560 / 702.2.b (ogn-150-298) — "you may spend any number of buffs as
     // an additional cost. Reduce my cost by [body] for each buff you spend":
@@ -847,6 +878,33 @@ export const playUnit: Defs["playUnit"] = {
         }
       }
 
+      // rule 355.2 (unl-120-219): offer any battlefield holding enemy units
+      // when the card grants CanPlayToEnemyBattlefield.
+      if (canPlayToEnemyOccupiedBattlefield(cardId as string)) {
+        for (const bfId of Object.keys(state.battlefields ?? {})) {
+          const bfZoneId = getBattlefieldZoneId(bfId) as string;
+          if (results.some((r) => r.cardId === (cardId as string) && r.location === bfZoneId)) {
+            continue;
+          }
+          if (
+            battlefieldHasEnemyUnits(
+              context.zones,
+              (id) =>
+                (context.cards.getCardController?.(id) as string | undefined) ??
+                (context.cards.getCardOwner(id) as string | undefined),
+              bfId,
+              context.playerId as string,
+            )
+          ) {
+            results.push({
+              cardId: cardId as string,
+              location: bfZoneId,
+              playerId: context.playerId as string,
+            });
+          }
+        }
+      }
+
       // Rule 560 / 717: when the unit declares an optional additional
       // play-cost, also enumerate the paid variant so callers can elect
       // to pay it.
@@ -871,6 +929,19 @@ export const playUnit: Defs["playUnit"] = {
             zones: context.zones,
           },
         );
+        // rule 356.2.a.1 (ogn-208-298) — a MANDATORY additional kill cost has
+        // no unpaid variant: drop the plain plays enumerated for this card so
+        // only victim-naming ones remain (none ⇒ the card cannot be played).
+        if (optional.mandatory) {
+          for (let i = results.length - 1; i >= 0; i--) {
+            if (
+              results[i]?.cardId === (cardId as string) &&
+              (results[i] as { sacrificeId?: string }).sacrificeId === undefined
+            ) {
+              results.splice(i, 1);
+            }
+          }
+        }
         for (const sacrificeId of sacrificeOptions) {
           results.push({
             cardId: cardId as string,

@@ -467,6 +467,13 @@ export function canPlayToOccupiedEnemyBattlefield(cardId: string): boolean {
  * `CanPlayToAttacked` on self; this is the engine hook that reads it.
  */
 export function canPlayToAttackedBattlefield(cardId: string): boolean {
+  return selfGrantsPlayLocationKeyword(cardId, "CanPlayToAttacked");
+}
+
+/**
+ * A play-location permission printed as a self static `grant-keyword` marker.
+ */
+function selfGrantsPlayLocationKeyword(cardId: string, keyword: string): boolean {
   const abilities = getGlobalCardRegistry().getAbilities(cardId) ?? [];
   for (const ability of abilities) {
     if (ability?.type !== "static") {
@@ -475,12 +482,41 @@ export function canPlayToAttackedBattlefield(cardId: string): boolean {
     const effect = (ability as { effect?: { type?: string; keyword?: string } }).effect;
     if (
       (effect?.type === "grant-keyword" || effect?.type === "grant-keywords") &&
-      effect?.keyword === "CanPlayToAttacked"
+      effect?.keyword === keyword
     ) {
       return true;
     }
   }
   return false;
+}
+
+/**
+ * rule 355.2 (unl-120-219, Rengar Trophy Hunter) — "I can be played to a
+ * battlefield where there are enemy units (even if you don't have units
+ * there)", modelled as a self static grant-keyword `CanPlayToEnemyBattlefield`.
+ * Unlike `canPlayToOccupiedEnemyBattlefield` the battlefield need not be
+ * enemy-CONTROLLED; enemy units being present is enough.
+ */
+export function canPlayToEnemyOccupiedBattlefield(cardId: string): boolean {
+  return selfGrantsPlayLocationKeyword(cardId, "CanPlayToEnemyBattlefield");
+}
+
+/**
+ * rule 170.11.a — at least one unit at `bfId` is controlled by an opponent of
+ * `playerId`, whoever controls the battlefield itself.
+ */
+export function battlefieldHasEnemyUnits(
+  zones: { getCardsInZone: (zone: CoreZoneId, player?: CorePlayerId) => readonly CoreCardId[] },
+  getController: (cardId: CoreCardId) => string | undefined,
+  bfId: string,
+  playerId: string,
+): boolean {
+  return zones
+    .getCardsInZone(getBattlefieldZoneId(bfId) as CoreZoneId)
+    .some((cardId) => {
+      const controller = getController(cardId);
+      return controller !== undefined && controller !== playerId;
+    });
 }
 
 /**

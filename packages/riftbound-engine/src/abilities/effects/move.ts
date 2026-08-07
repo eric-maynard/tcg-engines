@@ -115,6 +115,17 @@ export function stageCombatOnArrival(ctx: EffectContext, targetZoneId: string): 
 }
 
 /**
+ * sfd-014-221 — true when the unit carries the `NoMoveToBase` marker keyword
+ * (printed or granted by a static aura).
+ */
+function hasNoMoveToBase(ctx: EffectContext, cardId: string): boolean {
+  const meta = (
+    ctx.cards as { getCardMeta?: (id: CoreCardId) => { grantedKeywords?: { keyword: string }[] } | undefined }
+  ).getCardMeta?.(cardId as CoreCardId);
+  return meta?.grantedKeywords?.some((gk) => gk.keyword === "NoMoveToBase") === true;
+}
+
+/**
  * rule-id: unl-133-219 — an effect-driven move is still a move: move a board
  * card and emit the `move` event (with the unit's controller as `owner` and
  * the effect's controller as `movedBy`) so "When I move" / "When you move an
@@ -122,6 +133,12 @@ export function stageCombatOnArrival(ctx: EffectContext, targetZoneId: string): 
  */
 export function moveCardWithEvent(ctx: EffectContext, cardId: string, targetZoneId: string): void {
   const from = ctx.zones.getCardZone(cardId as CoreCardId) ?? "";
+  // rule 144.4.b / sfd-014-221 (Minotaur Reckoner): "Units can't move to base"
+  // binds effect-driven moves too (a Recall is not a Move — rule 455 — and goes
+  // through effects/recall.ts, which never calls this).
+  if (targetZoneId === "base" && from.startsWith("battlefield-") && hasNoMoveToBase(ctx, cardId)) {
+    return;
+  }
   ctx.zones.moveCard({ cardId: cardId as CoreCardId, targetZoneId: targetZoneId as CoreZoneId });
   const onBoard = (z: string) => z === "base" || z.startsWith("battlefield-");
   if (from === targetZoneId || !onBoard(from) || !onBoard(targetZoneId)) {

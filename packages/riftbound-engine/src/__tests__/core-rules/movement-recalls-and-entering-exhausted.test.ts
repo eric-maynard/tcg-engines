@@ -408,7 +408,7 @@ describe("455 / 456 / 456.1 / 456.2 / 458 / 458.1: a Recall relocates to base wi
 // ---------------------------------------------------------------------------
 
 describe("456.3 / 449.1 / 420.2.a: a Recall cannot be stopped by movement restrictions; a Move can", () => {
-  test.failing("BUG: 449.1/420.2.a — engine does not enforce movement-restricting passives: with an enemy 'enemy units can't move to base' on the board, Standard Move bf→base and an effect-driven move to base still go through", async () => {
+  test("449.1/420.2.a — engine does not enforce movement-restricting passives: with an enemy 'enemy units can't move to base' on the board, Standard Move bf→base and an effect-driven move to base still go through", async () => {
     // Expected: (a) Standard Move U → base rejected, U stays ready at bf1; (b) 'Move a friendly unit
     // to base' resolves but the move instruction is skipped (359.3.e.6). Actual: both relocate U.
     const game = await scenario()

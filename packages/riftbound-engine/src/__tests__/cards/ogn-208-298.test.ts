@@ -32,7 +32,7 @@ describe("Cruel Patron (ogn-208-298)", () => {
     expect(poor.p1.can("play", "patron")).toBe(false);
   });
 
-  test.failing("BUG: playing Cruel Patron kills the chosen friendly unit as an additional cost (4 energy + a kill)", async () => {
+  test("playing Cruel Patron kills the chosen friendly unit as an additional cost (4 energy + a kill)", async () => {
     // Expected: play offers a friendly-unit sacrifice (fodder only — never P2's unit); paying it puts
     // fodder in the trash and Cruel Patron in base with 0 energy left.
     // Actual: the card's `effect.additionalCost.kill` shape is not recognised by getOptionalPlayCost,
@@ -48,7 +48,7 @@ describe("Cruel Patron (ogn-208-298)", () => {
     expect(game.p1.resources()).toEqual({ energy: 0, power: {} });
   });
 
-  test.failing("BUG: the kill is MANDATORY — with no other friendly unit Cruel Patron cannot be played (rule 356.2.a.1)", async () => {
+  test("the kill is MANDATORY — with no other friendly unit Cruel Patron cannot be played (rule 356.2.a.1)", async () => {
     // Expected: no friendly unit to kill → play is not legal; and with one available there is no
     // variant that skips the kill. Actual: playable with nothing to sacrifice.
     const alone = await scenario().resources(P1, { energy: 4 }).hand(P1, CARD, "patron").unit(P2, "base", { might: 1 }, "theirs").build();

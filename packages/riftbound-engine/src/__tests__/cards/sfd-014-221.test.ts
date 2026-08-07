@@ -52,14 +52,14 @@ describe("Minotaur Reckoner (sfd-014-221)", () => {
     expect(game.locationOf("mine")).toBe("base");
   });
 
-  test.failing("BUG: your own units at a battlefield cannot move to base while Reckoner is in play", async () => {
+  test("your own units at a battlefield cannot move to base while Reckoner is in play", async () => {
     const game = await board().build();
     const r = await game.p1.try((p) => p.move("mine", "base"));
     expect(r.ok).toBe(false);
     expect(game.locationOf("mine")).toBe("bf1");
   });
 
-  test.failing("BUG: enemy units are bound too ('Units' is unscoped): the opponent cannot move to base on their turn", async () => {
+  test("enemy units are bound too ('Units' is unscoped): the opponent cannot move to base on their turn", async () => {
     const game = await board().active(P2).build();
     const r = await game.p2.try((p) => p.move("theirs", "base"));
     expect(r.ok).toBe(false);
@@ -72,7 +72,7 @@ describe("Minotaur Reckoner (sfd-014-221)", () => {
     expect(game.locationOf("walker")).toBe("bf1");
   });
 
-  test.failing("BUG: effect-driven moves to base are also forbidden: Emperor's Divide cannot move a unit home", async () => {
+  test("effect-driven moves to base are also forbidden: Emperor's Divide cannot move a unit home", async () => {
     const game = await board().resources(P1, { energy: 2 }).hand(P1, EMPERORS_DIVIDE, "divide").build();
     if (game.p1.can("cast", "divide")) {
       const r = await game.p1.try((p) => p.cast("divide", { targets: ["mine"] }));
