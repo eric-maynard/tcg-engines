@@ -463,6 +463,31 @@ export class Game {
       s.answers.shift();
       throw new HarnessError({ ...coerced, message: `scripted answer for ${d.seat}: ${coerced.message}` });
     }
+    // Same rule for a shorthand naming an option this prompt does not offer: it
+    // belongs to a LATER prompt (a battlefield key queued for a play-time
+    // choice must not be swallowed by an intervening reveal-and-pick).
+    if (d.kind === "pick" && coerced.kind === "pick") {
+      const offered = new Set<string>();
+      const add = (v: string | undefined): void => {
+        if (v === undefined) {
+          return;
+        }
+        offered.add(v);
+        // Destinations are zone ids ("battlefield-bf2") but every other harness
+        // surface names a battlefield by its bare id — accept both spellings,
+        // exactly as the destination resolver does.
+        offered.add(v.startsWith("battlefield-") ? v.slice("battlefield-".length) : `battlefield-${v}`);
+      };
+      for (const o of d.options) {
+        add(o.key);
+        add(o.card);
+        add(o.zone);
+        add(o.label);
+      }
+      if (offered.size > 0 && !coerced.keys.every((k) => offered.has(k))) {
+        return undefined;
+      }
+    }
     s.answers.shift();
     return coerced;
   }

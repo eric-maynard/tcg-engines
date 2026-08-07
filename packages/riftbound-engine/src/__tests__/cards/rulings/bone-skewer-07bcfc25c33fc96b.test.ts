@@ -46,7 +46,7 @@ describe("Ruling 07bcfc25c33fc96b — Bone Skewer makes the opponent PLAY the ch
   // alternative — and Teemo arrives stunned. P2's [rainbow] is untouched (nothing was paid, nothing hidden).
   // Actual: Bone Skewer is a stub (only its [Hidden] keyword is modelled): it resolves with no battlefield
   // choice, no hand reveal and no unit pick; Teemo stays in P2's hand.
-  test.failing("BUG: ruling 07bcfc25c33fc96b — engine resolves Bone Skewer as a no-op; expected: P1 picks Teemo from P2's revealed hand, P2 PLAYS it to bf1 (not hidden facedown), stunned, for free (811.1.c.1, 419.3)", async () => {
+  test("ruling 07bcfc25c33fc96b — engine resolves Bone Skewer as a no-op; expected: P1 picks Teemo from P2's revealed hand, P2 PLAYS it to bf1 (not hidden facedown), stunned, for free (811.1.c.1, 419.3)", async () => {
     const game = await board().build();
     await game.p1.cast("skewer", { answers: ["bf1"] });
     // Drain priority; answer the battlefield choice if it is asked at resolution instead of at play time.
