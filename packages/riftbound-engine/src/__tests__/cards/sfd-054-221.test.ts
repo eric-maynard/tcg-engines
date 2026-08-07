@@ -174,7 +174,7 @@ describe("Jax, Unmatched (sfd-054-221)", () => {
     expect(game.state("jax").damage).toBe(2);
   });
 
-  test.failing("BUG: Quick-Draw play rider (819.1.d): on your own turn, playing an Equipment from hand attaches it at once — no loose gear, no [Equip] cost", async () => {
+  test("Quick-Draw play rider (819.1.d): on your own turn, playing an Equipment from hand attaches it at once — no loose gear, no [Equip] cost", async () => {
     // Expected: pay 1 energy for Doran's Shield; as its play resolves it is attached to a unit you control
     // (choose Jax) without paying the [calm] Equip cost → Jax 6 Might, calm power untouched.
     // Actual: the Equipment lands unattached in base and only the paid equipCard move attaches it.

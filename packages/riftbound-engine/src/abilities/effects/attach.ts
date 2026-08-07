@@ -35,6 +35,37 @@ export function handle_attach(effect: ExecutableEffect, ctx: EffectContext, _h: 
     } as typeof ctx.draft.pendingChoice;
     return;
   }
+  // rule 819.1.d (sfd-054-221) — the mirror case: the SOURCE is the Equipment
+  // and the pick names the unit it attaches to ("attach it to a unit you
+  // control"). One candidate attaches directly, several are offered as a
+  // choose-target pick.
+  const holders = (effect as unknown as { holderCandidates?: readonly string[] })
+    .holderCandidates;
+  if (holders) {
+    const picked = ctx.boundTargets?.[0];
+    if (picked !== undefined) {
+      if (holders.includes(picked)) {
+        attachEquipment(ctx, ctx.sourceCardId, picked);
+      }
+      return;
+    }
+    if (holders.length === 0) {
+      return;
+    }
+    if (holders.length === 1) {
+      attachEquipment(ctx, ctx.sourceCardId, holders[0] as string);
+      return;
+    }
+    ctx.draft.pendingChoice = {
+      effect,
+      options: [...holders],
+      playerId: ctx.playerId,
+      remaining: 1,
+      sourceCardId: ctx.sourceCardId,
+      type: "choose-target",
+    } as typeof ctx.draft.pendingChoice;
+    return;
+  }
   const equipTargets = getTargetIds(
     { ...effect, target: effect.equipment } as ExecutableEffect,
     ctx,

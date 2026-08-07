@@ -187,8 +187,7 @@ export const playGear: Defs["playGear"] = {
 
     // rule 819.1.d (sfd-054-221) — [Quick-Draw]: "When you play it, attach it
     // to a unit you control." With exactly one friendly unit the attachment is
-    // forced, so it happens right here; with several the controller would be
-    // prompted (not modelled yet).
+    // forced; with several the controller is prompted (choose-target).
     if (hasKeyword(cardId, "Quick-Draw", (id) => context.cards.getCardMeta(id))) {
       const zoneIds = ["base", ...Object.keys(draft.battlefields ?? {}).map((bf) => `battlefield-${bf}`)];
       const registry = getGlobalCardRegistry();
@@ -212,6 +211,15 @@ export const playGear: Defs["playGear"] = {
           cardId,
           units[0] as string,
         );
+      } else if (units.length > 1 && !draft.pendingChoice) {
+        draft.pendingChoice = {
+          effect: { holderCandidates: units, type: "attach" },
+          options: units,
+          playerId,
+          remaining: 1,
+          sourceCardId: cardId,
+          type: "choose-target",
+        } as typeof draft.pendingChoice;
       }
     }
 

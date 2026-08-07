@@ -533,11 +533,32 @@ function resolveStaticTargetsFromDescriptor(
           if (tag && !(def?.tags ?? []).includes(tag)) {
             return false;
           }
+          // rule-id: ven-097-166 — "with my name": `"self"` means the source's
+          // own printed name (Spiderling counting other Spiderlings).
+          const name = (t.filter as { name?: string }).name;
+          if (name !== undefined) {
+            const sourceDef = registry.get(source.id);
+            const wanted = name === "self" ? sourceDef?.name : name;
+            if (!wanted || def?.name !== wanted) {
+              return false;
+            }
+          }
         }
       }
       return true;
     })
     .map((c) => c.id);
+}
+
+/**
+ * rule 809.2 (sfd-071-221) — keywords whose VALUE sums when several
+ * independent sources grant them (two Breakneck Mechs ⇒ Deflect 2). Grants of
+ * every other keyword are idempotent, so identical static grants collapse.
+ */
+const STACKABLE_GRANT_KEYWORDS = new Set(["Assault", "Deflect", "Shield"]);
+
+function isStackableKeyword(keyword: string): boolean {
+  return STACKABLE_GRANT_KEYWORDS.has(keyword);
 }
 
 /**
@@ -643,10 +664,12 @@ function applyStaticEffect(
         | Partial<RiftboundCardMeta>
         | undefined;
       const existing = meta?.grantedKeywords ?? [];
-      // Only add if not already granted statically with same keyword
-      const alreadyGranted = existing.some(
-        (gk) => gk.keyword === keyword && gk.duration === "static",
-      );
+      // Only add if not already granted statically with same keyword —
+      // rule 809.2 (sfd-071-221): stackable keywords (Deflect, Assault,
+      // Shield, …) sum across INDEPENDENT sources, so they are never deduped.
+      const alreadyGranted =
+        !isStackableKeyword(keyword) &&
+        existing.some((gk) => gk.keyword === keyword && gk.duration === "static");
       if (!alreadyGranted) {
         ctx.cards.updateCardMeta(
           targetId as CoreCardId,
@@ -671,7 +694,12 @@ function applyStaticEffect(
         | undefined;
       const existing = meta?.grantedKeywords ?? [];
       const newEntries: GrantedKeyword[] = keywords
-        .filter((kw) => !existing.some((gk) => gk.keyword === kw && gk.duration === "static"))
+        .filter(
+          (kw) =>
+            // rule 809.2 (sfd-071-221) — stackable keywords sum across sources.
+            isStackableKeyword(kw) ||
+            !existing.some((gk) => gk.keyword === kw && gk.duration === "static"),
+        )
         .map(
           (kw) =>
             ({ duration: "static" as GrantedKeyword["duration"], keyword: kw }) as GrantedKeyword,

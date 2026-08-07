@@ -199,7 +199,7 @@ describe("Breakneck Mech (sfd-071-221)", () => {
     expect(game.violations()).toEqual([]);
   });
 
-  test.failing("BUG: two Breakneck Mechs are two Deflect sources — Deflect 2, so one power is not enough (809.2)", async () => {
+  test("two Breakneck Mechs are two Deflect sources — Deflect 2, so one power is not enough (809.2)", async () => {
     // Expected: Mega-Mech has Deflect from bm1 AND bm2 → summed value 2 → a 1-power opponent cannot choose it.
     // Actual: the second grant is deduplicated; the bolt is cast for a single power.
     const game = await scenario()

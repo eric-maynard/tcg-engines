@@ -196,7 +196,7 @@ describe("Petricite Monument (sfd-104-221)", () => {
     expect(two.state("scout").damage).toBe(2);
   });
 
-  test.failing("BUG: two Monuments are two Deflect sources — a vanilla ally has Deflect 2 and one power is not enough (809.2)", async () => {
+  test("two Monuments are two Deflect sources — a vanilla ally has Deflect 2 and one power is not enough (809.2)", async () => {
     // Expected: granted Deflect from mon1 + mon2 sums to 2 → P2 (1 fury) cannot choose Ally.
     // Actual: identical granted keywords are collapsed into one; the Bolt is cast for a single power.
     const game = await scenario()
