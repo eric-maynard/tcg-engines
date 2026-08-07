@@ -223,6 +223,26 @@ function mandatoryKillCandidates(
 /**
  * Play a spell (rule 146-151)
  */
+/**
+ * rule 820.1.d / 355.1.a (rule-id: unl-017-219) — total cards a caster must
+ * discard to buy `repeatCount` extra executions of a "[Repeat] — Discard N"
+ * spell. A single-tier Repeat applies its cost to every repeat (820.1.c.2),
+ * matching how the Energy/Power surcharges are computed.
+ */
+function getRepeatDiscardCount(
+  repeatCount: number,
+  tiers: readonly { discard?: number }[] | undefined,
+): number {
+  if (repeatCount <= 0 || !tiers || tiers.length === 0) {
+    return 0;
+  }
+  let total = 0;
+  for (let i = 0; i < repeatCount; i++) {
+    total += tiers[Math.min(i, tiers.length - 1)]?.discard ?? 0;
+  }
+  return total;
+}
+
 export const playSpell: Defs["playSpell"] = {
   condition: (state, context) => {
     if (state.status !== "playing") {
@@ -329,6 +349,22 @@ export const playSpell: Defs["playSpell"] = {
       // Repeat instances on the spell.
       if (!repeatTiers || reqRepeatCount > repeatTiers.length) {
         return false;
+      }
+      // rule 820.1.d / 355.1.a (rule-id: unl-017-219) — "[Repeat] — Discard N"
+      // is an additional cost paid at play time: the caller must name a card
+      // in their own hand other than the spell itself.
+      const needDiscard = getRepeatDiscardCount(reqRepeatCount, repeatTiers);
+      if (needDiscard > 0) {
+        const discardId = context.params.discardId as string | undefined;
+        if (
+          needDiscard > 1 ||
+          !discardId ||
+          discardId === (context.params.cardId as string) ||
+          context.zones.getCardZone(discardId as CoreCardId) !== "hand" ||
+          context.cards.getCardOwner(discardId as CoreCardId) !== context.params.playerId
+        ) {
+          return false;
+        }
       }
     }
 
@@ -1687,6 +1723,27 @@ export const playSpell: Defs["playSpell"] = {
         }
       }
 
+      // rule 820.1.d / 355.1.a (rule-id: unl-017-219) — a "[Repeat] — Discard N"
+      // tier is paid as the spell is played: each repeat variant names the card
+      // it pitches, and with nothing to pitch no repeat variant exists at all.
+      if (repeatCost?.some((t) => (t.discard ?? 0) > 0)) {
+        const fodderIds = handCards
+          .map((id) => id as string)
+          .filter((id) => id !== (cardId as string));
+        const rebuilt = results.slice(cardResultsStart).flatMap((base) => {
+          const need = getRepeatDiscardCount(base.repeatCount ?? 0, repeatCost);
+          if (need === 0) {
+            return [base];
+          }
+          if (need > 1 || fodderIds.length < need) {
+            return [];
+          }
+          return fodderIds.map((discardId) => ({ ...base, discardId }));
+        });
+        results.length = cardResultsStart;
+        results.push(...rebuilt);
+      }
+
       // rule 357.2 — the mandatory kill is paid once per play, so every
       // variant of this card is offered once per legal sacrifice.
       if (killChoices) {
@@ -1933,6 +1990,26 @@ export const playSpell: Defs["playSpell"] = {
       // rule 357.1.a: tap ready runes for any Energy shortfall at Pay time.
       { counters: context.counters, zones: context.zones },
     );
+
+    // rule 820.1.d / 355.1.a / 422 (rule-id: unl-017-219) — a "[Repeat] —
+    // Discard N" tier is paid with the rest of the costs, so the pitched card
+    // is in the trash before anyone gets priority on the spell.
+    if (repeatN > 0 && discardId && zones.getCardZone(discardId as CoreCardId) === "hand") {
+      const repeatTiersPaid = getEffectiveSpellRepeatCost(draft, playerId, cardId, {
+        cards: context.cards,
+        zones,
+      });
+      if (getRepeatDiscardCount(repeatN, repeatTiersPaid) > 0) {
+        removeFromBoard(
+          { cards: context.cards, counters: context.counters, draft, zones },
+          [discardId as string],
+          "trash",
+          { by: playerId, kind: "discard", source: cardId as string, sourceKind: "spell" },
+          (event) =>
+            fireTriggers(event, { cards: context.cards, counters: context.counters, draft, zones }),
+        );
+      }
+    }
 
     const energyPaid = Math.max(
       0,

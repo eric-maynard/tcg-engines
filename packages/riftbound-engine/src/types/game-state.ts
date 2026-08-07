@@ -465,6 +465,14 @@ export interface RevealAndPickChoice {
    */
   readonly onDecline?: unknown;
 
+  /**
+   * rule 416.1.a / rule-id: sfd-169-221 — "put a card from your hand on the
+   * TOP or BOTTOM of your Main Deck": the picked card's owner still chooses
+   * which end, so the pick parks a `choose-destination` instead of the
+   * default bottom-of-deck recycle.
+   */
+  readonly position?: "owner-choice";
+
   /** Player who triggered the choice (picks the card). */
   readonly prompter: PlayerId;
 
@@ -989,6 +997,14 @@ export interface RiftboundGameState {
    * play costs ("If you've spent [4] or more to play a spell this turn …").
    */
   readonly spellEnergySpentThisTurn?: Record<string, number>;
+
+  /**
+   * rule 135.2 (rule-id: unl-005-219) — Energy actually paid to play each
+   * individual spell, keyed by card id. Written when the cost is paid; read by
+   * the `spell-energy-spent` trigger condition ("When you play a spell, if you
+   * spent [4] or more …"), which measures THAT spell's payment only.
+   */
+  readonly spellEnergySpentByCard?: Record<string, number>;
 
   /**
    * rule 430.3 — runes actually channeled per player by the most recent

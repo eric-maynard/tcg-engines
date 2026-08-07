@@ -20,7 +20,8 @@ const abilities: Ability[] = [
     effect: {
       effects: [
         { amount: 1, type: "draw" },
-        { amount: 1, from: "hand", type: "recycle" },
+        // rule 416.1.a — "on the top or bottom": the owner picks the end.
+        { amount: 1, from: "hand", position: "owner-choice", type: "recycle" },
       ],
       type: "sequence",
     },

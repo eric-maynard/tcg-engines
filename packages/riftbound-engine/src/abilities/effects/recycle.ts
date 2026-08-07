@@ -94,7 +94,12 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
   // rule-id: unl-204-219-owner-chooses-top-or-bottom — "Its owner places it
   // on the top or bottom of their Main Deck." prompts the target's OWNER via
   // choose-destination with mainDeck-top / mainDeck-bottom options.
-  if ((effect as { position?: string }).position === "owner-choice") {
+  // (A counted recycle out of a zone — "put a card from your hand …" — carries
+  // `from`/`amount` and is handled further down, where the card is picked first.)
+  const fromZonePool =
+    (effect as { amount?: unknown }).amount !== undefined &&
+    ((effect as { from?: string }).from === "hand" || (effect as { from?: string }).from === "trash");
+  if ((effect as { position?: string }).position === "owner-choice" && !fromZonePool) {
     const [targetId] = getTargetIds(effect, ctx);
     if (!targetId) {
       return;
@@ -177,6 +182,9 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
     if (n <= 0) {
       return;
     }
+    // rule 416.1.a / rule-id: sfd-169-221 — "put a card from your hand on the
+    // top or bottom of your Main Deck": the owner picks the end as well.
+    const ownerChoice = (effect as { position?: string }).position === "owner-choice";
     if (n < pool.length || upTo) {
       ctx.draft.pendingChoice = {
         onPicked: "recycle",
@@ -185,8 +193,21 @@ export function handle_recycle(effect: ExecutableEffect, ctx: EffectContext, _h:
         revealer: ctx.playerId,
         sourceCardId: ctx.sourceCardId,
         type: "reveal-and-pick",
+        ...(ownerChoice ? { position: "owner-choice" as const } : {}),
         ...(upTo ? { optional: true } : {}),
         ...(n > 1 ? { remaining: n } : {}),
+      };
+      return;
+    }
+    // Only one legal card: no pick to make, but the top/bottom end is still a
+    // real choice, so go straight to the destination prompt.
+    if (ownerChoice && pool.length === 1 && n === 1) {
+      const only = pool[0] as string;
+      ctx.draft.pendingChoice = {
+        cardId: only,
+        options: ["mainDeck-top", "mainDeck-bottom"],
+        playerId: ctx.cards.getCardOwner(only as CoreCardId) ?? ctx.playerId,
+        type: "choose-destination",
       };
       return;
     }

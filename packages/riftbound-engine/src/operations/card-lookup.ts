@@ -100,8 +100,8 @@ export interface CardDefinitionLookup {
      * :cost: to repeat the effect.
      */
     readonly repeat?:
-      | { energy?: number; power?: readonly string[] }
-      | readonly { energy?: number; power?: readonly string[] }[];
+      | { energy?: number; power?: readonly string[]; discard?: number }
+      | readonly { energy?: number; power?: readonly string[]; discard?: number }[];
   }[];
 }
 
@@ -275,7 +275,7 @@ export class CardDefinitionRegistry {
    */
   getSpellRepeatCost(
     cardId: string,
-  ): readonly { energy: number; power: readonly string[] }[] | undefined {
+  ): readonly { energy: number; power: readonly string[]; discard?: number }[] | undefined {
     const def = this.definitions.get(cardId);
     if (!def?.abilities) {
       return undefined;
@@ -286,7 +286,15 @@ export class CardDefinitionRegistry {
         // additional cost per extra activation. Normalise single-cost
         // Repeat to a one-element tier list so callers handle both shapes.
         const tiers = Array.isArray(ab.repeat) ? ab.repeat : [ab.repeat];
-        return tiers.map((t) => ({ energy: t.energy ?? 0, power: t.power ?? [] }));
+        // rule 820.1.d (unl-017-219): a tier may be priced in cards ("[Repeat]
+        // — Discard 1"), not Energy/Power; carry that through to the cost path.
+        return tiers.map((t) => ({
+          energy: t.energy ?? 0,
+          power: t.power ?? [],
+          ...((t as { discard?: number }).discard
+            ? { discard: (t as { discard?: number }).discard as number }
+            : {}),
+        }));
       }
     }
     return undefined;
@@ -420,6 +428,20 @@ export class CardDefinitionRegistry {
       if (def.name) names.add(def.name);
     }
     return [...names].sort();
+  }
+
+  /**
+   * List distinct tags printed on cards known to this registry. Used by
+   * rule-762 "name a tag" effects to enumerate legal choices.
+   */
+  listTags(): string[] {
+    const tags = new Set<string>();
+    for (const def of this.definitions.values()) {
+      for (const tag of (def as { tags?: string[] }).tags ?? []) {
+        if (tag) tags.add(tag);
+      }
+    }
+    return [...tags].sort();
   }
 
   get size(): number {
