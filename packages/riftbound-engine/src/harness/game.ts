@@ -71,6 +71,11 @@ export const passivePolicy: Policy = (d) => {
   if (d.kind === "pick" && d.options.length === 0 && d.allowDecline) {
     return { kind: "decline" };
   }
+  // rule 465.2.c.3 — a combat damage assignment always has a forced/greedy
+  // legal line; settling takes it rather than stalling the combat.
+  if (d.kind === "distribute" && d.defaultAllocation !== undefined) {
+    return { allocation: { ...d.defaultAllocation }, kind: "distribute" };
+  }
   // rule 355.13 (sfd-043-221) — a CONTINUATION of an "any number of" target
   // pick (the chooser already named a set) is declined, never silently
   // extended: settling must not add targets the answer did not name.
