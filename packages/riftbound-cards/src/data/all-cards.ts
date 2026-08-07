@@ -1667,6 +1667,19 @@ const JSON_CARD_ENGINE_FLAGS: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+  // rule 355.2 / 419.1.a (rule-id: ven-179-166) — Rengar, Trophy Hunter:
+  // "[Ambush] / I can be played to a battlefield where there are enemy units."
+  // Line 2 is a play-LOCATION permission (no timing grant); the rules-text
+  // parser leaves it as raw text, so both lines are declared here.
+  "ven-179-166": {
+    abilities: [
+      { keyword: "Ambush", type: "keyword" },
+      {
+        effect: { keyword: "CanPlayToEnemyBattlefield", type: "grant-keyword" },
+        type: "static",
+      },
+    ],
+  },
   // rule-id: ven-115-166 — printed DRAGON tag, missing from the set data (the
   // generator emits `tags: []` for every non-champion VEN unit). Ocean Drake's
   // "return a non-Dragon unit" reads the tag, so the drakes themselves — and
