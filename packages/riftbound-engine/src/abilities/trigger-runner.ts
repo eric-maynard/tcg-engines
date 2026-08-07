@@ -1006,7 +1006,12 @@ function evaluateControlCondition(
     if (t.excludeSelf && id === sourceCardId) {
       continue;
     }
-    const owner = ctx.cards.getCardOwner(id as CoreCardId) ?? "";
+    // rule 108.2 — "a unit you control" reads CONTROL, not deck ownership: a
+    // stolen unit counts for its current controller.
+    const owner =
+      ctx.cards.getCardController?.(id as CoreCardId) ??
+      ctx.cards.getCardOwner(id as CoreCardId) ??
+      "";
     if (t.controller === "enemy") {
       if (owner === controllerId || owner === "") {
         continue;

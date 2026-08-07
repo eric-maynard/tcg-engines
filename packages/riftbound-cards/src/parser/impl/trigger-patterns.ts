@@ -19,6 +19,7 @@ export interface TriggerPatternSubject {
   readonly actor?: "controller" | "opponent" | "any";
   readonly filter?: string | readonly string[];
   readonly excludeSelf?: boolean;
+  readonly location?: "here" | "from-here" | "battlefield" | "other-battlefield";
 }
 
 export const TRIGGER_PATTERNS: {
@@ -48,6 +49,9 @@ export const TRIGGER_PATTERNS: {
     pattern: /^As (?:I'm|I am|you reveal me)(?: revealed)?(?: from (?:your|my|the top of your|the top of my) (?:Main )?[Dd]eck)?,\s*/i,
   },
   { event: "become-mighty", on: "self", pattern: /^When I become \[Mighty\],\s*/i },
+  // rule 441.2.a / 828.1.d (rule-id: ven-047-166) — "When I become [Empowered]"
+  // is keyed on the false→true edge, whoever empowers me.
+  { event: "empower", on: "self", pattern: /^When I become \[Empowered\],\s*/i },
   { event: "attack", on: "self", pattern: /^When I attack,\s*/i },
   { event: "defend", on: "self", pattern: /^When I defend,\s*/i },
   { event: "conquer", on: "self", pattern: /^When I conquer an open battlefield,\s*/i },
@@ -433,10 +437,18 @@ export const TRIGGER_PATTERNS: {
     restrictions: [{ count: 1, type: "nth-time-each-turn" }],
   },
   // "Once each turn, when an enemy unit here dies, ..." (Nasus)
+  // rule 428.1.a.1.b — "here" scopes the death to the source's own location
+  // (last-known information), so a death elsewhere never triggers it.
+  {
+    event: "die",
+    on: { controller: "enemy", location: "here", type: "unit" },
+    pattern: /^Once each turn, when an enemy unit here dies,\s*/i,
+    restrictions: [{ type: "once-each-turn" }],
+  },
   {
     event: "die",
     on: "enemy-units",
-    pattern: /^Once each turn, when an enemy unit(?: here)? dies,\s*/i,
+    pattern: /^Once each turn, when an enemy unit dies,\s*/i,
     restrictions: [{ type: "once-each-turn" }],
   },
   // "At the start of your Main Phase, ..." (Bottled Constellation)
