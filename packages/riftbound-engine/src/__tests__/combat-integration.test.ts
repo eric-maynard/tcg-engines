@@ -803,12 +803,11 @@ describe("resolveFullCombat", () => {
 
     // Attacker wins and scores 1 VP -> 7 + 1 = 8 = victoryScore
     expect(draft.players[P1].victoryPoints).toBe(8);
+    // rule 472 / 323.1: the win is found by the Cleanup that follows combat
+    // (state-based checks → checkVictory), not by the move calling endGame.
     expect(draft.status).toBe("finished");
     expect(draft.winner).toBe(P1);
-
-    // EndGame should have been called
-    expect(mock.endGameCalled).toHaveLength(1);
-    expect(mock.endGameCalled[0].winner).toBe(P1);
+    expect(mock.endGameCalled).toHaveLength(0);
   });
 
   test("granted keywords are included in combat resolution", () => {

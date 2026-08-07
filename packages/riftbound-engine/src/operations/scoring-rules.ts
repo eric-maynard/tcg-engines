@@ -8,7 +8,8 @@
  *
  * This module intentionally consults the card registry directly so win
  * checks in movereducers and flow hooks can gate scoring without
- * plumbing card-registry contexts through every call site.
+ * plumbing card-registry contexts through every call site. Point gains
+ * themselves go through `operations/points.ts` (awardPoints).
  */
 
 import type {
@@ -22,58 +23,7 @@ import {
   type ReplacementContext,
 } from "../abilities/replacement-effects";
 import type { PlayerId, RiftboundGameState } from "../types";
-import { getBattlefieldVictoryScoreBonus } from "./battlefield-setup-effects";
 import { getGlobalCardRegistry } from "./card-lookup";
-
-/**
- * rule 471.1.b.1: a player at match point only takes the Final Point by
- * conquering if they have scored EVERY battlefield on the board this turn —
- * including any token battlefield such as the Baron Pit. Otherwise they draw a
- * card instead of scoring. Winning by hold carries no such requirement
- * (rule 471.1.a.1), so this gate is only consulted on conquer paths.
- *
- * Returns `true` when the point must NOT be awarded: the replacement draw has
- * already happened, and the caller must also skip recording the battlefield in
- * `scoredThisTurn` (it was conquered, not scored, so scoring it later this turn
- * after the remaining battlefields is still legal).
- */
-export function finalPointConquerDrawsInstead(
-  state: RiftboundGameState,
-  playerId: PlayerId,
-  battlefieldId: string,
-  io: ScoreReplacementIO,
-): boolean {
-  const player = state.players[playerId];
-  if (!player) {
-    return false;
-  }
-  // Same threshold as win-conditions/victory.getEffectiveVictoryScore, inlined
-  // to keep operations/ free of a game-definition/ import cycle.
-  const threshold =
-    (state.victoryScore ?? 8) +
-    (player.victoryScoreModifier ?? 0) +
-    getBattlefieldVictoryScoreBonus(state);
-  // rule 471.1.b: the restriction applies at "1 point from the Victory Score" OR
-  // HIGHER, so a player already at/above the Victory Score (a tie at 8–8) also
-  // cannot take another point by a lone conquer.
-  if (player.victoryPoints < threshold - 1) {
-    return false;
-  }
-  const scored = state.scoredThisTurn[playerId] ?? [];
-  const allScored = Object.keys(state.battlefields ?? {}).every(
-    (bfId) => bfId === battlefieldId || scored.includes(bfId),
-  );
-  if (allScored) {
-    return false;
-  }
-  io.zones.drawCards({
-    count: 1,
-    from: "mainDeck" as CoreZoneId,
-    playerId: playerId as CorePlayerId,
-    to: "hand" as CoreZoneId,
-  });
-  return true;
-}
 
 /**
  * Engine surface needed to look up and apply a `score` replacement.
@@ -117,81 +67,11 @@ function scoreReplacementConditionMet(
 }
 
 /**
- * rule 054.1 / 365.1: is `playerId` forbidden from gaining points right now by a
- * static restriction on a card that is currently ON THE BOARD (base or a
- * battlefield)? The shape the parser emits for "Opponents can't gain points."
- * is `{type:"static", effect:{type:"restriction", restriction:"opponents can't
- * gain points."}}`. Nothing is retroactive: the denial only counts while the
- * card is on the board, which is why this is evaluated at the moment of the gain.
- *
- * rule 365.1: a conditional denier ("While I'm at a battlefield, opponents can't
- * gain points.") only applies while its condition holds — `while-at-battlefield`
- * is checked against the denier's own zone. Any other condition fails open, so a
- * novel condition never silently stops scoring.
- */
-function denierConditionMet(condition: unknown, atBattlefield: boolean): boolean {
-  if (condition === undefined || condition === null) {
-    return true;
-  }
-  const type = (condition as { type?: string }).type;
-  if (type === "while-at-battlefield") {
-    return atBattlefield;
-  }
-  // Unknown condition: fail open (the restriction does not apply).
-  return false;
-}
-
-export function pointGainDenied(
-  state: RiftboundGameState,
-  playerId: PlayerId,
-  io: ScoreReplacementIO,
-): boolean {
-  const registry = getGlobalCardRegistry();
-  const getOwner = io.cards.getCardOwner ?? (() => undefined);
-
-  const boardCards: { id: string; owner: string | undefined; atBattlefield: boolean }[] = [];
-  for (const pid of Object.keys(state.players)) {
-    for (const cardId of io.zones.getCardsInZone("base" as CoreZoneId, pid as CorePlayerId)) {
-      boardCards.push({ atBattlefield: false, id: cardId as string, owner: pid });
-    }
-  }
-  for (const bfId of Object.keys(state.battlefields ?? {})) {
-    for (const cardId of io.zones.getCardsInZone(`battlefield-${bfId}` as CoreZoneId)) {
-      boardCards.push({
-        atBattlefield: true,
-        id: cardId as string,
-        owner: getOwner(cardId as CoreCardId),
-      });
-    }
-  }
-
-  for (const card of boardCards) {
-    for (const ability of registry.getAbilities(card.id) ?? []) {
-      if (ability.type !== "static" || !denierConditionMet(ability.condition, card.atBattlefield)) {
-        continue;
-      }
-      const effect = ability.effect as { type?: string; restriction?: unknown } | undefined;
-      if (effect?.type !== "restriction" || typeof effect.restriction !== "string") {
-        continue;
-      }
-      const text = effect.restriction.toLowerCase();
-      if (!/can'?t gain points/.test(text)) {
-        continue;
-      }
-      const targetsOpponents = text.includes("opponent") || text.includes("enemy");
-      if (targetsOpponents ? card.owner !== undefined && card.owner !== playerId : true) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-/**
  * Rule 571.4: before a player scores a point from conquering/holding, consult
  * board `replaces: "score"` replacement abilities (e.g. Otterpus — "they draw
  * 1 instead"). Returns `true` when the point was replaced and must NOT be
- * awarded; the replacement effect has already been applied.
+ * awarded; the replacement effect has already been applied. Called only from
+ * `operations/points.ts awardPoints` — the single point-gain choke point.
  */
 export function applyScoreReplacement(
   state: RiftboundGameState,
@@ -199,16 +79,14 @@ export function applyScoreReplacement(
   io: ScoreReplacementIO,
   /**
    * rule 443.1.a: how the point is being gained. Replacements that declare a
-   * `method` only match (and are only consumed by) the same method; callers
-   * that can't tell may omit it, and every replacement stays eligible.
+   * `method` only match (and are only consumed by) the same method. rule 468:
+   * only Hold / Conquer are Scoring, so points from effects or Burn Out are
+   * never touched by a "would score" replacement.
    */
-  method?: "conquer" | "hold",
+  method: "conquer" | "hold" | "effect" | "burn-out",
 ): boolean {
-  // rule 054.1: a static "opponents can't gain points" beats "can"; it removes
-  // the POINT only — the Score itself still happened, so callers keep recording
-  // scoredThisTurn and still fire Conquer/Hold triggers (383.4.c.2.c).
-  if (pointGainDenied(state, playerId, io)) {
-    return true;
+  if (method !== "conquer" && method !== "hold") {
+    return false;
   }
   const ctx: ReplacementContext = {
     cards: {

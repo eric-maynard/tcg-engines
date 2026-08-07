@@ -1,64 +1,44 @@
 /**
  * Riftbound Victory Conditions
  *
- * Win condition logic for the tabletop simulator.
- * Victory is achieved by reaching the victory score (8 points for 1v1).
+ * Read-only predicates over the points state. The pipeline that changes points
+ * and ends the game lives in `operations/points.ts`; these stay as the
+ * game-definition-facing names (`endIf`, harness, legacy tests).
  */
 
-import { getBattlefieldVictoryScoreBonus } from "../../operations/battlefield-setup-effects";
+import {
+  effectiveVictoryScore,
+  findWinner,
+  hasReachedVictory,
+} from "../../operations/points";
 import type { PlayerId, RiftboundGameState } from "../../types";
 
 /**
- * Get the effective victory score threshold for a player.
- *
- * Returns `state.victoryScore + player.victoryScoreModifier`, which is the
- * number of victory points the player must reach to win. The modifier is
- * bumped by battlefields like Aspirant's Climb (via the
- * `increase-victory-score` effect).
+ * rule 194.3 — the number of points `playerId` needs to win: the Mode of Play's
+ * Victory Score + the player's setup modifier + in-play "increase the points
+ * needed to win" battlefields (Aspirant's Climb).
  */
 export function getEffectiveVictoryScore(state: RiftboundGameState, playerId: PlayerId): number {
-  const player = state.players[playerId];
-  const modifier = player?.victoryScoreModifier ?? 0;
-  // rule 194.3.a / 365.1: an in-play battlefield's "Increase the points needed
-  // to win the game by 1" is a passive, derived from the board every time.
-  return state.victoryScore + modifier + getBattlefieldVictoryScoreBonus(state);
+  return effectiveVictoryScore(state, playerId);
 }
 
 /**
- * Check if a given player currently meets their effective victory threshold.
+ * rule 472 / 194.2: at or above the Victory Score AND strictly ahead of every
+ * opponent.
  */
 export function hasPlayerWon(state: RiftboundGameState, playerId: PlayerId): boolean {
-  const player = state.players[playerId];
-  if (!player) {
-    return false;
-  }
-  if (player.victoryPoints < getEffectiveVictoryScore(state, playerId)) {
-    return false;
-  }
-  // rule 194.2(.a/.b) / 472: reaching the Victory Score is not enough — the
-  // player must also have MORE points than every opponent, so a tie at or above
-  // the Victory Score keeps the game going.
-  return Object.entries(state.players).every(
-    ([pid, other]) => pid === playerId || player.victoryPoints > (other?.victoryPoints ?? 0),
-  );
+  return hasReachedVictory(state, playerId);
 }
 
 /**
- * Check if a player has won the game
+ * Which player (if any) currently satisfies the win condition. Pure — the
+ * state write happens in `operations/points.ts checkVictory` during Cleanup.
  *
  * @param state - Current game state
  * @returns The winning player ID, or null if no winner
  */
 export function checkVictory(state: RiftboundGameState): PlayerId | null {
-  const playerIds = Object.keys(state.players) as PlayerId[];
-
-  for (const playerId of playerIds) {
-    if (hasPlayerWon(state, playerId)) {
-      return playerId;
-    }
-  }
-
-  return null;
+  return findWinner(state);
 }
 
 /**

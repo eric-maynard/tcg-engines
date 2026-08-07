@@ -2,11 +2,7 @@
  * Showdown moves: passShowdownFocus / startShowdown / endShowdown (split from chain-moves.ts).
  */
 
-import type {
-  PlayerId as CorePlayerId,
-  ZoneId as CoreZoneId,
-  GameMoveDefinitions,
-} from "@tcg/core";
+import type { ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
 import {
   createInteractionState,
   endShowdown as endShowdownState,
@@ -19,11 +15,7 @@ import {
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { hasPlayerWon } from "../../win-conditions/victory";
-import {
-  applyScoreReplacement,
-  finalPointConquerDrawsInstead,
-} from "../../../operations/scoring-rules";
+import { scoreBattlefield } from "../../../operations/points";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -227,13 +219,21 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
               // rule 188: pre-conquer controller — `null` means Uncontrolled.
               const previousController = bf.controller ?? null;
               bf.controller = solo;
-              if (!draft.conqueredThisTurn[solo]) draft.conqueredThisTurn[solo] = [];
-              draft.conqueredThisTurn[solo].push(before!.battlefieldId);
-              const scored = draft.scoredThisTurn[solo] ?? [];
+              // rule 469.1 / 471: a Conquer worth up to one point (denial,
+              // skips and the Final Point restriction applied by awardPoints);
+              // the victory check waits for the next Cleanup (rule 472).
               // rule 471.2.c: Conquer abilities trigger only when the
               // Battlefield SCORES — re-taking a battlefield this player
               // already scored this turn is not a Conquer, so no event.
-              if (!scored.includes(before!.battlefieldId)) {
+              const { isScore } = scoreBattlefield(
+                draft,
+                solo,
+                before!.battlefieldId,
+                "conquer",
+                context,
+                { previousController },
+              );
+              if (isScore) {
                 // Rule 348.2.a.1: this is a Conquer — emit the "conquer" event
                 // (as conquerBattlefield / resolveFullCombat do) so [Hunt] and
                 // "When you conquer" triggers fire.
@@ -243,32 +243,6 @@ export const passShowdownFocus: Defs["passShowdownFocus"] = {
                   previousController,
                   type: "conquer",
                 };
-              }
-              if (!scored.includes(before!.battlefieldId)) {
-                // rule 471.1.b.1: the Final Point by conquer needs every
-                // battlefield scored this turn; otherwise draw instead. The
-                // Conquer is still a Score (469.1/470), so it is recorded.
-                const drewInstead = finalPointConquerDrawsInstead(
-                  draft,
-                  solo,
-                  before!.battlefieldId,
-                  context,
-                );
-                const p = draft.players[solo];
-                // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
-                if (!drewInstead && p && !applyScoreReplacement(draft, solo, context, "conquer"))
-                  p.victoryPoints += 1;
-                if (!draft.scoredThisTurn[solo]) draft.scoredThisTurn[solo] = [];
-                draft.scoredThisTurn[solo].push(before!.battlefieldId);
-                if (hasPlayerWon(draft, solo)) {
-                  draft.status = "finished";
-                  draft.winner = solo;
-                  context.endGame?.({
-                    metadata: { finalScore: p?.victoryPoints ?? 0, method: "conquer" },
-                    reason: "victory_points",
-                    winner: solo as CorePlayerId,
-                  });
-                }
               }
             }
           }

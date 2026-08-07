@@ -35,11 +35,8 @@ import { recalculateStaticEffects } from "../abilities/static-abilities";
 import { canAffordPower } from "../game-definition/moves/chain/effect-context";
 import { getGlobalCardRegistry } from "../operations/card-lookup";
 import { hiddenCapacityAt } from "../operations/hidden-capacity";
-import {
-  applyScoreReplacement,
-  canPlayerScoreAtBattlefield,
-} from "../operations/scoring-rules";
-import type { RiftboundCardMeta, RiftboundGameState } from "../types";
+import { checkVictory, type PointsIO, scoreBattlefield } from "../operations/points";
+import type { PlayerId, RiftboundCardMeta, RiftboundGameState } from "../types";
 
 /**
  * Context needed for state-based checks.
@@ -978,6 +975,10 @@ export function performCleanup(ctx: CleanupContext): CleanupResult {
     }
   }
 
+  // rule 472 / 323.1 — the victory check is a Cleanup task: the only place a
+  // points win ends the game (no-op while a Chain Item is resolving, rule 321).
+  checkVictory(ctx.draft, { io: ctx });
+
   return { combatPending, deaths, hiddenRemoved, killed, stateChanged };
 }
 
@@ -991,31 +992,22 @@ function conquerByPresence(ctx: CleanupContext, bfId: string, playerId: string):
   if (!bf) {
     return;
   }
+  const previousController = bf.controller;
   bf.controller = playerId;
   bf.contested = false;
   bf.contestedBy = undefined;
-  (draft.conqueredThisTurn[playerId] ??= []).push(bfId);
-  const player = draft.players[playerId];
-  const alreadyScored = (draft.scoredThisTurn[playerId] ?? []).includes(bfId);
-  if (
-    player &&
-    !alreadyScored &&
-    canPlayerScoreAtBattlefield(draft, playerId as CorePlayerId, bfId) &&
-    !applyScoreReplacement(
-      draft,
-      playerId as CorePlayerId,
-      {
-        cards: ctx.cards,
-        zones: ctx.zones,
-      } as never,
-      "conquer",
-    )
-  ) {
-    player.victoryPoints += 1;
-  }
-  if (!alreadyScored) {
-    (draft.scoredThisTurn[playerId] ??= []).push(bfId);
-  }
+  const zonesAny = ctx.zones as unknown as Partial<PointsIO["zones"]>;
+  scoreBattlefield(
+    draft,
+    playerId as PlayerId,
+    bfId,
+    "conquer",
+    {
+      cards: ctx.cards,
+      zones: { drawCards: zonesAny.drawCards ?? (() => {}), getCardsInZone: ctx.zones.getCardsInZone },
+    },
+    { previousController },
+  );
 }
 
 /**

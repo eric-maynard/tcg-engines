@@ -13,7 +13,7 @@ import type {
 import { fireTriggers } from "../../abilities/trigger-runner";
 import { withPostMoveCleanup } from "../../cleanup/post-move-cleanup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../types";
-import { hasPlayerWon } from "../win-conditions/victory";
+import { burnOut } from "../../operations/points";
 
 /**
  * Discard/trash move definitions.
@@ -69,36 +69,11 @@ export const discardMoves: Partial<
       const source = context.params.source ?? "directed";
       const { zones } = context;
 
-      // Rule 607.2.a: Shuffle the player's trash into their main deck.
-      const trashCards = zones.getCardsInZone("trash" as CoreZoneId, playerId as CorePlayerId);
-      for (const cardId of trashCards) {
-        zones.moveCard({
-          cardId,
-          position: "bottom",
-          targetZoneId: "mainDeck" as CoreZoneId,
-        });
-      }
-      zones.shuffleZone("mainDeck" as CoreZoneId, playerId as CorePlayerId);
-
-      // Rule 607.2.b: The opponent of the burning-out player gains 1 point.
-      const opponent = draft.players[opponentId];
-      if (opponent) {
-        opponent.victoryPoints += 1;
-
-        if (hasPlayerWon(draft, opponentId)) {
-          draft.status = "finished";
-          draft.winner = opponentId;
-
-          context.endGame?.({
-            metadata: {
-              finalScore: opponent.victoryPoints,
-              method: "burn_out",
-            },
-            reason: "victory_points",
-            winner: opponentId as CorePlayerId,
-          });
-        }
-      }
+      // Rule 607.2.a/.b (431.2): shuffle the player's trash into their main
+      // deck, then the chosen opponent gains 1 point — through awardPoints, so
+      // a "can't gain points" static applies (rule 054.1); the victory check is
+      // the Cleanup's (rule 472).
+      burnOut(draft, playerId, context, { opponentId });
 
       // Rule 607.2.c: After shuffling and scoring, the player retries
       // The original action that caused the burn-out. Only the `draw`

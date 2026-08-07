@@ -12,6 +12,7 @@
 import type { CardId } from "@tcg/core";
 import { produce } from "immer";
 import type { Domain, DomainPower, PlayerId, RiftboundGameState, RunePool } from "../types";
+import { awardPoints, losePoints } from "./points";
 
 /**
  * Add victory points to a player
@@ -27,13 +28,21 @@ export function addVictoryPoints(
   points: number,
 ): RiftboundGameState {
   return produce(state, (draft) => {
-    const player = draft.players[playerId];
-    if (player) {
-      // rule 194.4: players cannot have fewer than 0 points.
-      player.victoryPoints = Math.max(0, player.victoryPoints + points);
+    // rule 194.4: players cannot have fewer than 0 points. A bare-state helper
+    // has no board to consult, so the gain runs the pipeline with empty zones.
+    if (points < 0) {
+      losePoints(draft as RiftboundGameState, playerId, -points);
+    } else {
+      awardPoints(draft as RiftboundGameState, playerId, points, { method: "effect" }, NO_BOARD_IO);
     }
   });
 }
+
+/** Zone-less IO for state-only helpers: no permanents, draws are dropped. */
+const NO_BOARD_IO = {
+  cards: {},
+  zones: { drawCards: () => undefined, getCardsInZone: () => [] as CardId[] },
+};
 
 /**
  * Add energy to a player's rune pool

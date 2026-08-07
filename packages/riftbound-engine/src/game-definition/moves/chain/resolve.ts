@@ -28,7 +28,7 @@ import {
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { withChainItemResolution } from "../../../chain/resolution-guard";
 import { cleanupAndFireDeaths } from "../../../cleanup/post-move-cleanup";
-import { checkVictory } from "../../win-conditions/victory";
+import { checkVictory } from "../../../operations/points";
 import { getGlobalCardRegistry } from "../../../operations/card-lookup";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
 import { getCardEffectiveMight, getDeflectSurcharge, xCostIsPower } from "../play/cost";
@@ -51,14 +51,7 @@ type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCar
  * comparing every player exactly once against the final post-resolution scores.
  */
 function runPostResolutionVictoryCheck(draft: RiftboundGameState): void {
-  if (draft.status === "finished") {
-    return;
-  }
-  const winner = checkVictory(draft);
-  if (winner) {
-    draft.status = "finished";
-    draft.winner = winner;
-  }
+  checkVictory(draft);
 }
 
 /**

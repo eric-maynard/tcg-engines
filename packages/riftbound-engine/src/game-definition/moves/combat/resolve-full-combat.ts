@@ -25,12 +25,7 @@ import type {
   RiftboundGameState,
   RiftboundMoves,
 } from "../../../types";
-import { hasPlayerWon } from "../../win-conditions/victory";
-import {
-  applyScoreReplacement,
-  canPlayerScoreAtBattlefield,
-  finalPointConquerDrawsInstead,
-} from "../../../operations/scoring-rules";
+import { scoreBattlefield } from "../../../operations/points";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -604,55 +599,19 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       // Attacker conquers the battlefield
       battlefield.controller = attackingPlayer;
 
-      // Track conquered battlefield for this turn
-      if (!draft.conqueredThisTurn[attackingPlayer]) {
-        draft.conqueredThisTurn[attackingPlayer] = [];
-      }
-      draft.conqueredThisTurn[attackingPlayer].push(battlefieldId);
-
-      // Rule 631: a player may only Score once per battlefield per turn.
-      // Record scoredThisTurn here so scorePoint/conquerBattlefield can't
-      // award a second point for the same battlefield later this turn.
-      const alreadyScored =
-        draft.scoredThisTurn[attackingPlayer]?.includes(battlefieldId) ?? false;
-      if (!draft.scoredThisTurn[attackingPlayer]) {
-        draft.scoredThisTurn[attackingPlayer] = [];
-      }
-
-      // Award 1 VP for conquering (rule 630.1)
-      // Blocked if a battlefield ability (e.g. Forgotten Monument) prevents
-      // This player from scoring here right now.
-      const scoringAllowed =
-        !alreadyScored && canPlayerScoreAtBattlefield(draft, attackingPlayer, battlefieldId);
-      // rule 471.1.b.1: the Final Point by conquer requires every battlefield
-      // scored this turn; otherwise draw a card instead. rule 469.1 / 470: the
-      // Conquer is still a Score, so the battlefield IS recorded as scored.
-      const drewInstead =
-        scoringAllowed &&
-        finalPointConquerDrawsInstead(draft, attackingPlayer, battlefieldId, { cards, zones });
-      const player = draft.players[attackingPlayer];
-      if (player && scoringAllowed) {
-        draft.scoredThisTurn[attackingPlayer].push(battlefieldId);
-        // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
-        if (
-          !drewInstead &&
-          !applyScoreReplacement(draft, attackingPlayer, { cards, zones }, "conquer")
-        ) {
-          player.victoryPoints += 1;
-        }
-
-        // Check for victory
-        if (hasPlayerWon(draft, attackingPlayer)) {
-          draft.status = "finished";
-          draft.winner = attackingPlayer;
-
-          context.endGame?.({
-            metadata: { finalScore: player.victoryPoints, method: "conquer" },
-            reason: "victory_points",
-            winner: attackingPlayer as CorePlayerId,
-          });
-        }
-      }
+      // rule 469.1 / 471: establishing control is a Conquer (a Score, worth up
+      // to one point) unless this player already scored here this turn or a
+      // battlefield static forbids scoring here. The point itself goes through
+      // the awardPoints gates (denial, skips, Final Point → draw instead); the
+      // victory check waits for the Cleanup below (rule 472).
+      const { isScore } = scoreBattlefield(
+        draft,
+        attackingPlayer,
+        battlefieldId,
+        "conquer",
+        { cards, zones },
+        { previousController: controllerBeforeCombat },
+      );
 
       // Emit "conquer" event so triggered abilities fire
       // rule-id: ogn-034-298 — this conquer happened after an attack, so it
@@ -662,7 +621,7 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
       // establishes control without firing them. rule 471.2.a: the
       // draw-instead Final Point case (471.1.b.1) still Conquered, so its
       // triggers do fire.
-      if (!alreadyScored) {
+      if (isScore) {
         fireTriggers(
           {
             afterAttack: true,
@@ -739,5 +698,9 @@ export const resolveFullCombat: Defs["resolveFullCombat"] = {
     // Clear contested status
     battlefield.contested = false;
     battlefield.contestedBy = undefined;
+
+    // rule 319.1 / 472 — the Cleanup that follows combat resolution: statics,
+    // state-based checks, and the victory check for a conquer point.
+    cleanupAndFireDeaths(draft, context as unknown as PostMoveCleanupContext);
   },
 };

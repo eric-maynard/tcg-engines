@@ -37,9 +37,8 @@ import {
   dequeueExtraTurn,
   resumeQueuedTurn,
 } from "../../operations/turn-queue";
-import type { RiftboundCardMeta, RiftboundGameState } from "../../types";
-import { hasPlayerWon } from "../win-conditions/victory";
-import { applyScoreReplacement, canPlayerScoreAtBattlefield } from "../../operations/scoring-rules";
+import type { PlayerId, RiftboundCardMeta, RiftboundGameState } from "../../types";
+import { checkVictory, refillDeckOrBurnOut, scoreBattlefield } from "../../operations/points";
 
 /**
  * Build a TriggerRunnerContext from a flow phase context.
@@ -172,50 +171,33 @@ function runHoldScoringStep(context: FlowStepContext): void {
         const playerId = context.getCurrentPlayer();
         const triggerCtx = buildFlowTriggerContext(context);
 
-        // Scoring step (rule 515.2.b): Holding
-        // Score 1 point for each battlefield the turn player controls
+        // Scoring step (rule 315.2.b / 469.2): the Turn Player Holds each
+        // battlefield they control and did not yet score this turn — a Score
+        // worth up to one point. scoreBattlefield gates on "can't score here"
+        // statics, marks the battlefield and runs the point through awardPoints
+        // (054.1 denial, 443.1.a hold-scoped skips; no Final Point restriction
+        // for a Hold, 471.1.a.1). rule 383.4.d.2.c: the Hold trigger fires even
+        // when the point itself was denied or replaced.
         for (const [bfId, bf] of Object.entries(context.state.battlefields)) {
           if (bf.controller === playerId) {
-            const scored = context.state.scoredThisTurn[playerId] ?? [];
-            if (!scored.includes(bfId)) {
-              // Blocked if a battlefield ability (e.g. Forgotten Monument)
-              // Prevents this player from scoring here right now.
-              const scoringAllowed = canPlayerScoreAtBattlefield(
-                context.state,
-                playerId,
-                bfId,
-              );
-              const player = context.state.players[playerId];
-              // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
-              if (
-                player &&
-                scoringAllowed &&
-                !applyScoreReplacement(context.state, playerId, context)
-              ) {
-                player.victoryPoints += 1;
-              }
-
-              if (!context.state.scoredThisTurn[playerId]) {
-                context.state.scoredThisTurn[playerId] = [];
-              }
-              context.state.scoredThisTurn[playerId].push(bfId);
-
+            const { isScore } = scoreBattlefield(
+              context.state,
+              playerId as PlayerId,
+              bfId,
+              "hold",
+              context,
+            );
+            if (isScore) {
               // Emit "hold" event so triggered abilities fire (e.g. Altar to Unity)
-              if (scoringAllowed) {
-                fireTriggers({ battlefieldId: bfId, playerId, type: "hold" }, triggerCtx);
-              }
+              fireTriggers({ battlefieldId: bfId, playerId, type: "hold" }, triggerCtx);
             }
           }
         }
 
-        // rule 471.1.a.1: a hold that reaches the Victory Score wins
-        // immediately — unlike conquer it has no "scored every
-        // battlefield" requirement. The scoring step runs outside any
-        // move reducer, so the win check must happen here.
-        if (hasPlayerWon(context.state, playerId)) {
-          context.state.status = "finished";
-          context.state.winner = playerId;
-        }
+        // rule 472 / 319.2: the Cleanup at the end of the Scoring Step checks
+        // victory — a Hold can be the winning point. The step runs outside any
+        // move reducer, so the check is made here.
+        checkVictory(context.state, { io: context });
 
         // rule 364: passive abilities track game state continuously — the
         // scoring step changed points outside any move, so re-apply statics
@@ -895,58 +877,13 @@ export const riftboundFlow: FlowDefinition<RiftboundGameState, RiftboundCardMeta
                 return;
               }
 
-              // Check for empty deck -> Burn Out (rule 518)
-              // rule 431.3/431.3.a: when the trash is empty too the deck stays
-              // empty, so retrying the draw burns out again — repeatedly, giving
-              // an opponent 1 point each time, until an opponent wins (431.3.c.1
-              // wins immediately). No-progress guard: with nobody able to gain a
-              // point (no opponents left) or after a bounded number of repeats
-              // the deck simply stays empty and no card is drawn.
-              const burnOutCap = 4 * (context.state.victoryScore || 8) + 8;
-              for (let burnOuts = 0; ; burnOuts++) {
-                const deckCards = context.zones.getCardsInZone(
-                  "mainDeck" as CoreZoneId,
-                  playerId as CorePlayerId,
-                );
-                if (deckCards.length > 0) {
-                  break;
-                }
-                const someoneCanScore = Object.keys(context.state.players).some(
-                  (pid) => pid !== playerId && context.state.players[pid],
-                );
-                if (burnOuts > 0 && (!someoneCanScore || burnOuts >= burnOutCap)) {
-                  return;
-                }
-                // Burn Out: shuffle trash into deck, opponent scores 1 point
-                const trashCards = context.zones.getCardsInZone(
-                  "trash" as CoreZoneId,
-                  playerId as CorePlayerId,
-                );
-                for (const cardId of trashCards) {
-                  context.zones.moveCard({
-                    cardId,
-                    targetZoneId: "mainDeck" as CoreZoneId,
-                  });
-                }
-                context.zones.shuffleZone("mainDeck" as CoreZoneId, playerId as CorePlayerId);
-
-                // Opponent scores 1 point
-                for (const opponentId of Object.keys(context.state.players)) {
-                  if (opponentId !== playerId) {
-                    const opponent = context.state.players[opponentId];
-                    if (opponent) {
-                      opponent.victoryPoints += 1;
-                      if (hasPlayerWon(context.state, opponentId)) {
-                        context.state.status = "finished";
-                        context.state.winner = opponentId;
-                      }
-                    }
-                  }
-                }
-                if (gameHasEnded(context.state)) {
-                  // rule 323.1: the game ended mid-burnout — no card is drawn.
-                  return;
-                }
+              // rule 431 / 431.3: an empty Main Deck burns out — trash shuffled
+              // in, an opponent gains 1 point (through awardPoints); with the
+              // trash empty too it repeats until an opponent wins (431.3.c.1,
+              // immediately) or the no-progress guard gives up. rule 323.1: if
+              // the game ended, or the deck is still empty, no card is drawn.
+              if (!refillDeckOrBurnOut(context.state, playerId as PlayerId, context)) {
+                return;
               }
 
               // Draw 1 card (rule 515.4.b)

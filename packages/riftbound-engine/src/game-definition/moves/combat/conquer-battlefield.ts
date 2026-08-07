@@ -2,20 +2,11 @@
  * conquerBattlefield move (split from combat.ts).
  */
 
-import type {
-  PlayerId as CorePlayerId,
-  ZoneId as CoreZoneId,
-  GameMoveDefinitions,
-} from "@tcg/core";
+import type { ZoneId as CoreZoneId, GameMoveDefinitions } from "@tcg/core";
 import { fireTriggers } from "../../../abilities/trigger-runner";
 import { createInteractionState, getActiveShowdown, getTurnState } from "../../../chain";
 import type { RiftboundCardMeta, RiftboundGameState, RiftboundMoves } from "../../../types";
-import { hasPlayerWon } from "../../win-conditions/victory";
-import {
-  applyScoreReplacement,
-  canPlayerScoreAtBattlefield,
-  finalPointConquerDrawsInstead,
-} from "../../../operations/scoring-rules";
+import { checkVictory, scoreBattlefield } from "../../../operations/points";
 
 type Defs = GameMoveDefinitions<RiftboundGameState, RiftboundMoves, RiftboundCardMeta, unknown>;
 
@@ -143,63 +134,29 @@ export const conquerBattlefield: Defs["conquerBattlefield"] = {
       battlefield.contestedBy = undefined;
     }
 
-    // Track conquered battlefield for this turn
-    if (!draft.conqueredThisTurn[playerId]) {
-      draft.conqueredThisTurn[playerId] = [];
-    }
-    draft.conqueredThisTurn[playerId].push(battlefieldId);
-
-    // Award 1 VP for conquering (rule 630.1)
-    // Blocked if a battlefield ability (e.g. Forgotten Monument) prevents
-    // This player from scoring here right now.
-    const scoringAllowed = canPlayerScoreAtBattlefield(draft, playerId, battlefieldId);
-    const player = draft.players[playerId];
-    // rule 471.1.b.1: the Final Point by conquer requires every battlefield
-    // scored this turn; otherwise the player draws a card instead and the
-    // battlefield is NOT recorded as scored.
-    const drewInstead =
-      scoringAllowed && finalPointConquerDrawsInstead(draft, playerId, battlefieldId, context);
-    // Rule 571.4: a board `score` replacement (e.g. Otterpus) substitutes for the point.
-    if (
-      player &&
-      scoringAllowed &&
-      !drewInstead &&
-      // rule 443.1.a: method-scoped skips only match a conquer here.
-      !applyScoreReplacement(draft, playerId, context, "conquer")
-    ) {
-      player.victoryPoints += 1;
-    }
-
-    // Track as scored this turn to prevent double-scoring. rule 469.1 / 470:
-    // the Final Point draw-instead (471.1.b.1) replaces the POINT, not the
-    // Score, so the battlefield is recorded either way.
-    if (!draft.scoredThisTurn[playerId]) {
-      draft.scoredThisTurn[playerId] = [];
-    }
-    draft.scoredThisTurn[playerId].push(battlefieldId);
+    // rule 469.1 / 471: a Conquer worth up to one point — awardPoints applies
+    // denial (054.1), method-scoped skips (443.1.a) and the Final Point
+    // restriction (471.1.b: draw instead; the battlefield still Scored).
+    const { isScore } = scoreBattlefield(draft, playerId, battlefieldId, "conquer", context, {
+      previousController,
+    });
 
     // Emit "conquer" event so triggered abilities fire
-    // (e.g. Blade Dancer's "When you conquer, pay 1 to ready me")
-    fireTriggers(
-      { battlefieldId, playerId, previousController, type: "conquer" },
-      {
-        cards: context.cards,
-        counters: context.counters,
-        draft,
-        zones: context.zones,
-      },
-    );
-
-    // Check for victory
-    if (player && hasPlayerWon(draft, playerId)) {
-      draft.status = "finished";
-      draft.winner = playerId;
-
-      context.endGame?.({
-        metadata: { finalScore: player.victoryPoints, method: "conquer" },
-        reason: "victory_points",
-        winner: playerId as CorePlayerId,
-      });
+    // (e.g. Blade Dancer's "When you conquer, pay 1 to ready me").
+    // rule 471.2.c: only when the battlefield actually Scored.
+    if (isScore) {
+      fireTriggers(
+        { battlefieldId, playerId, previousController, type: "conquer" },
+        {
+          cards: context.cards,
+          counters: context.counters,
+          draft,
+          zones: context.zones,
+        },
+      );
     }
+
+    // rule 472 / 319.1 — the Cleanup after this action checks victory.
+    checkVictory(draft, { io: context });
   },
 };
